@@ -24,7 +24,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use tempfile::TempDir;
 
-use crate::datasources::table::fuse::BlockAppender;
+use crate::datasources::table::fuse::io::BlockAppender;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_fuse_table_block_appender() {

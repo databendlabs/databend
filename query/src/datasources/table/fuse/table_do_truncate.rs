@@ -26,8 +26,8 @@ use uuid::Uuid;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::Table;
-use crate::datasources::table::fuse::util;
-use crate::datasources::table::fuse::util::TBL_OPT_KEY_SNAPSHOT_LOC;
+use crate::datasources::table::fuse::io;
+use crate::datasources::table::fuse::meta::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::datasources::table::fuse::FuseTable;
 use crate::datasources::table::fuse::TableSnapshot;
 use crate::sessions::DatabendQueryContext;
@@ -67,7 +67,7 @@ impl FuseTable {
             .get_user_data()?
             .expect("DatabendQueryContext should not be None");
         let new_snapshot_loc =
-            util::snapshot_location(new_snapshot.snapshot_id.to_simple().to_string());
+            io::snapshot_location(new_snapshot.snapshot_id.to_simple().to_string());
         let da = io_ctx.get_data_accessor()?;
         let bytes = serde_json::to_vec(&new_snapshot).map_err(ErrorCode::from_std_error)?;
         da.put(&new_snapshot_loc, bytes).await?;

@@ -34,9 +34,9 @@ use common_planners::InsertIntoPlan;
 
 use crate::catalogs::Catalog;
 use crate::datasources::table::fuse::index::min_max::range_filter;
+use crate::datasources::table::fuse::io::MetaInfoReader;
+use crate::datasources::table::fuse::meta::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::datasources::table::fuse::table_test_fixture::TestFixture;
-use crate::datasources::table::fuse::util::TBL_OPT_KEY_SNAPSHOT_LOC;
-use crate::datasources::table::fuse::MetaInfoReader;
 
 #[tokio::test]
 async fn test_min_max_index() -> Result<()> {

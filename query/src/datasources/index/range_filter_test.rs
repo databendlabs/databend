@@ -20,7 +20,7 @@ use common_exception::Result;
 use common_planners::*;
 
 use crate::datasources::index::RangeFilter;
-use crate::datasources::table::fuse::util::BlockStats;
+use crate::datasources::table::fuse::BlockStats;
 use crate::datasources::table::fuse::ColStats;
 
 #[test]

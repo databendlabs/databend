@@ -26,7 +26,8 @@ use common_exception::Result;
 use futures::StreamExt;
 use rusoto_core::ByteStream;
 
-use crate::datasources::table::fuse::util;
+use crate::datasources::table::fuse::io;
+use crate::datasources::table::fuse::statistics;
 use crate::datasources::table::fuse::SegmentInfo;
 use crate::datasources::table::fuse::Stats;
 
@@ -43,14 +44,14 @@ impl BlockAppender {
         mut stream: BlockStream,
         data_schema: &DataSchema,
     ) -> Result<SegmentInfo> {
-        let mut stats_acc = util::StatisticsAccumulator::new();
-        let mut block_meta_acc = util::BlockMetaAccumulator::new();
+        let mut stats_acc = statistics::StatisticsAccumulator::new();
+        let mut block_meta_acc = statistics::BlockMetaAccumulator::new();
 
         // accumulate the stats and save the blocks
         while let Some(block) = stream.next().await {
             stats_acc.acc(&block)?;
             let schema = block.schema().to_arrow();
-            let location = util::gen_unique_block_location();
+            let location = io::gen_unique_block_location();
             let file_size = Self::save_block(&schema, block, &data_accessor, &location).await?;
             block_meta_acc.acc(file_size, location, &mut stats_acc);
         }
@@ -58,7 +59,8 @@ impl BlockAppender {
         // summary and give back a segment_info
         // we need to send back a stream of segment latter
         let block_metas = block_meta_acc.blocks_metas;
-        let summary = util::column_stats_reduce_with_schema(&stats_acc.blocks_stats, data_schema)?;
+        let summary =
+            statistics::column_stats_reduce_with_schema(&stats_acc.blocks_stats, data_schema)?;
         let segment_info = SegmentInfo {
             blocks: block_metas,
             summary: Stats {
@@ -88,7 +90,7 @@ impl BlockAppender {
         let encodings: Vec<_> = arrow_schema
             .fields()
             .iter()
-            .map(|f| util::col_encoding(&f.data_type))
+            .map(|f| io::col_encoding(&f.data_type))
             .collect();
 
         let iter = vec![Ok(batch)];

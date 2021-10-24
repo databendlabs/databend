@@ -19,82 +19,13 @@ use std::collections::HashMap;
 use common_datablocks::DataBlock;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchema;
-use common_exception::Result;
 
-use crate::datasources::table::fuse::util;
-use crate::datasources::table::fuse::BlockLocation;
-use crate::datasources::table::fuse::BlockMeta;
+use crate::datasources::table::fuse::statistics::BlockStats;
 use crate::datasources::table::fuse::ColStats;
 use crate::datasources::table::fuse::ColumnId;
 use crate::datasources::table::fuse::Stats;
 
-// TODO move this to other crate
-pub type BlockStats = HashMap<ColumnId, ColStats>;
-
-#[derive(Default)]
-pub struct StatisticsAccumulator {
-    pub blocks_metas: Vec<BlockMeta>,
-    pub blocks_stats: Vec<BlockStats>,
-    pub summary_row_count: u64,
-    pub summary_block_count: u64,
-    pub in_memory_size: u64,
-    pub file_size: u64,
-    last_block_rows: u64,
-    last_block_size: u64,
-    last_block_col_stats: Option<HashMap<ColumnId, ColStats>>,
-}
-
-impl StatisticsAccumulator {
-    pub fn new() -> Self {
-        Default::default()
-    }
-}
-
-impl StatisticsAccumulator {
-    pub fn acc(&mut self, block: &DataBlock) -> Result<()> {
-        let row_count = block.num_rows() as u64;
-        let block_in_memory_size = block.memory_size() as u64;
-
-        self.summary_block_count += 1;
-        self.summary_row_count += row_count;
-        self.in_memory_size += block_in_memory_size;
-        self.last_block_rows = block.num_rows() as u64;
-        self.last_block_size = block.memory_size() as u64;
-        let block_stats = block_stats(block)?;
-        self.last_block_col_stats = Some(block_stats.clone());
-        self.blocks_stats.push(block_stats);
-        Ok(())
-    }
-}
-
-#[derive(Default)]
-pub struct BlockMetaAccumulator {
-    pub blocks_metas: Vec<BlockMeta>,
-}
-
-impl BlockMetaAccumulator {
-    pub fn new() -> Self {
-        Default::default()
-    }
-}
-
-impl BlockMetaAccumulator {
-    pub fn acc(&mut self, file_size: u64, location: String, stats: &mut StatisticsAccumulator) {
-        stats.file_size += file_size;
-        let block_meta = BlockMeta {
-            location: BlockLocation {
-                location,
-                meta_size: 0,
-            },
-            row_count: stats.last_block_rows,
-            block_size: stats.last_block_size,
-            col_stats: stats.last_block_col_stats.take().unwrap_or_default(),
-        };
-        self.blocks_metas.push(block_meta);
-    }
-}
-
-pub(super) fn block_stats(data_block: &DataBlock) -> Result<BlockStats> {
+pub fn block_stats(data_block: &DataBlock) -> common_exception::Result<BlockStats> {
     // NOTE:
     // column id is FAKED, this is OK as long as table schema is NOT changed (which is not realistic)
     // we should extend DataField with column_id ...
@@ -137,7 +68,7 @@ pub(super) fn block_stats(data_block: &DataBlock) -> Result<BlockStats> {
 pub fn column_stats_reduce_with_schema(
     stats: &[HashMap<ColumnId, ColStats>],
     schema: &DataSchema,
-) -> Result<HashMap<ColumnId, ColStats>> {
+) -> common_exception::Result<HashMap<ColumnId, ColStats>> {
     let len = stats.len();
 
     // transpose Vec<HashMap<_,(_,_)>> to HashMap<_, (_, Vec<_>)>
@@ -198,13 +129,13 @@ pub fn column_stats_reduce_with_schema(
         })
 }
 
-pub fn merge_stats(schema: &DataSchema, l: &Stats, r: &Stats) -> Result<Stats> {
+pub fn merge_stats(schema: &DataSchema, l: &Stats, r: &Stats) -> common_exception::Result<Stats> {
     let s = Stats {
         row_count: l.row_count + r.row_count,
         block_count: l.block_count + r.block_count,
         uncompressed_byte_size: l.uncompressed_byte_size + r.uncompressed_byte_size,
         compressed_byte_size: l.compressed_byte_size + r.compressed_byte_size,
-        col_stats: util::column_stats_reduce_with_schema(
+        col_stats: column_stats_reduce_with_schema(
             &[l.col_stats.clone(), r.col_stats.clone()],
             schema,
         )?,

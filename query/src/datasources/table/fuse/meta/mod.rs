@@ -13,8 +13,8 @@
 //  limitations under the License.
 //
 
+pub use constants::*;
 pub use table_snapshot::*;
 
-pub use crate::datasources::table::fuse::io::meta_info_reader::MetaInfoReader;
-
+mod constants;
 mod table_snapshot;

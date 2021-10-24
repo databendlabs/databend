@@ -42,8 +42,8 @@ use common_datavalues::DataType;
 use common_planners::Part;
 use tempfile::TempDir;
 
-use super::super::util;
 use super::block_appender::BlockAppender;
+use crate::datasources::table::fuse::io;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_block_reader_read() -> common_exception::Result<()> {
@@ -53,7 +53,7 @@ async fn test_block_reader_read() -> common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
     let arrow_scheme = block.schema().to_arrow();
-    let location = util::gen_unique_block_location();
+    let location = io::gen_unique_block_location();
 
     let _r = BlockAppender::save_block(&arrow_scheme, block.clone(), &da, &location).await?;
 

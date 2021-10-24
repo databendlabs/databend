@@ -21,8 +21,8 @@ use common_planners::Partitions;
 use common_planners::Statistics;
 
 use super::index;
+use crate::datasources::table::fuse::io::MetaInfoReader;
 use crate::datasources::table::fuse::FuseTable;
-use crate::datasources::table::fuse::MetaInfoReader;
 
 impl FuseTable {
     #[inline]

@@ -33,9 +33,9 @@ use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
-use super::util;
 use crate::catalogs::Catalog;
 use crate::catalogs::Table;
+use crate::datasources::table::fuse::meta;
 use crate::datasources::table::fuse::BlockMeta;
 use crate::datasources::table::fuse::TableSnapshot;
 use crate::sessions::DatabendQueryContext;
@@ -127,7 +127,7 @@ impl FuseTable {
 
     fn read_snapshot(table: &dyn Table, io_ctx: &TableIOContext) -> Result<Option<TableSnapshot>> {
         let option = &table.get_table_info().options;
-        if let Some(loc) = option.get(util::TBL_OPT_KEY_SNAPSHOT_LOC) {
+        if let Some(loc) = option.get(meta::TBL_OPT_KEY_SNAPSHOT_LOC) {
             let da = io_ctx.get_data_accessor()?;
             let r = read_obj(da, loc.to_string()).wait_in(&io_ctx.get_runtime(), None)??;
             Ok(Some(r))

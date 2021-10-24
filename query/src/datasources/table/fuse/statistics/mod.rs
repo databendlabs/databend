@@ -13,15 +13,16 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
+pub use block_meta_accumulator::BlockMetaAccumulator;
+pub use block_meta_accumulator::BlockStats;
+pub use stats_accumulator::StatisticsAccumulator;
+pub use util::block_stats;
+pub use util::column_stats_reduce_with_schema;
+pub use util::merge_stats;
 
-use common_dal::read_obj;
-use common_dal::DataAccessor;
-use common_exception::Result;
+mod block_meta_accumulator;
+mod stats_accumulator;
+mod util;
 
-use crate::datasources::table::fuse::SegmentInfo;
-
-#[allow(dead_code)]
-pub async fn read_segment_async(da: Arc<dyn DataAccessor>, loc: &str) -> Result<SegmentInfo> {
-    read_obj(da, loc.to_string()).await
-}
+#[cfg(test)]
+mod util_test;

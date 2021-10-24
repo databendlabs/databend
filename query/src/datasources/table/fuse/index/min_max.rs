@@ -21,10 +21,10 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 
 use crate::datasources::index::RangeFilter;
-use crate::datasources::table::fuse::util;
-use crate::datasources::table::fuse::util::BlockStats;
+use crate::datasources::table::fuse::io;
+use crate::datasources::table::fuse::io::MetaInfoReader;
+use crate::datasources::table::fuse::statistics::BlockStats;
 use crate::datasources::table::fuse::BlockMeta;
-use crate::datasources::table::fuse::MetaInfoReader;
 use crate::datasources::table::fuse::SegmentInfo;
 use crate::datasources::table::fuse::TableSnapshot;
 
@@ -36,7 +36,7 @@ pub struct MinMaxIndex {
 impl MinMaxIndex {
     pub fn new(table_snapshot: &TableSnapshot, meta_reader: &MetaInfoReader) -> Self {
         Self {
-            table_snapshot_loc: util::snapshot_location(
+            table_snapshot_loc: io::snapshot_location(
                 table_snapshot.snapshot_id.to_simple().to_string(),
             ),
             meta_reader: meta_reader.clone(),

@@ -13,15 +13,19 @@
 //  limitations under the License.
 //
 
-pub(crate) mod index;
-pub(crate) mod io;
+pub(crate) use meta::*;
+pub(crate) use statistics::BlockStats;
+pub(crate) use table::FuseTable;
+
+mod index;
+mod io;
 mod meta;
+mod statistics;
 mod table;
 mod table_do_append;
 mod table_do_read;
 mod table_do_read_partitions;
 mod table_do_truncate;
-pub(crate) mod util;
 
 #[cfg(test)]
 mod table_do_append_test;
@@ -31,7 +35,3 @@ mod table_do_truncate_test;
 mod table_test;
 #[cfg(test)]
 mod table_test_fixture;
-
-pub(crate) use io::*;
-pub(crate) use meta::*;
-pub(crate) use table::FuseTable;

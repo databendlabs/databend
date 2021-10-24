@@ -29,9 +29,10 @@ use common_planners::InsertIntoPlan;
 use uuid::Uuid;
 
 use crate::catalogs::Catalog;
-use crate::datasources::table::fuse::util;
-use crate::datasources::table::fuse::util::TBL_OPT_KEY_SNAPSHOT_LOC;
-use crate::datasources::table::fuse::BlockAppender;
+use crate::datasources::table::fuse::io;
+use crate::datasources::table::fuse::io::BlockAppender;
+use crate::datasources::table::fuse::meta::TBL_OPT_KEY_SNAPSHOT_LOC;
+use crate::datasources::table::fuse::statistics;
 use crate::datasources::table::fuse::FuseTable;
 use crate::datasources::table::fuse::SegmentInfo;
 use crate::datasources::table::fuse::TableSnapshot;
@@ -61,7 +62,7 @@ impl FuseTable {
                 .await?;
 
         // 3. save segment info
-        let seg_loc = util::gen_segment_info_location();
+        let seg_loc = io::gen_segment_info_location();
         let bytes = serde_json::to_vec(&segment_info)?;
         da.put(&seg_loc, bytes).await?;
 
@@ -115,7 +116,7 @@ fn merge_snapshot(
     if let Some(s) = pre {
         let s = s.clone();
         let mut new_snapshot = s.append_segment(loc.clone());
-        let new_stat = util::merge_stats(schema, &new_snapshot.summary, &seg_info.summary)?;
+        let new_stat = statistics::merge_stats(schema, &new_snapshot.summary, &seg_info.summary)?;
         new_snapshot.summary = new_stat;
         Ok(new_snapshot)
     } else {
@@ -149,7 +150,7 @@ fn update_snapshot_location(
 
 async fn save_snapshot(new_snapshot: &TableSnapshot, da: &dyn DataAccessor) -> Result<String> {
     let uuid = new_snapshot.snapshot_id;
-    let snapshot_loc = util::snapshot_location(uuid.to_simple().to_string().as_str());
+    let snapshot_loc = io::snapshot_location(uuid.to_simple().to_string().as_str());
     let bytes = serde_json::to_vec(&new_snapshot).map_err(ErrorCode::from_std_error)?;
     da.put(&snapshot_loc, bytes).await?;
     Ok(snapshot_loc)
