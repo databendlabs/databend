@@ -102,7 +102,7 @@ fn test_aggregate_function() -> Result<()> {
         },
         Test {
             name: "argMax-passed",
-            eval_nums: 1,
+            eval_nums: 2,
             params: vec![],
             args: args.clone(),
             display: "argmax",
@@ -113,7 +113,7 @@ fn test_aggregate_function() -> Result<()> {
         },
         Test {
             name: "argMin-passed",
-            eval_nums: 1,
+            eval_nums: 2,
             params: vec![],
             args: args.clone(),
             display: "argmin",
@@ -225,6 +225,240 @@ fn test_aggregate_function() -> Result<()> {
 
             func.merge(addr1.into(), addr2.into())?;
             let result = func.merge_result(addr1.into())?;
+            assert_eq!(&t.expect, &result, "{}", t.name);
+            assert_eq!(t.display, format!("{:}", func), "{}", t.name);
+            Ok(())
+        };
+
+        if let Err(e) = func() {
+            assert_eq!(t.error, e.to_string());
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_aggregate_function_with_grpup_by() -> Result<()> {
+    struct Test {
+        name: &'static str,
+        eval_nums: usize,
+        params: Vec<DataValue>,
+        args: Vec<DataField>,
+        display: &'static str,
+        arrays: Vec<Series>,
+        expect: Vec<DataValue>,
+        error: &'static str,
+        func_name: &'static str,
+    }
+
+    let arrays: Vec<Series> = vec![
+        Series::new(vec![4i64, 3, 2, 1]),
+        Series::new(vec![1i64, 2, 3, 4]),
+        Series::new(vec!["a", "b", "c", "d"]),
+    ];
+
+    let args = vec![
+        DataField::new("a", DataType::Int64, false),
+        DataField::new("b", DataType::Int64, false),
+        DataField::new("c", DataType::String, false),
+    ];
+
+    let tests = vec![
+        Test {
+            name: "count-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone()],
+            display: "count",
+            func_name: "count",
+            arrays: vec![arrays[0].clone()],
+            expect: vec![DataValue::UInt64(Some(2)), DataValue::UInt64(Some(2))],
+            error: "",
+        },
+        Test {
+            name: "max-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone()],
+            display: "max",
+            func_name: "max",
+            arrays: vec![arrays[0].clone()],
+            expect: vec![DataValue::Int64(Some(4)), DataValue::Int64(Some(3))],
+            error: "",
+        },
+        Test {
+            name: "min-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone()],
+            display: "min",
+            func_name: "min",
+            arrays: vec![arrays[0].clone()],
+            expect: vec![DataValue::Int64(Some(2)), DataValue::Int64(Some(1))],
+            error: "",
+        },
+        Test {
+            name: "avg-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone()],
+            display: "avg",
+            func_name: "avg",
+            arrays: vec![arrays[0].clone()],
+            expect: vec![DataValue::Float64(Some(3.0)), DataValue::Float64(Some(2.0))],
+            error: "",
+        },
+        Test {
+            name: "sum-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone()],
+            display: "sum",
+            func_name: "sum",
+            arrays: vec![arrays[0].clone()],
+            expect: vec![DataValue::Int64(Some(6)), DataValue::Int64(Some(4))],
+            error: "",
+        },
+        Test {
+            name: "argMax-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone(), args[1].clone()],
+            display: "argmax",
+            func_name: "argmax",
+            arrays: vec![arrays[0].clone(), arrays[1].clone()],
+            expect: vec![DataValue::Int64(Some(2)), DataValue::Int64(Some(1))],
+            error: "",
+        },
+        Test {
+            name: "argMax-string-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone(), args[2].clone()],
+            display: "argmax",
+            func_name: "argmax",
+            arrays: vec![arrays[0].clone(), arrays[2].clone()],
+            expect: vec![DataValue::Int64(Some(2)), DataValue::Int64(Some(1))],
+            error: "",
+        },
+        Test {
+            name: "argMin-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone(), args[1].clone()],
+            display: "argmin",
+            func_name: "argmin",
+            arrays: vec![arrays[0].clone(), arrays[1].clone()],
+            expect: vec![DataValue::Int64(Some(4)), DataValue::Int64(Some(3))],
+            error: "",
+        },
+        Test {
+            name: "argMin-string-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone(), args[1].clone()],
+            display: "argmin",
+            func_name: "argmin",
+            arrays: vec![arrays[0].clone(), arrays[1].clone()],
+            expect: vec![DataValue::Int64(Some(4)), DataValue::Int64(Some(3))],
+            error: "",
+        },
+        Test {
+            name: "uniq-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone()],
+            display: "uniq",
+            func_name: "uniq",
+            arrays: vec![arrays[0].clone()],
+            expect: vec![DataValue::UInt64(Some(2)), DataValue::UInt64(Some(2))],
+            error: "",
+        },
+        Test {
+            name: "std-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone()],
+            display: "std",
+            func_name: "std",
+            arrays: vec![arrays[0].clone()],
+            expect: vec![DataValue::Float64(Some(1.0)), DataValue::Float64(Some(1.0))],
+            error: "",
+        },
+        Test {
+            name: "stddev-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone()],
+            display: "stddev",
+            func_name: "stddev",
+            arrays: vec![arrays[0].clone()],
+            expect: vec![DataValue::Float64(Some(1.0)), DataValue::Float64(Some(1.0))],
+            error: "",
+        },
+        Test {
+            name: "stddev-pop-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone()],
+            display: "stddev_pop",
+            func_name: "stddev_pop",
+            arrays: vec![arrays[0].clone()],
+            expect: vec![DataValue::Float64(Some(1.0)), DataValue::Float64(Some(1.0))],
+            error: "",
+        },
+        Test {
+            name: "covar-sample-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone(), args[1].clone()],
+            display: "covar_samp",
+            func_name: "covar_samp",
+            arrays: vec![arrays[0].clone(), arrays[1].clone()],
+            expect: vec![
+                DataValue::Float64(Some(-2.0)),
+                DataValue::Float64(Some(-2.0)),
+            ],
+            error: "",
+        },
+        Test {
+            name: "covar-pop-passed",
+            eval_nums: 1,
+            params: vec![],
+            args: vec![args[0].clone(), args[1].clone()],
+            display: "covar_pop",
+            func_name: "covar_pop",
+            arrays: vec![arrays[0].clone(), arrays[1].clone()],
+            expect: vec![
+                DataValue::Float64(Some(-1.0)),
+                DataValue::Float64(Some(-1.0)),
+            ],
+            error: "",
+        },
+    ];
+
+    for t in tests {
+        let arena = Bump::new();
+        let rows = t.arrays[0].len();
+
+        let func = || -> Result<()> {
+            let factory = AggregateFunctionFactory::instance();
+            let func = factory.get(t.func_name, t.params.clone(), t.args.clone())?;
+
+            let addr1 = arena.alloc_layout(func.state_layout());
+            func.init_state(addr1.into());
+            let addr2 = arena.alloc_layout(func.state_layout());
+            func.init_state(addr2.into());
+            let places = vec![addr1.into(), addr2.into(), addr1.into(), addr2.into()];
+
+            for _ in 0..t.eval_nums {
+                func.accumulate_keys(&places, 0, &t.arrays, rows)?;
+            }
+
+            let result = vec![
+                func.merge_result(addr1.into())?,
+                func.merge_result(addr2.into())?,
+            ];
             assert_eq!(&t.expect, &result, "{}", t.name);
             assert_eq!(t.display, format!("{:}", func), "{}", t.name);
             Ok(())

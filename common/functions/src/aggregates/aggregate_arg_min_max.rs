@@ -194,11 +194,11 @@ impl AggregateArgMinMaxState for StringState {
         places: &[StateAddr],
         offset: usize,
         data_series: &Series,
-        _series: &Series,
+        series: &Series,
         _rows: usize,
         is_min: bool,
     ) -> Result<()> {
-        let array: &DFStringArray = data_series.static_cast();
+        let array: &DFStringArray = series.static_cast();
         array
             .into_iter()
             .zip(places.iter().enumerate())
