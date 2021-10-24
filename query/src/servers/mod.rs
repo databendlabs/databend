@@ -23,6 +23,6 @@ pub use self::mysql::MySQLConnection;
 pub use self::mysql::MySQLHandler;
 
 mod clickhouse;
-mod http;
+pub mod http;
 mod mysql;
 pub(crate) mod server;

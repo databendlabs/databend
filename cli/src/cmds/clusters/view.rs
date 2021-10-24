@@ -23,6 +23,8 @@ use clap::ArgMatches;
 use comfy_table::Cell;
 use comfy_table::Color;
 use comfy_table::Table;
+use sysinfo::System;
+use sysinfo::SystemExt;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::clusters::utils;
@@ -30,8 +32,8 @@ use crate::cmds::status::LocalRuntime;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::cmds::Writer;
-use crate::error::{Result, CliError};
-use sysinfo::{System, SystemExt};
+use crate::error::CliError;
+use crate::error::Result;
 
 #[derive(Clone)]
 pub struct ViewCommand {
@@ -82,24 +84,19 @@ impl ViewCommand {
                             "cannot retrieve view table, error: {:?}",
                             table.unwrap_err()
                         )
-                            .as_str(),
+                        .as_str(),
                     );
                 }
             }
             Err(e) => {
-                writer.write_err(
-                    format!(
-                        "View precheck failed: {:?}",
-                        e
-                    ).as_str(),
-                );
+                writer.write_err(format!("View precheck failed: {:?}", e).as_str());
             }
         }
         Ok(())
     }
     /// precheck whether on view configs
     async fn local_exec_precheck(&self) -> Result<()> {
-        let mut status = Status::read(self.conf.clone())?;
+        let status = Status::read(self.conf.clone())?;
 
         if !status.has_local_configs() {
             return Err(CliError::Unknown(format!(

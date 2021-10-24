@@ -13,8 +13,7 @@
 // limitations under the License.
 
 use std::borrow::Borrow;
-use std::path::Path;
-use std::process::Stdio;
+use std::net::SocketAddr;
 use std::str::FromStr;
 
 use async_trait::async_trait;
@@ -22,6 +21,9 @@ use clap::App;
 use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
+use comfy_table::Cell;
+use comfy_table::Color;
+use comfy_table::Table;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -32,8 +34,6 @@ use crate::cmds::Status;
 use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
-use std::net::SocketAddr;
-use comfy_table::{Table, Cell, Color};
 
 #[derive(Clone)]
 pub struct QueryCommand {
@@ -89,7 +89,11 @@ impl QueryCommand {
         app
     }
 
-    pub(crate) async fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+    pub(crate) async fn exec_match(
+        &self,
+        writer: &mut Writer,
+        args: Option<&ArgMatches>,
+    ) -> Result<()> {
         match args {
             Some(matches) => {
                 let profile = matches.value_of_t("profile");
@@ -115,36 +119,32 @@ impl QueryCommand {
             Ok(_) => {
                 writer.write_ok("Query precheck passed!");
                 let status = Status::read(self.conf.clone())?;
-                    if let Some(query) = args.value_of("query") {
-                        let res = build_query_endpoint(&status);
-                        if let Ok((cli, url)) = res {
-                            writer.write_ok(format!("Execute query {} on {}", query, url).as_str());
-                            match execute_query(
-                                cli,
-                                url,
-                                query.parse().unwrap(),
-                            ).await {
-                                Ok(res) => {
-                                    writer.writeln(res.trim_fmt().as_str());
-                                }
-                                Err(e) => {
-                                    writer.write_err(format!("Query command error: cannot execute query with error: {:?}", e).as_str());
-                                }
+                if let Some(query) = args.value_of("query") {
+                    let res = build_query_endpoint(&status);
+                    if let Ok((cli, url)) = res {
+                        writer.write_ok(format!("Execute query {} on {}", query, url).as_str());
+                        match execute_query(cli, url, query.parse().unwrap()).await {
+                            Ok(res) => {
+                                writer.writeln(res.trim_fmt().as_str());
                             }
-                            return Ok(());
-                        } else {
-                            writer.write_err(
-                                format!(
-                                    "Query command error: cannot parse query url with error: {:?}",
-                                    res.unwrap_err()
-                                )
-                                .as_str(),
-                            );
+                            Err(e) => {
+                                writer.write_err(format!("Query command error: cannot execute query with error: {:?}", e).as_str());
+                            }
                         }
-                    } else {
-                        writer.write_err("Query command error: cannot find SQL argument!");
                         return Ok(());
+                    } else {
+                        writer.write_err(
+                            format!(
+                                "Query command error: cannot parse query url with error: {:?}",
+                                res.unwrap_err()
+                            )
+                            .as_str(),
+                        );
                     }
+                } else {
+                    writer.write_err("Query command error: cannot find SQL argument!");
+                    return Ok(());
+                }
 
                 Ok(())
             }
@@ -179,8 +179,15 @@ pub fn build_query_endpoint(status: &Status) -> Result<(reqwest::Client, String)
         .expect("Cannot build query client");
 
     let url = {
-        if query.config.query.api_tls_server_key.is_empty() || query.config.query.api_tls_server_cert.is_empty(){
-            let address = format!("{}:{}", query.config.query.http_handler_host, query.config.query.http_handler_port).parse::<SocketAddr>().expect("cannot build query socket address");
+        if query.config.query.api_tls_server_key.is_empty()
+            || query.config.query.api_tls_server_cert.is_empty()
+        {
+            let address = format!(
+                "{}:{}",
+                query.config.query.http_handler_host, query.config.query.http_handler_port
+            )
+            .parse::<SocketAddr>()
+            .expect("cannot build query socket address");
             format!("http://{}:{}/v1/statement", address.ip(), address.port())
         } else {
             todo!()
@@ -190,15 +197,30 @@ pub fn build_query_endpoint(status: &Status) -> Result<(reqwest::Client, String)
 }
 
 async fn execute_query(cli: reqwest::Client, url: String, query: String) -> Result<Table> {
-   let ans = cli.post(url).body(query).send().await.expect("cannot post to http handler").json::<databend_query::servers::http::v1::statement::HttpQueryResult>().await;
+    let ans = cli
+        .post(url)
+        .body(query)
+        .send()
+        .await
+        .expect("cannot post to http handler")
+        .json::<databend_query::servers::http::v1::statement::HttpQueryResult>()
+        .await;
     if let Err(e) = ans {
-        return Err(CliError::Unknown(format!("Cannot retrieve query result: {:?}", e)))
+        return Err(CliError::Unknown(format!(
+            "Cannot retrieve query result: {:?}",
+            e
+        )));
     } else {
         let ans = ans.unwrap();
         let mut table = Table::new();
         table.load_preset("||--+-++|    ++++++");
         if let Some(column) = ans.columns {
-            table.set_header(column.fields().iter().map(|field| Cell::new(field.name().as_str()).fg(Color::Green)));
+            table.set_header(
+                column
+                    .fields()
+                    .iter()
+                    .map(|field| Cell::new(field.name().as_str()).fg(Color::Green)),
+            );
         }
         if let Some(rows) = ans.data {
             for row in rows {

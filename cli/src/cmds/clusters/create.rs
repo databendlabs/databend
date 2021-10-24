@@ -571,7 +571,7 @@ impl CreateCommand {
                 status.write()?;
                 writer.write_ok("👏 successfully started query service.");
                 writer.write_ok(
-                        "✅  To run queries through RESTful api, run: bendctl query 'SQL statement'",
+                    "✅  To run queries through RESTful api, run: bendctl query 'SQL statement'",
                 );
                 writer.write_ok(
                     "✅  For example: bendctl query 'SELECT * FROM system.contributors LIMIT 20;'",

@@ -18,8 +18,7 @@ use tempfile::tempdir;
 
 use crate::cmds::config::GithubMirror;
 use crate::cmds::config::MirrorAsset;
-use crate::cmds::queries::query::{build_query_endpoint};
-use crate::cmds::queries::query::QueryCommand;
+use crate::cmds::queries::query::build_query_endpoint;
 use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
 use crate::cmds::Config;
@@ -77,8 +76,8 @@ fn test_generate_query_probe() -> Result<()> {
     // test on default bahavior
     {
         build_status!(conf.clone(), 8888);
-        let status = Status::read(conf.clone()).unwrap();
-        let (_, query_url) = build_query_endpoint( &status).unwrap();
+        let status = Status::read(conf).unwrap();
+        let (_, query_url) = build_query_endpoint(&status).unwrap();
         assert_eq!(query_url, "http://0.0.0.0:8888/v1/statement".to_string());
     }
     Ok(())

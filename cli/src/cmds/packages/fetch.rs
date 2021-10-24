@@ -24,7 +24,6 @@ use indicatif::ProgressStyle;
 use tar::Archive;
 
 use crate::cmds::Config;
-use crate::cmds::Status;
 use crate::cmds::SwitchCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;

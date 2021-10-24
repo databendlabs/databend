@@ -23,8 +23,8 @@ use crate::cmds::status::LocalRuntime;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::cmds::Writer;
-use crate::error::{Result, CliError};
-use sysinfo::{System, SystemExt};
+use crate::error::CliError;
+use crate::error::Result;
 
 #[derive(Clone)]
 pub struct DeleteCommand {
@@ -94,7 +94,9 @@ impl DeleteCommand {
         match self.local_exec_precheck().await {
             Ok(_) => {
                 let mut status = Status::read(self.conf.clone())?;
-                if let Err(e) = DeleteCommand::stop_current_local_services(&mut status, writer).await {
+                if let Err(e) =
+                    DeleteCommand::stop_current_local_services(&mut status, writer).await
+                {
                     writer.write_err(format!("{:?}", e).as_str());
                 };
                 status.current_profile = None;
@@ -111,7 +113,7 @@ impl DeleteCommand {
 
     // precheck delete commands
     async fn local_exec_precheck(&self) -> Result<()> {
-        let mut status = Status::read(self.conf.clone())?;
+        let status = Status::read(self.conf.clone())?;
         if status.current_profile.is_none() {
             return Err(CliError::Unknown(format!(
                 "❗ No current profile exists in {}",

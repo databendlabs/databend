@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_to_json;
+pub mod block_to_json;
 #[cfg(test)]
 mod block_to_json_test;
-pub(crate) mod statement;
+pub mod statement;
 #[cfg(test)]
 mod statement_test;

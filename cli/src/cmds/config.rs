@@ -105,11 +105,7 @@ pub struct CustomMirror {
 }
 
 impl CustomMirror {
-    fn new(
-        base_url: String,
-        databend_url: String,
-        databend_tag_url: String,
-    ) -> Self {
+    fn new(base_url: String, databend_url: String, databend_tag_url: String) -> Self {
         CustomMirror {
             base_url,
             databend_url,
@@ -130,7 +126,6 @@ impl MirrorAsset for CustomMirror {
     fn get_databend_tag_url(&self) -> String {
         self.databend_tag_url.clone()
     }
-
 }
 
 // choose one mirror which could be connected
