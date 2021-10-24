@@ -574,7 +574,7 @@ impl CreateCommand {
                     "✅  To run queries through RESTful api, run: bendctl query 'SQL statement'",
                 );
                 writer.write_ok(
-                    "✅  For example: bendctl query 'SELECT * FROM system.contributors LIMIT 20;'",
+                    "✅  For example: bendctl query 'SELECT sum(number), avg(number) FROM numbers(100);'",
                 );
                 writer.write_ok(
                     format!(
