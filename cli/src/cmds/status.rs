@@ -51,7 +51,6 @@ pub struct Status {
     pub local_config_dir: String,
     pub current_profile: Option<String>,
     pub mirrors: Option<CustomMirror>,
-    pub query_path: Option<String>, // the binary path to query binary file
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
@@ -461,7 +460,6 @@ impl Status {
                 local_config_dir,
                 current_profile: None,
                 mirrors: None,
-                query_path: None,
             };
             serde_json::to_writer(&file, &status)?;
         }

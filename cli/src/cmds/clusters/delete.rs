@@ -23,7 +23,8 @@ use crate::cmds::status::LocalRuntime;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::cmds::Writer;
-use crate::error::Result;
+use crate::error::{Result, CliError};
+use sysinfo::{System, SystemExt};
 
 #[derive(Clone)]
 pub struct DeleteCommand {
@@ -90,15 +91,40 @@ impl DeleteCommand {
     }
 
     async fn local_exec_match(&self, writer: &mut Writer, _args: &ArgMatches) -> Result<()> {
-        let mut status = Status::read(self.conf.clone())?;
-        if let Err(e) = DeleteCommand::stop_current_local_services(&mut status, writer).await {
-            writer.write_err(format!("{:?}", e).as_str());
-        };
-        status.current_profile = None;
-        status.write()?;
-        writer.write_ok("🚀 stopped services");
-
+        match self.local_exec_precheck().await {
+            Ok(_) => {
+                let mut status = Status::read(self.conf.clone())?;
+                if let Err(e) = DeleteCommand::stop_current_local_services(&mut status, writer).await {
+                    writer.write_err(format!("{:?}", e).as_str());
+                };
+                status.current_profile = None;
+                status.write()?;
+                writer.write_ok("🚀 stopped services");
+            }
+            Err(e) => {
+                writer.write_err(format!("{:?}", e).as_str());
+            }
+        }
         //(TODO) purge semantics
+        Ok(())
+    }
+
+    // precheck delete commands
+    async fn local_exec_precheck(&self) -> Result<()> {
+        let mut status = Status::read(self.conf.clone())?;
+        if status.current_profile.is_none() {
+            return Err(CliError::Unknown(format!(
+                "❗ No current profile exists in {}",
+                status.local_config_dir
+            )));
+        }
+        if !status.has_local_configs() {
+            return Err(CliError::Unknown(format!(
+                "❗ Does not have local config in {}",
+                status.local_config_dir
+            )));
+        }
+
         Ok(())
     }
 

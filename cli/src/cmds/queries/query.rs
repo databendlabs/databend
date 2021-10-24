@@ -22,7 +22,6 @@ use clap::App;
 use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
-use nix::NixPath;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -35,8 +34,6 @@ use crate::error::CliError;
 use crate::error::Result;
 use std::net::SocketAddr;
 use comfy_table::{Table, Cell, Color};
-
-pub const CLI_QUERY_CLIENT: &str = "CLI_QUERY_CLIENT";
 
 #[derive(Clone)]
 pub struct QueryCommand {
@@ -167,12 +164,7 @@ impl QueryCommand {
                 status.local_config_dir
             )));
         }
-        if status.query_path.is_none() || Path::new(status.query_path.unwrap().as_str()).is_empty()
-        {
-            return Err(CliError::Unknown(
-                "Query command error: cannot find local query binary path, please run `bendctl package fetch` to install it".to_string(),
-            ));
-        }
+
         Ok(())
     }
 }

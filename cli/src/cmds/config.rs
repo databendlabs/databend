@@ -33,12 +33,10 @@ use crate::error::CliError;
 const GITHUB_BASE_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
 const GITHUB_DATABEND_URL: &str = "https://github.com/datafuselabs/databend/releases/download";
 const GITHUB_DATABEND_TAG_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
-const GITHUB_CLIENT_URL: &str = "https://github.com/ZhiHanZ/usql/releases/download";
 
 const REPO_BASE_URL: &str = "https://repo.databend.rs/databend/tags.json";
 const REPO_DATABEND_URL: &str = "https://repo.databend.rs/databend";
 const REPO_DATABEND_TAG_URL: &str = "https://repo.databend.rs/databend/tags.json";
-const REPO_CLIENT_URL: &str = "https://repo.databend.rs/usql";
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -60,13 +58,11 @@ pub trait MirrorAsset {
     fn get_base_url(&self) -> String;
     fn get_databend_url(&self) -> String;
     fn get_databend_tag_url(&self) -> String;
-    fn get_client_url(&self) -> String;
     fn to_mirror(&self) -> CustomMirror {
         CustomMirror {
             base_url: self.get_base_url(),
             databend_url: self.get_databend_url(),
             databend_tag_url: self.get_databend_tag_url(),
-            client_url: self.get_client_url(),
         }
     }
 }
@@ -84,9 +80,6 @@ impl MirrorAsset for GithubMirror {
     fn get_databend_tag_url(&self) -> String {
         GITHUB_DATABEND_TAG_URL.to_string()
     }
-    fn get_client_url(&self) -> String {
-        GITHUB_CLIENT_URL.to_string()
-    }
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -102,9 +95,6 @@ impl MirrorAsset for RepoMirror {
     fn get_databend_tag_url(&self) -> String {
         REPO_DATABEND_TAG_URL.to_string()
     }
-    fn get_client_url(&self) -> String {
-        REPO_CLIENT_URL.to_string()
-    }
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -112,7 +102,6 @@ pub struct CustomMirror {
     pub(crate) base_url: String,
     pub(crate) databend_url: String,
     pub(crate) databend_tag_url: String,
-    pub(crate) client_url: String,
 }
 
 impl CustomMirror {
@@ -120,13 +109,11 @@ impl CustomMirror {
         base_url: String,
         databend_url: String,
         databend_tag_url: String,
-        client_url: String,
     ) -> Self {
         CustomMirror {
             base_url,
             databend_url,
             databend_tag_url,
-            client_url,
         }
     }
 }
@@ -144,9 +131,6 @@ impl MirrorAsset for CustomMirror {
         self.databend_tag_url.clone()
     }
 
-    fn get_client_url(&self) -> String {
-        self.client_url.clone()
-    }
 }
 
 // choose one mirror which could be connected
@@ -250,15 +234,6 @@ impl Config {
                     .takes_value(true),
             )
             .arg(
-                Arg::new("client_url")
-                    .long("client_url")
-                    .about("Sets the url to fetch databend query client")
-                    .env("DOWNLOAD_CLIENT_URL")
-                    .default_value("https://github.com/ZhiHanZ/usql/releases/download")
-                    .global(true)
-                    .takes_value(true),
-            )
-            .arg(
                 Arg::new("validation_url")
                     .long("validation_url")
                     .about("Sets the url to validate on custom download network connection")
@@ -305,11 +280,6 @@ impl Config {
                     .parse()
                     .unwrap(),
                 clap.clone().value_of("tag_url").unwrap().parse().unwrap(),
-                clap.clone()
-                    .value_of("client_url")
-                    .unwrap()
-                    .parse()
-                    .unwrap(),
             ),
             clap,
         };
