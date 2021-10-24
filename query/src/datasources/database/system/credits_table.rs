@@ -39,7 +39,7 @@ impl CreditsTable {
         ]);
 
         let table_info = TableInfo {
-            db: "system".to_string(),
+            desc: "'system'.'credits'".to_string(),
             name: "credits".to_string(),
             table_id,
             schema,

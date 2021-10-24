@@ -40,7 +40,7 @@ impl FunctionsTable {
         ]);
 
         let table_info = TableInfo {
-            db: "system".to_string(),
+            desc: "'system'.'functions'".to_string(),
             name: "functions".to_string(),
             table_id,
             schema,

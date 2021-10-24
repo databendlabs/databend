@@ -45,7 +45,7 @@ async fn test_csv_table() -> Result<()> {
     let table = CsvTable::try_create(
         TableInfo {
             database_id: 0,
-            db: "default".into(),
+            desc: "'default'.'test_csv'".into(),
             name: "test_csv".into(),
             schema: DataSchemaRefExt::create(vec![DataField::new(
                 "column1",
@@ -123,7 +123,7 @@ async fn test_csv_table_parse_error() -> Result<()> {
     let table = CsvTable::try_create(
         TableInfo {
             database_id: 0,
-            db: "default".into(),
+            desc: "'default'.'test_csv'".into(),
             name: "test_csv".into(),
             schema: DataSchemaRefExt::create(vec![
                 DataField::new("column1", DataType::UInt64, false),

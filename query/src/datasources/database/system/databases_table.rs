@@ -39,7 +39,7 @@ impl DatabasesTable {
             DataSchemaRefExt::create(vec![DataField::new("name", DataType::String, false)]);
 
         let table_info = TableInfo {
-            db: "system".to_string(),
+            desc: "'system'.'databases'".to_string(),
             name: "databases".to_string(),
             table_id,
             schema,

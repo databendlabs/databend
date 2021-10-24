@@ -40,7 +40,7 @@ impl OneTable {
             DataSchemaRefExt::create(vec![DataField::new("dummy", DataType::UInt8, false)]);
 
         let table_info = TableInfo {
-            db: "system".to_string(),
+            desc: "'system'.'one'".to_string(),
             name: "one".to_string(),
             table_id,
             schema,

@@ -46,7 +46,7 @@ impl ExampleTable {
             database_id: 0,
             table_id,
             version: 0,
-            db,
+            desc: format!("'{}'.'{}'", db, name),
             name,
 
             schema,

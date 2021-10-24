@@ -36,7 +36,7 @@ impl ContributorsTable {
             DataSchemaRefExt::create(vec![DataField::new("name", DataType::String, false)]);
 
         let table_info = TableInfo {
-            db: "system".to_string(),
+            desc: "'system'.'contributors'".to_string(),
             name: "contributors".to_string(),
             table_id,
             schema,

@@ -50,7 +50,7 @@ impl ProcessesTable {
         ]);
 
         let table_info = TableInfo {
-            db: "system".to_string(),
+            desc: "'system'.'processes'".to_string(),
             name: "processes".to_string(),
             table_id,
             schema,

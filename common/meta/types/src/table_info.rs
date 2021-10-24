@@ -37,7 +37,7 @@ pub struct TableInfo {
     ///
     pub version: MetaVersion,
 
-    pub db: String,
+    pub desc: String,
     pub name: String,
 
     pub schema: Arc<DataSchema>,
@@ -49,7 +49,7 @@ impl TableInfo {
     /// Create a TableInfo with only db, table, schema
     pub fn simple(db: &str, table: &str, schema: Arc<DataSchema>) -> TableInfo {
         TableInfo {
-            db: db.to_string(),
+            desc: format!("'{}'.'{}'", db, table),
             name: table.to_string(),
             schema,
             ..Default::default()
@@ -68,7 +68,7 @@ impl Default for TableInfo {
             database_id: 0,
             table_id: 0,
             version: 0,
-            db: "".to_string(),
+            desc: "".to_string(),
             name: "".to_string(),
             schema: Arc::new(DataSchema::empty()),
             engine: "".to_string(),
@@ -81,8 +81,8 @@ impl Display for TableInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "DB: {}-{}, Table: {}-{}, Version: {}, Engine: {}",
-            self.db, self.database_id, self.name, self.table_id, self.version, self.engine
+            "DB.Table: {}-{}, Table: {}-{}, Version: {}, Engine: {}",
+            self.desc, self.database_id, self.name, self.table_id, self.version, self.engine
         )
     }
 }

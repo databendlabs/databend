@@ -150,7 +150,7 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
         let table = TableInfo {
             table_id: 0,
             version: 0,
-            db: db_name.to_string(),
+            desc: format!("'{}'.'{}'", db_name, table_name),
             database_id: 0, // this field is unused during the creation of table
             schema: plan.schema.clone(),
             engine: plan.engine.clone(),
