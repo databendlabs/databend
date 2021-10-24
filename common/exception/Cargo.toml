@@ -16,6 +16,7 @@ serde_json = "1.0"
 thiserror = "1.0.30"
 tonic = "0.5.2"
 prost = "0.8.0"
+paste = "^1.0"
 
 # Github dependencies
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "cdd2ce1" }

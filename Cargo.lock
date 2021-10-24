@@ -1257,6 +1257,7 @@ dependencies = [
  "anyhow",
  "backtrace",
  "common-arrow",
+ "paste",
  "prost",
  "serde",
  "serde_json",
