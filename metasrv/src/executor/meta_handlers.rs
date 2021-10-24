@@ -219,7 +219,7 @@ impl RequestHandler<DropTableAction> for ActionHandler {
             Ok(())
         } else {
             Err(ErrorCode::UnknownTable(format!(
-                "table not found: {:}",
+                "Unknown table: '{:}'",
                 table_name
             )))
         }
@@ -244,7 +244,7 @@ impl RequestHandler<GetTableAction> for ActionHandler {
             .meta_node
             .lookup_table_id(db_id, table_name)
             .await?
-            .ok_or_else(|| ErrorCode::UnknownTable(format!("table not found: {:}", table_name)))?;
+            .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table: '{:}'", table_name)))?;
 
         let table_id = seq_table_id.1.value.0;
         let result = self.meta_node.get_table(&table_id).await?;

@@ -170,7 +170,7 @@ impl MetaApi for MetaEmbedded {
 
         if res.prev().is_none() && !if_exists {
             return Err(ErrorCode::UnknownTable(format!(
-                "table not found: {:}",
+                "Unknown table: '{:}'",
                 table_name
             )));
         }
@@ -194,7 +194,7 @@ impl MetaApi for MetaEmbedded {
                 database_id: db_id,
                 table_name: table.to_string(),
             })?
-            .ok_or_else(|| ErrorCode::UnknownTable(format!("table not found: {:}", table)))?;
+            .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table: '{:}'", table)))?;
         let table_id = table_id.1.value.0;
 
         let seq_table = sm
