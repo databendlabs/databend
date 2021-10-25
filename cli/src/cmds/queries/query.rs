@@ -16,7 +16,6 @@ use std::borrow::Borrow;
 use std::io::Read;
 use std::net::SocketAddr;
 use std::path::Path;
-use std::str::FromStr;
 
 use async_trait::async_trait;
 use clap::App;
@@ -30,8 +29,6 @@ use common_base::ProgressValues;
 use lexical_util::num::AsPrimitive;
 use num_format::Locale;
 use num_format::ToFormattedString;
-use serde::Deserialize;
-use serde::Serialize;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::command::Command;
@@ -134,15 +131,20 @@ impl QueryCommand {
                 let res = build_query_endpoint(&status);
 
                 if let Ok((cli, url)) = res {
-                    for query in queries.split(';').filter(|elem| !elem.trim().is_empty()).map(|elem| format!("{};", elem)).collect::<Vec<String>>() {
-                        writer.write_ok(format!("Execute query {} on {}", query.clone(), url).as_str());
-                        if let Err(e) = query_writer(&cli, &url, query.clone(), writer).await {
+                    for query in queries
+                        .split(';')
+                        .filter(|elem| !elem.trim().is_empty())
+                        .map(|elem| format!("{};", elem))
+                        .collect::<Vec<String>>()
+                    {
+                        writer.write_ok(
+                            format!("Execute query {} on {}", query.clone(), url).as_str(),
+                        );
+                        if let Err(e) =
+                            query_writer(&cli, url.as_str(), query.clone(), writer).await
+                        {
                             writer.write_err(
-                                format!(
-                                    "query {} execution error: {:?}", query,
-                                    e
-                                )
-                                    .as_str(),
+                                format!("query {} execution error: {:?}", query, e).as_str(),
                             );
                         }
                     }
@@ -179,7 +181,12 @@ impl QueryCommand {
     }
 }
 
-async fn query_writer(cli: &reqwest::Client, url: &String, query: String, writer: &mut Writer) -> Result<()>{
+async fn query_writer(
+    cli: &reqwest::Client,
+    url: &str,
+    query: String,
+    writer: &mut Writer,
+) -> Result<()> {
     let start = std::time::Instant::now();
     match execute_query(cli, url, query).await {
         Ok((res, stats)) => {
@@ -191,8 +198,8 @@ async fn query_writer(cli: &reqwest::Client, url: &String, query: String, writer
                     stat.read_bytes as f64 / time,
                     byte_unit::ByteUnit::B,
                 )
-                    .expect("cannot parse byte")
-                    .get_appropriate_unit(false);
+                .expect("cannot parse byte")
+                .get_appropriate_unit(false);
                 writer.write_ok(
                     format!(
                         "read rows: {}, read bytes: {}, rows/sec: {} (rows/sec), bytes/sec: {} ({}/sec)",
@@ -214,7 +221,7 @@ async fn query_writer(cli: &reqwest::Client, url: &String, query: String, writer
                     "Query command error: cannot execute query with error: {:?}",
                     e
                 )
-                    .as_str(),
+                .as_str(),
             );
         }
     }
@@ -250,7 +257,7 @@ pub fn build_query_endpoint(status: &Status) -> Result<(reqwest::Client, String)
 
 async fn execute_query(
     cli: &reqwest::Client,
-    url: &String,
+    url: &str,
     query: String,
 ) -> Result<(Table, Option<ProgressValues>)> {
     let ans = cli
