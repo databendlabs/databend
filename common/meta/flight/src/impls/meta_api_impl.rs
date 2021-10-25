@@ -96,12 +96,8 @@ impl MetaApi for MetaFlightClient {
         self.do_action(GetTablesAction { db: db.to_string() }).await
     }
 
-    async fn get_table_by_id(
-        &self,
-        tbl_id: MetaId,
-        tbl_ver: Option<MetaVersion>,
-    ) -> common_exception::Result<Arc<TableInfo>> {
-        let x = self.do_action(GetTableExtReq { tbl_id, tbl_ver }).await?;
+    async fn get_table_by_id(&self, tbl_id: MetaId) -> common_exception::Result<Arc<TableInfo>> {
+        let x = self.do_action(GetTableExtReq { tbl_id }).await?;
         Ok(Arc::new(x))
     }
 

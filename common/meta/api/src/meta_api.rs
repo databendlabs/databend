@@ -50,11 +50,7 @@ pub trait MetaApi: Send + Sync {
 
     async fn get_tables(&self, db: &str) -> Result<Vec<Arc<TableInfo>>>;
 
-    async fn get_table_by_id(
-        &self,
-        table_id: MetaId,
-        table_version: Option<MetaVersion>,
-    ) -> Result<Arc<TableInfo>>;
+    async fn get_table_by_id(&self, table_id: MetaId) -> Result<Arc<TableInfo>>;
 
     async fn upsert_table_option(
         &self,

@@ -47,11 +47,7 @@ pub trait Catalog {
 
     fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
 
-    fn get_table_by_id(
-        &self,
-        table_id: MetaId,
-        table_version: Option<MetaVersion>,
-    ) -> Result<Arc<dyn Table>>;
+    fn get_table_by_id(&self, table_id: MetaId) -> Result<Arc<dyn Table>>;
 
     fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
 

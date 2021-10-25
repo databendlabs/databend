@@ -114,13 +114,8 @@ impl MetaApi for MetaRemote {
             .await
     }
 
-    async fn get_table_by_id(
-        &self,
-        table_id: MetaId,
-        version: Option<MetaVersion>,
-    ) -> Result<Arc<TableInfo>> {
-        // TODO(xp): version
-        self.query_backend(move |cli| async move { cli.get_table_by_id(table_id, version).await })
+    async fn get_table_by_id(&self, table_id: MetaId) -> Result<Arc<TableInfo>> {
+        self.query_backend(move |cli| async move { cli.get_table_by_id(table_id).await })
             .await
     }
 

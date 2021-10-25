@@ -294,11 +294,7 @@ impl MetaApiSync for MetaEmbeddedSync {
         Ok(res)
     }
 
-    fn get_table_by_id(
-        &self,
-        table_id: MetaId,
-        _table_version: Option<MetaVersion>,
-    ) -> common_exception::Result<Arc<TableInfo>> {
+    fn get_table_by_id(&self, table_id: MetaId) -> common_exception::Result<Arc<TableInfo>> {
         let map = self.databases.read();
         for (_, tbl_idx) in map.values() {
             match tbl_idx.id2meta.get(&table_id) {
