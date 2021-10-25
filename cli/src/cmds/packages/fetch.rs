@@ -28,6 +28,9 @@ use crate::cmds::SwitchCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
+use fs_extra::dir::copy;
+use fs_extra::{dir, move_items};
+
 
 #[derive(Clone)]
 pub struct FetchCommand {
@@ -40,7 +43,18 @@ pub fn unpack(tar_file: &str, target_dir: &str) -> Result<()> {
     let mut archive = Archive::new(tar);
     let res = archive.unpack(target_dir);
     return match res {
-        Ok(_) => Ok(()),
+        Ok(_) => {
+            if Path::new(format!("{}/GNUSparseFile.0", target_dir).as_str()).exists() && Path::new(format!("{}/GNUSparseFile.0", target_dir).as_str()).is_dir() {
+                let options = dir::CopyOptions::new(); //Initialize default values for CopyOptions
+
+                let mut from_paths = Vec::new();
+                from_paths.push(format!("{}/GNUSparseFile.0/databend-query", target_dir));
+                from_paths.push(format!("{}/GNUSparseFile.0/databend-meta", target_dir));
+                move_items(&from_paths, target_dir, &options)?;
+                std::fs::remove_dir_all(format!("{}/GNUSparseFile.0", target_dir));
+            }
+            Ok(())
+        },
         Err(e) => Err(CliError::Unknown(format!(
             "cannot unpack file {} to {}, error: {}",
             tar_file, target_dir, e

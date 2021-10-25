@@ -580,6 +580,7 @@ dependencies = [
  "dirs",
  "dyn-clone",
  "flate2",
+ "fs_extra",
  "futures",
  "httpmock",
  "indicatif",
