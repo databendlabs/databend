@@ -57,6 +57,7 @@ async-compat = "0.2.1"
 async-trait = "0.1"
 axum = {version = "0.2.8", features=["headers"] }
 axum-server = { version = "0.2", features = ["tls-rustls"] }
+backoff = {version = "0.3.0", features = ["futures", "tokio"] }
 bumpalo = "3.8.0"
 byteorder = "1"
 bytes = "1"

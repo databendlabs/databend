@@ -96,7 +96,7 @@ impl FuseTable {
                     match backoff.next_backoff() {
                         Some(duration) => {
                             common_base::tokio::time::sleep(duration).await;
-                            let table = ctx.get_catalog().get_table_by_id(self.get_id(), None)?;
+                            let table = ctx.get_catalog().get_table_by_id(self.get_id())?;
                             vs = FuseTable::versioned_snapshot(table.get_table_info());
                             continue;
                         }

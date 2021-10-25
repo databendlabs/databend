@@ -86,7 +86,7 @@ impl FuseTable {
         ) {
             Err(err) => {
                 if err.code() == ErrorCode::TableVersionMissMatch("").code() {
-                    let table = catalog.get_table_by_id(self.get_id(), None)?;
+                    let table = catalog.get_table_by_id(self.get_id())?;
                     *vs = FuseTable::versioned_snapshot(table.get_table_info());
                     Err(backoff::Error::Transient(err))
                 } else {

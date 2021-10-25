@@ -55,7 +55,7 @@ async fn test_fuse_table_append_retry() -> Result<()> {
     assert!(r.is_ok());
 
     // get the latest table
-    let table = catalog.get_table_by_id(table.get_id(), None)?;
+    let table = catalog.get_table_by_id(table.get_id())?;
     let latest_version = table.get_table_info().version;
 
     // version has been increased by 2

@@ -51,7 +51,7 @@ async fn test_fuse_table_truncate_retry() -> Result<()> {
         table.append_data(io_ctx.clone(), insert_into_plan).await?;
 
         // get the lasted table
-        let table = catalog.get_table_by_id(table.get_id(), None)?;
+        let table = catalog.get_table_by_id(table.get_id())?;
         // no retry here, since we are using the latest table
         table
             .truncate(io_ctx.clone(), truncate_plan.clone())
@@ -65,7 +65,7 @@ async fn test_fuse_table_truncate_retry() -> Result<()> {
     assert!(r.is_ok());
 
     // get the latest table
-    let table = catalog.get_table_by_id(table.get_id(), None)?;
+    let table = catalog.get_table_by_id(table.get_id())?;
     let latest_version = table.get_table_info().version;
 
     // version has been bumped to at least 3 : one "insert", one "truncate" and another "truncate"
