@@ -51,7 +51,6 @@ pub struct Status {
     pub local_config_dir: String,
     pub current_profile: Option<String>,
     pub mirrors: Option<CustomMirror>,
-    pub query_path: Option<String>, // the binary path to query binary file
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
@@ -402,6 +401,14 @@ impl LocalRuntime for LocalQueryConfig {
                 databend_query::configs::config_storage::DISK_STORAGE_DATA_PATH,
                 conf.storage.disk.data_path,
             )
+            .env(
+                databend_query::configs::config_query::QUERY_HTTP_HANDLER_HOST,
+                conf.query.http_handler_host,
+            )
+            .env(
+                databend_query::configs::config_query::QUERY_HTTP_HANDLER_PORT,
+                conf.query.http_handler_port.to_string(),
+            )
             .stdout(unsafe { Stdio::from_raw_fd(out_file.into_raw_fd()) })
             .stderr(unsafe { Stdio::from_raw_fd(err_file.into_raw_fd()) });
         // logging debug
@@ -455,7 +462,6 @@ impl Status {
                 local_config_dir,
                 current_profile: None,
                 mirrors: None,
-                query_path: None,
             };
             serde_json::to_writer(&file, &status)?;
         }

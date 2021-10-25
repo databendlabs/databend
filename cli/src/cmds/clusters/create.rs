@@ -399,6 +399,10 @@ impl CreateCommand {
             config.query.clickhouse_handler_host = "0.0.0.0".to_string();
         }
 
+        if config.query.http_handler_host.is_empty() {
+            config.query.http_handler_host = "0.0.0.0".to_string();
+        }
+        config.query.http_handler_port = portpicker::pick_unused_port().unwrap();
         config
     }
 
@@ -567,6 +571,12 @@ impl CreateCommand {
                 status.write()?;
                 writer.write_ok("👏 successfully started query service.");
                 writer.write_ok(
+                    "✅  To run queries through RESTful api, run: bendctl query 'SQL statement'",
+                );
+                writer.write_ok(
+                    "✅  For example: bendctl query 'SELECT sum(number), avg(number) FROM numbers(100);'",
+                );
+                writer.write_ok(
                     format!(
                         "✅ To process mysql queries, run: mysql -h {} -P {} -uroot",
                         query_config.config.query.mysql_handler_host,
@@ -574,7 +584,15 @@ impl CreateCommand {
                     )
                     .as_str(),
                 );
-                // TODO(zhihanz) clickhouse handler instructions
+                writer.write_ok(
+                    format!(
+                        "✅ To process clickhouse queries, run: clickhouse client --host {} --port {} --user root",
+                        query_config.config.query.clickhouse_handler_host,
+                        query_config.config.query.clickhouse_handler_port
+                    )
+                        .as_str(),
+                );
+
                 Ok(())
             }
             Err(e) => Err(e),

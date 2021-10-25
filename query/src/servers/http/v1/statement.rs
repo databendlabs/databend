@@ -43,15 +43,15 @@ use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
 
 #[derive(Serialize, Deserialize, Debug)]
-pub(crate) struct HttpQueryResult {
+pub struct HttpQueryResult {
     id: String,
     #[serde(rename = "nextUri")] // to be compatible with presto
-    pub(crate) next_uri: Option<String>,
-    pub(crate) data: Option<Vec<Vec<JsonValue>>>,
-    pub(crate) columns: Option<DataSchemaRef>,
+    pub next_uri: Option<String>,
+    pub data: Option<Vec<Vec<JsonValue>>>,
+    pub columns: Option<DataSchemaRef>,
     // TODO(youngsofun): add more info in error (ErrorCode does not support Serialize)
-    pub(crate) error: Option<String>,
-    pub(crate) stats: Option<ProgressValues>,
+    pub error: Option<String>,
+    pub stats: Option<ProgressValues>,
 }
 
 impl HttpQueryResult {

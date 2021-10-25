@@ -23,6 +23,8 @@ use clap::ArgMatches;
 use comfy_table::Cell;
 use comfy_table::Color;
 use comfy_table::Table;
+use sysinfo::System;
+use sysinfo::SystemExt;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::clusters::utils;
@@ -30,6 +32,7 @@ use crate::cmds::status::LocalRuntime;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::cmds::Writer;
+use crate::error::CliError;
 use crate::error::Result;
 
 #[derive(Clone)]
@@ -69,19 +72,55 @@ impl ViewCommand {
     }
 
     async fn local_exec_match(&self, writer: &mut Writer, _args: &ArgMatches) -> Result<()> {
-        let status = Status::read(self.conf.clone())?;
-        let table = ViewCommand::build_local_table(&status, None, None).await;
-        if let Ok(t) = table {
-            writer.writeln(&t.trim_fmt());
-        } else {
-            writer.write_err(
-                format!(
-                    "cannot retrieve view table, error: {:?}",
-                    table.unwrap_err()
-                )
-                .as_str(),
-            );
+        match self.local_exec_precheck().await {
+            Ok(_) => {
+                let status = Status::read(self.conf.clone())?;
+                let table = ViewCommand::build_local_table(&status, None, None).await;
+                if let Ok(t) = table {
+                    writer.writeln(&t.trim_fmt());
+                } else {
+                    writer.write_err(
+                        format!(
+                            "cannot retrieve view table, error: {:?}",
+                            table.unwrap_err()
+                        )
+                        .as_str(),
+                    );
+                }
+            }
+            Err(e) => {
+                writer.write_err(format!("View precheck failed: {:?}", e).as_str());
+            }
         }
+        Ok(())
+    }
+    /// precheck whether on view configs
+    async fn local_exec_precheck(&self) -> Result<()> {
+        let status = Status::read(self.conf.clone())?;
+
+        if !status.has_local_configs() {
+            return Err(CliError::Unknown(format!(
+                "❗ Does not have local config in {}",
+                status.local_config_dir
+            )));
+        }
+        let s = System::new_all();
+
+        if s.process_by_name("databend-meta").is_empty() {
+            return Err(CliError::Unknown(
+                "❗ cannot find existing meta service on local machine"
+                    .parse()
+                    .unwrap(),
+            ));
+        }
+        if s.process_by_name("databend-query").is_empty() {
+            return Err(CliError::Unknown(
+                "❗ cannot find existing query service on local machine"
+                    .parse()
+                    .unwrap(),
+            ));
+        }
+
         Ok(())
     }
 

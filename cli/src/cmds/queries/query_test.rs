@@ -18,8 +18,7 @@ use tempfile::tempdir;
 
 use crate::cmds::config::GithubMirror;
 use crate::cmds::config::MirrorAsset;
-use crate::cmds::queries::query::build_query_url;
-use crate::cmds::queries::query::QueryCommand;
+use crate::cmds::queries::query::build_query_endpoint;
 use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
 use crate::cmds::Config;
@@ -27,7 +26,7 @@ use crate::cmds::Status;
 use crate::error::Result;
 
 macro_rules! build_status {
-    ($conf: expr, $mysql_port: expr, $clickhouse_port: expr) => {
+    ($conf: expr, $http_port: expr) => {
         let mut status = Status::read($conf)?;
         let mut meta_config = LocalMetaConfig {
             config: MetaConfig::default(),
@@ -49,10 +48,8 @@ macro_rules! build_status {
             path: Some("./".to_string()),
             log_dir: Some("./".to_string()),
         };
-        query_config.config.query.mysql_handler_host = "0.0.0.0".to_string();
-        query_config.config.query.mysql_handler_port = $mysql_port;
-        query_config.config.query.clickhouse_handler_host = "0.0.0.0".to_string();
-        query_config.config.query.clickhouse_handler_port = $clickhouse_port;
+        query_config.config.query.http_handler_host = "0.0.0.0".to_string();
+        query_config.config.query.http_handler_port = $http_port;
         query_config.config.query.http_api_address = format!("127.0.0.1:{}", 456);
 
         Status::save_local_config(
@@ -62,13 +59,12 @@ macro_rules! build_status {
             &query_config,
         )
         .unwrap();
-        status.query_path = Some("/bin/usql".to_string());
         status.write()?;
     };
 }
 
 #[test]
-fn test_build_query_url() -> Result<()> {
+fn test_generate_query_probe() -> Result<()> {
     let mut conf = Config {
         group: "foo".to_string(),
         databend_dir: "/tmp/.databend".to_string(),
@@ -79,52 +75,10 @@ fn test_build_query_url() -> Result<()> {
     conf.databend_dir = t.path().to_str().unwrap().to_string();
     // test on default bahavior
     {
-        let args = QueryCommand::generate();
-        let matches = args
-            .clone()
-            .get_matches_from(&["query", "select number from numbers(123);"]);
-        build_status!(conf.clone(), 3308, 9002);
-        let status = Status::read(conf.clone()).unwrap();
-        let query_url = build_query_url(&matches, &status);
-        assert!(query_url.is_ok());
-        assert_eq!(query_url.unwrap(), "mysql://root:@0.0.0.0:3308".to_string());
-    }
-    // test on clickhouse client
-    {
-        let args = QueryCommand::generate();
-        let matches = args.clone().get_matches_from(&[
-            "query",
-            "select number from numbers(123);",
-            "--client",
-            "clickhouse",
-        ]);
-        build_status!(conf.clone(), 3308, 9002);
-        let status = Status::read(conf.clone()).unwrap();
-        let query_url = build_query_url(&matches, &status);
-        assert!(query_url.is_ok());
-        assert_eq!(
-            query_url.unwrap(),
-            "clickhouse://root:@0.0.0.0:9002".to_string()
-        );
-    }
-
-    // test on clickhouse client
-    {
-        let args = QueryCommand::generate();
-        let matches = args.clone().get_matches_from(&[
-            "query",
-            "select number from numbers(123);",
-            "--client",
-            "clickhouse",
-        ]);
-        build_status!(conf.clone(), 3308, 9002);
+        build_status!(conf.clone(), 8888);
         let status = Status::read(conf).unwrap();
-        let query_url = build_query_url(&matches, &status);
-        assert!(query_url.is_ok());
-        assert_eq!(
-            query_url.unwrap(),
-            "clickhouse://root:@0.0.0.0:9002".to_string()
-        );
+        let (_, query_url) = build_query_endpoint(&status).unwrap();
+        assert_eq!(query_url, "http://0.0.0.0:8888/v1/statement".to_string());
     }
     Ok(())
 }
