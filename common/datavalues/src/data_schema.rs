@@ -115,6 +115,11 @@ impl DataSchema {
         true
     }
 
+    /// project will do column pruning.
+    pub fn project(&self, fields: Vec<DataField>) -> Self {
+        Self::new_from(fields, self.meta().clone())
+    }
+
     pub fn to_arrow(&self) -> ArrowSchema {
         let fields = self
             .fields()

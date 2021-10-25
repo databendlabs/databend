@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::TableInfo;
 
@@ -55,7 +54,7 @@ impl ReadDataSourcePlan {
             .clone()
             .map(|x| {
                 let fields: Vec<_> = x.iter().map(|(_, f)| f.clone()).collect();
-                Arc::new(DataSchema::new(fields))
+                Arc::new(self.table_info.schema.project(fields))
             })
             .unwrap_or_else(|| self.table_info.schema.clone())
     }
