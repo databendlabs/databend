@@ -34,6 +34,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         DataField::new("c2", DataType::String, is_nullable),
         DataField::new("c3", DataType::Boolean, is_nullable),
         DataField::new("c4", DataType::Float64, is_nullable),
+        DataField::new("c5", DataType::Date16, is_nullable),
     ]);
 
     let block = DataBlock::create_by_array(schema, vec![
@@ -41,12 +42,15 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         Series::new(vec!["a", "b", "c"]),
         Series::new(vec![true, true, false]),
         Series::new(vec![1.1, 2.2, 3.3]),
+        Series::new(vec![1_u16, 2_u16, 3_u16])
+            .cast_with_type(&DataType::Date16)
+            .unwrap(),
     ]);
     let json_block = block_to_json(block)?;
     let expect = vec![
-        vec![val(1), val("a"), val(true), val(1.1)],
-        vec![val(2), val("b"), val(true), val(2.2)],
-        vec![val(3), val("c"), val(false), val(3.3)],
+        vec![val(1), val("a"), val(true), val(1.1), val("1970-01-02")],
+        vec![val(2), val("b"), val(true), val(2.2), val("1970-01-03")],
+        vec![val(3), val("c"), val(false), val(3.3), val("1970-01-04")],
     ];
 
     assert_eq!(json_block, expect);
