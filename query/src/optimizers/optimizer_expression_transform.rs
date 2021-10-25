@@ -25,6 +25,7 @@ pub struct ExprTransformOptimizer {}
 
 struct ExprTransformImpl {
     before_group_by_schema: Option<DataSchemaRef>,
+    one_time_filter: Option<bool>,
 }
 
 impl ExprTransformImpl {
@@ -186,6 +187,15 @@ impl PlanRewriter for ExprTransformImpl {
     }
 
     fn rewrite_filter(&mut self, plan: &FilterPlan) -> Result<PlanNode> {
+        if plan.is_literal_false() {
+            self.one_time_filter = Some(false);
+            let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
+            self.one_time_filter = None;
+            return PlanBuilder::from(&new_input)
+                .filter(plan.predicate.clone())?
+                .build();
+        }
+
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
         let new_predicate = Self::boolean_transformer(&plan.predicate)?;
         let new_predicate = Self::truth_transformer(&new_predicate, false)?;
@@ -198,12 +208,36 @@ impl PlanRewriter for ExprTransformImpl {
         let new_predicate = Self::truth_transformer(&new_predicate, false)?;
         PlanBuilder::from(&new_input).having(new_predicate)?.build()
     }
+
+    fn rewrite_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<PlanNode> {
+        if let Some(false) = self.one_time_filter {
+            // if the filter is literal false, like 1+2=4 (constant folding optimizer will overwrite it to literal false),
+            // then we overwrites the ReadDataSourcePlan to an empty one.
+            let node = PlanNode::ReadSource(ReadDataSourcePlan {
+                table_info: plan.table_info.clone(),
+                scan_fields: plan.scan_fields.clone(),
+                parts: vec![], // set parts to empty vector, read_table should return None immediately
+                statistics: Statistics {
+                    read_rows: 0,
+                    read_bytes: 0,
+                    is_exact: true,
+                },
+                description: format!("(Read from {} table)", plan.table_info.desc),
+                scan_plan: plan.scan_plan.clone(),
+                tbl_args: plan.tbl_args.clone(),
+                push_downs: plan.push_downs.clone(),
+            });
+            return Ok(node);
+        }
+        Ok(PlanNode::ReadSource(plan.clone()))
+    }
 }
 
 impl ExprTransformImpl {
     pub fn new() -> ExprTransformImpl {
         ExprTransformImpl {
             before_group_by_schema: None,
+            one_time_filter: None,
         }
     }
 }

@@ -100,6 +100,14 @@ mod tests {
                 \n  Filter: (number = 0)\
                 \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
             },
+            Test {
+                name: "Literal boolean transform",
+                query: "select number from numbers_mt(10) where false",
+                expect: "\
+                Projection: number:UInt64\
+                \n  Filter: false\
+                \n    ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0]",
+            },
         ];
 
         for test in tests {
