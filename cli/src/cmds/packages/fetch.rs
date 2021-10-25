@@ -34,39 +34,6 @@ pub struct FetchCommand {
     conf: Config,
 }
 
-// pub fn get_go_architecture() -> Result<(String, String)> {
-//     let os = std::env::consts::OS;
-//     let arch = std::env::consts::ARCH;
-//     // Check rosetta
-//     let (_, rosetta, _) = run_script::run_script!(r#"uname -a"#)?;
-//     if rosetta.contains("Darwin") && rosetta.contains("arm64") {
-//         return Ok(("darwin".to_string(), "arm64".to_string()));
-//     }
-//     let goos = match os {
-//         "darwin" => "darwin".to_string(),
-//         "macos" => "darwin".to_string(),
-//         "linux" => "linux".to_string(),
-//         _ => {
-//             return Err(CliError::Unknown(format!(
-//                 "Unsupported go os {}",
-//                 std::env::consts::OS
-//             )));
-//         }
-//     };
-//     let goarch = match arch {
-//         "x86_64" => "amd64".to_string(),
-//         "aarch_64" => "arm64".to_string(),
-//         "aarch64" => "arm64".to_string(),
-//         _ => {
-//             return Err(CliError::Unknown(format!(
-//                 "Unsupported go architecture {}",
-//                 std::env::consts::ARCH
-//             )));
-//         }
-//     };
-//     Ok((goos, goarch))
-// }
-
 pub fn unpack(tar_file: &str, target_dir: &str) -> Result<()> {
     let tar_gz = File::open(tar_file)?;
     let tar = GzDecoder::new(tar_gz);
