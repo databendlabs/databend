@@ -21,22 +21,24 @@ use common_exception::Result;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 
-fn vec_to_json<T>(column: Vec<T>) -> Vec<JsonValue>
+fn to_json_value<T>(v: T) -> JsonValue
 where T: Serialize {
-    column
+    serde_json::to_value(v).unwrap()
+}
+
+fn primitive_array_to_json<T>(array: &DFPrimitiveArray<T>) -> Vec<JsonValue>
+where T: DFPrimitiveType + Serialize {
+    array.into_iter().map(to_json_value).collect()
+}
+
+fn primitive_array_to_json_not_null<T>(array: &DFPrimitiveArray<T>) -> Vec<JsonValue>
+where T: DFPrimitiveType + Serialize {
+    array
+        .inner()
+        .values()
         .iter()
         .map(|v| serde_json::to_value(v).unwrap())
         .collect()
-}
-
-fn primitive_column_to_json_nullable<T>(array: &DFPrimitiveArray<T>) -> Vec<JsonValue>
-where T: DFPrimitiveType + Serialize {
-    vec_to_json(array.collect_values())
-}
-
-fn primitive_column_to_json<T>(array: &DFPrimitiveArray<T>) -> Vec<JsonValue>
-where T: DFPrimitiveType + Serialize {
-    vec_to_json(array.inner().values().as_slice().to_vec())
 }
 
 fn transpose(col_table: Vec<Vec<JsonValue>>) -> Vec<Vec<JsonValue>> {
@@ -68,47 +70,49 @@ pub(crate) fn block_to_json(block: DataBlock) -> Result<Vec<Vec<JsonValue>>> {
         let data_type = field.data_type();
         let json_column: Vec<JsonValue> = match field.is_nullable() {
             true => match data_type {
-                DataType::Int8 => primitive_column_to_json_nullable(series.i8()?),
-                DataType::Int16 => primitive_column_to_json_nullable(series.i16()?),
-                DataType::Int32 => primitive_column_to_json_nullable(series.i32()?),
-                DataType::Int64 => primitive_column_to_json_nullable(series.i64()?),
-                DataType::UInt8 => primitive_column_to_json_nullable(series.u8()?),
-                DataType::UInt16 => primitive_column_to_json_nullable(series.u16()?),
-                DataType::UInt32 => primitive_column_to_json_nullable(series.u32()?),
-                DataType::UInt64 => primitive_column_to_json_nullable(series.u64()?),
-                DataType::Float32 => primitive_column_to_json_nullable(series.f32()?),
-                DataType::Float64 => primitive_column_to_json_nullable(series.f64()?),
-                DataType::String => vec_to_json(
-                    series
-                        .string()?
-                        .collect_values()
-                        .iter()
-                        .map(|o| o.as_ref().map(|v| String::from_utf8(v.clone()).unwrap()))
-                        .collect(),
-                ),
-                DataType::Boolean => vec_to_json(series.bool()?.collect_values()),
+                DataType::Int8 => primitive_array_to_json(series.i8()?),
+                DataType::Int16 => primitive_array_to_json(series.i16()?),
+                DataType::Int32 => primitive_array_to_json(series.i32()?),
+                DataType::Int64 => primitive_array_to_json(series.i64()?),
+                DataType::UInt8 => primitive_array_to_json(series.u8()?),
+                DataType::UInt16 => primitive_array_to_json(series.u16()?),
+                DataType::UInt32 => primitive_array_to_json(series.u32()?),
+                DataType::UInt64 => primitive_array_to_json(series.u64()?),
+                DataType::Float32 => primitive_array_to_json(series.f32()?),
+                DataType::Float64 => primitive_array_to_json(series.f64()?),
+                DataType::String => series
+                    .string()?
+                    .collect_values()
+                    .iter()
+                    .map(|o| o.as_ref().map(|v| String::from_utf8(v.clone()).unwrap()))
+                    .map(to_json_value)
+                    .collect(),
+                DataType::Boolean => series.bool()?.into_iter().map(to_json_value).collect(),
                 // TODO(youngsofun): support other DataType
                 _ => return Err(bad_type(data_type)),
             },
             false => match data_type {
-                DataType::Int8 => primitive_column_to_json(series.i8()?),
-                DataType::Int16 => primitive_column_to_json(series.i16()?),
-                DataType::Int32 => primitive_column_to_json(series.i32()?),
-                DataType::Int64 => primitive_column_to_json(series.i64()?),
-                DataType::UInt8 => primitive_column_to_json(series.u8()?),
-                DataType::UInt16 => primitive_column_to_json(series.u16()?),
-                DataType::UInt32 => primitive_column_to_json(series.u32()?),
-                DataType::UInt64 => primitive_column_to_json(series.u64()?),
-                DataType::Float32 => primitive_column_to_json(series.f32()?),
-                DataType::Float64 => primitive_column_to_json(series.f64()?),
-                DataType::Boolean => vec_to_json(series.bool()?.into_no_null_iter().collect()),
-                DataType::String => vec_to_json(
-                    series
-                        .string()?
-                        .into_no_null_iter()
-                        .map(|v| String::from_utf8(v.to_vec()).unwrap())
-                        .collect(),
-                ),
+                DataType::Int8 => primitive_array_to_json_not_null(series.i8()?),
+                DataType::Int16 => primitive_array_to_json_not_null(series.i16()?),
+                DataType::Int32 => primitive_array_to_json_not_null(series.i32()?),
+                DataType::Int64 => primitive_array_to_json_not_null(series.i64()?),
+                DataType::UInt8 => primitive_array_to_json_not_null(series.u8()?),
+                DataType::UInt16 => primitive_array_to_json_not_null(series.u16()?),
+                DataType::UInt32 => primitive_array_to_json_not_null(series.u32()?),
+                DataType::UInt64 => primitive_array_to_json_not_null(series.u64()?),
+                DataType::Float32 => primitive_array_to_json_not_null(series.f32()?),
+                DataType::Float64 => primitive_array_to_json_not_null(series.f64()?),
+                DataType::Boolean => series
+                    .bool()?
+                    .into_no_null_iter()
+                    .map(to_json_value)
+                    .collect(),
+                DataType::String => series
+                    .string()?
+                    .into_no_null_iter()
+                    .map(|v| String::from_utf8(v.to_vec()).unwrap())
+                    .map(to_json_value)
+                    .collect(),
                 // TODO(youngsofun): support other DataType
                 _ => return Err(bad_type(data_type)),
             },
