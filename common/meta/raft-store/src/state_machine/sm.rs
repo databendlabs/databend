@@ -357,7 +357,7 @@ impl StateMachine {
                 ref table_name,
                 table_info: ref table,
             } => {
-                let db_id = self.get_db_id(db_name)?;
+                let db_id = self.get_db_id(db_name).await?;
 
                 let lookup_key = TableLookupKey {
                     database_id: db_id,
@@ -410,7 +410,7 @@ impl StateMachine {
                 ref db_name,
                 ref table_name,
             } => {
-                let db_id = self.get_db_id(db_name)?;
+                let db_id = self.get_db_id(db_name).await?;
 
                 let lookup_key = TableLookupKey {
                     database_id: db_id,
@@ -538,6 +538,7 @@ impl StateMachine {
         Ok(Some(seq_kv_value))
     }
 
+    #[allow(clippy::ptr_arg)]
     async fn get_db_id(&self, db_name: &String) -> common_exception::Result<u64> {
         let dbi = self
             .databases()
