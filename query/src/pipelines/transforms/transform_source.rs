@@ -88,27 +88,11 @@ impl Processor for SourceTransform {
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let desc = self.source_plan.table_info.desc.clone();
-
         tracing::debug!("execute, table:{:#} ...", desc);
 
-        // We need to keep the block struct with the schema
-        // Because the table may not support require columns
-
-        // TODO(xp): should use this but it fails the stateless test:
-        //           Passing in only required fields needs to modify all components that use schema.
-        // let schema = DataSchema::new_from(
-        //     self.source_plan
-        //         .scan_fields()
-        //         .values()
-        //         .cloned()
-        //         .collect::<Vec<_>>(),
-        //     self.source_plan.schema().meta().clone(),
-        // );
-
-        let schema = self.source_plan.table_info.schema.clone();
         Ok(Box::pin(CorrectWithSchemaStream::new(
             self.read_table().await?,
-            schema,
+            self.source_plan.schema(),
         )))
     }
 }
