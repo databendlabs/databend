@@ -355,7 +355,7 @@ assert_supported_architecture() {
             return 0
             ;;
         aarch64-apple-darwin)
-            echo "aarch64-apple-darwin"
+            echo "x86_64-apple-darwin"
             return 0
             ;;
         *)

@@ -84,6 +84,10 @@ pub fn get_rust_architecture() -> Result<String> {
     }
 
     // Check rosetta
+    let (_, rosetta, _) = run_script::run_script!(r#"uname -a"#)?;
+    if rosetta.contains("Darwin") && rosetta.contains("arm64") {
+        return Ok("x86_64-apple-darwin".to_string());
+    }
     let os = match os {
         "darwin" => "apple-darwin".to_string(),
         "macos" => "apple-darwin".to_string(),
