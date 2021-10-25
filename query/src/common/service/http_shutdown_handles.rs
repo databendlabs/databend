@@ -33,6 +33,7 @@ impl HttpShutdownHandler {
             abort_handle: axum_server::Handle::new(),
         }
     }
+
     pub async fn try_listen(
         &mut self,
         join_handler: JoinHandle<std::io::Result<()>>,
@@ -55,16 +56,21 @@ impl HttpShutdownHandler {
             }
         }
     }
-    pub async fn shutdown(&mut self) {
-        self.abort_handle.graceful_shutdown();
 
-        if let Some(join_handle) = self.join_handle.take() {
-            if let Err(error) = join_handle.await {
-                log::error!(
-                    "Unexpected error during shutdown Http Server {}. cause {}",
-                    self.service_name,
-                    error
-                );
+    pub async fn shutdown(&mut self, graceful: bool) {
+        if graceful {
+            self.abort_handle.graceful_shutdown();
+        } else {
+            self.abort_handle.shutdown();
+
+            if let Some(join_handle) = self.join_handle.take() {
+                if let Err(error) = join_handle.await {
+                    log::error!(
+                        "Unexpected error during shutdown Http Server {}. cause {}",
+                        self.service_name,
+                        error
+                    );
+                }
             }
         }
     }

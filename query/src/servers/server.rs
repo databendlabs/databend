@@ -23,7 +23,6 @@ use common_base::SignalStream;
 use common_base::SignalType;
 use common_exception::Result;
 use futures::stream::Abortable;
-use futures::Future;
 use futures::StreamExt;
 use tokio_stream::wrappers::TcpListenerStream;
 
@@ -33,8 +32,7 @@ pub type ListeningStream = Abortable<TcpListenerStream>;
 
 #[async_trait::async_trait]
 pub trait Server: Send {
-    async fn shutdown(&mut self);
-
+    async fn shutdown(&mut self, graceful: bool);
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr>;
 }
 
@@ -52,22 +50,22 @@ impl ShutdownHandle {
             shutdown: Arc::new(AtomicBool::new(false)),
         }
     }
-
-    pub fn shutdown(&mut self, mut signal: SignalStream) -> impl Future<Output = ()> + '_ {
+    async fn shutdown_services(&mut self, graceful: bool) {
         let mut shutdown_jobs = vec![];
         for service in &mut self.services {
-            shutdown_jobs.push(service.shutdown());
+            shutdown_jobs.push(service.shutdown(graceful));
         }
+        futures::future::join_all(shutdown_jobs).await;
+    }
 
-        let sessions = self.sessions.clone();
-        let join_all = futures::future::join_all(shutdown_jobs);
-        async move {
-            let cluster_discovery = sessions.get_cluster_discovery();
-            cluster_discovery.unregister_to_metastore(&mut signal).await;
-
-            join_all.await;
-            sessions.shutdown(signal).await;
-        }
+    pub async fn shutdown(&mut self, mut signal: SignalStream) {
+        self.shutdown_services(true).await;
+        self.sessions
+            .get_cluster_discovery()
+            .unregister_to_metastore(&mut signal)
+            .await;
+        self.sessions.graceful_shutdown(signal, 5).await;
+        self.shutdown_services(false).await;
     }
 
     pub async fn wait_for_termination_request(&mut self) {

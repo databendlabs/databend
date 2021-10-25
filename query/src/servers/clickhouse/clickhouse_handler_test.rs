@@ -106,7 +106,7 @@ async fn test_abort_clickhouse_server() -> Result<()> {
     // Accepted connection
     let _handler = create_conn(listening.port()).await?;
 
-    handler.shutdown().await;
+    handler.shutdown(true).await;
 
     // Rejected connection
     match create_conn(listening.port()).await {

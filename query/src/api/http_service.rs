@@ -51,7 +51,7 @@ impl HttpService {
     pub fn create(sessions: SessionManagerRef) -> Box<HttpService> {
         Box::new(HttpService {
             sessions,
-            shutdown_handler: HttpShutdownHandler::create("HttpAPIService".to_string()),
+            shutdown_handler: HttpShutdownHandler::create("http api".to_string()),
         })
     }
 
@@ -180,8 +180,8 @@ impl HttpService {
 
 #[async_trait::async_trait]
 impl Server for HttpService {
-    async fn shutdown(&mut self) {
-        self.shutdown_handler.shutdown().await;
+    async fn shutdown(&mut self, graceful: bool) {
+        self.shutdown_handler.shutdown(graceful).await;
     }
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {

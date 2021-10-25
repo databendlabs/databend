@@ -117,7 +117,10 @@ impl MySQLHandler {
 
 #[async_trait::async_trait]
 impl Server for MySQLHandler {
-    async fn shutdown(&mut self) {
+    async fn shutdown(&mut self, graceful: bool) {
+        if !graceful {
+            return;
+        }
         self.abort_handle.abort();
 
         if let Some(join_handle) = self.join_handle.take() {
