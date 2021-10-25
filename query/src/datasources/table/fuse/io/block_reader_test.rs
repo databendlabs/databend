@@ -64,7 +64,7 @@ async fn test_block_reader_read() -> common_exception::Result<()> {
 
     let proj = (0..arrow_scheme.fields().len()).collect();
     let got = super::block_reader::do_read(part, da, proj, arrow_scheme).await;
-    assert!(got.is_ok());
+    assert!(got.is_ok(), "{:?}", got);
 
     let input_block_as_string = pretty_format_blocks(&[block]).unwrap();
     let lines_of_input_block = input_block_as_string.lines().collect();
