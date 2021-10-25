@@ -27,7 +27,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_metrics::MetricValue;
-use common_planners::Extras;
+use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use serde_json;
@@ -48,7 +48,7 @@ impl MetricsTable {
         ]);
 
         let table_info = TableInfo {
-            db: "system".to_string(),
+            desc: "'system'.'metrics'".to_string(),
             name: "metrics".to_string(),
             table_id,
             schema,
@@ -98,7 +98,7 @@ impl Table for MetricsTable {
     async fn read(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _push_downs: &Option<Extras>,
+        _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let prometheus_handle = common_metrics::try_handle().ok_or_else(|| {
             ErrorCode::InitPrometheusFailure("Prometheus recorder is not initialized yet.")

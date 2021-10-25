@@ -21,7 +21,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
-use common_planners::Extras;
+use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -42,7 +42,7 @@ impl TablesTable {
         ]);
 
         let table_info = TableInfo {
-            db: "system".to_string(),
+            desc: "'system'.'tables'".to_string(),
             name: "tables".to_string(),
             table_id,
             schema,
@@ -68,7 +68,7 @@ impl Table for TablesTable {
     async fn read(
         &self,
         io_ctx: Arc<TableIOContext>,
-        _push_downs: &Option<Extras>,
+        _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let ctx: Arc<DatabendQueryContext> = io_ctx
             .get_user_data()?

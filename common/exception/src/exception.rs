@@ -109,7 +109,17 @@ macro_rules! build_exceptions {
                         cause: None,
                         backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
                     }
-                })*
+                }
+                paste::item! {
+                    pub fn [< $body:snake _ code >] ()  -> u16{
+                        $code
+                    }
+
+                    pub fn [< $body  Code >] ()  -> u16{
+                        $code
+                    }
+                }
+                )*
             }
     }
 }

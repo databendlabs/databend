@@ -23,6 +23,7 @@ use crate::cmds::status::LocalRuntime;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::cmds::Writer;
+use crate::error::CliError;
 use crate::error::Result;
 
 #[derive(Clone)]
@@ -53,10 +54,13 @@ impl DeleteCommand {
             )
     }
 
-    pub fn stop_current_local_services(status: &mut Status, writer: &mut Writer) -> Result<()> {
+    pub async fn stop_current_local_services(
+        status: &mut Status,
+        writer: &mut Writer,
+    ) -> Result<()> {
         writer.write_ok("⚠ start to clean up local services");
         for (fs, query) in status.get_local_query_configs() {
-            if query.kill().is_err() {
+            if query.kill().await.is_err() {
                 if Status::delete_local_config(status, "query".to_string(), fs.clone()).is_err() {
                     writer.write_err(&*format!("cannot clean query config in {}", fs.clone()))
                 }
@@ -73,7 +77,7 @@ impl DeleteCommand {
         }
         if status.get_local_meta_config().is_some() {
             let (fs, meta) = status.get_local_meta_config().unwrap();
-            if meta.kill().is_err() {
+            if meta.kill().await.is_err() {
                 writer.write_err(&*format!("cannot kill meta service with config in {}", fs));
                 if Status::delete_local_config(status, "meta".to_string(), fs.clone()).is_err() {
                     writer.write_err(&*format!("cannot clean meta config in {}", fs))
@@ -86,24 +90,55 @@ impl DeleteCommand {
         Ok(())
     }
 
-    fn local_exec_match(&self, writer: &mut Writer, _args: &ArgMatches) -> Result<()> {
-        let mut status = Status::read(self.conf.clone())?;
-        DeleteCommand::stop_current_local_services(&mut status, writer)?;
-        status.current_profile = None;
-        status.write()?;
-        writer.write_ok("🚀 stopped services");
-
+    async fn local_exec_match(&self, writer: &mut Writer, _args: &ArgMatches) -> Result<()> {
+        match self.local_exec_precheck().await {
+            Ok(_) => {
+                let mut status = Status::read(self.conf.clone())?;
+                if let Err(e) =
+                    DeleteCommand::stop_current_local_services(&mut status, writer).await
+                {
+                    writer.write_err(format!("{:?}", e).as_str());
+                };
+                status.current_profile = None;
+                status.write()?;
+                writer.write_ok("🚀 stopped services");
+            }
+            Err(e) => {
+                writer.write_err(format!("{:?}", e).as_str());
+            }
+        }
         //(TODO) purge semantics
         Ok(())
     }
 
-    pub fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+    // precheck delete commands
+    async fn local_exec_precheck(&self) -> Result<()> {
+        let status = Status::read(self.conf.clone())?;
+        if status.current_profile.is_none() {
+            return Err(CliError::Unknown(format!(
+                "❗ No current profile exists in {}",
+                status.local_config_dir
+            )));
+        }
+        if !status.has_local_configs() {
+            return Err(CliError::Unknown(format!(
+                "❗ Does not have local config in {}",
+                status.local_config_dir
+            )));
+        }
+
+        Ok(())
+    }
+
+    pub async fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         match args {
             Some(matches) => {
                 let status = Status::read(self.conf.clone())?;
                 let p = utils::get_profile(status, matches.value_of("profile"));
                 match p {
-                    Ok(ClusterProfile::Local) => return self.local_exec_match(writer, matches),
+                    Ok(ClusterProfile::Local) => {
+                        return self.local_exec_match(writer, matches).await
+                    }
                     Ok(ClusterProfile::Cluster) => {
                         todo!()
                     }

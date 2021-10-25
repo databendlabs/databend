@@ -24,19 +24,17 @@ use axum::response::Html;
 use axum::response::IntoResponse;
 use axum::AddExtensionLayer;
 use axum::Router;
-use axum_server::Handle;
 use common_base::tokio;
-use common_base::tokio::task::JoinHandle;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::PrometheusHandle;
 
+use crate::common::service::HttpShutdownHandler;
 use crate::servers::Server;
 use crate::sessions::SessionManagerRef;
 
 pub struct MetricService {
-    join_handle: Option<JoinHandle<std::io::Result<()>>>,
-    abort_handler: Handle,
+    shutdown_handler: HttpShutdownHandler,
 }
 
 pub struct MetricTemplate {
@@ -70,8 +68,7 @@ impl MetricService {
     // TODO add session tls handler
     pub fn create(_sessions: SessionManagerRef) -> Box<MetricService> {
         Box::new(MetricService {
-            join_handle: None,
-            abort_handler: axum_server::Handle::new(),
+            shutdown_handler: HttpShutdownHandler::create("HttpHandler".to_string()),
         })
     }
 
@@ -81,42 +78,16 @@ impl MetricService {
         })?;
         let app = build_router!(prometheus_handle);
         let server = axum_server::bind(listening.to_string())
-            .handle(self.abort_handler.clone())
+            .handle(self.shutdown_handler.abort_handle.clone())
             .serve(app);
-
-        self.join_handle = Some(tokio::spawn(server));
-        self.abort_handler.listening().await;
-
-        match self.abort_handler.listening_addrs() {
-            None => Err(ErrorCode::CannotListenerPort("")),
-            Some(addresses) if addresses.is_empty() => Err(ErrorCode::CannotListenerPort("")),
-            Some(addresses) => {
-                // 0.0.0.0, for multiple network interface, we may listen to multiple address
-                let first_address = addresses[0];
-                for address in addresses {
-                    if address.port() != first_address.port() {
-                        return Err(ErrorCode::CannotListenerPort(""));
-                    }
-                }
-                Ok(first_address)
-            }
-        }
+        self.shutdown_handler.try_listen(tokio::spawn(server)).await
     }
 }
 
 #[async_trait::async_trait]
 impl Server for MetricService {
     async fn shutdown(&mut self) {
-        self.abort_handler.graceful_shutdown();
-
-        if let Some(join_handle) = self.join_handle.take() {
-            if let Err(error) = join_handle.await {
-                log::error!(
-                    "Unexpected error during shutdown Http API handler. cause {}",
-                    error
-                );
-            }
-        }
+        self.shutdown_handler.shutdown().await;
     }
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {

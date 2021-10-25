@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::TableInfo;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
@@ -123,11 +124,7 @@ impl Catalog for SystemCatalog {
         Ok(self.sys_db_meta.name_to_table.values().cloned().collect())
     }
 
-    fn get_table_by_id(
-        &self,
-        table_id: MetaId,
-        _table_version: Option<MetaVersion>,
-    ) -> Result<Arc<dyn Table>> {
+    fn get_table_by_id(&self, table_id: MetaId) -> Result<Arc<dyn Table>> {
         let table =
             self.sys_db_meta.id_to_table.get(&table_id).ok_or_else(|| {
                 ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id))
@@ -162,5 +159,10 @@ impl Catalog for SystemCatalog {
 
     fn drop_database(&self, _plan: DropDatabasePlan) -> Result<()> {
         Err(ErrorCode::UnImplement("Cannot drop system database"))
+    }
+
+    fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+        let table_id = table_info.table_id;
+        self.get_table_by_id(table_id)
     }
 }

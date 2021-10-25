@@ -13,48 +13,14 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fmt;
+use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 
 use crate::MetaVersion;
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, Default, Clone, PartialEq)]
-pub struct Table {
-    pub table_id: u64,
-
-    pub table_version: u64,
-
-    /// name of this table
-    pub table_name: String,
-
-    /// identity of the database which this table belongs to
-    pub database_id: u64,
-
-    /// snapshot of the database name which this table is being created
-    pub db_name: String,
-
-    /// serialized schema
-    pub schema: Vec<u8>,
-
-    /// table engine
-    pub table_engine: String,
-
-    /// table options
-    pub table_options: HashMap<String, String>,
-
-    /// name of parts that belong to this table.
-    pub parts: HashSet<String>,
-}
-
-impl fmt::Display for Table {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "table id: {}", self.table_id)
-    }
-}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TableInfo {
@@ -71,7 +37,7 @@ pub struct TableInfo {
     ///
     pub version: MetaVersion,
 
-    pub db: String,
+    pub desc: String,
     pub name: String,
 
     pub schema: Arc<DataSchema>,
@@ -83,7 +49,7 @@ impl TableInfo {
     /// Create a TableInfo with only db, table, schema
     pub fn simple(db: &str, table: &str, schema: Arc<DataSchema>) -> TableInfo {
         TableInfo {
-            db: db.to_string(),
+            desc: format!("'{}'.'{}'", db, table),
             name: table.to_string(),
             schema,
             ..Default::default()
@@ -102,11 +68,21 @@ impl Default for TableInfo {
             database_id: 0,
             table_id: 0,
             version: 0,
-            db: "".to_string(),
+            desc: "".to_string(),
             name: "".to_string(),
             schema: Arc::new(DataSchema::empty()),
             engine: "".to_string(),
             options: HashMap::new(),
         }
+    }
+}
+
+impl Display for TableInfo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "DB.Table: {}-{}, Table: {}-{}, Version: {}, Engine: {}",
+            self.desc, self.database_id, self.name, self.table_id, self.version, self.engine
+        )
     }
 }

@@ -92,7 +92,7 @@ impl RangeFilter {
 
 /// convert expr to Verifiable Expression
 /// Rules: (section 5.2 of http://vldb.org/pvldb/vol14/p3083-edara.pdf)
-fn build_verifiable_expr(
+pub(crate) fn build_verifiable_expr(
     expr: &Expression,
     schema: DataSchemaRef,
     stat_columns: &mut StatColumns,
@@ -190,7 +190,7 @@ impl fmt::Display for StatType {
 }
 
 #[derive(Debug, Clone)]
-struct StatColumn {
+pub(crate) struct StatColumn {
     column_id: u32,
     stat_type: StatType,
     stat_field: DataField,
@@ -214,7 +214,7 @@ impl StatColumn {
     }
 }
 
-type StatColumns = Vec<StatColumn>;
+pub(crate) type StatColumns = Vec<StatColumn>;
 
 fn collect_columns_from_expr(expr: &Expression) -> Result<HashSet<String>> {
     let mut visitor = RequireColumnsVisitor::default();
@@ -252,7 +252,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                     _ => {
                         return Err(ErrorCode::UnknownException(
                             "Multi-column expressions are not currently supported",
-                        ))
+                        ));
                     }
                 }
             }
@@ -268,14 +268,14 @@ impl<'a> VerifiableExprBuilder<'a> {
                     _ => {
                         return Err(ErrorCode::UnknownException(
                             "Multi-column expressions are not currently supported",
-                        ))
+                        ));
                     }
                 }
             }
             _ => {
                 return Err(ErrorCode::UnknownException(
                     "Expressions with more than two args are not currently supported",
-                ))
+                ));
             }
         };
 
@@ -392,79 +392,5 @@ impl<'a> VerifiableExprBuilder<'a> {
 
     fn nulls_column_expr(&mut self) -> Result<Expression> {
         self.stat_column_expr(StatType::Nulls)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use common_datavalues::DataField;
-    use common_datavalues::DataSchemaRefExt;
-    use common_datavalues::DataType;
-    use common_exception::Result;
-    use common_planners::*;
-
-    use super::*;
-
-    #[test]
-    fn test_build_verifiable_function() -> Result<()> {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("a", DataType::Int64, false),
-            DataField::new("b", DataType::Int32, false),
-            DataField::new("c", DataType::String, false),
-        ]);
-
-        #[allow(dead_code)]
-        struct Test {
-            name: &'static str,
-            expr: Expression,
-            expect: &'static str,
-        }
-
-        let tests: Vec<Test> = vec![
-            Test {
-                name: "a < 1 and b > 3",
-                expr: col("a").lt(lit(1)).and(col("b").gt(lit(3))),
-                expect: "((min_a < 1) and (max_b > 3))",
-            },
-            Test {
-                name: "1 > -a or 3 >= b",
-                expr: lit(1).gt(neg(col("a"))).or(lit(3).gt_eq(col("b"))),
-                expect: "(((- max_a) < 1) or (min_b <= 3))",
-            },
-            Test {
-                name: "a = 1 and b != 3",
-                expr: col("a").eq(lit(1)).and(col("b").not_eq(lit(3))),
-                expect: "(((min_a <= 1) and (max_a >= 1)) and ((min_b != 3) or (max_b != 3)))",
-            },
-            Test {
-                name: "a is null",
-                expr: Expression::create_scalar_function("isNull", vec![col("a")]),
-                expect: "(nulls_a > 0)",
-            },
-            Test {
-                name: "a is not null",
-                expr: Expression::create_scalar_function("isNotNull", vec![col("a")]),
-                expect: "isNotNull(min_a)",
-            },
-            Test {
-                name: "b >= 0 and c like '%sys%'",
-                expr: col("b")
-                    .gt_eq(lit(0))
-                    .and(Expression::create_binary_expression("like", vec![
-                        col("c"),
-                        lit("%sys%".as_bytes()),
-                    ])),
-                expect: "((max_b >= 0) and true)",
-            },
-        ];
-
-        for test in tests {
-            let mut stat_columns: StatColumns = Vec::new();
-            let res = build_verifiable_expr(&test.expr, schema.clone(), &mut stat_columns);
-            let actual = format!("{:?}", res);
-            assert_eq!(test.expect, actual, "{:#?}", test.name);
-        }
-
-        Ok(())
     }
 }

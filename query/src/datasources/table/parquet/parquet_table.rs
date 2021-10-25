@@ -25,7 +25,7 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
-use common_planners::Extras;
+use common_planners::ReadDataSourcePlan;
 use common_streams::ParquetStream;
 use common_streams::SendableDataBlockStream;
 use crossbeam::channel::bounded;
@@ -104,7 +104,7 @@ impl Table for ParquetTable {
     async fn read(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _push_downs: &Option<Extras>,
+        plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         type BlockSender = Sender<Option<Result<DataBlock>>>;
         type BlockReceiver = Receiver<Option<Result<DataBlock>>>;
@@ -112,7 +112,8 @@ impl Table for ParquetTable {
         let (response_tx, response_rx): (BlockSender, BlockReceiver) = bounded(2);
 
         let file = self.file.clone();
-        let projection: Vec<usize> = (0..self.table_info.schema.fields().len()).collect();
+        let projection: Vec<usize> = plan.scan_fields().keys().cloned().collect::<Vec<_>>();
+
         task::spawn_blocking(move || {
             if let Err(e) = read_file(&file, response_tx, &projection) {
                 println!("Parquet reader thread terminated due to error: {:?}", e);

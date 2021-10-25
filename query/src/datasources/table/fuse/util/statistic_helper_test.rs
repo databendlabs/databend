@@ -23,21 +23,7 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 
 use super::statistic_helper;
-
-struct TestFixture {}
-
-impl TestFixture {
-    fn gen_block_stream(num: u32) -> Vec<DataBlock> {
-        (0..num)
-            .into_iter()
-            .map(|_v| {
-                let schema =
-                    DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
-                DataBlock::create_by_array(schema, vec![Series::new(vec![1, 2, 3])])
-            })
-            .collect()
-    }
-}
+use crate::datasources::table::fuse::table_test_fixture::TestFixture;
 
 #[test]
 fn test_ft_stats_block_stats() -> common_exception::Result<()> {

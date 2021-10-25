@@ -15,6 +15,7 @@
 // The servers module used for external communication with user, such as MySQL wired protocol, etc.
 
 pub use clickhouse::ClickHouseHandler;
+pub use http::HttpHandler;
 pub use server::Server;
 pub use server::ShutdownHandle;
 
@@ -22,5 +23,6 @@ pub use self::mysql::MySQLConnection;
 pub use self::mysql::MySQLHandler;
 
 mod clickhouse;
+pub mod http;
 mod mysql;
 pub(crate) mod server;

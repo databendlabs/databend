@@ -20,7 +20,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
-use common_planners::Extras;
+use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
@@ -36,7 +36,7 @@ impl ContributorsTable {
             DataSchemaRefExt::create(vec![DataField::new("name", DataType::String, false)]);
 
         let table_info = TableInfo {
-            db: "system".to_string(),
+            desc: "'system'.'contributors'".to_string(),
             name: "contributors".to_string(),
             table_id,
             schema,
@@ -61,7 +61,7 @@ impl Table for ContributorsTable {
     async fn read(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _push_downs: &Option<Extras>,
+        _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let contributors: Vec<&[u8]> = env!("DATABEND_COMMIT_AUTHORS")
             .split_terminator(',')

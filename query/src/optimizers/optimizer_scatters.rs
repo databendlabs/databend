@@ -32,6 +32,7 @@ use common_planners::SortPlan;
 use common_planners::StageKind;
 use common_planners::StagePlan;
 
+use crate::catalogs::Catalog;
 use crate::optimizers::Optimizer;
 use crate::sessions::DatabendQueryContext;
 use crate::sessions::DatabendQueryContextRef;
@@ -282,7 +283,8 @@ impl PlanRewriter for ScattersOptimizerImpl {
     fn rewrite_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<PlanNode> {
         let context = self.ctx.clone();
         let select_table = if plan.tbl_args.is_none() {
-            context.get_table(&plan.table_info.db, &plan.table_info.name)?
+            let catalog = context.get_catalog();
+            catalog.build_table(&plan.table_info)?
         } else {
             context
                 .get_table_function(&plan.table_info.name, plan.tbl_args.clone())?

@@ -18,12 +18,12 @@ use async_raft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::table_info::Table;
 use crate::DatabaseInfo;
 use crate::KVMeta;
 use crate::MatchSeq;
 use crate::Node;
 use crate::Operation;
+use crate::TableInfo;
 
 /// A Cmd describes what a user want to do to raft state machine
 /// and is the essential part of a raft log.
@@ -37,38 +37,20 @@ pub enum Cmd {
     AddNode { node_id: NodeId, node: Node },
 
     /// Add a database if absent
-    CreateDatabase {
-        // TODO(ariesdevil): add `seq` for distinguish between the results of the execution of
-        // the two commands (failed `add` and successful `delete`)
-        name: String,
-        db: DatabaseInfo,
-    },
+    CreateDatabase { name: String, db: DatabaseInfo },
 
     /// Drop a database if absent
-    DropDatabase {
-        // TODO(ariesdevil): add `seq` for distinguish between the results of the execution of
-        // the two commands (failed `add` and successful `delete`)
-        name: String,
-    },
+    DropDatabase { name: String },
 
     /// Create a table if absent
     CreateTable {
-        // TODO(ariesdevil): add `seq` for distinguish between the results of the execution of
-        // the two commands (failed `add` and successful `delete`)
         db_name: String,
         table_name: String,
-        if_not_exists: bool,
-        table: Table,
+        table_info: TableInfo,
     },
 
     /// Drop a table if absent
-    DropTable {
-        // TODO(ariesdevil): add `seq` for distinguish between the results of the execution of
-        // the two commands (failed `add` and successful `delete`)
-        db_name: String,
-        table_name: String,
-        if_exists: bool,
-    },
+    DropTable { db_name: String, table_name: String },
 
     /// Update or insert a general purpose kv store
     UpsertKV {
@@ -106,25 +88,15 @@ impl fmt::Display for Cmd {
             Cmd::CreateTable {
                 db_name,
                 table_name,
-                if_not_exists,
-                table,
+                table_info: table,
             } => {
-                write!(
-                    f,
-                    "create_table:{}-{}={}, if_not_exists:{}",
-                    db_name, table_name, table, if_not_exists
-                )
+                write!(f, "create_table:{}-{}={}", db_name, table_name, table)
             }
             Cmd::DropTable {
                 db_name,
                 table_name,
-                if_exists,
             } => {
-                write!(
-                    f,
-                    "delete_table:{}-{}, if_exists:{}",
-                    db_name, table_name, if_exists
-                )
+                write!(f, "delete_table:{}-{}", db_name, table_name)
             }
             Cmd::UpsertKV {
                 key,

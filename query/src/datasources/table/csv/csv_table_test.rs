@@ -45,7 +45,7 @@ async fn test_csv_table() -> Result<()> {
     let table = CsvTable::try_create(
         TableInfo {
             database_id: 0,
-            db: "default".into(),
+            desc: "'default'.'test_csv'".into(),
             name: "test_csv".into(),
             schema: DataSchemaRefExt::create(vec![DataField::new(
                 "column1",
@@ -83,7 +83,7 @@ async fn test_csv_table() -> Result<()> {
     )?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
-    let stream = table.read(io_ctx, &source_plan.push_downs).await?;
+    let stream = table.read(io_ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 1);
@@ -123,7 +123,7 @@ async fn test_csv_table_parse_error() -> Result<()> {
     let table = CsvTable::try_create(
         TableInfo {
             database_id: 0,
-            db: "default".into(),
+            desc: "'default'.'test_csv'".into(),
             name: "test_csv".into(),
             schema: DataSchemaRefExt::create(vec![
                 DataField::new("column1", DataType::UInt64, false),
@@ -162,7 +162,7 @@ async fn test_csv_table_parse_error() -> Result<()> {
     )?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
-    let stream = table.read(io_ctx, &source_plan.push_downs).await?;
+    let stream = table.read(io_ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await;
     // integer parse error will result to Null value
     assert!(!result.is_err());

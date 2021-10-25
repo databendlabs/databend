@@ -13,18 +13,22 @@
 // limitations under the License.
 
 use std::borrow::Borrow;
+use std::io::Read;
+use std::net::SocketAddr;
 use std::path::Path;
-use std::process::Stdio;
-use std::str::FromStr;
 
 use async_trait::async_trait;
 use clap::App;
 use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
-use nix::NixPath;
-use serde::Deserialize;
-use serde::Serialize;
+use comfy_table::Cell;
+use comfy_table::Color;
+use comfy_table::Table;
+use common_base::ProgressValues;
+use lexical_util::num::AsPrimitive;
+use num_format::Locale;
+use num_format::ToFormattedString;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::command::Command;
@@ -34,34 +38,11 @@ use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
 
-pub const CLI_QUERY_CLIENT: &str = "CLI_QUERY_CLIENT";
-
 #[derive(Clone)]
 pub struct QueryCommand {
     #[allow(dead_code)]
     conf: Config,
     clap: App<'static>,
-}
-
-// Supported clients to run queries
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum QueryClient {
-    Clickhouse,
-    Mysql,
-}
-
-// Implement the trait
-impl FromStr for QueryClient {
-    type Err = &'static str;
-
-    fn from_str(s: &str) -> std::result::Result<QueryClient, &'static str> {
-        match s {
-            "mysql" => Ok(QueryClient::Mysql),
-            "clickhouse" => Ok(QueryClient::Clickhouse),
-            _ => Err("no match for client"),
-        }
-    }
 }
 
 impl QueryCommand {
@@ -82,40 +63,25 @@ impl QueryCommand {
                     .default_value("local"),
             )
             .arg(
-                Arg::new("client")
-                    .long("client")
-                    .about(
-                        "Set the query client to run query, support mysql and clickshouse client",
-                    )
-                    .takes_value(true)
-                    .possible_values(&["mysql", "clickhouse"])
-                    .default_value("mysql")
-                    .env(CLI_QUERY_CLIENT),
-            )
-            .arg(
                 Arg::new("query")
                     .about("Query statements to run")
                     .takes_value(true)
                     .required(true),
-            )
-            .arg(
-                Arg::new("file")
-                    .short('f')
-                    .long("file")
-                    .about("execute query commands from file")
-                    .takes_value(true)
-                    .required(false),
             );
         app
     }
 
-    pub(crate) fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+    pub(crate) async fn exec_match(
+        &self,
+        writer: &mut Writer,
+        args: Option<&ArgMatches>,
+    ) -> Result<()> {
         match args {
             Some(matches) => {
                 let profile = matches.value_of_t("profile");
                 match profile {
                     Ok(ClusterProfile::Local) => {
-                        return self.local_exec_match(writer, matches);
+                        return self.local_exec_match(writer, matches).await;
                     }
                     Ok(ClusterProfile::Cluster) => {
                         todo!()
@@ -130,44 +96,66 @@ impl QueryCommand {
         Ok(())
     }
 
-    fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
+    async fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
         match self.local_exec_precheck(args) {
             Ok(_) => {
                 writer.write_ok("Query precheck passed!");
                 let status = Status::read(self.conf.clone())?;
-                if args.value_of("file").is_none() {
-                    if let Some(query) = args.value_of("query") {
-                        let url = build_query_url(args, &status);
-                        if let Ok(url) = url {
-                            writer.write_ok(format!("Execute query {} on {}", query, url).as_str());
-                            match execute_query(
-                                status.query_path.unwrap(),
-                                url,
-                                query.parse().unwrap(),
-                            ) {
-                                Ok(res) => {
-                                    writer.write_ok(res.as_str());
-                                }
-                                Err(e) => {
-                                    writer.write_err(format!("Query command error: cannot execute query with error: {:?}", e).as_str());
-                                }
-                            }
-                            return Ok(());
+                let queries = match args.value_of("query") {
+                    Some(val) => {
+                        if Path::new(val).exists() {
+                            let buffer =
+                                std::fs::read(Path::new(val)).expect("cannot read query from file");
+                            String::from_utf8_lossy(&*buffer).to_string()
+                        } else if val.starts_with("http://") || val.starts_with("https://") {
+                            let res = reqwest::get(val)
+                                .await
+                                .expect("cannot fetch query from url")
+                                .text()
+                                .await
+                                .expect("cannot fetch response body");
+                            res
                         } else {
+                            val.to_string()
+                        }
+                    }
+                    None => {
+                        let mut buffer = String::new();
+                        std::io::stdin()
+                            .read_to_string(&mut buffer)
+                            .expect("cannot read from stdin");
+                        buffer
+                    }
+                };
+
+                let res = build_query_endpoint(&status);
+
+                if let Ok((cli, url)) = res {
+                    for query in queries
+                        .split(';')
+                        .filter(|elem| !elem.trim().is_empty())
+                        .map(|elem| format!("{};", elem))
+                        .collect::<Vec<String>>()
+                    {
+                        writer.write_ok(
+                            format!("Execute query {} on {}", query.clone(), url).as_str(),
+                        );
+                        if let Err(e) =
+                            query_writer(&cli, url.as_str(), query.clone(), writer).await
+                        {
                             writer.write_err(
-                                format!(
-                                    "Query command error: cannot parse query url with error: {:?}",
-                                    url.unwrap_err()
-                                )
-                                .as_str(),
+                                format!("query {} execution error: {:?}", query, e).as_str(),
                             );
                         }
-                    } else {
-                        writer.write_err("Query command error: cannot find SQL argument!");
-                        return Ok(());
                     }
                 } else {
-                    todo!()
+                    writer.write_err(
+                        format!(
+                            "Query command error: cannot parse query url with error: {:?}",
+                            res.unwrap_err()
+                        )
+                        .as_str(),
+                    );
                 }
 
                 Ok(())
@@ -188,70 +176,122 @@ impl QueryCommand {
                 status.local_config_dir
             )));
         }
-        if status.query_path.is_none() || Path::new(status.query_path.unwrap().as_str()).is_empty()
-        {
-            return Err(CliError::Unknown(
-                "Query command error: cannot find local query binary path, please run `bendctl package fetch` to install it".to_string(),
-            ));
-        }
+
         Ok(())
     }
 }
 
-pub fn build_query_url(matches: &ArgMatches, status: &Status) -> Result<String> {
-    let client = matches.value_of_t("client");
+async fn query_writer(
+    cli: &reqwest::Client,
+    url: &str,
+    query: String,
+    writer: &mut Writer,
+) -> Result<()> {
+    let start = std::time::Instant::now();
+    match execute_query(cli, url, query).await {
+        Ok((res, stats)) => {
+            let elapsed = start.elapsed();
+            writer.writeln(res.trim_fmt().as_str());
+            if let Some(stat) = stats {
+                let time = elapsed.as_millis() as f64 / 1000f64;
+                let byte_per_sec = byte_unit::Byte::from_unit(
+                    stat.read_bytes as f64 / time,
+                    byte_unit::ByteUnit::B,
+                )
+                .expect("cannot parse byte")
+                .get_appropriate_unit(false);
+                writer.write_ok(
+                    format!(
+                        "read rows: {}, read bytes: {}, rows/sec: {} (rows/sec), bytes/sec: {} ({}/sec)",
+                        stat.read_rows.to_formatted_string(&Locale::en),
+                        byte_unit::Byte::from_bytes(stat.read_bytes as u128)
+                            .get_appropriate_unit(false)
+                            .to_string(),
+                        (stat.read_rows as f64 / time).as_u128().to_formatted_string(&Locale::en),
+                        byte_per_sec.get_value(),
+                        byte_per_sec.get_unit().to_string()
+                    )
+                        .as_str(),
+                );
+            }
+        }
+        Err(e) => {
+            writer.write_err(
+                format!(
+                    "Query command error: cannot execute query with error: {:?}",
+                    e
+                )
+                .as_str(),
+            );
+        }
+    }
+    Ok(())
+}
+
+// TODO(zhihanz) mTLS support
+pub fn build_query_endpoint(status: &Status) -> Result<(reqwest::Client, String)> {
     let query_configs = status.get_local_query_configs();
 
     let (_, query) = query_configs.get(0).expect("cannot find query configs");
-    if let Ok(client) = client {
-        let url = match client {
-            QueryClient::Mysql => {
-                let scheme = "mysql";
-                format!(
-                    "{}://{}:{}@{}:{}",
-                    scheme,
-                    query.config.meta.meta_username,
-                    query.config.meta.meta_password,
-                    query.config.query.mysql_handler_host,
-                    query.config.query.mysql_handler_port
-                )
-            }
-            QueryClient::Clickhouse => {
-                let scheme = "clickhouse";
-                format!(
-                    "{}://{}:{}@{}:{}",
-                    scheme,
-                    query.config.meta.meta_username,
-                    query.config.meta.meta_password,
-                    query.config.query.clickhouse_handler_host,
-                    query.config.query.clickhouse_handler_port
-                )
-            }
-        };
-        Ok(url)
-    } else {
-        Err(CliError::Unknown(
-            "Query command error: cannot get query client".to_string(),
-        ))
-    }
+    let client = reqwest::Client::builder()
+        .build()
+        .expect("Cannot build query client");
+
+    let url = {
+        if query.config.query.api_tls_server_key.is_empty()
+            || query.config.query.api_tls_server_cert.is_empty()
+        {
+            let address = format!(
+                "{}:{}",
+                query.config.query.http_handler_host, query.config.query.http_handler_port
+            )
+            .parse::<SocketAddr>()
+            .expect("cannot build query socket address");
+            format!("http://{}:{}/v1/statement", address.ip(), address.port())
+        } else {
+            todo!()
+        }
+    };
+    Ok((client, url))
 }
 
-fn execute_query(bin_path: String, url: String, query: String) -> Result<String> {
-    let mut command = std::process::Command::new(bin_path);
-    command.args([url.as_str(), "-c", query.as_str()]);
-    // Tell the OS to record the command's output
-    command.stdout(Stdio::piped()).stderr(Stdio::null());
-    // execute the command, wait for it to complete, then capture the output
-    return match command.output() {
-        Ok(output) => {
-            let stdout = String::from_utf8(output.stdout).unwrap().trim().to_string();
-            Ok(stdout)
-        }
-        Err(e) => Err(CliError::Unknown(format!(
-            "Query command error: cannot execute query, error : {:?}",
+async fn execute_query(
+    cli: &reqwest::Client,
+    url: &str,
+    query: String,
+) -> Result<(Table, Option<ProgressValues>)> {
+    let ans = cli
+        .post(url)
+        .body(query.clone())
+        .send()
+        .await
+        .expect("cannot post to http handler")
+        .json::<databend_query::servers::http::v1::statement::HttpQueryResult>()
+        .await;
+    if let Err(e) = ans {
+        return Err(CliError::Unknown(format!(
+            "Cannot retrieve query result: {:?}",
             e
-        ))),
-    };
+        )));
+    } else {
+        let ans = ans.unwrap();
+        let mut table = Table::new();
+        table.load_preset("||--+-++|    ++++++");
+        if let Some(column) = ans.columns {
+            table.set_header(
+                column
+                    .fields()
+                    .iter()
+                    .map(|field| Cell::new(field.name().as_str()).fg(Color::Green)),
+            );
+        }
+        if let Some(rows) = ans.data {
+            for row in rows {
+                table.add_row(row.iter().map(|elem| Cell::new(elem.to_string())));
+            }
+        }
+        Ok((table, ans.stats))
+    }
 }
 
 #[async_trait]
@@ -276,7 +316,7 @@ impl Command for QueryCommand {
         }
         match self.clap.clone().try_get_matches_from(words.unwrap()) {
             Ok(matches) => {
-                return self.exec_match(writer, Some(matches.borrow()));
+                return self.exec_match(writer, Some(matches.borrow())).await;
             }
             Err(err) => {
                 println!("Cannot get subcommand matches: {}", err);

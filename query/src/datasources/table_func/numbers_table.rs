@@ -29,6 +29,7 @@ use common_meta_types::TableInfo;
 use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::Partitions;
+use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
 
@@ -79,7 +80,7 @@ impl NumbersTable {
             database_id: 0,
             table_id,
             version: 0,
-            db: database_name.to_string(),
+            desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: table_func_name.to_string(),
             schema: DataSchemaRefExt::create(vec![DataField::new(
                 "number",
@@ -132,7 +133,7 @@ impl Table for NumbersTable {
     async fn read(
         &self,
         io_ctx: Arc<TableIOContext>,
-        _push_downs: &Option<Extras>,
+        _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let ctx: Arc<DatabendQueryContext> = io_ctx
             .get_user_data()?
@@ -145,10 +146,6 @@ impl Table for NumbersTable {
 impl TableFunction for NumbersTable {
     fn function_name(&self) -> &str {
         self.name()
-    }
-
-    fn db(&self) -> &str {
-        self.get_table_info().db.as_str()
     }
 
     fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>

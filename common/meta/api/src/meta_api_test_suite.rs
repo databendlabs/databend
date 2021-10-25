@@ -212,7 +212,7 @@ impl MetaApiTestSuite {
                     database_id: 1,
                     table_id: 1,
                     version: 0,
-                    db: db_name.into(),
+                    desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
                     schema: schema.clone(),
                     engine: "JSON".to_owned(),
@@ -232,7 +232,7 @@ impl MetaApiTestSuite {
                     database_id: 1,
                     table_id: 1,
                     version: 0,
-                    db: db_name.into(),
+                    desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
                     schema: schema.clone(),
                     engine: "JSON".to_owned(),
@@ -261,7 +261,7 @@ impl MetaApiTestSuite {
                     database_id: 1,
                     table_id: 1,
                     version: 0,
-                    db: db_name.into(),
+                    desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
                     schema: schema.clone(),
                     engine: "JSON".to_owned(),
@@ -284,7 +284,7 @@ impl MetaApiTestSuite {
                     let res = mt.get_table(db_name, tbl_name).await;
                     let status = res.err().unwrap();
                     assert_eq!(
-                        format!("Code: 25, displayText = table not found: {}.", tbl_name),
+                        format!("Code: 25, displayText = Unknown table: '{:}'.", tbl_name),
                         status.to_string(),
                         "get dropped table {}",
                         tbl_name

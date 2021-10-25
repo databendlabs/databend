@@ -39,7 +39,7 @@ async fn test_null_table() -> Result<()> {
     let table = NullTable::try_create(
         TableInfo {
             database_id: 0,
-            db: "default".into(),
+            desc: "'default'.'a'".into(),
             name: "a".into(),
 
             schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::UInt64, false)]),
@@ -85,7 +85,7 @@ async fn test_null_table() -> Result<()> {
         )?;
         assert_eq!(table.engine(), "Null");
 
-        let stream = table.read(io_ctx.clone(), &source_plan.push_downs).await?;
+        let stream = table.read(io_ctx.clone(), &source_plan).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let block = &result[0];
         assert_eq!(block.num_columns(), 1);

@@ -118,14 +118,17 @@ impl DatabendQueryContextShared {
 
         let mut tables_refs = self.tables_refs.lock();
 
-        Ok(match tables_refs.entry(table_meta_key) {
+        let ent = match tables_refs.entry(table_meta_key) {
             Entry::Occupied(entry) => entry.get().clone(),
             Entry::Vacant(entry) => {
                 let catalog = self.get_catalog();
-                let table = catalog.get_table(database, table)?;
-                entry.insert(table).clone()
+                let t = catalog.get_table(database, table)?;
+
+                entry.insert(t).clone()
             }
-        })
+        };
+
+        Ok(ent)
     }
 
     /// Init runtime when first get

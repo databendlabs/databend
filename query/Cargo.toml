@@ -23,8 +23,8 @@ simd = ["common-arrow/simd"]
 # Workspace dependencies
 common-arrow = { path = "../common/arrow" }
 common-base = { path = "../common/base" }
-common-management = { path = "../common/management" }
 common-cache = { path = "../common/cache"}
+common-clickhouse-srv = { path = "../common/clickhouse-srv" }
 common-context = { path = "../common/context" }
 common-dal = { path = "../common/dal" }
 common-datablocks = { path = "../common/datablocks" }
@@ -33,79 +33,80 @@ common-exception = { path = "../common/exception" }
 common-flight-rpc = { path = "../common/flight-rpc" }
 common-functions = { path = "../common/functions" }
 common-infallible = { path = "../common/infallible" }
+common-io = { path = "../common/io" }
+common-management = { path = "../common/management" }
+common-mem-allocator = { path = "../common/mem-allocator" }
+common-meta-api = { path = "../common/meta/api" }
+common-meta-embedded = { path = "../common/meta/embedded" }
+common-meta-flight = {path = "../common/meta/flight" }
+common-meta-types = {path = "../common/meta/types"}
+common-macros = { path = "../common/macros" }
+common-metrics = { path = "../common/metrics" }
 common-planners = { path = "../common/planners" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
-common-meta-api = { path = "../common/meta/api" }
-common-meta-flight = {path = "../common/meta/flight" }
-common-meta-types = {path = "../common/meta/types"}
-common-meta-embedded = { path = "../common/meta/embedded" }
-common-mem-allocator = { path = "../common/mem-allocator" }
-common-macros = { path = "../common/macros" }
-common-io = { path = "../common/io" }
-common-clickhouse-srv = { path = "../common/clickhouse-srv" }
-common-metrics = { path = "../common/metrics" }
+
 # Github dependencies
-msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "e4c8f3d" }
 clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }
+msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "e4c8f3d" }
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "cdd2ce1" }
 
 # Crates.io dependencies
 ahash = "0.7.6"
-async-trait = "0.1"
 async-compat = "0.2.1"
-bumpalo = "3.7.1"
+async-trait = "0.1"
+axum = {version = "0.2.8", features=["headers"] }
+axum-server = { version = "0.2", features = ["tls-rustls"] }
+bumpalo = "3.8.0"
+byteorder = "1"
 bytes = "1"
+cargo-license = "0.4.2"
+cargo_metadata = "0.14.0"
+chrono =  "0.4.0"
+chrono-tz = "0.6"
 crossbeam = "0.8"
-quantiles = "0.7.1"
-ctrlc = { version = "3.1.9", features = ["termination"] }
 crossbeam-queue = "0.3.2"
+ctrlc = { version = "3.1.9", features = ["termination"] }
 env_logger = "0.9"
 futures = "0.3"
+headers = "0.3.4"
+hyper = "0.14.14"
 indexmap = "1.7.0"
 lazy_static = "1.4.0"
 log = "0.4"
 metrics = "0.17.0"
-num = "0.4"
 nom = "7.0.0"
+num = "0.4"
 num_cpus = "1.0"
 paste = "^1.0"
-chrono-tz = "0.6"
-chrono =  "0.4.0"
 prost = "0.8.0"
+quantiles = "0.7.1"
 rand = "0.8.4"
-rusoto_s3 = "0.47.0"
 rusoto_core = "0.47.0"
+rusoto_s3 = "0.47.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+sha1 = "0.6.0"
+sha2 = "0.9.8"
 structopt = "0.3"
 structopt-toml = "0.5.0"
 threadpool = "1.8.1"
+tokio-rustls = "0.22.0"
 tokio-stream = { version = "0.1", features = ["net"] }
 toml = "0.5.8"
 tonic = "0.5.2"
-walkdir = "2.3.2"
-axum = {version = "0.2.8", features=["headers"] }
 uuid = { version = "0.8", features = ["serde", "v4"] }
-byteorder = "1"
-hyper = "0.14.13"
-headers = "0.3.4"
-tokio-rustls = "0.22.0"
-axum-server = { version = "0.2", features = ["tls-rustls"] }
-cargo-license = "0.4.2"
-cargo_metadata = "0.14.0"
-sha2 = "0.9.8"
-sha1 = "0.6.0"
+walkdir = "2.3.2"
 
 [dependencies.parquet-format-async-temp]
 version = "0.2.0"
 
 [dev-dependencies]
-pretty_assertions = "1.0"
 criterion = "0.3"
-mysql = "21.0.1"
-reqwest = { version = "0.11", features = ["json", "native-tls"] }
 flaky_test = "0.1"
+mysql = "21.0.1"
+pretty_assertions = "1.0"
+reqwest = { version = "0.11", features = ["json", "native-tls"] }
 tempfile = "3.2.0"
 tower = { version = "0.4", default-features = false, features = ["util", "buffer", "make"] }
 

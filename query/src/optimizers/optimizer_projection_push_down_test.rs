@@ -101,6 +101,7 @@ fn test_projection_push_down_optimizer_2() -> Result<()> {
                 DataField::new("c", DataType::String, false),
             ]),
         ),
+        scan_fields: None,
         parts: generate_partitions(8, total as u64),
         statistics: statistics.clone(),
         description: format!(
@@ -159,6 +160,7 @@ fn test_projection_push_down_optimizer_3() -> Result<()> {
                 DataField::new("g", DataType::String, false),
             ]),
         ),
+        scan_fields: None,
         parts: generate_partitions(8, total as u64),
         statistics: statistics.clone(),
         description: format!(
@@ -220,5 +222,18 @@ fn test_projection_push_down_optimizer_4() -> Result<()> {
 
     let actual = format!("{:?}", optimized);
     assert_eq!(expect, actual);
+
+    let read_source_node = optimized.input(0).input(0).input(0);
+    match read_source_node.as_ref() {
+        PlanNode::ReadSource(ref read_source_plan) => {
+            let schema = read_source_plan.schema();
+            assert_eq!(schema.fields().len(), 1);
+            assert_eq!(schema.field(0).data_type(), &DataType::String);
+        }
+        _ => panic!(
+            "unexpected plan node, must be ReadDataSource, but got: {:?}",
+            read_source_node
+        ),
+    }
     Ok(())
 }

@@ -512,9 +512,9 @@ dependencies = [
 
 [[package]]
 name = "backtrace"
-version = "0.3.61"
+version = "0.3.62"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7a905d892734eea339e896738c14b9afce22b5318f64b951e70bf3844419b01"
+checksum = "091bcdf2da9950f96aa522681ce805e6857f6ca8df73833d35736ab2dc78e152"
 dependencies = [
  "addr2line",
  "cc",
@@ -565,7 +565,9 @@ name = "bendctl"
 version = "0.1.0"
 dependencies = [
  "assert_cmd",
+ "async-std",
  "async-trait",
+ "byte-unit",
  "clap 3.0.0-beta.5",
  "clap_generate",
  "colored",
@@ -578,12 +580,14 @@ dependencies = [
  "dirs",
  "dyn-clone",
  "flate2",
+ "futures",
  "httpmock",
  "indicatif",
  "lexical-util",
  "libc",
  "log",
  "nix 0.22.2",
+ "num-format",
  "portpicker",
  "predicates 2.0.3",
  "pretty_assertions",
@@ -601,6 +605,7 @@ dependencies = [
  "tar",
  "tempfile",
  "thiserror",
+ "tryhard",
  "ureq",
  "webbrowser",
 ]
@@ -734,9 +739,18 @@ checksum = "40e38929add23cdf8a366df9b0e088953150724bcbe5fc330b0d8eb3b328eec8"
 
 [[package]]
 name = "bumpalo"
-version = "3.7.1"
+version = "3.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9df67f7bf9ef8498769f994239c45613ef0c5899415fb58e9add412d2c1a538"
+checksum = "8f1e260c3a9040a7c19a12468758f4c16f31a81a1fe087482be9570ec864bb6c"
+
+[[package]]
+name = "byte-unit"
+version = "4.0.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "956ffc5b0ec7d7a6949e3f21fd63ba5af4cffdc2ba1e0b7bf62b481458c4ae7f"
+dependencies = [
+ "utf8-width",
+]
 
 [[package]]
 name = "bytecount"
@@ -1114,6 +1128,7 @@ dependencies = [
  "futures",
  "pprof",
  "pretty_assertions",
+ "serde",
  "tokio",
  "uuid",
 ]
@@ -1253,6 +1268,7 @@ dependencies = [
  "anyhow",
  "backtrace",
  "common-arrow",
+ "paste",
  "prost",
  "serde",
  "serde_json",
@@ -1438,9 +1454,11 @@ dependencies = [
  "anyhow",
  "async-raft",
  "async-trait",
+ "bytes",
  "common-arrow",
  "common-base",
  "common-exception",
+ "common-io",
  "common-meta-sled-store",
  "common-meta-types",
  "common-tracing",
@@ -3126,9 +3144,9 @@ checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "hyper"
-version = "0.14.13"
+version = "0.14.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15d1cfb9e4f68655fa04c01f59edb405b6074a0f7118ea881e5026e4a1cd8593"
+checksum = "2b91bb1f221b6ea1f1e4371216b70f40748774c2fb5971b450c07773fb92d26b"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -4282,9 +4300,9 @@ dependencies = [
 
 [[package]]
 name = "object"
-version = "0.26.2"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39f37e50073ccad23b6d09bcb5b263f4e76d3bb6038e4a3c08e52162ffa8abc2"
+checksum = "c821014c18301591b89b843809ef953af9e3df0496c232d5c0611b0a52aac363"
 dependencies = [
  "memchr",
 ]
@@ -6580,9 +6598,9 @@ dependencies = [
 
 [[package]]
 name = "tower"
-version = "0.4.9"
+version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d15a6b60cdff0cb039d81d3b37f8bc3d7e53dca09069aae3ef2502ca4834fe30"
+checksum = "c00e500fff5fa1131c866b246041a6bf96da9c965f8fe4128cb1421f23e93c00"
 dependencies = [
  "futures-core",
  "futures-util",
@@ -6806,6 +6824,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
 
 [[package]]
+name = "tryhard"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30cd27b84d4410536f50315f5179a49b651c365328bbeff9900b4c65fc3b92fa"
+dependencies = [
+ "futures",
+ "pin-project",
+ "tokio",
+]
+
+[[package]]
 name = "twox-hash"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6927,6 +6956,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "utf8-width"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cf7d77f457ef8dfa11e4cd5933c5ddb5dc52a94664071951219a97710f0a32b"
+
+[[package]]
 name = "utf8parse"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6966,9 +7001,9 @@ checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
 name = "vergen"
-version = "5.1.15"
+version = "5.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "265455aab08c55a1ab13f07c8d5e25c7d46900f4484dd7cbd682e77171f93f3c"
+checksum = "7b62d4fc8fc9c81d139c8106b9f4e583e7c1eb36e320dc28d5c03aab86729495"
 dependencies = [
  "anyhow",
  "cfg-if 1.0.0",

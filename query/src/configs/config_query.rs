@@ -26,6 +26,8 @@ pub const QUERY_MYSQL_HANDLER_PORT: &str = "QUERY_MYSQL_HANDLER_PORT";
 pub const QUERY_MAX_ACTIVE_SESSIONS: &str = "QUERY_MAX_ACTIVE_SESSIONS";
 pub const QUERY_CLICKHOUSE_HANDLER_HOST: &str = "QUERY_CLICKHOUSE_HANDLER_HOST";
 pub const QUERY_CLICKHOUSE_HANDLER_PORT: &str = "QUERY_CLICKHOUSE_HANDLER_PORT";
+pub const QUERY_HTTP_HANDLER_HOST: &str = "QUERY_HTTP_HANDLER_HOST";
+pub const QUERY_HTTP_HANDLER_PORT: &str = "QUERY_HTTP_HANDLER_PORT";
 pub const QUERY_FLIGHT_API_ADDRESS: &str = "QUERY_FLIGHT_API_ADDRESS";
 pub const QUERY_HTTP_API_ADDRESS: &str = "QUERY_HTTP_API_ADDRESS";
 pub const QUERY_METRICS_API_ADDRESS: &str = "QUERY_METRIC_API_ADDRESS";
@@ -91,6 +93,22 @@ pub struct QueryConfig {
     )]
     #[serde(default)]
     pub clickhouse_handler_port: u16,
+
+    #[structopt(
+    long,
+    env = QUERY_HTTP_HANDLER_HOST,
+    default_value = "127.0.0.1"
+    )]
+    #[serde(default)]
+    pub http_handler_host: String,
+
+    #[structopt(
+    long,
+    env = QUERY_HTTP_HANDLER_PORT,
+    default_value = "8000"
+    )]
+    #[serde(default)]
+    pub http_handler_port: u16,
 
     #[structopt(
     long,
@@ -174,6 +192,8 @@ impl QueryConfig {
             max_active_sessions: 256,
             clickhouse_handler_host: "127.0.0.1".to_string(),
             clickhouse_handler_port: 9000,
+            http_handler_host: "127.0.0.1".to_string(),
+            http_handler_port: 8000,
             flight_api_address: "127.0.0.1:9090".to_string(),
             http_api_address: "127.0.0.1:8080".to_string(),
             metric_api_address: "127.0.0.1:7070".to_string(),

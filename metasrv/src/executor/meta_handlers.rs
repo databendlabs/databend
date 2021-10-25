@@ -13,13 +13,8 @@
 // limitations under the License.
 //
 
-use std::convert::TryFrom;
 use std::sync::Arc;
 
-use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow::io::flight::serialize_schema;
-use common_arrow::arrow::io::ipc::write::common::IpcWriteOptions;
-use common_arrow::arrow_format::flight::data::FlightData;
 use common_exception::ErrorCode;
 use common_meta_flight::CreateDatabaseAction;
 use common_meta_flight::CreateTableAction;
@@ -40,7 +35,6 @@ use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::LogEntry;
-use common_meta_types::Table;
 use common_meta_types::TableInfo;
 use common_meta_types::UpsertTableOptionReply;
 use log::info;
@@ -126,18 +120,18 @@ impl RequestHandler<DropDatabaseAction> for ActionHandler {
             .await
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
-        match rst {
-            AppliedState::DataBase { prev, .. } => {
-                if prev.is_some() || if_exists {
-                    Ok(())
-                } else {
-                    Err(ErrorCode::UnknownDatabase(format!(
-                        "database not found: {:}",
-                        db_name
-                    )))
-                }
-            }
-            _ => Err(ErrorCode::MetaNodeInternalError("not a Database result")),
+        let (prev, _result) = match rst {
+            AppliedState::DataBase { prev, result } => (prev, result),
+            _ => return Err(ErrorCode::MetaNodeInternalError("not a Database result")),
+        };
+
+        if prev.is_some() || if_exists {
+            Ok(())
+        } else {
+            Err(ErrorCode::UnknownDatabase(format!(
+                "database not found: {:}",
+                db_name
+            )))
         }
     }
 }
@@ -153,19 +147,15 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
 
         info!("create table: {:}: {:?}", &db_name, &table_name);
 
-        let options = IpcWriteOptions::default();
-        let flight_data = serialize_schema(&plan.schema.to_arrow(), &options);
-
-        let table = Table {
+        let table = TableInfo {
             table_id: 0,
-            table_version: 0,
-            table_name: table_name.to_string(),
+            version: 0,
+            desc: format!("'{}'.'{}'", db_name, table_name),
             database_id: 0, // this field is unused during the creation of table
-            db_name: db_name.to_string(),
-            schema: flight_data.data_header,
-            table_engine: plan.engine.clone(),
-            table_options: plan.options.clone(),
-            parts: Default::default(),
+            schema: plan.schema.clone(),
+            engine: plan.engine.clone(),
+            name: table_name.to_string(),
+            options: plan.options.clone(),
         };
 
         let cr = LogEntry {
@@ -173,8 +163,7 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
             cmd: CreateTable {
                 db_name: db_name.clone(),
                 table_name: table_name.clone(),
-                if_not_exists,
-                table,
+                table_info: table,
             },
         };
 
@@ -184,27 +173,20 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
             .await
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
-        match rst {
-            AppliedState::Table { prev, result } => {
-                if let Some(prev) = prev {
-                    if if_not_exists {
-                        Ok(CreateTableReply {
-                            table_id: prev.table_id,
-                        })
-                    } else {
-                        Err(ErrorCode::TableAlreadyExists(format!(
-                            "table exists: {}",
-                            table_name
-                        )))
-                    }
-                } else {
-                    Ok(CreateTableReply {
-                        table_id: result.unwrap().table_id,
-                    })
-                }
-            }
-            _ => Err(ErrorCode::MetaNodeInternalError("not a Table result")),
+        let (prev, result) = match rst {
+            AppliedState::Table { prev, result } => (prev, result),
+            _ => return Err(ErrorCode::MetaNodeInternalError("not a Table result")),
+        };
+        if prev.is_some() && !if_not_exists {
+            return Err(ErrorCode::TableAlreadyExists(format!(
+                "table exists: {}",
+                table_name
+            )));
         }
+
+        Ok(CreateTableReply {
+            table_id: result.unwrap().1.value.table_id,
+        })
     }
 }
 
@@ -220,7 +202,6 @@ impl RequestHandler<DropTableAction> for ActionHandler {
             cmd: DropTable {
                 db_name: db_name.clone(),
                 table_name: table_name.clone(),
-                if_exists,
             },
         };
 
@@ -229,26 +210,25 @@ impl RequestHandler<DropTableAction> for ActionHandler {
             .write(cr)
             .await
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
+        let (prev, _result) = match rst {
+            AppliedState::Table { prev, result } => (prev, result),
+            _ => return Err(ErrorCode::MetaNodeInternalError("not a Table result")),
+        };
 
-        match rst {
-            AppliedState::Table { prev, .. } => {
-                if prev.is_some() || if_exists {
-                    Ok(())
-                } else {
-                    Err(ErrorCode::UnknownTable(format!(
-                        "table not found: {:}",
-                        table_name
-                    )))
-                }
-            }
-            _ => Err(ErrorCode::MetaNodeInternalError("not a Table result")),
+        if prev.is_some() || if_exists {
+            Ok(())
+        } else {
+            Err(ErrorCode::UnknownTable(format!(
+                "Unknown table: '{:}'",
+                table_name
+            )))
         }
     }
 }
 
 #[async_trait::async_trait]
 impl RequestHandler<GetTableAction> for ActionHandler {
-    async fn handle(&self, act: GetTableAction) -> common_exception::Result<Arc<TableInfo>> {
+    async fn handle(&self, act: GetTableAction) -> common_exception::Result<TableInfo> {
         let db_name = &act.db;
         let table_name = &act.table;
 
@@ -260,35 +240,17 @@ impl RequestHandler<GetTableAction> for ActionHandler {
         let db = db.1.value;
         let db_id = db.database_id;
 
-        let table_id = self
+        let seq_table_id = self
             .meta_node
             .lookup_table_id(db_id, table_name)
-            .await
-            .ok_or_else(|| ErrorCode::UnknownTable(format!("table not found: {:}", table_name)))?;
+            .await?
+            .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table: '{:}'", table_name)))?;
 
-        let result = self.meta_node.get_table(&table_id).await;
+        let table_id = seq_table_id.1.value.0;
+        let result = self.meta_node.get_table(&table_id).await?;
 
         match result {
-            Some(table) => {
-                let arrow_schema = ArrowSchema::try_from(&FlightData {
-                    data_header: table.schema,
-                    ..Default::default()
-                })
-                .map_err(|e| {
-                    ErrorCode::IllegalSchema(format!("invalid schema: {:}", e.to_string()))
-                })?;
-                let rst = TableInfo {
-                    database_id: db.database_id,
-                    table_id: table.table_id,
-                    version: table.table_version,
-                    db: db_name.clone(),
-                    name: table_name.clone(),
-                    schema: Arc::new(arrow_schema.into()),
-                    engine: table.table_engine.clone(),
-                    options: table.table_options,
-                };
-                Ok(Arc::new(rst))
-            }
+            Some(table) => Ok(table.1.value),
             None => Err(ErrorCode::UnknownTable(table_name)),
         }
     }
@@ -296,31 +258,12 @@ impl RequestHandler<GetTableAction> for ActionHandler {
 
 #[async_trait::async_trait]
 impl RequestHandler<GetTableExtReq> for ActionHandler {
-    async fn handle(&self, act: GetTableExtReq) -> common_exception::Result<Arc<TableInfo>> {
+    async fn handle(&self, act: GetTableExtReq) -> common_exception::Result<TableInfo> {
         // TODO duplicated code
         let table_id = act.tbl_id;
-        let result = self.meta_node.get_table(&table_id).await;
+        let result = self.meta_node.get_table(&table_id).await?;
         match result {
-            Some(table) => {
-                let arrow_schema = ArrowSchema::try_from(&FlightData {
-                    data_header: table.schema,
-                    ..Default::default()
-                })
-                .map_err(|e| {
-                    ErrorCode::IllegalSchema(format!("invalid schema: {:}", e.to_string()))
-                })?;
-                let rst = TableInfo {
-                    database_id: table.database_id,
-                    table_id: table.table_id,
-                    db: table.db_name,
-                    name: table.table_name,
-                    version: 0,
-                    schema: Arc::new(arrow_schema.into()),
-                    engine: table.table_engine.clone(),
-                    options: table.table_options,
-                };
-                Ok(Arc::new(rst))
-            }
+            Some(table) => Ok(table.1.value),
             None => Err(ErrorCode::UnknownTable(format!(
                 "table of id {} not found",
                 act.tbl_id
@@ -348,7 +291,7 @@ impl RequestHandler<GetDatabasesAction> for ActionHandler {
 impl RequestHandler<GetTablesAction> for ActionHandler {
     async fn handle(&self, req: GetTablesAction) -> common_exception::Result<Vec<Arc<TableInfo>>> {
         let res = self.meta_node.get_tables(req.db.as_str()).await?;
-        Ok(res)
+        Ok(res.iter().map(|t| Arc::new(t.clone())).collect::<Vec<_>>())
     }
 }
 #[async_trait::async_trait]

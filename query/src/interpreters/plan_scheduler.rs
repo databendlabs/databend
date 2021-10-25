@@ -48,6 +48,7 @@ use common_tracing::tracing;
 use crate::api::BroadcastAction;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;
+use crate::catalogs::Catalog;
 use crate::catalogs::TablePtr;
 use crate::catalogs::ToReadDataSourcePlan;
 use crate::sessions::DatabendQueryContext;
@@ -784,8 +785,8 @@ impl PlanScheduler {
 
     fn visit_data_source(&mut self, plan: &ReadDataSourcePlan, _: &mut Tasks) -> Result<()> {
         let table = if plan.tbl_args.is_none() {
-            self.query_context
-                .get_table(&plan.table_info.db, &plan.table_info.name)?
+            let catalog = self.query_context.get_catalog();
+            catalog.build_table(&plan.table_info)?
         } else {
             self.query_context
                 .get_table_function(&plan.table_info.name, plan.tbl_args.clone())?

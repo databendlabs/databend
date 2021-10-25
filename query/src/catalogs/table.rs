@@ -78,7 +78,7 @@ pub trait Table: Sync + Send {
     async fn read(
         &self,
         io_ctx: Arc<TableIOContext>,
-        _push_downs: &Option<Extras>,
+        plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream>;
 
     // temporary added, pls feel free to rm it
@@ -129,9 +129,8 @@ impl ToReadDataSourcePlan for dyn Table {
 
         let description = if statistics.read_rows > 0 {
             format!(
-                "(Read from {}.{} table, {} Read Rows:{}, Read Bytes:{})",
-                table_info.db,
-                table_info.name,
+                "(Read from {} table, {} Read Rows:{}, Read Bytes:{})",
+                table_info.desc,
                 if statistics.is_exact {
                     "Exactly"
                 } else {
@@ -141,11 +140,13 @@ impl ToReadDataSourcePlan for dyn Table {
                 statistics.read_bytes,
             )
         } else {
-            format!("(Read from {}.{} table)", table_info.db, table_info.name)
+            format!("(Read from {} table)", table_info.desc)
         };
 
         Ok(ReadDataSourcePlan {
             table_info: table_info.clone(),
+
+            scan_fields: None,
             parts,
             statistics,
             description,

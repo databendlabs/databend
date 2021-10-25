@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Display;
 
+use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 
 use crate::plan_display_indent::PlanNodeIndentFormatDisplay;
@@ -66,6 +68,31 @@ impl PlanNode {
             }
         }
         Wrapper(schema)
+    }
+
+    pub fn display_scan_fields(fields: &BTreeMap<usize, DataField>) -> impl fmt::Display + '_ {
+        struct Wrapper<'a>(&'a BTreeMap<usize, DataField>);
+
+        impl<'a> fmt::Display for Wrapper<'a> {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "[")?;
+                for (i, (_idx, field)) in self.0.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    let nullable_str = if field.is_nullable() { ";N" } else { "" };
+                    write!(
+                        f,
+                        "{}:{:?}{}",
+                        field.name(),
+                        field.data_type(),
+                        nullable_str
+                    )?;
+                }
+                write!(f, "]")
+            }
+        }
+        Wrapper(fields)
     }
 }
 

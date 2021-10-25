@@ -20,8 +20,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_meta_types::TableInfo;
-use common_planners::Extras;
 use common_planners::InsertIntoPlan;
+use common_planners::ReadDataSourcePlan;
 use common_planners::TableOptions;
 use common_planners::TruncateTablePlan;
 use common_streams::DataBlockStream;
@@ -46,7 +46,7 @@ impl ExampleTable {
             database_id: 0,
             table_id,
             version: 0,
-            db,
+            desc: format!("'{}'.'{}'", db, name),
             name,
 
             schema,
@@ -71,7 +71,7 @@ impl Table for ExampleTable {
     async fn read(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _push_downs: &Option<Extras>,
+        _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let block = DataBlock::empty_with_schema(self.schema());
 

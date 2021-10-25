@@ -20,7 +20,7 @@ use common_planners::Extras;
 use common_planners::Partitions;
 use common_planners::Statistics;
 
-use super::util;
+use super::index;
 use crate::datasources::table::fuse::FuseTable;
 use crate::datasources::table::fuse::MetaInfoReader;
 
@@ -35,7 +35,12 @@ impl FuseTable {
         if let Some(snapshot) = tbl_snapshot {
             let da = io_ctx.get_data_accessor()?;
             let meta_reader = MetaInfoReader::new(da, io_ctx.get_runtime());
-            let block_metas = util::range_filter(&snapshot, &push_downs, meta_reader)?;
+            let block_metas = index::range_filter(
+                &snapshot,
+                self.table_info.schema.clone(),
+                push_downs,
+                meta_reader,
+            )?;
             let (statistics, parts) = self.to_partitions(&block_metas);
             Ok((statistics, parts))
         } else {

@@ -23,6 +23,7 @@ use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
+use crate::catalogs::Catalog;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::sessions::DatabendQueryContextRef;
@@ -40,11 +41,10 @@ impl SourceTransform {
         Ok(SourceTransform { ctx, source_plan })
     }
 
-    async fn read_table(&self, _db: &str) -> Result<SendableDataBlockStream> {
-        let table_id = self.source_plan.table_info.table_id;
-        let table_ver = self.source_plan.table_info.version;
+    async fn read_table(&self) -> Result<SendableDataBlockStream> {
         let table = if self.source_plan.tbl_args.is_none() {
-            self.ctx.get_table_by_id(table_id, Some(table_ver))?.clone()
+            let catalog = self.ctx.get_catalog();
+            catalog.build_table(&self.source_plan.table_info)?
         } else {
             let func_meta = self.ctx.get_table_function(
                 &self.source_plan.table_info.name,
@@ -52,10 +52,11 @@ impl SourceTransform {
             )?;
             func_meta.as_table()
         };
+
         // TODO(xp): get_single_node_table_io_context() or
         //           get_cluster_table_io_context()?
         let io_ctx = Arc::new(self.ctx.get_cluster_table_io_context()?);
-        let table_stream = table.read(io_ctx, &self.source_plan.push_downs);
+        let table_stream = table.read(io_ctx, &self.source_plan);
         let progress_stream =
             ProgressStream::try_create(table_stream.await?, self.ctx.progress_callback()?)?;
 
@@ -86,16 +87,12 @@ impl Processor for SourceTransform {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let db = self.source_plan.table_info.db.clone();
-        let table = self.source_plan.table_info.name.clone();
+        let desc = self.source_plan.table_info.desc.clone();
+        tracing::debug!("execute, table:{:#} ...", desc);
 
-        tracing::debug!("execute, table:{:#}.{:#} ...", db, table);
-
-        // We need to keep the block struct with the schema
-        // Because the table may not support require columns
         Ok(Box::pin(CorrectWithSchemaStream::new(
-            self.read_table(&db).await?,
-            self.source_plan.table_info.schema.clone(),
+            self.read_table().await?,
+            self.source_plan.schema(),
         )))
     }
 }

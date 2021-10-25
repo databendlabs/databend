@@ -39,6 +39,16 @@ fn test_format_with_error_codes() {
 }
 
 #[test]
+fn test_error_code() {
+    use crate::exception::*;
+
+    let err = ErrorCode::UnknownException("test message 1");
+
+    assert_eq!(err.code(), ErrorCode::unknown_exception_code(),);
+    assert_eq!(err.code(), ErrorCode::UnknownExceptionCode(),);
+}
+
+#[test]
 fn test_derive_from_std_error() {
     use crate::exception::ErrorCode;
     use crate::exception::ToErrorCode;

@@ -24,49 +24,14 @@ use indicatif::ProgressStyle;
 use tar::Archive;
 
 use crate::cmds::Config;
-use crate::cmds::Status;
 use crate::cmds::SwitchCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
 
-const QUERY_CLIENT_VERSION: &str = "v0.9.4-databend-rc5";
-
 #[derive(Clone)]
 pub struct FetchCommand {
     conf: Config,
-}
-
-pub fn get_go_architecture() -> Result<(String, String)> {
-    let os = std::env::consts::OS;
-    let arch = std::env::consts::ARCH;
-    // Check rosetta
-    let (_, rosetta, _) = run_script::run_script!(r#"uname -a"#)?;
-    if rosetta.contains("Darwin") && rosetta.contains("arm64") {
-        return Ok(("darwin".to_string(), "arm64".to_string()));
-    }
-    let goos = match os {
-        "darwin" => "darwin".to_string(),
-        "macos" => "darwin".to_string(),
-        "linux" => "linux".to_string(),
-        _ => {
-            return Err(CliError::Unknown(format!(
-                "Unsupported go os {}",
-                std::env::consts::OS
-            )));
-        }
-    };
-    let goarch = match arch {
-        "x86_64" => "amd64".to_string(),
-        "aarch_64" => "arm64".to_string(),
-        _ => {
-            return Err(CliError::Unknown(format!(
-                "Unsupported go architecture {}",
-                std::env::consts::ARCH
-            )));
-        }
-    };
-    Ok((goos, goarch))
 }
 
 pub fn unpack(tar_file: &str, target_dir: &str) -> Result<()> {
@@ -202,69 +167,6 @@ impl FetchCommand {
         Ok(())
     }
 
-    fn download_query(&self, writer: &mut Writer, _args: Option<&ArgMatches>) -> Result<()> {
-        let (goos, goarch) =
-            get_go_architecture().expect("cannot get architecture info for query client download");
-        // Create download dir.
-        let bin_download_dir = format!(
-            "{}/downloads/usql/{}",
-            self.conf.databend_dir.clone(),
-            QUERY_CLIENT_VERSION
-        );
-        fs::create_dir_all(bin_download_dir.clone()).unwrap();
-
-        // Create bin dir.
-        let bin_unpack_dir = format!(
-            "{}/bin/usql/{}",
-            self.conf.databend_dir.clone(),
-            QUERY_CLIENT_VERSION
-        );
-        fs::create_dir_all(bin_unpack_dir.clone()).unwrap();
-
-        let bin_name = format!(
-            "usql-databend-{}-{}-{}.tar.gz",
-            QUERY_CLIENT_VERSION, goos, goarch
-        );
-        let bin_file = format!("{}/{}", bin_download_dir, bin_name);
-        let exists = Path::new(bin_file.as_str()).exists();
-
-        // Download.
-        if !exists {
-            let binary_url = format!(
-                "{}/{}/{}",
-                self.conf.mirror.client_url.clone(),
-                QUERY_CLIENT_VERSION,
-                bin_name,
-            );
-            if let Err(e) = download(&binary_url, &bin_file) {
-                writer.write_err(
-                    format!("Cannot download from {}, error: {:?}", binary_url, e).as_str(),
-                )
-            }
-        }
-
-        // Unpack.
-        match unpack(&bin_file, &bin_unpack_dir) {
-            Ok(_) => {
-                // update local usql path
-                let mut status = Status::read(self.conf.clone())?;
-                status.query_path = Some(
-                    std::fs::canonicalize(format!("{}/usql", bin_unpack_dir))
-                        .unwrap()
-                        .to_str()
-                        .unwrap()
-                        .to_string(),
-                );
-                status.write()?;
-                writer.write_ok(format!("Unpacked {} to {}", bin_file, bin_unpack_dir).as_str());
-            }
-            Err(e) => {
-                writer.write_err(format!("{:?}", e).as_str());
-            }
-        };
-        Ok(())
-    }
-
     pub fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         match args {
             Some(matches) => {
@@ -278,9 +180,6 @@ impl FetchCommand {
                     };
                     writer.write_ok(format!("Tag {}", current_tag).as_str());
                     if let Err(e) = self.download_databend(&arch, &current_tag, writer, args) {
-                        writer.write_err(format!("{:?}", e).as_str());
-                    }
-                    if let Err(e) = self.download_query(writer, args) {
                         writer.write_err(format!("{:?}", e).as_str());
                     }
                 } else {

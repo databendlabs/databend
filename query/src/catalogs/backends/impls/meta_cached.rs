@@ -84,19 +84,15 @@ impl MetaApi for MetaCached {
         self.inner.get_tables(db_name).await
     }
 
-    async fn get_table_by_id(
-        &self,
-        table_id: MetaId,
-        version: Option<MetaVersion>,
-    ) -> Result<Arc<TableInfo>> {
-        if let Some(ver) = version {
+    async fn get_table_by_id(&self, table_id: MetaId) -> Result<Arc<TableInfo>> {
+        {
             let mut cached = self.table_meta_cache.write().await;
-            if let Some(meta) = cached.get(&(table_id, ver)) {
+            if let Some(meta) = cached.get(&(table_id, 0)) {
                 return Ok(meta.clone());
             }
         }
 
-        let reply = self.inner.get_table_by_id(table_id, version).await?;
+        let reply = self.inner.get_table_by_id(table_id).await?;
 
         let mut cache = self.table_meta_cache.write().await;
         // TODO version

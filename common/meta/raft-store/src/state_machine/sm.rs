@@ -12,18 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-use std::convert::TryFrom;
 use std::fmt::Debug;
-use std::sync::Arc;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use async_raft::raft::Entry;
 use async_raft::raft::EntryPayload;
 use async_raft::raft::MembershipConfig;
-use common_arrow::arrow::datatypes::Schema;
-use common_arrow::arrow_format::flight::data::FlightData;
 use common_exception::prelude::ErrorCode;
 use common_exception::ToErrorCode;
 use common_meta_sled_store::get_sled_db;
@@ -43,7 +38,6 @@ use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::SeqValue;
-use common_meta_types::Table;
 use common_meta_types::TableInfo;
 use common_tracing::tracing;
 use serde::Deserialize;
@@ -57,6 +51,8 @@ use crate::sled_key_spaces::GenericKV;
 use crate::sled_key_spaces::Nodes;
 use crate::sled_key_spaces::Sequences;
 use crate::sled_key_spaces::StateMachineMeta;
+use crate::sled_key_spaces::TableLookup;
+use crate::sled_key_spaces::Tables;
 use crate::state_machine::AppliedState;
 use crate::state_machine::ClientLastRespValue;
 use crate::state_machine::StateMachineMetaKey;
@@ -64,6 +60,8 @@ use crate::state_machine::StateMachineMetaKey::Initialized;
 use crate::state_machine::StateMachineMetaKey::LastApplied;
 use crate::state_machine::StateMachineMetaKey::LastMembership;
 use crate::state_machine::StateMachineMetaValue;
+use crate::state_machine::TableLookupKey;
+use crate::state_machine::TableLookupValue;
 
 /// seq number key to generate database id
 const SEQ_DATABASE_ID: &str = "database_id";
@@ -76,19 +74,6 @@ const SEQ_DATABASE_META_ID: &str = "database_meta_id";
 // const TREE_NODES: &str = "nodes";
 // const TREE_META: &str = "meta";
 const TREE_STATE_MACHINE: &str = "state_machine";
-
-/// Replication defines the replication strategy.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum Replication {
-    /// n-copies mode.
-    Mirror(u64),
-}
-
-impl Default for Replication {
-    fn default() -> Self {
-        Replication::Mirror(1)
-    }
-}
 
 /// The state machine of the `MemStore`.
 /// It includes user data and two raft-related informations:
@@ -105,15 +90,7 @@ pub struct StateMachine {
     /// The internal sled::Tree to store everything about a state machine:
     /// - Store initialization state and last applied in keyspace `StateMachineMeta`.
     /// - Every other state is store in its own keyspace such as `Nodes`.
-    ///
-    /// TODO(xp): migrate other in-memory fields to `sm_tree`.
     pub sm_tree: SledTree,
-
-    /// (db_id, table_name) to table id
-    pub table_lookup: BTreeMap<(u64, String), u64>,
-
-    /// table id to table mapping
-    pub tables: BTreeMap<u64, Table>,
 }
 
 /// A key-value pair in a snapshot is a vec of two `Vec<u8>`.
@@ -169,9 +146,6 @@ impl StateMachine {
             _db: db,
 
             sm_tree,
-
-            table_lookup: BTreeMap::new(),
-            tables: BTreeMap::new(),
         };
 
         let inited = {
@@ -381,8 +355,7 @@ impl StateMachine {
             Cmd::CreateTable {
                 ref db_name,
                 ref table_name,
-                if_not_exists: _,
-                ref table,
+                table_info: ref table,
             } => {
                 let dbi = self
                     .databases()
@@ -390,42 +363,59 @@ impl StateMachine {
                     .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
 
                 let dbi = dbi.1.value;
-                let curr_table_id = self
-                    .table_lookup
-                    .get(&(dbi.database_id, table_name.clone()));
+                let table_lookup_tree = self.table_lookup();
+                let seq_table_id = table_lookup_tree.get(&TableLookupKey {
+                    database_id: dbi.database_id,
+                    table_name: table_name.to_string(),
+                })?;
 
-                if let Some(table_id) = curr_table_id {
-                    let prev = self.tables.get(table_id);
-                    Ok((prev.cloned(), prev.cloned()).into())
-                } else {
-                    let table_id = self.incr_seq(SEQ_TABLE_ID).await?;
-                    let table = Table {
-                        table_id,
-                        table_version: 0,
-                        table_name: table_name.to_string(),
-                        database_id: dbi.database_id,
-                        db_name: db_name.to_string(),
-                        schema: table.schema.clone(),
-                        table_engine: table.table_engine.clone(),
-                        table_options: table.table_options.clone(),
-                        parts: table.parts.clone(),
-                    };
-                    self.incr_seq(SEQ_DATABASE_META_ID).await?;
-
-                    self.table_lookup
-                        .insert((dbi.database_id, table_name.clone()), table_id);
-                    self.tables.insert(table.table_id, table.clone());
-
-                    tracing::debug!("applied CreateTable: {}={:?}", table_name, table);
-
-                    Ok((None, Some(table)).into())
+                if seq_table_id.is_some() {
+                    let prev = self.get_table(&seq_table_id.unwrap().1.value.0)?;
+                    return Ok((prev.clone(), prev).into());
                 }
+
+                let tables = self.tables();
+
+                let mut table = table.clone();
+                table.table_id = self.incr_seq(SEQ_TABLE_ID).await?;
+                table.database_id = dbi.database_id;
+
+                let table_id = table.table_id;
+
+                self.sub_tree_upsert(
+                    table_lookup_tree,
+                    &TableLookupKey {
+                        database_id: dbi.database_id,
+                        table_name: table_name.clone(),
+                    },
+                    &MatchSeq::Exact(0),
+                    Operation::Update(TableLookupValue(table_id)),
+                    None,
+                )
+                .await?;
+
+                let (prev, result) = self
+                    .sub_tree_upsert(
+                        tables,
+                        &table_id,
+                        &MatchSeq::Exact(0),
+                        Operation::Update(table),
+                        None,
+                    )
+                    .await?;
+
+                if prev.is_none() && result.is_some() {
+                    self.incr_seq(SEQ_DATABASE_META_ID).await?;
+                }
+
+                tracing::debug!("applied create Table: {}={:?}", table_name, result);
+
+                Ok((prev, result).into())
             }
 
             Cmd::DropTable {
                 ref db_name,
                 ref table_name,
-                if_exists: _,
             } => {
                 let dbi = self
                     .databases()
@@ -433,22 +423,43 @@ impl StateMachine {
                     .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
 
                 let dbi = dbi.1.value;
-                let curr_table_id = self
-                    .table_lookup
-                    .get(&(dbi.database_id, table_name.clone()))
-                    .cloned();
+                let table_lookup_tree = self.table_lookup();
+                let seq_table_id = table_lookup_tree.get(&TableLookupKey {
+                    database_id: dbi.database_id,
+                    table_name: table_name.to_string(),
+                })?;
 
-                if let Some(table_id) = curr_table_id {
-                    self.table_lookup
-                        .remove(&(dbi.database_id, table_name.clone()));
-                    let prev = self.tables.remove(&table_id);
-
-                    self.incr_seq(SEQ_DATABASE_META_ID).await?;
-
-                    Ok((prev, None).into())
-                } else {
-                    Ok((None::<Table>, None::<Table>).into())
+                if seq_table_id.is_none() {
+                    return Ok((None::<SeqValue<KVValue<TableInfo>>>, None).into());
                 }
+
+                self.sub_tree_upsert(
+                    table_lookup_tree,
+                    &TableLookupKey {
+                        database_id: dbi.database_id,
+                        table_name: table_name.to_string(),
+                    },
+                    &MatchSeq::Any,
+                    Operation::Delete,
+                    None,
+                )
+                .await?;
+
+                let tables = self.tables();
+                let (prev, result) = self
+                    .sub_tree_upsert(
+                        tables,
+                        &seq_table_id.unwrap().1.value.0,
+                        &MatchSeq::Any,
+                        Operation::Delete,
+                        None,
+                    )
+                    .await?;
+                if prev.is_some() && result.is_none() {
+                    self.incr_seq(SEQ_DATABASE_META_ID).await?;
+                }
+                tracing::debug!("applied drop Table: {} {:?}", table_name, result);
+                Ok((prev, result).into())
             }
 
             Cmd::UpsertKV {
@@ -625,12 +636,26 @@ impl StateMachine {
         Ok(res.map(|x| x.0))
     }
 
-    pub fn get_table(&self, tid: &u64) -> Option<Table> {
-        let x = self.tables.get(tid);
-        x.cloned()
+    pub fn get_table(&self, tid: &u64) -> Result<Option<SeqValue<KVValue<TableInfo>>>, ErrorCode> {
+        let x = self.tables().get(tid)?;
+        Ok(x)
     }
 
-    pub fn get_tables(&self, db_name: &str) -> common_exception::Result<Vec<Arc<TableInfo>>> {
+    pub async fn upsert_table(
+        &self,
+        tbl: TableInfo,
+        seq: &MatchSeq,
+    ) -> Result<Option<SeqValue<KVValue<TableInfo>>>, ErrorCode> {
+        let tables = self.tables();
+        let table_id = tbl.table_id;
+        let (_prev, result) = self
+            .sub_tree_upsert(tables, &table_id, seq, Operation::Update(tbl), None)
+            .await?;
+        self.incr_seq(SEQ_DATABASE_META_ID).await?; // need this?
+        Ok(result)
+    }
+
+    pub fn get_tables(&self, db_name: &str) -> Result<Vec<TableInfo>, ErrorCode> {
         let db = self.get_database(db_name)?;
         let db = match db {
             Some(x) => x,
@@ -645,36 +670,20 @@ impl StateMachine {
         let db_id = db.1.value.database_id;
 
         let mut tbls = vec![];
-        for ((got_db_id, table_name), table_id) in self.table_lookup.iter() {
-            if *got_db_id == db_id {
-                let table = self.tables.get(table_id).ok_or_else(|| {
+        let tables = self.tables();
+        let tables_iter = self.table_lookup().range(..)?;
+        for r in tables_iter {
+            let (k, seq_table_id) = r?;
+            let got_db_id = k.database_id;
+            if got_db_id == db_id {
+                let table_id: TableLookupValue = seq_table_id.1.value;
+                let table = tables.get(&table_id.0)?.ok_or_else(|| {
                     ErrorCode::IllegalMetaState(format!(" table of id {}, not found", table_id))
                 })?;
 
-                let arrow_schema = Schema::try_from(&FlightData {
-                    data_header: table.schema.clone(),
-                    ..Default::default()
-                })
-                .map_err(|e| {
-                    ErrorCode::IllegalSchema(format!(
-                        "invalid schema of table id {}, error: {}",
-                        *table_id,
-                        e.to_string()
-                    ))
-                })?;
+                let table_info = table.1.value;
 
-                let table_info = TableInfo {
-                    database_id: db_id,
-                    db: db_name.to_string(),
-                    table_id: *table_id,
-                    version: 0,
-                    name: table_name.to_string(),
-                    schema: Arc::new(arrow_schema.into()),
-                    engine: table.table_engine.to_string(),
-                    options: table.table_options.clone(),
-                };
-
-                tbls.push(Arc::new(table_info));
+                tbls.push(table_info);
             }
         }
 
@@ -796,6 +805,14 @@ impl StateMachine {
     }
 
     pub fn databases(&self) -> AsKeySpace<Databases> {
+        self.sm_tree.key_space()
+    }
+
+    pub fn tables(&self) -> AsKeySpace<Tables> {
+        self.sm_tree.key_space()
+    }
+
+    pub fn table_lookup(&self) -> AsKeySpace<TableLookup> {
         self.sm_tree.key_space()
     }
 }

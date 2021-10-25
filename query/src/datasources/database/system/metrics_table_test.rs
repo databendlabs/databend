@@ -39,7 +39,7 @@ async fn test_metrics_table() -> Result<()> {
     metrics::counter!("test.test_metrics_table_count", 1);
     metrics::histogram!("test.test_metrics_table_histogram", 1.0);
 
-    let stream = table.read(io_ctx, &source_plan.push_downs).await?;
+    let stream = table.read(io_ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 4);

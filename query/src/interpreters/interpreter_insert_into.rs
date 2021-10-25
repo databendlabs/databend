@@ -19,7 +19,6 @@ use common_planners::InsertIntoPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::DatabendQueryContextRef;
@@ -45,8 +44,9 @@ impl Interpreter for InsertIntoInterpreter {
     }
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        let catalog = self.ctx.get_catalog();
-        let table = catalog.get_table_by_id(self.plan.tbl_id, None)?;
+        let table = self
+            .ctx
+            .get_table(&self.plan.db_name, &self.plan.tbl_name)?;
 
         let io_ctx = self.ctx.get_cluster_table_io_context()?;
         let io_ctx = Arc::new(io_ctx);
