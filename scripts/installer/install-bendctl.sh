@@ -85,15 +85,6 @@ get_architecture() {
     _ostype="$(uname -s)"
     _cputype="$(uname -m)"
     _clibtype="gnu"
-    # rosetta hack, return ARM64 binary directly
-    detect_rosetta "$_cputype"
-    _is_rosseta=$?
-    if [ $_is_rosseta -eq 0 ]; then
-        log_err "⚠️ Macbook M1 is not officially supported!"
-        _arch="aarch64-apple-darwin"
-        RETVAL="$_arch"
-        return
-    fi
     if [ "$_ostype" = Linux ]; then
         if [ "$(uname -o)" = Android ]; then
             _ostype=Android
@@ -363,8 +354,12 @@ assert_supported_architecture() {
             echo "x86_64-unknown-linux-gnu"
             return 0
             ;;
+        aarch64-apple-darwin)
+            echo "x86_64-apple-darwin"
+            return 0
+            ;;
         *)
-          log_err "current architecture $_arch is not supported, Make sure this script is up-to-date and file request at https://github.com/$DATABEND_REPO/issues/new"
+          echo "current architecture $_arch is not supported, Make sure this script is up-to-date and file request at https://github.com/$DATABEND_REPO/issues/new"
           return 1
           ;;
     esac
