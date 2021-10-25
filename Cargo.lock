@@ -1235,8 +1235,8 @@ dependencies = [
  "common-arrow",
  "common-exception",
  "common-io",
+ "common-macros",
  "common-mem-allocator",
- "common-mem-derive",
  "lexical-core 0.8.2",
  "num",
  "ordered-float 2.8.0",
@@ -1322,6 +1322,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-macros"
+version = "0.1.0"
+dependencies = [
+ "common-base",
+ "proc-macro2",
+ "quote",
+ "syn",
+ "synstructure",
+]
+
+[[package]]
 name = "common-management"
 version = "0.1.0"
 dependencies = [
@@ -1345,18 +1356,9 @@ version = "0.1.0"
 dependencies = [
  "common-base",
  "common-infallible",
- "common-mem-derive",
+ "common-macros",
  "parking_lot",
  "tikv-jemalloc-sys",
-]
-
-[[package]]
-name = "common-mem-derive"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "syn",
- "synstructure",
 ]
 
 [[package]]
@@ -1974,6 +1976,7 @@ dependencies = [
  "common-flight-rpc",
  "common-functions",
  "common-infallible",
+ "common-macros",
  "common-meta-api",
  "common-meta-flight",
  "common-meta-raft-store",
@@ -2045,9 +2048,9 @@ dependencies = [
  "common-functions",
  "common-infallible",
  "common-io",
+ "common-macros",
  "common-management",
  "common-mem-allocator",
- "common-mem-derive",
  "common-meta-api",
  "common-meta-embedded",
  "common-meta-flight",

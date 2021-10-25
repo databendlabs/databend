@@ -40,8 +40,8 @@ common-meta-api = { path = "../common/meta/api" }
 common-meta-flight = {path = "../common/meta/flight" }
 common-meta-types = {path = "../common/meta/types"}
 common-meta-embedded = { path = "../common/meta/embedded" }
-common-mem-allocator = { path = "../common/mem/mem-allocator" }
-common-mem-derive = { path = "../common/mem/mem-derive" }
+common-mem-allocator = { path = "../common/mem-allocator" }
+common-macros = { path = "../common/macros" }
 common-io = { path = "../common/io" }
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }
 common-metrics = { path = "../common/metrics" }

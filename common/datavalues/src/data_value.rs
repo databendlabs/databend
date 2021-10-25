@@ -25,7 +25,7 @@ use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
-use common_mem_derive::*;
+use common_macros::MallocSizeOf;
 
 use crate::arrays::ListBooleanArrayBuilder;
 use crate::arrays::ListBuilderTrait;

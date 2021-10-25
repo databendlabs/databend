@@ -16,10 +16,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_infallible::Mutex;
+use common_macros::MallocSizeOf;
 use common_mem_allocator::malloc_size;
 use common_mem_allocator::MallocSizeOf;
 use common_mem_allocator::MallocSizeOfExt;
-use common_mem_derive::*;
 
 #[test]
 fn derive_vec() {
