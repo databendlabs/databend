@@ -127,7 +127,7 @@ impl MetaApi for MetaEmbedded {
         let cr = Cmd::CreateTable {
             db_name: db_name.clone(),
             table_name: table_name.clone(),
-            table,
+            table_info: table,
         };
 
         let mut sm = self.inner.lock().await;

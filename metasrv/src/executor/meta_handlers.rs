@@ -163,7 +163,7 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
             cmd: CreateTable {
                 db_name: db_name.clone(),
                 table_name: table_name.clone(),
-                table,
+                table_info: table,
             },
         };
 
