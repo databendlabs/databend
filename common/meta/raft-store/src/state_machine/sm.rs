@@ -355,7 +355,7 @@ impl StateMachine {
             Cmd::CreateTable {
                 ref db_name,
                 ref table_name,
-                ref table,
+                table_info: ref table,
             } => {
                 let dbi = self
                     .databases()

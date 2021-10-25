@@ -37,36 +37,20 @@ pub enum Cmd {
     AddNode { node_id: NodeId, node: Node },
 
     /// Add a database if absent
-    CreateDatabase {
-        // TODO(ariesdevil): add `seq` for distinguish between the results of the execution of
-        // the two commands (failed `add` and successful `delete`)
-        name: String,
-        db: DatabaseInfo,
-    },
+    CreateDatabase { name: String, db: DatabaseInfo },
 
     /// Drop a database if absent
-    DropDatabase {
-        // TODO(ariesdevil): add `seq` for distinguish between the results of the execution of
-        // the two commands (failed `add` and successful `delete`)
-        name: String,
-    },
+    DropDatabase { name: String },
 
     /// Create a table if absent
     CreateTable {
-        // TODO(ariesdevil): add `seq` for distinguish between the results of the execution of
-        // the two commands (failed `add` and successful `delete`)
         db_name: String,
         table_name: String,
-        table: TableInfo,
+        table_info: TableInfo,
     },
 
     /// Drop a table if absent
-    DropTable {
-        // TODO(ariesdevil): add `seq` for distinguish between the results of the execution of
-        // the two commands (failed `add` and successful `delete`)
-        db_name: String,
-        table_name: String,
-    },
+    DropTable { db_name: String, table_name: String },
 
     /// Update or insert a general purpose kv store
     UpsertKV {
@@ -104,7 +88,7 @@ impl fmt::Display for Cmd {
             Cmd::CreateTable {
                 db_name,
                 table_name,
-                table,
+                table_info: table,
             } => {
                 write!(f, "create_table:{}-{}={}", db_name, table_name, table)
             }
