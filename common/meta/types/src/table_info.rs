@@ -24,7 +24,6 @@ use crate::MetaVersion;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TableInfo {
-    pub database_id: u64,
     pub table_id: u64,
 
     /// version of this table snapshot.
@@ -65,7 +64,6 @@ impl TableInfo {
 impl Default for TableInfo {
     fn default() -> Self {
         TableInfo {
-            database_id: 0,
             table_id: 0,
             version: 0,
             desc: "".to_string(),
@@ -81,8 +79,8 @@ impl Display for TableInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "DB.Table: {}-{}, Table: {}-{}, Version: {}, Engine: {}",
-            self.desc, self.database_id, self.name, self.table_id, self.version, self.engine
+            "DB.Table: {}, Table: {}-{}, Version: {}, Engine: {}",
+            self.desc, self.name, self.table_id, self.version, self.engine
         )
     }
 }

@@ -209,7 +209,6 @@ impl MetaApiTestSuite {
                 let got = mt.get_table(db_name, tbl_name).await?;
 
                 let want = TableInfo {
-                    database_id: 1,
                     table_id: 1,
                     version: 0,
                     desc: format!("'{}'.'{}'", db_name, tbl_name),
@@ -229,7 +228,6 @@ impl MetaApiTestSuite {
 
                 let got = mt.get_table(db_name, tbl_name).await?;
                 let want = TableInfo {
-                    database_id: 1,
                     table_id: 1,
                     version: 0,
                     desc: format!("'{}'.'{}'", db_name, tbl_name),
@@ -258,7 +256,6 @@ impl MetaApiTestSuite {
 
                 let got = mt.get_table("db1", "tb2").await.unwrap();
                 let want = TableInfo {
-                    database_id: 1,
                     table_id: 1,
                     version: 0,
                     desc: format!("'{}'.'{}'", db_name, tbl_name),

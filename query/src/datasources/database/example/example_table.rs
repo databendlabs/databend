@@ -43,7 +43,6 @@ impl ExampleTable {
         table_id: u64,
     ) -> Result<Box<dyn Table>> {
         let table_info = TableInfo {
-            database_id: 0,
             table_id,
             version: 0,
             desc: format!("'{}'.'{}'", db, name),

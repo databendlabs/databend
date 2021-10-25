@@ -373,7 +373,6 @@ impl StateMachine {
 
                 let mut table = table.clone();
                 table.table_id = self.incr_seq(SEQ_TABLE_ID).await?;
-                table.database_id = db_id;
 
                 let table_id = table.table_id;
 

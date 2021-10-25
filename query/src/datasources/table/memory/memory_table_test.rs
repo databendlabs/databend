@@ -38,7 +38,6 @@ async fn test_memorytable() -> Result<()> {
     ]);
     let table = MemoryTable::try_create(
         TableInfo {
-            database_id: 0,
             desc: "'default'.'a'".into(),
             name: "a".into(),
             schema: schema.clone(),

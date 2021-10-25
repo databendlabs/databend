@@ -77,7 +77,6 @@ impl NumbersTable {
         };
 
         let table_info = TableInfo {
-            database_id: 0,
             table_id,
             version: 0,
             desc: format!("'{}'.'{}'", database_name, table_func_name),

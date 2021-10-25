@@ -44,7 +44,6 @@ async fn test_csv_table() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let table = CsvTable::try_create(
         TableInfo {
-            database_id: 0,
             desc: "'default'.'test_csv'".into(),
             name: "test_csv".into(),
             schema: DataSchemaRefExt::create(vec![DataField::new(
@@ -122,7 +121,6 @@ async fn test_csv_table_parse_error() -> Result<()> {
 
     let table = CsvTable::try_create(
         TableInfo {
-            database_id: 0,
             desc: "'default'.'test_csv'".into(),
             name: "test_csv".into(),
             schema: DataSchemaRefExt::create(vec![

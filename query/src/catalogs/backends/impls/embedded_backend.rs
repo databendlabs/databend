@@ -166,7 +166,6 @@ impl MetaApiSync for MetaEmbeddedSync {
         let table_name = clone.table.as_str();
 
         let table_info = TableInfo {
-            database_id: 0, // TODO tobe assigned to some real value
             desc: format!("'{}'.'{}'", plan.db, plan.table),
             table_id: self.next_db_id(),
             version: 0,

@@ -38,7 +38,6 @@ async fn test_null_table() -> Result<()> {
     ]);
     let table = NullTable::try_create(
         TableInfo {
-            database_id: 0,
             desc: "'default'.'a'".into(),
             name: "a".into(),
 
