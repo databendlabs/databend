@@ -34,6 +34,9 @@ jobs:
           cargo install --version 0.1.16 cross
       - name: Build Binary
         run: |
+          if [ ${{ matrix.config.os }} = "macos-11" ]; then
+              rustup target add aarch64-apple-darwin
+          fi
           if [ ${{ matrix.config.cross }} = true ]; then
               cross build --release --target=${{ matrix.config.target }}
           else
