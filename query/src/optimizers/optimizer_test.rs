@@ -39,3 +39,29 @@ pub fn generate_partitions(workers: u64, total: u64) -> Partitions {
     }
     partitions
 }
+
+#[cfg(test)]
+mod tests {
+    use common_exception::Result;
+
+    use crate::optimizers::Optimizers;
+
+    #[test]
+    fn test_literal_false_filter() -> Result<()> {
+        let query = "select * from numbers_mt(10) where 1 + 2 = 2";
+        let ctx = crate::tests::try_create_context()?;
+
+        let plan = crate::tests::parse_query(query)?;
+        let mut optimizer = Optimizers::without_scatters(ctx);
+        let optimized = optimizer.optimize(&plan)?;
+        let actual = format!("{:?}", optimized);
+
+        let expect = "\
+        Projection: number:UInt64\
+        \n  Filter: false\
+        \n    ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0]";
+
+        assert_eq!(actual, expect);
+        Ok(())
+    }
+}
