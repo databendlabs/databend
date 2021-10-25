@@ -104,7 +104,7 @@ impl Table for ParquetTable {
     async fn read(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _plan: &ReadDataSourcePlan,
+        plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         type BlockSender = Sender<Option<Result<DataBlock>>>;
         type BlockReceiver = Receiver<Option<Result<DataBlock>>>;
@@ -112,20 +112,8 @@ impl Table for ParquetTable {
         let (response_tx, response_rx): (BlockSender, BlockReceiver) = bounded(2);
 
         let file = self.file.clone();
+        let projection: Vec<usize> = plan.scan_fields().keys().cloned().collect::<Vec<_>>();
 
-        // TODO(xp): Optimized fields does not used, because:
-        //           - CorrectWithSchemaStream.schema should contains only optimized fields.
-        //           - There is a big chain through which some `schema` is passed from one to another.
-        //             E.g. SourceTransform::execute() pass schema to CorrectWithSchemaStream,
-        //                  FilterPlan.schema is passed to WhereTransform then to CorrectWithSchemaStream ...
-        //           That will be a change affects a lot components. Maybe complete unittest first before applying this change.
-        //
-        // This fails the stateless test:
-        // let projection: Vec<usize> = plan.scan_fields().keys().cloned().collect::<Vec<_>>();
-        //
-        // Now just using the entire fields list from table_info.scheme to let tests pass.
-
-        let projection: Vec<usize> = (0..self.table_info.schema.fields().len()).collect();
         task::spawn_blocking(move || {
             if let Err(e) = read_file(&file, response_tx, &projection) {
                 println!("Parquet reader thread terminated due to error: {:?}", e);

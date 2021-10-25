@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_datavalues::DataField;
+use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::TableInfo;
 
@@ -48,8 +49,15 @@ pub struct ReadDataSourcePlan {
 }
 
 impl ReadDataSourcePlan {
+    /// Return schema after the projection
     pub fn schema(&self) -> DataSchemaRef {
-        self.table_info.schema.clone()
+        self.scan_fields
+            .clone()
+            .map(|x| {
+                let fields: Vec<_> = x.iter().map(|(_, f)| f.clone()).collect();
+                Arc::new(DataSchema::new(fields))
+            })
+            .unwrap_or_else(|| self.table_info.schema.clone())
     }
 
     /// Return designated required fields or all fields in a hash map.
