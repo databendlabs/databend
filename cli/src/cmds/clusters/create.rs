@@ -402,7 +402,9 @@ impl CreateCommand {
         if config.query.http_handler_host.is_empty() {
             config.query.http_handler_host = "0.0.0.0".to_string();
         }
-        config.query.http_handler_port = portpicker::pick_unused_port().unwrap();
+        if !portpicker::is_free(config.query.http_handler_port) {
+            config.query.http_handler_port = portpicker::pick_unused_port().unwrap();
+        }
         config
     }
 

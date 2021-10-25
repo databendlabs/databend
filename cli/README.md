@@ -28,7 +28,21 @@ please add the following line to `~/.zshrc`
 source <(bendctl completion zsh)
 ```
 
+## Start from scratch
+### Install bendctl
+```bash
+curl -fsS https://repo.databend.rs/databend/install-bendctl.sh | bash
+export PATH="${HOME}/.databend/bin:${PATH}"
+```
+
+### Create a local cluster
+```bash
+bendctl cluster create
+```
+
 ``````
+
+
 
 Usage:
 ``` 

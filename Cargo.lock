@@ -567,6 +567,7 @@ dependencies = [
  "assert_cmd",
  "async-std",
  "async-trait",
+ "byte-unit",
  "clap 3.0.0-beta.5",
  "clap_generate",
  "colored",
@@ -586,6 +587,7 @@ dependencies = [
  "libc",
  "log",
  "nix 0.22.2",
+ "num-format",
  "portpicker",
  "predicates 2.0.3",
  "pretty_assertions",
@@ -740,6 +742,15 @@ name = "bumpalo"
 version = "3.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f1e260c3a9040a7c19a12468758f4c16f31a81a1fe087482be9570ec864bb6c"
+
+[[package]]
+name = "byte-unit"
+version = "4.0.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "956ffc5b0ec7d7a6949e3f21fd63ba5af4cffdc2ba1e0b7bf62b481458c4ae7f"
+dependencies = [
+ "utf8-width",
+]
 
 [[package]]
 name = "bytecount"
@@ -6940,6 +6951,12 @@ dependencies = [
  "libc",
  "log",
 ]
+
+[[package]]
+name = "utf8-width"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cf7d77f457ef8dfa11e4cd5933c5ddb5dc52a94664071951219a97710f0a32b"
 
 [[package]]
 name = "utf8parse"

@@ -13,8 +13,9 @@
 // limitations under the License.
 
 use std::borrow::Borrow;
+use std::io::Read;
 use std::net::SocketAddr;
-use std::str::FromStr;
+use std::path::Path;
 
 use async_trait::async_trait;
 use clap::App;
@@ -24,8 +25,10 @@ use clap::ArgMatches;
 use comfy_table::Cell;
 use comfy_table::Color;
 use comfy_table::Table;
-use serde::Deserialize;
-use serde::Serialize;
+use common_base::ProgressValues;
+use lexical_util::num::AsPrimitive;
+use num_format::Locale;
+use num_format::ToFormattedString;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::command::Command;
@@ -40,27 +43,6 @@ pub struct QueryCommand {
     #[allow(dead_code)]
     conf: Config,
     clap: App<'static>,
-}
-
-// Supported clients to run queries
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum QueryClient {
-    Clickhouse,
-    Mysql,
-}
-
-// Implement the trait
-impl FromStr for QueryClient {
-    type Err = &'static str;
-
-    fn from_str(s: &str) -> std::result::Result<QueryClient, &'static str> {
-        match s {
-            "mysql" => Ok(QueryClient::Mysql),
-            "clickhouse" => Ok(QueryClient::Clickhouse),
-            _ => Err("no match for client"),
-        }
-    }
 }
 
 impl QueryCommand {
@@ -119,31 +101,61 @@ impl QueryCommand {
             Ok(_) => {
                 writer.write_ok("Query precheck passed!");
                 let status = Status::read(self.conf.clone())?;
-                if let Some(query) = args.value_of("query") {
-                    let res = build_query_endpoint(&status);
-                    if let Ok((cli, url)) = res {
-                        writer.write_ok(format!("Execute query {} on {}", query, url).as_str());
-                        match execute_query(cli, url, query.parse().unwrap()).await {
-                            Ok(res) => {
-                                writer.writeln(res.trim_fmt().as_str());
-                            }
-                            Err(e) => {
-                                writer.write_err(format!("Query command error: cannot execute query with error: {:?}", e).as_str());
-                            }
+                let queries = match args.value_of("query") {
+                    Some(val) => {
+                        if Path::new(val).exists() {
+                            let buffer =
+                                std::fs::read(Path::new(val)).expect("cannot read query from file");
+                            String::from_utf8_lossy(&*buffer).to_string()
+                        } else if val.starts_with("http://") || val.starts_with("https://") {
+                            let res = reqwest::get(val)
+                                .await
+                                .expect("cannot fetch query from url")
+                                .text()
+                                .await
+                                .expect("cannot fetch response body");
+                            res
+                        } else {
+                            val.to_string()
                         }
-                        return Ok(());
-                    } else {
-                        writer.write_err(
-                            format!(
-                                "Query command error: cannot parse query url with error: {:?}",
-                                res.unwrap_err()
-                            )
-                            .as_str(),
+                    }
+                    None => {
+                        let mut buffer = String::new();
+                        std::io::stdin()
+                            .read_to_string(&mut buffer)
+                            .expect("cannot read from stdin");
+                        buffer
+                    }
+                };
+
+                let res = build_query_endpoint(&status);
+
+                if let Ok((cli, url)) = res {
+                    for query in queries
+                        .split(';')
+                        .filter(|elem| !elem.trim().is_empty())
+                        .map(|elem| format!("{};", elem))
+                        .collect::<Vec<String>>()
+                    {
+                        writer.write_ok(
+                            format!("Execute query {} on {}", query.clone(), url).as_str(),
                         );
+                        if let Err(e) =
+                            query_writer(&cli, url.as_str(), query.clone(), writer).await
+                        {
+                            writer.write_err(
+                                format!("query {} execution error: {:?}", query, e).as_str(),
+                            );
+                        }
                     }
                 } else {
-                    writer.write_err("Query command error: cannot find SQL argument!");
-                    return Ok(());
+                    writer.write_err(
+                        format!(
+                            "Query command error: cannot parse query url with error: {:?}",
+                            res.unwrap_err()
+                        )
+                        .as_str(),
+                    );
                 }
 
                 Ok(())
@@ -167,6 +179,53 @@ impl QueryCommand {
 
         Ok(())
     }
+}
+
+async fn query_writer(
+    cli: &reqwest::Client,
+    url: &str,
+    query: String,
+    writer: &mut Writer,
+) -> Result<()> {
+    let start = std::time::Instant::now();
+    match execute_query(cli, url, query).await {
+        Ok((res, stats)) => {
+            let elapsed = start.elapsed();
+            writer.writeln(res.trim_fmt().as_str());
+            if let Some(stat) = stats {
+                let time = elapsed.as_millis() as f64 / 1000f64;
+                let byte_per_sec = byte_unit::Byte::from_unit(
+                    stat.read_bytes as f64 / time,
+                    byte_unit::ByteUnit::B,
+                )
+                .expect("cannot parse byte")
+                .get_appropriate_unit(false);
+                writer.write_ok(
+                    format!(
+                        "read rows: {}, read bytes: {}, rows/sec: {} (rows/sec), bytes/sec: {} ({}/sec)",
+                        stat.read_rows.to_formatted_string(&Locale::en),
+                        byte_unit::Byte::from_bytes(stat.read_bytes as u128)
+                            .get_appropriate_unit(false)
+                            .to_string(),
+                        (stat.read_rows as f64 / time).as_u128().to_formatted_string(&Locale::en),
+                        byte_per_sec.get_value(),
+                        byte_per_sec.get_unit().to_string()
+                    )
+                        .as_str(),
+                );
+            }
+        }
+        Err(e) => {
+            writer.write_err(
+                format!(
+                    "Query command error: cannot execute query with error: {:?}",
+                    e
+                )
+                .as_str(),
+            );
+        }
+    }
+    Ok(())
 }
 
 // TODO(zhihanz) mTLS support
@@ -196,10 +255,14 @@ pub fn build_query_endpoint(status: &Status) -> Result<(reqwest::Client, String)
     Ok((client, url))
 }
 
-async fn execute_query(cli: reqwest::Client, url: String, query: String) -> Result<Table> {
+async fn execute_query(
+    cli: &reqwest::Client,
+    url: &str,
+    query: String,
+) -> Result<(Table, Option<ProgressValues>)> {
     let ans = cli
         .post(url)
-        .body(query)
+        .body(query.clone())
         .send()
         .await
         .expect("cannot post to http handler")
@@ -227,7 +290,7 @@ async fn execute_query(cli: reqwest::Client, url: String, query: String) -> Resu
                 table.add_row(row.iter().map(|elem| Cell::new(elem.to_string())));
             }
         }
-        Ok(table)
+        Ok((table, ans.stats))
     }
 }
 
