@@ -41,7 +41,7 @@ trust-dns-resolver = { version = "0.20.3", features = ["system-config"] }
 pretty_assertions = "1.0"
 
 [build-dependencies]
-tonic-build = "0.5.2"
+tonic-build = "0.6.0"
 
 [features]
 mocks = []
