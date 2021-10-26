@@ -43,6 +43,7 @@ use crate::catalogs::Table;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::datasources::common::ContextDalBuilder;
+use crate::servers::http::v1::query::HttpQueryHandle;
 use crate::sessions::context_shared::DatabendQueryContextShared;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
@@ -184,6 +185,10 @@ impl DatabendQueryContext {
         let (abort_handle, abort_stream) = AbortStream::try_create(input)?;
         self.shared.add_source_abort_handle(abort_handle);
         Ok(abort_stream)
+    }
+
+    pub fn attach_http_query(&self, handle: HttpQueryHandle) {
+        self.shared.attach_http_query(handle);
     }
 
     pub fn get_current_database(&self) -> String {

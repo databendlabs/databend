@@ -27,7 +27,6 @@ where T: Serialize {
     to_value(v).unwrap()
 }
 
-// TODO(youngsofun): test null, Int8, dates
 fn test_data_block(is_nullable: bool) -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("c1", DataType::Int32, is_nullable),
@@ -46,7 +45,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
             .cast_with_type(&DataType::Date16)
             .unwrap(),
     ]);
-    let json_block = block_to_json(block)?;
+    let json_block = block_to_json(&block)?;
     let expect = vec![
         vec![val(1), val("a"), val(true), val(1.1), val("1970-01-02")],
         vec![val(2), val("b"), val(true), val(2.2), val("1970-01-03")],
