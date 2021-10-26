@@ -25,6 +25,7 @@ use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
 use crate::cmds::command::Command;
+use crate::cmds::config::Mode;
 use crate::cmds::queries::query::QueryCommand;
 use crate::cmds::ClusterCommand;
 use crate::cmds::CommentCommand;
@@ -35,12 +36,14 @@ use crate::cmds::PackageCommand;
 use crate::cmds::VersionCommand;
 use crate::cmds::Writer;
 use crate::error::Result;
-use crate::cmds::config::Mode;
 
 pub struct Processor {
     env: Env,
     readline: Editor<()>,
-    commands: Vec<Box<dyn Command>>,
+    admin_commands: Vec<Box<dyn Command>>,
+    comment: CommentCommand,
+    help: HelpCommand,
+    query: QueryCommand,
 }
 
 enum MultilineType {
@@ -58,21 +61,19 @@ impl Processor {
     pub fn create(conf: Config) -> Self {
         fs::create_dir_all(conf.databend_dir.clone()).unwrap();
 
-        let sub_commands: Vec<Box<dyn Command>> = vec![
+        let admin_commands: Vec<Box<dyn Command>> = vec![
             Box::new(VersionCommand::create()),
-            Box::new(CommentCommand::create()),
             Box::new(PackageCommand::create(conf.clone())),
-            Box::new(QueryCommand::create(conf.clone())),
             Box::new(ClusterCommand::create(conf.clone())),
         ];
-
-        let mut commands: Vec<Box<dyn Command>> = sub_commands.clone();
-        commands.push(Box::new(HelpCommand::create(sub_commands)));
-
+        let help_command = HelpCommand::create(admin_commands.clone());
         Processor {
-            env: Env::create(conf),
+            env: Env::create(conf.clone()),
             readline: Editor::<()>::new(),
-            commands,
+            admin_commands,
+            comment: CommentCommand::create(),
+            help: help_command,
+            query: QueryCommand::create(conf),
         }
     }
     pub async fn process_run(&mut self) -> Result<()> {
@@ -222,22 +223,40 @@ impl Processor {
         if line.to_lowercase().trim() == "\\sql".to_string() {
             writeln!(writer, "Mode switched to SQL query mode").unwrap();
             self.env.load_mode(Mode::SQL);
-            return Ok(())
+            return Ok(());
         }
         if line.to_lowercase().trim() == "\\admin".to_string() {
             writeln!(writer, "Mode switched to admin mode").unwrap();
             self.env.load_mode(Mode::Admin);
-            return Ok(())
+            return Ok(());
         }
-        if self.env.conf.mode == Mode::SQL {
 
+        if self.comment.is(&*line) {
+            self.comment
+                .exec(&mut writer, line.trim().to_string())
+                .await?;
+            writer.flush()?;
+            return Ok(());
         }
-        if let Some(cmd) = self.commands.iter().find(|c| c.is(&*line)) {
-            cmd.exec(&mut writer, line.trim().to_string()).await?;
+        if self.help.is(&*line) {
+            self.help.exec(&mut writer, line.trim().to_string()).await?;
+            writer.flush()?;
+            return Ok(());
+        }
+        // query execution mode
+        if self.env.conf.mode == Mode::SQL {
+            self.query
+                .exec(&mut writer, line.trim().to_string())
+                .await?;
+            writer.flush()?;
         } else {
-            writeln!(writer, "Unknown command, usage: help").unwrap();
+            if let Some(cmd) = self.admin_commands.iter().find(|c| c.is(&*line)) {
+                cmd.exec(&mut writer, line.trim().to_string()).await?;
+            } else {
+                writeln!(writer, "Unknown command, usage: help").unwrap();
+            }
+            writer.flush()?;
         }
-        writer.flush()?;
         Ok(())
     }
 }

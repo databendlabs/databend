@@ -16,10 +16,11 @@ use httpmock::Method::GET;
 use httpmock::MockServer;
 use tempfile::tempdir;
 
-use crate::cmds::config::{choose_mirror, Mode};
+use crate::cmds::config::choose_mirror;
 use crate::cmds::config::CustomMirror;
 use crate::cmds::config::GithubMirror;
 use crate::cmds::config::MirrorAsset;
+use crate::cmds::config::Mode;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::error::Result;

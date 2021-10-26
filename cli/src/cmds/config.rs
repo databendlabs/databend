@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -19,6 +21,7 @@ use clap::App;
 use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
+use colored::Colorize;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -29,8 +32,6 @@ use crate::cmds::Status;
 use crate::cmds::VersionCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;
-use std::fmt::{Display, Formatter};
-use colored::Colorize;
 
 const GITHUB_BASE_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
 const GITHUB_DATABEND_URL: &str = "https://github.com/datafuselabs/databend/releases/download";
@@ -52,7 +53,7 @@ pub struct Config {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Mode {
     SQL,
-    Admin
+    Admin,
 }
 
 impl Display for Mode {
@@ -63,7 +64,6 @@ impl Display for Mode {
         }
     }
 }
-
 
 pub trait MirrorAsset {
     fn is_ok(&self) -> bool {
@@ -154,7 +154,7 @@ impl MirrorAsset for CustomMirror {
 pub fn choose_mirror(conf: &Config) -> Result<CustomMirror, CliError> {
     // try user defined mirror source at first
     let conf = conf.clone();
-    let default = GithubMirror {};
+    let default = RepoMirror {};
     if default.to_mirror() != conf.mirror {
         let custom: CustomMirror = conf.mirror.clone();
         for _ in 0..5 {
@@ -231,7 +231,7 @@ impl Config {
                 Arg::new("download_url")
                     .long("download_url")
                     .about("Sets the url to download databend binaries")
-                    .default_value("https://github.com/datafuselabs/databend/releases/download")
+                    .default_value(REPO_DATABEND_URL)
                     .env("DOWNLOAD_URL")
                     .global(true)
                     .takes_value(true),
@@ -240,7 +240,7 @@ impl Config {
                 Arg::new("tag_url")
                     .long("tag_url")
                     .about("Sets the url to for databend tags")
-                    .default_value("https://api.github.com/repos/datafuselabs/databend/tags")
+                    .default_value(REPO_DATABEND_TAG_URL)
                     .env("DOWNLOAD_URL")
                     .global(true)
                     .takes_value(true),
@@ -250,7 +250,7 @@ impl Config {
                     .long("validation_url")
                     .about("Sets the url to validate on custom download network connection")
                     .env("DOWNLOAD_VALIDATION_URL")
-                    .default_value("https://github.com")
+                    .default_value(REPO_DATABEND_TAG_URL)
                     .global(true)
                     .takes_value(true),
             )
