@@ -52,14 +52,14 @@ pub struct Config {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum Mode {
-    SQL,
+    Sql,
     Admin,
 }
 
 impl Display for Mode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match *self {
-            Mode::SQL => write!(f, "{}", String::from("sql").purple()),
+            Mode::Sql => write!(f, "{}", String::from("sql").purple()),
             Mode::Admin => write!(f, "{}", String::from("admin").red()),
         }
     }
@@ -157,7 +157,7 @@ pub fn choose_mirror(conf: &Config) -> Result<CustomMirror, CliError> {
     let default = RepoMirror {};
     if default.to_mirror() != conf.mirror {
         let custom: CustomMirror = conf.mirror.clone();
-        for _ in 0..5 {
+        for _ in 0..2 {
             let custom: CustomMirror = conf.mirror.clone();
             if custom.is_ok() {
                 let mut status = Status::read(conf).expect("cannot configure status");
@@ -190,7 +190,7 @@ pub fn choose_mirror(conf: &Config) -> Result<CustomMirror, CliError> {
 
     let default_mirrors: Vec<Box<dyn MirrorAsset>> =
         vec![Box::new(GithubMirror {}), Box::new(RepoMirror {})];
-    for _ in 0..5 {
+    for _ in 0..2 {
         for i in &default_mirrors {
             if i.is_ok() {
                 return Ok(i.to_mirror());
@@ -212,7 +212,7 @@ impl Config {
                 Arg::new("group")
                     .long("group")
                     .about("Sets the group name for configuration")
-                    .default_value("test")
+                    .default_value("local")
                     .env("DATABEND_GROUP")
                     .global(true)
                     .takes_value(true),
@@ -273,7 +273,7 @@ impl Config {
         let clap = Config::build_cli().get_matches();
         let config = Config {
             group: clap.clone().value_of("group").unwrap().parse().unwrap(),
-            mode: Mode::SQL,
+            mode: Mode::Sql,
             databend_dir: clap
                 .clone()
                 .value_of("databend_dir")

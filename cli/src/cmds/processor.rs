@@ -220,12 +220,12 @@ impl Processor {
 
     pub async fn processor_line(&mut self, mut writer: Writer, line: String) -> Result<()> {
         // mode switch
-        if line.to_lowercase().trim() == "\\sql".to_string() {
+        if line.to_lowercase().trim().eq("\\sql") {
             writeln!(writer, "Mode switched to SQL query mode").unwrap();
-            self.env.load_mode(Mode::SQL);
+            self.env.load_mode(Mode::Sql);
             return Ok(());
         }
-        if line.to_lowercase().trim() == "\\admin".to_string() {
+        if line.to_lowercase().trim().eq("\\admin") {
             writeln!(writer, "Mode switched to admin mode").unwrap();
             self.env.load_mode(Mode::Admin);
             return Ok(());
@@ -244,7 +244,7 @@ impl Processor {
             return Ok(());
         }
         // query execution mode
-        if self.env.conf.mode == Mode::SQL {
+        if self.env.conf.mode == Mode::Sql {
             self.query
                 .exec(&mut writer, line.trim().to_string())
                 .await?;

@@ -18,6 +18,7 @@ use tempfile::tempdir;
 
 use crate::cmds::config::GithubMirror;
 use crate::cmds::config::MirrorAsset;
+use crate::cmds::config::Mode;
 use crate::cmds::queries::query::build_query_endpoint;
 use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
@@ -67,6 +68,7 @@ macro_rules! build_status {
 fn test_generate_query_probe() -> Result<()> {
     let mut conf = Config {
         group: "foo".to_string(),
+        mode: Mode::Sql,
         databend_dir: "/tmp/.databend".to_string(),
         mirror: GithubMirror {}.to_mirror(),
         clap: Default::default(),
