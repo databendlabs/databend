@@ -100,7 +100,7 @@ impl Table for FuseTable {
 
 impl FuseTable {
     pub fn table_snapshot(&self, io_ctx: &TableIOContext) -> Result<Option<TableSnapshot>> {
-        let option = &self.table_info.options;
+        let option = &self.table_info.options();
         if let Some(loc) = option.get(util::TBL_OPT_KEY_SNAPSHOT_LOC) {
             let da = io_ctx.get_data_accessor()?;
             let r = read_obj(da, loc.to_string()).wait_in(&io_ctx.get_runtime(), None)??;

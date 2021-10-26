@@ -21,6 +21,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -45,9 +46,12 @@ impl SettingsTable {
             desc: "'system'.'settings'".to_string(),
             name: "settings".to_string(),
             table_id,
-            schema,
-            engine: "SystemSettings".to_string(),
+            meta: TableMeta {
+                schema,
+                engine: "SystemSettings".to_string(),
 
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -93,14 +97,14 @@ impl Table for SettingsTable {
         let values: Vec<&[u8]> = values.iter().map(|x| x.as_bytes()).collect();
         let default_values: Vec<&[u8]> = default_values.iter().map(|x| x.as_bytes()).collect();
         let descs: Vec<&[u8]> = descs.iter().map(|x| x.as_bytes()).collect();
-        let block = DataBlock::create_by_array(self.table_info.schema.clone(), vec![
+        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
             Series::new(names),
             Series::new(values),
             Series::new(default_values),
             Series::new(descs),
         ]);
         Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema.clone(),
+            self.table_info.schema(),
             None,
             vec![block],
         )))

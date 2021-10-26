@@ -38,11 +38,11 @@ pub trait Table: Sync + Send {
     }
 
     fn engine(&self) -> &str {
-        &self.get_table_info().engine
+        self.get_table_info().engine()
     }
 
     fn schema(&self) -> DataSchemaRef {
-        self.get_table_info().schema.clone()
+        self.get_table_info().schema()
     }
 
     fn get_id(&self) -> MetaId {

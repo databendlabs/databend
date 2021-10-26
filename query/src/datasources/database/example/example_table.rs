@@ -20,6 +20,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_planners::InsertIntoPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::TableOptions;
@@ -48,9 +49,11 @@ impl ExampleTable {
             desc: format!("'{}'.'{}'", db, name),
             name,
 
-            schema,
-            engine: "ExampleNull".to_string(),
-            options,
+            meta: TableMeta {
+                schema,
+                engine: "ExampleNull".to_string(),
+                options,
+            },
         };
 
         Ok(Box::new(Self { table_info }))

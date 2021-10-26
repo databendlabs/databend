@@ -41,6 +41,7 @@ pub use raft_types::LogIndex;
 pub use raft_types::NodeId;
 pub use raft_types::Term;
 pub use table_info::TableInfo;
+pub use table_info::TableMeta;
 pub use table_reply::CreateTableReply;
 
 mod cluster;

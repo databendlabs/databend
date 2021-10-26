@@ -1053,7 +1053,7 @@ impl MetaNode {
                     table_version, tbl.version,
                 )))
             } else {
-                tbl.options.insert(opt_key, opt_value);
+                tbl.meta.options.insert(opt_key, opt_value);
                 tbl.version += 1;
                 sm.upsert_table(tbl, &MatchSeq::Exact(seq)).await?;
                 Ok(())

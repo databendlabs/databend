@@ -20,6 +20,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -39,8 +40,11 @@ impl ContributorsTable {
             desc: "'system'.'contributors'".to_string(),
             name: "contributors".to_string(),
             table_id,
-            schema,
-            engine: "SystemContributors".to_string(),
+            meta: TableMeta {
+                schema,
+                engine: "SystemContributors".to_string(),
+                ..Default::default()
+            },
 
             ..Default::default()
         };
@@ -67,12 +71,11 @@ impl Table for ContributorsTable {
             .split_terminator(',')
             .map(|x| x.trim().as_bytes())
             .collect();
-        let block = DataBlock::create_by_array(self.table_info.schema.clone(), vec![Series::new(
-            contributors,
-        )]);
+        let block =
+            DataBlock::create_by_array(self.table_info.schema(), vec![Series::new(contributors)]);
 
         Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema.clone(),
+            self.table_info.schema(),
             None,
             vec![block],
         )))
