@@ -24,6 +24,7 @@ use tempfile::tempdir;
 
 use crate::cmds::config::GithubMirror;
 use crate::cmds::config::MirrorAsset;
+use crate::cmds::config::Mode;
 use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
 use crate::cmds::status::LocalRuntime;
@@ -35,6 +36,7 @@ use crate::error::Result;
 fn test_status() -> Result<()> {
     let mut conf = Config {
         group: "foo".to_string(),
+        mode: Mode::Sql,
         databend_dir: "/tmp/.databend".to_string(),
         mirror: GithubMirror {}.to_mirror(),
         clap: Default::default(),
@@ -156,6 +158,7 @@ fn test_status() -> Result<()> {
 async fn test_verify() -> Result<()> {
     let mut conf = Config {
         group: "foo".to_string(),
+        mode: Mode::Sql,
         databend_dir: "/tmp/.databend".to_string(),
         clap: Default::default(),
         mirror: GithubMirror {}.to_mirror(),

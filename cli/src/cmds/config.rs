@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -19,6 +21,7 @@ use clap::App;
 use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
+use colored::Colorize;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -42,10 +45,24 @@ const REPO_DATABEND_TAG_URL: &str = "https://repo.databend.rs/databend/tags.json
 pub struct Config {
     //(TODO(zhihanz) remove those field as they already mentioned in Clap global flag)
     pub group: String,
-
+    pub mode: Mode,
     pub databend_dir: String,
     pub mirror: CustomMirror,
     pub clap: ArgMatches,
+}
+#[derive(Clone, Debug, PartialEq)]
+pub enum Mode {
+    Sql,
+    Admin,
+}
+
+impl Display for Mode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            Mode::Sql => write!(f, "{}", String::from("sql").purple()),
+            Mode::Admin => write!(f, "{}", String::from("admin").red()),
+        }
+    }
 }
 
 pub trait MirrorAsset {
@@ -137,10 +154,10 @@ impl MirrorAsset for CustomMirror {
 pub fn choose_mirror(conf: &Config) -> Result<CustomMirror, CliError> {
     // try user defined mirror source at first
     let conf = conf.clone();
-    let default = GithubMirror {};
+    let default = RepoMirror {};
     if default.to_mirror() != conf.mirror {
         let custom: CustomMirror = conf.mirror.clone();
-        for _ in 0..5 {
+        for _ in 0..2 {
             let custom: CustomMirror = conf.mirror.clone();
             if custom.is_ok() {
                 let mut status = Status::read(conf).expect("cannot configure status");
@@ -173,7 +190,7 @@ pub fn choose_mirror(conf: &Config) -> Result<CustomMirror, CliError> {
 
     let default_mirrors: Vec<Box<dyn MirrorAsset>> =
         vec![Box::new(GithubMirror {}), Box::new(RepoMirror {})];
-    for _ in 0..5 {
+    for _ in 0..2 {
         for i in &default_mirrors {
             if i.is_ok() {
                 return Ok(i.to_mirror());
@@ -195,7 +212,7 @@ impl Config {
                 Arg::new("group")
                     .long("group")
                     .about("Sets the group name for configuration")
-                    .default_value("test")
+                    .default_value("local")
                     .env("DATABEND_GROUP")
                     .global(true)
                     .takes_value(true),
@@ -214,7 +231,7 @@ impl Config {
                 Arg::new("download_url")
                     .long("download_url")
                     .about("Sets the url to download databend binaries")
-                    .default_value("https://github.com/datafuselabs/databend/releases/download")
+                    .default_value(REPO_DATABEND_URL)
                     .env("DOWNLOAD_URL")
                     .global(true)
                     .takes_value(true),
@@ -223,7 +240,7 @@ impl Config {
                 Arg::new("tag_url")
                     .long("tag_url")
                     .about("Sets the url to for databend tags")
-                    .default_value("https://api.github.com/repos/datafuselabs/databend/tags")
+                    .default_value(REPO_DATABEND_TAG_URL)
                     .env("DOWNLOAD_URL")
                     .global(true)
                     .takes_value(true),
@@ -233,7 +250,7 @@ impl Config {
                     .long("validation_url")
                     .about("Sets the url to validate on custom download network connection")
                     .env("DOWNLOAD_VALIDATION_URL")
-                    .default_value("https://github.com")
+                    .default_value(REPO_DATABEND_TAG_URL)
                     .global(true)
                     .takes_value(true),
             )
@@ -256,6 +273,7 @@ impl Config {
         let clap = Config::build_cli().get_matches();
         let config = Config {
             group: clap.clone().value_of("group").unwrap().parse().unwrap(),
+            mode: Mode::Sql,
             databend_dir: clap
                 .clone()
                 .value_of("databend_dir")
