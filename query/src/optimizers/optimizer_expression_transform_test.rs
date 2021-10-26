@@ -108,6 +108,15 @@ mod tests {
                 \n  Filter: false\
                 \n    ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0]",
             },
+            Test {
+                name: "Limit zero transform",
+                query: "select number from numbers_mt(10) where true limit 0",
+                expect: "\
+                Limit: 0\
+                \n  Projection: number:UInt64\
+                \n    Filter: true\
+                \n      ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0]",
+            },
         ];
 
         for test in tests {
