@@ -22,7 +22,7 @@ jobs:
           - {os: ubuntu-latest, toolchain: stable, target: x86_64-unknown-linux-gnu, cross: false}
           - {os: ubuntu-latest, toolchain: stable, target: aarch64-unknown-linux-gnu, cross: true}
           # Macos
-          - {os: macos-latest, toolchain: stable, target: x86_64-apple-darwin, cross: false}
+          - {os: macos-11, toolchain: stable, target: x86_64-apple-darwin, cross: false}
           - {os: macos-11, toolchain: stable, target: aarch64-apple-darwin, cross: false}
 
     steps:
@@ -49,8 +49,15 @@ jobs:
 
       - name: Pack binaries
         run: |
-          tar -C ./target/${{ matrix.config.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-query databend-meta
-          tar -C ./target/${{ matrix.config.target }}/release -czvf bendctl-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz bendctl
+          if [ ${{ matrix.config.os }} = "macos-11" ]; then
+            brew install gnu-tar
+            sudo /usr/sbin/purge
+            gtar -C ./target/${{ matrix.config.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-query databend-meta
+            gtar -C ./target/${{ matrix.config.target }}/release -czvf bendctl-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz bendctl
+          else
+            tar -C ./target/${{ matrix.config.target }}/release -czvf databend-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz databend-query databend-meta
+            tar -C ./target/${{ matrix.config.target }}/release -czvf bendctl-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.target }}.tar.gz bendctl
+          fi
 
       - name: Release databend
         uses: svenstaro/upload-release-action@v2
