@@ -47,6 +47,7 @@ use crate::sql::DfHint;
 use crate::sql::DfKillStatement;
 use crate::sql::DfShowCreateTable;
 use crate::sql::DfShowDatabases;
+use crate::sql::DfShowMetrics;
 use crate::sql::DfShowProcessList;
 use crate::sql::DfShowSettings;
 use crate::sql::DfShowTables;
@@ -195,6 +196,8 @@ impl<'a> DfParser<'a> {
                             self.parse_show_create()
                         } else if self.consume_token("PROCESSLIST") {
                             Ok(DfStatement::ShowProcessList(DfShowProcessList))
+                        } else if self.consume_token("METRICS") {
+                            Ok(DfStatement::ShowMetrics(DfShowMetrics))
                         } else {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
