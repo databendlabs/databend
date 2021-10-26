@@ -357,37 +357,30 @@ impl StateMachine {
                 ref table_name,
                 table_info: ref table,
             } => {
-                let dbi = self
-                    .databases()
-                    .get(db_name)?
-                    .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
+                let db_id = self.get_db_id(db_name).await?;
 
-                let dbi = dbi.1.value;
-                let table_lookup_tree = self.table_lookup();
-                let seq_table_id = table_lookup_tree.get(&TableLookupKey {
-                    database_id: dbi.database_id,
+                let lookup_key = TableLookupKey {
+                    database_id: db_id,
                     table_name: table_name.to_string(),
-                })?;
+                };
+
+                let table_lookup_tree = self.table_lookup();
+                let seq_table_id = table_lookup_tree.get(&lookup_key)?;
 
                 if seq_table_id.is_some() {
                     let prev = self.get_table(&seq_table_id.unwrap().1.value.0)?;
                     return Ok((prev.clone(), prev).into());
                 }
 
-                let tables = self.tables();
-
                 let mut table = table.clone();
                 table.table_id = self.incr_seq(SEQ_TABLE_ID).await?;
-                table.database_id = dbi.database_id;
+                table.database_id = db_id;
 
                 let table_id = table.table_id;
 
                 self.sub_tree_upsert(
                     table_lookup_tree,
-                    &TableLookupKey {
-                        database_id: dbi.database_id,
-                        table_name: table_name.clone(),
-                    },
+                    &lookup_key,
                     &MatchSeq::Exact(0),
                     Operation::Update(TableLookupValue(table_id)),
                     None,
@@ -396,7 +389,7 @@ impl StateMachine {
 
                 let (prev, result) = self
                     .sub_tree_upsert(
-                        tables,
+                        self.tables(),
                         &table_id,
                         &MatchSeq::Exact(0),
                         Operation::Update(table),
@@ -417,17 +410,15 @@ impl StateMachine {
                 ref db_name,
                 ref table_name,
             } => {
-                let dbi = self
-                    .databases()
-                    .get(db_name)?
-                    .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
+                let db_id = self.get_db_id(db_name).await?;
 
-                let dbi = dbi.1.value;
-                let table_lookup_tree = self.table_lookup();
-                let seq_table_id = table_lookup_tree.get(&TableLookupKey {
-                    database_id: dbi.database_id,
+                let lookup_key = TableLookupKey {
+                    database_id: db_id,
                     table_name: table_name.to_string(),
-                })?;
+                };
+
+                let table_lookup_tree = self.table_lookup();
+                let seq_table_id = table_lookup_tree.get(&lookup_key)?;
 
                 if seq_table_id.is_none() {
                     return Ok((None::<SeqValue<KVValue<TableInfo>>>, None).into());
@@ -435,10 +426,7 @@ impl StateMachine {
 
                 self.sub_tree_upsert(
                     table_lookup_tree,
-                    &TableLookupKey {
-                        database_id: dbi.database_id,
-                        table_name: table_name.to_string(),
-                    },
+                    &lookup_key,
                     &MatchSeq::Any,
                     Operation::Delete,
                     None,
@@ -548,6 +536,18 @@ impl StateMachine {
         sub_tree.insert(key, &seq_kv_value).await?;
 
         Ok(Some(seq_kv_value))
+    }
+
+    #[allow(clippy::ptr_arg)]
+    async fn get_db_id(&self, db_name: &String) -> common_exception::Result<u64> {
+        let dbi = self
+            .databases()
+            .get(db_name)?
+            .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
+
+        let dbi = dbi.1.value;
+
+        Ok(dbi.database_id)
     }
 
     async fn client_last_resp_update(
