@@ -29,6 +29,8 @@ use crate::cmds::Status;
 use crate::cmds::VersionCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;
+use std::fmt::{Display, Formatter};
+use colored::Colorize;
 
 const GITHUB_BASE_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
 const GITHUB_DATABEND_URL: &str = "https://github.com/datafuselabs/databend/releases/download";
@@ -42,11 +44,26 @@ const REPO_DATABEND_TAG_URL: &str = "https://repo.databend.rs/databend/tags.json
 pub struct Config {
     //(TODO(zhihanz) remove those field as they already mentioned in Clap global flag)
     pub group: String,
-
+    pub mode: Mode,
     pub databend_dir: String,
     pub mirror: CustomMirror,
     pub clap: ArgMatches,
 }
+#[derive(Clone, Debug, PartialEq)]
+pub enum Mode {
+    SQL,
+    Admin
+}
+
+impl Display for Mode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            Mode::SQL => write!(f, "{}", String::from("sql").purple()),
+            Mode::Admin => write!(f, "{}", String::from("admin").red()),
+        }
+    }
+}
+
 
 pub trait MirrorAsset {
     fn is_ok(&self) -> bool {
@@ -256,6 +273,7 @@ impl Config {
         let clap = Config::build_cli().get_matches();
         let config = Config {
             group: clap.clone().value_of("group").unwrap().parse().unwrap(),
+            mode: Mode::SQL,
             databend_dir: clap
                 .clone()
                 .value_of("databend_dir")

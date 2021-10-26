@@ -35,6 +35,7 @@ use crate::cmds::PackageCommand;
 use crate::cmds::VersionCommand;
 use crate::cmds::Writer;
 use crate::error::Result;
+use crate::cmds::config::Mode;
 
 pub struct Processor {
     env: Env,
@@ -216,7 +217,21 @@ impl Processor {
         Ok(())
     }
 
-    pub async fn processor_line(&self, mut writer: Writer, line: String) -> Result<()> {
+    pub async fn processor_line(&mut self, mut writer: Writer, line: String) -> Result<()> {
+        // mode switch
+        if line.to_lowercase().trim() == "\\sql".to_string() {
+            writeln!(writer, "Mode switched to SQL query mode").unwrap();
+            self.env.load_mode(Mode::SQL);
+            return Ok(())
+        }
+        if line.to_lowercase().trim() == "\\admin".to_string() {
+            writeln!(writer, "Mode switched to admin mode").unwrap();
+            self.env.load_mode(Mode::Admin);
+            return Ok(())
+        }
+        if self.env.conf.mode == Mode::SQL {
+
+        }
         if let Some(cmd) = self.commands.iter().find(|c| c.is(&*line)) {
             cmd.exec(&mut writer, line.trim().to_string()).await?;
         } else {

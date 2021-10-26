@@ -16,7 +16,7 @@ use httpmock::Method::GET;
 use httpmock::MockServer;
 use tempfile::tempdir;
 
-use crate::cmds::config::choose_mirror;
+use crate::cmds::config::{choose_mirror, Mode};
 use crate::cmds::config::CustomMirror;
 use crate::cmds::config::GithubMirror;
 use crate::cmds::config::MirrorAsset;
@@ -28,6 +28,7 @@ use crate::error::Result;
 fn test_mirror() -> Result<()> {
     let mut conf = Config {
         group: "foo".to_string(),
+        mode: Mode::SQL,
         databend_dir: "/tmp/.databend".to_string(),
         clap: Default::default(),
         mirror: GithubMirror {}.to_mirror(),
