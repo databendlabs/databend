@@ -25,6 +25,7 @@ use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
+use common_meta_types::SeqV;
 use common_tracing::tracing;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
@@ -244,7 +245,7 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
 
                 assert_eq!(
                     *want_id,
-                    got.unwrap().1.value.database_id,
+                    got.unwrap().data.database_id,
                     "n{} applied AddDatabase",
                     i
                 );
@@ -349,8 +350,8 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
             None => {
                 panic!("expect get some value for {}", key)
             }
-            Some((ref _seq, ref v)) => {
-                assert_eq!(v.value, b"v".to_vec());
+            Some(SeqV { ref data, .. }) => {
+                assert_eq!(data, b"v");
             }
         }
     }
@@ -724,7 +725,7 @@ async fn assert_get_kv(
         // let got = mn.get_file(key).await?;
         assert_eq!(
             value.to_string().into_bytes(),
-            got.unwrap().1.value,
+            got.unwrap().data,
             "n{} applied value",
             i
         );

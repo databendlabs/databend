@@ -14,9 +14,8 @@
 
 use async_raft::AppDataResponse;
 use common_meta_types::DatabaseInfo;
-use common_meta_types::KVValue;
 use common_meta_types::Node;
-use common_meta_types::SeqValue;
+use common_meta_types::SeqV;
 use common_meta_types::TableInfo;
 use serde::Deserialize;
 use serde::Serialize;
@@ -48,13 +47,13 @@ pub enum AppliedState {
     },
 
     Table {
-        prev: Option<SeqTableInfo>,
-        result: Option<SeqTableInfo>,
+        prev: Option<SeqV<TableInfo>>,
+        result: Option<SeqV<TableInfo>>,
     },
 
     KV {
-        prev: Option<SeqValue<KVValue>>,
-        result: Option<SeqValue<KVValue>>,
+        prev: Option<SeqV<Vec<u8>>>,
+        result: Option<SeqV<Vec<u8>>>,
     },
 
     DataPartsCount {
@@ -102,7 +101,7 @@ impl From<(Option<Node>, Option<Node>)> for AppliedState {
     }
 }
 
-type SeqDBInfo = SeqValue<KVValue<DatabaseInfo>>;
+type SeqDBInfo = SeqV<DatabaseInfo>;
 
 impl From<(Option<SeqDBInfo>, Option<SeqDBInfo>)> for AppliedState {
     fn from(v: (Option<SeqDBInfo>, Option<SeqDBInfo>)) -> Self {
@@ -113,10 +112,8 @@ impl From<(Option<SeqDBInfo>, Option<SeqDBInfo>)> for AppliedState {
     }
 }
 
-type SeqTableInfo = SeqValue<KVValue<TableInfo>>;
-
-impl From<(Option<SeqTableInfo>, Option<SeqTableInfo>)> for AppliedState {
-    fn from(v: (Option<SeqTableInfo>, Option<SeqTableInfo>)) -> Self {
+impl From<(Option<SeqV<TableInfo>>, Option<SeqV<TableInfo>>)> for AppliedState {
+    fn from(v: (Option<SeqV<TableInfo>>, Option<SeqV<TableInfo>>)) -> Self {
         AppliedState::Table {
             prev: v.0,
             result: v.1,
@@ -124,8 +121,8 @@ impl From<(Option<SeqTableInfo>, Option<SeqTableInfo>)> for AppliedState {
     }
 }
 
-impl From<(Option<SeqValue<KVValue>>, Option<SeqValue<KVValue>>)> for AppliedState {
-    fn from(v: (Option<SeqValue<KVValue>>, Option<SeqValue<KVValue>>)) -> Self {
+impl From<(Option<SeqV>, Option<SeqV>)> for AppliedState {
+    fn from(v: (Option<SeqV>, Option<SeqV>)) -> Self {
         AppliedState::KV {
             prev: v.0,
             result: v.1,

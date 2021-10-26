@@ -59,7 +59,7 @@ impl UserManager {
                 let user = User::new(user, "", AuthType::None);
                 Ok(user.into())
             }
-            _ => Ok(self.api_provider.get_user(user.to_string(), None)?.1),
+            _ => Ok(self.api_provider.get_user(user.to_string(), None)?.data),
         }
     }
 
@@ -99,7 +99,7 @@ impl UserManager {
         let mut res = vec![];
         let users = self.api_provider.get_users()?;
         for user in users {
-            res.push(user.1);
+            res.push(user.data);
         }
         Ok(res)
     }

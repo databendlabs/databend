@@ -65,7 +65,7 @@ impl MetaApi for MetaEmbedded {
         }
 
         Ok(CreateDatabaseReply {
-            database_id: result.unwrap().1.value.database_id,
+            database_id: result.unwrap().data.database_id,
         })
     }
 
@@ -94,7 +94,7 @@ impl MetaApi for MetaEmbedded {
         let res = sm
             .get_database(db)?
             .ok_or_else(|| ErrorCode::UnknownDatabase(db.to_string()))?;
-        Ok(Arc::new(res.1.value))
+        Ok(Arc::new(res.data))
     }
 
     async fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>> {
@@ -148,7 +148,7 @@ impl MetaApi for MetaEmbedded {
             )))
         } else {
             Ok(CreateTableReply {
-                table_id: result.unwrap().1.value.table_id,
+                table_id: result.unwrap().data.table_id,
             })
         }
     }
@@ -185,7 +185,7 @@ impl MetaApi for MetaEmbedded {
             ErrorCode::UnknownDatabase(format!("get table: database not found {:}", db))
         })?;
 
-        let dbi = seq_db.1.value;
+        let dbi = seq_db.data;
         let db_id = dbi.database_id;
 
         let table_id = sm
@@ -195,13 +195,13 @@ impl MetaApi for MetaEmbedded {
                 table_name: table.to_string(),
             })?
             .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table: '{:}'", table)))?;
-        let table_id = table_id.1.value.0;
+        let table_id = table_id.data.0;
 
         let seq_table = sm
             .get_table(&table_id)?
             .ok_or_else(|| ErrorCode::UnknownTable(table.to_string()))?;
 
-        let tablei = seq_table.1.value;
+        let tablei = seq_table.data;
 
         let rst = TableInfo {
             database_id: tablei.database_id,
@@ -231,7 +231,7 @@ impl MetaApi for MetaEmbedded {
             ErrorCode::UnknownTable(format!("table of id {} not found", table_id))
         })?;
 
-        let tablei = table.1.value;
+        let tablei = table.data;
 
         let rst = TableInfo {
             database_id: tablei.database_id,

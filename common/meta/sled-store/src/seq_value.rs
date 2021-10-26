@@ -12,10 +12,79 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::KVValue;
+use std::convert::TryInto;
+
+use serde::de::DeserializeOwned;
+use serde::Deserialize;
+use serde::Serialize;
+
+use crate::KVMeta;
 use crate::SledSerde;
 
-/// Value with a corresponding sequence number
-pub type SeqValue<T = Vec<u8>> = (u64, T);
+/// Some value bound with a seq number
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
+pub struct SeqV<T = Vec<u8>> {
+    pub seq: u64,
+    pub meta: Option<KVMeta>,
+    pub data: T,
+}
 
-impl<T: serde::Serialize + serde::de::DeserializeOwned> SledSerde for SeqValue<KVValue<T>> {}
+impl<T: Serialize + DeserializeOwned> SledSerde for SeqV<T> {}
+
+pub trait IntoSeqV<T> {
+    type Error;
+    fn into_seqv(self) -> Result<SeqV<T>, Self::Error>;
+}
+
+impl<T, V> IntoSeqV<T> for SeqV<V>
+where V: TryInto<T>
+{
+    type Error = <V as TryInto<T>>::Error;
+
+    fn into_seqv(self) -> Result<SeqV<T>, Self::Error> {
+        Ok(SeqV {
+            seq: self.seq,
+            meta: self.meta,
+            data: self.data.try_into()?,
+        })
+    }
+}
+
+impl<T> SeqV<T> {
+    pub fn new(seq: u64, data: T) -> Self {
+        Self {
+            seq,
+            meta: None,
+            data,
+        }
+    }
+
+    pub fn with_meta(seq: u64, meta: Option<KVMeta>, data: T) -> Self {
+        Self { seq, meta, data }
+    }
+
+    pub fn get_expire_at(&self) -> u64 {
+        match self.meta {
+            None => u64::MAX,
+            Some(ref m) => match m.expire_at {
+                None => u64::MAX,
+                Some(exp_at) => exp_at,
+            },
+        }
+    }
+
+    pub fn set_seq(mut self, seq: u64) -> SeqV<T> {
+        self.seq = seq;
+        self
+    }
+
+    pub fn set_meta(mut self, m: Option<KVMeta>) -> SeqV<T> {
+        self.meta = m;
+        self
+    }
+
+    pub fn set_value(mut self, v: T) -> SeqV<T> {
+        self.data = v;
+        self
+    }
+}

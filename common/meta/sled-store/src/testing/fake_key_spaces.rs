@@ -13,19 +13,18 @@
 // limitations under the License.
 
 use async_raft::raft::Entry;
-use common_meta_types::KVValue;
 use common_meta_types::LogEntry;
 use common_meta_types::LogIndex;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
-use common_meta_types::SeqValue;
 
 use crate::testing::fake_state_machine_meta::StateMachineMetaKey;
 use crate::testing::fake_state_machine_meta::StateMachineMetaValue;
+use crate::SeqV;
 use crate::SledKeySpace;
 use crate::SledSerde;
 
-impl SledSerde for SeqValue<KVValue> {}
+// impl SledSerde for SeqValue<KVValue> {}
 
 impl SledSerde for Node {}
 
@@ -71,5 +70,5 @@ impl SledKeySpace for GenericKV {
     const PREFIX: u8 = 6;
     const NAME: &'static str = "generic-kv";
     type K = String;
-    type V = SeqValue<KVValue<Vec<u8>>>;
+    type V = SeqV<Vec<u8>>;
 }
