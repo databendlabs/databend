@@ -29,7 +29,6 @@ use common_meta_sled_store::SledTree;
 use common_meta_types::Cmd;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::KVMeta;
-use common_meta_types::KVValue;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
 use common_meta_types::MatchSeq;
@@ -37,7 +36,7 @@ use common_meta_types::MatchSeqExt;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
-use common_meta_types::SeqValue;
+use common_meta_types::SeqV;
 use common_meta_types::TableInfo;
 use common_tracing::tracing;
 use serde::Deserialize;
@@ -368,7 +367,7 @@ impl StateMachine {
                 let seq_table_id = table_lookup_tree.get(&lookup_key)?;
 
                 if seq_table_id.is_some() {
-                    let prev = self.get_table(&seq_table_id.unwrap().1.value.0)?;
+                    let prev = self.get_table(&seq_table_id.unwrap().data.0)?;
                     return Ok((prev.clone(), prev).into());
                 }
 
@@ -421,7 +420,7 @@ impl StateMachine {
                 let seq_table_id = table_lookup_tree.get(&lookup_key)?;
 
                 if seq_table_id.is_none() {
-                    return Ok((None::<SeqValue<KVValue<TableInfo>>>, None).into());
+                    return Ok((None::<SeqV<TableInfo>>, None).into());
                 }
 
                 self.sub_tree_upsert(
@@ -437,7 +436,7 @@ impl StateMachine {
                 let (prev, result) = self
                     .sub_tree_upsert(
                         tables,
-                        &seq_table_id.unwrap().1.value.0,
+                        &seq_table_id.unwrap().data.0,
                         &MatchSeq::Any,
                         Operation::Delete,
                         None,
@@ -473,10 +472,10 @@ impl StateMachine {
         seq: &MatchSeq,
         value_op: Operation<V>,
         value_meta: Option<KVMeta>,
-    ) -> common_exception::Result<(Option<SeqValue<KVValue<V>>>, Option<SeqValue<KVValue<V>>>)>
+    ) -> common_exception::Result<(Option<SeqV<V>>, Option<SeqV<V>>)>
     where
         V: Clone + Debug,
-        KS: SledKeySpace<V = SeqValue<KVValue<V>>>,
+        KS: SledKeySpace<V = SeqV<V>>,
     {
         // TODO(xp): need to be done all in a tx
 
@@ -505,33 +504,29 @@ impl StateMachine {
         &'s self,
         sub_tree: &AsKeySpace<'s, KS>,
         key: &KS::K,
-        prev: Option<SeqValue<KVValue<V>>>,
+        prev: Option<SeqV<V>>,
         value_meta: Option<KVMeta>,
         value_op: Operation<V>,
-    ) -> common_exception::Result<Option<SeqValue<KVValue<V>>>>
+    ) -> common_exception::Result<Option<SeqV<V>>>
     where
         V: Clone + Debug,
-        KS: SledKeySpace<V = SeqValue<KVValue<V>>>,
+        KS: SledKeySpace<V = SeqV<V>>,
     {
-        let new_kv_value = match value_op {
-            Operation::Update(v) => KVValue {
-                meta: value_meta.clone(),
-                value: v,
-            },
+        let mut seq_kv_value = match value_op {
+            Operation::Update(v) => SeqV::with_meta(0, value_meta.clone(), v),
             Operation::Delete => {
                 sub_tree.remove(key, true).await?;
                 return Ok(None);
             }
             Operation::AsIs => match prev {
                 None => return Ok(None),
-                Some((_, ref prev_kv_value)) => prev_kv_value.clone().set_meta(value_meta),
+                Some(ref prev_kv_value) => prev_kv_value.clone().set_meta(value_meta),
             },
         };
 
         // insert the updated record.
 
-        let new_seq = self.incr_seq(KS::NAME).await?;
-        let seq_kv_value = (new_seq, new_kv_value);
+        seq_kv_value.seq = self.incr_seq(KS::NAME).await?;
 
         sub_tree.insert(key, &seq_kv_value).await?;
 
@@ -540,14 +535,12 @@ impl StateMachine {
 
     #[allow(clippy::ptr_arg)]
     async fn get_db_id(&self, db_name: &String) -> common_exception::Result<u64> {
-        let dbi = self
+        let seq_dbi = self
             .databases()
             .get(db_name)?
             .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
 
-        let dbi = dbi.1.value;
-
-        Ok(dbi.database_id)
+        Ok(seq_dbi.data.database_id)
     }
 
     async fn client_last_resp_update(
@@ -609,10 +602,7 @@ impl StateMachine {
         sm_nodes.get(node_id)
     }
 
-    pub fn get_database(
-        &self,
-        name: &str,
-    ) -> Result<Option<SeqValue<KVValue<DatabaseInfo>>>, ErrorCode> {
+    pub fn get_database(&self, name: &str) -> Result<Option<SeqV<DatabaseInfo>>, ErrorCode> {
         let dbs = self.databases();
         let x = dbs.get(&name.to_string())?;
         Ok(x)
@@ -624,7 +614,7 @@ impl StateMachine {
         let it = self.databases().range(..)?;
         for r in it {
             let (a, b) = r?;
-            res.push((a, b.1.value));
+            res.push((a, b.data));
         }
 
         Ok(res)
@@ -636,7 +626,7 @@ impl StateMachine {
         Ok(res.map(|x| x.0))
     }
 
-    pub fn get_table(&self, tid: &u64) -> Result<Option<SeqValue<KVValue<TableInfo>>>, ErrorCode> {
+    pub fn get_table(&self, tid: &u64) -> Result<Option<SeqV<TableInfo>>, ErrorCode> {
         let x = self.tables().get(tid)?;
         Ok(x)
     }
@@ -645,7 +635,7 @@ impl StateMachine {
         &self,
         tbl: TableInfo,
         seq: &MatchSeq,
-    ) -> Result<Option<SeqValue<KVValue<TableInfo>>>, ErrorCode> {
+    ) -> Result<Option<SeqV<TableInfo>>, ErrorCode> {
         let tables = self.tables();
         let table_id = tbl.table_id;
         let (_prev, result) = self
@@ -667,7 +657,7 @@ impl StateMachine {
             }
         };
 
-        let db_id = db.1.value.database_id;
+        let db_id = db.data.database_id;
 
         let mut tbls = vec![];
         let tables = self.tables();
@@ -676,12 +666,12 @@ impl StateMachine {
             let (k, seq_table_id) = r?;
             let got_db_id = k.database_id;
             if got_db_id == db_id {
-                let table_id: TableLookupValue = seq_table_id.1.value;
+                let table_id: TableLookupValue = seq_table_id.data;
                 let table = tables.get(&table_id.0)?.ok_or_else(|| {
                     ErrorCode::IllegalMetaState(format!(" table of id {}, not found", table_id))
                 })?;
 
-                let table_info = table.1.value;
+                let table_info = table.data;
 
                 tbls.push(table_info);
             }
@@ -690,7 +680,7 @@ impl StateMachine {
         Ok(tbls)
     }
 
-    pub fn get_kv(&self, key: &str) -> common_exception::Result<Option<SeqValue<KVValue>>> {
+    pub fn get_kv(&self, key: &str) -> common_exception::Result<Option<SeqV<Vec<u8>>>> {
         // TODO(xp) refine get(): a &str is enough for key
         let sv = self.kvs().get(&key.to_string())?;
         tracing::debug!("get_kv sv:{:?}", sv);
@@ -705,7 +695,7 @@ impl StateMachine {
     pub fn mget_kv(
         &self,
         keys: &[impl AsRef<str>],
-    ) -> common_exception::Result<Vec<Option<SeqValue<KVValue>>>> {
+    ) -> common_exception::Result<Vec<Option<SeqV<Vec<u8>>>>> {
         let kvs = self.kvs();
         let mut res = vec![];
         for x in keys.iter() {
@@ -720,7 +710,7 @@ impl StateMachine {
     pub fn prefix_list_kv(
         &self,
         prefix: &str,
-    ) -> common_exception::Result<Vec<(String, SeqValue<KVValue>)>> {
+    ) -> common_exception::Result<Vec<(String, SeqV<Vec<u8>>)>> {
         let kvs = self.kvs();
         let kv_pairs = kvs.scan_prefix(&prefix.to_string())?;
 
@@ -736,15 +726,13 @@ impl StateMachine {
         Ok(x.collect())
     }
 
-    fn unexpired_opt<V: Debug>(
-        seq_value: Option<SeqValue<KVValue<V>>>,
-    ) -> Option<SeqValue<KVValue<V>>> {
+    fn unexpired_opt<V: Debug>(seq_value: Option<SeqV<V>>) -> Option<SeqV<V>> {
         match seq_value {
             None => None,
             Some(sv) => Self::unexpired(sv),
         }
     }
-    fn unexpired<V: Debug>(seq_value: SeqValue<KVValue<V>>) -> Option<SeqValue<KVValue<V>>> {
+    fn unexpired<V: Debug>(seq_value: SeqV<V>) -> Option<SeqV<V>> {
         // TODO(xp): log must be assigned with a ts.
 
         // TODO(xp): background task to clean expired
@@ -769,7 +757,7 @@ impl StateMachine {
 
         tracing::debug!("seq_value: {:?} now: {}", seq_value, now);
 
-        if seq_value.1 < now {
+        if seq_value.get_expire_at() < now {
             None
         } else {
             Some(seq_value)

@@ -60,10 +60,10 @@ async fn test_meta_server_upsert_kv() -> anyhow::Result<()> {
         match resp {
             AppliedState::KV { prev, result } => {
                 assert!(prev.is_none());
-                let (seq, value) = result.unwrap();
-                assert!(seq > 0);
-                assert!(value.meta.is_none());
-                assert_eq!(b"bar".to_vec(), value.value);
+                let sv = result.unwrap();
+                assert!(sv.seq > 0);
+                assert!(sv.meta.is_none());
+                assert_eq!(b"bar".to_vec(), sv.data);
             }
             _ => {
                 panic!("not KV")

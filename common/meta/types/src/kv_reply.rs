@@ -12,25 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::KVValue;
-use crate::SeqValue;
+use crate::SeqV;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct UpsertKVActionReply {
     /// prev is the value before upsert.
-    pub prev: Option<SeqValue<KVValue>>,
+    pub prev: Option<SeqV<Vec<u8>>>,
     /// result is the value after upsert.
-    pub result: Option<SeqValue<KVValue>>,
+    pub result: Option<SeqV<Vec<u8>>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct GetKVActionReply {
-    pub result: Option<SeqValue<KVValue>>,
+    pub result: Option<SeqV<Vec<u8>>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct MGetKVActionReply {
-    pub result: Vec<Option<SeqValue<KVValue>>>,
+    pub result: Vec<Option<SeqV<Vec<u8>>>>,
 }
 
-pub type PrefixListReply = Vec<(String, SeqValue<KVValue>)>;
+pub type PrefixListReply = Vec<(String, SeqV<Vec<u8>>)>;

@@ -24,6 +24,7 @@ use common_meta_api::KVApi;
 use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
 use common_meta_types::NodeInfo;
+use common_meta_types::SeqV;
 use common_meta_types::UpsertKVActionReply;
 
 use crate::namespace::NamespaceApi;
@@ -145,10 +146,10 @@ impl NamespaceApi for NamespaceMgr {
         match upsert_node.await? {
             UpsertKVActionReply {
                 prev: None,
-                result: Some((s, _)),
+                result: Some(SeqV { seq: s, .. }),
             } => Ok(s),
             UpsertKVActionReply {
-                prev: Some((s, _)),
+                prev: Some(SeqV { seq: s, .. }),
                 result: _,
             } => Err(ErrorCode::NamespaceNodeAlreadyExists(format!(
                 "Namespace already exists, seq [{}]",
@@ -165,8 +166,8 @@ impl NamespaceApi for NamespaceMgr {
         let values = self.kv_api.prefix_list_kv(&self.namespace_prefix).await?;
 
         let mut nodes_info = Vec::with_capacity(values.len());
-        for (node_key, (_, value)) in values {
-            let mut node_info = serde_json::from_slice::<NodeInfo>(&value.value)?;
+        for (node_key, value) in values {
+            let mut node_info = serde_json::from_slice::<NodeInfo>(&value.data)?;
 
             let node_key = Self::unescape_for_key(&node_key)?;
             node_info.id = node_key[self.namespace_prefix.len() + 1..].to_string();
@@ -211,7 +212,7 @@ impl NamespaceApi for NamespaceMgr {
                 match upsert_meta.await? {
                     UpsertKVActionReply {
                         prev: Some(_),
-                        result: Some((s, _)),
+                        result: Some(SeqV { seq: s, .. }),
                     } => Ok(s),
                     UpsertKVActionReply { .. } => Err(ErrorCode::NamespaceUnknownNode(format!(
                         "unknown node {:?}",
@@ -226,7 +227,7 @@ impl NamespaceApi for NamespaceMgr {
                 match upsert_meta.await? {
                     UpsertKVActionReply {
                         prev: Some(_),
-                        result: Some((s, _)),
+                        result: Some(SeqV { seq: s, .. }),
                     } => Ok(s),
                     UpsertKVActionReply { .. } => Err(ErrorCode::NamespaceUnknownNode(format!(
                         "unknown node {:?}",

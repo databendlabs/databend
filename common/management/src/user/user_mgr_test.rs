@@ -23,6 +23,7 @@ use common_meta_types::KVMeta;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MatchSeq;
 use common_meta_types::PrefixListReply;
+use common_meta_types::SeqV;
 use common_meta_types::UpsertKVActionReply;
 use mockall::predicate::*;
 use mockall::*;
@@ -64,7 +65,6 @@ mock! {
 }
 
 mod add {
-    use common_meta_types::KVValue;
 
     use super::*;
 
@@ -125,10 +125,7 @@ mod add {
                 .times(1)
                 .returning(|_u, _s, _salt, _meta| {
                     Ok(UpsertKVActionReply {
-                        prev: Some((1, KVValue {
-                            meta: None,
-                            value: vec![],
-                        })),
+                        prev: Some(SeqV::new(1, vec![])),
                         result: None,
                     })
                 });
@@ -188,7 +185,6 @@ mod add {
 }
 
 mod get {
-    use common_meta_types::KVValue;
 
     use super::*;
 
@@ -210,7 +206,7 @@ mod get {
             .times(1)
             .return_once(move |_k| {
                 Ok(GetKVActionReply {
-                    result: Some((1, KVValue { meta: None, value })),
+                    result: Some(SeqV::new(1, value)),
                 })
             });
 
@@ -240,7 +236,7 @@ mod get {
             .times(1)
             .return_once(move |_k| {
                 Ok(GetKVActionReply {
-                    result: Some((100, KVValue { meta: None, value })),
+                    result: Some(SeqV::new(100, value)),
                 })
             });
 
@@ -281,10 +277,7 @@ mod get {
             .times(1)
             .return_once(move |_k| {
                 Ok(GetKVActionReply {
-                    result: Some((1, KVValue {
-                        meta: None,
-                        value: vec![],
-                    })),
+                    result: Some(SeqV::new(1, vec![])),
                 })
             });
 
@@ -307,10 +300,7 @@ mod get {
             .times(1)
             .return_once(move |_k| {
                 Ok(GetKVActionReply {
-                    result: Some((1, KVValue {
-                        meta: None,
-                        value: vec![1],
-                    })),
+                    result: Some(SeqV::new(1, vec![])),
                 })
             });
 
@@ -328,13 +318,10 @@ mod get {
 
 mod get_users {
 
-    use common_meta_types::KVValue;
-    use common_meta_types::SeqValue;
-
     use super::*;
 
-    type FakeKeys = Vec<(String, SeqValue<KVValue>)>;
-    type UserInfos = Vec<(u64, UserInfo)>;
+    type FakeKeys = Vec<(String, SeqV<Vec<u8>>)>;
+    type UserInfos = Vec<SeqV<UserInfo>>;
     fn prepare() -> common_exception::Result<(FakeKeys, UserInfos)> {
         let mut names = vec![];
         let mut keys = vec![];
@@ -348,12 +335,9 @@ mod get_users {
             let user_info = UserInfo::new(name, Vec::from("pass"), AuthType::Sha256);
             res.push((
                 "fake_key".to_string(),
-                (i, KVValue {
-                    meta: None,
-                    value: serde_json::to_vec(&user_info)?,
-                }),
+                SeqV::new(i, serde_json::to_vec(&user_info)?),
             ));
-            user_infos.push((i, user_info));
+            user_infos.push(SeqV::new(i, user_info));
         }
         Ok((res, user_infos))
     }
@@ -385,10 +369,7 @@ mod get_users {
             8,
             (
                 "fake_key".to_string(),
-                (0, KVValue {
-                    meta: None,
-                    value: b"some arbitrary str".to_vec(),
-                }),
+                SeqV::new(0, b"some arbitrary str".to_vec()),
             ),
         );
 
@@ -414,7 +395,6 @@ mod get_users {
 }
 
 mod drop {
-    use common_meta_types::KVValue;
 
     use super::*;
 
@@ -432,10 +412,7 @@ mod drop {
             .times(1)
             .returning(|_k, _seq, _none, _meta| {
                 Ok(UpsertKVActionReply {
-                    prev: Some((1, KVValue {
-                        meta: None,
-                        value: vec![],
-                    })),
+                    prev: Some(SeqV::new(1, vec![])),
                     result: None,
                 })
             });
@@ -474,7 +451,6 @@ mod drop {
 }
 
 mod update {
-    use common_meta_types::KVValue;
 
     use super::*;
 
@@ -503,10 +479,7 @@ mod update {
                 .times(1)
                 .return_once(move |_k| {
                     Ok(GetKVActionReply {
-                        result: Some((0, KVValue {
-                            meta: None,
-                            value: prev_value,
-                        })),
+                        result: Some(SeqV::new(0, prev_value)),
                     })
                 });
         }
@@ -532,10 +505,7 @@ mod update {
             .return_once(|_, _, _, _meta| {
                 Ok(UpsertKVActionReply {
                     prev: None,
-                    result: Some((0, KVValue {
-                        meta: None,
-                        value: vec![],
-                    })),
+                    result: Some(SeqV::new(0, vec![])),
                 })
             });
 
@@ -584,10 +554,7 @@ mod update {
             .return_once(|_, _, _, _meta| {
                 Ok(UpsertKVActionReply {
                     prev: None,
-                    result: Some((0, KVValue {
-                        meta: None,
-                        value: vec![],
-                    })),
+                    result: Some(SeqV::new(0, vec![])),
                 })
             });
 

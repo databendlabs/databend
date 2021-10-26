@@ -19,8 +19,8 @@ use common_meta_api::KVApi;
 use common_meta_api::KVApiTestSuite;
 use common_meta_api::MetaApiTestSuite;
 use common_meta_flight::MetaFlightClient;
-use common_meta_types::KVValue;
 use common_meta_types::MatchSeq;
+use common_meta_types::SeqV;
 use common_meta_types::UpsertKVActionReply;
 use common_tracing::tracing;
 use databend_meta::init_meta_ut;
@@ -52,10 +52,11 @@ async fn test_restart() -> anyhow::Result<()> {
         assert_eq!(
             UpsertKVActionReply {
                 prev: None,
-                result: Some((1, KVValue {
+                result: Some(SeqV {
+                    seq: 1,
                     meta: None,
-                    value: b"bar".to_vec()
-                }))
+                    data: b"bar".to_vec(),
+                })
             },
             res,
             "upsert kv"
@@ -68,10 +69,11 @@ async fn test_restart() -> anyhow::Result<()> {
         tracing::debug!("get kv res: {:?}", res);
         let res = res?;
         assert_eq!(
-            Some((1, KVValue {
+            Some(SeqV {
+                seq: 1,
                 meta: None,
-                value: b"bar".to_vec()
-            })),
+                data: b"bar".to_vec(),
+            }),
             res.result,
             "get kv"
         );
@@ -106,10 +108,11 @@ async fn test_restart() -> anyhow::Result<()> {
         tracing::debug!("get kv res: {:?}", res);
         let res = res?;
         assert_eq!(
-            Some((1, KVValue {
+            Some(SeqV {
+                seq: 1,
                 meta: None,
-                value: b"bar".to_vec()
-            })),
+                data: b"bar".to_vec()
+            }),
             res.result,
             "get kv"
         );
