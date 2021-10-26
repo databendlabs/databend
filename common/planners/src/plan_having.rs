@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataValue;
 
 use crate::Expression;
 use crate::PlanNode;
@@ -36,5 +37,12 @@ impl HavingPlan {
 
     pub fn set_input(&mut self, node: &PlanNode) {
         self.input = Arc::new(node.clone());
+    }
+
+    pub fn is_literal_false(&self) -> bool {
+        if let Expression::Literal { value, .. } = &self.predicate {
+            return *value == DataValue::Boolean(Some(false));
+        }
+        false
     }
 }

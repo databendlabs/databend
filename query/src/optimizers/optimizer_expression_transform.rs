@@ -26,6 +26,8 @@ pub struct ExprTransformOptimizer {}
 struct ExprTransformImpl {
     before_group_by_schema: Option<DataSchemaRef>,
     one_time_filter: Option<bool>,
+    one_time_limit: Option<bool>,
+    one_time_having: Option<bool>,
 }
 
 impl ExprTransformImpl {
@@ -186,6 +188,22 @@ impl PlanRewriter for ExprTransformImpl {
         }
     }
 
+    fn rewrite_limit(&mut self, plan: &LimitPlan) -> Result<PlanNode> {
+        let new_input = if let Some(0) = plan.n {
+            // case of limit zero.
+            self.one_time_limit = Some(false);
+            let plan = self.rewrite_plan_node(plan.input.as_ref())?;
+            self.one_time_limit = None;
+            plan
+        } else {
+            self.rewrite_plan_node(plan.input.as_ref())?
+        };
+
+        PlanBuilder::from(&new_input)
+            .limit_offset(plan.n, plan.offset)?
+            .build()
+    }
+
     fn rewrite_filter(&mut self, plan: &FilterPlan) -> Result<PlanNode> {
         if plan.is_literal_false() {
             self.one_time_filter = Some(false);
@@ -203,6 +221,15 @@ impl PlanRewriter for ExprTransformImpl {
     }
 
     fn rewrite_having(&mut self, plan: &HavingPlan) -> Result<PlanNode> {
+        if plan.is_literal_false() {
+            self.one_time_having = Some(false);
+            let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
+            self.one_time_having = None;
+            return PlanBuilder::from(&new_input)
+                .having(plan.predicate.clone())?
+                .build();
+        }
+
         let new_input = self.rewrite_plan_node(plan.input.as_ref())?;
         let new_predicate = Self::boolean_transformer(&plan.predicate)?;
         let new_predicate = Self::truth_transformer(&new_predicate, false)?;
@@ -210,8 +237,10 @@ impl PlanRewriter for ExprTransformImpl {
     }
 
     fn rewrite_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<PlanNode> {
-        if let Some(false) = self.one_time_filter {
-            // if the filter is literal false, like 1+2=4 (constant folding optimizer will overwrite it to literal false),
+        if self.should_skip_scan() {
+            // if the filter is literal false, like 'where 1+2=4' (constant folding optimizer will overwrite it to literal false),
+            // or the limit is zero, like 'limit 0',
+            // of the having is literal false like 'having 1=2'
             // then we overwrites the ReadDataSourcePlan to an empty one.
             let node = PlanNode::ReadSource(ReadDataSourcePlan {
                 table_info: plan.table_info.clone(),
@@ -238,7 +267,15 @@ impl ExprTransformImpl {
         ExprTransformImpl {
             before_group_by_schema: None,
             one_time_filter: None,
+            one_time_limit: None,
+            one_time_having: None,
         }
+    }
+
+    pub fn should_skip_scan(&self) -> bool {
+        self.one_time_filter == Some(false)
+            || self.one_time_limit == Some(false)
+            || self.one_time_having == Some(false)
     }
 }
 
