@@ -146,11 +146,6 @@ impl Catalog for MetaStoreCatalog {
         })
     }
 
-    fn get_table_by_id(&self, table_id: MetaId) -> Result<Arc<dyn Table>> {
-        let table_info = self.meta.get_table_by_id(table_id)?;
-        self.build_table(table_info.as_ref())
-    }
-
     fn upsert_table_option(
         &self,
         table_id: MetaId,
