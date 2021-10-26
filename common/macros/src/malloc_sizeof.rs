@@ -21,15 +21,10 @@
 //! A crate for deriving the MallocSizeOf trait.
 //! this is only used for databend
 
-extern crate proc_macro2;
-#[macro_use]
-extern crate syn;
-#[macro_use]
-extern crate synstructure;
+use syn::*;
+use synstructure::*;
 
-decl_derive!([MallocSizeOf, attributes(ignore_malloc_size_of, conditional_malloc_size_of)] => malloc_size_of_derive);
-
-fn malloc_size_of_derive(s: synstructure::Structure) -> proc_macro2::TokenStream {
+pub fn malloc_size_of_derive(s: synstructure::Structure) -> proc_macro2::TokenStream {
     let match_body = s.each(|binding| {
         let mut ignore = false;
         let mut conditional = false;

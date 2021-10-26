@@ -15,7 +15,7 @@
 use core::fmt;
 
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use common_mem_derive::*;
+use common_macros::MallocSizeOf;
 
 use crate::DataField;
 use crate::PhysicalDataType;
