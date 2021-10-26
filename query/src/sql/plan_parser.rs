@@ -167,6 +167,7 @@ impl PlanParser {
             DfStatement::ShowProcessList(_) => {
                 self.build_from_sql("SELECT * FROM system.processes")
             }
+            DfStatement::ShowMetrics(_) => self.build_from_sql("SELECT * FROM system.metrics"),
             DfStatement::KillQuery(v) => self.sql_kill_query_to_plan(v),
             DfStatement::KillConn(v) => self.sql_kill_connection_to_plan(v),
         }
