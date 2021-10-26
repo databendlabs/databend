@@ -1251,8 +1251,8 @@ dependencies = [
  "common-arrow",
  "common-exception",
  "common-io",
+ "common-macros",
  "common-mem-allocator",
- "common-mem-derive",
  "lexical-core 0.8.2",
  "num",
  "ordered-float 2.8.0",
@@ -1339,6 +1339,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-macros"
+version = "0.1.0"
+dependencies = [
+ "common-base",
+ "proc-macro2",
+ "quote",
+ "syn",
+ "synstructure",
+]
+
+[[package]]
 name = "common-management"
 version = "0.1.0"
 dependencies = [
@@ -1362,18 +1373,9 @@ version = "0.1.0"
 dependencies = [
  "common-base",
  "common-infallible",
- "common-mem-derive",
+ "common-macros",
  "parking_lot",
  "tikv-jemalloc-sys",
-]
-
-[[package]]
-name = "common-mem-derive"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "syn",
- "synstructure",
 ]
 
 [[package]]
@@ -1561,7 +1563,7 @@ dependencies = [
  "tracing-appender",
  "tracing-bunyan-formatter",
  "tracing-opentelemetry",
- "tracing-subscriber",
+ "tracing-subscriber 0.2.25",
 ]
 
 [[package]]
@@ -1993,6 +1995,7 @@ dependencies = [
  "common-flight-rpc",
  "common-functions",
  "common-infallible",
+ "common-macros",
  "common-meta-api",
  "common-meta-flight",
  "common-meta-raft-store",
@@ -2064,9 +2067,9 @@ dependencies = [
  "common-functions",
  "common-infallible",
  "common-io",
+ "common-macros",
  "common-management",
  "common-mem-allocator",
- "common-mem-derive",
  "common-meta-api",
  "common-meta-embedded",
  "common-meta-flight",
@@ -6664,7 +6667,7 @@ checksum = "9965507e507f12c8901432a33e31131222abac31edd90cabbcf85cf544b7127a"
 dependencies = [
  "chrono",
  "crossbeam-channel 0.5.1",
- "tracing-subscriber",
+ "tracing-subscriber 0.2.25",
 ]
 
 [[package]]
@@ -6692,7 +6695,7 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
- "tracing-subscriber",
+ "tracing-subscriber 0.2.25",
 ]
 
 [[package]]
@@ -6727,15 +6730,15 @@ dependencies = [
 
 [[package]]
 name = "tracing-opentelemetry"
-version = "0.15.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "599f388ecb26b28d9c1b2e4437ae019a7b336018b45ed911458cd9ebf91129f6"
+checksum = "3ffbf13a0f8b054a4e59df3a173b818e9c6177c02789871f2073977fd0062076"
 dependencies = [
  "opentelemetry",
  "tracing",
  "tracing-core",
  "tracing-log",
- "tracing-subscriber",
+ "tracing-subscriber 0.3.1",
 ]
 
 [[package]]
@@ -6768,6 +6771,17 @@ dependencies = [
  "tracing-core",
  "tracing-log",
  "tracing-serde",
+]
+
+[[package]]
+name = "tracing-subscriber"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80a4ddde70311d8da398062ecf6fc2c309337de6b0f77d6c27aff8d53f6fca52"
+dependencies = [
+ "sharded-slab",
+ "thread_local",
+ "tracing-core",
 ]
 
 [[package]]
