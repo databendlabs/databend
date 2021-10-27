@@ -37,11 +37,21 @@ fn test_aggregate_function() -> Result<()> {
     let arrays: Vec<Series> = vec![
         Series::new(vec![4i64, 3, 2, 1]),
         Series::new(vec![1i64, 2, 3, 4]),
+        // arrays for window funnel function
+        Series::new(vec![1, 0u32, 2, 3]),
+        Series::new(vec![true, false, false, false]),
+        Series::new(vec![false, false, true, false]),
+        Series::new(vec![false, false, false, true]),
     ];
 
     let args = vec![
         DataField::new("a", DataType::Int64, false),
         DataField::new("b", DataType::Int64, false),
+        // args for window funnel function
+        DataField::new("dt", DataType::DateTime32(None), false),
+        DataField::new("event = 1001", DataType::Boolean, false),
+        DataField::new("event = 1002", DataType::Boolean, false),
+        DataField::new("event = 1003", DataType::Boolean, false),
     ];
 
     let tests = vec![
@@ -104,10 +114,10 @@ fn test_aggregate_function() -> Result<()> {
             name: "argMax-passed",
             eval_nums: 2,
             params: vec![],
-            args: args.clone(),
+            args: vec![args[0].clone(), args[1].clone()],
             display: "argmax",
             func_name: "argmax",
-            arrays: arrays.clone(),
+            arrays: vec![arrays[0].clone(), arrays[1].clone()],
             expect: DataValue::Int64(Some(1)),
             error: "",
         },
@@ -115,10 +125,10 @@ fn test_aggregate_function() -> Result<()> {
             name: "argMin-passed",
             eval_nums: 2,
             params: vec![],
-            args: args.clone(),
+            args: vec![args[0].clone(), args[1].clone()],
             display: "argmin",
             func_name: "argmin",
-            arrays: arrays.clone(),
+            arrays: vec![arrays[0].clone(), arrays[1].clone()],
             expect: DataValue::Int64(Some(4)),
             error: "",
         },
@@ -199,6 +209,27 @@ fn test_aggregate_function() -> Result<()> {
             expect: DataValue::Float64(Some(-1.25000)),
             error: "",
         },
+        Test {
+            name: "windowFunnel-passed",
+            eval_nums: 2,
+            params: vec![DataValue::UInt64(Some(2))],
+            args: vec![
+                args[2].clone(),
+                args[3].clone(),
+                args[4].clone(),
+                args[5].clone(),
+            ],
+            display: "windowFunnel",
+            func_name: "windowFunnel",
+            arrays: vec![
+                arrays[2].clone(),
+                arrays[3].clone(),
+                arrays[4].clone(),
+                arrays[5].clone(),
+            ],
+            expect: DataValue::UInt8(Some(3)),
+            error: "",
+        },
     ];
 
     for t in tests {
@@ -255,12 +286,21 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
         Series::new(vec![4i64, 3, 2, 1]),
         Series::new(vec![1i64, 2, 3, 4]),
         Series::new(vec!["a", "b", "c", "d"]),
+        // arrays for window funnel function
+        Series::new(vec![0u32, 2, 1, 3]),
+        Series::new(vec![true, true, false, false]),
+        Series::new(vec![false, false, true, false]),
+        Series::new(vec![false, false, false, false]),
     ];
 
     let args = vec![
         DataField::new("a", DataType::Int64, false),
         DataField::new("b", DataType::Int64, false),
         DataField::new("c", DataType::String, false),
+        // args for window funnel function
+        DataField::new("dt", DataType::DateTime32(None), false),
+        DataField::new("event = 1001", DataType::Boolean, false),
+        DataField::new("event = 1002", DataType::Boolean, false),
     ];
 
     let tests = vec![
@@ -433,6 +473,22 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
                 DataValue::Float64(Some(-1.0)),
                 DataValue::Float64(Some(-1.0)),
             ],
+            error: "",
+        },
+        Test {
+            name: "windowFunnel-passed",
+            eval_nums: 1,
+            params: vec![DataValue::UInt64(Some(2))],
+            args: vec![args[3].clone(), args[4].clone(), args[5].clone()],
+            display: "windowFunnel",
+            func_name: "windowFunnel",
+            arrays: vec![
+                arrays[3].clone(),
+                arrays[4].clone(),
+                arrays[5].clone(),
+                arrays[6].clone(),
+            ],
+            expect: vec![DataValue::UInt8(Some(2)), DataValue::UInt8(Some(1))],
             error: "",
         },
     ];
