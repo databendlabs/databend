@@ -32,6 +32,7 @@ use crate::cmds::Status;
 use crate::cmds::VersionCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;
+use crate::cmds::ups::up::UpCommand;
 
 const GITHUB_BASE_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
 const GITHUB_DATABEND_URL: &str = "https://github.com/datafuselabs/databend/releases/download";
@@ -268,6 +269,7 @@ impl Config {
             .subcommand(VersionCommand::generate())
             .subcommand(ClusterCommand::generate())
             .subcommand(QueryCommand::generate())
+            .subcommand(UpCommand::generate())
     }
     pub fn create() -> Self {
         let clap = Config::build_cli().get_matches();

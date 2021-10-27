@@ -36,6 +36,7 @@ use crate::cmds::PackageCommand;
 use crate::cmds::VersionCommand;
 use crate::cmds::Writer;
 use crate::error::Result;
+use crate::cmds::ups::up::UpCommand;
 
 pub struct Processor {
     env: Env,
@@ -65,6 +66,7 @@ impl Processor {
             Box::new(VersionCommand::create()),
             Box::new(PackageCommand::create(conf.clone())),
             Box::new(ClusterCommand::create(conf.clone())),
+            Box::new(UpCommand::create(conf.clone())),
         ];
         let help_command = HelpCommand::create(admin_commands.clone());
         Processor {
@@ -126,6 +128,13 @@ impl Processor {
                     }
                 }
                 Ok(())
+            }
+            Some("up") => {
+                let cmd = UpCommand::create(self.env.conf.clone());
+                cmd.exec_match(
+                    &mut writer,
+                    self.env.conf.clone().clap.subcommand_matches("up"),
+                ).await
             }
             None => self.process_run_interactive().await,
             _ => {
