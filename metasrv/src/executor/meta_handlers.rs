@@ -151,7 +151,6 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
             table_id: 0,
             version: 0,
             desc: format!("'{}'.'{}'", db_name, table_name),
-            database_id: 0, // this field is unused during the creation of table
             schema: plan.schema.clone(),
             engine: plan.engine.clone(),
             name: table_name.to_string(),

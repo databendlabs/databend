@@ -117,7 +117,6 @@ impl MetaApi for MetaEmbedded {
             table_id: 0,
             version: 0,
             desc: format!("'{}'.'{}'", db_name, table_name),
-            database_id: 0, // this field is unused during the creation of table
             schema: plan.schema.clone(),
             engine: plan.engine.clone(),
             name: table_name.to_string(),
@@ -201,19 +200,9 @@ impl MetaApi for MetaEmbedded {
             .get_table(&table_id)?
             .ok_or_else(|| ErrorCode::UnknownTable(table.to_string()))?;
 
-        let tablei = seq_table.data;
+        let table_info = seq_table.data;
 
-        let rst = TableInfo {
-            database_id: tablei.database_id,
-            table_id: tablei.table_id,
-            version: tablei.version, // placeholder, not yet implemented in meta service
-            desc: tablei.desc.clone(),
-            name: tablei.name.clone(),
-            schema: tablei.schema,
-            engine: tablei.engine.clone(),
-            options: tablei.options,
-        };
-        Ok(Arc::new(rst))
+        Ok(Arc::new(table_info))
     }
 
     async fn get_tables(&self, db: &str) -> Result<Vec<Arc<TableInfo>>> {
@@ -231,19 +220,9 @@ impl MetaApi for MetaEmbedded {
             ErrorCode::UnknownTable(format!("table of id {} not found", table_id))
         })?;
 
-        let tablei = table.data;
+        let table_info = table.data;
 
-        let rst = TableInfo {
-            database_id: tablei.database_id,
-            table_id: tablei.table_id,
-            version: tablei.version, // placeholder, not yet implemented in meta service
-            desc: tablei.desc.clone(),
-            name: tablei.name.clone(),
-            schema: tablei.schema,
-            engine: tablei.engine.clone(),
-            options: tablei.options,
-        };
-        Ok(Arc::new(rst))
+        Ok(Arc::new(table_info))
     }
 
     async fn upsert_table_option(
