@@ -147,13 +147,19 @@ impl SessionManager {
         self.active_sessions.write().remove(session_id);
     }
 
-    pub fn shutdown(self: &Arc<Self>, mut signal: SignalStream) -> impl Future<Output = ()> {
+    pub fn graceful_shutdown(
+        self: &Arc<Self>,
+        mut signal: SignalStream,
+        timeout_secs: i32,
+    ) -> impl Future<Output = ()> {
         let active_sessions = self.active_sessions.clone();
         async move {
-            log::info!("Waiting for current connections to close.");
+            log::info!(
+                "Waiting {} secs for connections to close. You can press Ctrl + C again to force shutdown.",
+                timeout_secs);
             let mut signal = Box::pin(signal.next());
 
-            for _index in 0..5 {
+            for _index in 0..timeout_secs {
                 if SessionManager::destroy_idle_sessions(&active_sessions) {
                     return;
                 }
