@@ -220,6 +220,10 @@ impl Processor {
 
     pub async fn processor_line(&mut self, mut writer: Writer, line: String) -> Result<()> {
         // mode switch
+        if line.to_lowercase().trim().eq("exit") || line.to_lowercase().trim().eq("quit") {
+            writeln!(writer, "Bye").unwrap();
+            return Ok(());
+        }
         if line.to_lowercase().trim().eq("\\sql") {
             writeln!(writer, "Mode switched to SQL query mode").unwrap();
             self.env.load_mode(Mode::Sql);

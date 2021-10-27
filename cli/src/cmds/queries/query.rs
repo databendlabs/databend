@@ -276,6 +276,12 @@ async fn execute_query(
     } else {
         let ans = ans.unwrap();
         let mut table = Table::new();
+        if ans.error.is_some() {
+            return Err(CliError::Unknown(format!(
+                "Query has error: {:?}",
+                ans.error.unwrap()
+            )));
+        }
         table.load_preset("||--+-++|    ++++++");
         if let Some(column) = ans.columns {
             table.set_header(
