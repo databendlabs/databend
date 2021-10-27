@@ -171,7 +171,7 @@ impl FetchCommand {
             tag,
             bin_name,
         );
-        if let Err(e) = download_and_unpack(&*binary_url, &*bin_file, &*bin_unpack_dir, Some(bin_file)) {
+        if let Err(e) = download_and_unpack(&*binary_url, &*bin_file.clone(), &*bin_unpack_dir, Some(bin_file)) {
             writer.write_err(
                 format!("Cannot download or unpack error: {:?}",  e).as_str(),
             )

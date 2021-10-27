@@ -40,6 +40,7 @@ use crate::cmds::config::CustomMirror;
 use crate::cmds::Config;
 use crate::error::CliError;
 use crate::error::Result;
+use reqwest::Client;
 
 const RETRIES: u16 = 30;
 
@@ -69,6 +70,14 @@ pub struct LocalMetaConfig {
     pub log_dir: Option<String>,
 }
 
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
+pub struct LocalDashboardConfig {
+    pub listen_addr: Option<String>,
+    pub http_api: Option<String>,
+    pub pid: Option<pid_t>,
+    pub path: Option<String>, // download location
+}
+
 async fn check_health(
     cli: reqwest::Client,
     url: String,
@@ -94,14 +103,29 @@ pub trait LocalRuntime: Send + Sync {
             Some(id) => {
                 match nix::sys::signal::kill(Pid::from_raw(id), Some(nix::sys::signal::SIGINT)) {
                     Ok(_) => {
-                        for _ in 0..60 {
+                        for _ in 0..3 {
                             if !self.is_clean() {
                                 if nix::sys::signal::kill(
                                     Pid::from_raw(id),
                                     Some(nix::sys::signal::SIGINT),
-                                )
-                                .is_ok()
-                                {}
+                                ).is_ok() && self.is_clean()
+                                {
+                                    return Ok(())
+                                }
+                                if nix::sys::signal::kill(
+                                    Pid::from_raw(id),
+                                    Some(nix::sys::signal::SIGTERM),
+                                ).is_ok() && self.is_clean()
+                                {
+                                    return Ok(())
+                                }
+                                if nix::sys::signal::kill(
+                                    Pid::from_raw(id),
+                                    Some(nix::sys::signal::SIGKILL),
+                                ).is_ok() && self.is_clean()
+                                {
+                                    return Ok(())
+                                }
                                 sleep(time::Duration::from_secs(1));
                             } else {
                                 return Ok(());
@@ -153,6 +177,87 @@ pub trait LocalRuntime: Send + Sync {
     fn set_pid(&mut self, id: pid_t);
     fn is_clean(&self) -> bool; // return true if runtime resources are cleaned
     fn get_health_probe(&self) -> (reqwest::Client, String);
+}
+
+#[async_trait]
+impl LocalRuntime for LocalDashboardConfig {
+    fn get_pid(&self) -> Option<pid_t> {
+        self.pid
+    }
+
+    fn get_path(&self) -> Option<String> {
+        self.path.clone()
+    }
+
+    fn generate_command(&mut self) -> Result<Command> {
+        if self.path.is_none() {
+            return Err(CliError::Unknown(
+                "cannot retrieve playground binary execution path"
+                    .parse()
+                    .unwrap(),
+            ));
+        }
+        let mut command = Command::new(self.path.clone().unwrap());
+        let log_dir = format!(
+            "{}/_local_logs",
+            self.log_dir
+                .as_ref()
+                .expect("cannot find log dir for store")
+        );
+
+        if !Path::new(log_dir.as_str()).exists() {
+            std::fs::create_dir(Path::new(log_dir.as_str()))
+                .unwrap_or_else(|_| panic!("cannot create directory {}", log_dir));
+        }
+
+        let out_file = File::create(format!("{}/std_out.log", log_dir).as_str())
+            .expect("couldn't create stdout file");
+        let err_file = File::create(format!("{}/std_err.log", log_dir).as_str())
+            .expect("couldn't create stderr file");
+        // configure runtime by process local env settings
+        command
+            .env(
+                "LISTEN_ADDR",
+                self.listen_addr.expect("did not configured listen address for playground"),
+            )
+            .env(
+                "BEND_HTTP_API",
+                self.http_api.expect("did not configured http handler address for playground"),
+            )
+            .stdout(unsafe { Stdio::from_raw_fd(out_file.into_raw_fd()) })
+            .stderr(unsafe { Stdio::from_raw_fd(err_file.into_raw_fd()) });
+        // logging debug
+        info!("executing command {:?}", command);
+        Ok(command)
+    }
+
+    fn set_pid(&mut self, id: pid_t) {
+        self.pid = Some(id)
+    }
+
+    fn is_clean(&self) -> bool {
+        if self.pid.is_none() {
+            return true;
+        }
+        let s = System::new_all();
+        let pid = self.pid.unwrap();
+        return s.process(pid).is_none();
+    }
+
+    fn get_health_probe(&self) -> (reqwest::Client, String) {
+        let client = reqwest::Client::builder()
+            .build()
+            .expect("Cannot build health probe for health check");
+
+        let url = {
+            if !self.config.tls_rpc_server_enabled() {
+                format!("http://{}", self.http_api.unwrap())
+            } else {
+                todo!()
+            }
+        };
+        (client, url)
+    }
 }
 
 #[async_trait]
@@ -481,7 +586,7 @@ impl Status {
     where
         T: ?Sized + Serialize,
     {
-        if config_type.as_str() != "meta" && config_type.as_str() != "query" {
+        if config_type.as_str() != "meta" && config_type.as_str() != "query" && config_type.as_str() != "dashboard"{
             return Err(CliError::Unknown(
                 "Unsupported config type for local storage".parse().unwrap(),
             ));
@@ -519,7 +624,7 @@ impl Status {
         config_type: String,
         file_name: String,
     ) -> Result<()> {
-        if config_type.as_str() != "meta" && config_type.as_str() != "query" {
+        if config_type.as_str() != "meta" && config_type.as_str() != "query" && config_type.as_str() != "dashboard" {
             return Err(CliError::Unknown(
                 "Unsupported config type for local storage".parse().unwrap(),
             ));
@@ -576,6 +681,35 @@ impl Status {
         return Some((
             meta_file.to_string(),
             serde_yaml::from_reader(reader).expect(&*format!("cannot read from {}", meta_file)),
+        ));
+    }
+
+    pub fn get_local_dashboard_config(&self) -> Option<(String, LocalDashboardConfig)> {
+        if self.local_configs.get("dashboard").is_none()
+            || self.local_configs.get("dashboard").unwrap().is_empty()
+        {
+            return None;
+        }
+        let mut dashboard = self.local_configs.get("dashboard").unwrap().to_string();
+        if dashboard.contains(',') {
+            let splited = meta_file
+                .as_str()
+                .split(',')
+                .filter(|s| !s.trim().is_empty())
+                .collect::<Vec<&str>>();
+            if !splited.is_empty() {
+                dashboard = splited.get(0).unwrap().to_string()
+            }
+        };
+        if !Path::new(dashboard.as_str()).exists() {
+            return None;
+        }
+        let file =
+            File::open(dashboard.to_string()).expect(&*format!("cannot read from {}", dashboard));
+        let reader = BufReader::new(file);
+        return Some((
+            dashboard.to_string(),
+            serde_yaml::from_reader(reader).expect(&*format!("cannot read from {}", dashboard)),
         ));
     }
 

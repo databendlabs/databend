@@ -37,11 +37,12 @@ use crate::cmds::ups::up::UpCommand;
 const GITHUB_BASE_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
 const GITHUB_DATABEND_URL: &str = "https://github.com/datafuselabs/databend/releases/download";
 const GITHUB_DATABEND_TAG_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
+const GITHUB_PLAYGROUND_URL: &str = "https://github.com/datafuselabs/databend-playground/releases/download";
 
 const REPO_BASE_URL: &str = "https://repo.databend.rs/databend/tags.json";
 const REPO_DATABEND_URL: &str = "https://repo.databend.rs/databend";
 const REPO_DATABEND_TAG_URL: &str = "https://repo.databend.rs/databend/tags.json";
-
+const REPO_PLAYGROUND_URL: &str = "https://repo.databend.rs/databend";
 #[derive(Clone, Debug)]
 pub struct Config {
     //(TODO(zhihanz) remove those field as they already mentioned in Clap global flag)
@@ -76,11 +77,13 @@ pub trait MirrorAsset {
     fn get_base_url(&self) -> String;
     fn get_databend_url(&self) -> String;
     fn get_databend_tag_url(&self) -> String;
+    fn get_playground_url(&self) -> String;
     fn to_mirror(&self) -> CustomMirror {
         CustomMirror {
             base_url: self.get_base_url(),
             databend_url: self.get_databend_url(),
             databend_tag_url: self.get_databend_tag_url(),
+            playground_url: self.get_playground_url(),
         }
     }
 }
@@ -98,6 +101,10 @@ impl MirrorAsset for GithubMirror {
     fn get_databend_tag_url(&self) -> String {
         GITHUB_DATABEND_TAG_URL.to_string()
     }
+
+    fn get_playground_url(&self) -> String {
+        GITHUB_PLAYGROUND_URL.to_string()
+    }
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -113,6 +120,10 @@ impl MirrorAsset for RepoMirror {
     fn get_databend_tag_url(&self) -> String {
         REPO_DATABEND_TAG_URL.to_string()
     }
+
+    fn get_playground_url(&self) -> String {
+        REPO_PLAYGROUND_URL.to_string()
+    }
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -120,14 +131,16 @@ pub struct CustomMirror {
     pub(crate) base_url: String,
     pub(crate) databend_url: String,
     pub(crate) databend_tag_url: String,
+    pub(crate) playground_url: String,
 }
 
 impl CustomMirror {
-    fn new(base_url: String, databend_url: String, databend_tag_url: String) -> Self {
+    fn new(base_url: String, databend_url: String, databend_tag_url: String, playground_url: String) -> Self {
         CustomMirror {
             base_url,
             databend_url,
             databend_tag_url,
+            playground_url,
         }
     }
 }
@@ -143,6 +156,10 @@ impl MirrorAsset for CustomMirror {
 
     fn get_databend_tag_url(&self) -> String {
         self.databend_tag_url.clone()
+    }
+
+    fn get_playground_url(&self) -> String {
+       self.playground_url.clone()
     }
 }
 
@@ -255,6 +272,15 @@ impl Config {
                     .global(true)
                     .takes_value(true),
             )
+            .arg(
+                Arg::new("playground_url")
+                    .long("playground_url")
+                    .about("Sets the url to download databend playground")
+                    .env("DOWNLOAD_PLAYGROUND_URL")
+                    .default_value(REPO_PLAYGROUND_URL)
+                    .global(true)
+                    .takes_value(true),
+            )
             .subcommand(
                 App::new("completion")
                     .setting(AppSettings::DisableVersionFlag)
@@ -295,6 +321,7 @@ impl Config {
                     .parse()
                     .unwrap(),
                 clap.clone().value_of("tag_url").unwrap().parse().unwrap(),
+                clap.clone().value_of("playground_url").unwrap().parse().unwrap(),
             ),
             clap,
         };

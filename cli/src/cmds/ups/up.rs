@@ -38,7 +38,7 @@ use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
 use std::str::FromStr;
-use crate::cmds::packages::fetch::{download, unpack, download_and_unpack};
+use crate::cmds::packages::fetch::{download, unpack, download_and_unpack, get_rust_architecture};
 use crate::cmds::clusters::delete::DeleteCommand;
 use crate::cmds::queries::query::QueryCommand;
 use databend_query::common::HashMap;
@@ -169,6 +169,7 @@ pub struct UpCommand {
 }
 
 // Support to load datasets from official resource
+#[derive(Clone)]
 pub enum DataSets {
     OntimeMini(&'static str, &'static str),
 }
@@ -254,43 +255,83 @@ impl UpCommand {
         }
         Ok(())
     }
+    async fn download_dataset(&self, dataset: DataSets) -> Result<String> {
+        match dataset{
+            DataSets::OntimeMini(url, ddl) => {
+                let status = Status::read(self.conf.clone())?;
+                let cfgs = status.get_local_query_configs();
+                let (_, query_config) = cfgs.get(0).expect("cannot get local query config");
+                let dataset_dir = query_config.config.storage.disk.data_path.as_str();
+                let dataset_location = format!("{}/ontime_2019_2021.csv", dataset_dir);
+                let download_location = format!("{}/downloads/datasets/ontime_mini.tar.gz", self.conf.databend_dir);
+                std::fs::create_dir_all(Path::new(format!("{}/downloads/datasets/", self.conf.databend_dir).as_str()))?;
+                if let Err(e) = download_and_unpack(url, &*download_location, dataset_dir, Some(dataset_location.clone())) {
+                    return Err(CliError::Unknown(format!("Cannot download/unpack dataset {:?}", e)));
+                }
+                return Ok(dataset_location)
+            }
+        };
+    }
+
+    async fn download_playground(&self) -> Result<()> {
+        let arch = get_rust_architecture()?;
+        let bin_name = format!("databend-playground-{}-{}.tar.gz", PLAYGROUND_VERSION, arch);
+        let bin_file = format!("{}/downloads/{}", self.conf.databend_dir, bin_name);
+        let url =  format!(
+            "{}/{}/{}",
+            self.conf.mirror.playground_url.clone(),
+            PLAYGROUND_VERSION,
+            bin_name,
+        );
+        let target_dir = format!("{}/bin/playground/{}", self.conf.databend_dir, PLAYGROUND_VERSION);
+        std::fs::create_dir_all(Path::new(target_dir.as_str()))?;
+        if let Err(e) = download_and_unpack(&*url, &*bin_file.clone(), &*target_dir, Some(format!("{}/databend-playground", target_dir))) {
+            return Err(CliError::Unknown(format!("Cannot download/unpack dataset {:?}", e)));
+        }
+        Ok(())
+    }
 
     async fn local_up(&self, dataset: DataSets, writer: &mut Writer,) -> Result<()> {
-        let (url, ddl) = match dataset{
-            DataSets::OntimeMini(url, ddl) => (url, ddl)
-        };
         // bootstrap cluster
         writer.write_ok("Welcome to use our databend product 🎉🎉🎉");
         let cluster = ClusterCommand::create(self.conf.clone());
         if let Err(e) = cluster.exec(writer, ["cluster", "create", "--force"].join(" ")).await {
             return Err(CliError::Unknown(format!("Cannot bootstrap local cluster, error {:?}", e)));
         }
-
-        // download dataset
-        let status = Status::read(self.conf.clone())?;
-        let cfgs = status.get_local_query_configs();
-        let (_, query_config) = cfgs.get(0).expect("cannot get local query config");
-        let dataset_dir = query_config.config.storage.disk.data_path.as_str();
-        let dataset_location = format!("{}/ontime_2019_2021.csv", dataset_dir);
-        let download_location = format!("{}/downloads/datasets/ontime_mini.tar.gz", self.conf.databend_dir);
-        std::fs::create_dir_all(Path::new(format!("{}/downloads/datasets/", self.conf.databend_dir).as_str()))?;
-        if let Err(e) = download_and_unpack(url, &*download_location, dataset_dir, Some(download_location)) {
-            return Err(CliError::Unknown(format!("Cannot download/unpack dataset {:?}", e)));
-        }
-
         // download playground
+        writer.write_ok("Start to download playground");
+        if let Err(e) = self.download_playground().await {
+            return Err(e)
+        }
+        writer.write_ok("Start to download dataset");
+        match self.download_dataset(dataset.clone()).await {
+            Ok(dataset_location) => {
+                match  dataset {
+                    DataSets::OntimeMini(_, ddl) => {
+                        if let Err(e) = self.create_ddl(writer, dataset_location, "ontime".to_string(), ddl).await {
+                            return Err(e)
+                        }
+                    }
+                }
 
-
+                return  Ok(())
+            }
+            Err(e) => {
+                return Err(e)
+            }
+        }
+    }
+    async fn create_ddl(&self, writer: &mut Writer, dataset_location: String, table_name: String, ddl : &str) -> Result<()> {
         if !Path::new(dataset_location.as_str()).exists() {
-            return Err(CliError::Unknown(format!("Cannot find dataset on {}",Path::new(dataset_location.as_str()).canonicalize().unwrap().to_str().unwrap())));
+            return Err(CliError::Unknown(format!("Cannot find dataset on {}", Path::new(dataset_location.as_str()).canonicalize().unwrap().to_str().unwrap())));
         }
         let query = QueryCommand::create(self.conf.clone());
         let ddl = render(ddl, json!({"csv_location": Path::new(dataset_location.as_str()).canonicalize().unwrap().to_str().unwrap()}));
         match ddl {
             Ok(ddl) => {
-                if let Err(_) = query.exec(writer, "DROP DATABASE IF EXISTS ontime;".to_string()).await {}
+                if let Err(_) = query.exec(writer, format!("DROP DATABASE IF EXISTS {};", table_name)).await {}
                 if let Err(e) = query.exec(writer, ddl).await {
-                   return Err(e)
+                    return Err(e)
                 }
             }
             Err(e) => {
