@@ -249,9 +249,12 @@ impl Processor {
         }
         // query execution mode
         if self.env.conf.mode == Mode::Sql {
-            self.query
+            let res = self.query
                 .exec(&mut writer, line.trim().to_string())
-                .await?;
+                .await;
+            if let Err(e) = res {
+                writer.write_err(format!("Cannot exeuction query, if you want to manage databend cluster or check its status, please change to admin mode(type \\admin), error: {:?}", e).as_str())
+            }
             writer.flush()?;
         } else {
             if let Some(cmd) = self.admin_commands.iter().find(|c| c.is(&*line)) {
