@@ -33,9 +33,33 @@ pub enum SignalType {
     Hangup,
     Sigint,
     Sigterm,
+    Exit,
 }
 
 pub type SignalStream = Pin<Box<dyn Stream<Item = SignalType> + Send>>;
+
+pub struct DummySignalStream {
+    signal_type: SignalType,
+}
+
+impl DummySignalStream {
+    pub fn create(signal_type: SignalType) -> SignalStream {
+        Box::pin(DummySignalStream { signal_type })
+    }
+}
+
+impl Stream for DummySignalStream {
+    type Item = SignalType;
+
+    fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        match self.signal_type {
+            SignalType::Hangup => Poll::Ready(Some(SignalType::Hangup)),
+            SignalType::Sigint => Poll::Ready(Some(SignalType::Sigint)),
+            SignalType::Sigterm => Poll::Ready(Some(SignalType::Sigterm)),
+            SignalType::Exit => Poll::Ready(Some(SignalType::Exit)),
+        }
+    }
+}
 
 #[cfg(not(target_os = "windows"))]
 pub fn signal_stream() -> Result<SignalStream> {

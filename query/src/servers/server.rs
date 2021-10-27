@@ -18,7 +18,9 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_base::signal_stream;
+use common_base::DummySignalStream;
 use common_base::SignalStream;
+use common_base::SignalType;
 use common_exception::Result;
 use futures::stream::Abortable;
 use futures::Future;
@@ -51,7 +53,7 @@ impl ShutdownHandle {
         }
     }
 
-    pub fn shutdown(&mut self, signal: Option<SignalStream>) -> impl Future<Output = ()> + '_ {
+    pub fn shutdown(&mut self, mut signal: SignalStream) -> impl Future<Output = ()> + '_ {
         let mut shutdown_jobs = vec![];
         for service in &mut self.services {
             shutdown_jobs.push(service.shutdown());
@@ -61,7 +63,7 @@ impl ShutdownHandle {
         let join_all = futures::future::join_all(shutdown_jobs);
         async move {
             let cluster_discovery = sessions.get_cluster_discovery();
-            cluster_discovery.unregister_to_metastore().await;
+            cluster_discovery.unregister_to_metastore(&mut signal).await;
 
             join_all.await;
             sessions.shutdown(signal).await;
@@ -83,7 +85,7 @@ impl ShutdownHandle {
                     self.shutdown
                         .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
                 {
-                    let shutdown_services = self.shutdown(Some(stream));
+                    let shutdown_services = self.shutdown(stream);
                     shutdown_services.await;
                 }
             }
@@ -101,7 +103,8 @@ impl Drop for ShutdownHandle {
             self.shutdown
                 .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
         {
-            futures::executor::block_on(self.shutdown(None));
+            let signal_stream = DummySignalStream::create(SignalType::Exit);
+            futures::executor::block_on(self.shutdown(signal_stream));
         }
     }
 }

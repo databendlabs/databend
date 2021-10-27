@@ -147,25 +147,23 @@ impl SessionManager {
         self.active_sessions.write().remove(session_id);
     }
 
-    pub fn shutdown(self: &Arc<Self>, signal: Option<SignalStream>) -> impl Future<Output = ()> {
+    pub fn shutdown(self: &Arc<Self>, mut signal: SignalStream) -> impl Future<Output = ()> {
         let active_sessions = self.active_sessions.clone();
         async move {
             log::info!("Waiting for current connections to close.");
-            if let Some(mut signal) = signal {
-                let mut signal = Box::pin(signal.next());
+            let mut signal = Box::pin(signal.next());
 
-                for _index in 0..5 {
-                    if SessionManager::destroy_idle_sessions(&active_sessions) {
-                        return;
-                    }
-
-                    let interval = Duration::from_secs(1);
-                    let sleep = Box::pin(tokio::time::sleep(interval));
-                    match futures::future::select(sleep, signal).await {
-                        Either::Right((_, _)) => break,
-                        Either::Left((_, reserve_signal)) => signal = reserve_signal,
-                    };
+            for _index in 0..5 {
+                if SessionManager::destroy_idle_sessions(&active_sessions) {
+                    return;
                 }
+
+                let interval = Duration::from_secs(1);
+                let sleep = Box::pin(tokio::time::sleep(interval));
+                match futures::future::select(sleep, signal).await {
+                    Either::Right((_, _)) => break,
+                    Either::Left((_, reserve_signal)) => signal = reserve_signal,
+                };
             }
 
             log::info!("Will shutdown forcefully.");
