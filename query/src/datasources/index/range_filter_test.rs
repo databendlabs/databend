@@ -30,6 +30,7 @@ fn test_range_filter() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", DataType::Int64, false),
         DataField::new("b", DataType::Int32, false),
+        DataField::new("c", DataType::String, false),
     ]);
 
     let mut stats: BlockStats = HashMap::new();
@@ -41,6 +42,11 @@ fn test_range_filter() -> Result<()> {
     stats.insert(1u32, ColStats {
         min: DataValue::Int32(Some(3)),
         max: DataValue::Int32(Some(10)),
+        null_count: 0,
+    });
+    stats.insert(2u32, ColStats {
+        min: DataValue::String(Some("abc".as_bytes().to_vec())),
+        max: DataValue::String(Some("bcd".as_bytes().to_vec())),
         null_count: 0,
     });
 
@@ -91,6 +97,22 @@ fn test_range_filter() -> Result<()> {
                     lit("%sys%".as_bytes()),
                 ])),
             expect: true,
+        },
+        Test {
+            name: "c like 'ab_'",
+            expr: Expression::create_binary_expression("like", vec![
+                col("c"),
+                lit("ab_".as_bytes()),
+            ]),
+            expect: true,
+        },
+        Test {
+            name: "c like 'bcdf'",
+            expr: Expression::create_binary_expression("like", vec![
+                col("c"),
+                lit("bcdf".as_bytes()),
+            ]),
+            expect: false,
         },
     ];
 
@@ -145,14 +167,30 @@ fn test_build_verifiable_function() -> Result<()> {
             expect: "isNotNull(min_a)",
         },
         Test {
-            name: "b >= 0 and c like '%sys%'",
+            name: "b >= 0 and c like ffffff",
             expr: col("b")
                 .gt_eq(lit(0))
                 .and(Expression::create_binary_expression("like", vec![
                     col("c"),
-                    lit("%sys%".as_bytes()),
+                    lit(vec![255u8, 255, 255]),
                 ])),
-            expect: "((max_b >= 0) and true)",
+            expect: "((max_b >= 0) and (max_c >= ffffff))",
+        },
+        Test {
+            name: "c like 'sys_'",
+            expr: Expression::create_binary_expression("like", vec![
+                col("c"),
+                lit("sys_".as_bytes()),
+            ]),
+            expect: "((max_c >= sys) and (min_c < syt))",
+        },
+        Test {
+            name: "c like 'sys\\%'",
+            expr: Expression::create_binary_expression("like", vec![
+                col("c"),
+                lit("sys\\%".as_bytes()),
+            ]),
+            expect: "((max_c >= sys%) and (min_c < sys&))",
         },
     ];
 

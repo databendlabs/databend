@@ -130,6 +130,11 @@ pub(crate) fn build_verifiable_expr(
     .map_or(unhandled.clone(), |mut v| v.build().unwrap_or(unhandled))
 }
 
+struct Monotonic {
+    is_monotonic: bool,
+    is_positive: bool,
+}
+
 // TODO: need add monotonic check for the expression, will move to FunctionFeatures.
 // ISSUE-2343: https://github.com/datafuselabs/databend/issues/2343
 fn is_monotonic_expression(expr: &Expression) -> Monotonic {
@@ -222,11 +227,6 @@ fn collect_columns_from_expr(expr: &Expression) -> Result<HashSet<String>> {
     Ok(visitor.required_columns)
 }
 
-struct Monotonic {
-    is_monotonic: bool,
-    is_positive: bool,
-}
-
 struct VerifiableExprBuilder<'a> {
     args: Expressions,
     op: &'a str,
@@ -303,7 +303,7 @@ impl<'a> VerifiableExprBuilder<'a> {
     }
 
     fn build(&mut self) -> Result<Expression> {
-        // TODO: support like/not like/in/not in.
+        // TODO: support not like/in/not in.
         match self.op {
             "isnull" => {
                 let nulls_expr = self.nulls_column_expr()?;
@@ -345,6 +345,30 @@ impl<'a> VerifiableExprBuilder<'a> {
             "<=" => {
                 let min_expr = self.min_column_expr()?;
                 Ok(min_expr.lt_eq(self.args[1].clone()))
+            }
+            "like" => {
+                if let Expression::Literal {
+                    value: DataValue::String(Some(v)),
+                    ..
+                } = &self.args[1]
+                {
+                    // e.g. col like 'a%'
+                    // rewrite: col >= 'a' and col < 'b'
+                    let left = left_bound_for_like_pattern(v.to_vec());
+                    if !left.is_empty() {
+                        let right = right_bound_for_like_pattern(left.clone());
+                        let max_expr = self.max_column_expr()?;
+                        if right.is_empty() {
+                            return Ok(max_expr.gt_eq(lit(left)));
+                        } else {
+                            let min_expr = self.min_column_expr()?;
+                            return Ok(max_expr.gt_eq(lit(left)).and(min_expr.lt(lit(right))));
+                        }
+                    }
+                }
+                Err(ErrorCode::UnknownException(
+                    "Cannot build atom expression by the operator: like",
+                ))
             }
             other => Err(ErrorCode::UnknownException(format!(
                 "Cannot build atom expression by the operator: {:?}",
@@ -393,4 +417,43 @@ impl<'a> VerifiableExprBuilder<'a> {
     fn nulls_column_expr(&mut self) -> Result<Expression> {
         self.stat_column_expr(StatType::Nulls)
     }
+}
+
+fn left_bound_for_like_pattern(pattern: Vec<u8>) -> Vec<u8> {
+    let mut index = 0;
+    let mut prefix: Vec<u8> = Vec::new();
+    let len = pattern.len();
+    while index < len {
+        match pattern[index] {
+            b'%' | b'_' => break,
+            b'\\' => {
+                index += 1;
+                if index == len {
+                    break;
+                } else {
+                    prefix.push(pattern[index]);
+                }
+            }
+            other => {
+                prefix.push(other);
+            }
+        }
+        index += 1;
+    }
+    prefix
+}
+
+fn right_bound_for_like_pattern(prefix: Vec<u8>) -> Vec<u8> {
+    let mut res = prefix;
+    while !res.is_empty() && *res.last().unwrap() == u8::MAX {
+        res.pop();
+    }
+
+    if !res.is_empty() {
+        if let Some(last) = res.last_mut() {
+            *last += 1;
+        }
+    }
+
+    res
 }
