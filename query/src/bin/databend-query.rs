@@ -74,10 +74,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let hostname = conf.query.mysql_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.mysql_handler_port);
         let mut handler = MySQLHandler::create(session_manager.clone());
-        let listening = handler
-            .start(listening.parse()?)
-            .await
-            .expect("MySQL handler error");
+        let listening = handler.start(listening.parse()?).await?;
         shutdown_handle.add_service(handler);
 
         info!(
@@ -94,10 +91,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let listening = format!("{}:{}", hostname, conf.query.clickhouse_handler_port);
 
         let mut srv = ClickHouseHandler::create(session_manager.clone());
-        let listening = srv
-            .start(listening.parse()?)
-            .await
-            .expect("Clickhouse handler error");
+        let listening = srv.start(listening.parse()?).await?;
         shutdown_handle.add_service(srv);
 
         info!(
@@ -113,10 +107,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let listening = format!("{}:{}", hostname, conf.query.http_handler_port);
 
         let mut srv = HttpHandler::create(session_manager.clone());
-        let listening = srv
-            .start(listening.parse()?)
-            .await
-            .expect("HTTP handler error");
+        let listening = srv.start(listening.parse()?).await?;
         shutdown_handle.add_service(srv);
 
         info!("Http handler listening on {}", listening);
@@ -126,10 +117,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     {
         let address = conf.query.metric_api_address.clone();
         let mut srv = MetricService::create(session_manager.clone());
-        let listening = srv
-            .start(address.parse()?)
-            .await
-            .expect("Metric API service error");
+        let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
         info!("Metric API server listening on {}", listening);
     }
@@ -138,10 +126,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     {
         let address = conf.query.http_api_address.clone();
         let mut srv = HttpService::create(session_manager.clone());
-        let listening = srv
-            .start(address.parse()?)
-            .await
-            .expect("HTTP API service error");
+        let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
         info!("HTTP API server listening on {}", listening);
     }
@@ -150,10 +135,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     {
         let address = conf.query.flight_api_address.clone();
         let mut srv = RpcService::create(session_manager.clone());
-        let listening = srv
-            .start(address.parse()?)
-            .await
-            .expect("RPC API service error");
+        let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
         info!("RPC API server listening on {}", listening);
     }

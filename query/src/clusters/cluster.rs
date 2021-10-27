@@ -24,7 +24,10 @@ use common_base::tokio::sync::Mutex;
 use common_base::tokio::sync::Notify;
 use common_base::tokio::task::JoinHandle;
 use common_base::tokio::time::sleep as tokio_async_sleep;
+use common_base::DummySignalStream;
 use common_base::GlobalUniqName;
+use common_base::SignalStream;
+use common_base::SignalType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_flight_rpc::ConnectionFactory;
@@ -35,6 +38,7 @@ use common_meta_types::NodeInfo;
 use futures::future::select;
 use futures::future::Either;
 use futures::Future;
+use futures::StreamExt;
 use rand::thread_rng;
 use rand::Rng;
 
@@ -122,7 +126,7 @@ impl ClusterDiscovery {
         Ok(())
     }
 
-    pub async fn unregister_to_metastore(self: &Arc<Self>) {
+    pub async fn unregister_to_metastore(self: &Arc<Self>, signal: &mut SignalStream) {
         let mut heartbeat = self.heartbeat.lock().await;
 
         if let Err(shutdown_failure) = heartbeat.shutdown().await {
@@ -132,13 +136,25 @@ impl ClusterDiscovery {
             );
         }
 
-        let drop_node = self.api_provider.drop_node(self.local_id.clone(), None);
-        if let Err(drop_node_failure) = drop_node.await {
-            log::warn!(
-                "Cannot drop namespace node(while shutdown), cause {:?}",
-                drop_node_failure
-            );
-        }
+        let mut mut_signal_pin = signal.as_mut();
+        let signal_future = Box::pin(mut_signal_pin.next());
+        let drop_node = Box::pin(self.api_provider.drop_node(self.local_id.clone(), None));
+        match futures::future::select(drop_node, signal_future).await {
+            Either::Left((drop_node_result, _)) => {
+                if let Err(drop_node_failure) = drop_node_result {
+                    log::warn!(
+                        "Cannot drop namespace node(while shutdown), cause {:?}",
+                        drop_node_failure
+                    );
+                }
+            }
+            Either::Right((signal_type, _)) => {
+                match signal_type {
+                    None => *signal = DummySignalStream::create(SignalType::Exit),
+                    Some(signal_type) => *signal = DummySignalStream::create(signal_type),
+                };
+            }
+        };
     }
 
     pub async fn register_to_metastore(self: &Arc<Self>, cfg: &Config) -> Result<()> {
