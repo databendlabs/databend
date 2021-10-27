@@ -303,7 +303,7 @@ impl<'a> VerifiableExprBuilder<'a> {
     }
 
     fn build(&mut self) -> Result<Expression> {
-        // TODO: support not like/in/not in.
+        // TODO: support in/not in.
         match self.op {
             "isnull" => {
                 let nulls_expr = self.nulls_column_expr()?;
@@ -354,7 +354,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                 {
                     // e.g. col like 'a%'
                     // rewrite: col >= 'a' and col < 'b'
-                    let left = left_bound_for_like_pattern(v.to_vec());
+                    let left = left_bound_for_like_pattern(v);
                     if !left.is_empty() {
                         let right = right_bound_for_like_pattern(left.clone());
                         let max_expr = self.max_column_expr()?;
@@ -368,6 +368,29 @@ impl<'a> VerifiableExprBuilder<'a> {
                 }
                 Err(ErrorCode::UnknownException(
                     "Cannot build atom expression by the operator: like",
+                ))
+            }
+            "not like" => {
+                if let Expression::Literal {
+                    value: DataValue::String(Some(v)),
+                    ..
+                } = &self.args[1]
+                {
+                    if !contains_like_pattern(v) {
+                        let max_expr = self.max_column_expr()?;
+                        let min_expr = self.min_column_expr()?;
+                        return Ok(Expression::create_binary_expression("not like", vec![
+                            min_expr,
+                            self.args[1].clone(),
+                        ])
+                        .or(Expression::create_binary_expression("not like", vec![
+                            max_expr,
+                            self.args[1].clone(),
+                        ])));
+                    }
+                }
+                Err(ErrorCode::UnknownException(
+                    "Cannot build atom expression by the operator: not like",
                 ))
             }
             other => Err(ErrorCode::UnknownException(format!(
@@ -419,7 +442,7 @@ impl<'a> VerifiableExprBuilder<'a> {
     }
 }
 
-fn left_bound_for_like_pattern(pattern: Vec<u8>) -> Vec<u8> {
+fn left_bound_for_like_pattern(pattern: &[u8]) -> Vec<u8> {
     let mut index = 0;
     let mut prefix: Vec<u8> = Vec::new();
     let len = pattern.len();
@@ -456,4 +479,18 @@ fn right_bound_for_like_pattern(prefix: Vec<u8>) -> Vec<u8> {
     }
 
     res
+}
+
+// Check whether the pattern contains '_' or '%'.
+fn contains_like_pattern(pattern: &[u8]) -> bool {
+    let mut index = 0;
+    let len = pattern.len();
+    while index < len {
+        match pattern[index] {
+            b'%' | b'_' => return true,
+            b'\\' => index += 2,
+            _ => index += 1,
+        }
+    }
+    false
 }

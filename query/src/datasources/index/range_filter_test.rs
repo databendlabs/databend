@@ -167,7 +167,7 @@ fn test_build_verifiable_function() -> Result<()> {
             expect: "isNotNull(min_a)",
         },
         Test {
-            name: "b >= 0 and c like ffffff",
+            name: "b >= 0 and c like 0xffffff",
             expr: col("b")
                 .gt_eq(lit(0))
                 .and(Expression::create_binary_expression("like", vec![
@@ -191,6 +191,22 @@ fn test_build_verifiable_function() -> Result<()> {
                 lit("sys\\%".as_bytes()),
             ]),
             expect: "((max_c >= sys%) and (min_c < sys&))",
+        },
+        Test {
+            name: "c not like 'sys\\%'",
+            expr: Expression::create_binary_expression("not like", vec![
+                col("c"),
+                lit("sys\\%".as_bytes()),
+            ]),
+            expect: "((min_c not like sys\\%) or (max_c not like sys\\%))",
+        },
+        Test {
+            name: "c not like 'sys%'",
+            expr: Expression::create_binary_expression("not like", vec![
+                col("c"),
+                lit("sys%".as_bytes()),
+            ]),
+            expect: "true",
         },
     ];
 
