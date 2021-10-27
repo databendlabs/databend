@@ -801,7 +801,7 @@ dependencies = [
  "ansi_term 0.12.1",
  "anyhow",
  "atty",
- "cargo_metadata 0.14.0",
+ "cargo_metadata 0.14.1",
  "csv",
  "getopts",
  "semver 1.0.4",
@@ -836,9 +836,9 @@ dependencies = [
 
 [[package]]
 name = "cargo_metadata"
-version = "0.14.0"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c297bd3135f558552f99a0daa180876984ea2c4ffa7470314540dff8c654109a"
+checksum = "ba2ae6de944143141f6155a473a6b02f66c7c3f9f47316f802f80204ebfe6e12"
 dependencies = [
  "camino",
  "cargo-platform",
@@ -2049,7 +2049,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "cargo-license",
- "cargo_metadata 0.14.0",
+ "cargo_metadata 0.14.1",
  "chrono",
  "chrono-tz 0.6.0",
  "clickhouse-rs",
