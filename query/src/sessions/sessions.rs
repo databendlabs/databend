@@ -154,7 +154,9 @@ impl SessionManager {
     ) -> impl Future<Output = ()> {
         let active_sessions = self.active_sessions.clone();
         async move {
-            log::info!("Waiting for current connections to close.");
+            log::info!(
+                "Waiting {} secs for connections to close. You can press Ctrl + C again to force shutdown.",
+                timeout_secs);
             let mut signal = Box::pin(signal.next());
 
             for _index in 0..timeout_secs {

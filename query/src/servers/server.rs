@@ -78,7 +78,6 @@ impl ShutdownHandle {
                 stream.next().await;
 
                 log::info!("Received termination signal.");
-                log::info!("You can press Ctrl + C again to force shutdown.");
                 if let Ok(false) =
                     self.shutdown
                         .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)
