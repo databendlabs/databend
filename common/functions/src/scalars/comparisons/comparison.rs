@@ -14,6 +14,8 @@
 
 use std::fmt;
 
+use common_datavalues::chrono::NaiveDate;
+use common_datavalues::chrono::NaiveDateTime;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
 use common_datavalues::DataValueComparisonOperator;
@@ -70,21 +72,11 @@ impl Function for ComparisonFunction {
         if need_parse_date(columns) {
             let new_columns = columns
                 .iter()
-                .map(|c| match c.column().data_type() {
-                    DataType::String => {
-                        let funcs = ["toDateTime", "toDate"];
-                        for func in funcs {
-                            let date = FunctionFactory::instance()
-                                .get(func)
-                                .unwrap()
-                                .eval(&[c.clone()], _input_rows)
-                                .unwrap();
-                            if !date.to_values().unwrap()[0].is_null() {
-                                return DataColumnWithField::new(date, c.field().clone());
-                            }
-                        }
-                        c.clone()
-                    }
+                .map(|c| match c.data_type() {
+                    DataType::String => match parse_date_type(c) {
+                        None => c.clone(),
+                        Some(data_type) => cast_column(c, data_type, _input_rows),
+                    },
                     _ => c.clone(),
                 })
                 .collect::<Vec<_>>();
@@ -118,4 +110,44 @@ fn need_parse_date(columns: &DataColumnsWithField) -> bool {
         _ => {}
     });
     str && num
+}
+
+fn cast_column(
+    column: &DataColumnWithField,
+    data_type: DataType,
+    _input_rows: usize,
+) -> DataColumnWithField {
+    match (column.data_type(), data_type) {
+        (DataType::String, DataType::Date16) => {
+            let date = FunctionFactory::instance()
+                .get("toDate")
+                .unwrap()
+                .eval(&[column.clone()], _input_rows)
+                .unwrap();
+            let field = DataField::new(column.field().name(), DataType::Date16, false);
+            DataColumnWithField::new(date, field)
+        }
+        (DataType::String, DataType::DateTime32(None)) => {
+            let date = FunctionFactory::instance()
+                .get("toDateTime")
+                .unwrap()
+                .eval(&[column.clone()], _input_rows)
+                .unwrap();
+            let field = DataField::new(column.field().name(), DataType::DateTime32(None), false);
+            DataColumnWithField::new(date, field)
+        }
+        _ => column.clone(),
+    }
+}
+
+fn parse_date_type(c: &DataColumnWithField) -> Option<DataType> {
+    let val = c.column().to_values().unwrap();
+    let date = NaiveDate::parse_from_str(val[0].to_string().as_str(), "%Y-%m-%d").is_ok();
+    let date_time =
+        NaiveDateTime::parse_from_str(val[0].to_string().as_str(), "%Y-%m-%d %H:%M:%S").is_ok();
+    match (date, date_time) {
+        (true, false) => Some(DataType::Date16),
+        (false, true) => Some(DataType::DateTime32(None)),
+        _ => None,
+    }
 }
