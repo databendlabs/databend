@@ -44,10 +44,10 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ runner.os }}-cargo-buildcache-${{ secrets.CACHE_RESET_KEY }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-fast-ut-cache-${{ secrets.CACHE_RESET_KEY }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-buildcache-${{ secrets.CACHE_RESET_KEY }}-
-            ${{ runner.os }}-cargo-buildcache-
+            ${{ runner.os }}-cargo-fast-ut-cache-${{ secrets.CACHE_RESET_KEY }}-
+            ${{ runner.os }}-cargo-fast-ut-cache-
             ${{ runner.os }}-cargo-
 
       - name: Run test with incremental compile:1
