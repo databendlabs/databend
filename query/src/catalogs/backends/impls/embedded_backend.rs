@@ -23,6 +23,7 @@ use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
@@ -49,10 +50,9 @@ impl InMemoryTableInfo {
     }
 
     pub fn insert(&mut self, table_info: TableInfo) {
-        let met_ref = Arc::new(table_info);
-        self.name2meta
-            .insert(met_ref.name.to_owned(), met_ref.clone());
-        self.id2meta.insert(met_ref.table_id, met_ref);
+        let tbl = Arc::new(table_info);
+        self.name2meta.insert(tbl.name.to_owned(), tbl.clone());
+        self.id2meta.insert(tbl.ident.table_id, tbl);
     }
 }
 
@@ -168,8 +168,7 @@ impl MetaApiSync for MetaEmbeddedSync {
 
         let table_info = TableInfo {
             desc: format!("'{}'.'{}'", plan.db, plan.table),
-            table_id: self.next_db_id(),
-            version: 0,
+            ident: TableIdent::new(self.next_db_id(), 0),
             name: plan.table,
             meta: TableMeta {
                 schema: plan.schema,
@@ -233,7 +232,7 @@ impl MetaApiSync for MetaEmbeddedSync {
                             )));
                         }
                     }
-                    Some(tbl) => tbl.table_id,
+                    Some(tbl) => tbl.ident.table_id,
                 }
             }
         };
@@ -329,19 +328,19 @@ impl MetaApiSync for MetaEmbeddedSync {
                     continue;
                 }
                 Some(tbl) => {
-                    if tbl.version == table_version {
+                    if tbl.ident.version == table_version {
                         let mut new_tbl_info = tbl.as_ref().clone();
                         new_tbl_info
                             .meta
                             .options
                             .insert(table_option_name, table_option_value);
-                        new_tbl_info.version += 1;
+                        new_tbl_info.ident.version += 1;
                         tbl_idx.insert(new_tbl_info);
                         return Ok(());
                     } else {
                         return Err(ErrorCode::CommitTableError(format!(
                             "expecting table version: [{}], but got [{}]. (table_id {})",
-                            tbl.version, table_version, table_id
+                            tbl.ident.version, table_version, table_id
                         )));
                     }
                 }

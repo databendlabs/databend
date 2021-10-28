@@ -46,7 +46,7 @@ pub trait Table: Sync + Send {
     }
 
     fn get_id(&self) -> MetaId {
-        self.get_table_info().table_id
+        self.get_table_info().ident.table_id
     }
 
     fn is_local(&self) -> bool {

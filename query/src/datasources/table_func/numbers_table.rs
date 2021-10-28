@@ -25,6 +25,7 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_planners::Expression;
@@ -78,8 +79,7 @@ impl NumbersTable {
         };
 
         let table_info = TableInfo {
-            table_id,
-            version: 0,
+            ident: TableIdent::new(table_id, 0),
             desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: table_func_name.to_string(),
             meta: TableMeta {

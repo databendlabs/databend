@@ -22,8 +22,10 @@ use common_datavalues::DataSchema;
 
 use crate::MetaVersion;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct TableInfo {
+/// Globally unique identifier of a version of TableMeta.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+pub struct TableIdent {
+    /// Globally unique id to identify a table.
     pub table_id: u64,
 
     /// version of this table snapshot.
@@ -35,6 +37,23 @@ pub struct TableInfo {
     /// A version is not guaranteed to be consecutive.
     ///
     pub version: MetaVersion,
+}
+
+impl TableIdent {
+    pub fn new(table_id: u64, version: MetaVersion) -> Self {
+        TableIdent { table_id, version }
+    }
+}
+
+impl Display for TableIdent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "id:{}, ver:{}", self.table_id, self.version)
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+pub struct TableInfo {
+    pub ident: TableIdent,
 
     pub desc: String,
     pub name: String,
@@ -98,24 +117,12 @@ impl Default for TableMeta {
     }
 }
 
-impl Default for TableInfo {
-    fn default() -> Self {
-        TableInfo {
-            table_id: 0,
-            version: 0,
-            desc: "".to_string(),
-            name: "".to_string(),
-            meta: Default::default(),
-        }
-    }
-}
-
 impl Display for TableInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "DB.Table: {}, Table: {}-{}, Version: {}, Engine: {}",
-            self.desc, self.name, self.table_id, self.version, self.meta.engine
+            "DB.Table: {}, Table: {}-{}, Engine: {}",
+            self.desc, self.name, self.ident, self.meta.engine
         )
     }
 }

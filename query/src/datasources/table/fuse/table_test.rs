@@ -48,12 +48,12 @@ async fn test_fuse_table_simple_case() -> Result<()> {
     table.append_data(io_ctx.clone(), insert_into_plan).await?;
 
     // get the latest tbl
-    let prev_version = table.get_table_info().version;
+    let prev_version = table.get_table_info().ident.version;
     let table = catalog.get_table(
         fixture.default_db().as_str(),
         fixture.default_table().as_str(),
     )?;
-    assert_ne!(prev_version, table.get_table_info().version);
+    assert_ne!(prev_version, table.get_table_info().ident.version);
 
     let (stats, parts) = table.read_partitions(io_ctx.clone(), None, None)?;
     assert_eq!(parts.len(), num_blocks as usize);
@@ -125,14 +125,14 @@ async fn test_fuse_table_truncate() -> Result<()> {
     };
 
     // 1. truncate empty table
-    let prev_version = table.get_table_info().version;
+    let prev_version = table.get_table_info().ident.version;
     let r = table.truncate(io_ctx.clone(), truncate_plan.clone()).await;
     let table = catalog.get_table(
         fixture.default_db().as_str(),
         fixture.default_table().as_str(),
     )?;
     // no side effects
-    assert_eq!(prev_version, table.get_table_info().version);
+    assert_eq!(prev_version, table.get_table_info().ident.version);
     assert!(r.is_ok());
 
     // 2. truncate table which has data
@@ -145,12 +145,12 @@ async fn test_fuse_table_truncate() -> Result<()> {
     )?;
 
     // get the latest tbl
-    let prev_version = table.get_table_info().version;
+    let prev_version = table.get_table_info().ident.version;
     let table = catalog.get_table(
         fixture.default_db().as_str(),
         fixture.default_table().as_str(),
     )?;
-    assert_ne!(prev_version, table.get_table_info().version);
+    assert_ne!(prev_version, table.get_table_info().ident.version);
 
     // ensure data ingested
     let (stats, parts) =
@@ -163,12 +163,12 @@ async fn test_fuse_table_truncate() -> Result<()> {
     assert!(r.is_ok());
 
     // get the latest tbl
-    let prev_version = table.get_table_info().version;
+    let prev_version = table.get_table_info().ident.version;
     let table = catalog.get_table(
         fixture.default_db().as_str(),
         fixture.default_table().as_str(),
     )?;
-    assert_ne!(prev_version, table.get_table_info().version);
+    assert_ne!(prev_version, table.get_table_info().ident.version);
     let (stats, parts) =
         table.read_partitions(io_ctx.clone(), source_plan.push_downs.clone(), None)?;
     // cleared?

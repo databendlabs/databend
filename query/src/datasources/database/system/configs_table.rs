@@ -20,6 +20,7 @@ use common_context::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_planners::ReadDataSourcePlan;
@@ -46,13 +47,12 @@ impl ConfigsTable {
         let table_info = TableInfo {
             desc: "'system'.'configs'".to_string(),
             name: "configs".to_string(),
-            table_id,
+            ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
                 schema,
                 engine: "SystemConfigs".to_string(),
                 ..Default::default()
             },
-            ..Default::default()
         };
         ConfigsTable { table_info }
     }

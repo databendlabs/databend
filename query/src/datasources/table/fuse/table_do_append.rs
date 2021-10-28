@@ -83,7 +83,12 @@ impl FuseTable {
 
             // 5. commit
             let table_id = insert_plan.tbl_id;
-            commit(&io_ctx, table_id, self.table_info.version, snapshot_loc)?;
+            commit(
+                &io_ctx,
+                table_id,
+                self.table_info.ident.version,
+                snapshot_loc,
+            )?;
         }
         Ok(())
     }
