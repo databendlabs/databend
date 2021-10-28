@@ -67,9 +67,35 @@ impl Function for ComparisonFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        columns[0]
-            .column()
-            .compare(self.op.clone(), columns[1].column())
+        if need_parse_date(columns) {
+            let new_columns = columns
+                .iter()
+                .map(|c| match c.column().data_type() {
+                    DataType::String => {
+                        let funcs = ["toDateTime", "toDate"];
+                        for func in funcs {
+                            let date = FunctionFactory::instance()
+                                .get(func)
+                                .unwrap()
+                                .eval(&vec![c.clone()], _input_rows)
+                                .unwrap();
+                            if !date.to_values().unwrap()[0].is_null() {
+                                return DataColumnWithField::new(date, c.field().clone());
+                            }
+                        }
+                        c.clone()
+                    }
+                    _ => c.clone(),
+                })
+                .collect::<Vec<_>>();
+            new_columns[0]
+                .column()
+                .compare(self.op.clone(), new_columns[1].column())
+        } else {
+            columns[0]
+                .column()
+                .compare(self.op.clone(), columns[1].column())
+        }
     }
 
     fn num_arguments(&self) -> usize {
@@ -81,4 +107,15 @@ impl fmt::Display for ComparisonFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.op)
     }
+}
+
+fn need_parse_date(columns: &DataColumnsWithField) -> bool {
+    let mut str = false;
+    let mut num = false;
+    columns.iter().for_each(|c| match c.column().data_type() {
+        DataType::UInt32 | DataType::UInt16 => num = true,
+        DataType::String => str = true,
+        _ => {}
+    });
+    return str && num;
 }
