@@ -27,6 +27,7 @@ use rustyline::Editor;
 use crate::cmds::command::Command;
 use crate::cmds::config::Mode;
 use crate::cmds::queries::query::QueryCommand;
+use crate::cmds::ups::up::UpCommand;
 use crate::cmds::ClusterCommand;
 use crate::cmds::CommentCommand;
 use crate::cmds::Config;
@@ -36,7 +37,6 @@ use crate::cmds::PackageCommand;
 use crate::cmds::VersionCommand;
 use crate::cmds::Writer;
 use crate::error::Result;
-use crate::cmds::ups::up::UpCommand;
 
 pub struct Processor {
     env: Env,
@@ -80,6 +80,11 @@ impl Processor {
     }
     pub async fn process_run(&mut self) -> Result<()> {
         let mut writer = Writer::create();
+        if let Some(level) = self.env.conf.clap.value_of("log-level") {
+            if level != "info" {
+                writer.debug = true;
+            }
+        }
         match self.env.conf.clone().clap.subcommand_name() {
             Some("package") => {
                 let cmd = PackageCommand::create(self.env.conf.clone());
@@ -134,7 +139,8 @@ impl Processor {
                 cmd.exec_match(
                     &mut writer,
                     self.env.conf.clone().clap.subcommand_matches("up"),
-                ).await
+                )
+                .await
             }
             None => self.process_run_interactive().await,
             _ => {
@@ -151,7 +157,12 @@ impl Processor {
         let mut multiline_type = MultilineType::None;
 
         loop {
-            let writer = Writer::create();
+            let mut writer = Writer::create();
+            if let Some(level) = self.env.conf.clap.value_of("log-level") {
+                if level != "info" {
+                    writer.debug = true;
+                }
+            }
             let prompt = if content.is_empty() {
                 self.env.prompt.as_str()
             } else {
@@ -258,9 +269,7 @@ impl Processor {
         }
         // query execution mode
         if self.env.conf.mode == Mode::Sql {
-            let res = self.query
-                .exec(&mut writer, line.trim().to_string())
-                .await;
+            let res = self.query.exec(&mut writer, line.trim().to_string()).await;
             if let Err(e) = res {
                 writer.write_err(format!("Cannot exeuction query, if you want to manage databend cluster or check its status, please change to admin mode(type \\admin), error: {:?}", e).as_str())
             }

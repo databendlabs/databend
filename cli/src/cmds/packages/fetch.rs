@@ -65,17 +65,20 @@ pub fn unpack(tar_file: &str, target_dir: &str) -> Result<()> {
     };
 }
 
-pub fn download_and_unpack(url: &str, download_file_name: &str, target_dir: &str, exist: Option<String>) -> Result<()> {
-    if exist.is_some() {
-        if Path::new(exist.unwrap().as_str()).exists() {
-            return Ok(())
-        }
+pub fn download_and_unpack(
+    url: &str,
+    download_file_name: &str,
+    target_dir: &str,
+    exist: Option<String>,
+) -> Result<()> {
+    if exist.is_some() && Path::new(exist.unwrap().as_str()).exists() {
+        return Ok(());
     }
     if let Err(e) = download(url, download_file_name) {
-        return Err(e)
+        return Err(e);
     }
     if let Err(e) = unpack(download_file_name, target_dir) {
-        return Err(e)
+        return Err(e);
     }
     Ok(())
 }
@@ -171,13 +174,16 @@ impl FetchCommand {
             tag,
             bin_name,
         );
-        if let Err(e) = download_and_unpack(&*binary_url, &*bin_file.clone(), &*bin_unpack_dir, Some(bin_file)) {
-            writer.write_err(
-                format!("Cannot download or unpack error: {:?}",  e).as_str(),
-            )
+        if let Err(e) = download_and_unpack(
+            &*binary_url,
+            &*bin_file.clone(),
+            &*bin_unpack_dir,
+            Some(bin_file),
+        ) {
+            writer.write_err(format!("Cannot download or unpack error: {:?}", e).as_str())
         }
         let switch = SwitchCommand::create(self.conf.clone());
-        return switch.exec_match(writer, args);
+        switch.exec_match(writer, args)
     }
 
     pub fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {

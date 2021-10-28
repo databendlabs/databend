@@ -26,8 +26,8 @@ mod helps;
 mod packages;
 mod processor;
 mod queries;
-mod ups;
 mod status;
+mod ups;
 mod versions;
 mod writer;
 

@@ -13,39 +13,33 @@
 // limitations under the License.
 
 use std::borrow::Borrow;
-use std::io::Read;
-use std::net::SocketAddr;
 use std::path::Path;
+use std::str::FromStr;
 
 use async_trait::async_trait;
 use clap::App;
 use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
-use comfy_table::Cell;
-use comfy_table::Color;
-use comfy_table::Table;
-use common_base::ProgressValues;
-use lexical_util::num::AsPrimitive;
-use num_format::Locale;
-use num_format::ToFormattedString;
 use serde_json::json;
+
 use crate::cmds::clusters::cluster::ClusterProfile;
+use crate::cmds::clusters::delete::DeleteCommand;
 use crate::cmds::command::Command;
-use crate::cmds::{Config, ClusterCommand};
+use crate::cmds::packages::fetch::download_and_unpack;
+use crate::cmds::packages::fetch::get_rust_architecture;
+use crate::cmds::queries::query::QueryCommand;
+use crate::cmds::status::LocalDashboardConfig;
+use crate::cmds::status::LocalRuntime;
+use crate::cmds::ClusterCommand;
+use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
-use std::str::FromStr;
-use crate::cmds::packages::fetch::{download, unpack, download_and_unpack, get_rust_architecture};
-use crate::cmds::clusters::delete::DeleteCommand;
-use crate::cmds::queries::query::QueryCommand;
-use databend_query::common::HashMap;
-use crate::cmds::status::{LocalDashboardConfig, LocalRuntime};
 
-const ONTIME_DOWNLOAD_URL : &str ="https://repo.databend.rs/dataset/ontime_mini.tar.gz";
-const ONTIME_DDL_TEMPLATE : &str = r#"
+const ONTIME_DOWNLOAD_URL: &str = "https://repo.databend.rs/dataset/ontime_mini.tar.gz";
+const ONTIME_DDL_TEMPLATE: &str = r#"
 CREATE TABLE ontime
 (
     Year                            UInt16,
@@ -181,7 +175,10 @@ impl FromStr for DataSets {
 
     fn from_str(s: &str) -> std::result::Result<DataSets, &'static str> {
         match s {
-            "ontime_mini" => Ok(DataSets::OntimeMini(ONTIME_DOWNLOAD_URL, ONTIME_DDL_TEMPLATE)),
+            "ontime_mini" => Ok(DataSets::OntimeMini(
+                ONTIME_DOWNLOAD_URL,
+                ONTIME_DDL_TEMPLATE,
+            )),
             _ => Err("no match for profile"),
         }
     }
@@ -190,35 +187,39 @@ impl FromStr for DataSets {
 pub async fn generate_dashboard(status: &Status) -> Result<LocalDashboardConfig> {
     let query_configs = status.get_local_query_configs();
     if query_configs.is_empty() {
-        return Err(CliError::Unknown("No active query config exists".to_string()))
+        return Err(CliError::Unknown(
+            "No active query config exists".to_string(),
+        ));
     }
     let (_, query) = query_configs.get(0).unwrap();
-    let mut dashboard = LocalDashboardConfig{
+    let mut dashboard = LocalDashboardConfig {
         listen_addr: None,
         http_api: None,
         pid: None,
         path: None,
-        log_dir: None
+        log_dir: None,
     };
-    dashboard.http_api = Some(format!("http://{}:{}", query.config.query.http_handler_host,  query.config.query.http_handler_port));
+    dashboard.http_api = Some(format!(
+        "http://{}:{}",
+        query.config.query.http_handler_host, query.config.query.http_handler_port
+    ));
     dashboard.listen_addr = Some(Status::find_unused_local_port());
     Ok(dashboard)
 }
 
-fn render(ddl: &str, template: serde_json::Value)  -> Result<String> {
-    let mut reg = handlebars::Handlebars::new();
+fn render(ddl: &str, template: serde_json::Value) -> Result<String> {
+    let reg = handlebars::Handlebars::new();
     // render without register
     match reg.render_template(ddl, &template) {
-        Ok(str) => {
-            return Ok(str)
-        }
+        Ok(str) => Ok(str),
         Err(e) => {
-            return Err(CliError::Unknown(format!("cannot render DDL, error: {}", e)))
+            return Err(CliError::Unknown(format!(
+                "cannot render DDL, error: {}",
+                e
+            )))
         }
     }
-
 }
-
 
 impl UpCommand {
     pub fn create(conf: Config) -> Self {
@@ -273,19 +274,32 @@ impl UpCommand {
         Ok(())
     }
     async fn download_dataset(&self, dataset: DataSets) -> Result<String> {
-        match dataset{
-            DataSets::OntimeMini(url, ddl) => {
+        return match dataset {
+            DataSets::OntimeMini(url, _) => {
                 let status = Status::read(self.conf.clone())?;
                 let cfgs = status.get_local_query_configs();
                 let (_, query_config) = cfgs.get(0).expect("cannot get local query config");
                 let dataset_dir = query_config.config.storage.disk.data_path.as_str();
                 let dataset_location = format!("{}/ontime_2019_2021.csv", dataset_dir);
-                let download_location = format!("{}/downloads/datasets/ontime_mini.tar.gz", self.conf.databend_dir);
-                std::fs::create_dir_all(Path::new(format!("{}/downloads/datasets/", self.conf.databend_dir).as_str()))?;
-                if let Err(e) = download_and_unpack(url, &*download_location, dataset_dir, Some(dataset_location.clone())) {
-                    return Err(CliError::Unknown(format!("Cannot download/unpack dataset {:?}", e)));
+                let download_location = format!(
+                    "{}/downloads/datasets/ontime_mini.tar.gz",
+                    self.conf.databend_dir
+                );
+                std::fs::create_dir_all(Path::new(
+                    format!("{}/downloads/datasets/", self.conf.databend_dir).as_str(),
+                ))?;
+                if let Err(e) = download_and_unpack(
+                    url,
+                    &*download_location,
+                    dataset_dir,
+                    Some(dataset_location.clone()),
+                ) {
+                    return Err(CliError::Unknown(format!(
+                        "Cannot download/unpack dataset {:?}",
+                        e
+                    )));
                 }
-                return Ok(dataset_location)
+                Ok::<String, CliError>(dataset_location)
             }
         };
     }
@@ -294,34 +308,54 @@ impl UpCommand {
         let arch = get_rust_architecture()?;
         let bin_name = format!("databend-playground-{}-{}.tar.gz", PLAYGROUND_VERSION, arch);
         let bin_file = format!("{}/downloads/{}", self.conf.databend_dir, bin_name);
-        let url =  format!(
+        let url = format!(
             "{}/{}/{}",
             self.conf.mirror.playground_url.clone(),
             PLAYGROUND_VERSION,
             bin_name,
         );
-        let target_dir = format!("{}/bin/playground/{}", self.conf.databend_dir, PLAYGROUND_VERSION);
+        let target_dir = format!(
+            "{}/bin/playground/{}",
+            self.conf.databend_dir, PLAYGROUND_VERSION
+        );
         std::fs::create_dir_all(Path::new(target_dir.as_str()))?;
-        if let Err(e) = download_and_unpack(&*url, &*bin_file.clone(), &*target_dir, Some(format!("{}/databend-playground", target_dir))) {
-            return Err(CliError::Unknown(format!("Cannot download/unpack dataset {:?}", e)));
+        if let Err(e) = download_and_unpack(
+            &*url,
+            &*bin_file,
+            &*target_dir,
+            Some(format!("{}/databend-playground", target_dir)),
+        ) {
+            return Err(CliError::Unknown(format!(
+                "Cannot download/unpack dataset {:?}",
+                e
+            )));
         }
         Ok(format!("{}/databend-playground", target_dir))
     }
 
-    async fn local_up(&self, dataset: DataSets, writer: &mut Writer,) -> Result<()> {
+    async fn local_up(&self, dataset: DataSets, writer: &mut Writer) -> Result<()> {
         // bootstrap cluster
         writer.write_ok("Welcome to use our databend product 🎉🎉🎉");
         let cluster = ClusterCommand::create(self.conf.clone());
-        if let Err(e) = cluster.exec(writer, ["cluster", "create", "--force"].join(" ")).await {
-            return Err(CliError::Unknown(format!("Cannot bootstrap local cluster, error {:?}", e)));
+        if let Err(e) = cluster
+            .exec(writer, ["cluster", "create", "--force"].join(" "))
+            .await
+        {
+            return Err(CliError::Unknown(format!(
+                "Cannot bootstrap local cluster, error {:?}",
+                e
+            )));
         }
         writer.write_ok("Start to download dataset");
         match self.download_dataset(dataset.clone()).await {
             Ok(dataset_location) => {
-                match  dataset {
+                match dataset {
                     DataSets::OntimeMini(_, ddl) => {
-                        if let Err(e) = self.create_ddl(writer, dataset_location, "ontime".to_string(), ddl).await {
-                            return Err(e)
+                        if let Err(e) = self
+                            .create_ddl(writer, dataset_location, "ontime".to_string(), ddl)
+                            .await
+                        {
+                            return Err(e);
                         }
                     }
                 }
@@ -329,30 +363,36 @@ impl UpCommand {
 
                 match self.download_playground().await {
                     Ok(path) => {
-
                         let status = Status::read(self.conf.clone())?;
                         let mut config = generate_dashboard(&status).await?;
                         config.path = Some(path);
-                        std::fs::create_dir_all(Path::new(format!("{}/logs/dashboard/", self.conf.databend_dir).as_str()))?;
-                        config.log_dir = Some(format!("{}/logs/dashboard/", self.conf.databend_dir));
-                        if let Err(e) = self.provision_local_dashboard_service(writer, config).await {
-                            return Err(e)
+                        std::fs::create_dir_all(Path::new(
+                            format!("{}/logs/dashboard/", self.conf.databend_dir).as_str(),
+                        ))?;
+                        config.log_dir =
+                            Some(format!("{}/logs/dashboard/", self.conf.databend_dir));
+                        if let Err(e) = self.provision_local_dashboard_service(writer, config).await
+                        {
+                            return Err(e);
                         }
                         let status = Status::read(self.conf.clone())?;
-                        let (_, dash) = status.get_local_dashboard_config().expect("no dashboard config exists");
-                        if let Err(e) = webbrowser::open(&*format!("http://{}",dash.listen_addr.unwrap())) {
-                            return Err(CliError::Unknown(format!("Cannot open web browser for dashboard error: {}", e)))
+                        let (_, dash) = status
+                            .get_local_dashboard_config()
+                            .expect("no dashboard config exists");
+                        if let Err(e) =
+                            webbrowser::open(&*format!("http://{}", dash.listen_addr.unwrap()))
+                        {
+                            return Err(CliError::Unknown(format!(
+                                "Cannot open web browser for dashboard error: {}",
+                                e
+                            )));
                         }
                     }
-                    Err(e) => {
-                        return Err(e)
-                    }
+                    Err(e) => return Err(e),
                 }
-                return Ok(())
+                Ok(())
             }
-            Err(e) => {
-                return Err(e)
-            }
+            Err(e) => Err(e),
         }
     }
 
@@ -374,9 +414,11 @@ impl UpCommand {
                 writer.write_ok(
                     format!(
                         "👏 successfully started meta service listen on {}",
-                        dash_config.listen_addr.expect("dashboard config has no listen address")
+                        dash_config
+                            .listen_addr
+                            .expect("dashboard config has no listen address")
                     )
-                        .as_str(),
+                    .as_str(),
                 );
                 Ok(())
             }
@@ -384,24 +426,41 @@ impl UpCommand {
         }
     }
 
-    async fn create_ddl(&self, writer: &mut Writer, dataset_location: String, table_name: String, ddl : &str) -> Result<()> {
+    async fn create_ddl(
+        &self,
+        writer: &mut Writer,
+        dataset_location: String,
+        table_name: String,
+        ddl: &str,
+    ) -> Result<()> {
         if !Path::new(dataset_location.as_str()).exists() {
-            return Err(CliError::Unknown(format!("Cannot find dataset on {}", Path::new(dataset_location.as_str()).canonicalize().unwrap().to_str().unwrap())));
+            return Err(CliError::Unknown(format!(
+                "Cannot find dataset on {}",
+                Path::new(dataset_location.as_str())
+                    .canonicalize()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+            )));
         }
         let query = QueryCommand::create(self.conf.clone());
-        let ddl = render(ddl, json!({"csv_location": Path::new(dataset_location.as_str()).canonicalize().unwrap().to_str().unwrap()}));
+        let ddl = render(
+            ddl,
+            json!({"csv_location": Path::new(dataset_location.as_str()).canonicalize().unwrap().to_str().unwrap()}),
+        );
         match ddl {
             Ok(ddl) => {
-                if let Err(e) = query.exec(writer, format!(r#"DROP DATABASE IF EXISTS {}"#, table_name)).await {
-                    return Err(e)
+                if let Err(e) = query
+                    .exec(writer, format!(r#"DROP TABLE IF EXISTS {}"#, table_name))
+                    .await
+                {
+                    return Err(e);
                 }
                 if let Err(e) = query.exec(writer, ddl).await {
-                    return Err(e)
+                    return Err(e);
                 }
             }
-            Err(e) => {
-                return Err(e)
-            }
+            Err(e) => return Err(e),
         }
         Ok(())
     }
@@ -415,7 +474,10 @@ impl UpCommand {
                         if let Err(e) = self.local_up(d, writer).await {
                             writer.write_err(&*format!("{:?}", e));
                             let mut status = Status::read(self.conf.clone())?;
-                            if let Err(e) = DeleteCommand::stop_current_local_services(&mut status, writer).await {
+                            if let Err(e) =
+                                DeleteCommand::stop_current_local_services(&mut status, writer)
+                                    .await
+                            {
                                 writer.write_err(&*format!("{:?}", e));
                             }
                         }
@@ -424,7 +486,7 @@ impl UpCommand {
                         writer.write_err(&*format!("Cannot find public dataset, error {:?}", e));
                     }
                 }
-               Ok(())
+                Ok(())
             }
             Err(e) => {
                 writer.write_err(&*format!("Query command precheck failed, error {:?}", e));
@@ -435,7 +497,6 @@ impl UpCommand {
 
     /// precheck whether current local profile applicable for local host machine
     fn local_exec_precheck(&self, _args: &ArgMatches) -> Result<()> {
-
         Ok(())
     }
 }

@@ -26,18 +26,19 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::cmds::queries::query::QueryCommand;
+use crate::cmds::ups::up::UpCommand;
 use crate::cmds::ClusterCommand;
 use crate::cmds::PackageCommand;
 use crate::cmds::Status;
 use crate::cmds::VersionCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;
-use crate::cmds::ups::up::UpCommand;
 
 const GITHUB_BASE_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
 const GITHUB_DATABEND_URL: &str = "https://github.com/datafuselabs/databend/releases/download";
 const GITHUB_DATABEND_TAG_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
-const GITHUB_PLAYGROUND_URL: &str = "https://github.com/datafuselabs/databend-playground/releases/download";
+const GITHUB_PLAYGROUND_URL: &str =
+    "https://github.com/datafuselabs/databend-playground/releases/download";
 
 const REPO_BASE_URL: &str = "https://repo.databend.rs/databend/tags.json";
 const REPO_DATABEND_URL: &str = "https://repo.databend.rs/databend";
@@ -135,7 +136,12 @@ pub struct CustomMirror {
 }
 
 impl CustomMirror {
-    fn new(base_url: String, databend_url: String, databend_tag_url: String, playground_url: String) -> Self {
+    fn new(
+        base_url: String,
+        databend_url: String,
+        databend_tag_url: String,
+        playground_url: String,
+    ) -> Self {
         CustomMirror {
             base_url,
             databend_url,
@@ -159,7 +165,7 @@ impl MirrorAsset for CustomMirror {
     }
 
     fn get_playground_url(&self) -> String {
-       self.playground_url.clone()
+        self.playground_url.clone()
     }
 }
 
@@ -281,6 +287,15 @@ impl Config {
                     .global(true)
                     .takes_value(true),
             )
+            .arg(
+                Arg::new("log-level")
+                    .long("log-level")
+                    .about("Sets the log-level for current settings")
+                    .env("BEND_LOG_LEVEL")
+                    .default_value("info")
+                    .global(true)
+                    .takes_value(true),
+            )
             .subcommand(
                 App::new("completion")
                     .setting(AppSettings::DisableVersionFlag)
@@ -321,7 +336,11 @@ impl Config {
                     .parse()
                     .unwrap(),
                 clap.clone().value_of("tag_url").unwrap().parse().unwrap(),
-                clap.clone().value_of("playground_url").unwrap().parse().unwrap(),
+                clap.clone()
+                    .value_of("playground_url")
+                    .unwrap()
+                    .parse()
+                    .unwrap(),
             ),
             clap,
         };

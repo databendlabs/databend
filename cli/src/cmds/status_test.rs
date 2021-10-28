@@ -25,7 +25,8 @@ use tempfile::tempdir;
 use crate::cmds::config::GithubMirror;
 use crate::cmds::config::MirrorAsset;
 use crate::cmds::config::Mode;
-use crate::cmds::status::{LocalMetaConfig, LocalDashboardConfig};
+use crate::cmds::status::LocalDashboardConfig;
+use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
 use crate::cmds::status::LocalRuntime;
 use crate::cmds::Config;
@@ -118,20 +119,22 @@ fn test_status() -> Result<()> {
             "query".parse().unwrap(),
             "query_2.yaml".to_string(),
             &query_config2,
-        ) .unwrap();
+        )
+        .unwrap();
         let dashboard = LocalDashboardConfig {
             listen_addr: None,
             http_api: Some("127.0.0.1:9000".to_string()),
             pid: None,
             path: None,
-            log_dir: None
+            log_dir: None,
         };
         Status::save_local_config(
             &mut status,
             "dashboard".parse().unwrap(),
             "dashboard.yaml".to_string(),
             &dashboard,
-        ) .unwrap();
+        )
+        .unwrap();
         status.current_profile = Some("local".to_string());
         status.write()?;
         let status = Status::read(conf.clone()).unwrap();

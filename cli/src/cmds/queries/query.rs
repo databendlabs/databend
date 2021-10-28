@@ -99,7 +99,7 @@ impl QueryCommand {
     async fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
         match self.local_exec_precheck(args) {
             Ok(_) => {
-                writer.write_ok("Query precheck passed!");
+                writer.write_debug("Query precheck passed!");
                 let status = Status::read(self.conf.clone())?;
                 let queries = match args.value_of("query") {
                     Some(val) => {
@@ -137,7 +137,7 @@ impl QueryCommand {
                         .map(|elem| format!("{};", elem))
                         .collect::<Vec<String>>()
                     {
-                        writer.write_ok(
+                        writer.write_debug(
                             format!("Execute query {} on {}", query.clone(), url).as_str(),
                         );
                         if let Err(e) =
@@ -191,7 +191,7 @@ async fn query_writer(
     match execute_query(cli, url, query).await {
         Ok((res, stats)) => {
             let elapsed = start.elapsed();
-            writer.writeln(res.trim_fmt().as_str());
+            writer.writeln(res.as_str());
             if let Some(stat) = stats {
                 let time = elapsed.as_millis() as f64 / 1000f64;
                 let byte_per_sec = byte_unit::Byte::from_unit(
@@ -259,7 +259,7 @@ async fn execute_query(
     cli: &reqwest::Client,
     url: &str,
     query: String,
-) -> Result<(Table, Option<ProgressValues>)> {
+) -> Result<(String, Option<ProgressValues>)> {
     let ans = cli
         .post(url)
         .body(query.clone())
@@ -292,11 +292,16 @@ async fn execute_query(
             );
         }
         if let Some(rows) = ans.data {
-            for row in rows {
-                table.add_row(row.iter().map(|elem| Cell::new(elem.to_string())));
+            if rows.is_empty() {
+                return Ok(("".to_string(), ans.stats));
+            } else {
+                for row in rows {
+                    table.add_row(row.iter().map(|elem| Cell::new(elem.to_string())));
+                }
+                return Ok((table.trim_fmt(), ans.stats));
             }
         }
-        Ok((table, ans.stats))
+        Ok(("".to_string(), ans.stats))
     }
 }
 

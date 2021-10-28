@@ -26,11 +26,13 @@ use std::thread::sleep;
 use std::time;
 
 use async_trait::async_trait;
+use common_base::tokio::time::Duration;
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
 use libc::pid_t;
 use log::info;
 use nix::unistd::Pid;
+use reqwest::Client;
 use serde::Deserialize;
 use serde::Serialize;
 use sysinfo::System;
@@ -40,8 +42,6 @@ use crate::cmds::config::CustomMirror;
 use crate::cmds::Config;
 use crate::error::CliError;
 use crate::error::Result;
-use reqwest::Client;
-use common_base::tokio::time::Duration;
 
 const RETRIES: u16 = 30;
 
@@ -110,23 +110,20 @@ pub trait LocalRuntime: Send + Sync {
                                 if nix::sys::signal::kill(
                                     Pid::from_raw(id),
                                     Some(nix::sys::signal::SIGINT),
-                                ).is_ok() && self.is_clean()
+                                )
+                                .is_ok()
+                                    && self.is_clean()
                                 {
-                                    return Ok(())
+                                    return Ok(());
                                 }
                                 if nix::sys::signal::kill(
                                     Pid::from_raw(id),
                                     Some(nix::sys::signal::SIGTERM),
-                                ).is_ok() && self.is_clean()
+                                )
+                                .is_ok()
+                                    && self.is_clean()
                                 {
-                                    return Ok(())
-                                }
-                                if nix::sys::signal::kill(
-                                    Pid::from_raw(id),
-                                    Some(nix::sys::signal::SIGKILL),
-                                ).is_ok() && self.is_clean()
-                                {
-                                    return Ok(())
+                                    return Ok(());
                                 }
                                 sleep(time::Duration::from_secs(1));
                             } else {
@@ -217,8 +214,19 @@ impl LocalRuntime for LocalDashboardConfig {
         let err_file = File::create(format!("{}/std_err.log", log_dir).as_str())
             .expect("couldn't create stderr file");
         // configure runtime by process local env settings
-        command.arg("--listen-addr").arg(self.listen_addr.as_ref().expect("did not configured listen address for playground"))
-            .arg("--bend-http-api").arg(self.http_api.as_ref().expect("did not configured http handler address for playground"))
+        command
+            .arg("--listen-addr")
+            .arg(
+                self.listen_addr
+                    .as_ref()
+                    .expect("did not configured listen address for playground"),
+            )
+            .arg("--bend-http-api")
+            .arg(
+                self.http_api
+                    .as_ref()
+                    .expect("did not configured http handler address for playground"),
+            )
             .stdout(unsafe { Stdio::from_raw_fd(out_file.into_raw_fd()) })
             .stderr(unsafe { Stdio::from_raw_fd(err_file.into_raw_fd()) });
         // logging debug
@@ -239,7 +247,7 @@ impl LocalRuntime for LocalDashboardConfig {
         return s.process(pid).is_none();
     }
 
-    async fn verify(&self, retries: Option<u32>, duration: Option<Duration>) -> Result<()> {
+    async fn verify(&self, _retries: Option<u32>, _duration: Option<Duration>) -> Result<()> {
         Ok(())
     }
 
@@ -422,7 +430,7 @@ impl LocalRuntime for LocalQueryConfig {
         let out_file = File::create(format!("{}/std_out.log", log_dir).as_str())
             .expect("couldn't create stdout file");
         let err_file = File::create(format!("{}/std_err.log", log_dir).as_str())
-            .expect("couldn't create stdout file");
+            .expect("couldn't create stderr file");
         // configure runtime by process local env settings
         // (TODO) S3 configurations
         command
@@ -574,7 +582,10 @@ impl Status {
     where
         T: ?Sized + Serialize,
     {
-        if config_type.as_str() != "meta" && config_type.as_str() != "query" && config_type.as_str() != "dashboard"{
+        if config_type.as_str() != "meta"
+            && config_type.as_str() != "query"
+            && config_type.as_str() != "dashboard"
+        {
             return Err(CliError::Unknown(
                 "Unsupported config type for local storage".parse().unwrap(),
             ));
@@ -612,7 +623,10 @@ impl Status {
         config_type: String,
         file_name: String,
     ) -> Result<()> {
-        if config_type.as_str() != "meta" && config_type.as_str() != "query" && config_type.as_str() != "dashboard" {
+        if config_type.as_str() != "meta"
+            && config_type.as_str() != "query"
+            && config_type.as_str() != "dashboard"
+        {
             return Err(CliError::Unknown(
                 "Unsupported config type for local storage".parse().unwrap(),
             ));

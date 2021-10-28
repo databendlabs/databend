@@ -23,12 +23,14 @@ enum WriterOutput {
 
 pub struct Writer {
     output: WriterOutput,
+    pub(crate) debug: bool,
 }
 
 impl Writer {
     pub fn create() -> Self {
         Writer {
             output: WriterOutput::Stdout(std::io::stdout()),
+            debug: false,
         }
     }
 
@@ -43,6 +45,11 @@ impl Writer {
 
     pub fn write_ok(&mut self, msg: &str) {
         writeln!(self, "{} {}", "[ok]".bold().green(), msg).unwrap();
+    }
+    pub fn write_debug(&mut self, msg: &str) {
+        if self.debug {
+            writeln!(self, "{} {}", "[debug]".bold().yellow(), msg).unwrap();
+        }
     }
 
     pub fn write_err(&mut self, msg: &str) {

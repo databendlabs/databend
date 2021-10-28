@@ -90,7 +90,10 @@ impl DeleteCommand {
         if status.get_local_dashboard_config().is_some() {
             let (fs, dash) = status.get_local_dashboard_config().unwrap();
             if dash.kill().await.is_err() {
-                writer.write_err(&*format!("cannot kill dashboard service with config in {}", fs));
+                writer.write_err(&*format!(
+                    "cannot kill dashboard service with config in {}",
+                    fs
+                ));
                 if Status::delete_local_config(status, "meta".to_string(), fs.clone()).is_err() {
                     writer.write_err(&*format!("cannot clean meta config in {}", fs))
                 }
