@@ -59,7 +59,7 @@ mod tests {
         let expect = "\
         Projection: number:UInt64\
         \n  Filter: false\
-        \n    ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0]";
+        \n    ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0], push_downs: []";
 
         assert_eq!(actual, expect);
         Ok(())
@@ -81,7 +81,7 @@ mod tests {
                 expect:"\
                 Projection: number:UInt64\
                 \n  Filter: false\
-                \n    ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0]",
+                \n    ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0], push_downs: []",
             },
             Test {
                 name: "Limit with zero should skip the scan",
@@ -90,7 +90,7 @@ mod tests {
                 Limit: 0\
                 \n  Projection: number:UInt64\
                 \n    Filter: true\
-                \n      ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0]",
+                \n      ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0], push_downs: []",
             },
             Test {
                 name: "Having with 'having 1+1=3' should skip the scan",
@@ -101,7 +101,7 @@ mod tests {
                 \n    AggregatorFinal: groupBy=[[(number % 10)]], aggr=[[avg(number)]]\
                 \n      AggregatorPartial: groupBy=[[(number % 10)]], aggr=[[avg(number)]]\
                 \n        Expression: (number % 10):UInt8, number:UInt64 (Before GroupBy)\
-                \n          ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0]",
+                \n          ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0], push_downs: []",
             },
         ];
 

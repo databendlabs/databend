@@ -4,8 +4,8 @@ Projection: max((number + 1)) as c1:UInt64, ((number % 3) + 1) as c2:UInt16
   AggregatorFinal: groupBy=[[((number % 3) + 1)]], aggr=[[max((number + 1))]]
     AggregatorPartial: groupBy=[[((number % 3) + 1)]], aggr=[[max((number + 1))]]
       Expression: ((number % 3) + 1):UInt16, (number + 1):UInt64 (Before GroupBy)
-        ReadDataSource: scan partitions: [16], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]
+        ReadDataSource: scan partitions: [16], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000], push_downs: []
 projection push down: push (name and value) to read datasource
 Projection: name:String
   Filter: (value > 10)
-    ReadDataSource: scan partitions: [1], scan schema: [name:String, value:String], statistics: [read_rows: 0, read_bytes: 0]
+    ReadDataSource: scan partitions: [1], scan schema: [name:String, value:String], statistics: [read_rows: 0, read_bytes: 0], push_downs: []

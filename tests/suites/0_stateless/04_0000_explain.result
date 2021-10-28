@@ -5,4 +5,4 @@ Limit: 1
         AggregatorPartial: groupBy=[[]], aggr=[[sum((number + 1))]]
           Expression: (number + 1):UInt64 (Before GroupBy)
             Filter: ((number + 1) = 4)
-              ReadDataSource: scan partitions: [16], scan schema: [number:UInt64], statistics: [read_rows: 80000, read_bytes: 640000]
+              ReadDataSource: scan partitions: [16], scan schema: [number:UInt64], statistics: [read_rows: 80000, read_bytes: 640000], push_downs: []

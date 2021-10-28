@@ -4,5 +4,5 @@
 Projection: number as c1:UInt64, (number + 1) as c2:UInt64
   Expression: number:UInt64, (number + 1):UInt64 (Before Projection)
     Filter: (number > 1)
-      ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 3, read_bytes: 24]
+      ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 3, read_bytes: 24], push_downs: []
 2	3

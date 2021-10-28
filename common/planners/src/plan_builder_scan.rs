@@ -63,6 +63,7 @@ impl PlanBuilder {
                 projection,
                 filters: vec![],
                 limit,
+                order_by: vec![],
             },
         })))
     }
