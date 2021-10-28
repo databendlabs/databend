@@ -515,11 +515,7 @@ impl Command for UpCommand {
     }
 
     async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
-        match self
-            .clap
-            .clone()
-            .try_get_matches_from(vec!["up", args.as_str()])
-        {
+        match self.clap.clone().try_get_matches_from(args.split(' ')) {
             Ok(matches) => {
                 return self.exec_match(writer, Some(matches.borrow())).await;
             }
