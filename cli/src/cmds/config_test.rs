@@ -53,6 +53,7 @@ fn test_mirror() -> Result<()> {
             base_url: server.url("/v1/health"),
             databend_url: "".to_string(),
             databend_tag_url: "".to_string(),
+            playground_url: "".to_string()
         };
         conf.mirror = custom.to_mirror();
         let mirror = choose_mirror(&conf).unwrap();
@@ -66,6 +67,7 @@ fn test_mirror() -> Result<()> {
             base_url: server.url("/v1/health"),
             databend_url: "".to_string(),
             databend_tag_url: "".to_string(),
+            playground_url: "".to_string()
         };
         let mut status = Status::read(conf.clone()).unwrap();
         status.mirrors = Some(status_mirror.to_mirror());

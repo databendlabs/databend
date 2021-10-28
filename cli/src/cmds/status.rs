@@ -41,6 +41,7 @@ use crate::cmds::Config;
 use crate::error::CliError;
 use crate::error::Result;
 use reqwest::Client;
+use common_base::tokio::time::Duration;
 
 const RETRIES: u16 = 30;
 
@@ -76,6 +77,7 @@ pub struct LocalDashboardConfig {
     pub http_api: Option<String>,
     pub pid: Option<pid_t>,
     pub path: Option<String>, // download location
+    pub log_dir: Option<String>,
 }
 
 async fn check_health(
@@ -215,15 +217,8 @@ impl LocalRuntime for LocalDashboardConfig {
         let err_file = File::create(format!("{}/std_err.log", log_dir).as_str())
             .expect("couldn't create stderr file");
         // configure runtime by process local env settings
-        command
-            .env(
-                "LISTEN_ADDR",
-                self.listen_addr.expect("did not configured listen address for playground"),
-            )
-            .env(
-                "BEND_HTTP_API",
-                self.http_api.expect("did not configured http handler address for playground"),
-            )
+        command.arg("--listen-addr").arg(self.listen_addr.as_ref().expect("did not configured listen address for playground"))
+            .arg("--bend-http-api").arg(self.http_api.as_ref().expect("did not configured http handler address for playground"))
             .stdout(unsafe { Stdio::from_raw_fd(out_file.into_raw_fd()) })
             .stderr(unsafe { Stdio::from_raw_fd(err_file.into_raw_fd()) });
         // logging debug
@@ -244,19 +239,12 @@ impl LocalRuntime for LocalDashboardConfig {
         return s.process(pid).is_none();
     }
 
-    fn get_health_probe(&self) -> (reqwest::Client, String) {
-        let client = reqwest::Client::builder()
-            .build()
-            .expect("Cannot build health probe for health check");
+    async fn verify(&self, retries: Option<u32>, duration: Option<Duration>) -> Result<()> {
+        Ok(())
+    }
 
-        let url = {
-            if !self.config.tls_rpc_server_enabled() {
-                format!("http://{}", self.http_api.unwrap())
-            } else {
-                todo!()
-            }
-        };
-        (client, url)
+    fn get_health_probe(&self) -> (Client, String) {
+        todo!()
     }
 }
 
@@ -692,7 +680,7 @@ impl Status {
         }
         let mut dashboard = self.local_configs.get("dashboard").unwrap().to_string();
         if dashboard.contains(',') {
-            let splited = meta_file
+            let splited = dashboard
                 .as_str()
                 .split(',')
                 .filter(|s| !s.trim().is_empty())

@@ -42,6 +42,7 @@ use crate::cmds::packages::fetch::{download, unpack, download_and_unpack, get_ru
 use crate::cmds::clusters::delete::DeleteCommand;
 use crate::cmds::queries::query::QueryCommand;
 use databend_query::common::HashMap;
+use crate::cmds::status::{LocalDashboardConfig, LocalRuntime};
 
 const ONTIME_DOWNLOAD_URL : &str ="https://repo.databend.rs/dataset/ontime_mini.tar.gz";
 const ONTIME_DDL_TEMPLATE : &str = r#"
@@ -186,7 +187,23 @@ impl FromStr for DataSets {
     }
 }
 
-
+pub async fn generate_dashboard(status: &Status) -> Result<LocalDashboardConfig> {
+    let query_configs = status.get_local_query_configs();
+    if query_configs.is_empty() {
+        return Err(CliError::Unknown("No active query config exists".to_string()))
+    }
+    let (_, query) = query_configs.get(0).unwrap();
+    let mut dashboard = LocalDashboardConfig{
+        listen_addr: None,
+        http_api: None,
+        pid: None,
+        path: None,
+        log_dir: None
+    };
+    dashboard.http_api = Some(format!("http://{}:{}", query.config.query.http_handler_host,  query.config.query.http_handler_port));
+    dashboard.listen_addr = Some(Status::find_unused_local_port());
+    Ok(dashboard)
+}
 
 fn render(ddl: &str, template: serde_json::Value)  -> Result<String> {
     let mut reg = handlebars::Handlebars::new();
@@ -273,7 +290,7 @@ impl UpCommand {
         };
     }
 
-    async fn download_playground(&self) -> Result<()> {
+    async fn download_playground(&self) -> Result<String> {
         let arch = get_rust_architecture()?;
         let bin_name = format!("databend-playground-{}-{}.tar.gz", PLAYGROUND_VERSION, arch);
         let bin_file = format!("{}/downloads/{}", self.conf.databend_dir, bin_name);
@@ -288,7 +305,7 @@ impl UpCommand {
         if let Err(e) = download_and_unpack(&*url, &*bin_file.clone(), &*target_dir, Some(format!("{}/databend-playground", target_dir))) {
             return Err(CliError::Unknown(format!("Cannot download/unpack dataset {:?}", e)));
         }
-        Ok(())
+        Ok(format!("{}/databend-playground", target_dir))
     }
 
     async fn local_up(&self, dataset: DataSets, writer: &mut Writer,) -> Result<()> {
@@ -297,11 +314,6 @@ impl UpCommand {
         let cluster = ClusterCommand::create(self.conf.clone());
         if let Err(e) = cluster.exec(writer, ["cluster", "create", "--force"].join(" ")).await {
             return Err(CliError::Unknown(format!("Cannot bootstrap local cluster, error {:?}", e)));
-        }
-        // download playground
-        writer.write_ok("Start to download playground");
-        if let Err(e) = self.download_playground().await {
-            return Err(e)
         }
         writer.write_ok("Start to download dataset");
         match self.download_dataset(dataset.clone()).await {
@@ -313,14 +325,65 @@ impl UpCommand {
                         }
                     }
                 }
+                writer.write_ok("Start to download playground");
 
-                return  Ok(())
+                match self.download_playground().await {
+                    Ok(path) => {
+
+                        let status = Status::read(self.conf.clone())?;
+                        let mut config = generate_dashboard(&status).await?;
+                        config.path = Some(path);
+                        std::fs::create_dir_all(Path::new(format!("{}/logs/dashboard/", self.conf.databend_dir).as_str()))?;
+                        config.log_dir = Some(format!("{}/logs/dashboard/", self.conf.databend_dir));
+                        if let Err(e) = self.provision_local_dashboard_service(writer, config).await {
+                            return Err(e)
+                        }
+                        let status = Status::read(self.conf.clone())?;
+                        let (_, dash) = status.get_local_dashboard_config().expect("no dashboard config exists");
+                        if let Err(e) = webbrowser::open(&*format!("http://{}",dash.listen_addr.unwrap())) {
+                            return Err(CliError::Unknown(format!("Cannot open web browser for dashboard error: {}", e)))
+                        }
+                    }
+                    Err(e) => {
+                        return Err(e)
+                    }
+                }
+                return Ok(())
             }
             Err(e) => {
                 return Err(e)
             }
         }
     }
+
+    async fn provision_local_dashboard_service(
+        &self,
+        writer: &mut Writer,
+        mut dash_config: LocalDashboardConfig,
+    ) -> Result<()> {
+        match dash_config.start().await {
+            Ok(_) => {
+                assert!(dash_config.get_pid().is_some());
+                let mut status = Status::read(self.conf.clone())?;
+                Status::save_local_config::<LocalDashboardConfig>(
+                    &mut status,
+                    "dashboard".to_string(),
+                    "dashboard_config_0.yaml".to_string(),
+                    &dash_config.clone(),
+                )?;
+                writer.write_ok(
+                    format!(
+                        "👏 successfully started meta service listen on {}",
+                        dash_config.listen_addr.expect("dashboard config has no listen address")
+                    )
+                        .as_str(),
+                );
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     async fn create_ddl(&self, writer: &mut Writer, dataset_location: String, table_name: String, ddl : &str) -> Result<()> {
         if !Path::new(dataset_location.as_str()).exists() {
             return Err(CliError::Unknown(format!("Cannot find dataset on {}", Path::new(dataset_location.as_str()).canonicalize().unwrap().to_str().unwrap())));
@@ -329,7 +392,9 @@ impl UpCommand {
         let ddl = render(ddl, json!({"csv_location": Path::new(dataset_location.as_str()).canonicalize().unwrap().to_str().unwrap()}));
         match ddl {
             Ok(ddl) => {
-                if let Err(_) = query.exec(writer, format!("DROP DATABASE IF EXISTS {};", table_name)).await {}
+                if let Err(e) = query.exec(writer, format!(r#"DROP DATABASE IF EXISTS {}"#, table_name)).await {
+                    return Err(e)
+                }
                 if let Err(e) = query.exec(writer, ddl).await {
                     return Err(e)
                 }
