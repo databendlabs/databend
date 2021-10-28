@@ -274,7 +274,7 @@ impl MetaApiTestSuite {
                 assert_eq!(want, got.as_ref().clone(), "get old table");
             }
 
-            tracing::info!("--- update table options with key1=val1");
+            tracing::info!("--- upsert table options with key1=val1");
             {
                 let table = mt.get_table("db1", "tb2").await.unwrap();
                 let got = mt
