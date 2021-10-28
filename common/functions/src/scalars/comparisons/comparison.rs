@@ -22,6 +22,7 @@ use common_datavalues::DataValueComparisonOperator;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionFactory;
+use crate::scalars::CastFunction;
 use crate::scalars::ComparisonEqFunction;
 use crate::scalars::ComparisonGtEqFunction;
 use crate::scalars::ComparisonGtFunction;
@@ -117,27 +118,12 @@ fn cast_column(
     data_type: DataType,
     _input_rows: usize,
 ) -> DataColumnWithField {
-    match (column.data_type(), data_type) {
-        (DataType::String, DataType::Date16) => {
-            let date = FunctionFactory::instance()
-                .get("toDate")
-                .unwrap()
-                .eval(&[column.clone()], _input_rows)
-                .unwrap();
-            let field = DataField::new(column.field().name(), DataType::Date16, false);
-            DataColumnWithField::new(date, field)
-        }
-        (DataType::String, DataType::DateTime32(None)) => {
-            let date = FunctionFactory::instance()
-                .get("toDateTime")
-                .unwrap()
-                .eval(&[column.clone()], _input_rows)
-                .unwrap();
-            let field = DataField::new(column.field().name(), DataType::DateTime32(None), false);
-            DataColumnWithField::new(date, field)
-        }
-        _ => column.clone(),
-    }
+    let new_col = CastFunction::create("cast".to_string(), data_type.clone())
+        .unwrap()
+        .eval(&[column.clone()], _input_rows)
+        .unwrap();
+    let new_field = DataField::new(column.field().name(), data_type, false);
+    DataColumnWithField::new(new_col, new_field)
 }
 
 fn parse_date_type(c: &DataColumnWithField) -> Option<DataType> {
