@@ -17,7 +17,7 @@ simd = ["arrow/simd"]
 
 # Github dependencies
 arrow = { package = "arrow2", git="https://github.com/datafuse-extras/arrow2", default-features = false, rev = "bd8f02b" }
-arrow-format = { version = "0.2.1", features = ["flight-data", "flight-service"]}
+arrow-format = { version = "0.3.0", features = ["flight-data", "flight-service"]}
 parquet2 = { version = "0.6", default_features = false }
 # Crates.io dependencies
 
