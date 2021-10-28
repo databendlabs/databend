@@ -8,6 +8,7 @@
 # Which is a work around to the issue that `grcov` sometimes has data conflict
 # with incremtnal compile: 1.
 
+
 name: Fast Unit Tests
 on: [push, pull_request]
 
