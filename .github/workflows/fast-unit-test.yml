@@ -1,0 +1,73 @@
+# Run unit test with incremental-compile: 1.
+#
+# Thus this workflow will finished quickly(~ 5 mins).
+# This way a failure can be found quickly.
+#
+# Standard unit test workflow is configured with incremental-compile: 0(it takes
+# 20 mins);
+# Which is a work around to the issue that `grcov` sometimes has data conflict
+# with incremtnal compile: 1.
+
+name: Fast Unit Tests
+on: [push, pull_request]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: "Unittest with incremental test on"
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        config:
+          # Linux
+          - { os: ubuntu-latest, toolchain: stable, target: x86_64-unknown-linux-gnu, cross: false }
+          # Macos
+          - { os: macos-latest, toolchain: stable, target: x86_64-apple-darwin, cross: false }
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v2
+
+      - name: Rust setup
+        run: |
+          bash ./scripts/setup/dev_setup.sh
+
+      - name: Cache cargo registry
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-buildcache-${{ secrets.CACHE_RESET_KEY }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-buildcache-${{ secrets.CACHE_RESET_KEY }}-
+            ${{ runner.os }}-cargo-buildcache-
+            ${{ runner.os }}-cargo-
+
+      - name: Run test with incremental compile:1
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --all-features
+        env:
+          RUST_TEST_THREADS: 2
+          RUST_LOG: debug
+          RUST_BACKTRACE: full
+          CARGO_INCREMENTAL: '1'
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        if: failure()
+        with:
+          path: |
+            _local_fs/
+            _logs/
+            _meta/
+            metasrv/_logs/
+            query/_logs/
+            store/_logs/
