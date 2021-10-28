@@ -27,6 +27,7 @@ use rustyline::Editor;
 use crate::cmds::command::Command;
 use crate::cmds::config::Mode;
 use crate::cmds::queries::query::QueryCommand;
+use crate::cmds::ups::up::UpCommand;
 use crate::cmds::ClusterCommand;
 use crate::cmds::CommentCommand;
 use crate::cmds::Config;
@@ -65,6 +66,7 @@ impl Processor {
             Box::new(VersionCommand::create()),
             Box::new(PackageCommand::create(conf.clone())),
             Box::new(ClusterCommand::create(conf.clone())),
+            Box::new(UpCommand::create(conf.clone())),
         ];
         let help_command = HelpCommand::create(admin_commands.clone());
         Processor {
@@ -78,6 +80,11 @@ impl Processor {
     }
     pub async fn process_run(&mut self) -> Result<()> {
         let mut writer = Writer::create();
+        if let Some(level) = self.env.conf.clap.value_of("log-level") {
+            if level != "info" {
+                writer.debug = true;
+            }
+        }
         match self.env.conf.clone().clap.subcommand_name() {
             Some("package") => {
                 let cmd = PackageCommand::create(self.env.conf.clone());
@@ -127,6 +134,14 @@ impl Processor {
                 }
                 Ok(())
             }
+            Some("up") => {
+                let cmd = UpCommand::create(self.env.conf.clone());
+                cmd.exec_match(
+                    &mut writer,
+                    self.env.conf.clone().clap.subcommand_matches("up"),
+                )
+                .await
+            }
             None => self.process_run_interactive().await,
             _ => {
                 println!("Some other subcommand was used");
@@ -142,7 +157,12 @@ impl Processor {
         let mut multiline_type = MultilineType::None;
 
         loop {
-            let writer = Writer::create();
+            let mut writer = Writer::create();
+            if let Some(level) = self.env.conf.clap.value_of("log-level") {
+                if level != "info" {
+                    writer.debug = true;
+                }
+            }
             let prompt = if content.is_empty() {
                 self.env.prompt.as_str()
             } else {
@@ -249,9 +269,10 @@ impl Processor {
         }
         // query execution mode
         if self.env.conf.mode == Mode::Sql {
-            self.query
-                .exec(&mut writer, line.trim().to_string())
-                .await?;
+            let res = self.query.exec(&mut writer, line.trim().to_string()).await;
+            if let Err(e) = res {
+                writer.write_err(format!("Cannot exeuction query, if you want to manage databend cluster or check its status, please change to admin mode(type \\admin), error: {:?}", e).as_str())
+            }
             writer.flush()?;
         } else {
             if let Some(cmd) = self.admin_commands.iter().find(|c| c.is(&*line)) {
