@@ -35,6 +35,9 @@ pub enum CliError {
 
     #[error("Nix error: {0}")]
     Nix(Box<nix::Error>),
+
+    #[error("Exited")]
+    Exited,
 }
 
 impl From<ureq::Error> for CliError {
