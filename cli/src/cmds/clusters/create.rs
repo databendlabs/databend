@@ -618,8 +618,9 @@ impl CreateCommand {
                         .await;
                     if res.is_err() {
                         writer.write_err(&*format!(
-                            "❌ Cannot provison meta service, error: {:?}",
-                            res.unwrap_err()
+                            "❌ Cannot provison meta service, error: {:?}, please check the logs output by: tail -n 100 {}/*",
+                            res.unwrap_err(),
+                            meta_config.log_dir.unwrap_or_else(|| "unknown log_dir".into()),
                         ));
                         return Ok(());
                     }
@@ -660,13 +661,17 @@ impl CreateCommand {
                 ));
                 {
                     let res = self
-                        .provision_local_query_service(writer, query_config.unwrap())
+                        .provision_local_query_service(
+                            writer,
+                            query_config.as_ref().unwrap().clone(),
+                        )
                         .await;
                     if res.is_err() {
                         let mut status = Status::read(self.conf.clone())?;
                         writer.write_err(&*format!(
-                            "❌ Cannot provison query service, error: {:?}",
-                            res.unwrap_err()
+                            "❌ Cannot provison query service, error: {:?}, please check the logs output by: tail -n 100 {}/*",
+                            res.unwrap_err(),
+                            query_config.as_ref().unwrap().config.log.log_dir,
                         ));
                         DeleteCommand::stop_current_local_services(&mut status, writer)
                             .await
