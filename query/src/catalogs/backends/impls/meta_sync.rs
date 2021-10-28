@@ -24,7 +24,9 @@ use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
@@ -98,7 +100,7 @@ impl MetaApiSync for MetaSync {
         (async move { x.get_tables(&db_name).await }).wait_in(&self.rt, self.timeout)?
     }
 
-    fn get_table_by_id(&self, table_id: MetaId) -> Result<Arc<TableInfo>> {
+    fn get_table_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
         let x = self.inner.clone();
         (async move { x.get_table_by_id(table_id).await }).wait_in(&self.rt, self.timeout)?
     }

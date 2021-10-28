@@ -213,7 +213,7 @@ impl MetaApiTestSuite {
                 let got = mt.get_table(db_name, tbl_name).await?;
 
                 let want = TableInfo {
-                    ident: TableIdent::new(1, 0),
+                    ident: TableIdent::new(1, 1),
                     desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: TableMeta {
@@ -233,7 +233,7 @@ impl MetaApiTestSuite {
 
                 let got = mt.get_table(db_name, tbl_name).await?;
                 let want = TableInfo {
-                    ident: TableIdent::new(1, 0),
+                    ident: TableIdent::new(1, 1),
                     desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: TableMeta {
@@ -262,7 +262,7 @@ impl MetaApiTestSuite {
 
                 let got = mt.get_table("db1", "tb2").await.unwrap();
                 let want = TableInfo {
-                    ident: TableIdent::new(1, 0),
+                    ident: TableIdent::new(1, 1),
                     desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: TableMeta {

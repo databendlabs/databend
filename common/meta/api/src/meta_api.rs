@@ -21,7 +21,9 @@ use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
@@ -50,7 +52,7 @@ pub trait MetaApi: Send + Sync {
 
     async fn get_tables(&self, db: &str) -> Result<Vec<Arc<TableInfo>>>;
 
-    async fn get_table_by_id(&self, table_id: MetaId) -> Result<Arc<TableInfo>>;
+    async fn get_table_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)>;
 
     async fn upsert_table_option(
         &self,

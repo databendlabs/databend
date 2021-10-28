@@ -21,7 +21,9 @@ use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
@@ -96,9 +98,12 @@ impl MetaApi for MetaFlightClient {
         self.do_action(GetTablesAction { db: db.to_string() }).await
     }
 
-    async fn get_table_by_id(&self, tbl_id: MetaId) -> common_exception::Result<Arc<TableInfo>> {
-        let x = self.do_action(GetTableExtReq { tbl_id }).await?;
-        Ok(Arc::new(x))
+    async fn get_table_by_id(
+        &self,
+        table_id: MetaId,
+    ) -> common_exception::Result<(TableIdent, Arc<TableMeta>)> {
+        let x = self.do_action(GetTableExtReq { tbl_id: table_id }).await?;
+        Ok((x.ident, Arc::new(x.meta)))
     }
 
     async fn upsert_table_option(

@@ -21,7 +21,7 @@ use common_meta_types::LogIndex;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::SeqV;
-use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 
 use crate::state::RaftStateKey;
 use crate::state::RaftStateValue;
@@ -106,7 +106,7 @@ impl SledKeySpace for Tables {
     const PREFIX: u8 = 9;
     const NAME: &'static str = "tables";
     type K = u64;
-    type V = SeqV<TableInfo>;
+    type V = SeqV<TableMeta>;
 }
 
 pub struct ClientLastResps {}

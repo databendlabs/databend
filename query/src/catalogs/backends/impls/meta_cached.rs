@@ -24,14 +24,16 @@ use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
-type TableInfoCache = LruCache<(MetaId, MetaVersion), Arc<TableInfo>>;
+type TableInfoCache = LruCache<(MetaId, MetaVersion), (TableIdent, Arc<TableMeta>)>;
 
 /// A `MetaApi` impl with table cached in memory, backed with another `MetaApi`.
 #[derive(Clone)]
@@ -84,7 +86,7 @@ impl MetaApi for MetaCached {
         self.inner.get_tables(db_name).await
     }
 
-    async fn get_table_by_id(&self, table_id: MetaId) -> Result<Arc<TableInfo>> {
+    async fn get_table_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
         {
             let mut cached = self.table_meta_cache.write().await;
             if let Some(meta) = cached.get(&(table_id, 0)) {
@@ -93,10 +95,11 @@ impl MetaApi for MetaCached {
         }
 
         let reply = self.inner.get_table_by_id(table_id).await?;
+        let ident = reply.0.clone();
 
         let mut cache = self.table_meta_cache.write().await;
         // TODO version
-        cache.put((reply.ident.table_id, 0), reply.clone());
+        cache.put((ident.table_id, 0), reply.clone());
         Ok(reply)
     }
 

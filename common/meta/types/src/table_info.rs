@@ -89,6 +89,15 @@ impl TableInfo {
         }
     }
 
+    pub fn new(db_name: &str, table_name: &str, ident: TableIdent, meta: TableMeta) -> TableInfo {
+        TableInfo {
+            ident,
+            desc: format!("'{}'.'{}'", db_name, table_name),
+            name: table_name.to_string(),
+            meta,
+        }
+    }
+
     pub fn schema(&self) -> Arc<DataSchema> {
         self.meta.schema.clone()
     }
@@ -114,6 +123,16 @@ impl Default for TableMeta {
             engine: "".to_string(),
             options: HashMap::new(),
         }
+    }
+}
+
+impl Display for TableMeta {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Engine: {}, Schema: {}, Options: {:?}",
+            self.engine, self.schema, self.options
+        )
     }
 }
 

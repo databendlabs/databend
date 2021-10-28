@@ -59,6 +59,7 @@ use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::SeqV;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 
@@ -1026,11 +1027,11 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_table(&self, tid: &u64) -> Result<Option<SeqV<TableInfo>>, ErrorCode> {
+    pub async fn get_table_by_id(&self, tid: &u64) -> Result<Option<SeqV<TableMeta>>, ErrorCode> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
-        sm.get_table(tid)
+        sm.get_table_by_id(tid)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
@@ -1046,16 +1047,16 @@ impl MetaNode {
         let seq_table = sm.tables().get(&table_id)?;
         if let Some(tbl) = seq_table {
             let seq = tbl.seq;
-            let mut tbl = tbl.data;
-            if tbl.ident.version != table_version {
+            let mut table_meta = tbl.data;
+            if seq != table_version {
                 Err(ErrorCode::TableVersionMissMatch(format!(
                     "targeting version {}, current version {}",
-                    table_version, tbl.ident.version,
+                    table_version, seq,
                 )))
             } else {
-                tbl.meta.options.insert(opt_key, opt_value);
-                tbl.ident.version += 1;
-                sm.upsert_table(tbl, &MatchSeq::Exact(seq)).await?;
+                table_meta.options.insert(opt_key, opt_value);
+                sm.upsert_table(table_id, table_meta, &MatchSeq::Exact(seq))
+                    .await?;
                 Ok(())
             }
         } else {
