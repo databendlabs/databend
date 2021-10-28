@@ -65,7 +65,7 @@ impl FuseTable {
         da.put(&seg_loc, bytes).await?;
 
         // 4. new snapshot
-        let prev_snapshot = self.table_snapshot(io_ctx.as_ref())?;
+        let prev_snapshot = self.table_snapshot(io_ctx.as_ref()).await?;
 
         // TODO backoff retry this block
         {
