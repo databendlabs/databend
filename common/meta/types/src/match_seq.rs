@@ -19,7 +19,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::ConflictSeq;
-use crate::SeqValue;
+use crate::SeqV;
 
 /// Describes what `seq` an operation must match to take effect.
 /// Every value written to meta data has a unique `seq` bound.
@@ -75,19 +75,19 @@ pub trait MatchSeqExt<T> {
     fn match_seq(&self, sv: T) -> Result<(), ConflictSeq>;
 }
 
-impl<U> MatchSeqExt<&Option<SeqValue<U>>> for MatchSeq {
-    fn match_seq(&self, sv: &Option<SeqValue<U>>) -> Result<(), ConflictSeq> {
+impl<U> MatchSeqExt<&Option<SeqV<U>>> for MatchSeq {
+    fn match_seq(&self, sv: &Option<SeqV<U>>) -> Result<(), ConflictSeq> {
         let seq = match sv {
-            Some(sv) => sv.0,
+            Some(sv) => sv.seq,
             None => 0,
         };
         self.match_seq(seq)
     }
 }
 
-impl<U> MatchSeqExt<&SeqValue<U>> for MatchSeq {
-    fn match_seq(&self, sv: &SeqValue<U>) -> Result<(), ConflictSeq> {
-        let seq = sv.0;
+impl<U> MatchSeqExt<&SeqV<U>> for MatchSeq {
+    fn match_seq(&self, sv: &SeqV<U>) -> Result<(), ConflictSeq> {
+        let seq = sv.seq;
         self.match_seq(seq)
     }
 }

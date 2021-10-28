@@ -18,8 +18,8 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_infallible::Mutex;
+use common_macros::MallocSizeOf;
 use common_mem_allocator::malloc_size;
-use common_mem_derive::*;
 use futures::channel::oneshot::Sender;
 use futures::channel::*;
 

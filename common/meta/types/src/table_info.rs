@@ -24,7 +24,6 @@ use crate::MetaVersion;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TableInfo {
-    pub database_id: u64,
     pub table_id: u64,
 
     /// version of this table snapshot.
@@ -40,6 +39,18 @@ pub struct TableInfo {
     pub desc: String,
     pub name: String,
 
+    /// The essential information about a table definition.
+    ///
+    /// It is about what a table actually is.
+    /// `name`, `id` or `version` is not included in the table structure definition.
+    pub meta: TableMeta,
+}
+
+/// The essential state that defines what a table is.
+///
+/// It is what a meta store just needs to save.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct TableMeta {
     pub schema: Arc<DataSchema>,
     pub engine: String,
     pub options: HashMap<String, String>,
@@ -51,28 +62,50 @@ impl TableInfo {
         TableInfo {
             desc: format!("'{}'.'{}'", db, table),
             name: table.to_string(),
-            schema,
+            meta: TableMeta {
+                schema,
+                ..Default::default()
+            },
             ..Default::default()
         }
     }
 
-    pub fn schema(mut self, schema: Arc<DataSchema>) -> TableInfo {
-        self.schema = schema;
+    pub fn schema(&self) -> Arc<DataSchema> {
+        self.meta.schema.clone()
+    }
+
+    pub fn options(&self) -> &HashMap<String, String> {
+        &self.meta.options
+    }
+
+    pub fn engine(&self) -> &str {
+        &self.meta.engine
+    }
+
+    pub fn set_schema(mut self, schema: Arc<DataSchema>) -> TableInfo {
+        self.meta.schema = schema;
         self
+    }
+}
+
+impl Default for TableMeta {
+    fn default() -> Self {
+        TableMeta {
+            schema: Arc::new(DataSchema::empty()),
+            engine: "".to_string(),
+            options: HashMap::new(),
+        }
     }
 }
 
 impl Default for TableInfo {
     fn default() -> Self {
         TableInfo {
-            database_id: 0,
             table_id: 0,
             version: 0,
             desc: "".to_string(),
             name: "".to_string(),
-            schema: Arc::new(DataSchema::empty()),
-            engine: "".to_string(),
-            options: HashMap::new(),
+            meta: Default::default(),
         }
     }
 }
@@ -81,8 +114,8 @@ impl Display for TableInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "DB.Table: {}-{}, Table: {}-{}, Version: {}, Engine: {}",
-            self.desc, self.database_id, self.name, self.table_id, self.version, self.engine
+            "DB.Table: {}, Table: {}-{}, Version: {}, Engine: {}",
+            self.desc, self.name, self.table_id, self.version, self.meta.engine
         )
     }
 }

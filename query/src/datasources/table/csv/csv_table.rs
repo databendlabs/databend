@@ -46,7 +46,7 @@ impl CsvTable {
         table_info: TableInfo,
         _data_ctx: Arc<dyn DataContext<u64>>,
     ) -> Result<Box<dyn Table>> {
-        let options = &table_info.options;
+        let options = table_info.options();
         let has_header = options.get("has_header").is_some();
         let file = match options.get("location") {
             None => {
@@ -105,7 +105,7 @@ impl Table for CsvTable {
 
         Ok(Box::pin(CsvTableStream::try_create(
             ctx,
-            self.table_info.schema.clone(),
+            self.table_info.schema(),
             self.file.clone(),
         )?))
     }

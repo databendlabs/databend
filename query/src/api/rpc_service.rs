@@ -112,8 +112,10 @@ impl RpcService {
 
 #[async_trait::async_trait]
 impl DatabendQueryServer for RpcService {
-    async fn shutdown(&mut self) {
-        self.dispatcher.abort();
+    async fn shutdown(&mut self, graceful: bool) {
+        if graceful {
+            self.dispatcher.abort();
+        }
         // We can't turn off listening on the connection
         // self.abort_notify.notify_waiters();
     }

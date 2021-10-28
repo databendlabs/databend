@@ -53,12 +53,11 @@ use common_meta_raft_store::state_machine::TableLookupValue;
 use common_meta_sled_store::get_sled_db;
 use common_meta_types::Cmd;
 use common_meta_types::DatabaseInfo;
-use common_meta_types::KVValue;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
-use common_meta_types::SeqValue;
+use common_meta_types::SeqV;
 use common_meta_types::TableInfo;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
@@ -987,10 +986,7 @@ impl MetaNode {
     /// Get a database from local meta state machine.
     /// The returned value may not be the latest written.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_database(
-        &self,
-        name: &str,
-    ) -> Result<Option<SeqValue<KVValue<DatabaseInfo>>>, ErrorCode> {
+    pub async fn get_database(&self, name: &str) -> Result<Option<SeqV<DatabaseInfo>>, ErrorCode> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
@@ -1002,7 +998,7 @@ impl MetaNode {
         &self,
         db_id: u64,
         name: &str,
-    ) -> Result<Option<SeqValue<KVValue<TableLookupValue>>>, ErrorCode> {
+    ) -> Result<Option<SeqV<TableLookupValue>>, ErrorCode> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
@@ -1030,10 +1026,7 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_table(
-        &self,
-        tid: &u64,
-    ) -> Result<Option<SeqValue<KVValue<TableInfo>>>, ErrorCode> {
+    pub async fn get_table(&self, tid: &u64) -> Result<Option<SeqV<TableInfo>>, ErrorCode> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
@@ -1052,15 +1045,15 @@ impl MetaNode {
         let sm = self.sto.state_machine.write().await;
         let seq_table = sm.tables().get(&table_id)?;
         if let Some(tbl) = seq_table {
-            let seq = tbl.0;
-            let mut tbl = tbl.1.value;
+            let seq = tbl.seq;
+            let mut tbl = tbl.data;
             if tbl.version != table_version {
                 Err(ErrorCode::TableVersionMissMatch(format!(
                     "targeting version {}, current version {}",
                     table_version, tbl.version,
                 )))
             } else {
-                tbl.options.insert(opt_key, opt_value);
+                tbl.meta.options.insert(opt_key, opt_value);
                 tbl.version += 1;
                 sm.upsert_table(tbl, &MatchSeq::Exact(seq)).await?;
                 Ok(())
@@ -1074,7 +1067,7 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_kv(&self, key: &str) -> common_exception::Result<Option<SeqValue<KVValue>>> {
+    pub async fn get_kv(&self, key: &str) -> common_exception::Result<Option<SeqV<Vec<u8>>>> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
@@ -1085,7 +1078,7 @@ impl MetaNode {
     pub async fn mget_kv(
         &self,
         keys: &[impl AsRef<str> + std::fmt::Debug],
-    ) -> common_exception::Result<Vec<Option<SeqValue<KVValue>>>> {
+    ) -> common_exception::Result<Vec<Option<SeqV<Vec<u8>>>>> {
         // inconsistent get: from local state machine
         let sm = self.sto.state_machine.read().await;
         sm.mget_kv(keys)
@@ -1095,7 +1088,7 @@ impl MetaNode {
     pub async fn prefix_list_kv(
         &self,
         prefix: &str,
-    ) -> common_exception::Result<Vec<(String, SeqValue<KVValue>)>> {
+    ) -> common_exception::Result<Vec<(String, SeqV<Vec<u8>>)>> {
         // inconsistent get: from local state machine
         let sm = self.sto.state_machine.read().await;
         sm.prefix_list_kv(prefix)

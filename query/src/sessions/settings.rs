@@ -19,7 +19,7 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_mem_derive::*;
+use common_macros::MallocSizeOf;
 #[derive(Debug, MallocSizeOf)]
 pub struct Settings {
     inner: SettingsBase,

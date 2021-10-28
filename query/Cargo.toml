@@ -35,12 +35,12 @@ common-functions = { path = "../common/functions" }
 common-infallible = { path = "../common/infallible" }
 common-io = { path = "../common/io" }
 common-management = { path = "../common/management" }
-common-mem-allocator = { path = "../common/mem/mem-allocator" }
-common-mem-derive = { path = "../common/mem/mem-derive" }
+common-mem-allocator = { path = "../common/mem-allocator" }
 common-meta-api = { path = "../common/meta/api" }
 common-meta-embedded = { path = "../common/meta/embedded" }
 common-meta-flight = {path = "../common/meta/flight" }
 common-meta-types = {path = "../common/meta/types"}
+common-macros = { path = "../common/macros" }
 common-metrics = { path = "../common/metrics" }
 common-planners = { path = "../common/planners" }
 common-streams = { path = "../common/streams" }
@@ -61,7 +61,7 @@ bumpalo = "3.8.0"
 byteorder = "1"
 bytes = "1"
 cargo-license = "0.4.2"
-cargo_metadata = "0.14.0"
+cargo_metadata = "0.14.1"
 chrono =  "0.4.0"
 chrono-tz = "0.6"
 crossbeam = "0.8"

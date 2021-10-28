@@ -18,7 +18,6 @@ use async_raft::raft::EntryPayload;
 use common_base::tokio;
 use common_base::GlobalSequence;
 use common_meta_types::Cmd;
-use common_meta_types::KVValue;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
 use common_meta_types::LogIndex;
@@ -32,6 +31,7 @@ use crate::testing::fake_key_spaces::StateMachineMeta;
 use crate::testing::fake_state_machine_meta::StateMachineMetaKey::Initialized;
 use crate::testing::fake_state_machine_meta::StateMachineMetaKey::LastApplied;
 use crate::testing::fake_state_machine_meta::StateMachineMetaValue;
+use crate::SeqV;
 use crate::SledTree;
 
 /// 1. Open a temp sled::Db for all tests.
@@ -1038,9 +1038,9 @@ async fn test_as_scan_prefix() -> anyhow::Result<()> {
     file_tree.append(&files).await?;
 
     let kvs = vec![
-        ("a".to_string(), (1, KVValue::default())),
-        ("ab".to_string(), (2, KVValue::default())),
-        ("b".to_string(), (3, KVValue::default())),
+        ("a".to_string(), SeqV::new(1, vec![])),
+        ("ab".to_string(), SeqV::new(2, vec![])),
+        ("b".to_string(), SeqV::new(3, vec![])),
     ];
 
     kv_tree.append(&kvs).await?;

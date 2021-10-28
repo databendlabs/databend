@@ -16,7 +16,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_base::BlockingWait;
 use common_context::DataContext;
 use common_context::IOContext;
 use common_context::TableIOContext;
@@ -99,14 +98,21 @@ impl Table for FuseTable {
 }
 
 impl FuseTable {
-    pub fn table_snapshot(&self, io_ctx: &TableIOContext) -> Result<Option<TableSnapshot>> {
-        let option = &self.table_info.options;
-        if let Some(loc) = option.get(util::TBL_OPT_KEY_SNAPSHOT_LOC) {
+    pub(crate) fn snapshot_loc(&self) -> Option<String> {
+        self.table_info
+            .options()
+            .get(util::TBL_OPT_KEY_SNAPSHOT_LOC)
+            .cloned()
+    }
+
+    pub(crate) async fn table_snapshot(
+        &self,
+        io_ctx: &TableIOContext,
+    ) -> Result<Option<TableSnapshot>> {
+        if let Some(loc) = self.snapshot_loc() {
             let da = io_ctx.get_data_accessor()?;
-            let r = read_obj(da, loc.to_string()).wait_in(&io_ctx.get_runtime(), None)??;
-            Ok(Some(r))
+            Ok(Some(read_obj(da, loc.to_string()).await?))
         } else {
-            // TODO distinguish this from invalid TableSnapshot?
             Ok(None)
         }
     }

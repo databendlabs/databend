@@ -36,6 +36,7 @@ use crate::cmds::HelpCommand;
 use crate::cmds::PackageCommand;
 use crate::cmds::VersionCommand;
 use crate::cmds::Writer;
+use crate::error::CliError;
 use crate::error::Result;
 
 pub struct Processor {
@@ -216,7 +217,11 @@ impl Processor {
                     }
                     content.push_str(line);
                     self.readline.history_mut().add(content.clone());
-                    self.processor_line(writer, content.clone()).await?;
+                    match self.processor_line(writer, content.clone()).await {
+                        Ok(()) => Ok(()),
+                        Err(CliError::Exited) => break,
+                        Err(err) => Err(err),
+                    }?;
                     content.clear();
                     multiline_type = MultilineType::None;
                 }
@@ -242,7 +247,7 @@ impl Processor {
         // mode switch
         if line.to_lowercase().trim().eq("exit") || line.to_lowercase().trim().eq("quit") {
             writeln!(writer, "Bye").unwrap();
-            return Ok(());
+            return Err(CliError::Exited);
         }
         if line.to_lowercase().trim().eq("\\sql") {
             writeln!(writer, "Mode switched to SQL query mode").unwrap();

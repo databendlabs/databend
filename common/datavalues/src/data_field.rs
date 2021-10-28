@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 
 use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_mem_derive::*;
+use common_macros::MallocSizeOf;
 
 use crate::DataType;
 

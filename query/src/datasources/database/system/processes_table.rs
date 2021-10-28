@@ -25,6 +25,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -53,9 +54,12 @@ impl ProcessesTable {
             desc: "'system'.'processes'".to_string(),
             name: "processes".to_string(),
             table_id,
-            schema,
-            engine: "SystemProcesses".to_string(),
+            meta: TableMeta {
+                schema,
+                engine: "SystemProcesses".to_string(),
 
+                ..Default::default()
+            },
             ..Default::default()
         };
         ProcessesTable { table_info }
@@ -114,7 +118,7 @@ impl Table for ProcessesTable {
             processes_memory_usage.push(process_info.memory_usage);
         }
 
-        let schema = self.table_info.schema.clone();
+        let schema = self.table_info.schema();
         let block = DataBlock::create_by_array(schema.clone(), vec![
             Series::new(processes_id),
             Series::new(processes_type),

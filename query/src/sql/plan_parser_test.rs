@@ -199,6 +199,14 @@ fn test_plan_parser() -> Result<()> {
             \n  Filter: (NULL AND true)\
             \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
             error: "",
+        },
+        Test {
+            name: "show-metrics",
+            sql: "show metrics",
+            expect: "\
+            Projection: metric:String, kind:String, labels:String, value:String\
+            \n  ReadDataSource: scan partitions: [1], scan schema: [metric:String, kind:String, labels:String, value:String], statistics: [read_rows: 0, read_bytes: 0]",
+            error: "",
         }
     ];
 

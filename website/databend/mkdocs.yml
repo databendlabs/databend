@@ -152,6 +152,9 @@ nav:
           - SHOW PROCESSLIST: sqlstatement/show-commands/show-processlist.md
           - SHOW TABLES: sqlstatement/show-commands/show-tables.md
           - SHOW SETTINGS: sqlstatement/show-commands/show-settings.md
+          - SHOW METRICS: sqlstatement/show-commands/show-metrics.md
+      - Kill Commands:
+          - KILL QUERY: sqlstatement/kill-commands/kill-query.md
       - Aggregate Functions:
           - AVG: sqlstatement/aggregate-functions/aggregate-avg.md
           - COUNT: sqlstatement/aggregate-functions/aggregate-count.md

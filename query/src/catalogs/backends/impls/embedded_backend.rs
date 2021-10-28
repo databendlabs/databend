@@ -24,6 +24,7 @@ use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
@@ -166,14 +167,15 @@ impl MetaApiSync for MetaEmbeddedSync {
         let table_name = clone.table.as_str();
 
         let table_info = TableInfo {
-            database_id: 0, // TODO tobe assigned to some real value
             desc: format!("'{}'.'{}'", plan.db, plan.table),
             table_id: self.next_db_id(),
             version: 0,
             name: plan.table,
-            schema: plan.schema,
-            options: plan.options,
-            engine: plan.engine,
+            meta: TableMeta {
+                schema: plan.schema,
+                options: plan.options,
+                engine: plan.engine,
+            },
         };
 
         let mut lock = self.databases.write();
@@ -330,6 +332,7 @@ impl MetaApiSync for MetaEmbeddedSync {
                     if tbl.version == table_version {
                         let mut new_tbl_info = tbl.as_ref().clone();
                         new_tbl_info
+                            .meta
                             .options
                             .insert(table_option_name, table_option_value);
                         new_tbl_info.version += 1;

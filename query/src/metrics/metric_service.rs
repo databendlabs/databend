@@ -68,7 +68,7 @@ impl MetricService {
     // TODO add session tls handler
     pub fn create(_sessions: SessionManagerRef) -> Box<MetricService> {
         Box::new(MetricService {
-            shutdown_handler: HttpShutdownHandler::create("HttpHandler".to_string()),
+            shutdown_handler: HttpShutdownHandler::create("metric api".to_string()),
         })
     }
 
@@ -86,8 +86,8 @@ impl MetricService {
 
 #[async_trait::async_trait]
 impl Server for MetricService {
-    async fn shutdown(&mut self) {
-        self.shutdown_handler.shutdown().await;
+    async fn shutdown(&mut self, graceful: bool) {
+        self.shutdown_handler.shutdown(graceful).await;
     }
 
     async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {

@@ -134,7 +134,7 @@ impl Table for MemoryTable {
         }
         .ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
 
-        if _insert_plan.schema().as_ref().fields() != self.table_info.schema.as_ref().fields() {
+        if _insert_plan.schema().as_ref().fields() != self.table_info.schema().as_ref().fields() {
             return Err(ErrorCode::BadArguments("DataBlock schema mismatch"));
         }
 

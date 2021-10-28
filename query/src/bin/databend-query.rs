@@ -14,9 +14,8 @@
 
 use std::sync::Arc;
 
-use common_base::BlockingWait;
-use common_base::Runtime;
 use common_base::RuntimeTracker;
+use common_macros::databend_main;
 use common_metrics::init_default_metrics_recorder;
 use common_tracing::init_tracing_with_file;
 use common_tracing::set_panic_hook;
@@ -32,14 +31,8 @@ use databend_query::servers::ShutdownHandle;
 use databend_query::sessions::SessionManager;
 use log::info;
 
-// TODO: replace with proc macro
-fn main() {
-    let global_runtime = Runtime::with_default_worker_threads().unwrap();
-    let main_entity = async_main(global_runtime.get_tracker());
-    main_entity.wait_in(&global_runtime, None).unwrap().unwrap();
-}
-
-async fn async_main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
+#[databend_main]
+async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
     // First load configs from args.
     let mut conf = Config::load_from_args();
 

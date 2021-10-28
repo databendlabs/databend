@@ -59,10 +59,10 @@ impl Table for NullTable {
         _io_ctx: Arc<TableIOContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let block = DataBlock::empty_with_schema(self.table_info.schema.clone());
+        let block = DataBlock::empty_with_schema(self.table_info.schema());
 
         Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema.clone(),
+            self.table_info.schema(),
             None,
             vec![block],
         )))

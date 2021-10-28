@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::scalars::FunctionFactory;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -43,9 +44,12 @@ impl FunctionsTable {
             desc: "'system'.'functions'".to_string(),
             name: "functions".to_string(),
             table_id,
-            schema,
-            engine: "SystemFunctions".to_string(),
+            meta: TableMeta {
+                schema,
+                engine: "SystemFunctions".to_string(),
 
+                ..Default::default()
+            },
             ..Default::default()
         };
         FunctionsTable { table_info }
@@ -82,13 +86,13 @@ impl Table for FunctionsTable {
             .map(|i| i >= func_names.len())
             .collect::<Vec<bool>>();
 
-        let block = DataBlock::create_by_array(self.table_info.schema.clone(), vec![
+        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
             Series::new(names),
             Series::new(is_aggregate),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema.clone(),
+            self.table_info.schema(),
             None,
             vec![block],
         )))

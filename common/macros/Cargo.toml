@@ -1,5 +1,5 @@
 [package]
-name = "common-mem-derive"
+name = "common-macros"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,6 +9,8 @@ edition = "2021"
 proc-macro = true
 
 [dependencies]
+quote = "1"
 proc-macro2 = "1"
 syn = { version = "1", features = ["full"] }
 synstructure = "0.12"
+common-base = { path = "../base" }

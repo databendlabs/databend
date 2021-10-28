@@ -829,7 +829,7 @@ dependencies = [
  "ansi_term 0.12.1",
  "anyhow",
  "atty",
- "cargo_metadata 0.14.0",
+ "cargo_metadata 0.14.1",
  "csv",
  "getopts",
  "semver 1.0.4",
@@ -864,9 +864,9 @@ dependencies = [
 
 [[package]]
 name = "cargo_metadata"
-version = "0.14.0"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c297bd3135f558552f99a0daa180876984ea2c4ffa7470314540dff8c654109a"
+checksum = "ba2ae6de944143141f6155a473a6b02f66c7c3f9f47316f802f80204ebfe6e12"
 dependencies = [
  "camino",
  "cargo-platform",
@@ -1279,8 +1279,8 @@ dependencies = [
  "common-arrow",
  "common-exception",
  "common-io",
+ "common-macros",
  "common-mem-allocator",
- "common-mem-derive",
  "lexical-core 0.8.2",
  "num",
  "ordered-float 2.8.0",
@@ -1367,6 +1367,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-macros"
+version = "0.1.0"
+dependencies = [
+ "common-base",
+ "proc-macro2",
+ "quote",
+ "syn",
+ "synstructure",
+]
+
+[[package]]
 name = "common-management"
 version = "0.1.0"
 dependencies = [
@@ -1390,18 +1401,9 @@ version = "0.1.0"
 dependencies = [
  "common-base",
  "common-infallible",
- "common-mem-derive",
+ "common-macros",
  "parking_lot",
  "tikv-jemalloc-sys",
-]
-
-[[package]]
-name = "common-mem-derive"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "syn",
- "synstructure",
 ]
 
 [[package]]
@@ -2021,6 +2023,7 @@ dependencies = [
  "common-flight-rpc",
  "common-functions",
  "common-infallible",
+ "common-macros",
  "common-meta-api",
  "common-meta-flight",
  "common-meta-raft-store",
@@ -2074,7 +2077,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "cargo-license",
- "cargo_metadata 0.14.0",
+ "cargo_metadata 0.14.1",
  "chrono",
  "chrono-tz 0.6.0",
  "clickhouse-rs",
@@ -2092,9 +2095,9 @@ dependencies = [
  "common-functions",
  "common-infallible",
  "common-io",
+ "common-macros",
  "common-management",
  "common-mem-allocator",
- "common-mem-derive",
  "common-meta-api",
  "common-meta-embedded",
  "common-meta-flight",
@@ -4978,9 +4981,9 @@ checksum = "bc881b2c22681370c6a780e47af9840ef841837bc98118431d4e1868bd0c1086"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.30"
+version = "1.0.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edc3358ebc67bc8b7fa0c007f945b0b18226f78437d61bec735a9eb96b61ee70"
+checksum = "ba508cc11742c0dc5c1659771673afbab7a0efab23aa17e854cbab0837ed0b43"
 dependencies = [
  "unicode-xid",
 ]
@@ -6278,9 +6281,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.80"
+version = "1.0.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d010a1623fbd906d51d650a9916aaefc05ffa0e4053ff7fe601167f3e715d194"
+checksum = "f2afee18b8beb5a596ecb4a2dce128c719b4ba399d34126b9e4396e3f9860966"
 dependencies = [
  "proc-macro2",
  "quote",
