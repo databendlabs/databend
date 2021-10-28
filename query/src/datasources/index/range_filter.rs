@@ -442,7 +442,7 @@ impl<'a> VerifiableExprBuilder<'a> {
     }
 }
 
-fn left_bound_for_like_pattern(pattern: &[u8]) -> Vec<u8> {
+pub(crate) fn left_bound_for_like_pattern(pattern: &[u8]) -> Vec<u8> {
     let mut index = 0;
     let mut prefix: Vec<u8> = Vec::new();
     let len = pattern.len();
@@ -466,7 +466,7 @@ fn left_bound_for_like_pattern(pattern: &[u8]) -> Vec<u8> {
     prefix
 }
 
-fn right_bound_for_like_pattern(prefix: Vec<u8>) -> Vec<u8> {
+pub(crate) fn right_bound_for_like_pattern(prefix: Vec<u8>) -> Vec<u8> {
     let mut res = prefix;
     while !res.is_empty() && *res.last().unwrap() == u8::MAX {
         res.pop();

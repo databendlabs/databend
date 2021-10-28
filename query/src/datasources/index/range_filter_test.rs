@@ -19,9 +19,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;
 
-use crate::datasources::index::range_filter::build_verifiable_expr;
-use crate::datasources::index::range_filter::StatColumns;
-use crate::datasources::index::RangeFilter;
+use crate::datasources::index::range_filter::*;
 use crate::datasources::table::fuse::util::BlockStats;
 use crate::datasources::table::fuse::ColStats;
 
@@ -215,6 +213,65 @@ fn test_build_verifiable_function() -> Result<()> {
         let res = build_verifiable_expr(&test.expr, schema.clone(), &mut stat_columns);
         let actual = format!("{:?}", res);
         assert_eq!(test.expect, actual, "{:#?}", test.name);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_bound_for_like_pattern() -> Result<()> {
+    #[allow(dead_code)]
+    struct Test {
+        name: &'static str,
+        pattern: Vec<u8>,
+        left: Vec<u8>,
+        right: Vec<u8>,
+    }
+
+    let tests: Vec<Test> = vec![
+        Test {
+            name: "ordinary string",
+            pattern: vec![b'a', b'b', b'c'],
+            left: vec![b'a', b'b', b'c'],
+            right: vec![b'a', b'b', b'd'],
+        },
+        Test {
+            name: "contain _",
+            pattern: vec![b'a', b'_', b'c'],
+            left: vec![b'a'],
+            right: vec![b'b'],
+        },
+        Test {
+            name: "contain %",
+            pattern: vec![b'a', b'%', b'c'],
+            left: vec![b'a'],
+            right: vec![b'b'],
+        },
+        Test {
+            name: "contain \\",
+            pattern: vec![b'a', b'\\', b'_', b'c'],
+            left: vec![b'a', b'_', b'c'],
+            right: vec![b'a', b'_', b'd'],
+        },
+        Test {
+            name: "left is empty",
+            pattern: vec![b'%', b'b', b'c'],
+            left: vec![],
+            right: vec![],
+        },
+        Test {
+            name: "right is empty",
+            pattern: vec![255u8, 255, 255],
+            left: vec![255u8, 255, 255],
+            right: vec![],
+        },
+    ];
+
+    for test in tests {
+        let left = left_bound_for_like_pattern(&test.pattern);
+        assert_eq!(test.left, left, "{:#?}", test.name);
+        let right = right_bound_for_like_pattern(left);
+        assert_eq!(test.right, right, "{:#?}", test.name);
     }
 
     Ok(())
