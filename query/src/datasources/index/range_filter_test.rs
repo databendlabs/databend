@@ -112,6 +112,14 @@ fn test_range_filter() -> Result<()> {
             ]),
             expect: false,
         },
+        Test {
+            name: "c not like 'ac%'",
+            expr: Expression::create_binary_expression("not like", vec![
+                col("c"),
+                lit("ac%".as_bytes()),
+            ]),
+            expect: true,
+        },
     ];
 
     for test in tests {
@@ -191,20 +199,52 @@ fn test_build_verifiable_function() -> Result<()> {
             expect: "((max_c >= sys%) and (min_c < sys&))",
         },
         Test {
+            name: "c like 'sys\\t'",
+            expr: Expression::create_binary_expression("like", vec![
+                col("c"),
+                lit("sys\\t".as_bytes()),
+            ]),
+            expect: "((max_c >= sys\\t) and (min_c < sys\\u))",
+        },
+        Test {
             name: "c not like 'sys\\%'",
             expr: Expression::create_binary_expression("not like", vec![
                 col("c"),
                 lit("sys\\%".as_bytes()),
             ]),
-            expect: "((min_c not like sys\\%) or (max_c not like sys\\%))",
+            expect: "((min_c != sys%) or (max_c != sys%))",
         },
         Test {
-            name: "c not like 'sys%'",
+            name: "c not like 'sys\\s'",
             expr: Expression::create_binary_expression("not like", vec![
                 col("c"),
-                lit("sys%".as_bytes()),
+                lit("sys\\s".as_bytes()),
+            ]),
+            expect: "((min_c != sys\\s) or (max_c != sys\\s))",
+        },
+        Test {
+            name: "c not like 'sys%%'",
+            expr: Expression::create_binary_expression("not like", vec![
+                col("c"),
+                lit("sys%%".as_bytes()),
+            ]),
+            expect: "((min_c < sys) or (max_c >= syt))",
+        },
+        Test {
+            name: "c not like 'sys%a'",
+            expr: Expression::create_binary_expression("not like", vec![
+                col("c"),
+                lit("sys%a".as_bytes()),
             ]),
             expect: "true",
+        },
+        Test {
+            name: "c not like 0xffffff%",
+            expr: Expression::create_binary_expression("not like", vec![
+                col("c"),
+                lit(vec![255u8, 255, 255, 37]),
+            ]),
+            expect: "(min_c < ffffff)",
         },
     ];
 
@@ -248,10 +288,16 @@ fn test_bound_for_like_pattern() -> Result<()> {
             right: vec![b'b'],
         },
         Test {
-            name: "contain \\",
+            name: "contain \\_",
             pattern: vec![b'a', b'\\', b'_', b'c'],
             left: vec![b'a', b'_', b'c'],
             right: vec![b'a', b'_', b'd'],
+        },
+        Test {
+            name: "contain \\",
+            pattern: vec![b'a', b'\\', b'b', b'c'],
+            left: vec![b'a', b'\\', b'b', b'c'],
+            right: vec![b'a', b'\\', b'b', b'd'],
         },
         Test {
             name: "left is empty",

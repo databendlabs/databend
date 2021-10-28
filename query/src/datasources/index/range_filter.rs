@@ -352,8 +352,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                     ..
                 } = &self.args[1]
                 {
-                    // e.g. col like 'a%'
-                    // rewrite: col >= 'a' and col < 'b'
+                    // e.g. col like 'a%' => max_col >= 'a' and min_col < 'b'
                     let left = left_bound_for_like_pattern(v);
                     if !left.is_empty() {
                         let right = right_bound_for_like_pattern(left.clone());
@@ -376,17 +375,34 @@ impl<'a> VerifiableExprBuilder<'a> {
                     ..
                 } = &self.args[1]
                 {
-                    if !contains_like_pattern(v) {
-                        let max_expr = self.max_column_expr()?;
-                        let min_expr = self.min_column_expr()?;
-                        return Ok(Expression::create_binary_expression("not like", vec![
-                            min_expr,
-                            self.args[1].clone(),
-                        ])
-                        .or(Expression::create_binary_expression("not like", vec![
-                            max_expr,
-                            self.args[1].clone(),
-                        ])));
+                    // Only support such as 'abc' or 'ab%'.
+                    match check_pattern_type(v) {
+                        // e.g. col not like 'abc' => min_col != 'abc' or max_col != 'abc'
+                        PatternType::OrdinalStr => {
+                            let const_arg = left_bound_for_like_pattern(v);
+                            let max_expr = self.max_column_expr()?;
+                            let min_expr = self.min_column_expr()?;
+                            return Ok(min_expr
+                                .not_eq(lit(const_arg.clone()))
+                                .or(max_expr.not_eq(lit(const_arg))));
+                        }
+                        // e.g. col not like 'ab%' => min_col < 'ab' or max_col >= 'ac'
+                        PatternType::EndOfPercent => {
+                            let left = left_bound_for_like_pattern(v);
+                            if !left.is_empty() {
+                                let right = right_bound_for_like_pattern(left.clone());
+                                let min_expr = self.min_column_expr()?;
+                                if right.is_empty() {
+                                    return Ok(min_expr.lt(lit(left)));
+                                } else {
+                                    let max_expr = self.max_column_expr()?;
+                                    return Ok(min_expr
+                                        .lt(lit(left))
+                                        .or(max_expr.gt_eq(lit(right))));
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 }
                 Err(ErrorCode::UnknownException(
@@ -442,6 +458,10 @@ impl<'a> VerifiableExprBuilder<'a> {
     }
 }
 
+fn is_like_pattern_escape(c: u8) -> bool {
+    c == b'%' || c == b'_' || c == b'\\'
+}
+
 pub(crate) fn left_bound_for_like_pattern(pattern: &[u8]) -> Vec<u8> {
     let mut index = 0;
     let mut prefix: Vec<u8> = Vec::new();
@@ -450,17 +470,16 @@ pub(crate) fn left_bound_for_like_pattern(pattern: &[u8]) -> Vec<u8> {
         match pattern[index] {
             b'%' | b'_' => break,
             b'\\' => {
-                index += 1;
-                if index == len {
-                    break;
-                } else {
-                    prefix.push(pattern[index]);
+                if index < len - 1 {
+                    index += 1;
+                    if !is_like_pattern_escape(pattern[index]) {
+                        prefix.push(pattern[index - 1]);
+                    }
                 }
             }
-            other => {
-                prefix.push(other);
-            }
+            _ => {}
         }
+        prefix.push(pattern[index]);
         index += 1;
     }
     prefix
@@ -481,16 +500,41 @@ pub(crate) fn right_bound_for_like_pattern(prefix: Vec<u8>) -> Vec<u8> {
     res
 }
 
-// Check whether the pattern contains '_' or '%'.
-fn contains_like_pattern(pattern: &[u8]) -> bool {
+enum PatternType {
+    // e.g. "abc"
+    OrdinalStr,
+    // e.g. "a%c" or "ab_"
+    PatternStr,
+    // e.g. "ab%"
+    EndOfPercent,
+}
+
+// check not like pattern type.
+fn check_pattern_type(pattern: &[u8]) -> PatternType {
     let mut index = 0;
+    let mut percent = false;
     let len = pattern.len();
     while index < len {
         match pattern[index] {
-            b'%' | b'_' => return true,
-            b'\\' => index += 2,
-            _ => index += 1,
+            b'_' => return PatternType::PatternStr,
+            b'%' => percent = true,
+            b'\\' => {
+                if percent {
+                    return PatternType::PatternStr;
+                }
+                index += 1;
+            }
+            _ => {
+                if percent {
+                    return PatternType::PatternStr;
+                }
+            }
         }
+        index += 1;
     }
-    false
+    if percent {
+        PatternType::EndOfPercent
+    } else {
+        PatternType::OrdinalStr
+    }
 }
