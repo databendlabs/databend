@@ -77,7 +77,7 @@ impl Function for ComparisonFunction {
                             let date = FunctionFactory::instance()
                                 .get(func)
                                 .unwrap()
-                                .eval(&vec![c.clone()], _input_rows)
+                                .eval(&[c.clone()], _input_rows)
                                 .unwrap();
                             if !date.to_values().unwrap()[0].is_null() {
                                 return DataColumnWithField::new(date, c.field().clone());
@@ -117,5 +117,5 @@ fn need_parse_date(columns: &DataColumnsWithField) -> bool {
         DataType::String => str = true,
         _ => {}
     });
-    return str && num;
+    str && num
 }
