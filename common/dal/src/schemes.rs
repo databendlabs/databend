@@ -17,6 +17,7 @@ use std::str::FromStr;
 
 use common_exception::ErrorCode;
 
+use self::StorageScheme::ASBlob;
 use self::StorageScheme::LocalFs;
 use self::StorageScheme::S3;
 
@@ -24,6 +25,7 @@ use self::StorageScheme::S3;
 pub enum StorageScheme {
     LocalFs,
     S3,
+    ASBlob,
 }
 
 impl FromStr for StorageScheme {
@@ -33,6 +35,7 @@ impl FromStr for StorageScheme {
         match s.as_str() {
             "S3" => Ok(S3),
             "LOCAL" | "DISK" => Ok(LocalFs),
+            "ASBLOB" => Ok(ASBlob),
             _ => Err(ErrorCode::UnknownStorageSchemeName(format!(
                 "unknown storage scheme [{}], supported schemes are S3 | Disk",
                 s
