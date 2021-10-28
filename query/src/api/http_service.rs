@@ -138,6 +138,7 @@ impl HttpService {
                 get(super::http::debug::pprof::debug_pprof_handler),
             )
             .layer(AddExtensionLayer::new(self.sessions.clone()))
+            .layer(AddExtensionLayer::new(self.sessions.get_conf().clone()))
             .boxed()
     }
 
