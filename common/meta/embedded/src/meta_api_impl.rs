@@ -235,7 +235,9 @@ impl MetaApi for MetaEmbedded {
         _option_key: String,
         _option_value: String,
     ) -> Result<UpsertTableOptionReply> {
-        todo!()
+        Err(ErrorCode::UnImplement(
+            "not implemented in MetaEmbedded yet",
+        ))
     }
 
     fn name(&self) -> String {
