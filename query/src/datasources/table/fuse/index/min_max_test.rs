@@ -93,7 +93,7 @@ async fn test_min_max_index() -> Result<()> {
 
     let snapshot_loc = table
         .get_table_info()
-        .options
+        .options()
         .get(TBL_OPT_KEY_SNAPSHOT_LOC)
         .unwrap();
     let snapshot = read_obj(da.clone(), snapshot_loc.clone()).await?;
@@ -103,7 +103,7 @@ async fn test_min_max_index() -> Result<()> {
     let push_downs = None;
     let blocks = range_filter(
         &snapshot,
-        table.get_table_info().schema.clone(),
+        table.get_table_info().schema(),
         push_downs,
         meta_reader.clone(),
     )?;
@@ -118,7 +118,7 @@ async fn test_min_max_index() -> Result<()> {
 
     let blocks = range_filter(
         &snapshot,
-        table.get_table_info().schema.clone(),
+        table.get_table_info().schema(),
         Some(extra),
         meta_reader.clone(),
     )?;
@@ -131,7 +131,7 @@ async fn test_min_max_index() -> Result<()> {
 
     let blocks = range_filter(
         &snapshot,
-        table.get_table_info().schema.clone(),
+        table.get_table_info().schema(),
         Some(extra),
         meta_reader,
     )?;

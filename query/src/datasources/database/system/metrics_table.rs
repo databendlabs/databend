@@ -26,6 +26,7 @@ use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_metrics::MetricValue;
 use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
@@ -51,8 +52,11 @@ impl MetricsTable {
             desc: "'system'.'metrics'".to_string(),
             name: "metrics".to_string(),
             table_id,
-            schema,
-            engine: "SystemMetrics".to_string(),
+            meta: TableMeta {
+                schema,
+                engine: "SystemMetrics".to_string(),
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -116,14 +120,14 @@ impl Table for MetricsTable {
             values.push(self.display_sample_value(&sample.value)?.into_bytes());
         }
 
-        let block = DataBlock::create_by_array(self.table_info.schema.clone(), vec![
+        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
             Series::new(metrics),
             Series::new(kinds),
             Series::new(labels),
             Series::new(values),
         ]);
         Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema.clone(),
+            self.table_info.schema(),
             None,
             vec![block],
         )))

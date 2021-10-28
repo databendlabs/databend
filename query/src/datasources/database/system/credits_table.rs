@@ -20,6 +20,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -42,8 +43,11 @@ impl CreditsTable {
             desc: "'system'.'credits'".to_string(),
             name: "credits".to_string(),
             table_id,
-            schema,
-            engine: "SystemCredits".to_string(),
+            meta: TableMeta {
+                schema,
+                engine: "SystemCredits".to_string(),
+                ..Default::default()
+            },
 
             ..Default::default()
         };
@@ -88,14 +92,14 @@ impl Table for CreditsTable {
             })
             .collect();
 
-        let block = DataBlock::create_by_array(self.table_info.schema.clone(), vec![
+        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
             Series::new(names),
             Series::new(versions),
             Series::new(licenses),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema.clone(),
+            self.table_info.schema(),
             None,
             vec![block],
         )))

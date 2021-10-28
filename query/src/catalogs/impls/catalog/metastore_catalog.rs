@@ -188,7 +188,7 @@ impl Catalog for MetaStoreCatalog {
     }
 
     fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        let engine = &table_info.engine;
+        let engine = table_info.engine();
         let factory = self
             .table_engine_registry
             .get_table_factory(engine)

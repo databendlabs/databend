@@ -26,6 +26,7 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_planners::Expression;
 use common_planners::Extras;
 use common_planners::Partitions;
@@ -81,13 +82,15 @@ impl NumbersTable {
             version: 0,
             desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: table_func_name.to_string(),
-            schema: DataSchemaRefExt::create(vec![DataField::new(
-                "number",
-                DataType::UInt64,
-                false,
-            )]),
-            engine: engine.to_string(),
-            options: Default::default(),
+            meta: TableMeta {
+                schema: DataSchemaRefExt::create(vec![DataField::new(
+                    "number",
+                    DataType::UInt64,
+                    false,
+                )]),
+                engine: engine.to_string(),
+                options: Default::default(),
+            },
         };
 
         Ok(Arc::new(NumbersTable { table_info, total }))

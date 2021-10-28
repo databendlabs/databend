@@ -44,7 +44,7 @@ impl ParquetTable {
         table_info: TableInfo,
         _data_ctx: Arc<dyn DataContext<u64>>,
     ) -> Result<Box<dyn Table>> {
-        let options = &table_info.options;
+        let options = table_info.options();
         let file = options.get("location").cloned();
         return match file {
             Some(file) => {

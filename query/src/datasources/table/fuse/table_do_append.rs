@@ -52,9 +52,12 @@ impl FuseTable {
         let da = io_ctx.get_data_accessor()?;
 
         // 2. Append blocks to storage
-        let segment_info =
-            BlockAppender::append_blocks(da.clone(), block_stream, self.table_info.schema.as_ref())
-                .await?;
+        let segment_info = BlockAppender::append_blocks(
+            da.clone(),
+            block_stream,
+            self.table_info.schema().as_ref(),
+        )
+        .await?;
 
         // 3. save segment info
         let seg_loc = util::gen_segment_info_location();
@@ -67,7 +70,7 @@ impl FuseTable {
         // TODO backoff retry this block
         {
             let new_snapshot = merge_snapshot(
-                self.table_info.schema.as_ref(),
+                self.table_info.schema().as_ref(),
                 prev_snapshot,
                 (segment_info, seg_loc),
             )?;

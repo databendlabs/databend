@@ -20,6 +20,7 @@ use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
@@ -213,9 +214,11 @@ impl MetaApiTestSuite {
                     version: 0,
                     desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
-                    schema: schema.clone(),
-                    engine: "JSON".to_owned(),
-                    options: options.clone(),
+                    meta: TableMeta {
+                        schema: schema.clone(),
+                        engine: "JSON".to_owned(),
+                        options: options.clone(),
+                    },
                 };
                 assert_eq!(want, got.as_ref().clone(), "get created table");
             }
@@ -232,9 +235,11 @@ impl MetaApiTestSuite {
                     version: 0,
                     desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
-                    schema: schema.clone(),
-                    engine: "JSON".to_owned(),
-                    options: options.clone(),
+                    meta: TableMeta {
+                        schema: schema.clone(),
+                        engine: "JSON".to_owned(),
+                        options: options.clone(),
+                    },
                 };
                 assert_eq!(want, got.as_ref().clone(), "get created table");
             }
@@ -260,9 +265,11 @@ impl MetaApiTestSuite {
                     version: 0,
                     desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
-                    schema: schema.clone(),
-                    engine: "JSON".to_owned(),
-                    options: options.clone(),
+                    meta: TableMeta {
+                        schema: schema.clone(),
+                        engine: "JSON".to_owned(),
+                        options: options.clone(),
+                    },
                 };
                 assert_eq!(want, got.as_ref().clone(), "get old table");
             }

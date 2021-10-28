@@ -38,7 +38,7 @@ impl FuseTable {
             .expect("DatabendQueryContext should not be None");
 
         let default_proj = || {
-            (0..self.table_info.schema.fields().len())
+            (0..self.table_info.schema().fields().len())
                 .into_iter()
                 .collect::<Vec<usize>>()
         };
@@ -64,7 +64,7 @@ impl FuseTable {
             .flatten()
         };
         let da = io_ctx.get_data_accessor()?;
-        let arrow_schema = self.table_info.schema.to_arrow();
+        let arrow_schema = self.table_info.schema().to_arrow();
 
         let stream = futures::stream::iter(iter);
         let stream = stream.then(move |part| {

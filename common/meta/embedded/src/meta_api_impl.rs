@@ -27,6 +27,7 @@ use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
@@ -117,10 +118,12 @@ impl MetaApi for MetaEmbedded {
             table_id: 0,
             version: 0,
             desc: format!("'{}'.'{}'", db_name, table_name),
-            schema: plan.schema.clone(),
-            engine: plan.engine.clone(),
             name: table_name.to_string(),
-            options: plan.options.clone(),
+            meta: TableMeta {
+                schema: plan.schema.clone(),
+                engine: plan.engine.clone(),
+                options: plan.options.clone(),
+            },
         };
 
         let cr = Cmd::CreateTable {
