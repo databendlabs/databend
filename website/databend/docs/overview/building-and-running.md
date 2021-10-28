@@ -82,34 +82,36 @@ This document describes how to build and run [DatabendQuery](https://github.com/
     !!! note
         numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
 
-```
-$ curl --location --request POST 'localhost:8001/v1/statement/' \
---header 'Content-Type: text/plain' \
---data-raw 'SELECT avg(number) FROM numbers(1000000000)'
+    ```
+    $ curl --location --request POST 'localhost:8001/v1/statement/' \
+    --header 'Content-Type: text/plain' \
+    --data-raw 'SELECT avg(number) FROM numbers(1000000000)'
+    ```
 
-{
-    "id": "93114794-a532-4706-84c9-61a137398fb8",
-    "nextUri": null,
-    "data": [
-        [
-            499999999.5
-        ]
-    ],
-    "columns": {
-        "fields": [
-            {
-                "name": "avg(number)",
-                "data_type": "Float64",
-                "nullable": false
-            }
+    ```
+    {
+        "id": "93114794-a532-4706-84c9-61a137398fb8",
+        "nextUri": null,
+        "data": [
+            [
+                499999999.5
+            ]
         ],
-        "metadata": {}
-    },
-    "error": null,
-    "stats": {
-        "read_rows": 1000000000,
-        "read_bytes": 8000000000,
-        "total_rows_to_read": 0
+        "columns": {
+            "fields": [
+                {
+                    "name": "avg(number)",
+                    "data_type": "Float64",
+                    "nullable": false
+                }
+            ],
+            "metadata": {}
+        },
+        "error": null,
+        "stats": {
+            "read_rows": 1000000000,
+            "read_bytes": 8000000000,
+            "total_rows_to_read": 0
+        }
     }
-}
-```
+    ```
