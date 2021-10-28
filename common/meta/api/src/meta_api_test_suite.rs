@@ -274,6 +274,26 @@ impl MetaApiTestSuite {
                 assert_eq!(want, got.as_ref().clone(), "get old table");
             }
 
+            tracing::info!("--- update table options with key1=val1");
+            {
+                let table = mt.get_table("db1", "tb2").await.unwrap();
+                let got = mt
+                    .upsert_table_option(
+                        table.table_id,
+                        table.version,
+                        "key1".into(),
+                        "val1".into(),
+                    )
+                    .await;
+                if let Err(ref err) = got {
+                    // TODO: remove this check after upsert_table_option is implemented for MetaEmbedded
+                    assert_eq!(err.code(), ErrorCode::UnImplementCode());
+                } else {
+                    let table = mt.get_table("db1", "tb2").await.unwrap();
+                    assert_eq!(table.options().get("key1"), Some(&"val1".into()));
+                }
+            }
+
             tracing::info!("--- drop table with if_exists = false");
             {
                 let plan = DropTablePlan {
