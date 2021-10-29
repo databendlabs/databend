@@ -80,7 +80,10 @@ pub trait Command: DynClone + Send + Sync {
             }
         }
 
-        writer.write_err("unknown command");
+        // show help on not founding subcommand
+        self.clap()
+            .print_help()
+            .map_err(|err| CliError::Unknown(format!("unexpected err: {:?}", err)))?;
         Ok(())
     }
 }

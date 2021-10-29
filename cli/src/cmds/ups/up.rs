@@ -474,8 +474,6 @@ impl UpCommand {
     fn local_exec_precheck(&self, _args: &ArgMatches) -> Result<()> {
         Ok(())
     }
-
-
 }
 
 #[async_trait]
