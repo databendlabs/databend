@@ -27,13 +27,13 @@ use crate::error::CliError;
 use crate::error::Result;
 
 #[derive(Clone)]
-pub struct DeleteCommand {
+pub struct StopCommand {
     conf: Config,
 }
 
-impl DeleteCommand {
+impl StopCommand {
     pub fn create(conf: Config) -> Self {
-        DeleteCommand { conf }
+        StopCommand { conf }
     }
     pub fn generate() -> App<'static> {
         App::new("delete")
@@ -109,8 +109,7 @@ impl DeleteCommand {
         match self.local_exec_precheck().await {
             Ok(_) => {
                 let mut status = Status::read(self.conf.clone())?;
-                if let Err(e) =
-                    DeleteCommand::stop_current_local_services(&mut status, writer).await
+                if let Err(e) = StopCommand::stop_current_local_services(&mut status, writer).await
                 {
                     writer.write_err(format!("{:?}", e).as_str());
                 };

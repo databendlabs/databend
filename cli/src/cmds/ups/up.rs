@@ -24,7 +24,7 @@ use clap::ArgMatches;
 use serde_json::json;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
-use crate::cmds::clusters::delete::DeleteCommand;
+use crate::cmds::clusters::stop::StopCommand;
 use crate::cmds::command::Command;
 use crate::cmds::packages::fetch::download_and_unpack;
 use crate::cmds::packages::fetch::get_rust_architecture;
@@ -475,8 +475,7 @@ impl UpCommand {
                             writer.write_err(&*format!("{:?}", e));
                             let mut status = Status::read(self.conf.clone())?;
                             if let Err(e) =
-                                DeleteCommand::stop_current_local_services(&mut status, writer)
-                                    .await
+                                StopCommand::stop_current_local_services(&mut status, writer).await
                             {
                                 writer.write_err(&*format!("{:?}", e));
                             }
@@ -503,11 +502,11 @@ impl UpCommand {
 #[async_trait]
 impl Command for UpCommand {
     fn name(&self) -> &str {
-        "query"
+        "up"
     }
 
     fn about(&self) -> &str {
-        "Query on databend cluster"
+        "Bootstrap a single cluster with dashboard"
     }
 
     fn is(&self, s: &str) -> bool {
@@ -515,11 +514,7 @@ impl Command for UpCommand {
     }
 
     async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
-        match self
-            .clap
-            .clone()
-            .try_get_matches_from(vec!["query", args.as_str()])
-        {
+        match self.clap.clone().try_get_matches_from(args.split(' ')) {
             Ok(matches) => {
                 return self.exec_match(writer, Some(matches.borrow())).await;
             }
