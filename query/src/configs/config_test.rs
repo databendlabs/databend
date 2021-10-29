@@ -81,6 +81,11 @@ region = \"\"
 access_key_id = \"\"
 secret_access_key = \"\"
 bucket = \"\"
+
+[storage.asb]
+account = \"\"
+master_key = \"\"
+container = \"\"
 ";
 
     let tom_actual = toml::to_string(&actual).unwrap();

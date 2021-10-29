@@ -31,10 +31,16 @@ const S3_STORAGE_ACCESS_KEY_ID: &str = "S3_STORAGE_ACCESS_KEY_ID";
 const S3_STORAGE_SECRET_ACCESS_KEY: &str = "S3_STORAGE_SECRET_ACCESS_KEY";
 const S3_STORAGE_BUCKET: &str = "S3_STORAGE_BUCKET";
 
+// Azure Storage Blob env.
+const AZURE_STORAGE_ACCOUNT: &str = "AZURE_STORAGE_ACCOUNT";
+const AZURE_BLOB_MASTER_KEY: &str = "AZURE_BLOB_MASTER_KEY";
+const AZURE_BLOB_CONTAINER: &str = "AZURE_BLOB_CONTAINER";
+
 #[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub enum StorageType {
     Disk,
     S3,
+    ASBlob,
 }
 
 // Implement the trait
@@ -45,6 +51,7 @@ impl FromStr for StorageType {
         match s {
             "disk" => Ok(StorageType::Disk),
             "s3" => Ok(StorageType::S3),
+            "asblob" => Ok(StorageType::ASBlob),
             _ => Err("no match for storage type"),
         }
     }
@@ -105,6 +112,39 @@ impl fmt::Debug for S3StorageConfig {
     }
 }
 
+#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+pub struct ASBlobConfig {
+    #[structopt(long, env = AZURE_STORAGE_ACCOUNT, default_value = "", help = "Account for Azure storage")]
+    #[serde(default)]
+    pub account: String,
+
+    #[structopt(long, env = AZURE_BLOB_MASTER_KEY, default_value = "", help = "Master key for Azure storage")]
+    #[serde(default)]
+    pub master_key: String,
+
+    #[structopt(long, env = AZURE_BLOB_CONTAINER, default_value = "", help = "Container for Azure storage")]
+    #[serde(default)]
+    pub container: String,
+}
+
+impl ASBlobConfig {
+    pub fn default() -> Self {
+        ASBlobConfig {
+            account: "".to_string(),
+            master_key: "".to_string(),
+            container: "".to_string(),
+        }
+    }
+}
+
+impl fmt::Debug for ASBlobConfig {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{{")?;
+        write!(f, "Azure.storage.container: \"{}\", ", self.container)?;
+        write!(f, "}}")
+    }
+}
+
 /// Storage config group.
 /// serde(default) make the toml de to default working.
 #[derive(
@@ -122,6 +162,10 @@ pub struct StorageConfig {
     // S3 storage backend config.
     #[structopt(flatten)]
     pub s3: S3StorageConfig,
+
+    // azure storage blob config.
+    #[structopt(flatten)]
+    pub asb: ASBlobConfig,
 }
 
 impl StorageConfig {
@@ -130,6 +174,7 @@ impl StorageConfig {
             storage_type: "disk".to_string(),
             disk: DiskStorageConfig::default(),
             s3: S3StorageConfig::default(),
+            asb: ASBlobConfig::default(),
         }
     }
 
@@ -162,5 +207,14 @@ impl StorageConfig {
             S3_STORAGE_SECRET_ACCESS_KEY
         );
         env_helper!(mut_config.storage, s3, bucket, String, S3_STORAGE_BUCKET);
+
+        // Azure Storage Blob.
+        env_helper!(
+            mut_config.storage,
+            asb,
+            account,
+            String,
+            AZURE_BLOB_MASTER_KEY
+        );
     }
 }
