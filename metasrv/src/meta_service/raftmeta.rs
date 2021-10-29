@@ -54,7 +54,6 @@ use common_meta_sled_store::get_sled_db;
 use common_meta_types::Cmd;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::LogEntry;
-use common_meta_types::MatchSeq;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::SeqV;
@@ -1032,39 +1031,6 @@ impl MetaNode {
 
         let sm = self.sto.state_machine.read().await;
         sm.get_table_by_id(tid)
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn upsert_table_opt(
-        &self,
-        table_id: u64,
-        table_version: u64,
-        opt_key: String,
-        opt_value: String,
-    ) -> common_exception::Result<()> {
-        // non-consensus modification, tobe fixed latter
-        let sm = self.sto.state_machine.write().await;
-        let seq_table = sm.tables().get(&table_id)?;
-        if let Some(tbl) = seq_table {
-            let seq = tbl.seq;
-            let mut table_meta = tbl.data;
-            if seq != table_version {
-                Err(ErrorCode::TableVersionMissMatch(format!(
-                    "targeting version {}, current version {}",
-                    table_version, seq,
-                )))
-            } else {
-                table_meta.options.insert(opt_key, opt_value);
-                sm.upsert_table(table_id, table_meta, &MatchSeq::Exact(seq))
-                    .await?;
-                Ok(())
-            }
-        } else {
-            Err(ErrorCode::UnknownTable(format!(
-                "unknown table of id {}",
-                table_id
-            )))
-        }
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
