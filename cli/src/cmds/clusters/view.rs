@@ -157,10 +157,15 @@ impl ViewCommand {
             Cell::new("Tls"),
             Cell::new("Config"),
         ]);
+        let dash_config = status.get_local_dashboard_config();
         let meta_config = status.get_local_meta_config();
         let query_config = status.get_local_query_configs();
-        let mut fs_vec = Vec::with_capacity(query_config.len() + 1);
-        let mut handles = Vec::with_capacity(query_config.len() + 1);
+        let mut fs_vec = Vec::with_capacity(query_config.len() + 2);
+        let mut handles = Vec::with_capacity(query_config.len() + 2);
+        for (fs, dash_config) in dash_config.iter() {
+            fs_vec.push(fs);
+            handles.push(dash_config.verify(retry, duration));
+        }
         for (fs, meta_config) in meta_config.iter() {
             fs_vec.push(fs);
             handles.push(meta_config.verify(retry, duration));
