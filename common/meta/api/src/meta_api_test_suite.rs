@@ -198,9 +198,11 @@ impl MetaApiTestSuite {
                 if_not_exists: false,
                 db: db_name.to_string(),
                 table: tbl_name.to_string(),
-                schema: schema.clone(),
-                options: options.clone(),
-                engine: "JSON".to_string(),
+                table_meta: TableMeta {
+                    schema: schema.clone(),
+                    engine: "JSON".to_string(),
+                    options: options.clone(),
+                },
             };
 
             {
@@ -371,9 +373,11 @@ impl MetaApiTestSuite {
                 if_not_exists: false,
                 db: db_name.to_string(),
                 table: "tb1".to_string(),
-                schema: schema.clone(),
-                options: options.clone(),
-                engine: "JSON".to_string(),
+                table_meta: TableMeta {
+                    schema: schema.clone(),
+                    engine: "JSON".to_string(),
+                    options: options.clone(),
+                },
             };
 
             {

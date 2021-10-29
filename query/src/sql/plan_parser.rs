@@ -21,6 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_infallible::Mutex;
+use common_meta_types::TableMeta;
 use common_planners::expand_aggregate_arg_exprs;
 use common_planners::expand_wildcard;
 use common_planners::expr_as_column_expr;
@@ -321,9 +322,11 @@ impl PlanParser {
             if_not_exists: create.if_not_exists,
             db,
             table,
-            schema,
-            engine: create.engine.clone(),
-            options,
+            table_meta: TableMeta {
+                schema,
+                engine: create.engine.clone(),
+                options,
+            },
         }))
     }
 
