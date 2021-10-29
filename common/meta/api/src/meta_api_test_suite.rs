@@ -279,8 +279,8 @@ impl MetaApiTestSuite {
                 let table = mt.get_table("db1", "tb2").await.unwrap();
                 let got = mt
                     .upsert_table_option(
-                        table.table_id,
-                        table.version,
+                        table.ident.table_id,
+                        table.ident.version,
                         "key1".into(),
                         "val1".into(),
                     )
