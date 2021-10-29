@@ -24,6 +24,7 @@ use crate::servers::clickhouse::interactive_worker_base::InteractiveWorkerBase;
 use crate::servers::clickhouse::writers::to_clickhouse_err;
 use crate::servers::clickhouse::writers::QueryWriter;
 use crate::sessions::SessionRef;
+use crate::users::CertifiedInfo;
 
 pub struct InteractiveWorker {
     session: SessionRef,
@@ -97,16 +98,27 @@ impl ClickHouseSession for InteractiveWorker {
     }
 
     fn authenticate(&self, user: &str, password: &[u8], client_addr: &str) -> bool {
-        let user_mgr = self.session.get_user_manager();
-        if let Ok(res) = user_mgr.auth_user(user, password, client_addr) {
-            return res;
-        }
-        log::error!(
-            "clickhouse authenticate failed, client_addr: {} user: {}",
-            client_addr,
-            user
-        );
-        false
+        let info = CertifiedInfo::create(user, password, client_addr);
+
+        let user_manager = self.session.get_user_manager();
+        // TODO: push async up to clickhouse server lib
+        futures::executor::block_on(async move {
+            match user_manager.auth_user(info).await {
+                Ok(res) => res,
+                Err(failure) => {
+                    log::error!(
+                        "ClickHouse handler authenticate failed, \
+                        user: {}, \
+                        client_address: {}, \
+                        cause: {:?}",
+                        user,
+                        client_addr,
+                        failure
+                    );
+                    false
+                }
+            }
+        })
     }
 
     // TODO: remove it

@@ -182,6 +182,7 @@ build_exceptions! {
     UnexpectedError(54),
     DateTimeParseError(55),
     BadPredicateRows(56),
+    SHA1CheckFailed(57),
 
     // uncategorized
     UnexpectedResponseType(600),

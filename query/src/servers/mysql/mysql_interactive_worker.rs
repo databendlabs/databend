@@ -37,6 +37,7 @@ use crate::servers::mysql::writers::DFQueryResultWriter;
 use crate::sessions::DatabendQueryContextRef;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
+use crate::users::CertifiedInfo;
 
 struct InteractiveWorkerBase<W: std::io::Write> {
     session: SessionRef,
@@ -81,50 +82,27 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
         salt: &[u8],
         auth_data: &[u8],
     ) -> bool {
-        let user_mgr = self.session.get_user_manager();
-        let user_name = String::from_utf8_lossy(username);
-        if let Ok(user) = user_mgr.get_user(user_name.as_ref()) {
-            let encode_password = match auth_plugin {
-                "mysql_native_password" => {
-                    if auth_data.is_empty() {
-                        vec![]
-                    } else {
-                        // SHA1( password ) XOR SHA1( "20-bytes random data from server" <concat> SHA1( SHA1( password ) ) )
-                        let mut m = sha1::Sha1::new();
-                        m.update(salt);
-                        m.update(&user.password);
+        let username = String::from_utf8_lossy(username);
+        let info = CertifiedInfo::create(&username, auth_data, &self.client_addr);
 
-                        let result = m.digest().bytes();
-                        if auth_data.len() != result.len() {
-                            log::error!(
-                                "mysql authenticate failed, client_addr: {} user: {}, error: SHA1 check failed",
-                                self.client_addr,
-                                String::from_utf8_lossy(username)
-                            );
-                            return false;
-                        }
-                        let mut s = Vec::with_capacity(result.len());
-                        for i in 0..result.len() {
-                            s.push(auth_data[i] ^ result[i]);
-                        }
-                        s
-                    }
+        let authenticate = self.base.authenticate(auth_plugin, salt, info);
+        futures::executor::block_on(async move {
+            match authenticate.await {
+                Ok(res) => res,
+                Err(failure) => {
+                    log::error!(
+                        "MySQL handler authenticate failed, \
+                        user_name: {}, \
+                        client_address: {}, \
+                        failure_cause: {}",
+                        username,
+                        self.client_addr,
+                        failure
+                    );
+                    false
                 }
-                _ => auth_data.to_vec(),
-            };
-
-            if let Ok(res) =
-                user_mgr.auth_user(user_name.as_ref(), encode_password, &self.client_addr)
-            {
-                return res;
             }
-        }
-        log::error!(
-            "mysql authenticate failed, client_addr: {} user: {}, error: user_mgr auth failed",
-            self.client_addr,
-            String::from_utf8_lossy(username)
-        );
-        false
+        })
     }
 
     fn on_prepare(&mut self, query: &str, writer: StatementMetaWriter<W>) -> Result<()> {
@@ -220,6 +198,55 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
 }
 
 impl<W: std::io::Write> InteractiveWorkerBase<W> {
+    async fn authenticate(
+        &self,
+        auth_plugin: &str,
+        salt: &[u8],
+        info: CertifiedInfo,
+    ) -> Result<bool> {
+        let user_name = &info.user_name;
+        let address = &info.user_client_address;
+
+        let user_manager = self.session.get_user_manager();
+        let user_info = user_manager.get_user(user_name).await?;
+
+        let input = &info.user_password;
+        let saved = &user_info.password;
+        let encode_password = Self::encoding_password(auth_plugin, salt, input, saved)?;
+
+        user_manager
+            .auth_user(CertifiedInfo::create(user_name, encode_password, address))
+            .await
+    }
+
+    fn encoding_password(
+        auth_plugin: &str,
+        salt: &[u8],
+        input: &[u8],
+        user_password: &[u8],
+    ) -> Result<Vec<u8>> {
+        match auth_plugin {
+            "mysql_native_password" if input.is_empty() => Ok(vec![]),
+            "mysql_native_password" => {
+                // SHA1( password ) XOR SHA1( "20-bytes random data from server" <concat> SHA1( SHA1( password ) ) )
+                let mut m = sha1::Sha1::new();
+                m.update(salt);
+                m.update(user_password);
+
+                let result = m.digest().bytes();
+                if input.len() != result.len() {
+                    return Err(ErrorCode::SHA1CheckFailed("SHA1 check failed"));
+                }
+                let mut s = Vec::with_capacity(result.len());
+                for i in 0..result.len() {
+                    s.push(input[i] ^ result[i]);
+                }
+                Ok(s)
+            }
+            _ => Ok(input.to_vec()),
+        }
+    }
+
     fn do_prepare(&mut self, _: &str, writer: StatementMetaWriter<'_, W>) -> Result<()> {
         writer.error(
             ErrorKind::ER_UNKNOWN_ERROR,

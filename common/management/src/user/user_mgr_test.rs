@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_base::tokio;
 use common_exception::ErrorCode;
 use common_meta_api::KVApi;
 use common_meta_types::GetKVActionReply;
@@ -68,8 +69,8 @@ mod add {
 
     use super::*;
 
-    #[test]
-    fn test_add_user() -> common_exception::Result<()> {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_add_user() -> common_exception::Result<()> {
         let test_user_name = "test_user";
         let test_password = "test_password";
         let auth_type = AuthType::Sha256;
@@ -106,7 +107,7 @@ mod add {
             let res = user_mgr.add_user(user_info);
 
             assert_eq!(
-                res.unwrap_err().code(),
+                res.await.unwrap_err().code(),
                 ErrorCode::UnknownException("").code()
             );
         }
@@ -142,7 +143,7 @@ mod add {
             let res = user_mgr.add_user(user_info);
 
             assert_eq!(
-                res.unwrap_err().code(),
+                res.await.unwrap_err().code(),
                 ErrorCode::UserAlreadyExists("").code()
             );
         }
@@ -176,7 +177,7 @@ mod add {
             let res = user_mgr.add_user(user_info);
 
             assert_eq!(
-                res.unwrap_err().code(),
+                res.await.unwrap_err().code(),
                 ErrorCode::UnknownException("").code()
             );
         }
@@ -188,8 +189,8 @@ mod get {
 
     use super::*;
 
-    #[test]
-    fn test_get_user_seq_match() -> common_exception::Result<()> {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_get_user_seq_match() -> common_exception::Result<()> {
         let test_user_name = "test";
         let test_key = format!("__fd_users/tenant1/{}", test_user_name);
 
@@ -213,13 +214,13 @@ mod get {
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
         let res = user_mgr.get_user(test_user_name.to_string(), Some(1));
-        assert!(res.is_ok());
+        assert!(res.await.is_ok());
 
         Ok(())
     }
 
-    #[test]
-    fn test_get_user_do_not_care_seq() -> common_exception::Result<()> {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_get_user_do_not_care_seq() -> common_exception::Result<()> {
         let test_user_name = "test";
         let test_key = format!("__fd_users/tenant1/{}", test_user_name);
 
@@ -243,12 +244,12 @@ mod get {
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
         let res = user_mgr.get_user(test_user_name.to_string(), None);
-        assert!(res.is_ok());
+        assert!(res.await.is_ok());
         Ok(())
     }
 
-    #[test]
-    fn test_get_user_not_exist() -> common_exception::Result<()> {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_get_user_not_exist() -> common_exception::Result<()> {
         let test_user_name = "test";
         let test_key = format!("__fd_users/tenant1/{}", test_user_name);
 
@@ -260,14 +261,14 @@ mod get {
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
-        let res = user_mgr.get_user(test_user_name.to_string(), None);
+        let res = user_mgr.get_user(test_user_name.to_string(), None).await;
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
         Ok(())
     }
 
-    #[test]
-    fn test_get_user_not_exist_seq_mismatch() -> common_exception::Result<()> {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_get_user_not_exist_seq_mismatch() -> common_exception::Result<()> {
         let test_user_name = "test";
         let test_key = format!("__fd_users/tenant1/{}", test_user_name);
 
@@ -283,14 +284,14 @@ mod get {
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
-        let res = user_mgr.get_user(test_user_name.to_string(), Some(2));
+        let res = user_mgr.get_user(test_user_name.to_string(), Some(2)).await;
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
         Ok(())
     }
 
-    #[test]
-    fn test_get_user_invalid_user_info_encoding() -> common_exception::Result<()> {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_get_user_invalid_user_info_encoding() -> common_exception::Result<()> {
         let test_user_name = "test";
         let test_key = format!("__fd_users/tenant1/{}", test_user_name);
 
@@ -308,7 +309,7 @@ mod get {
         let user_mgr = UserMgr::new(kv, "tenant1");
         let res = user_mgr.get_user(test_user_name.to_string(), None);
         assert_eq!(
-            res.unwrap_err().code(),
+            res.await.unwrap_err().code(),
             ErrorCode::IllegalUserInfoFormat("").code()
         );
 
@@ -342,8 +343,8 @@ mod get_users {
         Ok((res, user_infos))
     }
 
-    #[test]
-    fn test_get_users_normal() -> common_exception::Result<()> {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_get_users_normal() -> common_exception::Result<()> {
         let (res, user_infos) = prepare()?;
         let mut kv = MockKV::new();
         {
@@ -356,14 +357,14 @@ mod get_users {
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
-        let res = user_mgr.get_users()?;
-        assert_eq!(res, user_infos);
+        let res = user_mgr.get_users();
+        assert_eq!(res.await?, user_infos);
 
         Ok(())
     }
 
-    #[test]
-    fn test_get_all_users_invalid_user_info_encoding() -> common_exception::Result<()> {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_get_all_users_invalid_user_info_encoding() -> common_exception::Result<()> {
         let (mut res, _user_infos) = prepare()?;
         res.insert(
             8,
@@ -386,7 +387,7 @@ mod get_users {
         let user_mgr = UserMgr::new(kv, "tenant1");
         let res = user_mgr.get_users();
         assert_eq!(
-            res.unwrap_err().code(),
+            res.await.unwrap_err().code(),
             ErrorCode::IllegalUserInfoFormat("").code()
         );
 
@@ -398,8 +399,8 @@ mod drop {
 
     use super::*;
 
-    #[test]
-    fn test_drop_user_normal_case() -> common_exception::Result<()> {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_drop_user_normal_case() -> common_exception::Result<()> {
         let mut kv = MockKV::new();
         let test_key = "__fd_users/tenant1/test";
         kv.expect_upsert_kv()
@@ -419,13 +420,13 @@ mod drop {
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
         let res = user_mgr.drop_user("test".to_string(), None);
-        assert!(res.is_ok());
+        assert!(res.await.is_ok());
 
         Ok(())
     }
 
-    #[test]
-    fn test_drop_user_unknown() -> common_exception::Result<()> {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_drop_user_unknown() -> common_exception::Result<()> {
         let mut kv = MockKV::new();
         let test_key = "__fd_users/tenant1/test";
         kv.expect_upsert_kv()
@@ -445,7 +446,10 @@ mod drop {
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
         let res = user_mgr.drop_user("test".to_string(), None);
-        assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
+        assert_eq!(
+            res.await.unwrap_err().code(),
+            ErrorCode::UnknownUser("").code()
+        );
         Ok(())
     }
 }
@@ -454,8 +458,8 @@ mod update {
 
     use super::*;
 
-    #[test]
-    fn test_update_user_normal_partial_update() -> common_exception::Result<()> {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_update_user_normal_partial_update() -> common_exception::Result<()> {
         let test_user_name = "name";
         let test_key = format!("__fd_users/tenant1/{}", test_user_name);
         let test_seq = None;
@@ -519,12 +523,12 @@ mod update {
             test_seq,
         );
 
-        assert!(res.is_ok());
+        assert!(res.await.is_ok());
         Ok(())
     }
 
-    #[test]
-    fn test_update_user_normal_full_update() -> common_exception::Result<()> {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_update_user_normal_full_update() -> common_exception::Result<()> {
         let test_user_name = "name";
         let test_key = format!("__fd_users/tenant1/{}", test_user_name);
         let test_seq = None;
@@ -567,12 +571,12 @@ mod update {
             Some(new_auth_type),
             test_seq,
         );
-        assert!(res.is_ok());
+        assert!(res.await.is_ok());
         Ok(())
     }
 
-    #[test]
-    fn test_update_user_none_update() -> common_exception::Result<()> {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_update_user_none_update() -> common_exception::Result<()> {
         // mock kv expects nothing
         let test_name = "name";
         let kv = MockKV::new();
@@ -582,12 +586,12 @@ mod update {
 
         let new_password: Option<Vec<u8>> = None;
         let res = user_mgr.update_user(test_name.to_string(), new_password, None, None);
-        assert!(res.is_ok());
+        assert!(res.await.is_ok());
         Ok(())
     }
 
-    #[test]
-    fn test_update_user_partial_unknown() -> common_exception::Result<()> {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_update_user_partial_unknown() -> common_exception::Result<()> {
         let test_user_name = "name";
         let test_key = format!("__fd_users/tenant1/{}", test_user_name);
         let test_seq = None;
@@ -609,12 +613,15 @@ mod update {
             None,
             test_seq,
         );
-        assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
+        assert_eq!(
+            res.await.unwrap_err().code(),
+            ErrorCode::UnknownUser("").code()
+        );
         Ok(())
     }
 
-    #[test]
-    fn test_update_user_full_unknown() -> common_exception::Result<()> {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_update_user_full_unknown() -> common_exception::Result<()> {
         let test_user_name = "name";
         let test_key = format!("__fd_users/tenant1/{}", test_user_name);
         let test_seq = None;
@@ -647,7 +654,10 @@ mod update {
             Some(AuthType::Sha256),
             test_seq,
         );
-        assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
+        assert_eq!(
+            res.await.unwrap_err().code(),
+            ErrorCode::UnknownUser("").code()
+        );
         Ok(())
     }
 }
