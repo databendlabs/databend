@@ -25,7 +25,9 @@ use common_meta_types::CreateDatabaseReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
@@ -144,6 +146,10 @@ impl Catalog for MetaStoreCatalog {
             acc.push(tbl);
             Ok(acc)
         })
+    }
+
+    fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
+        self.meta.get_table_by_id(table_id)
     }
 
     fn upsert_table_option(

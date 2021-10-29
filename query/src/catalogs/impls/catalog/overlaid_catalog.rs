@@ -20,7 +20,9 @@ use common_exception::ErrorCode;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
@@ -114,6 +116,15 @@ impl Catalog for OverlaidCatalog {
                 }
             }
         }
+    }
+
+    fn get_table_meta_by_id(
+        &self,
+        table_id: MetaId,
+    ) -> common_exception::Result<(TableIdent, Arc<TableMeta>)> {
+        self.read_only
+            .get_table_meta_by_id(table_id)
+            .or_else(|_e| self.bottom.get_table_meta_by_id(table_id))
     }
 
     fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
