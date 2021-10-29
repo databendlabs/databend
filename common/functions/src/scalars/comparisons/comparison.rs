@@ -14,12 +14,15 @@
 
 use std::fmt;
 
+use common_datavalues::chrono::NaiveDate;
+use common_datavalues::chrono::NaiveDateTime;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
 use common_datavalues::DataValueComparisonOperator;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionFactory;
+use crate::scalars::CastFunction;
 use crate::scalars::ComparisonEqFunction;
 use crate::scalars::ComparisonGtEqFunction;
 use crate::scalars::ComparisonGtFunction;
@@ -67,9 +70,25 @@ impl Function for ComparisonFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        columns[0]
-            .column()
-            .compare(self.op.clone(), columns[1].column())
+        if need_parse_date(columns) {
+            let new_columns = columns
+                .iter()
+                .map(|c| match c.data_type() {
+                    DataType::String => match parse_date_type(c) {
+                        None => c.clone(),
+                        Some(data_type) => cast_column(c, data_type, _input_rows),
+                    },
+                    _ => c.clone(),
+                })
+                .collect::<Vec<_>>();
+            new_columns[0]
+                .column()
+                .compare(self.op.clone(), new_columns[1].column())
+        } else {
+            columns[0]
+                .column()
+                .compare(self.op.clone(), columns[1].column())
+        }
     }
 
     fn num_arguments(&self) -> usize {
@@ -80,5 +99,41 @@ impl Function for ComparisonFunction {
 impl fmt::Display for ComparisonFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.op)
+    }
+}
+
+fn need_parse_date(columns: &DataColumnsWithField) -> bool {
+    let mut str = false;
+    let mut num = false;
+    columns.iter().for_each(|c| match c.column().data_type() {
+        DataType::UInt32 | DataType::UInt16 => num = true,
+        DataType::String => str = true,
+        _ => {}
+    });
+    str && num
+}
+
+fn cast_column(
+    column: &DataColumnWithField,
+    data_type: DataType,
+    _input_rows: usize,
+) -> DataColumnWithField {
+    let new_col = CastFunction::create("cast".to_string(), data_type.clone())
+        .unwrap()
+        .eval(&[column.clone()], _input_rows)
+        .unwrap();
+    let new_field = DataField::new(column.field().name(), data_type, false);
+    DataColumnWithField::new(new_col, new_field)
+}
+
+fn parse_date_type(c: &DataColumnWithField) -> Option<DataType> {
+    let val = c.column().to_values().unwrap();
+    let date = NaiveDate::parse_from_str(val[0].to_string().as_str(), "%Y-%m-%d").is_ok();
+    let date_time =
+        NaiveDateTime::parse_from_str(val[0].to_string().as_str(), "%Y-%m-%d %H:%M:%S").is_ok();
+    match (date, date_time) {
+        (true, false) => Some(DataType::Date16),
+        (false, true) => Some(DataType::DateTime32(None)),
+        _ => None,
     }
 }

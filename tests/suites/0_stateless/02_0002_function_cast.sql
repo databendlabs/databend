@@ -19,3 +19,10 @@ SELECT  toDateTime('2021-03-05 01:01:01') + 1 = toDateTime('2021-03-05 01:01:02'
 SELECT  toDate('2021-03-05') + 1 = toDate('2021-03-06');
 SELECT  toString(toDate('2021-03-05') + 1) = '2021-03-06';
 SELECT toDateTime(toDate('2021-03-05')) = toDateTime('2021-03-05 00:00:00');
+
+SELECT '2021-03-05' = toDate('2021-03-05');
+SELECT '2021-03-05' > toDate('2021-03-05');
+SELECT '2021-03-04' < toDate('2021-03-05');
+SELECT '2021-03-05 01:01:01' = toDateTime('2021-03-05 01:01:01');
+SELECT '2021-03-05 01:01:01' > toDateTime('2021-03-05 01:01:01');
+SELECT '2021-03-05 01:01:00' < toDateTime('2021-03-05 01:01:01');
