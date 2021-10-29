@@ -35,6 +35,7 @@ use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::LogEntry;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::UpsertTableOptionReply;
 use log::info;
@@ -147,19 +148,14 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
 
         info!("create table: {:}: {:?}", &db_name, &table_name);
 
-        let table = TableInfo {
-            ident: Default::default(),
-            desc: format!("'{}'.'{}'", db_name, table_name),
-            name: table_name.to_string(),
-            meta: plan.table_meta,
-        };
+        let table_meta = plan.table_meta;
 
         let cr = LogEntry {
             txid: None,
             cmd: CreateTable {
                 db_name: db_name.clone(),
                 table_name: table_name.clone(),
-                table_info: table,
+                table_meta,
             },
         };
 
@@ -170,7 +166,7 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
         let (prev, result) = match rst {
-            AppliedState::Table { prev, result } => (prev, result),
+            AppliedState::TableIdent { prev, result } => (prev, result),
             _ => return Err(ErrorCode::MetaNodeInternalError("not a Table result")),
         };
         if prev.is_some() && !if_not_exists {
@@ -181,7 +177,7 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
         }
 
         Ok(CreateTableReply {
-            table_id: result.unwrap().data.ident.table_id,
+            table_id: result.unwrap().table_id,
         })
     }
 }
@@ -243,10 +239,15 @@ impl RequestHandler<GetTableAction> for ActionHandler {
             .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table: '{:}'", table_name)))?;
 
         let table_id = seq_table_id.data.0;
-        let result = self.meta_node.get_table(&table_id).await?;
+        let result = self.meta_node.get_table_by_id(&table_id).await?;
 
         match result {
-            Some(table) => Ok(table.data),
+            Some(table) => Ok(TableInfo::new(
+                db_name,
+                table_name,
+                TableIdent::new(table_id, table.seq),
+                table.data,
+            )),
             None => Err(ErrorCode::UnknownTable(table_name)),
         }
     }
@@ -257,9 +258,14 @@ impl RequestHandler<GetTableExtReq> for ActionHandler {
     async fn handle(&self, act: GetTableExtReq) -> common_exception::Result<TableInfo> {
         // TODO duplicated code
         let table_id = act.tbl_id;
-        let result = self.meta_node.get_table(&table_id).await?;
+        let result = self.meta_node.get_table_by_id(&table_id).await?;
         match result {
-            Some(table) => Ok(table.data),
+            Some(table) => Ok(TableInfo::new(
+                "",
+                "",
+                TableIdent::new(table_id, table.seq),
+                table.data,
+            )),
             None => Err(ErrorCode::UnknownTable(format!(
                 "table of id {} not found",
                 act.tbl_id

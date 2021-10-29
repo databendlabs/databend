@@ -37,7 +37,9 @@ use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_tracing::tracing;
 use serde::Deserialize;
 use serde::Serialize;
@@ -354,7 +356,7 @@ impl StateMachine {
             Cmd::CreateTable {
                 ref db_name,
                 ref table_name,
-                table_info: ref table,
+                ref table_meta,
             } => {
                 let db_id = self.get_db_id(db_name).await?;
 
@@ -366,15 +368,16 @@ impl StateMachine {
                 let table_lookup_tree = self.table_lookup();
                 let seq_table_id = table_lookup_tree.get(&lookup_key)?;
 
-                if seq_table_id.is_some() {
-                    let prev = self.get_table(&seq_table_id.unwrap().data.0)?;
+                if let Some(u) = seq_table_id {
+                    let table_id = u.data.0;
+
+                    let prev = self.get_table_by_id(&table_id)?;
+                    let prev = prev.map(|x| TableIdent::new(table_id, x.seq));
                     return Ok((prev.clone(), prev).into());
                 }
 
-                let mut table = table.clone();
-                table.ident.table_id = self.incr_seq(SEQ_TABLE_ID).await?;
-
-                let table_id = table.ident.table_id;
+                let table_meta = table_meta.clone();
+                let table_id = self.incr_seq(SEQ_TABLE_ID).await?;
 
                 self.sub_tree_upsert(
                     table_lookup_tree,
@@ -390,18 +393,21 @@ impl StateMachine {
                         self.tables(),
                         &table_id,
                         &MatchSeq::Exact(0),
-                        Operation::Update(table),
+                        Operation::Update(table_meta),
                         None,
                     )
                     .await?;
+
+                tracing::debug!("applied create Table: {}={:?}", table_name, result);
 
                 if prev.is_none() && result.is_some() {
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
                 }
 
-                tracing::debug!("applied create Table: {}={:?}", table_name, result);
-
-                Ok((prev, result).into())
+                Ok(AppliedState::TableIdent {
+                    prev: prev.map(|x| TableIdent::new(table_id, x.seq)),
+                    result: result.map(|x| TableIdent::new(table_id, x.seq)),
+                })
             }
 
             Cmd::DropTable {
@@ -419,7 +425,7 @@ impl StateMachine {
                 let seq_table_id = table_lookup_tree.get(&lookup_key)?;
 
                 if seq_table_id.is_none() {
-                    return Ok((None::<SeqV<TableInfo>>, None).into());
+                    return Ok((None::<SeqV<TableMeta>>, None).into());
                 }
 
                 self.sub_tree_upsert(
@@ -625,18 +631,18 @@ impl StateMachine {
         Ok(res.map(|x| x.0))
     }
 
-    pub fn get_table(&self, tid: &u64) -> Result<Option<SeqV<TableInfo>>, ErrorCode> {
+    pub fn get_table_by_id(&self, tid: &u64) -> Result<Option<SeqV<TableMeta>>, ErrorCode> {
         let x = self.tables().get(tid)?;
         Ok(x)
     }
 
     pub async fn upsert_table(
         &self,
-        tbl: TableInfo,
+        table_id: u64,
+        tbl: TableMeta,
         seq: &MatchSeq,
-    ) -> Result<Option<SeqV<TableInfo>>, ErrorCode> {
+    ) -> Result<Option<SeqV<TableMeta>>, ErrorCode> {
         let tables = self.tables();
-        let table_id = tbl.ident.table_id;
         let (_prev, result) = self
             .sub_tree_upsert(tables, &table_id, seq, Operation::Update(tbl), None)
             .await?;
@@ -663,14 +669,26 @@ impl StateMachine {
         let tables_iter = self.table_lookup().range(..)?;
         for r in tables_iter {
             let (k, seq_table_id) = r?;
+
             let got_db_id = k.database_id;
+            let table_name = k.table_name;
+
             if got_db_id == db_id {
-                let table_id: TableLookupValue = seq_table_id.data;
-                let table = tables.get(&table_id.0)?.ok_or_else(|| {
+                let table_id = seq_table_id.data.0;
+
+                let seq_table_meta = tables.get(&table_id)?.ok_or_else(|| {
                     ErrorCode::IllegalMetaState(format!(" table of id {}, not found", table_id))
                 })?;
 
-                let table_info = table.data;
+                let version = seq_table_meta.seq;
+                let table_meta = seq_table_meta.data;
+
+                let table_info = TableInfo::new(
+                    db_name,
+                    &table_name,
+                    TableIdent::new(table_id, version),
+                    table_meta,
+                );
 
                 tbls.push(table_info);
             }

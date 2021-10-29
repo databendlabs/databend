@@ -16,7 +16,8 @@ use async_raft::AppDataResponse;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::Node;
 use common_meta_types::SeqV;
-use common_meta_types::TableInfo;
+use common_meta_types::TableIdent;
+use common_meta_types::TableMeta;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -47,8 +48,13 @@ pub enum AppliedState {
     },
 
     Table {
-        prev: Option<SeqV<TableInfo>>,
-        result: Option<SeqV<TableInfo>>,
+        prev: Option<SeqV<TableMeta>>,
+        result: Option<SeqV<TableMeta>>,
+    },
+
+    TableIdent {
+        prev: Option<TableIdent>,
+        result: Option<TableIdent>,
     },
 
     KV {
@@ -112,9 +118,18 @@ impl From<(Option<SeqDBInfo>, Option<SeqDBInfo>)> for AppliedState {
     }
 }
 
-impl From<(Option<SeqV<TableInfo>>, Option<SeqV<TableInfo>>)> for AppliedState {
-    fn from(v: (Option<SeqV<TableInfo>>, Option<SeqV<TableInfo>>)) -> Self {
+impl From<(Option<SeqV<TableMeta>>, Option<SeqV<TableMeta>>)> for AppliedState {
+    fn from(v: (Option<SeqV<TableMeta>>, Option<SeqV<TableMeta>>)) -> Self {
         AppliedState::Table {
+            prev: v.0,
+            result: v.1,
+        }
+    }
+}
+
+impl From<(Option<TableIdent>, Option<TableIdent>)> for AppliedState {
+    fn from(v: (Option<TableIdent>, Option<TableIdent>)) -> Self {
+        AppliedState::TableIdent {
             prev: v.0,
             result: v.1,
         }
@@ -176,6 +191,7 @@ impl AppliedState {
                 ref prev,
                 ref result,
             } => prev != result,
+            AppliedState::TableIdent { prev, result } => prev != result,
             AppliedState::KV {
                 ref prev,
                 ref result,
@@ -211,6 +227,7 @@ impl AppliedState {
             AppliedState::Node { ref prev, .. } => prev.is_none(),
             AppliedState::DataBase { ref prev, .. } => prev.is_none(),
             AppliedState::Table { ref prev, .. } => prev.is_none(),
+            AppliedState::TableIdent { ref prev, .. } => prev.is_none(),
             AppliedState::KV { ref prev, .. } => prev.is_none(),
             AppliedState::DataPartsCount { ref prev, .. } => prev.is_none(),
             AppliedState::None => true,
@@ -224,6 +241,7 @@ impl AppliedState {
             AppliedState::Node { ref result, .. } => result.is_none(),
             AppliedState::DataBase { ref result, .. } => result.is_none(),
             AppliedState::Table { ref result, .. } => result.is_none(),
+            AppliedState::TableIdent { ref result, .. } => result.is_none(),
             AppliedState::KV { ref result, .. } => result.is_none(),
             AppliedState::DataPartsCount { ref result, .. } => result.is_none(),
             AppliedState::None => true,

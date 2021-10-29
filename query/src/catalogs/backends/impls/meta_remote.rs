@@ -23,7 +23,9 @@ use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
@@ -114,7 +116,7 @@ impl MetaApi for MetaRemote {
             .await
     }
 
-    async fn get_table_by_id(&self, table_id: MetaId) -> Result<Arc<TableInfo>> {
+    async fn get_table_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
         self.query_backend(move |cli| async move { cli.get_table_by_id(table_id).await })
             .await
     }

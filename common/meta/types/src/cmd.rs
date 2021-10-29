@@ -23,7 +23,7 @@ use crate::KVMeta;
 use crate::MatchSeq;
 use crate::Node;
 use crate::Operation;
-use crate::TableInfo;
+use crate::TableMeta;
 
 /// A Cmd describes what a user want to do to raft state machine
 /// and is the essential part of a raft log.
@@ -46,7 +46,7 @@ pub enum Cmd {
     CreateTable {
         db_name: String,
         table_name: String,
-        table_info: TableInfo,
+        table_meta: TableMeta,
     },
 
     /// Drop a table if absent
@@ -88,9 +88,9 @@ impl fmt::Display for Cmd {
             Cmd::CreateTable {
                 db_name,
                 table_name,
-                table_info: table,
+                table_meta,
             } => {
-                write!(f, "create_table:{}-{}={}", db_name, table_name, table)
+                write!(f, "create_table:{}-{}={}", db_name, table_name, table_meta)
             }
             Cmd::DropTable {
                 db_name,

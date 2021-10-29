@@ -25,6 +25,7 @@ use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
@@ -290,7 +291,10 @@ impl MetaApiSync for MetaEmbeddedSync {
         Ok(res)
     }
 
-    fn get_table_by_id(&self, table_id: MetaId) -> common_exception::Result<Arc<TableInfo>> {
+    fn get_table_by_id(
+        &self,
+        table_id: MetaId,
+    ) -> common_exception::Result<(TableIdent, Arc<TableMeta>)> {
         let map = self.databases.read();
         for (_, tbl_idx) in map.values() {
             match tbl_idx.id2meta.get(&table_id) {
@@ -298,7 +302,7 @@ impl MetaApiSync for MetaEmbeddedSync {
                     continue;
                 }
                 Some(tbl) => {
-                    return Ok(tbl.clone());
+                    return Ok((tbl.ident.clone(), Arc::new(tbl.meta.clone())));
                 }
             }
         }
