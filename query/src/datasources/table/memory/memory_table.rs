@@ -91,7 +91,7 @@ impl Table for MemoryTable {
         &self.table_info
     }
 
-    fn read_partitions(
+    async fn read_partitions(
         &self,
         io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,

@@ -725,13 +725,13 @@ impl PlanParser {
                     PlanNode::Scan(ref dummy_scan_plan) => {
                         // TODO(xp): is it possible to use get_cluster_table_io_context() here?
                         let io_ctx = self.ctx.get_single_node_table_io_context()?;
-                        table
-                            .read_plan(
+                        futures::executor::block_on(async move {
+                            table.read_plan(
                                 Arc::new(io_ctx),
                                 Some(dummy_scan_plan.push_downs.clone()),
                                 Some(self.ctx.get_settings().get_max_threads()? as usize),
-                            )
-                            .map(PlanNode::ReadSource)
+                            ).await.map(PlanNode::ReadSource)
+                        })
                     }
                     _unreachable_plan => panic!("Logical error: cannot downcast to scan plan"),
                 })
@@ -811,14 +811,14 @@ impl PlanParser {
                         // TODO(xp): is it possible to use get_cluster_table_io_context() here?
 
                         let io_ctx = self.ctx.get_single_node_table_io_context()?;
-                        table
-                            .read_plan(
+                        futures::executor::block_on(async move {
+                            table.read_plan(
                                 Arc::new(io_ctx),
                                 Some(scan.push_downs.clone()),
                                 // TODO(xp): remove partitions, partitioning hint has been included in io_ctx.max_threads and io_ctx.query_nodes
                                 Some(partitions),
-                            )
-                            .map(PlanNode::ReadSource)
+                            ).await.map(PlanNode::ReadSource)
+                        })
                     }
                     _unreachable_plan => panic!("Logical error: Cannot downcast to scan plan"),
                 })

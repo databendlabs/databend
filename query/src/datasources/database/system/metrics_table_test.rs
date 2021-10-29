@@ -35,7 +35,7 @@ async fn test_metrics_table() -> Result<()> {
         io_ctx.clone(),
         None,
         Some(ctx.get_settings().get_max_threads()? as usize),
-    )?;
+    ).await?;
     metrics::counter!("test.test_metrics_table_count", 1);
     metrics::histogram!("test.test_metrics_table_histogram", 1.0);
 

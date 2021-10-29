@@ -50,7 +50,7 @@ async fn test_number_table() -> Result<()> {
         io_ctx.clone(),
         Some(scan.push_downs.clone()),
         Some(partitions),
-    )?;
+    ).await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
     let stream = table.read(io_ctx, &source_plan).await?;

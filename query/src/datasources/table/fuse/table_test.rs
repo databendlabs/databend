@@ -55,7 +55,7 @@ async fn test_fuse_table_simple_case() -> Result<()> {
     )?;
     assert_ne!(prev_version, table.get_table_info().ident.version);
 
-    let (stats, parts) = table.read_partitions(io_ctx.clone(), None, None)?;
+    let (stats, parts) = table.read_partitions(io_ctx.clone(), None, None).await?;
     assert_eq!(parts.len(), num_blocks as usize);
     assert_eq!(stats.read_rows, num_blocks as usize * 3);
 
@@ -142,7 +142,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
         io_ctx.clone(),
         None,
         Some(ctx.get_settings().get_max_threads()? as usize),
-    )?;
+    ).await?;
 
     // get the latest tbl
     let prev_version = table.get_table_info().ident.version;
@@ -154,7 +154,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     // ensure data ingested
     let (stats, parts) =
-        table.read_partitions(io_ctx.clone(), source_plan.push_downs.clone(), None)?;
+        table.read_partitions(io_ctx.clone(), source_plan.push_downs.clone(), None).await?;
     assert_eq!(parts.len(), 10);
     assert_eq!(stats.read_rows, 10 * 3);
 
@@ -170,7 +170,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
     )?;
     assert_ne!(prev_version, table.get_table_info().ident.version);
     let (stats, parts) =
-        table.read_partitions(io_ctx.clone(), source_plan.push_downs.clone(), None)?;
+        table.read_partitions(io_ctx.clone(), source_plan.push_downs.clone(), None).await?;
     // cleared?
     assert_eq!(parts.len(), 0);
     assert_eq!(stats.read_rows, 0);

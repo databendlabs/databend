@@ -58,7 +58,7 @@ pub trait Table: Sync + Send {
     fn get_table_info(&self) -> &TableInfo;
 
     // defaults to generate one single part and empty statistics
-    fn read_partitions(
+    async fn read_partitions(
         &self,
         _io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
@@ -107,8 +107,9 @@ pub trait Table: Sync + Send {
 
 pub type TablePtr = Arc<dyn Table>;
 
+#[async_trait::async_trait]
 pub trait ToReadDataSourcePlan {
-    fn read_plan(
+    async fn read_plan(
         &self,
         io_ctx: Arc<TableIOContext>,
         push_downs: Option<Extras>,
@@ -116,15 +117,11 @@ pub trait ToReadDataSourcePlan {
     ) -> Result<ReadDataSourcePlan>;
 }
 
+#[async_trait::async_trait]
 impl ToReadDataSourcePlan for dyn Table {
-    fn read_plan(
-        &self,
-        io_ctx: Arc<TableIOContext>,
-        push_downs: Option<Extras>,
-        partition_num_hint: Option<usize>,
-    ) -> Result<ReadDataSourcePlan> {
+    async fn read_plan(&self, io_ctx: Arc<TableIOContext>, push_downs: Option<Extras>, partition_num_hint: Option<usize>) -> Result<ReadDataSourcePlan> {
         let (statistics, parts) =
-            self.read_partitions(io_ctx, push_downs.clone(), partition_num_hint)?;
+            self.read_partitions(io_ctx, push_downs.clone(), partition_num_hint).await?;
         let table_info = self.get_table_info();
 
         let description = if statistics.read_rows > 0 {

@@ -81,7 +81,7 @@ async fn test_csv_table() -> Result<()> {
         io_ctx.clone(),
         Some(scan_plan.push_downs.clone()),
         Some(partitions),
-    )?;
+    ).await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
     let stream = table.read(io_ctx, &source_plan).await?;
@@ -160,7 +160,7 @@ async fn test_csv_table_parse_error() -> Result<()> {
         io_ctx.clone(),
         Some(scan_plan.push_downs.clone()),
         Some(partitions),
-    )?;
+    ).await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
     let stream = table.read(io_ctx, &source_plan).await?;

@@ -65,7 +65,7 @@ impl Table for OneTable {
         &self.table_info
     }
 
-    fn read_partitions(
+    async fn read_partitions(
         &self,
         _io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,

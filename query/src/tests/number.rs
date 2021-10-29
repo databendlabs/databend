@@ -52,11 +52,13 @@ impl NumberTestData {
         )))]);
         let table = catalog.get_table_function(self.table, tbl_arg)?;
         let io_ctx = self.ctx.get_single_node_table_io_context()?;
-        table.clone().as_table().read_plan(
-            Arc::new(io_ctx),
-            None,
-            Some(self.ctx.get_settings().get_max_threads()? as usize),
-        )
+        futures::executor::block_on(async move {
+            table.clone().as_table().read_plan(
+                Arc::new(io_ctx),
+                None,
+                Some(self.ctx.get_settings().get_max_threads()? as usize),
+            ).await
+        })
     }
 
     pub fn number_source_transform_for_test(&self, numbers: i64) -> Result<SourceTransform> {

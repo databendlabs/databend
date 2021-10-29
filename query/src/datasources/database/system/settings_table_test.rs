@@ -35,7 +35,7 @@ async fn test_settings_table() -> Result<()> {
         io_ctx.clone(),
         None,
         Some(ctx.get_settings().get_max_threads()? as usize),
-    )?;
+    ).await?;
 
     let stream = table.read(io_ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;

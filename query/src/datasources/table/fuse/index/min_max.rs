@@ -13,7 +13,6 @@
 //  limitations under the License.
 //
 
-use common_base::BlockingWait;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_planners::Extras;
@@ -101,13 +100,12 @@ impl MinMaxIndex {
     }
 }
 
-pub fn range_filter(
+pub async fn range_filter(
     table_snapshot: &TableSnapshot,
     schema: DataSchemaRef,
     push_down: Option<Extras>,
     meta_reader: MetaInfoReader,
 ) -> common_exception::Result<Vec<BlockMeta>> {
     let range_index = MinMaxIndex::new(table_snapshot, &meta_reader);
-    async move { range_index.apply(schema, push_down).await }
-        .wait_in(meta_reader.runtime(), None)?
+    range_index.apply(schema, push_down).await
 }

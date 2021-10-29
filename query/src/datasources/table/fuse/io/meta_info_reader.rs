@@ -38,11 +38,9 @@ impl MetaInfoReader {
     pub fn new(da: Arc<dyn DataAccessor>, ctx: Arc<Runtime>) -> Self {
         MetaInfoReader { da, ctx }
     }
+
     pub fn data_accessor(&self) -> Arc<dyn DataAccessor> {
         self.da.clone()
-    }
-    pub fn runtime(&self) -> &Runtime {
-        self.ctx.as_ref()
     }
 }
 
@@ -64,6 +62,7 @@ impl MetaInfoReader {
         }
         Ok(res)
     }
+
     #[allow(dead_code)]
     pub fn read_segment_info(&self, location: &str) -> Result<SegmentInfo> {
         read_obj(self.da.clone(), location.to_string()).wait_in(&self.ctx, None)?

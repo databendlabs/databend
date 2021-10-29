@@ -851,11 +851,13 @@ impl PlanScheduler {
 
         let io_ctx = Arc::new(io_ctx);
 
-        table.read_plan(
-            io_ctx.clone(),
-            Some(node.push_downs.clone()),
-            Some(io_ctx.get_max_threads() * io_ctx.get_query_node_ids().len()),
-        )
+        futures::executor::block_on(async move {
+            table.read_plan(
+                io_ctx.clone(),
+                Some(node.push_downs.clone()),
+                Some(io_ctx.get_max_threads() * io_ctx.get_query_node_ids().len()),
+            ).await
+        })
     }
 
     fn repartition(&mut self, cluster_source: &ReadDataSourcePlan) -> Vec<Partitions> {

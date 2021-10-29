@@ -117,7 +117,7 @@ impl Table for NumbersTable {
         )))])
     }
 
-    fn read_partitions(
+    async fn read_partitions(
         &self,
         io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,

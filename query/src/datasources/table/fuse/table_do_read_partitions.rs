@@ -13,7 +13,6 @@
 //  limitations under the License.
 //
 
-use common_base::BlockingWait;
 use common_context::IOContext;
 use common_context::TableIOContext;
 use common_dal::read_obj;
@@ -28,22 +27,17 @@ use crate::datasources::table::fuse::MetaInfoReader;
 
 impl FuseTable {
     #[inline]
-    pub fn do_read_partitions(
-        &self,
-        io_ctx: &TableIOContext,
-        push_downs: Option<Extras>,
-    ) -> Result<(Statistics, Partitions)> {
-        let location = self.snapshot_loc();
-        if let Some(loc) = location {
-            let da = io_ctx.get_data_accessor()?;
-            let snapshot = read_obj(da.clone(), loc).wait_in(&io_ctx.get_runtime(), None)??;
-            let meta_reader = MetaInfoReader::new(da, io_ctx.get_runtime());
-            let block_metas =
-                index::range_filter(&snapshot, self.table_info.schema(), push_downs, meta_reader)?;
-            let (statistics, parts) = self.to_partitions(&block_metas);
-            Ok((statistics, parts))
-        } else {
-            Ok((Statistics::default(), vec![]))
+    pub async fn do_read_partitions(&self, io_ctx: &TableIOContext, push_downs: Option<Extras>) -> Result<(Statistics, Partitions)> {
+        match self.snapshot_loc() {
+            None => Ok((Statistics::default(), vec![])),
+            Some(location) => {
+                let schema = self.table_info.schema();
+                let da = io_ctx.get_data_accessor()?;
+                let snapshot = read_obj(da.clone(), location).await?;
+                let meta_reader = MetaInfoReader::new(da, io_ctx.get_runtime());
+                let block_metas = index::range_filter(&snapshot, schema, push_downs, meta_reader).await?;
+                Ok(self.to_partitions(&block_metas))
+            }
         }
     }
 }

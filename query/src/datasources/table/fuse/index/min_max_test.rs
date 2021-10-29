@@ -109,7 +109,7 @@ async fn test_min_max_index() -> Result<()> {
         table.get_table_info().schema(),
         push_downs,
         meta_reader.clone(),
-    )?;
+    ).await?;
     let rows: u64 = blocks.iter().map(|b| b.row_count).sum();
     assert_eq!(rows, num * 3u64);
     assert_eq!(10, blocks.len());
@@ -124,7 +124,7 @@ async fn test_min_max_index() -> Result<()> {
         table.get_table_info().schema(),
         Some(extra),
         meta_reader.clone(),
-    )?;
+    ).await?;
     assert_eq!(0, blocks.len());
 
     // one block pruned
@@ -137,7 +137,7 @@ async fn test_min_max_index() -> Result<()> {
         table.get_table_info().schema(),
         Some(extra),
         meta_reader,
-    )?;
+    ).await?;
     assert_eq!(num - 1, blocks.len() as u64);
 
     Ok(())
