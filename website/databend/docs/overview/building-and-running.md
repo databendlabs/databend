@@ -12,25 +12,39 @@ This document describes how to build and run [DatabendQuery](https://github.com/
 === "Release binary"
 
     ```markdown
-    $ curl -fsS https://repo.databend.rs/databend/install-bendctl.sh | bash
+    curl -fsS https://repo.databend.rs/databend/install-bendctl.sh | bash
+    ```
+
+    ```markdown
     $ export PATH="${HOME}/.databend/bin:${PATH}"
+    ```
+
+    ```markdown
     $ bendctl cluster create
     ```
 
 === "Run with Docker(Recommended)"
 
     ```markdown
-    $ docker pull datafuselabs/databend
-    $ docker run --init --rm -p 3307:3307 datafuselabs/databend
+    docker pull datafuselabs/databend
+    ```
+
+    ```markdown
+    docker run --init --rm -p 3307:3307 datafuselabs/databend
     ```
 
 === "From source"
 
     ```markdown
-    $ git clone https://github.com/datafuselabs/databend.git
-    $ cd databend
-    $ make setup
-    $ make run
+    git clone https://github.com/datafuselabs/databend.git
+    ```
+
+    ```markdown
+    cd databend && make setup
+    ```
+
+    ```markdown
+    make run
     ```
 
 
@@ -42,7 +56,7 @@ This document describes how to build and run [DatabendQuery](https://github.com/
         numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
 
     ```
-    $ mysql -h127.0.0.1 -P3307
+    mysql -h127.0.0.1 -uroot -P3307
     ```
     ```markdown
     mysql> SELECT avg(number) FROM numbers(1000000000);
@@ -60,7 +74,7 @@ This document describes how to build and run [DatabendQuery](https://github.com/
         numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
 
     ```
-    $ clickhouse client --host 0.0.0.0 --port 9001
+    clickhouse client --host 0.0.0.0 --port 9001
     ```
 
     ```

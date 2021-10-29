@@ -13,11 +13,11 @@ and run SQL queries from command line.
 ## 1. Install
 
 ```markdown
-$ curl -fsS https://repo.databend.rs/databend/install-bendctl.sh | bash
+curl -fsS https://repo.databend.rs/databend/install-bendctl.sh | bash
 ```
 
 ```markdown
-$ export PATH="${HOME}/.databend/bin:${PATH}"
+export PATH="${HOME}/.databend/bin:${PATH}"
 ```
 
 ## 2. Setting up a cluster
