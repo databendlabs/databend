@@ -1047,14 +1047,14 @@ impl MetaNode {
         if let Some(tbl) = seq_table {
             let seq = tbl.seq;
             let mut tbl = tbl.data;
-            if tbl.version != table_version {
+            if tbl.ident.version != table_version {
                 Err(ErrorCode::TableVersionMissMatch(format!(
                     "targeting version {}, current version {}",
-                    table_version, tbl.version,
+                    table_version, tbl.ident.version,
                 )))
             } else {
                 tbl.meta.options.insert(opt_key, opt_value);
-                tbl.version += 1;
+                tbl.ident.version += 1;
                 sm.upsert_table(tbl, &MatchSeq::Exact(seq)).await?;
                 Ok(())
             }

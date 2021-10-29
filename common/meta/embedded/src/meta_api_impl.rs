@@ -115,8 +115,7 @@ impl MetaApi for MetaEmbedded {
         tracing::info!("create table: {:}: {:?}", &db_name, &table_name);
 
         let table = TableInfo {
-            table_id: 0,
-            version: 0,
+            ident: Default::default(),
             desc: format!("'{}'.'{}'", db_name, table_name),
             name: table_name.to_string(),
             meta: TableMeta {
@@ -150,7 +149,7 @@ impl MetaApi for MetaEmbedded {
             )))
         } else {
             Ok(CreateTableReply {
-                table_id: result.unwrap().data.table_id,
+                table_id: result.unwrap().data.ident.table_id,
             })
         }
     }

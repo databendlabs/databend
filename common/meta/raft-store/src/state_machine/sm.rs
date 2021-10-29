@@ -372,9 +372,9 @@ impl StateMachine {
                 }
 
                 let mut table = table.clone();
-                table.table_id = self.incr_seq(SEQ_TABLE_ID).await?;
+                table.ident.table_id = self.incr_seq(SEQ_TABLE_ID).await?;
 
-                let table_id = table.table_id;
+                let table_id = table.ident.table_id;
 
                 self.sub_tree_upsert(
                     table_lookup_tree,
@@ -636,7 +636,7 @@ impl StateMachine {
         seq: &MatchSeq,
     ) -> Result<Option<SeqV<TableInfo>>, ErrorCode> {
         let tables = self.tables();
-        let table_id = tbl.table_id;
+        let table_id = tbl.ident.table_id;
         let (_prev, result) = self
             .sub_tree_upsert(tables, &table_id, seq, Operation::Update(tbl), None)
             .await?;

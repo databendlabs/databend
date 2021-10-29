@@ -19,6 +19,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_meta_types::CreateDatabaseReply;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_planners::CreateDatabasePlan;
@@ -210,8 +211,7 @@ impl MetaApiTestSuite {
                 let got = mt.get_table(db_name, tbl_name).await?;
 
                 let want = TableInfo {
-                    table_id: 1,
-                    version: 0,
+                    ident: TableIdent::new(1, 0),
                     desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: TableMeta {
@@ -231,8 +231,7 @@ impl MetaApiTestSuite {
 
                 let got = mt.get_table(db_name, tbl_name).await?;
                 let want = TableInfo {
-                    table_id: 1,
-                    version: 0,
+                    ident: TableIdent::new(1, 0),
                     desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: TableMeta {
@@ -261,8 +260,7 @@ impl MetaApiTestSuite {
 
                 let got = mt.get_table("db1", "tb2").await.unwrap();
                 let want = TableInfo {
-                    table_id: 1,
-                    version: 0,
+                    ident: TableIdent::new(1, 0),
                     desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
                     meta: TableMeta {
@@ -388,8 +386,8 @@ impl MetaApiTestSuite {
             tracing::info!("--- get_tables");
             {
                 let res = mt.get_tables(db_name).await?;
-                assert_eq!(1, res[0].table_id);
-                assert_eq!(2, res[1].table_id);
+                assert_eq!(1, res[0].ident.table_id);
+                assert_eq!(2, res[1].ident.table_id);
             }
         }
 

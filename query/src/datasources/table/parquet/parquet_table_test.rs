@@ -44,8 +44,7 @@ async fn test_parquet_table() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let table_info = TableInfo {
         desc: "'default'.'test_parquet_table'".to_string(),
-        table_id: 0,
-        version: 0,
+        ident: Default::default(),
         name: "test_parquet".to_string(),
 
         meta: TableMeta {

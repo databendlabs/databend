@@ -96,7 +96,7 @@ impl MetaApi for MetaCached {
 
         let mut cache = self.table_meta_cache.write().await;
         // TODO version
-        cache.put((reply.table_id, 0), reply.clone());
+        cache.put((reply.ident.table_id, 0), reply.clone());
         Ok(reply)
     }
 

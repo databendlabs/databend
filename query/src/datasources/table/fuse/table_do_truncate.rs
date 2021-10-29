@@ -56,7 +56,7 @@ impl FuseTable {
             // TODO backoff retry
             catalog.upsert_table_option(
                 table_id,
-                self.table_info.version,
+                self.table_info.ident.version,
                 TBL_OPT_KEY_SNAPSHOT_LOC.to_string(),
                 new_snapshot_loc,
             )?

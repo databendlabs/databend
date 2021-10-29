@@ -25,6 +25,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_metrics::MetricValue;
@@ -51,13 +52,12 @@ impl MetricsTable {
         let table_info = TableInfo {
             desc: "'system'.'metrics'".to_string(),
             name: "metrics".to_string(),
-            table_id,
+            ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
                 schema,
                 engine: "SystemMetrics".to_string(),
                 ..Default::default()
             },
-            ..Default::default()
         };
 
         MetricsTable { table_info }

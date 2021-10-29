@@ -41,8 +41,7 @@ async fn test_memorytable() -> Result<()> {
         TableInfo {
             desc: "'default'.'a'".into(),
             name: "a".into(),
-            table_id: 0,
-            version: 0,
+            ident: Default::default(),
             meta: TableMeta {
                 schema: schema.clone(),
                 engine: "Memory".to_string(),

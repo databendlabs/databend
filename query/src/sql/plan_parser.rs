@@ -706,7 +706,7 @@ impl PlanParser {
 
         self.ctx.get_table(db_name, table_name).and_then(|table| {
             let table_id = table.get_id();
-            let table_version = Some(table.get_table_info().version);
+            let table_version = Some(table.get_table_info().ident.version);
 
             let tbl_scan_info = TableScanInfo {
                 table_name,
@@ -780,13 +780,13 @@ impl PlanParser {
 
                     let table_func = self.ctx.get_table_function(&table_name, Some(table_args))?;
                     meta_id = table_func.get_id();
-                    meta_version = table_func.get_table_info().version;
+                    meta_version = table_func.get_table_info().ident.version;
                     table_name = table_func.name().to_string();
                     table = table_func.as_table();
                 } else {
                     table = self.ctx.get_table(&db_name, &table_name)?;
                     meta_id = table.get_id();
-                    meta_version = table.get_table_info().version;
+                    meta_version = table.get_table_info().ident.version;
                 }
 
                 let scan = {

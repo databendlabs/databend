@@ -20,6 +20,7 @@ use common_context::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_planners::ReadDataSourcePlan;
@@ -42,13 +43,12 @@ impl DatabasesTable {
         let table_info = TableInfo {
             desc: "'system'.'databases'".to_string(),
             name: "databases".to_string(),
-            table_id,
+            ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
                 schema,
                 engine: "SystemDatabases".to_string(),
                 ..Default::default()
             },
-            ..Default::default()
         };
 
         DatabasesTable { table_info }

@@ -21,6 +21,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::scalars::FunctionFactory;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_planners::ReadDataSourcePlan;
@@ -43,14 +44,13 @@ impl FunctionsTable {
         let table_info = TableInfo {
             desc: "'system'.'functions'".to_string(),
             name: "functions".to_string(),
-            table_id,
+            ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
                 schema,
                 engine: "SystemFunctions".to_string(),
 
                 ..Default::default()
             },
-            ..Default::default()
         };
         FunctionsTable { table_info }
     }

@@ -24,6 +24,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_planners::ReadDataSourcePlan;
@@ -53,14 +54,13 @@ impl ProcessesTable {
         let table_info = TableInfo {
             desc: "'system'.'processes'".to_string(),
             name: "processes".to_string(),
-            table_id,
+            ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
                 schema,
                 engine: "SystemProcesses".to_string(),
 
                 ..Default::default()
             },
-            ..Default::default()
         };
         ProcessesTable { table_info }
     }

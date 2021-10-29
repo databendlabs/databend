@@ -154,7 +154,7 @@ impl Catalog for SystemCatalog {
     }
 
     fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        let table_id = table_info.table_id;
+        let table_id = table_info.ident.table_id;
 
         let table =
             self.sys_db_meta.id_to_table.get(&table_id).ok_or_else(|| {

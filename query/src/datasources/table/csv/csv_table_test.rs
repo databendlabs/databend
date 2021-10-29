@@ -47,8 +47,7 @@ async fn test_csv_table() -> Result<()> {
         TableInfo {
             desc: "'default'.'test_csv'".into(),
             name: "test_csv".into(),
-            table_id: 0,
-            version: 0,
+            ident: Default::default(),
             meta: TableMeta {
                 schema: DataSchemaRefExt::create(vec![DataField::new(
                     "column1",
@@ -126,8 +125,7 @@ async fn test_csv_table_parse_error() -> Result<()> {
         TableInfo {
             desc: "'default'.'test_csv'".into(),
             name: "test_csv".into(),
-            table_id: 0,
-            version: 0,
+            ident: Default::default(),
             meta: TableMeta {
                 schema: DataSchemaRefExt::create(vec![
                     DataField::new("column1", DataType::UInt64, false),

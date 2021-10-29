@@ -64,7 +64,7 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                     let dummy_read_plan =
                         self.ctx.get_table(db_name, table_name).and_then(|table| {
                             let table_id = table.get_id();
-                            let table_version = Some(table.get_table_info().version);
+                            let table_version = Some(table.get_table_info().ident.version);
 
                             let tbl_scan_info = TableScanInfo {
                                 table_name,
