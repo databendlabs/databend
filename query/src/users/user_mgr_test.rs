@@ -33,25 +33,25 @@ async fn test_user_manager() -> Result<()> {
     // add.
     {
         let user_info = User::new(user, pwd, AuthType::PlainText);
-        user_mgr.add_user(user_info.into())?;
+        user_mgr.add_user(user_info.into()).await?;
     }
 
     // get all users.
     {
-        let users = user_mgr.get_users()?;
+        let users = user_mgr.get_users().await?;
         assert_eq!(pwd.as_bytes(), users[0].password);
     }
 
     // get.
     {
-        let user = user_mgr.get_user(user)?;
+        let user = user_mgr.get_user(user).await?;
         assert_eq!(pwd.as_bytes(), user.password);
     }
 
     // drop.
     {
-        user_mgr.drop_user(user)?;
-        let users = user_mgr.get_users()?;
+        user_mgr.drop_user(user).await?;
+        let users = user_mgr.get_users().await?;
         assert_eq!(0, users.len());
     }
 

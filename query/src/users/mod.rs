@@ -19,5 +19,6 @@ mod user;
 mod user_mgr;
 
 pub use user::User;
+pub use user_mgr::CertifiedInfo;
 pub use user_mgr::UserManager;
 pub use user_mgr::UserManagerRef;

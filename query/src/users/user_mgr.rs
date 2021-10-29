@@ -34,52 +34,48 @@ pub struct UserManager {
 
 impl UserManager {
     async fn create_kv_client(cfg: &Config) -> Result<Arc<dyn KVApi>> {
-        let store_api_provider = MetaClientProvider::new(cfg);
-        match store_api_provider.try_get_kv_client().await {
+        match MetaClientProvider::new(cfg).try_get_kv_client().await {
             Ok(client) => Ok(client),
             Err(cause) => Err(cause.add_message_back("(while create user api).")),
         }
     }
 
     pub async fn create_global(cfg: Config) -> Result<UserManagerRef> {
-        let client = UserManager::create_kv_client(&cfg).await?;
         let tenant = &cfg.query.tenant;
-        let user_manager = UserMgr::new(client, tenant);
+        let kv_client = UserManager::create_kv_client(&cfg).await?;
 
         Ok(Arc::new(UserManager {
-            api_provider: Arc::new(user_manager),
+            api_provider: Arc::new(UserMgr::new(kv_client, tenant)),
         }))
     }
 
     // Get one user from by tenant.
-    pub fn get_user(&self, user: &str) -> Result<UserInfo> {
+    pub async fn get_user(&self, user: &str) -> Result<UserInfo> {
         match user {
             // TODO(BohuTANG): Mock, need removed.
             "default" | "" | "root" => {
                 let user = User::new(user, "", AuthType::None);
                 Ok(user.into())
             }
-            _ => Ok(self.api_provider.get_user(user.to_string(), None)?.data),
+            _ => {
+                let get_user = self.api_provider.get_user(user.to_string(), None);
+                Ok(get_user.await?.data)
+            }
         }
     }
 
     // Auth the user and password for different Auth type.
-    pub fn auth_user(
-        &self,
-        user: &str,
-        password: impl AsRef<[u8]>,
-        _client_addr: &str,
-    ) -> Result<bool> {
-        let user = self.get_user(user)?;
+    pub async fn auth_user(&self, info: CertifiedInfo) -> Result<bool> {
+        let user = self.get_user(&info.user_name).await?;
 
         match user.auth_type {
             AuthType::None => Ok(true),
-            AuthType::PlainText => Ok(user.password == password.as_ref()),
+            AuthType::PlainText => Ok(user.password == info.user_password),
             // MySQL already did x = sha1(x)
             // so we just check double sha1(x)
             AuthType::DoubleSha1 => {
                 let mut m = sha1::Sha1::new();
-                m.update(password.as_ref());
+                m.update(&info.user_password);
 
                 let bs = m.digest().bytes();
                 let mut m = sha1::Sha1::new();
@@ -88,29 +84,60 @@ impl UserManager {
                 Ok(user.password == m.digest().bytes().to_vec())
             }
             AuthType::Sha256 => {
-                let result = sha2::Sha256::digest(password.as_ref());
+                let result = sha2::Sha256::digest(&info.user_password);
                 Ok(user.password == result.to_vec())
             }
         }
     }
 
     // Get the tenant all users list.
-    pub fn get_users(&self) -> Result<Vec<UserInfo>> {
+    pub async fn get_users(&self) -> Result<Vec<UserInfo>> {
+        let get_users = self.api_provider.get_users();
+
         let mut res = vec![];
-        let users = self.api_provider.get_users()?;
-        for user in users {
-            res.push(user.data);
+        match get_users.await {
+            Err(failure) => Err(failure.add_message_back("(while get users).")),
+            Ok(seq_users_info) => {
+                for seq_user_info in seq_users_info {
+                    res.push(seq_user_info.data);
+                }
+
+                Ok(res)
+            }
         }
-        Ok(res)
     }
 
     // Add a new user info.
-    pub fn add_user(&self, user_info: UserInfo) -> Result<u64> {
-        self.api_provider.add_user(user_info)
+    pub async fn add_user(&self, user_info: UserInfo) -> Result<u64> {
+        let add_user = self.api_provider.add_user(user_info);
+        match add_user.await {
+            Ok(res) => Ok(res),
+            Err(failure) => Err(failure.add_message_back("(while add user).")),
+        }
     }
 
     // Drop a user by name.
-    pub fn drop_user(&self, user: &str) -> Result<()> {
-        self.api_provider.drop_user(user.to_string(), None)
+    pub async fn drop_user(&self, user: &str) -> Result<()> {
+        let drop_user = self.api_provider.drop_user(user.to_string(), None);
+        match drop_user.await {
+            Ok(res) => Ok(res),
+            Err(failure) => Err(failure.add_message_back("(while drop user).")),
+        }
+    }
+}
+
+pub struct CertifiedInfo {
+    pub user_name: String,
+    pub user_password: Vec<u8>,
+    pub user_client_address: String,
+}
+
+impl CertifiedInfo {
+    pub fn create(user: &str, password: impl AsRef<[u8]>, address: &str) -> CertifiedInfo {
+        CertifiedInfo {
+            user_name: user.to_string(),
+            user_password: password.as_ref().to_vec(),
+            user_client_address: address.to_string(),
+        }
     }
 }
