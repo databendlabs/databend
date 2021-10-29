@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt;
 
 use async_raft::NodeId;
@@ -51,6 +52,26 @@ pub enum Cmd {
 
     /// Drop a table if absent
     DropTable { db_name: String, table_name: String },
+
+    /// Update, remove or insert table options.
+    ///
+    /// This Cmd requires a present table to operate on.
+    /// Otherwise an `UnknownTableId` is returned.
+    ///
+    /// With mismatched seq, it returns a unchanged state: (prev:TableMeta, prev:TableMeta)
+    /// Otherwise it returns the TableMeta before and after update.
+    UpsertTableOptions {
+        table_id: u64,
+
+        /// The exact version of a table to operate on.
+        seq: MatchSeq,
+
+        /// Add or remove options
+        ///
+        /// Some(String): add or update an option.
+        /// None: delete an option.
+        table_options: HashMap<String, Option<String>>,
+    },
 
     /// Update or insert a general purpose kv store
     UpsertKV {
@@ -108,6 +129,17 @@ impl fmt::Display for Cmd {
                     f,
                     "upsert_kv: {}({:?}) = {:?} ({:?})",
                     key, seq, value, value_meta
+                )
+            }
+            Cmd::UpsertTableOptions {
+                table_id,
+                seq,
+                table_options,
+            } => {
+                write!(
+                    f,
+                    "upsert-table-options: table-id:{}({:?}) = {:?}",
+                    table_id, seq, table_options
                 )
             }
         }
