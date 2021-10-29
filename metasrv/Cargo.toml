@@ -45,6 +45,7 @@ futures = "0.3"
 indexmap = "1.7.0"
 lazy_static = "1.4.0"
 log = "0.4"
+maplit = "1.0.2"
 metrics = "0.17.0"
 metrics-exporter-prometheus = "0.6.0"
 num = "0.4"
@@ -60,8 +61,8 @@ tempfile = "3.2.0"
 thiserror = "1.0.30"
 threadpool = "1.8.1"
 tokio-stream = "0.1"
-tracing-appender = "0.1.2"
 tonic = { version = "0.5.2", features = ["tls"]}
+tracing-appender = "0.1.2"
 
 sha2 = "0.9.8"
 uuid = { version = "0.8", features = ["serde", "v4"] }
@@ -74,7 +75,6 @@ common-meta-api = {path = "../common/meta/api" }
 pretty_assertions = "1.0"
 test-env-log = "0.2.7"
 flaky_test = "0.1"
-maplit = "1.0.2"
 tower = { version = "0.4", default-features = false, features = ["util", "buffer", "make"] }
 reqwest = { version = "0.11", features = ["json"] }
 

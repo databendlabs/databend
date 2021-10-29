@@ -24,6 +24,7 @@ use common_meta_types::Cmd;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
+use common_meta_types::MatchSeq;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
@@ -35,6 +36,7 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_tracing::tracing;
+use maplit::hashmap;
 
 use crate::MetaEmbedded;
 
@@ -230,14 +232,39 @@ impl MetaApi for MetaEmbedded {
 
     async fn upsert_table_option(
         &self,
-        _table_id: MetaId,
-        _table_version: MetaVersion,
-        _option_key: String,
-        _option_value: String,
+        table_id: MetaId,
+        table_version: MetaVersion,
+        option_key: String,
+        option_value: String,
     ) -> Result<UpsertTableOptionReply> {
-        Err(ErrorCode::UnImplement(
-            "not implemented in MetaEmbedded yet",
-        ))
+        let mut sm = self.inner.lock().await;
+
+        let cmd = Cmd::UpsertTableOptions {
+            table_id,
+            seq: MatchSeq::Exact(table_version),
+            table_options: hashmap! {
+                option_key => Some(option_value),
+            },
+        };
+
+        let res = sm.apply_cmd(&cmd).await?;
+        if !res.changed() {
+            let prev = match res {
+                AppliedState::Table { prev, .. } => prev,
+                _ => {
+                    panic!("expect AppliedState::Table")
+                }
+            };
+
+            let prev = prev.unwrap();
+
+            return Err(ErrorCode::TableVersionMissMatch(format!(
+                "targeting version {}, current version {}",
+                table_version, prev.seq,
+            )));
+        }
+
+        Ok(())
     }
 
     fn name(&self) -> String {

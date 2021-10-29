@@ -172,7 +172,7 @@ impl AppliedState {
     }
 
     /// Whether the state changed
-    pub fn changed(self) -> bool {
+    pub fn changed(&self) -> bool {
         match self {
             AppliedState::String {
                 ref prev,

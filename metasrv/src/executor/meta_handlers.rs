@@ -31,14 +31,17 @@ use common_meta_types::Cmd::CreateDatabase;
 use common_meta_types::Cmd::CreateTable;
 use common_meta_types::Cmd::DropDatabase;
 use common_meta_types::Cmd::DropTable;
+use common_meta_types::Cmd::UpsertTableOptions;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::LogEntry;
+use common_meta_types::MatchSeq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::UpsertTableOptionReply;
 use log::info;
+use maplit::hashmap;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
@@ -302,13 +305,39 @@ impl RequestHandler<UpsertTableOptionReq> for ActionHandler {
         &self,
         req: UpsertTableOptionReq,
     ) -> common_exception::Result<UpsertTableOptionReply> {
-        self.meta_node
-            .upsert_table_opt(
-                req.table_id,
-                req.table_version,
-                req.option_key,
-                req.option_value,
-            )
+        let cr = LogEntry {
+            txid: None,
+            cmd: UpsertTableOptions {
+                table_id: req.table_id,
+                seq: MatchSeq::Exact(req.table_version),
+                table_options: hashmap! {
+                    req.option_key => Some(req.option_value),
+                },
+            },
+        };
+
+        let res = self
+            .meta_node
+            .write(cr)
             .await
+            .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
+
+        if !res.changed() {
+            let prev = match res {
+                AppliedState::Table { prev, .. } => prev,
+                _ => {
+                    panic!("expect AppliedState::Table")
+                }
+            };
+
+            let prev = prev.unwrap();
+
+            return Err(ErrorCode::TableVersionMissMatch(format!(
+                "targeting version {}, current version {}",
+                req.table_version, prev.seq,
+            )));
+        }
+
+        Ok(())
     }
 }
