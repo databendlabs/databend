@@ -475,8 +475,7 @@ impl UpCommand {
                             writer.write_err(&*format!("{:?}", e));
                             let mut status = Status::read(self.conf.clone())?;
                             if let Err(e) =
-                                StopCommand::stop_current_local_services(&mut status, writer)
-                                    .await
+                                StopCommand::stop_current_local_services(&mut status, writer).await
                             {
                                 writer.write_err(&*format!("{:?}", e));
                             }

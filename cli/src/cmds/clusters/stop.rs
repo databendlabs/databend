@@ -109,8 +109,7 @@ impl StopCommand {
         match self.local_exec_precheck().await {
             Ok(_) => {
                 let mut status = Status::read(self.conf.clone())?;
-                if let Err(e) =
-                    StopCommand::stop_current_local_services(&mut status, writer).await
+                if let Err(e) = StopCommand::stop_current_local_services(&mut status, writer).await
                 {
                     writer.write_err(format!("{:?}", e).as_str());
                 };
