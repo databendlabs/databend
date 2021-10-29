@@ -103,38 +103,36 @@ pub trait LocalRuntime: Send + Sync {
         let pid = self.get_pid();
         match pid {
             Some(id) => {
-                match nix::sys::signal::kill(Pid::from_raw(id), Some(nix::sys::signal::SIGINT)) {
-                    Ok(_) => {
-                        for _ in 0..3 {
-                            if !self.is_clean() {
-                                if nix::sys::signal::kill(
-                                    Pid::from_raw(id),
-                                    Some(nix::sys::signal::SIGINT),
-                                )
-                                .is_ok()
-                                    && self.is_clean()
-                                {
-                                    return Ok(());
-                                }
-                                if nix::sys::signal::kill(
-                                    Pid::from_raw(id),
-                                    Some(nix::sys::signal::SIGTERM),
-                                )
-                                .is_ok()
-                                    && self.is_clean()
-                                {
-                                    return Ok(());
-                                }
-                                sleep(time::Duration::from_secs(1));
-                            } else {
-                                return Ok(());
-                            }
+                for _ in 0..10 {
+                    if !self.is_clean() {
+                        if nix::sys::signal::kill(Pid::from_raw(id), Some(nix::sys::signal::SIGINT))
+                            .is_ok()
+                            && self.is_clean()
+                        {
+                            return Ok(());
                         }
-                        return Err(CliError::Unknown(
-                            "timeout from killing process".to_string(),
-                        ));
+                        if nix::sys::signal::kill(
+                            Pid::from_raw(id),
+                            Some(nix::sys::signal::SIGTERM),
+                        )
+                        .is_ok()
+                            && self.is_clean()
+                        {
+                            return Ok(());
+                        }
+                        sleep(time::Duration::from_secs(1));
+                    } else {
+                        return Ok(());
                     }
-                    Err(e) => Err(CliError::from(e)),
+                }
+
+                if self.is_clean() {
+                    return Ok(());
+                } else {
+                    if nix::sys::signal::kill(Pid::from_raw(id), Some(nix::sys::signal::SIGKILL))
+                        .is_err()
+                    {}
+                    return Ok(());
                 }
             }
             None => Ok(()),
