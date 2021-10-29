@@ -27,13 +27,13 @@ use crate::error::CliError;
 use crate::error::Result;
 
 #[derive(Clone)]
-pub struct DeleteCommand {
+pub struct StopCommand {
     conf: Config,
 }
 
-impl DeleteCommand {
+impl StopCommand {
     pub fn create(conf: Config) -> Self {
-        DeleteCommand { conf }
+        StopCommand { conf }
     }
     pub fn generate() -> App<'static> {
         App::new("delete")
@@ -58,7 +58,7 @@ impl DeleteCommand {
         status: &mut Status,
         writer: &mut Writer,
     ) -> Result<()> {
-        writer.write_ok("⚠ start to clean up local services");
+        writer.write_ok("⚠️  start to clean up local services");
         for (fs, query) in status.get_local_query_configs() {
             if query.kill().await.is_err() {
                 if Status::delete_local_config(status, "query".to_string(), fs.clone()).is_err() {
@@ -73,7 +73,7 @@ impl DeleteCommand {
             if Status::delete_local_config(status, "query".to_string(), fs.clone()).is_err() {
                 writer.write_err(&*format!("cannot clean query config in {}", fs.clone()))
             }
-            writer.write_ok(format!("⚠️ stopped query service with config in {}", fs).as_str());
+            writer.write_ok(format!("⚠️  stopped query service with config in {}", fs).as_str());
         }
         if status.get_local_meta_config().is_some() {
             let (fs, meta) = status.get_local_meta_config().unwrap();
@@ -85,6 +85,21 @@ impl DeleteCommand {
             }
             Status::delete_local_config(status, "meta".to_string(), fs.clone())
                 .expect("cannot clean meta config");
+            writer.write_ok(format!("⚠️  stopped meta service with config in {}", fs).as_str());
+        }
+        if status.get_local_dashboard_config().is_some() {
+            let (fs, dash) = status.get_local_dashboard_config().unwrap();
+            if dash.kill().await.is_err() {
+                writer.write_err(&*format!(
+                    "cannot kill dashboard service with config in {}",
+                    fs
+                ));
+                if Status::delete_local_config(status, "meta".to_string(), fs.clone()).is_err() {
+                    writer.write_err(&*format!("cannot clean meta config in {}", fs))
+                }
+            }
+            Status::delete_local_config(status, "dashboard".to_string(), fs.clone())
+                .expect("cannot clean meta config");
             writer.write_ok(format!("⚠️ stopped meta service with config in {}", fs).as_str());
         }
         Ok(())
@@ -94,8 +109,7 @@ impl DeleteCommand {
         match self.local_exec_precheck().await {
             Ok(_) => {
                 let mut status = Status::read(self.conf.clone())?;
-                if let Err(e) =
-                    DeleteCommand::stop_current_local_services(&mut status, writer).await
+                if let Err(e) = StopCommand::stop_current_local_services(&mut status, writer).await
                 {
                     writer.write_err(format!("{:?}", e).as_str());
                 };

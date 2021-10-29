@@ -21,6 +21,7 @@ use common_context::TableDataContext;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_planners::*;
 use futures::TryStreamExt;
 
@@ -42,15 +43,15 @@ async fn test_parquet_table() -> Result<()> {
 
     let ctx = crate::tests::try_create_context()?;
     let table_info = TableInfo {
-        database_id: 0,
         desc: "'default'.'test_parquet_table'".to_string(),
-        table_id: 0,
-        version: 0,
+        ident: Default::default(),
         name: "test_parquet".to_string(),
 
-        schema: DataSchemaRefExt::create(vec![DataField::new("id", DataType::Int32, false)]),
-        engine: "test_parquet".into(),
-        options,
+        meta: TableMeta {
+            schema: DataSchemaRefExt::create(vec![DataField::new("id", DataType::Int32, false)]),
+            engine: "test_parquet".into(),
+            options,
+        },
     };
     let table = ParquetTable::try_create(table_info, Arc::new(TableDataContext::default()))?;
 

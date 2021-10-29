@@ -21,6 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_infallible::Mutex;
+use common_meta_types::TableMeta;
 use common_planners::expand_aggregate_arg_exprs;
 use common_planners::expand_wildcard;
 use common_planners::expr_as_column_expr;
@@ -167,6 +168,7 @@ impl PlanParser {
             DfStatement::ShowProcessList(_) => {
                 self.build_from_sql("SELECT * FROM system.processes")
             }
+            DfStatement::ShowMetrics(_) => self.build_from_sql("SELECT * FROM system.metrics"),
             DfStatement::KillQuery(v) => self.sql_kill_query_to_plan(v),
             DfStatement::KillConn(v) => self.sql_kill_connection_to_plan(v),
         }
@@ -320,9 +322,11 @@ impl PlanParser {
             if_not_exists: create.if_not_exists,
             db,
             table,
-            schema,
-            engine: create.engine.clone(),
-            options,
+            table_meta: TableMeta {
+                schema,
+                engine: create.engine.clone(),
+                options,
+            },
         }))
     }
 
@@ -705,7 +709,7 @@ impl PlanParser {
 
         self.ctx.get_table(db_name, table_name).and_then(|table| {
             let table_id = table.get_id();
-            let table_version = Some(table.get_table_info().version);
+            let table_version = Some(table.get_table_info().ident.version);
 
             let tbl_scan_info = TableScanInfo {
                 table_name,
@@ -779,13 +783,13 @@ impl PlanParser {
 
                     let table_func = self.ctx.get_table_function(&table_name, Some(table_args))?;
                     meta_id = table_func.get_id();
-                    meta_version = table_func.get_table_info().version;
+                    meta_version = table_func.get_table_info().ident.version;
                     table_name = table_func.name().to_string();
                     table = table_func.as_table();
                 } else {
                     table = self.ctx.get_table(&db_name, &table_name)?;
                     meta_id = table.get_id();
-                    meta_version = table.get_table_info().version;
+                    meta_version = table.get_table_info().ident.version;
                 }
 
                 let scan = {

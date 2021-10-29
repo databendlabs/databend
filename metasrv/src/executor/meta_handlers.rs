@@ -84,7 +84,7 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
 
         Ok(CreateDatabaseReply {
             // TODO(xp): return DatabaseInfo?
-            database_id: result.unwrap().1.value.database_id,
+            database_id: result.unwrap().data.database_id,
         })
     }
 }
@@ -96,7 +96,7 @@ impl RequestHandler<GetDatabaseAction> for ActionHandler {
         let db = self.meta_node.get_database(&db_name).await?;
 
         match db {
-            Some(db) => Ok(db.1.value),
+            Some(db) => Ok(db.data),
             None => Err(ErrorCode::UnknownDatabase(db_name)),
         }
     }
@@ -148,14 +148,10 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
         info!("create table: {:}: {:?}", &db_name, &table_name);
 
         let table = TableInfo {
-            table_id: 0,
-            version: 0,
+            ident: Default::default(),
             desc: format!("'{}'.'{}'", db_name, table_name),
-            database_id: 0, // this field is unused during the creation of table
-            schema: plan.schema.clone(),
-            engine: plan.engine.clone(),
             name: table_name.to_string(),
-            options: plan.options.clone(),
+            meta: plan.table_meta,
         };
 
         let cr = LogEntry {
@@ -185,7 +181,7 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
         }
 
         Ok(CreateTableReply {
-            table_id: result.unwrap().1.value.table_id,
+            table_id: result.unwrap().data.ident.table_id,
         })
     }
 }
@@ -237,7 +233,7 @@ impl RequestHandler<GetTableAction> for ActionHandler {
             ErrorCode::UnknownDatabase(format!("get table: database not found {:}", db_name))
         })?;
 
-        let db = db.1.value;
+        let db = db.data;
         let db_id = db.database_id;
 
         let seq_table_id = self
@@ -246,11 +242,11 @@ impl RequestHandler<GetTableAction> for ActionHandler {
             .await?
             .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table: '{:}'", table_name)))?;
 
-        let table_id = seq_table_id.1.value.0;
+        let table_id = seq_table_id.data.0;
         let result = self.meta_node.get_table(&table_id).await?;
 
         match result {
-            Some(table) => Ok(table.1.value),
+            Some(table) => Ok(table.data),
             None => Err(ErrorCode::UnknownTable(table_name)),
         }
     }
@@ -263,7 +259,7 @@ impl RequestHandler<GetTableExtReq> for ActionHandler {
         let table_id = act.tbl_id;
         let result = self.meta_node.get_table(&table_id).await?;
         match result {
-            Some(table) => Ok(table.1.value),
+            Some(table) => Ok(table.data),
             None => Err(ErrorCode::UnknownTable(format!(
                 "table of id {} not found",
                 act.tbl_id

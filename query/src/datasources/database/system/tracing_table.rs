@@ -22,7 +22,9 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_planners::ReadDataSourcePlan;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
@@ -53,10 +55,12 @@ impl TracingTable {
         let table_info = TableInfo {
             desc: "'system'.'tracing'".to_string(),
             name: "tracing".to_string(),
-            table_id,
-            schema,
-            engine: "SystemTracing".to_string(),
-            ..Default::default()
+            ident: TableIdent::new(table_id, 0),
+            meta: TableMeta {
+                schema,
+                engine: "SystemTracing".to_string(),
+                ..Default::default()
+            },
         };
 
         TracingTable { table_info }
@@ -104,7 +108,7 @@ impl Table for TracingTable {
         }
 
         Ok(Box::pin(TracingTableStream::try_create(
-            self.table_info.schema.clone(),
+            self.table_info.schema(),
             log_files,
             limit,
         )?))

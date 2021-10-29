@@ -15,7 +15,7 @@ pub mod cluster;
 pub mod create;
 #[cfg(test)]
 mod create_test;
-pub mod delete;
+pub mod stop;
 mod utils;
 pub mod view;
 

@@ -35,7 +35,7 @@ impl HttpHandler {
     pub fn create(session_manager: SessionManagerRef) -> Box<dyn Server> {
         Box::new(HttpHandler {
             session_manager,
-            shutdown_handler: HttpShutdownHandler::create("HttpHandler".to_string()),
+            shutdown_handler: HttpShutdownHandler::create("http handler".to_string()),
         })
     }
     fn build_router(&self) -> Router<BoxRoute> {
@@ -56,8 +56,8 @@ impl HttpHandler {
 
 #[async_trait::async_trait]
 impl Server for HttpHandler {
-    async fn shutdown(&mut self) {
-        self.shutdown_handler.shutdown().await;
+    async fn shutdown(&mut self, graceful: bool) {
+        self.shutdown_handler.shutdown(graceful).await;
     }
 
     async fn start(&mut self, listening: SocketAddr) -> common_exception::Result<SocketAddr> {

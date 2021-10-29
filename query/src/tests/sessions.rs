@@ -85,6 +85,12 @@ impl SessionManagerBuilder {
         SessionManagerBuilder::inner_create(new_config)
     }
 
+    pub fn disk_storage_path(self, path: String) -> SessionManagerBuilder {
+        let mut new_config = self.config;
+        new_config.storage.disk.data_path = path;
+        SessionManagerBuilder::inner_create(new_config)
+    }
+
     pub fn log_dir_with_relative(self, path: impl Into<String>) -> SessionManagerBuilder {
         let mut new_config = self.config;
         new_config.log.log_dir = env::current_dir()

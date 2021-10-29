@@ -124,14 +124,6 @@ impl Catalog for SystemCatalog {
         Ok(self.sys_db_meta.name_to_table.values().cloned().collect())
     }
 
-    fn get_table_by_id(&self, table_id: MetaId) -> Result<Arc<dyn Table>> {
-        let table =
-            self.sys_db_meta.id_to_table.get(&table_id).ok_or_else(|| {
-                ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id))
-            })?;
-        Ok(table.clone())
-    }
-
     fn upsert_table_option(
         &self,
         table_id: MetaId,
@@ -162,7 +154,13 @@ impl Catalog for SystemCatalog {
     }
 
     fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        let table_id = table_info.table_id;
-        self.get_table_by_id(table_id)
+        let table_id = table_info.ident.table_id;
+
+        let table =
+            self.sys_db_meta.id_to_table.get(&table_id).ok_or_else(|| {
+                ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id))
+            })?;
+
+        Ok(table.clone())
     }
 }

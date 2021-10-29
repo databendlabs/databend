@@ -13,8 +13,10 @@
 //  limitations under the License.
 //
 
+use common_base::BlockingWait;
 use common_context::IOContext;
 use common_context::TableIOContext;
+use common_dal::read_obj;
 use common_exception::Result;
 use common_planners::Extras;
 use common_planners::Partitions;
@@ -31,16 +33,13 @@ impl FuseTable {
         io_ctx: &TableIOContext,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        let tbl_snapshot = self.table_snapshot(io_ctx)?;
-        if let Some(snapshot) = tbl_snapshot {
+        let location = self.snapshot_loc();
+        if let Some(loc) = location {
             let da = io_ctx.get_data_accessor()?;
+            let snapshot = read_obj(da.clone(), loc).wait_in(&io_ctx.get_runtime(), None)??;
             let meta_reader = MetaInfoReader::new(da, io_ctx.get_runtime());
-            let block_metas = index::range_filter(
-                &snapshot,
-                self.table_info.schema.clone(),
-                push_downs,
-                meta_reader,
-            )?;
+            let block_metas =
+                index::range_filter(&snapshot, self.table_info.schema(), push_downs, meta_reader)?;
             let (statistics, parts) = self.to_partitions(&block_metas);
             Ok((statistics, parts))
         } else {

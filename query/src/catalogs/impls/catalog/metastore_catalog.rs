@@ -146,11 +146,6 @@ impl Catalog for MetaStoreCatalog {
         })
     }
 
-    fn get_table_by_id(&self, table_id: MetaId) -> Result<Arc<dyn Table>> {
-        let table_info = self.meta.get_table_by_id(table_id)?;
-        self.build_table(table_info.as_ref())
-    }
-
     fn upsert_table_option(
         &self,
         table_id: MetaId,
@@ -188,7 +183,7 @@ impl Catalog for MetaStoreCatalog {
     }
 
     fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        let engine = &table_info.engine;
+        let engine = table_info.engine();
         let factory = self
             .table_engine_registry
             .get_table_factory(engine)

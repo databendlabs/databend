@@ -26,6 +26,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
 use common_infallible::Mutex;
+use common_meta_types::TableMeta;
 use common_planners::col;
 use common_planners::lit;
 use common_planners::CreateTablePlan;
@@ -54,9 +55,11 @@ async fn test_min_max_index() -> Result<()> {
         if_not_exists: false,
         db: fixture.default_db(),
         table: test_tbl_name.to_string(),
-        schema: test_schema.clone(),
-        engine: "FUSE".to_string(),
-        options: Default::default(),
+        table_meta: TableMeta {
+            schema: test_schema.clone(),
+            engine: "FUSE".to_string(),
+            options: Default::default(),
+        },
     };
 
     let catalog = ctx.get_catalog();
@@ -93,7 +96,7 @@ async fn test_min_max_index() -> Result<()> {
 
     let snapshot_loc = table
         .get_table_info()
-        .options
+        .options()
         .get(TBL_OPT_KEY_SNAPSHOT_LOC)
         .unwrap();
     let snapshot = read_obj(da.clone(), snapshot_loc.clone()).await?;
@@ -103,7 +106,7 @@ async fn test_min_max_index() -> Result<()> {
     let push_downs = None;
     let blocks = range_filter(
         &snapshot,
-        table.get_table_info().schema.clone(),
+        table.get_table_info().schema(),
         push_downs,
         meta_reader.clone(),
     )?;
@@ -118,7 +121,7 @@ async fn test_min_max_index() -> Result<()> {
 
     let blocks = range_filter(
         &snapshot,
-        table.get_table_info().schema.clone(),
+        table.get_table_info().schema(),
         Some(extra),
         meta_reader.clone(),
     )?;
@@ -131,7 +134,7 @@ async fn test_min_max_index() -> Result<()> {
 
     let blocks = range_filter(
         &snapshot,
-        table.get_table_info().schema.clone(),
+        table.get_table_info().schema(),
         Some(extra),
         meta_reader,
     )?;

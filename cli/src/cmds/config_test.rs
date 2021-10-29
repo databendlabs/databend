@@ -20,6 +20,8 @@ use crate::cmds::config::choose_mirror;
 use crate::cmds::config::CustomMirror;
 use crate::cmds::config::GithubMirror;
 use crate::cmds::config::MirrorAsset;
+use crate::cmds::config::Mode;
+use crate::cmds::config::RepoMirror;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::error::Result;
@@ -28,6 +30,7 @@ use crate::error::Result;
 fn test_mirror() -> Result<()> {
     let mut conf = Config {
         group: "foo".to_string(),
+        mode: Mode::Sql,
         databend_dir: "/tmp/.databend".to_string(),
         clap: Default::default(),
         mirror: GithubMirror {}.to_mirror(),
@@ -50,6 +53,7 @@ fn test_mirror() -> Result<()> {
             base_url: server.url("/v1/health"),
             databend_url: "".to_string(),
             databend_tag_url: "".to_string(),
+            playground_url: "".to_string(),
         };
         conf.mirror = custom.to_mirror();
         let mirror = choose_mirror(&conf).unwrap();
@@ -63,11 +67,12 @@ fn test_mirror() -> Result<()> {
             base_url: server.url("/v1/health"),
             databend_url: "".to_string(),
             databend_tag_url: "".to_string(),
+            playground_url: "".to_string(),
         };
         let mut status = Status::read(conf.clone()).unwrap();
         status.mirrors = Some(status_mirror.to_mirror());
         status.write().unwrap();
-        let custom = GithubMirror {}.to_mirror();
+        let custom = RepoMirror {}.to_mirror();
         conf.mirror = custom;
         let mirror = choose_mirror(&conf).unwrap();
         assert_eq!(mirror, status_mirror.to_mirror());

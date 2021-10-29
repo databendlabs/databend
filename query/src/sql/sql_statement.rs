@@ -46,6 +46,9 @@ pub struct DfShowSettings;
 pub struct DfShowProcessList;
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct DfShowMetrics;
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct DfExplain {
     pub typ: ExplainType,
     pub statement: Box<SQLStatement>,
@@ -131,6 +134,9 @@ pub enum DfStatement {
 
     // ProcessList
     ShowProcessList(DfShowProcessList),
+
+    // Metrics
+    ShowMetrics(DfShowMetrics),
 
     // Kill
     KillQuery(DfKillStatement),

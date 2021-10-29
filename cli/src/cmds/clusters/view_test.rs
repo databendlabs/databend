@@ -28,6 +28,7 @@ use crate::cmds::clusters::view::HealthStatus;
 use crate::cmds::clusters::view::ViewCommand;
 use crate::cmds::config::GithubMirror;
 use crate::cmds::config::MirrorAsset;
+use crate::cmds::config::Mode;
 use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
 use crate::cmds::Config;
@@ -38,6 +39,7 @@ use crate::error::Result;
 async fn test_build_table() -> Result<()> {
     let mut conf = Config {
         group: "foo".to_string(),
+        mode: Mode::Sql,
         databend_dir: "/tmp/.databend".to_string(),
         clap: Default::default(),
         mirror: GithubMirror {}.to_mirror(),
@@ -130,6 +132,7 @@ async fn test_build_table() -> Result<()> {
 async fn test_build_table_fail() -> Result<()> {
     let mut conf = Config {
         group: "foo".to_string(),
+        mode: Mode::Sql,
         databend_dir: "/tmp/.databend".to_string(),
         clap: Default::default(),
         mirror: GithubMirror {}.to_mirror(),

@@ -24,6 +24,8 @@ use tempfile::tempdir;
 
 use crate::cmds::config::GithubMirror;
 use crate::cmds::config::MirrorAsset;
+use crate::cmds::config::Mode;
+use crate::cmds::status::LocalDashboardConfig;
 use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
 use crate::cmds::status::LocalRuntime;
@@ -35,6 +37,7 @@ use crate::error::Result;
 fn test_status() -> Result<()> {
     let mut conf = Config {
         group: "foo".to_string(),
+        mode: Mode::Sql,
         databend_dir: "/tmp/.databend".to_string(),
         mirror: GithubMirror {}.to_mirror(),
         clap: Default::default(),
@@ -118,6 +121,20 @@ fn test_status() -> Result<()> {
             &query_config2,
         )
         .unwrap();
+        let dashboard = LocalDashboardConfig {
+            listen_addr: None,
+            http_api: Some("127.0.0.1:9000".to_string()),
+            pid: None,
+            path: None,
+            log_dir: None,
+        };
+        Status::save_local_config(
+            &mut status,
+            "dashboard".parse().unwrap(),
+            "dashboard.yaml".to_string(),
+            &dashboard,
+        )
+        .unwrap();
         status.current_profile = Some("local".to_string());
         status.write()?;
         let status = Status::read(conf.clone()).unwrap();
@@ -132,12 +149,15 @@ fn test_status() -> Result<()> {
             query_config2
         );
         assert_eq!(status.get_local_meta_config().unwrap().1, meta_config);
+        assert_eq!(status.get_local_dashboard_config().unwrap().1, dashboard);
         assert_eq!(status.current_profile, Some("local".to_string()));
         assert!(status.has_local_configs());
         // delete status
         let mut status = Status::read(conf.clone()).unwrap();
         let (fs, _) = status.clone().get_local_meta_config().unwrap();
         Status::delete_local_config(&mut status, "meta".to_string(), fs).unwrap();
+        let (fs, _) = status.clone().get_local_dashboard_config().unwrap();
+        Status::delete_local_config(&mut status, "dashboard".to_string(), fs).unwrap();
         for (fs, _) in status.clone().get_local_query_configs() {
             Status::delete_local_config(&mut status, "query".to_string(), fs).unwrap();
         }
@@ -146,6 +166,7 @@ fn test_status() -> Result<()> {
         let status = Status::read(conf).unwrap();
         assert_eq!(status.get_local_query_configs().len(), 0);
         assert_eq!(status.get_local_meta_config(), None);
+        assert_eq!(status.get_local_dashboard_config(), None);
         assert_eq!(status.current_profile, None);
         assert!(!status.has_local_configs());
     }
@@ -156,6 +177,7 @@ fn test_status() -> Result<()> {
 async fn test_verify() -> Result<()> {
     let mut conf = Config {
         group: "foo".to_string(),
+        mode: Mode::Sql,
         databend_dir: "/tmp/.databend".to_string(),
         clap: Default::default(),
         mirror: GithubMirror {}.to_mirror(),

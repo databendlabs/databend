@@ -23,11 +23,10 @@ use async_raft::LogId;
 use common_base::tokio;
 use common_meta_types::Cmd;
 use common_meta_types::KVMeta;
-use common_meta_types::KVValue;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
-use common_meta_types::SeqValue;
+use common_meta_types::SeqV;
 use common_tracing::tracing;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
@@ -138,8 +137,8 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
 
         let (prev, result) = match resp {
             AppliedState::DataBase { prev, result } => (
-                prev.map(|(_seq, kv_value)| kv_value.value.database_id),
-                result.map(|(_seq, kv_value)| kv_value.value.database_id),
+                prev.map(|kv_value| kv_value.data.database_id),
+                result.map(|kv_value| kv_value.data.database_id),
             ),
             _ => {
                 panic!("expect AppliedState::Database")
@@ -161,7 +160,7 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
         let got = m
             .get_database(c.name)?
             .ok_or_else(|| anyhow::anyhow!("db not found: {}", c.name))?;
-        assert_eq!(*want, got.1.value.database_id);
+        assert_eq!(*want, got.data.database_id);
     }
 
     Ok(())
@@ -182,8 +181,8 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
         value: Vec<u8>,
         value_meta: Option<KVMeta>,
         // want:
-        prev: Option<SeqValue<KVValue>>,
-        result: Option<SeqValue<KVValue>>,
+        prev: Option<SeqV<Vec<u8>>>,
+        result: Option<SeqV<Vec<u8>>>,
     }
 
     fn case(
@@ -200,18 +199,8 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
             seq,
             value: value.to_string().into_bytes(),
             value_meta: m.clone(),
-            prev: prev.map(|(a, b)| {
-                (a, KVValue {
-                    meta: None,
-                    value: b.as_bytes().to_vec(),
-                })
-            }),
-            result: result.map(|(a, b)| {
-                (a, KVValue {
-                    meta: m,
-                    value: b.as_bytes().to_vec(),
-                })
-            }),
+            prev: prev.map(|(a, b)| SeqV::new(a, b.into())),
+            result: result.map(|(a, b)| SeqV::with_meta(a, m, b.into())),
         }
     }
 
@@ -303,7 +292,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
             None => None,
             Some(ref w) => {
                 // trick: in this test all expired timestamps are all 0
-                if w.1 < now {
+                if w.get_expire_at() < now {
                     None
                 } else {
                     want
@@ -390,13 +379,14 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
     let got = got.unwrap();
 
     assert_eq!(
-        KVValue {
+        SeqV {
+            seq: got.seq,
             meta: Some(KVMeta {
                 expire_at: Some(now + 20)
             }),
-            value: b"value_meta_bar".to_vec()
+            data: b"value_meta_bar".to_vec()
         },
-        got.1,
+        got,
         "update meta of None does nothing",
     );
 
@@ -413,8 +403,8 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
         key: String,
         seq: MatchSeq,
         // want:
-        prev: Option<SeqValue<KVValue>>,
-        result: Option<SeqValue<KVValue>>,
+        prev: Option<SeqV<Vec<u8>>>,
+        result: Option<SeqV<Vec<u8>>>,
     }
 
     fn case(
@@ -426,18 +416,8 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
         T {
             key: name.to_string(),
             seq,
-            prev: prev.map(|(a, b)| {
-                (a, KVValue {
-                    meta: None,
-                    value: b.as_bytes().to_vec(),
-                })
-            }),
-            result: result.map(|(a, b)| {
-                (a, KVValue {
-                    meta: None,
-                    value: b.as_bytes().to_vec(),
-                })
-            }),
+            prev: prev.map(|(a, b)| SeqV::new(a, b.into())),
+            result: result.map(|(a, b)| SeqV::new(a, b.into())),
         }
     }
 

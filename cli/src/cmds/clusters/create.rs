@@ -31,7 +31,7 @@ use sysinfo::System;
 use sysinfo::SystemExt;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
-use crate::cmds::clusters::delete::DeleteCommand;
+use crate::cmds::clusters::stop::StopCommand;
 use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
 use crate::cmds::status::LocalRuntime;
@@ -618,8 +618,9 @@ impl CreateCommand {
                         .await;
                     if res.is_err() {
                         writer.write_err(&*format!(
-                            "❌ Cannot provison meta service, error: {:?}",
-                            res.unwrap_err()
+                            "❌ Cannot provison meta service, error: {:?}, please check the logs output by: tail -n 100 {}/*",
+                            res.unwrap_err(),
+                            meta_config.log_dir.unwrap_or_else(|| "unknown log_dir".into()),
                         ));
                         return Ok(());
                     }
@@ -631,7 +632,7 @@ impl CreateCommand {
                         "❌ Cannot connect to meta service: {:?}",
                         meta_status.unwrap_err()
                     ));
-                    DeleteCommand::stop_current_local_services(&mut status, writer)
+                    StopCommand::stop_current_local_services(&mut status, writer)
                         .await
                         .unwrap();
                     return Ok(());
@@ -643,7 +644,7 @@ impl CreateCommand {
                         "❌ Cannot generate query configurations, error: {:?}",
                         query_config.as_ref().unwrap_err()
                     ));
-                    DeleteCommand::stop_current_local_services(&mut status, writer)
+                    StopCommand::stop_current_local_services(&mut status, writer)
                         .await
                         .unwrap();
                 }
@@ -660,15 +661,19 @@ impl CreateCommand {
                 ));
                 {
                     let res = self
-                        .provision_local_query_service(writer, query_config.unwrap())
+                        .provision_local_query_service(
+                            writer,
+                            query_config.as_ref().unwrap().clone(),
+                        )
                         .await;
                     if res.is_err() {
                         let mut status = Status::read(self.conf.clone())?;
                         writer.write_err(&*format!(
-                            "❌ Cannot provison query service, error: {:?}",
-                            res.unwrap_err()
+                            "❌ Cannot provison query service, error: {:?}, please check the logs output by: tail -n 100 {}/*",
+                            res.unwrap_err(),
+                            query_config.as_ref().unwrap().config.log.log_dir,
                         ));
-                        DeleteCommand::stop_current_local_services(&mut status, writer)
+                        StopCommand::stop_current_local_services(&mut status, writer)
                             .await
                             .unwrap();
                     }
@@ -692,22 +697,25 @@ impl CreateCommand {
         let mut status = Status::read(self.conf.clone())?;
         if args.is_present("force") {
             writer.write_ok("delete existing cluster");
-            DeleteCommand::stop_current_local_services(&mut status, writer)
+            StopCommand::stop_current_local_services(&mut status, writer)
                 .await
                 .expect("cannot stop current services");
             let s = System::new_all();
             for elem in s.process_by_name("databend-meta") {
-                elem.kill(Signal::Kill);
+                elem.kill(Signal::Term);
             }
             for elem in s.process_by_name("databend-query") {
-                elem.kill(Signal::Kill);
+                elem.kill(Signal::Term);
+            }
+            for elem in s.process_by_name("databend-dashboard") {
+                elem.kill(Signal::Term);
             }
         }
         if let Err(e) = reconcile_local(&mut status).await {
             writer.write_ok(
                 format!("local environment has problem {:?}, start reconcile", e).as_str(),
             );
-            if let Err(e) = DeleteCommand::stop_current_local_services(&mut status, writer).await {
+            if let Err(e) = StopCommand::stop_current_local_services(&mut status, writer).await {
                 writer
                     .write_err(format!("cannot delete existing service, error: {:?}", e).as_str());
                 return Err(e);

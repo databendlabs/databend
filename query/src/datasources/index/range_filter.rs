@@ -130,6 +130,11 @@ pub(crate) fn build_verifiable_expr(
     .map_or(unhandled.clone(), |mut v| v.build().unwrap_or(unhandled))
 }
 
+struct Monotonic {
+    is_monotonic: bool,
+    is_positive: bool,
+}
+
 // TODO: need add monotonic check for the expression, will move to FunctionFeatures.
 // ISSUE-2343: https://github.com/datafuselabs/databend/issues/2343
 fn is_monotonic_expression(expr: &Expression) -> Monotonic {
@@ -222,11 +227,6 @@ fn collect_columns_from_expr(expr: &Expression) -> Result<HashSet<String>> {
     Ok(visitor.required_columns)
 }
 
-struct Monotonic {
-    is_monotonic: bool,
-    is_positive: bool,
-}
-
 struct VerifiableExprBuilder<'a> {
     args: Expressions,
     op: &'a str,
@@ -303,7 +303,7 @@ impl<'a> VerifiableExprBuilder<'a> {
     }
 
     fn build(&mut self) -> Result<Expression> {
-        // TODO: support like/not like/in/not in.
+        // TODO: support in/not in.
         match self.op {
             "isnull" => {
                 let nulls_expr = self.nulls_column_expr()?;
@@ -345,6 +345,69 @@ impl<'a> VerifiableExprBuilder<'a> {
             "<=" => {
                 let min_expr = self.min_column_expr()?;
                 Ok(min_expr.lt_eq(self.args[1].clone()))
+            }
+            "like" => {
+                if let Expression::Literal {
+                    value: DataValue::String(Some(v)),
+                    ..
+                } = &self.args[1]
+                {
+                    // e.g. col like 'a%' => max_col >= 'a' and min_col < 'b'
+                    let left = left_bound_for_like_pattern(v);
+                    if !left.is_empty() {
+                        let right = right_bound_for_like_pattern(left.clone());
+                        let max_expr = self.max_column_expr()?;
+                        if right.is_empty() {
+                            return Ok(max_expr.gt_eq(lit(left)));
+                        } else {
+                            let min_expr = self.min_column_expr()?;
+                            return Ok(max_expr.gt_eq(lit(left)).and(min_expr.lt(lit(right))));
+                        }
+                    }
+                }
+                Err(ErrorCode::UnknownException(
+                    "Cannot build atom expression by the operator: like",
+                ))
+            }
+            "not like" => {
+                if let Expression::Literal {
+                    value: DataValue::String(Some(v)),
+                    ..
+                } = &self.args[1]
+                {
+                    // Only support such as 'abc' or 'ab%'.
+                    match check_pattern_type(v) {
+                        // e.g. col not like 'abc' => min_col != 'abc' or max_col != 'abc'
+                        PatternType::OrdinalStr => {
+                            let const_arg = left_bound_for_like_pattern(v);
+                            let max_expr = self.max_column_expr()?;
+                            let min_expr = self.min_column_expr()?;
+                            return Ok(min_expr
+                                .not_eq(lit(const_arg.clone()))
+                                .or(max_expr.not_eq(lit(const_arg))));
+                        }
+                        // e.g. col not like 'ab%' => min_col < 'ab' or max_col >= 'ac'
+                        PatternType::EndOfPercent => {
+                            let left = left_bound_for_like_pattern(v);
+                            if !left.is_empty() {
+                                let right = right_bound_for_like_pattern(left.clone());
+                                let min_expr = self.min_column_expr()?;
+                                if right.is_empty() {
+                                    return Ok(min_expr.lt(lit(left)));
+                                } else {
+                                    let max_expr = self.max_column_expr()?;
+                                    return Ok(min_expr
+                                        .lt(lit(left))
+                                        .or(max_expr.gt_eq(lit(right))));
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                Err(ErrorCode::UnknownException(
+                    "Cannot build atom expression by the operator: not like",
+                ))
             }
             other => Err(ErrorCode::UnknownException(format!(
                 "Cannot build atom expression by the operator: {:?}",
@@ -392,5 +455,86 @@ impl<'a> VerifiableExprBuilder<'a> {
 
     fn nulls_column_expr(&mut self) -> Result<Expression> {
         self.stat_column_expr(StatType::Nulls)
+    }
+}
+
+fn is_like_pattern_escape(c: u8) -> bool {
+    c == b'%' || c == b'_' || c == b'\\'
+}
+
+pub(crate) fn left_bound_for_like_pattern(pattern: &[u8]) -> Vec<u8> {
+    let mut index = 0;
+    let mut prefix: Vec<u8> = Vec::new();
+    let len = pattern.len();
+    while index < len {
+        match pattern[index] {
+            b'%' | b'_' => break,
+            b'\\' => {
+                if index < len - 1 {
+                    index += 1;
+                    if !is_like_pattern_escape(pattern[index]) {
+                        prefix.push(pattern[index - 1]);
+                    }
+                }
+            }
+            _ => {}
+        }
+        prefix.push(pattern[index]);
+        index += 1;
+    }
+    prefix
+}
+
+pub(crate) fn right_bound_for_like_pattern(prefix: Vec<u8>) -> Vec<u8> {
+    let mut res = prefix;
+    while !res.is_empty() && *res.last().unwrap() == u8::MAX {
+        res.pop();
+    }
+
+    if !res.is_empty() {
+        if let Some(last) = res.last_mut() {
+            *last += 1;
+        }
+    }
+
+    res
+}
+
+enum PatternType {
+    // e.g. "abc"
+    OrdinalStr,
+    // e.g. "a%c" or "ab_"
+    PatternStr,
+    // e.g. "ab%"
+    EndOfPercent,
+}
+
+// check not like pattern type.
+fn check_pattern_type(pattern: &[u8]) -> PatternType {
+    let mut index = 0;
+    let mut percent = false;
+    let len = pattern.len();
+    while index < len {
+        match pattern[index] {
+            b'_' => return PatternType::PatternStr,
+            b'%' => percent = true,
+            b'\\' => {
+                if percent {
+                    return PatternType::PatternStr;
+                }
+                index += 1;
+            }
+            _ => {
+                if percent {
+                    return PatternType::PatternStr;
+                }
+            }
+        }
+        index += 1;
+    }
+    if percent {
+        PatternType::EndOfPercent
+    } else {
+        PatternType::OrdinalStr
     }
 }

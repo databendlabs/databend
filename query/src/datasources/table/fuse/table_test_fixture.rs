@@ -23,6 +23,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_infallible::Mutex;
+use common_meta_types::TableMeta;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::InsertIntoPlan;
@@ -88,9 +89,11 @@ impl TestFixture {
             if_not_exists: false,
             db: self.default_db(),
             table: self.default_table(),
-            schema: TestFixture::default_schema(),
-            engine: "FUSE".to_string(),
-            options: Default::default(),
+            table_meta: TableMeta {
+                schema: TestFixture::default_schema(),
+                engine: "FUSE".to_string(),
+                options: Default::default(),
+            },
         }
     }
 

@@ -65,6 +65,24 @@ pub fn unpack(tar_file: &str, target_dir: &str) -> Result<()> {
     };
 }
 
+pub fn download_and_unpack(
+    url: &str,
+    download_file_name: &str,
+    target_dir: &str,
+    exist: Option<String>,
+) -> Result<()> {
+    if exist.is_some() && Path::new(exist.unwrap().as_str()).exists() {
+        return Ok(());
+    }
+    if let Err(e) = download(url, download_file_name) {
+        return Err(e);
+    }
+    if let Err(e) = unpack(download_file_name, target_dir) {
+        return Err(e);
+    }
+    Ok(())
+}
+
 pub fn download(url: &str, target_file: &str) -> Result<()> {
     let res = ureq::get(url).call()?;
     let total_size: u64 = res
@@ -150,36 +168,22 @@ impl FetchCommand {
 
         let bin_name = format!("databend-{}-{}.tar.gz", tag, arch);
         let bin_file = format!("{}/{}", bin_download_dir, bin_name);
-        let exists = Path::new(bin_file.as_str()).exists();
-        // Download.
-        if !exists {
-            let binary_url = format!(
-                "{}/{}/{}",
-                self.conf.mirror.databend_url.clone(),
-                tag,
-                bin_name,
-            );
-            if let Err(e) = download(&binary_url, &bin_file) {
-                writer.write_err(
-                    format!("Cannot download from {}, error: {:?}", binary_url, e).as_str(),
-                )
-            }
+        let binary_url = format!(
+            "{}/{}/{}",
+            self.conf.mirror.databend_url.clone(),
+            tag,
+            bin_name,
+        );
+        if let Err(e) = download_and_unpack(
+            &*binary_url,
+            &*bin_file.clone(),
+            &*bin_unpack_dir,
+            Some(bin_file),
+        ) {
+            writer.write_err(format!("Cannot download or unpack error: {:?}", e).as_str())
         }
-
-        // Unpack.
-        match unpack(&bin_file, &bin_unpack_dir) {
-            Ok(_) => {
-                writer.write_ok(format!("Unpacked {} to {}", bin_file, bin_unpack_dir).as_str());
-
-                // switch to fetched version
-                let switch = SwitchCommand::create(self.conf.clone());
-                return switch.exec_match(writer, args);
-            }
-            Err(e) => {
-                writer.write_err(format!("{:?}", e).as_str());
-            }
-        };
-        Ok(())
+        let switch = SwitchCommand::create(self.conf.clone());
+        switch.exec_match(writer, args)
     }
 
     pub fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {

@@ -19,7 +19,9 @@ use common_context::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_planners::InsertIntoPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::TableOptions;
@@ -43,15 +45,15 @@ impl ExampleTable {
         table_id: u64,
     ) -> Result<Box<dyn Table>> {
         let table_info = TableInfo {
-            database_id: 0,
-            table_id,
-            version: 0,
+            ident: TableIdent::new(table_id, 0),
             desc: format!("'{}'.'{}'", db, name),
             name,
 
-            schema,
-            engine: "ExampleNull".to_string(),
-            options,
+            meta: TableMeta {
+                schema,
+                engine: "ExampleNull".to_string(),
+                options,
+            },
         };
 
         Ok(Box::new(Self { table_info }))

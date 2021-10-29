@@ -505,7 +505,11 @@ impl From<&Status> for ErrorCode {
     fn from(status: &Status) -> Self {
         match status.code() {
             tonic::Code::Unknown => {
-                match serde_json::from_slice::<SerializedError>(status.details()) {
+                let details = status.details();
+                if details.is_empty() {
+                    return ErrorCode::UnknownException(status.message());
+                }
+                match serde_json::from_slice::<SerializedError>(details) {
                     Err(error) => ErrorCode::from(error),
                     Ok(serialized_error) => match serialized_error.backtrace.len() {
                         0 => {

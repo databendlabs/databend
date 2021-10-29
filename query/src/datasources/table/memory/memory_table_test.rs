@@ -23,6 +23,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_infallible::Mutex;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_planners::*;
 use futures::TryStreamExt;
 
@@ -38,14 +39,14 @@ async fn test_memorytable() -> Result<()> {
     ]);
     let table = MemoryTable::try_create(
         TableInfo {
-            database_id: 0,
             desc: "'default'.'a'".into(),
             name: "a".into(),
-            schema: schema.clone(),
-            engine: "Memory".to_string(),
-            options: TableOptions::default(),
-            table_id: 0,
-            version: 0,
+            ident: Default::default(),
+            meta: TableMeta {
+                schema: schema.clone(),
+                engine: "Memory".to_string(),
+                options: TableOptions::default(),
+            },
         },
         Arc::new(TableDataContext::default()),
     )?;

@@ -17,39 +17,39 @@ use std::result::Result;
 use crate::ConflictSeq;
 use crate::MatchSeq;
 use crate::MatchSeqExt;
-use crate::SeqValue;
+use crate::SeqV;
 
 #[test]
 fn test_match_seq_match_seq_value() -> Result<(), ()> {
-    assert_eq!(MatchSeq::Any.match_seq(&Some((0, 1))), Ok(()));
-    assert_eq!(MatchSeq::Any.match_seq(&Some((1, 1))), Ok(()));
+    assert_eq!(MatchSeq::Any.match_seq(&Some(SeqV::new(0, 1))), Ok(()));
+    assert_eq!(MatchSeq::Any.match_seq(&Some(SeqV::new(1, 1))), Ok(()));
 
     //
 
     assert_eq!(
-        MatchSeq::Exact(3).match_seq(&None::<SeqValue>),
+        MatchSeq::Exact(3).match_seq(&None::<SeqV>),
         Err(ConflictSeq::NotMatch {
             want: MatchSeq::Exact(3),
             got: 0
         })
     );
     assert_eq!(
-        MatchSeq::Exact(3).match_seq(&Some((0, 1))),
+        MatchSeq::Exact(3).match_seq(&Some(SeqV::new(0, 1))),
         Err(ConflictSeq::NotMatch {
             want: MatchSeq::Exact(3),
             got: 0
         })
     );
     assert_eq!(
-        MatchSeq::Exact(3).match_seq(&Some((2, 1))),
+        MatchSeq::Exact(3).match_seq(&Some(SeqV::new(2, 1))),
         Err(ConflictSeq::NotMatch {
             want: MatchSeq::Exact(3),
             got: 2
         })
     );
-    assert_eq!(MatchSeq::Exact(3).match_seq(&Some((3, 1))), Ok(()));
+    assert_eq!(MatchSeq::Exact(3).match_seq(&Some(SeqV::new(3, 1))), Ok(()));
     assert_eq!(
-        MatchSeq::Exact(3).match_seq(&Some((4, 1))),
+        MatchSeq::Exact(3).match_seq(&Some(SeqV::new(4, 1))),
         Err(ConflictSeq::NotMatch {
             want: MatchSeq::Exact(3),
             got: 4
@@ -59,28 +59,28 @@ fn test_match_seq_match_seq_value() -> Result<(), ()> {
     //
 
     assert_eq!(
-        MatchSeq::GE(3).match_seq(&None::<SeqValue>),
+        MatchSeq::GE(3).match_seq(&None::<SeqV>),
         Err(ConflictSeq::NotMatch {
             want: MatchSeq::GE(3),
             got: 0
         })
     );
     assert_eq!(
-        MatchSeq::GE(3).match_seq(&Some((0, 1))),
+        MatchSeq::GE(3).match_seq(&Some(SeqV::new(0, 1))),
         Err(ConflictSeq::NotMatch {
             want: MatchSeq::GE(3),
             got: 0
         })
     );
     assert_eq!(
-        MatchSeq::GE(3).match_seq(&Some((2, 1))),
+        MatchSeq::GE(3).match_seq(&Some(SeqV::new(2, 1))),
         Err(ConflictSeq::NotMatch {
             want: MatchSeq::GE(3),
             got: 2
         })
     );
-    assert_eq!(MatchSeq::GE(3).match_seq(&Some((3, 1))), Ok(()));
-    assert_eq!(MatchSeq::GE(3).match_seq(&Some((4, 1))), Ok(()));
+    assert_eq!(MatchSeq::GE(3).match_seq(&Some(SeqV::new(3, 1))), Ok(()));
+    assert_eq!(MatchSeq::GE(3).match_seq(&Some(SeqV::new(4, 1))), Ok(()));
 
     Ok(())
 }

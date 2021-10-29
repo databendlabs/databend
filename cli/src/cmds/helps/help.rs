@@ -13,6 +13,9 @@
 // limitations under the License.
 
 use async_trait::async_trait;
+use comfy_table::Cell;
+use comfy_table::Row;
+use comfy_table::Table;
 
 use crate::cmds::command::Command;
 use crate::cmds::Writer;
@@ -44,9 +47,25 @@ impl Command for HelpCommand {
     }
 
     async fn exec(&self, writer: &mut Writer, _args: String) -> Result<()> {
+        let mut table = Table::new();
+        table.load_preset("||--+-++|    ++++++");
+        // Title.
+        table.set_header(vec![Cell::new("Name"), Cell::new("About")]);
+
         for cmd in self.commands.iter() {
-            writer.writeln_width(cmd.name(), cmd.about());
+            table.add_row(Row::from([cmd.name(), cmd.about()]));
         }
+        writer.write_ok("Mode switch commands:");
+        writer.writeln_width(
+            "\\sql",
+            "Switch to query mode, you could run query directly under this mode",
+        );
+        writer.writeln_width(
+            "\\admin",
+            "Switch to cluster administration mode, you could profile/view/update databend cluster",
+        );
+        writer.write_ok("Admin commands:");
+        writer.writeln(&table.trim_fmt());
         Ok(())
     }
 }

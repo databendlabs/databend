@@ -227,11 +227,11 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
 
     fn format_create_table(f: &mut Formatter, plan: &CreateTablePlan) -> fmt::Result {
         write!(f, "Create table {:}.{:}", plan.db, plan.table)?;
-        write!(f, " {:},", plan.schema)?;
+        write!(f, " {:},", plan.schema())?;
         // need engine to impl Display
-        write!(f, " engine: {},", plan.engine.to_string())?;
+        write!(f, " engine: {},", plan.engine().to_string())?;
         write!(f, " if_not_exists:{:},", plan.if_not_exists)?;
-        write!(f, " option: {:?}", plan.options)
+        write!(f, " option: {:?}", plan.options())
     }
 
     fn format_drop_table(f: &mut Formatter, plan: &DropTablePlan) -> fmt::Result {

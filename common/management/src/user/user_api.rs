@@ -17,7 +17,7 @@ use std::convert::TryFrom;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::SeqValue;
+use common_meta_types::SeqV;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum AuthType {
@@ -47,9 +47,9 @@ impl UserInfo {
 pub trait UserMgrApi: Sync + Send {
     fn add_user(&self, user_info: UserInfo) -> Result<u64>;
 
-    fn get_user(&self, username: String, seq: Option<u64>) -> Result<SeqValue<UserInfo>>;
+    fn get_user(&self, username: String, seq: Option<u64>) -> Result<SeqV<UserInfo>>;
 
-    fn get_users(&self) -> Result<Vec<SeqValue<UserInfo>>>;
+    fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>>;
 
     fn update_user(
         &self,

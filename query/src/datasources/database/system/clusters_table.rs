@@ -20,7 +20,9 @@ use common_context::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -42,11 +44,12 @@ impl ClustersTable {
         let table_info = TableInfo {
             desc: "'system'.'clusters'".to_string(),
             name: "clusters".to_string(),
-            table_id,
-            schema,
-            engine: "SystemClusters".to_string(),
-
-            ..Default::default()
+            ident: TableIdent::new(table_id, 0),
+            meta: TableMeta {
+                schema,
+                engine: "SystemClusters".to_string(),
+                ..Default::default()
+            },
         };
 
         ClustersTable { table_info }
@@ -83,16 +86,13 @@ impl Table for ClustersTable {
         }
 
         Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema.clone(),
+            self.table_info.schema(),
             None,
-            vec![DataBlock::create_by_array(
-                self.table_info.schema.clone(),
-                vec![
-                    names.finish().into_series(),
-                    addresses.finish().into_series(),
-                    addresses_port.finish().into_series(),
-                ],
-            )],
+            vec![DataBlock::create_by_array(self.table_info.schema(), vec![
+                names.finish().into_series(),
+                addresses.finish().into_series(),
+                addresses_port.finish().into_series(),
+            ])],
         )))
     }
 }

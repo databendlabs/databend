@@ -49,7 +49,7 @@ impl Interpreter for CreateTableInterpreter {
         catalog.create_table(self.plan.clone())?;
 
         Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema.clone(),
+            self.plan.schema(),
             None,
             vec![],
         )))

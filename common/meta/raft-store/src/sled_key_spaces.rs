@@ -16,12 +16,11 @@ use async_raft::raft::Entry;
 use common_meta_sled_store::SeqNum;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_types::DatabaseInfo;
-use common_meta_types::KVValue;
 use common_meta_types::LogEntry;
 use common_meta_types::LogIndex;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
-use common_meta_types::SeqValue;
+use common_meta_types::SeqV;
 use common_meta_types::TableInfo;
 
 use crate::state::RaftStateKey;
@@ -80,7 +79,7 @@ impl SledKeySpace for GenericKV {
     const PREFIX: u8 = 6;
     const NAME: &'static str = "generic-kv";
     type K = String;
-    type V = SeqValue<KVValue<Vec<u8>>>;
+    type V = SeqV<Vec<u8>>;
 }
 
 /// Key-Value Types for sequence number generator in sled::Tree:
@@ -98,7 +97,7 @@ impl SledKeySpace for Databases {
     const PREFIX: u8 = 8;
     const NAME: &'static str = "databases";
     type K = String;
-    type V = SeqValue<KVValue<DatabaseInfo>>;
+    type V = SeqV<DatabaseInfo>;
 }
 
 pub struct Tables {}
@@ -107,7 +106,7 @@ impl SledKeySpace for Tables {
     const PREFIX: u8 = 9;
     const NAME: &'static str = "tables";
     type K = u64;
-    type V = SeqValue<KVValue<TableInfo>>;
+    type V = SeqV<TableInfo>;
 }
 
 pub struct ClientLastResps {}
@@ -124,5 +123,5 @@ impl SledKeySpace for TableLookup {
     const PREFIX: u8 = 11;
     const NAME: &'static str = "table-lookup";
     type K = TableLookupKey;
-    type V = SeqValue<KVValue<TableLookupValue>>;
+    type V = SeqV<TableLookupValue>;
 }

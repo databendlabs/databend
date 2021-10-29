@@ -97,8 +97,8 @@ pub fn snapshot_logs() -> (Vec<Entry<LogEntry>>, Vec<String>) {
         "[3, 1]:{\"LogId\":{\"term\":1,\"index\":9}}",                  // sm meta: LastApplied
         "[3, 2]:{\"Bool\":true}",                                       // sm meta: init
         "[3, 3]:{\"Membership\":{\"members\":[4,5,6],\"members_after_consensus\":null}}", // membership
-        "[6, 97]:[1,{\"meta\":null,\"value\":[65]}]", // generic kv
-        "[7, 99]:1",                                  // sequence: c
+        "[6, 97]:{\"seq\":1,\"meta\":null,\"data\":[65]}", // generic kv
+        "[7, 99]:1",                                       // sequence: c
         "[7, 103, 101, 110, 101, 114, 105, 99, 45, 107, 118]:1", // sequence: by upsertkv
     ]
     .iter()

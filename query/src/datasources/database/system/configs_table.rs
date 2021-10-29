@@ -20,7 +20,9 @@ use common_context::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -45,11 +47,12 @@ impl ConfigsTable {
         let table_info = TableInfo {
             desc: "'system'.'configs'".to_string(),
             name: "configs".to_string(),
-            table_id,
-            schema,
-            engine: "SystemConfigs".to_string(),
-
-            ..Default::default()
+            ident: TableIdent::new(table_id, 0),
+            meta: TableMeta {
+                schema,
+                engine: "SystemConfigs".to_string(),
+                ..Default::default()
+            },
         };
         ConfigsTable { table_info }
     }
@@ -138,14 +141,14 @@ impl Table for ConfigsTable {
         let values: Vec<&str> = values.iter().map(|x| x.as_str()).collect();
         let groups: Vec<&str> = groups.iter().map(|x| x.as_str()).collect();
         let descs: Vec<&str> = descs.iter().map(|x| x.as_str()).collect();
-        let block = DataBlock::create_by_array(self.table_info.schema.clone(), vec![
+        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
             Series::new(names),
             Series::new(values),
             Series::new(groups),
             Series::new(descs),
         ]);
         Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema.clone(),
+            self.table_info.schema(),
             None,
             vec![block],
         )))

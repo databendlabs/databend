@@ -14,8 +14,8 @@
 
 use colored::Colorize;
 
+use crate::cmds::config::Mode;
 use crate::cmds::Config;
-
 pub struct Env {
     pub conf: Config,
     pub prompt: String,
@@ -25,10 +25,15 @@ pub struct Env {
 impl Env {
     pub fn create(conf: Config) -> Self {
         let namespace = conf.group.clone();
+        let mode: Mode = conf.mode.clone();
         Env {
             conf,
-            prompt: format!("[{}] > ", namespace.green()),
+            prompt: format!("[{}] [{}]> ", namespace.green(), mode),
             multiline_prompt: format!("{} > ", " ".repeat(namespace.len() + 2)),
         }
+    }
+    pub fn load_mode(&mut self, mode: Mode) {
+        self.conf.mode = mode.clone();
+        self.prompt = format!("[{}] [{}]> ", self.conf.group.green(), mode);
     }
 }

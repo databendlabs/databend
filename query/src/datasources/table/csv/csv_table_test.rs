@@ -22,6 +22,7 @@ use common_datablocks::assert_blocks_sorted_eq;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_planners::*;
 use futures::TryStreamExt;
 
@@ -44,18 +45,18 @@ async fn test_csv_table() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let table = CsvTable::try_create(
         TableInfo {
-            database_id: 0,
             desc: "'default'.'test_csv'".into(),
             name: "test_csv".into(),
-            schema: DataSchemaRefExt::create(vec![DataField::new(
-                "column1",
-                DataType::UInt64,
-                false,
-            )]),
-            engine: "Csv".to_string(),
-            options,
-            table_id: 0,
-            version: 0,
+            ident: Default::default(),
+            meta: TableMeta {
+                schema: DataSchemaRefExt::create(vec![DataField::new(
+                    "column1",
+                    DataType::UInt64,
+                    false,
+                )]),
+                engine: "Csv".to_string(),
+                options,
+            },
         },
         Arc::new(TableDataContext::default()),
     )?;
@@ -122,19 +123,19 @@ async fn test_csv_table_parse_error() -> Result<()> {
 
     let table = CsvTable::try_create(
         TableInfo {
-            database_id: 0,
             desc: "'default'.'test_csv'".into(),
             name: "test_csv".into(),
-            schema: DataSchemaRefExt::create(vec![
-                DataField::new("column1", DataType::UInt64, false),
-                DataField::new("column2", DataType::UInt64, false),
-                DataField::new("column3", DataType::UInt64, false),
-                DataField::new("column4", DataType::UInt64, false),
-            ]),
-            engine: "Csv".to_string(),
-            options,
-            table_id: 0,
-            version: 0,
+            ident: Default::default(),
+            meta: TableMeta {
+                schema: DataSchemaRefExt::create(vec![
+                    DataField::new("column1", DataType::UInt64, false),
+                    DataField::new("column2", DataType::UInt64, false),
+                    DataField::new("column3", DataType::UInt64, false),
+                    DataField::new("column4", DataType::UInt64, false),
+                ]),
+                engine: "Csv".to_string(),
+                options,
+            },
         },
         Arc::new(TableDataContext::default()),
     )?;

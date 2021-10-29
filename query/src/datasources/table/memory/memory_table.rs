@@ -55,7 +55,7 @@ impl MemoryTable {
         table_info: TableInfo,
         data_ctx: Arc<dyn DataContext<u64>>,
     ) -> Result<Box<dyn Table>> {
-        let table_id = &table_info.table_id;
+        let table_id = &table_info.ident.table_id;
         let in_memory_data = data_ctx.get_in_memory_data()?;
 
         let blocks = {
@@ -134,7 +134,7 @@ impl Table for MemoryTable {
         }
         .ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
 
-        if _insert_plan.schema().as_ref().fields() != self.table_info.schema.as_ref().fields() {
+        if _insert_plan.schema().as_ref().fields() != self.table_info.schema().as_ref().fields() {
             return Err(ErrorCode::BadArguments("DataBlock schema mismatch"));
         }
 

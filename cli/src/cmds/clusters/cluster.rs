@@ -23,7 +23,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::cmds::clusters::create::CreateCommand;
-use crate::cmds::clusters::delete::DeleteCommand;
+use crate::cmds::clusters::stop::StopCommand;
 use crate::cmds::clusters::view::ViewCommand;
 use crate::cmds::command::Command;
 use crate::cmds::Config;
@@ -69,7 +69,7 @@ impl ClusterCommand {
             .setting(AppSettings::DisableVersionFlag)
             .about("Cluster life cycle management")
             .subcommand(CreateCommand::generate())
-            .subcommand(DeleteCommand::generate())
+            .subcommand(StopCommand::generate())
             .subcommand(ViewCommand::generate());
         app
     }
@@ -88,7 +88,7 @@ impl ClusterCommand {
                         .await?;
                 }
                 Some("delete") => {
-                    let create = DeleteCommand::create(self.conf.clone());
+                    let create = StopCommand::create(self.conf.clone());
                     create
                         .exec_match(writer, matches.subcommand_matches("delete"))
                         .await?;
