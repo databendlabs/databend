@@ -222,7 +222,8 @@ build_exceptions! {
 
     ConcurrentSnapshotInstall(2404),
     IllegalSnapshot(2405),
-    TableVersionMissMatch(2406),
+    UnknownTableId(2406),
+    TableVersionMissMatch(2407),
 
     // KVSrv server error
 

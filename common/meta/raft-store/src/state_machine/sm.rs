@@ -467,6 +467,59 @@ impl StateMachine {
                 tracing::debug!("applied UpsertKV: {} {:?}", key, result);
                 Ok((prev, result).into())
             }
+
+            Cmd::UpsertTableOptions {
+                ref table_id,
+                ref seq,
+                ref table_options,
+            } => {
+                let prev = self.tables().get(table_id)?;
+
+                // Unlike other Cmd, prev to be None is not allowed for upsert-options.
+                let prev = match prev {
+                    None => {
+                        return Err(ErrorCode::UnknownTableId(format!("table_id:{}", table_id)))
+                    }
+                    Some(x) => x,
+                };
+
+                if seq.match_seq(&prev).is_err() {
+                    let res = AppliedState::Table {
+                        prev: Some(prev.clone()),
+                        result: Some(prev),
+                    };
+                    return Ok(res);
+                }
+
+                let meta = prev.meta.clone();
+                let mut table_meta = prev.data.clone();
+                let opts = &mut table_meta.options;
+
+                for (k, opt_v) in table_options {
+                    match opt_v {
+                        None => {
+                            opts.remove(k);
+                        }
+                        Some(v) => {
+                            opts.insert(k.to_string(), v.to_string());
+                        }
+                    }
+                }
+
+                let new_seq = self.incr_seq(Tables::NAME).await?;
+                let sv = SeqV {
+                    seq: new_seq,
+                    meta,
+                    data: table_meta,
+                };
+
+                self.tables().insert(table_id, &sv).await?;
+
+                Ok(AppliedState::Table {
+                    prev: Some(prev),
+                    result: Some(sv),
+                })
+            }
         }
     }
 
