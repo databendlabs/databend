@@ -23,7 +23,7 @@ use common_dal::Local;
 use common_dal::StorageScheme;
 use common_dal::S3;
 
-use crate::configs::config_storage::ASBlobConfig;
+use crate::configs::config_storage::AzureStorageBlobConfig;
 use crate::configs::StorageConfig;
 
 pub struct ContextDalBuilder {
@@ -51,8 +51,8 @@ impl DataAccessorBuilder for ContextDalBuilder {
                     &conf.secret_access_key,
                 )?))
             }
-            StorageScheme::ASBlob => {
-                let conf: &ASBlobConfig = &conf.asb;
+            StorageScheme::AzureStorageBlob => {
+                let conf: &AzureStorageBlobConfig = &conf.azure_storage_blob;
                 Ok(Arc::new(AzureBlobAccessor::with_credentials(
                     &conf.account,
                     &conf.container,

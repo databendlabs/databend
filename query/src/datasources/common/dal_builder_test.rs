@@ -15,7 +15,7 @@
 
 use common_dal::DataAccessorBuilder;
 
-use crate::configs::ASBlobConfig;
+use crate::configs::AzureStorageBlobConfig;
 use crate::configs::DiskStorageConfig;
 use crate::configs::S3StorageConfig;
 use crate::configs::StorageConfig;
@@ -34,7 +34,7 @@ fn test_dal_builder() -> common_exception::Result<()> {
             secret_access_key: "".to_string(),
             bucket: "".to_string(),
         },
-        asb: ASBlobConfig {
+        azure_storage_blob: AzureStorageBlobConfig {
             account: "".to_string(),
             master_key: "".to_string(),
             container: "".to_string(),

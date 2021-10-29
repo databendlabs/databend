@@ -82,7 +82,7 @@ access_key_id = \"\"
 secret_access_key = \"\"
 bucket = \"\"
 
-[storage.asb]
+[storage.azure_storage_blob]
 account = \"\"
 master_key = \"\"
 container = \"\"
