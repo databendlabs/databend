@@ -18,6 +18,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
+use common_meta_types::TableMeta;
 
 use crate::*;
 
@@ -35,9 +36,11 @@ fn test_plan_display_indent() -> Result<()> {
         if_not_exists: true,
         db: "foo".into(),
         table: "bar".into(),
-        schema,
-        engine: "JSON".to_string(),
-        options,
+        table_meta: TableMeta {
+            schema,
+            engine: "JSON".to_string(),
+            options,
+        },
     });
 
     assert_eq!(

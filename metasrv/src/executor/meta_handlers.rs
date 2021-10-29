@@ -36,7 +36,6 @@ use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::LogEntry;
 use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use log::info;
 
@@ -152,11 +151,7 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
             ident: Default::default(),
             desc: format!("'{}'.'{}'", db_name, table_name),
             name: table_name.to_string(),
-            meta: TableMeta {
-                schema: plan.schema.clone(),
-                engine: plan.engine.clone(),
-                options: plan.options.clone(),
-            },
+            meta: plan.table_meta,
         };
 
         let cr = LogEntry {

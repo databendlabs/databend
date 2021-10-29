@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 
 use common_datavalues::DataSchemaRef;
+use common_meta_types::TableMeta;
 
 pub type TableOptions = HashMap<String, String>;
 
@@ -24,15 +25,20 @@ pub struct CreateTablePlan {
     pub db: String,
     /// The table name
     pub table: String,
-    /// The table schema
-    pub schema: DataSchemaRef,
-    /// The file type of physical file
-    pub engine: String,
-    pub options: TableOptions,
+
+    pub table_meta: TableMeta,
 }
 
 impl CreateTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
-        self.schema.clone()
+        self.table_meta.schema.clone()
+    }
+
+    pub fn options(&self) -> &HashMap<String, String> {
+        &self.table_meta.options
+    }
+
+    pub fn engine(&self) -> &str {
+        &self.table_meta.engine
     }
 }

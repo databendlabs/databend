@@ -25,7 +25,6 @@ use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
@@ -170,11 +169,7 @@ impl MetaApiSync for MetaEmbeddedSync {
             desc: format!("'{}'.'{}'", plan.db, plan.table),
             ident: TableIdent::new(self.next_db_id(), 0),
             name: plan.table,
-            meta: TableMeta {
-                schema: plan.schema,
-                options: plan.options,
-                engine: plan.engine,
-            },
+            meta: plan.table_meta,
         };
 
         let mut lock = self.databases.write();
