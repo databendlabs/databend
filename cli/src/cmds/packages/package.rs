@@ -40,19 +40,6 @@ impl PackageCommand {
         PackageCommand { conf, clap }
     }
 
-    async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
-        match self.clap.clone().try_get_matches_from(args.split(' ')) {
-            Ok(matches) => {
-                return self.exec_matches(writer, Some(matches.borrow())).await;
-            }
-            Err(err) => {
-                println!("Cannot get subcommand matches: {}", err);
-            }
-        }
-
-        Ok(())
-    }
-
     pub fn generate() -> App<'static> {
         return App::new("package")
             .about("Package manage databend binary releases")
@@ -96,29 +83,9 @@ impl Command for PackageCommand {
     fn is(&self, s: &str) -> bool {
         s.contains(self.name())
     }
-    async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
-        match args {
-            Some(matches) => match matches.subcommand_name() {
-                Some("fetch") => {
-                    let fetch = FetchCommand::create(self.conf.clone());
-                    fetch.exec_match(writer, matches.subcommand_matches("fetch"))?;
-                }
-                Some("list") => {
-                    let list = ListCommand::create(self.conf.clone());
-                    list.exec_match(writer, matches.subcommand_matches("list"))?;
-                }
-                Some("switch") => {
-                    let switch = SwitchCommand::create(self.conf.clone());
-                    switch.exec_match(writer, matches.subcommand_matches("switch"))?;
-                }
-                _ => writer.write_err("unknown command, usage: package -h"),
-            },
-            None => {
-                println!("None")
-            }
-        }
 
-        Ok(())
+    async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+        self.exec_subcommand(writer, args).await
     }
 
 }

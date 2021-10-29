@@ -15,6 +15,7 @@
 use async_trait::async_trait;
 use dyn_clone::DynClone;
 use clap::ArgMatches;
+use crate::error::CliError;
 
 use crate::cmds::Writer;
 use crate::error::Result;
@@ -44,6 +45,27 @@ pub trait Command: DynClone + Send + Sync {
             }
         }
 
+        Ok(())
+    }
+
+    async fn exec_subcommand(&self, writer: &mut Writer, matches: Option<&ArgMatches>) -> Result<()> {
+        let subcommands = self.subcommands();
+        if subcommands.len() == 0 {
+            return Err(CliError::Unknown(format!("unexpected: no subcommands in {}", self.name())));
+        }
+
+        let matches = match matches {
+            None => return Err(CliError::Unknown(format!("expected args in {}", self.name()))),
+            Some(m) => m,
+        };
+
+        for subcommand in subcommands.into_iter() {
+            if matches.subcommand_name() == Some(subcommand.name()) {
+                return subcommand.exec_matches(writer, matches.subcommand_matches(subcommand.name())).await;
+            }
+        }
+
+        writer.write_err("unknown command");
         Ok(())
     }
 }
