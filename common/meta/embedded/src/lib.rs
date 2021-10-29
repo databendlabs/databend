@@ -20,6 +20,7 @@
 //! `MetaEmbedded` behave exactly the same as a metasrv without distributed logs(raft), since it is driven by
 //! a embedded raft `StateMachine`.
 
+mod kv_api_impl;
 mod meta_api_impl;
 mod meta_embedded;
 
