@@ -32,6 +32,7 @@ use sysinfo::SystemExt;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::clusters::stop::StopCommand;
+use crate::cmds::packages::fetch::get_version;
 use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
 use crate::cmds::status::LocalRuntime;
@@ -221,16 +222,20 @@ impl CreateCommand {
     }
 
     fn ensure_bin(&self, writer: &mut Writer, args: &ArgMatches) -> Result<LocalBinaryPaths> {
-        let status = Status::read(self.conf.clone())?;
+        let mut status = Status::read(self.conf.clone())?;
 
         let mut paths = LocalBinaryPaths {
             query: "".to_string(),
             meta: "".to_string(),
         };
+        let current_version =
+            get_version(&self.conf, args.value_of("version").map(|s| s.to_string()))?;
+        status.version = current_version.clone();
+        status.write()?;
         if self
             .binary_path(
                 format!("{}/bin", self.conf.databend_dir),
-                status.version,
+                current_version,
                 "databend-query".to_string(),
             )
             .is_err()

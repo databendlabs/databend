@@ -138,17 +138,24 @@ pub fn get_rust_architecture() -> Result<String> {
 
     Ok(format!("{}-{}", arch, os))
 }
+
+fn get_latest_tag(conf: &Config) -> Result<String> {
+    let tag_url = conf.mirror.databend_tag_url.clone();
+    let resp = ureq::get(tag_url.as_str()).call()?;
+    let json: serde_json::Value = resp.into_json().unwrap();
+    Ok(format!("{}", json[0]["name"]).replace("\"", ""))
+}
+
+pub fn get_version(conf: &Config, version: Option<String>) -> Result<String> {
+    if version.is_none() || version.as_ref().unwrap().eq("latest") {
+        return get_latest_tag(conf);
+    }
+    Ok(version.unwrap())
+}
+
 impl FetchCommand {
     pub fn create(conf: Config) -> Self {
         FetchCommand { conf }
-    }
-
-    fn get_latest_tag(&self) -> Result<String> {
-        let tag_url = self.conf.mirror.databend_tag_url.clone();
-        let resp = ureq::get(tag_url.as_str()).call()?;
-        let json: serde_json::Value = resp.into_json().unwrap();
-
-        Ok(format!("{}", json[0]["name"]).replace("\"", ""))
     }
 
     fn download_databend(
@@ -192,13 +199,14 @@ impl FetchCommand {
                 let arch = get_rust_architecture();
                 if let Ok(arch) = arch {
                     writer.write_ok(format!("Arch {}", arch).as_str());
-                    let current_tag = if matches.value_of("version").unwrap() == "latest" {
-                        self.get_latest_tag()?
-                    } else {
-                        matches.value_of("version").unwrap().to_string()
-                    };
+                    let current_tag = get_version(
+                        &self.conf,
+                        matches.value_of("version").map(|e| e.to_string()),
+                    )?;
                     writer.write_ok(format!("Tag {}", current_tag).as_str());
-                    if let Err(e) = self.download_databend(&arch, &current_tag, writer, args) {
+                    if let Err(e) =
+                        self.download_databend(&arch, current_tag.as_str(), writer, args)
+                    {
                         writer.write_err(format!("{:?}", e).as_str());
                     }
                 } else {
