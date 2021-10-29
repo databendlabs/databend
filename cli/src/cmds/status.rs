@@ -105,7 +105,7 @@ pub trait LocalRuntime: Send + Sync {
             Some(id) => {
                 match nix::sys::signal::kill(Pid::from_raw(id), Some(nix::sys::signal::SIGINT)) {
                     Ok(_) => {
-                        for _ in 0..3 {
+                        for _ in 0..5 {
                             if !self.is_clean() {
                                 if nix::sys::signal::kill(
                                     Pid::from_raw(id),
@@ -130,9 +130,18 @@ pub trait LocalRuntime: Send + Sync {
                                 return Ok(());
                             }
                         }
-                        return Err(CliError::Unknown(
-                            "timeout from killing process".to_string(),
-                        ));
+
+                        if self.is_clean() {
+                            return Ok(());
+                        } else {
+                            if nix::sys::signal::kill(
+                                Pid::from_raw(id),
+                                Some(nix::sys::signal::SIGKILL),
+                            )
+                            .is_err()
+                            {}
+                            return Ok(());
+                        }
                     }
                     Err(e) => Err(CliError::from(e)),
                 }
