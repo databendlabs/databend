@@ -89,10 +89,12 @@ impl Processor {
         match self.env.conf.clone().clap.subcommand_name() {
             Some("package") => {
                 let cmd = PackageCommand::create(self.env.conf.clone());
-                return cmd.exec_matches(
-                    &mut writer,
-                    self.env.conf.clone().clap.subcommand_matches("package"),
-                ).await;
+                return cmd
+                    .exec_matches(
+                        &mut writer,
+                        self.env.conf.clone().clap.subcommand_matches("package"),
+                    )
+                    .await;
             }
             Some("version") => {
                 let cmd = VersionCommand::create();

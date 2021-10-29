@@ -15,11 +15,11 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use clap::App;
+use clap::ArgMatches;
 use comfy_table::Cell;
 use comfy_table::Row;
 use comfy_table::Table;
-use clap::ArgMatches;
-use clap::App;
 
 use crate::cmds::command::Command;
 use crate::cmds::Writer;

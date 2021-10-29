@@ -295,8 +295,6 @@ async fn execute_query(
         }
         Ok(("".to_string(), ans.stats))
     }
-
-
 }
 
 #[async_trait]
@@ -321,11 +319,7 @@ impl Command for QueryCommand {
         s.contains(self.name())
     }
 
-    async fn exec_matches(
-        &self,
-        writer: &mut Writer,
-        args: Option<&ArgMatches>,
-    ) -> Result<()> {
+    async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         match args {
             Some(matches) => {
                 let profile = matches.value_of_t("profile");
@@ -345,6 +339,4 @@ impl Command for QueryCommand {
         }
         Ok(())
     }
-
-
 }

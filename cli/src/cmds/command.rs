@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
-use dyn_clone::DynClone;
 use clap::ArgMatches;
-use crate::error::CliError;
+use dyn_clone::DynClone;
 
 use crate::cmds::Writer;
+use crate::error::CliError;
 use crate::error::Result;
-use std::sync::Arc;
 
 #[async_trait]
 pub trait Command: DynClone + Send + Sync {
@@ -48,20 +49,34 @@ pub trait Command: DynClone + Send + Sync {
         Ok(())
     }
 
-    async fn exec_subcommand(&self, writer: &mut Writer, matches: Option<&ArgMatches>) -> Result<()> {
+    async fn exec_subcommand(
+        &self,
+        writer: &mut Writer,
+        matches: Option<&ArgMatches>,
+    ) -> Result<()> {
         let subcommands = self.subcommands();
-        if subcommands.len() == 0 {
-            return Err(CliError::Unknown(format!("unexpected: no subcommands in {}", self.name())));
+        if subcommands.is_empty() {
+            return Err(CliError::Unknown(format!(
+                "unexpected: no subcommands in {}",
+                self.name()
+            )));
         }
 
         let matches = match matches {
-            None => return Err(CliError::Unknown(format!("expected args in {}", self.name()))),
+            None => {
+                return Err(CliError::Unknown(format!(
+                    "expected args in {}",
+                    self.name()
+                )))
+            }
             Some(m) => m,
         };
 
         for subcommand in subcommands.into_iter() {
             if matches.subcommand_name() == Some(subcommand.name()) {
-                return subcommand.exec_matches(writer, matches.subcommand_matches(subcommand.name())).await;
+                return subcommand
+                    .exec_matches(writer, matches.subcommand_matches(subcommand.name()))
+                    .await;
             }
         }
 

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -85,7 +84,27 @@ impl Command for PackageCommand {
     }
 
     async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
-        self.exec_subcommand(writer, args).await
-    }
+        match args {
+            Some(matches) => match matches.subcommand_name() {
+                Some("fetch") => {
+                    let fetch = FetchCommand::create(self.conf.clone());
+                    fetch.exec_match(writer, matches.subcommand_matches("fetch"))?;
+                }
+                Some("list") => {
+                    let list = ListCommand::create(self.conf.clone());
+                    list.exec_match(writer, matches.subcommand_matches("list"))?;
+                }
+                Some("switch") => {
+                    let switch = SwitchCommand::create(self.conf.clone());
+                    switch.exec_match(writer, matches.subcommand_matches("switch"))?;
+                }
+                _ => writer.write_err("unknown command, usage: package -h"),
+            },
+            None => {
+                println!("None")
+            }
+        }
 
+        Ok(())
+    }
 }

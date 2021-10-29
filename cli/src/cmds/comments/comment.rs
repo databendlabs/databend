@@ -12,13 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_trait::async_trait;
 use colored::Colorize;
-use std::sync::Arc;
 
-use clap::App;
-use clap::ArgMatches;
-use crate::cmds::command::Command;
 use crate::cmds::Writer;
 use crate::error::Result;
 
@@ -29,33 +24,21 @@ impl CommentCommand {
     pub fn create() -> Self {
         CommentCommand {}
     }
-}
 
-#[async_trait]
-impl Command for CommentCommand {
-    fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         "comment"
     }
 
-    fn about(&self) -> &str {
+    pub fn about(&self) -> &str {
         "# your comments"
     }
 
-    fn clap(&self) -> App<'static> {
-        App::new("#").about("your comments")
-    }
-
-    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
-        vec![]
-    }
-
-    fn is(&self, s: &str) -> bool {
+    pub fn is(&self, s: &str) -> bool {
         s.starts_with('#')
     }
 
-    async fn exec_matches(&self, writer: &mut Writer, _matches: Option<&ArgMatches>) -> Result<()> {
-        // TODO writer.writeln(format!("{}", args.green()).as_str());
+    pub async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
+        writer.writeln(format!("{}", args.green()).as_str());
         Ok(())
     }
-
 }

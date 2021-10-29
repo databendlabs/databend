@@ -17,6 +17,7 @@ use std::fs;
 use tempfile::tempdir;
 
 use crate::cmds::clusters::create::LocalBinaryPaths;
+use crate::cmds::command::Command;
 use crate::cmds::config::GithubMirror;
 use crate::cmds::config::MirrorAsset;
 use crate::cmds::config::Mode;
@@ -35,7 +36,7 @@ fn test_generate_local_meta_config() -> Result<()> {
     };
     let t = tempdir()?;
     conf.databend_dir = t.path().to_str().unwrap().to_string();
-    let args = CreateCommand::generate();
+    let args = CreateCommand::create(conf.clone()).clap();
     // test on default bahavior
     {
         let matches = args
@@ -123,7 +124,7 @@ fn test_generate_local_query_config() -> Result<()> {
     };
     let t = tempdir()?;
     conf.databend_dir = t.path().to_str().unwrap().to_string();
-    let args = CreateCommand::generate();
+    let args = CreateCommand::create(conf.clone()).clap();
     // test on default bahavior
     {
         let matches = args

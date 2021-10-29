@@ -19,7 +19,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use crate::cmds::command::Command;
 use clap::App;
 use clap::AppSettings;
 use clap::Arg;
@@ -35,6 +34,7 @@ use sysinfo::SystemExt;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::clusters::stop::StopCommand;
+use crate::cmds::command::Command;
 use crate::cmds::packages::fetch::get_version;
 use crate::cmds::status::LocalMetaConfig;
 use crate::cmds::status::LocalQueryConfig;
@@ -103,105 +103,6 @@ async fn reconcile_local(status: &mut Status) -> Result<()> {
 impl CreateCommand {
     pub fn create(conf: Config) -> Self {
         CreateCommand { conf }
-    }
-    pub fn generate() -> App<'static> {
-        App::new("create")
-            .setting(AppSettings::DisableVersionFlag)
-            .about("Create a databend cluster based on profile")
-            .arg(
-                Arg::new("profile")
-                    .long("profile")
-                    .about("Profile for deployment, support local and cluster")
-                    .required(false)
-                    .takes_value(true)
-                    .possible_values(&["local"]).default_value("local"),
-            )
-            .arg(
-                Arg::new("meta_address")
-                    .long("meta-address")
-                    .about("Set endpoint to provide metastore service")
-                    .takes_value(true)
-                    .env(databend_query::configs::config_meta::META_ADDRESS),
-            )
-            .arg(
-                Arg::new("log_level")
-                    .long("log-level")
-                    .about("Set logging level")
-                    .takes_value(true)
-                    .env(databend_query::configs::config_log::LOG_LEVEL)
-                    .default_value("INFO"),
-            )
-            .arg(
-                Arg::new("version")
-                    .long("version")
-                    .takes_value(true)
-                    .about("Set databend version to run")
-                    .default_value("latest"),
-            )
-            .arg(
-                Arg::new("num_cpus")
-                    .long("num-cpus")
-                    .env(databend_query::configs::config_query::QUERY_NUM_CPUS)
-                    .takes_value(true)
-                    .about("Set number of cpus for query instance to use")
-                    .default_value(""),
-            )
-            .arg(
-                Arg::new("query_namespace")
-                    .long("query-namespace")
-                    .env(databend_query::configs::config_query::QUERY_NAMESPACE)
-                    .takes_value(true)
-                    .about("Set the namespace for query to work on")
-                    .default_value("test_cluster"),
-            )
-            .arg(
-                Arg::new("query_tenant")
-                    .long("query-tenant")
-                    .env(databend_query::configs::config_query::QUERY_TENANT)
-                    .takes_value(true)
-                    .about("Set the tenant for query to work on")
-                    .default_value("test"),
-            )
-            .arg(
-                Arg::new("mysql_handler_port")
-                    .long("mysql-handler-port")
-                    .takes_value(true)
-                    .env(databend_query::configs::config_query::QUERY_MYSQL_HANDLER_PORT)
-                    .about("Configure the port for mysql endpoint to run queries in mysql client")
-                    .default_value("3307"),
-            )
-            .arg(
-                Arg::new("clickhouse_handler_port")
-                    .long("clickhouse-handler-port")
-                    .env(databend_query::configs::config_query::QUERY_CLICKHOUSE_HANDLER_HOST)
-                    .takes_value(true)
-                    .about("Configure the port clickhouse endpoint to run queries in clickhouse client")
-                    .default_value("9000"),
-            )
-            .arg(
-                Arg::new("storage_type")
-                    .long("storage-type")
-                    .takes_value(true)
-                    .env(databend_query::configs::config_storage::STORAGE_TYPE)
-                    .about("Set the storage medium to store datasets, support disk or s3 object storage ")
-                    .possible_values(&["disk", "s3"]).default_value("disk"),
-            )
-            .arg(
-                Arg::new("disk_path")
-                    .long("disk-path")
-                    .takes_value(true)
-                    // .env(databend_query::configs::config_storage::DISK_STORAGE_DATA_PATH)
-                    .about("Set the root directory to store all datasets")
-                    .value_hint(ValueHint::DirPath),
-            )
-            .arg(
-                Arg::new("force")
-                    .long("force")
-                    // .env(databend_query::configs::config_storage::DISK_STORAGE_DATA_PATH)
-                    .about("Delete existing cluster and install new cluster without check")
-                    .takes_value(false)
-                    ,
-            )
     }
 
     fn binary_path(&self, dir: String, version: String, name: String) -> Result<String> {
@@ -784,7 +685,102 @@ impl Command for CreateCommand {
     }
 
     fn clap(&self) -> App<'static> {
-        CreateCommand::generate()
+        App::new("create")
+            .setting(AppSettings::DisableVersionFlag)
+            .about("Create a databend cluster based on profile")
+            .arg(
+                Arg::new("profile")
+                    .long("profile")
+                    .about("Profile for deployment, support local and cluster")
+                    .required(false)
+                    .takes_value(true)
+                    .possible_values(&["local"]).default_value("local"),
+            )
+            .arg(
+                Arg::new("meta_address")
+                    .long("meta-address")
+                    .about("Set endpoint to provide metastore service")
+                    .takes_value(true)
+                    .env(databend_query::configs::config_meta::META_ADDRESS),
+            )
+            .arg(
+                Arg::new("log_level")
+                    .long("log-level")
+                    .about("Set logging level")
+                    .takes_value(true)
+                    .env(databend_query::configs::config_log::LOG_LEVEL)
+                    .default_value("INFO"),
+            )
+            .arg(
+                Arg::new("version")
+                    .long("version")
+                    .takes_value(true)
+                    .about("Set databend version to run")
+                    .default_value("latest"),
+            )
+            .arg(
+                Arg::new("num_cpus")
+                    .long("num-cpus")
+                    .env(databend_query::configs::config_query::QUERY_NUM_CPUS)
+                    .takes_value(true)
+                    .about("Set number of cpus for query instance to use")
+                    .default_value(""),
+            )
+            .arg(
+                Arg::new("query_namespace")
+                    .long("query-namespace")
+                    .env(databend_query::configs::config_query::QUERY_NAMESPACE)
+                    .takes_value(true)
+                    .about("Set the namespace for query to work on")
+                    .default_value("test_cluster"),
+            )
+            .arg(
+                Arg::new("query_tenant")
+                    .long("query-tenant")
+                    .env(databend_query::configs::config_query::QUERY_TENANT)
+                    .takes_value(true)
+                    .about("Set the tenant for query to work on")
+                    .default_value("test"),
+            )
+            .arg(
+                Arg::new("mysql_handler_port")
+                    .long("mysql-handler-port")
+                    .takes_value(true)
+                    .env(databend_query::configs::config_query::QUERY_MYSQL_HANDLER_PORT)
+                    .about("Configure the port for mysql endpoint to run queries in mysql client")
+                    .default_value("3307"),
+            )
+            .arg(
+                Arg::new("clickhouse_handler_port")
+                    .long("clickhouse-handler-port")
+                    .env(databend_query::configs::config_query::QUERY_CLICKHOUSE_HANDLER_HOST)
+                    .takes_value(true)
+                    .about("Configure the port clickhouse endpoint to run queries in clickhouse client")
+                    .default_value("9000"),
+            )
+            .arg(
+                Arg::new("storage_type")
+                    .long("storage-type")
+                    .takes_value(true)
+                    .env(databend_query::configs::config_storage::STORAGE_TYPE)
+                    .about("Set the storage medium to store datasets, support disk or s3 object storage ")
+                    .possible_values(&["disk", "s3"]).default_value("disk"),
+            )
+            .arg(
+                Arg::new("disk_path")
+                    .long("disk-path")
+                    .takes_value(true)
+                    // .env(databend_query::configs::config_storage::DISK_STORAGE_DATA_PATH)
+                    .about("Set the root directory to store all datasets")
+                    .value_hint(ValueHint::DirPath),
+            )
+            .arg(
+                Arg::new("force")
+                    .long("force")
+                    // .env(databend_query::configs::config_storage::DISK_STORAGE_DATA_PATH)
+                    .about("Delete existing cluster and install new cluster without check")
+                    .takes_value(false),
+            )
     }
 
     fn subcommands(&self) -> Vec<Arc<dyn Command>> {
@@ -820,5 +816,4 @@ impl Command for CreateCommand {
 
         Ok(())
     }
-
 }

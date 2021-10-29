@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use clap::App;
+use clap::ArgMatches;
 use sha2::Digest;
 use sha2::Sha256;
 use sysinfo::SystemExt;
-use clap::ArgMatches;
-use std::sync::Arc;
 
 use crate::cmds::command::Command;
 use crate::cmds::Writer;
@@ -107,5 +108,4 @@ impl Command for VersionCommand {
 
         Ok(())
     }
-
 }

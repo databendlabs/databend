@@ -14,8 +14,10 @@
 
 use std::fmt;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 
+use async_trait::async_trait;
 use clap::App;
 use clap::AppSettings;
 use clap::Arg;
@@ -28,6 +30,7 @@ use sysinfo::SystemExt;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::clusters::utils;
+use crate::cmds::command::Command;
 use crate::cmds::status::LocalRuntime;
 use crate::cmds::Config;
 use crate::cmds::Status;
@@ -58,18 +61,6 @@ impl ViewCommand {
     pub fn create(conf: Config) -> Self {
         ViewCommand { conf }
     }
-    pub fn generate() -> App<'static> {
-        App::new("view")
-            .setting(AppSettings::DisableVersionFlag)
-            .about("View health status of current profile")
-            .arg(
-                Arg::new("profile")
-                    .long("profile")
-                    .about("Profile to view, support local and clusters")
-                    .required(false)
-                    .takes_value(true),
-            )
-    }
 
     async fn local_exec_match(&self, writer: &mut Writer, _args: &ArgMatches) -> Result<()> {
         match self.local_exec_precheck().await {
@@ -94,6 +85,7 @@ impl ViewCommand {
         }
         Ok(())
     }
+
     /// precheck whether on view configs
     async fn local_exec_precheck(&self) -> Result<()> {
         let status = Status::read(self.conf.clone())?;
@@ -180,8 +172,40 @@ impl ViewCommand {
         }
         Ok(table)
     }
+}
 
-    pub async fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+#[async_trait]
+impl Command for ViewCommand {
+    fn name(&self) -> &str {
+        "view"
+    }
+
+    fn clap(&self) -> App<'static> {
+        App::new("view")
+            .setting(AppSettings::DisableVersionFlag)
+            .about("View health status of current profile")
+            .arg(
+                Arg::new("profile")
+                    .long("profile")
+                    .about("Profile to view, support local and clusters")
+                    .required(false)
+                    .takes_value(true),
+            )
+    }
+
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
+    }
+
+    fn about(&self) -> &str {
+        "create" // TODO
+    }
+
+    fn is(&self, s: &str) -> bool {
+        s.contains(self.name())
+    }
+
+    async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         match args {
             Some(matches) => {
                 let status = Status::read(self.conf.clone())?;
