@@ -18,7 +18,9 @@ use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
@@ -46,6 +48,8 @@ pub trait Catalog {
     fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>>;
 
     fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
+
+    fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)>;
 
     fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
 

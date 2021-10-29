@@ -20,7 +20,9 @@ use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
@@ -122,6 +124,15 @@ impl Catalog for SystemCatalog {
         let _db = self.get_database(db_name)?;
 
         Ok(self.sys_db_meta.name_to_table.values().cloned().collect())
+    }
+
+    fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
+        let table =
+            self.sys_db_meta.id_to_table.get(&table_id).ok_or_else(|| {
+                ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id))
+            })?;
+        let ti = table.get_table_info();
+        Ok((ti.ident.clone(), Arc::new(ti.meta.clone())))
     }
 
     fn upsert_table_option(
