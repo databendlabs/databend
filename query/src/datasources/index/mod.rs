@@ -22,8 +22,7 @@ mod range_filter_test;
 
 mod index_min_max;
 mod index_sparse;
-#[allow(dead_code)]
-pub mod range_filter;
+mod range_filter;
 
 pub use index_min_max::MinMaxIndex;
 pub use index_sparse::SparseIndex;
