@@ -14,16 +14,38 @@
 
 use async_trait::async_trait;
 use dyn_clone::DynClone;
+use clap::ArgMatches;
 
 use crate::cmds::Writer;
 use crate::error::Result;
+use std::sync::Arc;
 
 #[async_trait]
 pub trait Command: DynClone + Send + Sync {
     fn name(&self) -> &str;
+
+    fn clap(&self) -> clap::App<'static>;
+
     fn about(&self) -> &str;
+
     fn is(&self, s: &str) -> bool;
-    async fn exec(&self, writer: &mut Writer, args: String) -> Result<()>;
+
+    fn subcommands(&self) -> Vec<Arc<dyn Command>>;
+
+    async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()>;
+
+    async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
+        match self.clap().try_get_matches_from(args.split(' ')) {
+            Ok(matches) => {
+                return self.exec_matches(writer, Some(&matches)).await;
+            }
+            Err(err) => {
+                println!("Cannot get subcommand matches: {}", err);
+            }
+        }
+
+        Ok(())
+    }
 }
 
 dyn_clone::clone_trait_object!(Command);

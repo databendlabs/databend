@@ -14,6 +14,7 @@
 
 use std::borrow::Borrow;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use clap::App;
@@ -64,6 +65,7 @@ impl ClusterCommand {
         let clap = ClusterCommand::generate();
         ClusterCommand { conf, clap }
     }
+
     pub fn generate() -> App<'static> {
         let app = App::new("cluster")
             .setting(AppSettings::DisableVersionFlag)
@@ -74,34 +76,13 @@ impl ClusterCommand {
         app
     }
 
-    pub(crate) async fn exec_match(
-        &self,
-        writer: &mut Writer,
-        args: Option<&ArgMatches>,
-    ) -> Result<()> {
-        match args {
-            Some(matches) => match matches.subcommand_name() {
-                Some("create") => {
-                    let create = CreateCommand::create(self.conf.clone());
-                    create
-                        .exec_match(writer, matches.subcommand_matches("create"))
-                        .await?;
-                }
-                Some("delete") => {
-                    let create = StopCommand::create(self.conf.clone());
-                    create
-                        .exec_match(writer, matches.subcommand_matches("delete"))
-                        .await?;
-                }
-                Some("view") => {
-                    let view = ViewCommand::create(self.conf.clone());
-                    view.exec_match(writer, matches.subcommand_matches("view"))
-                        .await?;
-                }
-                _ => writer.write_err("unknown command, usage: cluster -h"),
-            },
-            None => {
-                println!("None")
+    pub async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
+        match self.clap.clone().try_get_matches_from(args.split(' ')) {
+            Ok(matches) => {
+                return self.exec_matches(writer, Some(matches.borrow())).await;
+            }
+            Err(err) => {
+                println!("Cannot get subcommand matches: {}", err);
             }
         }
 
@@ -115,6 +96,16 @@ impl Command for ClusterCommand {
         "cluster"
     }
 
+    fn clap(&self) -> App<'static> {
+        self.clap.clone()
+    }
+
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![
+            Arc::new(CreateCommand::create(self.conf.clone())),
+        ]
+    }
+
     fn about(&self) -> &str {
         "Cluster life cycle management"
     }
@@ -123,13 +114,34 @@ impl Command for ClusterCommand {
         s.contains(self.name())
     }
 
-    async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
-        match self.clap.clone().try_get_matches_from(args.split(' ')) {
-            Ok(matches) => {
-                return self.exec_match(writer, Some(matches.borrow())).await;
-            }
-            Err(err) => {
-                println!("Cannot get subcommand matches: {}", err);
+    async fn exec_matches(
+        &self,
+        writer: &mut Writer,
+        args: Option<&ArgMatches>,
+    ) -> Result<()> {
+        match args {
+            Some(matches) => match matches.subcommand_name() {
+                Some("create") => {
+                    let create = CreateCommand::create(self.conf.clone());
+                    create
+                        .exec_matches(writer, matches.subcommand_matches("create"))
+                        .await?;
+                }
+                Some("delete") => {
+                    let stop = StopCommand::create(self.conf.clone());
+                    stop
+                        .exec_match(writer, matches.subcommand_matches("delete"))
+                        .await?;
+                }
+                Some("view") => {
+                    let view = ViewCommand::create(self.conf.clone());
+                    view.exec_match(writer, matches.subcommand_matches("view"))
+                        .await?;
+                }
+                _ => writer.write_err("unknown command, usage: cluster -h"),
+            },
+            None => {
+                println!("None")
             }
         }
 

@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use comfy_table::Cell;
 use comfy_table::Row;
 use comfy_table::Table;
+use clap::ArgMatches;
+use clap::App;
 
 use crate::cmds::command::Command;
 use crate::cmds::Writer;
@@ -38,6 +42,14 @@ impl Command for HelpCommand {
         "help"
     }
 
+    fn clap(&self) -> App<'static> {
+        App::new("help").about("show help")
+    }
+
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
+    }
+
     fn about(&self) -> &str {
         "help"
     }
@@ -46,7 +58,7 @@ impl Command for HelpCommand {
         self.name() == s
     }
 
-    async fn exec(&self, writer: &mut Writer, _args: String) -> Result<()> {
+    async fn exec_matches(&self, writer: &mut Writer, _args: Option<&ArgMatches>) -> Result<()> {
         let mut table = Table::new();
         table.load_preset("||--+-++|    ++++++");
         // Title.

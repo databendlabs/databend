@@ -17,6 +17,8 @@ use clap::App;
 use sha2::Digest;
 use sha2::Sha256;
 use sysinfo::SystemExt;
+use clap::ArgMatches;
+use std::sync::Arc;
 
 use crate::cmds::command::Command;
 use crate::cmds::Writer;
@@ -33,6 +35,7 @@ impl VersionCommand {
     pub fn generate() -> App<'static> {
         return App::new("version").about("Version info for local cli and remote cluster");
     }
+
     fn cli_sha_info(&self) -> Option<String> {
         let path = std::env::current_exe().ok()?;
         let cli_bin = std::fs::read(path).ok()?;
@@ -54,6 +57,10 @@ impl VersionCommand {
 
         Some(info)
     }
+
+    pub async fn exec(&self, writer: &mut Writer, _args: String) -> Result<()> {
+        self.exec_matches(writer, None).await
+    }
 }
 
 #[async_trait]
@@ -62,15 +69,23 @@ impl Command for VersionCommand {
         "version"
     }
 
+    fn clap(&self) -> App<'static> {
+        VersionCommand::generate()
+    }
+
     fn about(&self) -> &str {
         "Databend CLI version"
+    }
+
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
     }
 
     fn is(&self, s: &str) -> bool {
         self.name() == s
     }
 
-    async fn exec(&self, writer: &mut Writer, _args: String) -> Result<()> {
+    async fn exec_matches(&self, writer: &mut Writer, _args: Option<&ArgMatches>) -> Result<()> {
         let build_semver = option_env!("VERGEN_BUILD_SEMVER");
         let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
         let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
@@ -92,4 +107,5 @@ impl Command for VersionCommand {
 
         Ok(())
     }
+
 }

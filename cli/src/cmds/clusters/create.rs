@@ -16,7 +16,10 @@ use std::fs;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 
+use async_trait::async_trait;
+use crate::cmds::command::Command;
 use clap::App;
 use clap::AppSettings;
 use clap::Arg;
@@ -772,8 +775,31 @@ impl CreateCommand {
 
         Ok(())
     }
+}
 
-    pub async fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+#[async_trait]
+impl Command for CreateCommand {
+    fn name(&self) -> &str {
+        "create"
+    }
+
+    fn clap(&self) -> App<'static> {
+        CreateCommand::generate()
+    }
+
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
+    }
+
+    fn about(&self) -> &str {
+        "create" // TODO
+    }
+
+    fn is(&self, s: &str) -> bool {
+        s.contains(self.name())
+    }
+
+    async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         match args {
             Some(matches) => {
                 let profile = matches.value_of_t("profile");
@@ -794,4 +820,5 @@ impl CreateCommand {
 
         Ok(())
     }
+
 }

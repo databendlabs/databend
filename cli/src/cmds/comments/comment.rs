@@ -14,7 +14,10 @@
 
 use async_trait::async_trait;
 use colored::Colorize;
+use std::sync::Arc;
 
+use clap::App;
+use clap::ArgMatches;
 use crate::cmds::command::Command;
 use crate::cmds::Writer;
 use crate::error::Result;
@@ -38,12 +41,21 @@ impl Command for CommentCommand {
         "# your comments"
     }
 
+    fn clap(&self) -> App<'static> {
+        App::new("#").about("your comments")
+    }
+
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
+    }
+
     fn is(&self, s: &str) -> bool {
         s.starts_with('#')
     }
 
-    async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
-        writer.writeln(format!("{}", args.green()).as_str());
+    async fn exec_matches(&self, writer: &mut Writer, _matches: Option<&ArgMatches>) -> Result<()> {
+        // TODO writer.writeln(format!("{}", args.green()).as_str());
         Ok(())
     }
+
 }

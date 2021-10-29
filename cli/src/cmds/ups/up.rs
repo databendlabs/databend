@@ -15,6 +15,7 @@
 use std::borrow::Borrow;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use clap::App;
@@ -248,60 +249,18 @@ impl UpCommand {
             );
         app
     }
-
-    pub(crate) async fn exec_match(
-        &self,
-        writer: &mut Writer,
-        args: Option<&ArgMatches>,
-    ) -> Result<()> {
-        match args {
-            Some(matches) => {
-                let profile = matches.value_of_t("profile");
-                match profile {
-                    Ok(ClusterProfile::Local) => {
-                        return self.local_exec_match(writer, matches).await;
-                    }
-                    Ok(ClusterProfile::Cluster) => {
-                        todo!()
-                    }
-                    Err(_) => writer.write_err("currently profile only support cluster or local"),
-                }
+ 
+    async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
+        match self.clap.clone().try_get_matches_from(args.split(' ')) {
+            Ok(matches) => {
+                return self.exec_matches(writer, Some(matches.borrow())).await;
             }
-            None => {
-                println!("none ");
+            Err(err) => {
+                println!("Cannot get subcommand matches: {}", err);
             }
         }
+
         Ok(())
-    }
-    async fn download_dataset(&self, dataset: DataSets) -> Result<String> {
-        return match dataset {
-            DataSets::OntimeMini(url, _) => {
-                let status = Status::read(self.conf.clone())?;
-                let cfgs = status.get_local_query_configs();
-                let (_, query_config) = cfgs.get(0).expect("cannot get local query config");
-                let dataset_dir = query_config.config.storage.disk.data_path.as_str();
-                let dataset_location = format!("{}/ontime_2019_2021.csv", dataset_dir);
-                let download_location = format!(
-                    "{}/downloads/datasets/ontime_mini.tar.gz",
-                    self.conf.databend_dir
-                );
-                std::fs::create_dir_all(Path::new(
-                    format!("{}/downloads/datasets/", self.conf.databend_dir).as_str(),
-                ))?;
-                if let Err(e) = download_and_unpack(
-                    url,
-                    &*download_location,
-                    dataset_dir,
-                    Some(dataset_location.clone()),
-                ) {
-                    return Err(CliError::Unknown(format!(
-                        "Cannot download/unpack dataset {:?}",
-                        e
-                    )));
-                }
-                Ok::<String, CliError>(dataset_location)
-            }
-        };
     }
 
     async fn download_playground(&self) -> Result<String> {
@@ -498,11 +457,49 @@ impl UpCommand {
     fn local_exec_precheck(&self, _args: &ArgMatches) -> Result<()> {
         Ok(())
     }
+
+   async fn download_dataset(&self, dataset: DataSets) -> Result<String> {
+        return match dataset {
+            DataSets::OntimeMini(url, _) => {
+                let status = Status::read(self.conf.clone())?;
+                let cfgs = status.get_local_query_configs();
+                let (_, query_config) = cfgs.get(0).expect("cannot get local query config");
+                let dataset_dir = query_config.config.storage.disk.data_path.as_str();
+                let dataset_location = format!("{}/ontime_2019_2021.csv", dataset_dir);
+                let download_location = format!(
+                    "{}/downloads/datasets/ontime_mini.tar.gz",
+                    self.conf.databend_dir
+                );
+                std::fs::create_dir_all(Path::new(
+                    format!("{}/downloads/datasets/", self.conf.databend_dir).as_str(),
+                ))?;
+                if let Err(e) = download_and_unpack(
+                    url,
+                    &*download_location,
+                    dataset_dir,
+                    Some(dataset_location.clone()),
+                ) {
+                    return Err(CliError::Unknown(format!(
+                        "Cannot download/unpack dataset {:?}",
+                        e
+                    )));
+                }
+                Ok::<String, CliError>(dataset_location)
+            }
+        };
+    }
+
+
 }
+
 #[async_trait]
 impl Command for UpCommand {
     fn name(&self) -> &str {
         "up"
+    }
+
+    fn clap(&self) -> App<'static> {
+        self.clap.clone()
     }
 
     fn about(&self) -> &str {
@@ -513,16 +510,33 @@ impl Command for UpCommand {
         s.contains(self.name())
     }
 
-    async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
-        match self.clap.clone().try_get_matches_from(args.split(' ')) {
-            Ok(matches) => {
-                return self.exec_match(writer, Some(matches.borrow())).await;
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
+    }
+
+    async fn exec_matches(
+        &self,
+        writer: &mut Writer,
+        args: Option<&ArgMatches>,
+    ) -> Result<()> {
+        match args {
+            Some(matches) => {
+                let profile = matches.value_of_t("profile");
+                match profile {
+                    Ok(ClusterProfile::Local) => {
+                        return self.local_exec_match(writer, matches).await;
+                    }
+                    Ok(ClusterProfile::Cluster) => {
+                        todo!()
+                    }
+                    Err(_) => writer.write_err("currently profile only support cluster or local"),
+                }
             }
-            Err(err) => {
-                println!("Cannot get subcommand matches: {}", err);
+            None => {
+                println!("none ");
             }
         }
-
         Ok(())
     }
+
 }

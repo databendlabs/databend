@@ -89,19 +89,19 @@ impl Processor {
         match self.env.conf.clone().clap.subcommand_name() {
             Some("package") => {
                 let cmd = PackageCommand::create(self.env.conf.clone());
-                return cmd.exec_match(
+                return cmd.exec_matches(
                     &mut writer,
                     self.env.conf.clone().clap.subcommand_matches("package"),
-                );
+                ).await;
             }
             Some("version") => {
                 let cmd = VersionCommand::create();
-                cmd.exec(&mut writer, "".parse().unwrap()).await
+                cmd.exec_matches(&mut writer, None).await
             }
             Some("cluster") => {
                 let cmd = ClusterCommand::create(self.env.conf.clone());
                 return cmd
-                    .exec_match(
+                    .exec_matches(
                         &mut writer,
                         self.env.conf.clone().clap.subcommand_matches("cluster"),
                     )
@@ -109,7 +109,7 @@ impl Processor {
             }
             Some("query") => {
                 let cmd = QueryCommand::create(self.env.conf.clone());
-                cmd.exec_match(
+                cmd.exec_matches(
                     &mut writer,
                     self.env.conf.clone().clap.subcommand_matches("query"),
                 )
@@ -137,7 +137,7 @@ impl Processor {
             }
             Some("up") => {
                 let cmd = UpCommand::create(self.env.conf.clone());
-                cmd.exec_match(
+                cmd.exec_matches(
                     &mut writer,
                     self.env.conf.clone().clap.subcommand_matches("up"),
                 )
