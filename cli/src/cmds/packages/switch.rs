@@ -15,13 +15,13 @@
 use std::fs;
 use std::sync::Arc;
 
-use clap::ArgMatches;
-use clap::Arg;
 use clap::App;
+use clap::Arg;
+use clap::ArgMatches;
 
+use crate::cmds::command::Command;
 use crate::cmds::Config;
 use crate::cmds::ListCommand;
-use crate::cmds::command::Command;
 use crate::cmds::Status;
 use crate::cmds::Writer;
 use crate::error::Result;
@@ -55,8 +55,8 @@ impl Command for SwitchCommand {
         App::new("switch")
             .about(self.about())
             .arg(Arg::new("version").required(true).about(
-                "Version of databend package, e.g. v0.4.69-nightly. Check the versions: package list"
-            ))
+            "Version of databend package, e.g. v0.4.69-nightly. Check the versions: package list",
+        ))
     }
 
     fn subcommands(&self) -> Vec<Arc<dyn Command>> {

@@ -18,6 +18,9 @@ use std::io;
 use std::path::Path;
 use std::sync::Arc;
 
+use async_trait::async_trait;
+use clap::App;
+use clap::Arg;
 use clap::ArgMatches;
 use flate2::read::GzDecoder;
 use fs_extra::dir;
@@ -25,9 +28,6 @@ use fs_extra::move_items;
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 use tar::Archive;
-use async_trait::async_trait;
-use clap::App;
-use clap::Arg;
 
 use crate::cmds::command::Command;
 use crate::cmds::Config;
@@ -206,9 +206,11 @@ impl Command for FetchCommand {
     }
 
     fn clap(&self) -> App<'static> {
-        App::new("fetch")
-            .about(self.about())
-            .arg(Arg::new("version").about("Version of databend package to fetch").default_value("latest"))
+        App::new("fetch").about(self.about()).arg(
+            Arg::new("version")
+                .about("Version of databend package to fetch")
+                .default_value("latest"),
+        )
     }
 
     fn subcommands(&self) -> Vec<Arc<dyn Command>> {
@@ -234,8 +236,9 @@ impl Command for FetchCommand {
                         matches.value_of("version").map(|e| e.to_string()),
                     )?;
                     writer.write_ok(format!("Tag {}", current_tag).as_str());
-                    if let Err(e) =
-                        self.download_databend(&arch, current_tag.as_str(), writer, args).await
+                    if let Err(e) = self
+                        .download_databend(&arch, current_tag.as_str(), writer, args)
+                        .await
                     {
                         writer.write_err(format!("{:?}", e).as_str());
                     }
@@ -249,6 +252,5 @@ impl Command for FetchCommand {
         }
 
         Ok(())
-
     }
 }

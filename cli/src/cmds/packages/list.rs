@@ -15,12 +15,12 @@
 use std::fs;
 use std::sync::Arc;
 
+use clap::App;
 use clap::ArgMatches;
 use comfy_table::Cell;
 use comfy_table::CellAlignment;
 use comfy_table::Color;
 use comfy_table::Table;
-use clap::App;
 
 use crate::cmds::command::Command;
 use crate::cmds::Config;
@@ -46,8 +46,7 @@ impl Command for ListCommand {
     }
 
     fn clap(&self) -> App<'static> {
-        App::new("list")
-            .about(self.about())
+        App::new("list").about(self.about())
     }
 
     fn subcommands(&self) -> Vec<Arc<dyn Command>> {

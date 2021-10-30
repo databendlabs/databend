@@ -149,9 +149,13 @@ impl CreateCommand {
                 "Cannot find databend binary path in version {}, start to download",
                 args.value_of("version").unwrap()
             ));
-            FetchCommand::create(self.conf.clone()).exec_matches(writer, Some(args)).await?;
+            FetchCommand::create(self.conf.clone())
+                .exec_matches(writer, Some(args))
+                .await?;
         }
-        SwitchCommand::create(self.conf.clone()).exec_matches(writer, Some(args)).await?;
+        SwitchCommand::create(self.conf.clone())
+            .exec_matches(writer, Some(args))
+            .await?;
         let status = Status::read(self.conf.clone())?;
         paths.query = self
             .binary_path(
