@@ -44,49 +44,49 @@ impl StopCommand {
         status: &mut Status,
         writer: &mut Writer,
     ) -> Result<()> {
-        writer.write_ok("⚠️  start to clean up local services");
+        writer.write_warn("Start to clean up local services".to_string());
         for (fs, query) in status.get_local_query_configs() {
             if query.kill().await.is_err() {
                 if Status::delete_local_config(status, "query".to_string(), fs.clone()).is_err() {
-                    writer.write_err(&*format!("cannot clean query config in {}", fs.clone()))
+                    writer.write_err(format!("Cannot clean query config in {}", fs.clone()))
                 }
-                writer.write_err(&*format!(
-                    "cannot kill query service with config in {}",
+                writer.write_err(format!(
+                    "Cannot kill query service with config in {}",
                     fs.clone()
                 ))
             }
 
             if Status::delete_local_config(status, "query".to_string(), fs.clone()).is_err() {
-                writer.write_err(&*format!("cannot clean query config in {}", fs.clone()))
+                writer.write_err(format!("cannot clean query config in {}", fs.clone()))
             }
-            writer.write_ok(format!("⚠️  stopped query service with config in {}", fs).as_str());
+            writer.write_warn(format!("Stopped query service with config in {}", fs));
         }
         if status.get_local_meta_config().is_some() {
             let (fs, meta) = status.get_local_meta_config().unwrap();
             if meta.kill().await.is_err() {
-                writer.write_err(&*format!("cannot kill meta service with config in {}", fs));
+                writer.write_err(format!("Cannot kill meta service with config in {}", fs));
                 if Status::delete_local_config(status, "meta".to_string(), fs.clone()).is_err() {
-                    writer.write_err(&*format!("cannot clean meta config in {}", fs))
+                    writer.write_err(format!("Cannot clean meta config in {}", fs))
                 }
             }
             Status::delete_local_config(status, "meta".to_string(), fs.clone())
                 .expect("cannot clean meta config");
-            writer.write_ok(format!("⚠️  stopped meta service with config in {}", fs).as_str());
+            writer.write_warn(format!("Stopped meta service with config in {}", fs));
         }
         if status.get_local_dashboard_config().is_some() {
             let (fs, dash) = status.get_local_dashboard_config().unwrap();
             if dash.kill().await.is_err() {
-                writer.write_err(&*format!(
-                    "cannot kill dashboard service with config in {}",
+                writer.write_err(format!(
+                    "Cannot kill dashboard service with config in {}",
                     fs
                 ));
                 if Status::delete_local_config(status, "meta".to_string(), fs.clone()).is_err() {
-                    writer.write_err(&*format!("cannot clean meta config in {}", fs))
+                    writer.write_err(format!("Cannot clean meta config in {}", fs))
                 }
             }
             Status::delete_local_config(status, "dashboard".to_string(), fs.clone())
                 .expect("cannot clean meta config");
-            writer.write_ok(format!("⚠️ stopped meta service with config in {}", fs).as_str());
+            writer.write_warn(format!("Stopped meta service with config in {}", fs));
         }
         Ok(())
     }
@@ -97,14 +97,14 @@ impl StopCommand {
                 let mut status = Status::read(self.conf.clone())?;
                 if let Err(e) = StopCommand::stop_current_local_services(&mut status, writer).await
                 {
-                    writer.write_err(format!("{:?}", e).as_str());
+                    writer.write_err(format!("{:?}", e));
                 };
                 status.current_profile = None;
                 status.write()?;
-                writer.write_ok("🚀 stopped services");
+                writer.write_rocket("Stopped all services".to_string());
             }
             Err(e) => {
-                writer.write_err(format!("{:?}", e).as_str());
+                writer.write_err(format!("{:?}", e));
             }
         }
         //(TODO) purge semantics
@@ -156,16 +156,16 @@ impl Command for StopCommand {
             )
     }
 
-    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
-        vec![]
-    }
-
     fn about(&self) -> &str {
         "stop" // TODO
     }
 
     fn is(&self, s: &str) -> bool {
         s.contains(self.name())
+    }
+
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
     }
 
     async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
@@ -180,11 +180,11 @@ impl Command for StopCommand {
                     Ok(ClusterProfile::Cluster) => {
                         todo!()
                     }
-                    Err(e) => writer.write_err(format!("cannot parse profile, {:?}", e).as_str()),
+                    Err(e) => writer.write_err(format!("Cannot parse profile, {:?}", e)),
                 }
             }
             None => {
-                writer.write_err(&*"cannot find matches for cluster delete");
+                writer.write_err("Cannot find matches for cluster delete".to_string());
             }
         }
 

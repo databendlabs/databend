@@ -187,7 +187,7 @@ impl FetchCommand {
             &*bin_unpack_dir,
             Some(bin_file),
         ) {
-            writer.write_err(format!("Cannot download or unpack error: {:?}", e).as_str())
+            writer.write_err(format!("Cannot download or unpack error: {:?}", e))
         }
         let switch = SwitchCommand::create(self.conf.clone());
         switch.exec_match(writer, args)
@@ -198,19 +198,19 @@ impl FetchCommand {
             Some(matches) => {
                 let arch = get_rust_architecture();
                 if let Ok(arch) = arch {
-                    writer.write_ok(format!("Arch {}", arch).as_str());
+                    writer.write_ok(format!("Arch {}", arch));
                     let current_tag = get_version(
                         &self.conf,
                         matches.value_of("version").map(|e| e.to_string()),
                     )?;
-                    writer.write_ok(format!("Tag {}", current_tag).as_str());
+                    writer.write_ok(format!("Tag {}", current_tag));
                     if let Err(e) =
                         self.download_databend(&arch, current_tag.as_str(), writer, args)
                     {
-                        writer.write_err(format!("{:?}", e).as_str());
+                        writer.write_err(format!("{:?}", e));
                     }
                 } else {
-                    writer.write_err(format!("{:?}", arch.unwrap_err()).as_str());
+                    writer.write_err(format!("{:?}", arch.unwrap_err()));
                 }
             }
             None => {
