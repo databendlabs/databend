@@ -311,7 +311,7 @@ impl UpCommand {
 
     async fn local_up(&self, dataset: DataSets, writer: &mut Writer) -> Result<()> {
         // bootstrap cluster
-        writer.write_ok("Welcome to use our databend product 🎉🎉🎉");
+        writer.write_ok("Welcome to use our databend product 🎉🎉🎉".to_string());
         let cluster = ClusterCommand::create(self.conf.clone());
         if let Err(e) = cluster
             .exec(writer, ["cluster", "create", "--force"].join(" "))
@@ -322,9 +322,10 @@ impl UpCommand {
                 e
             )));
         }
-        writer.write_ok("Start to download dataset");
+        writer.write_ok("Start to download dataset".to_string());
         match self.download_dataset(dataset.clone()).await {
             Ok(dataset_location) => {
+                writer.write_ok(format!("Download dataset to {}", dataset_location));
                 match dataset {
                     DataSets::OntimeMini(_, ddl) => {
                         if let Err(e) = self
@@ -335,7 +336,7 @@ impl UpCommand {
                         }
                     }
                 }
-                writer.write_ok("Start to download playground");
+                writer.write_ok("Start to download playground".to_string());
 
                 match self.download_playground().await {
                     Ok(path) => {
@@ -387,15 +388,12 @@ impl UpCommand {
                     "dashboard_config_0.yaml".to_string(),
                     &dash_config.clone(),
                 )?;
-                writer.write_ok(
-                    format!(
-                        "👏 successfully started meta service listen on {}",
-                        dash_config
-                            .listen_addr
-                            .expect("dashboard config has no listen address")
-                    )
-                    .as_str(),
-                );
+                writer.write_ok(format!(
+                    "👏 Successfully started meta service listen on {}",
+                    dash_config
+                        .listen_addr
+                        .expect("dashboard config has no listen address")
+                ));
                 Ok(())
             }
             Err(e) => Err(e),
@@ -448,23 +446,23 @@ impl UpCommand {
                 match dataset {
                     Ok(d) => {
                         if let Err(e) = self.local_up(d, writer).await {
-                            writer.write_err(&*format!("{:?}", e));
+                            writer.write_err(format!("{:?}", e));
                             let mut status = Status::read(self.conf.clone())?;
                             if let Err(e) =
                                 StopCommand::stop_current_local_services(&mut status, writer).await
                             {
-                                writer.write_err(&*format!("{:?}", e));
+                                writer.write_err(format!("{:?}", e));
                             }
                         }
                     }
                     Err(e) => {
-                        writer.write_err(&*format!("Cannot find public dataset, error {:?}", e));
+                        writer.write_err(format!("Cannot find public dataset, error {:?}", e));
                     }
                 }
                 Ok(())
             }
             Err(e) => {
-                writer.write_err(&*format!("Query command precheck failed, error {:?}", e));
+                writer.write_err(format!("Query command precheck failed, error {:?}", e));
                 Ok(())
             }
         }
@@ -509,7 +507,8 @@ impl Command for UpCommand {
                     Ok(ClusterProfile::Cluster) => {
                         todo!()
                     }
-                    Err(_) => writer.write_err("currently profile only support cluster or local"),
+                    Err(_) => writer
+                        .write_err("Currently profile only support cluster or local".to_string()),
                 }
             }
             None => {

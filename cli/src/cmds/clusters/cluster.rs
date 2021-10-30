@@ -87,20 +87,20 @@ impl Command for ClusterCommand {
         app
     }
 
-    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
-        vec![
-            Arc::new(CreateCommand::create(self.conf.clone())),
-            Arc::new(StopCommand::create(self.conf.clone())),
-            Arc::new(ViewCommand::create(self.conf.clone())),
-        ]
-    }
-
     fn about(&self) -> &str {
         "Cluster life cycle management"
     }
 
     fn is(&self, s: &str) -> bool {
         s.contains(self.name())
+    }
+
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![
+            Arc::new(CreateCommand::create(self.conf.clone())),
+            Arc::new(StopCommand::create(self.conf.clone())),
+            Arc::new(ViewCommand::create(self.conf.clone())),
+        ]
     }
 
     async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {

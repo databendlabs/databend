@@ -98,7 +98,7 @@ impl Command for PackageCommand {
                     let switch = SwitchCommand::create(self.conf.clone());
                     switch.exec_match(writer, matches.subcommand_matches("switch"))?;
                 }
-                _ => writer.write_err("unknown command, usage: package -h"),
+                _ => writer.write_err("Unknown command, usage: package -h".to_string()),
             },
             None => {
                 println!("None")

@@ -145,9 +145,10 @@ impl CreateCommand {
             .is_err()
         {
             // fetch latest version of databend binary if version not found
-            writer.write_ok(&*format!(
-                "Cannot find databend binary path in version {}, start to download",
-                args.value_of("version").unwrap()
+            writer.write_ok(format!(
+                "Cannot find databend binary path in version {}, start to download from {:?}",
+                args.value_of("version").unwrap(),
+                status.mirrors
             ));
             FetchCommand::create(self.conf.clone()).exec_match(writer, Some(args))?;
         }
@@ -451,13 +452,10 @@ impl CreateCommand {
                     "meta_config_0.yaml".to_string(),
                     &meta_config.clone(),
                 )?;
-                writer.write_ok(
-                    format!(
-                        "👏 successfully started meta service with rpc endpoint {}",
-                        meta_config.config.flight_api_address
-                    )
-                    .as_str(),
-                );
+                writer.write_ok(format!(
+                    "Successfully started meta service with rpc endpoint {}",
+                    meta_config.config.flight_api_address
+                ));
                 Ok(())
             }
             Err(e) => Err(e),
@@ -480,28 +478,31 @@ impl CreateCommand {
                     &query_config.clone(),
                 )?;
                 status.write()?;
-                writer.write_ok("👏 successfully started query service.");
+                writer.write_ok("Successfully started query service.".to_string());
                 writer.write_ok(
-                    "✅  To run queries through RESTful api, run: bendctl query 'SQL statement'",
+                    "To run queries through bendctl, run: bendctl query 'your SQL'".to_string(),
                 );
                 writer.write_ok(
-                    "✅  For example: bendctl query 'SELECT sum(number), avg(number) FROM numbers(100);'",
+                    "For example: bendctl query 'SELECT sum(number), avg(number) FROM numbers(100)'".to_string()
                 );
+                writer.write_ok(format!(
+                    "To process mysql queries, run: mysql -h{} -P{} -uroot",
+                    query_config.config.query.mysql_handler_host,
+                    query_config.config.query.mysql_handler_port
+                ));
                 writer.write_ok(
                     format!(
-                        "✅ To process mysql queries, run: mysql -h {} -P {} -uroot",
-                        query_config.config.query.mysql_handler_host,
-                        query_config.config.query.mysql_handler_port
-                    )
-                    .as_str(),
-                );
-                writer.write_ok(
-                    format!(
-                        "✅ To process clickhouse queries, run: clickhouse client --host {} --port {} --user root",
+                        "To process clickhouse queries, run: clickhouse client --host {} --port {} --user root",
                         query_config.config.query.clickhouse_handler_host,
                         query_config.config.query.clickhouse_handler_port
                     )
-                        .as_str(),
+                );
+                writer.write_ok(
+                    format!(
+                        "To process HTTP REST queries, run: curl --location --request POST '{}:{}/v1/statement/' --header 'Content-Type: text/plain' --data-raw 'your SQL'",
+                        query_config.config.query.http_handler_host,
+                        query_config.config.query.http_handler_port
+                    )
                 );
 
                 Ok(())
@@ -513,21 +514,21 @@ impl CreateCommand {
     async fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
         match self.local_exec_precheck(writer, args).await {
             Ok(_) => {
-                writer.write_ok("databend cluster precheck passed!");
+                writer.write_ok("Databend cluster pre-check passed!".to_string());
                 // ensuring needed dependencies
                 let bin_path = self
                     .ensure_bin(writer, args)
                     .expect("cannot find binary path");
                 let meta_config = self
                     .generate_local_meta_config(args, bin_path.clone())
-                    .expect("cannot generate metaservice config");
+                    .expect("Cannot generate meta-service config");
                 {
                     let res = self
                         .provision_local_meta_service(writer, meta_config.clone())
                         .await;
                     if res.is_err() {
-                        writer.write_err(&*format!(
-                            "❌ Cannot provison meta service, error: {:?}, please check the logs output by: tail -n 100 {}/*",
+                        writer.write_err(format!(
+                            "Cannot provision meta service, error: {:?}, please check the logs output by: tail -n 100 {}/*",
                             res.unwrap_err(),
                             meta_config.log_dir.unwrap_or_else(|| "unknown log_dir".into()),
                         ));
@@ -537,8 +538,8 @@ impl CreateCommand {
                 let meta_status = meta_config.verify(None, None).await;
                 if meta_status.is_err() {
                     let mut status = Status::read(self.conf.clone())?;
-                    writer.write_err(&*format!(
-                        "❌ Cannot connect to meta service: {:?}",
+                    writer.write_err(format!(
+                        "Cannot connect to meta service: {:?}",
                         meta_status.unwrap_err()
                     ));
                     StopCommand::stop_current_local_services(&mut status, writer)
@@ -549,16 +550,16 @@ impl CreateCommand {
                 let query_config = self.generate_local_query_config(args, bin_path, &meta_config);
                 if query_config.is_err() {
                     let mut status = Status::read(self.conf.clone())?;
-                    writer.write_err(&*format!(
-                        "❌ Cannot generate query configurations, error: {:?}",
+                    writer.write_err(format!(
+                        "Cannot generate query configurations, error: {:?}",
                         query_config.as_ref().unwrap_err()
                     ));
                     StopCommand::stop_current_local_services(&mut status, writer)
                         .await
                         .unwrap();
                 }
-                writer.write_ok(&*format!(
-                    "local data would be stored in {}",
+                writer.write_ok(format!(
+                    "Local data would be stored in {}",
                     query_config
                         .as_ref()
                         .unwrap()
@@ -577,8 +578,8 @@ impl CreateCommand {
                         .await;
                     if res.is_err() {
                         let mut status = Status::read(self.conf.clone())?;
-                        writer.write_err(&*format!(
-                            "❌ Cannot provison query service, error: {:?}, please check the logs output by: tail -n 100 {}/*",
+                        writer.write_err(format!(
+                            "Cannot provison query service, error: {:?}, please check the logs output by: tail -n 100 {}/*",
                             res.unwrap_err(),
                             query_config.as_ref().unwrap().config.log.log_dir,
                         ));
@@ -595,7 +596,7 @@ impl CreateCommand {
                 Ok(())
             }
             Err(e) => {
-                writer.write_err(&*format!("cluster precheck failed, error {:?}", e));
+                writer.write_err(format!("Cluster precheck failed, error {:?}", e));
                 Ok(())
             }
         }
@@ -605,7 +606,7 @@ impl CreateCommand {
     async fn local_exec_precheck(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
         let mut status = Status::read(self.conf.clone())?;
         if args.is_present("force") {
-            writer.write_ok("delete existing cluster");
+            writer.write_ok("Delete existing cluster".to_string());
             StopCommand::stop_current_local_services(&mut status, writer)
                 .await
                 .expect("cannot stop current services");
@@ -621,12 +622,12 @@ impl CreateCommand {
             }
         }
         if let Err(e) = reconcile_local(&mut status).await {
-            writer.write_ok(
-                format!("local environment has problem {:?}, start reconcile", e).as_str(),
-            );
+            writer.write_ok(format!(
+                "Local environment has problem {:?}, start reconcile",
+                e
+            ));
             if let Err(e) = StopCommand::stop_current_local_services(&mut status, writer).await {
-                writer
-                    .write_err(format!("cannot delete existing service, error: {:?}", e).as_str());
+                writer.write_err(format!("Cannot delete existing service, error: {:?}", e));
                 return Err(e);
             }
         }
@@ -783,16 +784,16 @@ impl Command for CreateCommand {
             )
     }
 
-    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
-        vec![]
-    }
-
     fn about(&self) -> &str {
         "create" // TODO
     }
 
     fn is(&self, s: &str) -> bool {
         s.contains(self.name())
+    }
+
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
     }
 
     async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
@@ -806,7 +807,8 @@ impl Command for CreateCommand {
                     Ok(ClusterProfile::Cluster) => {
                         todo!()
                     }
-                    Err(_) => writer.write_err("currently profile only support cluster or local"),
+                    Err(_) => writer
+                        .write_err("Currently profile only support cluster or local".to_string()),
                 }
             }
             None => {
