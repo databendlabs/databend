@@ -61,7 +61,7 @@ cli-test:
 	bash ./scripts/ci/ci-run-cli-unit-tests.sh
 
 unit-test:
-	bash ./scripts/ci/ci-run-unit-tests.sh
+	ulimit -c 1024 bash ./scripts/ci/ci-run-unit-tests.sh
 
 embedded-meta-test: build-debug
 	rm -rf ./_meta_embedded
@@ -69,7 +69,7 @@ embedded-meta-test: build-debug
 
 stateless-test: build-debug
 	rm -rf ./_meta/
-	bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
+	ulimit -c 1024 bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
 
 stateless-cluster-test: build-debug
 	rm -rf ./_meta/
