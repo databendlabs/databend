@@ -811,7 +811,52 @@ fn test_tomonday_function() -> Result<()> {
         },
     ];
 
-    do_test(tests)
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new("a", DataType::DateTime32(None), false),
+        DataField::new("b", DataType::Date32, false),
+        DataField::new("c", DataType::Date16, false),
+    ]);
+
+    for t in tests {
+        let rows = t.columns[0].len();
+
+        // Type check
+        let mut args = vec![];
+        let mut fields = vec![];
+        for name in t.arg_names {
+            args.push(schema.field_with_name(name)?.data_type().clone());
+            fields.push(schema.field_with_name(name)?.clone());
+        }
+
+        let columns: Vec<DataColumnWithField> = t
+            .columns
+            .iter()
+            .zip(fields.iter())
+            .map(|(c, f)| DataColumnWithField::new(c.clone(), f.clone()))
+            .collect();
+
+        let func = t.func;
+        if let Err(e) = func.eval(&columns, rows) {
+            assert_eq!(t.error, e.to_string());
+        }
+
+        // Display check
+        let expect_display = t.display.to_string();
+        let actual_display = format!("{}", func);
+        assert_eq!(expect_display, actual_display);
+
+        // Nullable check.
+        let expect_null = t.nullable;
+        let actual_null = func.nullable(&schema)?;
+        assert_eq!(expect_null, actual_null);
+
+        let v = &(func.eval(&columns, rows)?);
+        let actual_type = v.data_type().clone();
+        assert_eq!(actual_type, DataType::UInt16);
+        assert_eq!(v, &t.expect);
+    }
+
+    Ok(())
 }
 
 fn do_test(tests: Vec<Test>) -> Result<()> {
