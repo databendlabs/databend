@@ -318,7 +318,7 @@ impl NumberResultFunction<u16> for ToMonday {
     const IS_DETERMINISTIC: bool = true;
 
     fn return_type() -> Result<DataType> {
-        Ok(DataType::Date16)
+        Ok(DataType::UInt16)
     }
     fn to_number(value: DateTime<Utc>) -> u16 {
         let weekday = value.weekday();
