@@ -48,7 +48,7 @@ impl KVApi for MetaEmbedded {
         let res = sm.apply_cmd(&cmd).await?;
 
         match res {
-            AppliedState::KV { prev, result } => Ok(UpsertKVActionReply { prev, result }),
+            AppliedState::KV(x) => Ok(x),
             _ => {
                 panic!("expect AppliedState::KV");
             }
@@ -72,7 +72,7 @@ impl KVApi for MetaEmbedded {
         let res = sm.apply_cmd(&cmd).await?;
 
         match res {
-            AppliedState::KV { prev, result } => Ok(UpsertKVActionReply { prev, result }),
+            AppliedState::KV(x) => Ok(x),
             _ => {
                 panic!("expect AppliedState::KV");
             }

@@ -17,7 +17,12 @@ use std::convert::TryInto;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::KVMeta;
+/// The meta data of a record in kv
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
+pub struct KVMeta {
+    /// expiration time in second since 1970
+    pub expire_at: Option<u64>,
+}
 
 /// Some value bound with a seq number
 #[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]

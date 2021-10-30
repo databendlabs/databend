@@ -14,6 +14,8 @@
 
 //! This crate defines data types used in meta data storage service.
 
+pub use change::AddResult;
+pub use change::Change;
 pub use cluster::Node;
 pub use cluster::NodeInfo;
 pub use cluster::Slot;
@@ -22,7 +24,6 @@ pub use commit_table_reply::UpsertTableOptionReply;
 pub use database_info::DatabaseInfo;
 pub use database_reply::CreateDatabaseReply;
 pub use errors::ConflictSeq;
-pub use kv::KVMeta;
 pub use kv_reply::GetKVActionReply;
 pub use kv_reply::MGetKVActionReply;
 pub use kv_reply::PrefixListReply;
@@ -40,19 +41,20 @@ pub use raft_types::NodeId;
 pub use raft_types::Term;
 pub use seq_num::SeqNum;
 pub use seq_value::IntoSeqV;
+pub use seq_value::KVMeta;
 pub use seq_value::SeqV;
 pub use table_info::TableIdent;
 pub use table_info::TableInfo;
 pub use table_info::TableMeta;
 pub use table_reply::CreateTableReply;
 
+mod change;
 mod cluster;
 mod cmd;
 mod commit_table_reply;
 mod database_info;
 mod database_reply;
 mod errors;
-mod kv;
 mod kv_reply;
 mod log_entry;
 mod match_seq;

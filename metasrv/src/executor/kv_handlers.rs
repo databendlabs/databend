@@ -50,7 +50,7 @@ impl RequestHandler<UpsertKVAction> for ActionHandler {
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
         match rst {
-            AppliedState::KV { prev, result } => Ok(UpsertKVActionReply { prev, result }),
+            AppliedState::KV(x) => Ok(x),
             _ => Err(ErrorCode::MetaNodeInternalError("not a KV result")),
         }
     }
@@ -75,7 +75,7 @@ impl RequestHandler<KVMetaAction> for ActionHandler {
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
         match rst {
-            AppliedState::KV { prev, result } => Ok(UpsertKVActionReply { prev, result }),
+            AppliedState::KV(x) => Ok(x),
             _ => Err(ErrorCode::MetaNodeInternalError("not a KV result")),
         }
     }

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use async_raft::AppDataResponse;
+use common_meta_types::Change;
 use common_meta_types::Node;
-use common_meta_types::SeqV;
 use common_meta_types::TableIdent;
 use common_meta_types::TableMeta;
 use serde::Deserialize;
@@ -23,7 +23,9 @@ use serde::Serialize;
 /// The state of an applied raft log.
 /// Normally it includes two fields: the state before applying and the state after applying the log.
 #[allow(clippy::large_enum_variant)]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(
+    Serialize, Deserialize, Debug, Clone, PartialEq, derive_more::From, derive_more::TryInto,
+)]
 pub enum AppliedState {
     Seq {
         seq: u64,
@@ -34,81 +36,22 @@ pub enum AppliedState {
         result: Option<Node>,
     },
 
-    DatabaseId {
-        prev: Option<SeqV<u64>>,
-        result: Option<SeqV<u64>>,
-    },
+    DatabaseId(Change<u64>),
 
-    TableMeta {
-        prev: Option<SeqV<TableMeta>>,
-        result: Option<SeqV<TableMeta>>,
-    },
+    TableMeta(Change<TableMeta>),
 
     TableIdent {
         prev: Option<TableIdent>,
         result: Option<TableIdent>,
     },
 
-    KV {
-        prev: Option<SeqV<Vec<u8>>>,
-        result: Option<SeqV<Vec<u8>>>,
-    },
+    KV(Change<Vec<u8>>),
 
+    #[try_into(ignore)]
     None,
 }
 
 impl AppDataResponse for AppliedState {}
-
-impl From<u64> for AppliedState {
-    fn from(seq: u64) -> Self {
-        AppliedState::Seq { seq }
-    }
-}
-
-impl From<(Option<Node>, Option<Node>)> for AppliedState {
-    fn from(v: (Option<Node>, Option<Node>)) -> Self {
-        AppliedState::Node {
-            prev: v.0,
-            result: v.1,
-        }
-    }
-}
-
-impl From<(Option<SeqV<u64>>, Option<SeqV<u64>>)> for AppliedState {
-    fn from(v: (Option<SeqV<u64>>, Option<SeqV<u64>>)) -> Self {
-        AppliedState::DatabaseId {
-            prev: v.0,
-            result: v.1,
-        }
-    }
-}
-
-impl From<(Option<SeqV<TableMeta>>, Option<SeqV<TableMeta>>)> for AppliedState {
-    fn from(v: (Option<SeqV<TableMeta>>, Option<SeqV<TableMeta>>)) -> Self {
-        AppliedState::TableMeta {
-            prev: v.0,
-            result: v.1,
-        }
-    }
-}
-
-impl From<(Option<TableIdent>, Option<TableIdent>)> for AppliedState {
-    fn from(v: (Option<TableIdent>, Option<TableIdent>)) -> Self {
-        AppliedState::TableIdent {
-            prev: v.0,
-            result: v.1,
-        }
-    }
-}
-
-impl From<(Option<SeqV>, Option<SeqV>)> for AppliedState {
-    fn from(v: (Option<SeqV>, Option<SeqV>)) -> Self {
-        AppliedState::KV {
-            prev: v.0,
-            result: v.1,
-        }
-    }
-}
 
 pub enum PrevOrResult<'a> {
     Prev(&'a AppliedState),
@@ -144,19 +87,10 @@ impl AppliedState {
                 ref prev,
                 ref result,
             } => prev != result,
-            AppliedState::DatabaseId {
-                ref prev,
-                ref result,
-            } => prev != result,
-            AppliedState::TableMeta {
-                ref prev,
-                ref result,
-            } => prev != result,
+            AppliedState::DatabaseId(ref ch) => ch.changed(),
+            AppliedState::TableMeta(ref ch) => ch.changed(),
             AppliedState::TableIdent { prev, result } => prev != result,
-            AppliedState::KV {
-                ref prev,
-                ref result,
-            } => prev != result,
+            AppliedState::KV(ref ch) => ch.changed(),
             AppliedState::None => false,
         }
     }
@@ -181,10 +115,10 @@ impl AppliedState {
         match self {
             AppliedState::Seq { .. } => false,
             AppliedState::Node { ref prev, .. } => prev.is_none(),
-            AppliedState::DatabaseId { ref prev, .. } => prev.is_none(),
-            AppliedState::TableMeta { ref prev, .. } => prev.is_none(),
+            AppliedState::DatabaseId(Change { ref prev, .. }) => prev.is_none(),
+            AppliedState::TableMeta(Change { ref prev, .. }) => prev.is_none(),
             AppliedState::TableIdent { ref prev, .. } => prev.is_none(),
-            AppliedState::KV { ref prev, .. } => prev.is_none(),
+            AppliedState::KV(Change { ref prev, .. }) => prev.is_none(),
             AppliedState::None => true,
         }
     }
@@ -193,10 +127,10 @@ impl AppliedState {
         match self {
             AppliedState::Seq { .. } => false,
             AppliedState::Node { ref result, .. } => result.is_none(),
-            AppliedState::DatabaseId { ref result, .. } => result.is_none(),
-            AppliedState::TableMeta { ref result, .. } => result.is_none(),
+            AppliedState::DatabaseId(Change { ref result, .. }) => result.is_none(),
+            AppliedState::TableMeta(Change { ref result, .. }) => result.is_none(),
             AppliedState::TableIdent { ref result, .. } => result.is_none(),
-            AppliedState::KV { ref result, .. } => result.is_none(),
+            AppliedState::KV(Change { ref result, .. }) => result.is_none(),
             AppliedState::None => true,
         }
     }

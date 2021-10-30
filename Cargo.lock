@@ -1438,6 +1438,7 @@ dependencies = [
  "common-meta-types",
  "common-planners",
  "common-tracing",
+ "derive_more",
  "futures",
  "maplit",
  "pretty_assertions",
@@ -1491,6 +1492,7 @@ dependencies = [
  "common-meta-sled-store",
  "common-meta-types",
  "common-tracing",
+ "derive_more",
  "maplit",
  "pretty_assertions",
  "rand 0.8.4",
@@ -1527,6 +1529,7 @@ dependencies = [
  "async-raft",
  "common-datavalues",
  "common-exception",
+ "derive_more",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -1626,6 +1629,12 @@ name = "const_fn"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f92cfa0fd5690b3cf8c1ef2cabbd9b7ef22fa53cf5e1f92b05103f6d5d1cf6e7"
+
+[[package]]
+name = "convert_case"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
 
 [[package]]
 name = "core-foundation"
@@ -2175,8 +2184,10 @@ version = "0.99.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40eebddd2156ce1bb37b20bbe5151340a31828b1f2d22ba4141f3531710e38df"
 dependencies = [
+ "convert_case",
  "proc-macro2",
  "quote",
+ "rustc_version 0.3.3",
  "syn",
 ]
 
@@ -5540,6 +5551,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "138e3e0acb6c9fb258b19b67cb8abd63c00679d2851805ea151465464fe9030a"
 dependencies = [
  "semver 0.9.0",
+]
+
+[[package]]
+name = "rustc_version"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0dfe2087c51c460008730de8b57e6a320782fbfb312e1f4d520e6c6fae155ee"
+dependencies = [
+ "semver 0.11.0",
 ]
 
 [[package]]
