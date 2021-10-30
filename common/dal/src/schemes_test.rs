@@ -17,7 +17,7 @@ use std::str::FromStr;
 
 use common_exception::ErrorCode;
 
-use crate::schemes::StorageScheme::ASBlob;
+use crate::schemes::StorageScheme::AzureStorageBlob;
 use crate::schemes::StorageScheme::LocalFs;
 use crate::schemes::StorageScheme::S3;
 use crate::StorageScheme;
@@ -31,8 +31,8 @@ fn test_scheme_from_str() {
         ("LOCAL", LocalFs),
         ("Disk", LocalFs),
         ("disk", LocalFs),
-        ("asblob", ASBlob),
-        ("ASBlob", ASBlob),
+        ("azurestorageblob", AzureStorageBlob),
+        ("AzureStorageBlob", AzureStorageBlob),
     ];
     valid_schemes.iter().for_each(|(str, scheme)| {
         let s = StorageScheme::from_str(str);

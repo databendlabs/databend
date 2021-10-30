@@ -40,7 +40,7 @@ const AZURE_BLOB_CONTAINER: &str = "AZURE_BLOB_CONTAINER";
 pub enum StorageType {
     Disk,
     S3,
-    ASBlob,
+    AzureStorageBlob,
 }
 
 // Implement the trait
@@ -51,7 +51,7 @@ impl FromStr for StorageType {
         match s {
             "disk" => Ok(StorageType::Disk),
             "s3" => Ok(StorageType::S3),
-            "asblob" => Ok(StorageType::ASBlob),
+            "azure_storage_blob" => Ok(StorageType::AzureStorageBlob),
             _ => Err("no match for storage type"),
         }
     }
@@ -113,7 +113,7 @@ impl fmt::Debug for S3StorageConfig {
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
-pub struct ASBlobConfig {
+pub struct AzureStorageBlobConfig {
     #[structopt(long, env = AZURE_STORAGE_ACCOUNT, default_value = "", help = "Account for Azure storage")]
     #[serde(default)]
     pub account: String,
@@ -127,9 +127,9 @@ pub struct ASBlobConfig {
     pub container: String,
 }
 
-impl ASBlobConfig {
+impl AzureStorageBlobConfig {
     pub fn default() -> Self {
-        ASBlobConfig {
+        AzureStorageBlobConfig {
             account: "".to_string(),
             master_key: "".to_string(),
             container: "".to_string(),
@@ -137,7 +137,7 @@ impl ASBlobConfig {
     }
 }
 
-impl fmt::Debug for ASBlobConfig {
+impl fmt::Debug for AzureStorageBlobConfig {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{{")?;
         write!(f, "Azure.storage.container: \"{}\", ", self.container)?;
@@ -165,7 +165,7 @@ pub struct StorageConfig {
 
     // azure storage blob config.
     #[structopt(flatten)]
-    pub asb: ASBlobConfig,
+    pub azure_storage_blob: AzureStorageBlobConfig,
 }
 
 impl StorageConfig {
@@ -174,7 +174,7 @@ impl StorageConfig {
             storage_type: "disk".to_string(),
             disk: DiskStorageConfig::default(),
             s3: S3StorageConfig::default(),
-            asb: ASBlobConfig::default(),
+            azure_storage_blob: AzureStorageBlobConfig::default(),
         }
     }
 
@@ -211,7 +211,7 @@ impl StorageConfig {
         // Azure Storage Blob.
         env_helper!(
             mut_config.storage,
-            asb,
+            azure_storage_blob,
             account,
             String,
             AZURE_BLOB_MASTER_KEY
