@@ -125,7 +125,7 @@ impl CreateCommand {
             .to_string())
     }
 
-    fn ensure_bin(&self, writer: &mut Writer, args: &ArgMatches) -> Result<LocalBinaryPaths> {
+    async fn ensure_bin(&self, writer: &mut Writer, args: &ArgMatches) -> Result<LocalBinaryPaths> {
         let mut status = Status::read(self.conf.clone())?;
 
         let mut paths = LocalBinaryPaths {
@@ -149,9 +149,9 @@ impl CreateCommand {
                 "Cannot find databend binary path in version {}, start to download",
                 args.value_of("version").unwrap()
             ));
-            FetchCommand::create(self.conf.clone()).exec_match(writer, Some(args))?;
+            FetchCommand::create(self.conf.clone()).exec_matches(writer, Some(args)).await?;
         }
-        SwitchCommand::create(self.conf.clone()).exec_match(writer, Some(args))?;
+        SwitchCommand::create(self.conf.clone()).exec_matches(writer, Some(args)).await?;
         let status = Status::read(self.conf.clone())?;
         paths.query = self
             .binary_path(
@@ -517,6 +517,7 @@ impl CreateCommand {
                 // ensuring needed dependencies
                 let bin_path = self
                     .ensure_bin(writer, args)
+                    .await
                     .expect("cannot find binary path");
                 let meta_config = self
                     .generate_local_meta_config(args, bin_path.clone())

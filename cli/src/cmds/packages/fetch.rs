@@ -16,6 +16,7 @@ use std::fs;
 use std::fs::File;
 use std::io;
 use std::path::Path;
+use std::sync::Arc;
 
 use clap::ArgMatches;
 use flate2::read::GzDecoder;
@@ -24,7 +25,11 @@ use fs_extra::move_items;
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 use tar::Archive;
+use async_trait::async_trait;
+use clap::App;
+use clap::Arg;
 
+use crate::cmds::command::Command;
 use crate::cmds::Config;
 use crate::cmds::SwitchCommand;
 use crate::cmds::Writer;
@@ -158,7 +163,7 @@ impl FetchCommand {
         FetchCommand { conf }
     }
 
-    fn download_databend(
+    async fn download_databend(
         &self,
         arch: &str,
         tag: &str,
@@ -190,10 +195,35 @@ impl FetchCommand {
             writer.write_err(format!("Cannot download or unpack error: {:?}", e).as_str())
         }
         let switch = SwitchCommand::create(self.conf.clone());
-        switch.exec_match(writer, args)
+        switch.exec_matches(writer, args).await
+    }
+}
+
+#[async_trait]
+impl Command for FetchCommand {
+    fn name(&self) -> &str {
+        "fetch"
     }
 
-    pub fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+    fn clap(&self) -> App<'static> {
+        App::new("fetch")
+            .about("Fetch the given version binary package")
+            .arg(Arg::new("version").about("Version of databend package to fetch").default_value("latest"))
+    }
+
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
+    }
+
+    fn about(&self) -> &str {
+        "Fetch the given version binary package"
+    }
+
+    fn is(&self, s: &str) -> bool {
+        s.contains(self.name())
+    }
+
+    async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         match args {
             Some(matches) => {
                 let arch = get_rust_architecture();
@@ -205,7 +235,7 @@ impl FetchCommand {
                     )?;
                     writer.write_ok(format!("Tag {}", current_tag).as_str());
                     if let Err(e) =
-                        self.download_databend(&arch, current_tag.as_str(), writer, args)
+                        self.download_databend(&arch, current_tag.as_str(), writer, args).await
                     {
                         writer.write_err(format!("{:?}", e).as_str());
                     }
@@ -219,5 +249,6 @@ impl FetchCommand {
         }
 
         Ok(())
+
     }
 }

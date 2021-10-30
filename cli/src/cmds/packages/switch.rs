@@ -13,11 +13,15 @@
 // limitations under the License.
 
 use std::fs;
+use std::sync::Arc;
 
 use clap::ArgMatches;
+use clap::Arg;
+use clap::App;
 
 use crate::cmds::Config;
 use crate::cmds::ListCommand;
+use crate::cmds::command::Command;
 use crate::cmds::Status;
 use crate::cmds::Writer;
 use crate::error::Result;
@@ -39,8 +43,35 @@ impl SwitchCommand {
 
         Ok(format!("{}", json[0]["name"]).replace("\"", ""))
     }
+}
 
-    pub fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+#[async_trait::async_trait]
+impl Command for SwitchCommand {
+    fn name(&self) -> &str {
+        "switch"
+    }
+
+    fn clap(&self) -> App<'static> {
+        App::new("switch")
+            .about("Switch the active databend to a specified version")
+            .arg(Arg::new("version").required(true).about(
+                "Version of databend package, e.g. v0.4.69-nightly. Check the versions: package list"
+            ))
+    }
+
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
+    }
+
+    fn about(&self) -> &str {
+        "Fetch the given version binary package"
+    }
+
+    fn is(&self, s: &str) -> bool {
+        s.contains(self.name())
+    }
+
+    async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         match args {
             Some(matches) => {
                 let bin_dir = format!("{}/bin", self.conf.databend_dir.clone());
@@ -69,7 +100,7 @@ impl SwitchCommand {
                         format!("Can't found version: {}, package list:", current_tag).as_str(),
                     );
                     let list = ListCommand::create(self.conf.clone());
-                    list.exec_match(writer, args)?;
+                    list.exec_matches(writer, args).await?;
                     writer.write_err(
                         format!(
                             "Use command bendctl package fetch {} to retrieve this version",
