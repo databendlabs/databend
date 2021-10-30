@@ -16,6 +16,7 @@ use std::borrow::Borrow;
 use std::io::Read;
 use std::net::SocketAddr;
 use std::path::Path;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use clap::App;
@@ -70,32 +71,6 @@ impl QueryCommand {
             );
         app
     }
-
-    pub(crate) async fn exec_match(
-        &self,
-        writer: &mut Writer,
-        args: Option<&ArgMatches>,
-    ) -> Result<()> {
-        match args {
-            Some(matches) => {
-                let profile = matches.value_of_t("profile");
-                match profile {
-                    Ok(ClusterProfile::Local) => {
-                        return self.local_exec_match(writer, matches).await;
-                    }
-                    Ok(ClusterProfile::Cluster) => {
-                        todo!()
-                    }
-                    Err(_) => writer.write_err("currently profile only support cluster or local"),
-                }
-            }
-            None => {
-                println!("none ");
-            }
-        }
-        Ok(())
-    }
-
     async fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
         match self.local_exec_precheck(args) {
             Ok(_) => {
@@ -175,6 +150,23 @@ impl QueryCommand {
                 "Query command error: cannot find local configs in {}, please run `bendctl cluster create --profile local` to create a new local cluster",
                 status.local_config_dir
             )));
+        }
+
+        Ok(())
+    }
+
+    pub async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
+        match self
+            .clap
+            .clone()
+            .try_get_matches_from(vec!["query", args.as_str()])
+        {
+            Ok(matches) => {
+                return self.exec_matches(writer, Some(matches.borrow())).await;
+            }
+            Err(err) => {
+                println!("Cannot get subcommand matches: {}", err);
+            }
         }
 
         Ok(())
@@ -311,28 +303,40 @@ impl Command for QueryCommand {
         "query"
     }
 
+    fn clap(&self) -> App<'static> {
+        self.clap.clone()
+    }
+
     fn about(&self) -> &str {
         "Query on databend cluster"
+    }
+
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
     }
 
     fn is(&self, s: &str) -> bool {
         s.contains(self.name())
     }
 
-    async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
-        match self
-            .clap
-            .clone()
-            .try_get_matches_from(vec!["query", args.as_str()])
-        {
-            Ok(matches) => {
-                return self.exec_match(writer, Some(matches.borrow())).await;
+    async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+        match args {
+            Some(matches) => {
+                let profile = matches.value_of_t("profile");
+                match profile {
+                    Ok(ClusterProfile::Local) => {
+                        return self.local_exec_match(writer, matches).await;
+                    }
+                    Ok(ClusterProfile::Cluster) => {
+                        todo!()
+                    }
+                    Err(_) => writer.write_err("currently profile only support cluster or local"),
+                }
             }
-            Err(err) => {
-                println!("Cannot get subcommand matches: {}", err);
+            None => {
+                println!("none ");
             }
         }
-
         Ok(())
     }
 }

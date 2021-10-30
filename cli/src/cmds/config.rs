@@ -25,6 +25,7 @@ use colored::Colorize;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::cmds::command::Command;
 use crate::cmds::queries::query::QueryCommand;
 use crate::cmds::ups::up::UpCommand;
 use crate::cmds::ClusterCommand;
@@ -44,6 +45,7 @@ const REPO_BASE_URL: &str = "https://repo.databend.rs/databend/tags.json";
 const REPO_DATABEND_URL: &str = "https://repo.databend.rs/databend";
 const REPO_DATABEND_TAG_URL: &str = "https://repo.databend.rs/databend/tags.json";
 const REPO_PLAYGROUND_URL: &str = "https://repo.databend.rs/databend";
+
 #[derive(Clone, Debug)]
 pub struct Config {
     //(TODO(zhihanz) remove those field as they already mentioned in Clap global flag)
@@ -53,6 +55,7 @@ pub struct Config {
     pub mirror: CustomMirror,
     pub clap: ArgMatches,
 }
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Mode {
     Sql,
@@ -308,10 +311,11 @@ impl Config {
             )
             .subcommand(PackageCommand::generate())
             .subcommand(VersionCommand::generate())
-            .subcommand(ClusterCommand::generate())
+            .subcommand(ClusterCommand::default().clap())
             .subcommand(QueryCommand::generate())
             .subcommand(UpCommand::generate())
     }
+
     pub fn create() -> Self {
         let clap = Config::build_cli().get_matches();
         let config = Config {
@@ -346,6 +350,22 @@ impl Config {
         };
         Config::build(config)
     }
+
+    pub fn default() -> Self {
+        Config {
+            group: "".into(),
+            mode: Mode::Sql,
+            databend_dir: "~/.databend".into(),
+            clap: Default::default(),
+            mirror: CustomMirror {
+                base_url: "".into(),
+                databend_url: "".into(),
+                databend_tag_url: "".into(),
+                playground_url: "".into(),
+            },
+        }
+    }
+
     fn build(mut conf: Config) -> Self {
         let home_dir = dirs::home_dir().unwrap();
         let databend_dir = home_dir.join(".databend");

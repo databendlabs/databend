@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use async_trait::async_trait;
 use clap::App;
 use clap::AppSettings;
 use clap::Arg;
@@ -19,6 +22,7 @@ use clap::ArgMatches;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::clusters::utils;
+use crate::cmds::command::Command;
 use crate::cmds::status::LocalRuntime;
 use crate::cmds::Config;
 use crate::cmds::Status;
@@ -34,24 +38,6 @@ pub struct StopCommand {
 impl StopCommand {
     pub fn create(conf: Config) -> Self {
         StopCommand { conf }
-    }
-    pub fn generate() -> App<'static> {
-        App::new("delete")
-            .setting(AppSettings::DisableVersionFlag)
-            .about("Delete a databend cluster (delete current cluster by default) ")
-            .arg(
-                Arg::new("profile")
-                    .long("profile")
-                    .about("Profile to delete, support local and clusters")
-                    .required(false)
-                    .takes_value(true),
-            )
-            .arg(
-                Arg::new("purge")
-                    .long("purge")
-                    .takes_value(false)
-                    .about("Purge would delete both persist data and deploy instances"),
-            )
     }
 
     pub async fn stop_current_local_services(
@@ -143,8 +129,46 @@ impl StopCommand {
 
         Ok(())
     }
+}
 
-    pub async fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+#[async_trait]
+impl Command for StopCommand {
+    fn name(&self) -> &str {
+        "stop"
+    }
+
+    fn clap(&self) -> App<'static> {
+        App::new("stop")
+            .setting(AppSettings::DisableVersionFlag)
+            .about("Delete a databend cluster (delete current cluster by default) ")
+            .arg(
+                Arg::new("profile")
+                    .long("profile")
+                    .about("Profile to delete, support local and clusters")
+                    .required(false)
+                    .takes_value(true),
+            )
+            .arg(
+                Arg::new("purge")
+                    .long("purge")
+                    .takes_value(false)
+                    .about("Purge would delete both persist data and deploy instances"),
+            )
+    }
+
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
+    }
+
+    fn about(&self) -> &str {
+        "stop" // TODO
+    }
+
+    fn is(&self, s: &str) -> bool {
+        s.contains(self.name())
+    }
+
+    async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         match args {
             Some(matches) => {
                 let status = Status::read(self.conf.clone())?;

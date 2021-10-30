@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use clap::App;
@@ -38,6 +38,7 @@ impl PackageCommand {
         let clap = PackageCommand::generate();
         PackageCommand { conf, clap }
     }
+
     pub fn generate() -> App<'static> {
         return App::new("package")
             .about("Package manage databend binary releases")
@@ -58,8 +59,31 @@ impl PackageCommand {
                     ))
             );
     }
+}
 
-    pub(crate) fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+#[async_trait]
+impl Command for PackageCommand {
+    fn name(&self) -> &str {
+        "package"
+    }
+
+    fn about(&self) -> &str {
+        "Package command"
+    }
+
+    fn clap(&self) -> App<'static> {
+        self.clap.clone()
+    }
+
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
+    }
+
+    fn is(&self, s: &str) -> bool {
+        s.contains(self.name())
+    }
+
+    async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         match args {
             Some(matches) => match matches.subcommand_name() {
                 Some("fetch") => {
@@ -78,34 +102,6 @@ impl PackageCommand {
             },
             None => {
                 println!("None")
-            }
-        }
-
-        Ok(())
-    }
-}
-
-#[async_trait]
-impl Command for PackageCommand {
-    fn name(&self) -> &str {
-        "package"
-    }
-
-    fn about(&self) -> &str {
-        "Package command"
-    }
-
-    fn is(&self, s: &str) -> bool {
-        s.contains(self.name())
-    }
-
-    async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
-        match self.clap.clone().try_get_matches_from(args.split(' ')) {
-            Ok(matches) => {
-                return self.exec_match(writer, Some(matches.borrow()));
-            }
-            Err(err) => {
-                println!("Cannot get subcommand matches: {}", err);
             }
         }
 

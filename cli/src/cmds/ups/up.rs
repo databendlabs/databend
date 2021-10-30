@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use clap::App;
@@ -249,30 +249,6 @@ impl UpCommand {
         app
     }
 
-    pub(crate) async fn exec_match(
-        &self,
-        writer: &mut Writer,
-        args: Option<&ArgMatches>,
-    ) -> Result<()> {
-        match args {
-            Some(matches) => {
-                let profile = matches.value_of_t("profile");
-                match profile {
-                    Ok(ClusterProfile::Local) => {
-                        return self.local_exec_match(writer, matches).await;
-                    }
-                    Ok(ClusterProfile::Cluster) => {
-                        todo!()
-                    }
-                    Err(_) => writer.write_err("currently profile only support cluster or local"),
-                }
-            }
-            None => {
-                println!("none ");
-            }
-        }
-        Ok(())
-    }
     async fn download_dataset(&self, dataset: DataSets) -> Result<String> {
         return match dataset {
             DataSets::OntimeMini(url, _) => {
@@ -499,10 +475,15 @@ impl UpCommand {
         Ok(())
     }
 }
+
 #[async_trait]
 impl Command for UpCommand {
     fn name(&self) -> &str {
         "up"
+    }
+
+    fn clap(&self) -> App<'static> {
+        self.clap.clone()
     }
 
     fn about(&self) -> &str {
@@ -513,16 +494,28 @@ impl Command for UpCommand {
         s.contains(self.name())
     }
 
-    async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
-        match self.clap.clone().try_get_matches_from(args.split(' ')) {
-            Ok(matches) => {
-                return self.exec_match(writer, Some(matches.borrow())).await;
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
+    }
+
+    async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+        match args {
+            Some(matches) => {
+                let profile = matches.value_of_t("profile");
+                match profile {
+                    Ok(ClusterProfile::Local) => {
+                        return self.local_exec_match(writer, matches).await;
+                    }
+                    Ok(ClusterProfile::Cluster) => {
+                        todo!()
+                    }
+                    Err(_) => writer.write_err("currently profile only support cluster or local"),
+                }
             }
-            Err(err) => {
-                println!("Cannot get subcommand matches: {}", err);
+            None => {
+                println!("none ");
             }
         }
-
         Ok(())
     }
 }
