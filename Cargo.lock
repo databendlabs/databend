@@ -2101,6 +2101,7 @@ dependencies = [
  "common-meta-api",
  "common-meta-embedded",
  "common-meta-flight",
+ "common-meta-sled-store",
  "common-meta-types",
  "common-metrics",
  "common-planners",

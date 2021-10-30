@@ -1,0 +1,47 @@
+name: Stateless(Standalone, using embedded meta-store)
+on: [push, pull_request]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: "Tests"
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        config:
+          # Linux
+          - { os: ubuntu-latest, toolchain: stable, target: x86_64-unknown-linux-gnu, cross: false }
+          # Macos
+          - { os: macos-latest, toolchain: stable, target: x86_64-apple-darwin, cross: false }
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Rust setup
+        run: |
+          bash ./scripts/setup/dev_setup.sh -o -t
+      - name: Cache cargo registry
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-buildcache-${{ secrets.CACHE_RESET_KEY }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-buildcache-${{ secrets.CACHE_RESET_KEY }}-
+            ${{ runner.os }}-cargo-buildcache-
+            ${{ runner.os }}-cargo-
+
+      - name: Build
+        run: cargo build --verbose
+        env:
+          CARGO_INCREMENTAL: '0'
+
+      - name: Run Stateless Tests with Standalone mode, with embedded meta-store
+        run: |
+          bash ./scripts/ci/ci-run-tests-embedded-meta.sh

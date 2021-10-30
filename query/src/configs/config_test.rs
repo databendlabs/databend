@@ -63,6 +63,7 @@ log_level = \"INFO\"
 log_dir = \"./_logs\"
 
 [meta]
+meta_embedded_dir = \"./_meta_embedded\"
 meta_address = \"\"
 meta_username = \"root\"
 meta_password = \"\"
