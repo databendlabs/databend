@@ -80,7 +80,7 @@ impl Command for ClusterCommand {
         let subcommands = self.subcommands();
         let app = App::new("cluster")
             .setting(AppSettings::DisableVersionFlag)
-            .about("Cluster life cycle management")
+            .about(self.about())
             .subcommand(subcommands[0].clap())
             .subcommand(subcommands[1].clap())
             .subcommand(subcommands[2].clap());
@@ -95,7 +95,7 @@ impl Command for ClusterCommand {
         ]
     }
 
-    fn about(&self) -> &str {
+    fn about(&self) -> &'static str {
         "Cluster life cycle management"
     }
 

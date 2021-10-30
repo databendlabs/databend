@@ -28,7 +28,7 @@ pub trait Command: DynClone + Send + Sync {
 
     fn clap(&self) -> clap::App<'static>;
 
-    fn about(&self) -> &str;
+    fn about(&self) -> &'static str;
 
     fn is(&self, s: &str) -> bool;
 

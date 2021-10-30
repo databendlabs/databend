@@ -74,7 +74,7 @@ impl Command for VersionCommand {
         VersionCommand::generate()
     }
 
-    fn about(&self) -> &str {
+    fn about(&self) -> &'static str {
         "Databend CLI version"
     }
 

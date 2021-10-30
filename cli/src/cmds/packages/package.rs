@@ -47,14 +47,14 @@ impl Command for PackageCommand {
         "package"
     }
 
-    fn about(&self) -> &str {
+    fn about(&self) -> &'static str {
         "Package manage databend binary releases"
     }
 
     fn clap(&self) -> App<'static> {
         let subcommands = self.subcommands();
         let app = App::new("package")
-            .about("Package manage databend binary releases")
+            .about(self.about())
             .subcommand(subcommands[0].clap())
             .subcommand(subcommands[1].clap())
             .subcommand(subcommands[2].clap());

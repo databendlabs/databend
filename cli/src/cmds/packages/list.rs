@@ -47,15 +47,15 @@ impl Command for ListCommand {
 
     fn clap(&self) -> App<'static> {
         App::new("list")
-            .about("List all the packages")
+            .about(self.about())
     }
 
     fn subcommands(&self) -> Vec<Arc<dyn Command>> {
         vec![]
     }
 
-    fn about(&self) -> &str {
-        "list all the packages"
+    fn about(&self) -> &'static str {
+        "List all the packages"
     }
 
     fn is(&self, s: &str) -> bool {

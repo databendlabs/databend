@@ -207,7 +207,7 @@ impl Command for FetchCommand {
 
     fn clap(&self) -> App<'static> {
         App::new("fetch")
-            .about("Fetch the given version binary package")
+            .about(self.about())
             .arg(Arg::new("version").about("Version of databend package to fetch").default_value("latest"))
     }
 
@@ -215,7 +215,7 @@ impl Command for FetchCommand {
         vec![]
     }
 
-    fn about(&self) -> &str {
+    fn about(&self) -> &'static str {
         "Fetch the given version binary package"
     }
 

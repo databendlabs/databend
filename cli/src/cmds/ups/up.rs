@@ -486,7 +486,7 @@ impl Command for UpCommand {
         self.clap.clone()
     }
 
-    fn about(&self) -> &str {
+    fn about(&self) -> &'static str {
         "Bootstrap a single cluster with dashboard"
     }
 

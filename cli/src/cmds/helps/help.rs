@@ -43,15 +43,15 @@ impl Command for HelpCommand {
     }
 
     fn clap(&self) -> App<'static> {
-        App::new("help").about("show help")
+        App::new("help").about(self.about())
     }
 
     fn subcommands(&self) -> Vec<Arc<dyn Command>> {
         vec![]
     }
 
-    fn about(&self) -> &str {
-        "help"
+    fn about(&self) -> &'static str {
+        "show help"
     }
 
     fn is(&self, s: &str) -> bool {

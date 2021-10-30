@@ -53,7 +53,7 @@ impl Command for SwitchCommand {
 
     fn clap(&self) -> App<'static> {
         App::new("switch")
-            .about("Switch the active databend to a specified version")
+            .about(self.about())
             .arg(Arg::new("version").required(true).about(
                 "Version of databend package, e.g. v0.4.69-nightly. Check the versions: package list"
             ))
@@ -63,8 +63,8 @@ impl Command for SwitchCommand {
         vec![]
     }
 
-    fn about(&self) -> &str {
-        "Fetch the given version binary package"
+    fn about(&self) -> &'static str {
+        "Switch the active databend to a specified version"
     }
 
     fn is(&self, s: &str) -> bool {

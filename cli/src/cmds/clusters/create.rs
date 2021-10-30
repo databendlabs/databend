@@ -688,7 +688,7 @@ impl Command for CreateCommand {
     fn clap(&self) -> App<'static> {
         App::new("create")
             .setting(AppSettings::DisableVersionFlag)
-            .about("Create a databend cluster based on profile")
+            .about(self.about())
             .arg(
                 Arg::new("profile")
                     .long("profile")
@@ -788,8 +788,8 @@ impl Command for CreateCommand {
         vec![]
     }
 
-    fn about(&self) -> &str {
-        "create" // TODO
+    fn about(&self) -> &'static str {
+        "Create a databend cluster based on profile"
     }
 
     fn is(&self, s: &str) -> bool {
