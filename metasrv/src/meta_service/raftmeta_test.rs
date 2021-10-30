@@ -230,7 +230,6 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
                     txid: None,
                     cmd: Cmd::CreateDatabase {
                         name: name.to_string(),
-                        db: Default::default(),
                     },
                 })
                 .await;
@@ -241,14 +240,9 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
             assert_applied_index(all.clone(), last_applied + 1).await?;
 
             for (i, mn) in all.iter().enumerate() {
-                let got = mn.get_database(name).await?;
+                let got = mn.get_state_machine().await.get_database(name)?;
 
-                assert_eq!(
-                    *want_id,
-                    got.unwrap().data.database_id,
-                    "n{} applied AddDatabase",
-                    i
-                );
+                assert_eq!(*want_id, got.unwrap().data, "n{} applied AddDatabase", i);
             }
         }
     }

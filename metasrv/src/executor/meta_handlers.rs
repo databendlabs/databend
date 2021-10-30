@@ -61,10 +61,6 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
             txid: None,
             cmd: CreateDatabase {
                 name: db_name.clone(),
-                db: DatabaseInfo {
-                    database_id: 0,
-                    db: db_name.clone(),
-                },
             },
         };
 
@@ -75,7 +71,7 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
         let (prev, result) = match rst {
-            AppliedState::DataBase { prev, result } => (prev, result),
+            AppliedState::DatabaseId { prev, result } => (prev, result),
             _ => return Err(ErrorCode::MetaNodeInternalError("not a Database result")),
         };
 
@@ -88,7 +84,7 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
 
         Ok(CreateDatabaseReply {
             // TODO(xp): return DatabaseInfo?
-            database_id: result.unwrap().data.database_id,
+            database_id: result.unwrap().data,
         })
     }
 }
@@ -97,10 +93,17 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
 impl RequestHandler<GetDatabaseAction> for ActionHandler {
     async fn handle(&self, act: GetDatabaseAction) -> common_exception::Result<DatabaseInfo> {
         let db_name = act.db;
-        let db = self.meta_node.get_database(&db_name).await?;
+        let db = self
+            .meta_node
+            .get_state_machine()
+            .await
+            .get_database(&db_name)?;
 
         match db {
-            Some(db) => Ok(db.data),
+            Some(db) => Ok(DatabaseInfo {
+                database_id: db.data,
+                db: db_name.to_string(),
+            }),
             None => Err(ErrorCode::UnknownDatabase(db_name)),
         }
     }
@@ -125,7 +128,7 @@ impl RequestHandler<DropDatabaseAction> for ActionHandler {
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
         let (prev, _result) = match rst {
-            AppliedState::DataBase { prev, result } => (prev, result),
+            AppliedState::DatabaseId { prev, result } => (prev, result),
             _ => return Err(ErrorCode::MetaNodeInternalError("not a Database result")),
         };
 
@@ -206,7 +209,7 @@ impl RequestHandler<DropTableAction> for ActionHandler {
             .await
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
         let (prev, _result) = match rst {
-            AppliedState::Table { prev, result } => (prev, result),
+            AppliedState::TableMeta { prev, result } => (prev, result),
             _ => return Err(ErrorCode::MetaNodeInternalError("not a Table result")),
         };
 
@@ -227,13 +230,16 @@ impl RequestHandler<GetTableAction> for ActionHandler {
         let db_name = &act.db;
         let table_name = &act.table;
 
-        let x = self.meta_node.get_database(db_name).await?;
+        let x = self
+            .meta_node
+            .get_state_machine()
+            .await
+            .get_database(db_name)?;
         let db = x.ok_or_else(|| {
             ErrorCode::UnknownDatabase(format!("get table: database not found {:}", db_name))
         })?;
 
-        let db = db.data;
-        let db_id = db.database_id;
+        let db_id = db.data;
 
         let seq_table_id = self
             .meta_node
@@ -283,11 +289,16 @@ impl RequestHandler<GetDatabasesAction> for ActionHandler {
         &self,
         _req: GetDatabasesAction,
     ) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
-        let res = self.meta_node.get_databases().await?;
+        let res = self.meta_node.get_state_machine().await.get_databases()?;
 
         Ok(res
             .iter()
-            .map(|(_name, db)| Arc::new(db.clone()))
+            .map(|(name, db)| {
+                Arc::new(DatabaseInfo {
+                    database_id: *db,
+                    db: name.to_string(),
+                })
+            })
             .collect::<Vec<_>>())
     }
 }
@@ -324,7 +335,7 @@ impl RequestHandler<UpsertTableOptionReq> for ActionHandler {
 
         if !res.changed() {
             let prev = match res {
-                AppliedState::Table { prev, .. } => prev,
+                AppliedState::TableMeta { prev, .. } => prev,
                 _ => {
                     panic!("expect AppliedState::Table")
                 }

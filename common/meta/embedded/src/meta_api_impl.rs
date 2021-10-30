@@ -45,17 +45,13 @@ impl MetaApi for MetaEmbedded {
     async fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
         let cmd = Cmd::CreateDatabase {
             name: plan.db.clone(),
-            db: DatabaseInfo {
-                database_id: 0,
-                db: plan.db.clone(),
-            },
         };
 
         let mut sm = self.inner.lock().await;
         let res = sm.apply_cmd(&cmd).await?;
 
         let (prev, result) = match res {
-            AppliedState::DataBase { prev, result } => (prev, result),
+            AppliedState::DatabaseId { prev, result } => (prev, result),
             _ => return Err(ErrorCode::MetaNodeInternalError("not a Database result")),
         };
 
@@ -69,7 +65,7 @@ impl MetaApi for MetaEmbedded {
         }
 
         Ok(CreateDatabaseReply {
-            database_id: result.unwrap().data.database_id,
+            database_id: result.unwrap().data,
         })
     }
 
@@ -98,7 +94,12 @@ impl MetaApi for MetaEmbedded {
         let res = sm
             .get_database(db)?
             .ok_or_else(|| ErrorCode::UnknownDatabase(db.to_string()))?;
-        Ok(Arc::new(res.data))
+
+        let dbi = DatabaseInfo {
+            database_id: res.data,
+            db: db.to_string(),
+        };
+        Ok(Arc::new(dbi))
     }
 
     async fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>> {
@@ -106,7 +107,12 @@ impl MetaApi for MetaEmbedded {
         let res = sm.get_databases()?;
         Ok(res
             .iter()
-            .map(|(_name, db)| Arc::new(db.clone()))
+            .map(|(name, db)| {
+                Arc::new(DatabaseInfo {
+                    database_id: *db,
+                    db: name.to_string(),
+                })
+            })
             .collect::<Vec<_>>())
     }
 
@@ -180,8 +186,7 @@ impl MetaApi for MetaEmbedded {
             ErrorCode::UnknownDatabase(format!("get table: database not found {:}", db))
         })?;
 
-        let dbi = seq_db.data;
-        let db_id = dbi.database_id;
+        let db_id = seq_db.data;
 
         let table_id = sm
             .table_lookup()
@@ -250,7 +255,7 @@ impl MetaApi for MetaEmbedded {
         let res = sm.apply_cmd(&cmd).await?;
         if !res.changed() {
             let prev = match res {
-                AppliedState::Table { prev, .. } => prev,
+                AppliedState::TableMeta { prev, .. } => prev,
                 _ => {
                     panic!("expect AppliedState::Table")
                 }

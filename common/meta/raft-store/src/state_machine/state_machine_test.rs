@@ -134,14 +134,13 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
         let resp = m
             .apply_cmd(&Cmd::CreateDatabase {
                 name: c.name.to_string(),
-                db: Default::default(),
             })
             .await?;
 
         let (prev, result) = match resp {
-            AppliedState::DataBase { prev, result } => (
-                prev.map(|kv_value| kv_value.data.database_id),
-                result.map(|kv_value| kv_value.data.database_id),
+            AppliedState::DatabaseId { prev, result } => (
+                prev.map(|kv_value| kv_value.data),
+                result.map(|kv_value| kv_value.data),
             ),
             _ => {
                 panic!("expect AppliedState::Database")
@@ -163,7 +162,7 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
         let got = m
             .get_database(c.name)?
             .ok_or_else(|| anyhow::anyhow!("db not found: {}", c.name))?;
-        assert_eq!(*want, got.data.database_id);
+        assert_eq!(*want, got.data);
     }
 
     Ok(())
@@ -180,7 +179,6 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
     tracing::info!("--- prepare a table");
     m.apply_cmd(&Cmd::CreateDatabase {
         name: "db1".to_string(),
-        db: Default::default(),
     })
     .await?;
 
@@ -216,7 +214,7 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
             .await?;
 
         let (prev, result) = match resp {
-            AppliedState::Table { prev, result } => (prev.unwrap(), result.unwrap()),
+            AppliedState::TableMeta { prev, result } => (prev.unwrap(), result.unwrap()),
             _ => {
                 panic!("expect AppliedState::TableIdent")
             }
@@ -281,7 +279,7 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
             .await?;
 
         let (prev, result) = match resp {
-            AppliedState::Table { prev, result } => (prev.unwrap(), result.unwrap()),
+            AppliedState::TableMeta { prev, result } => (prev.unwrap(), result.unwrap()),
             _ => {
                 panic!("expect AppliedState::Table")
             }
@@ -303,7 +301,7 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
             .await?;
 
         let (prev, result) = match resp {
-            AppliedState::Table { prev, result } => (prev.unwrap(), result.unwrap()),
+            AppliedState::TableMeta { prev, result } => (prev.unwrap(), result.unwrap()),
             _ => {
                 panic!("expect AppliedState::TableIdent")
             }
