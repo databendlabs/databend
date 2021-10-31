@@ -180,7 +180,7 @@ impl Command for ViewCommand {
     fn clap(&self) -> App<'static> {
         App::new("view")
             .setting(AppSettings::DisableVersionFlag)
-            .about("View health status of current profile")
+            .about(self.about())
             .arg(
                 Arg::new("profile")
                     .long("profile")
@@ -190,16 +190,16 @@ impl Command for ViewCommand {
             )
     }
 
-    fn about(&self) -> &str {
-        "create" // TODO
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
+    }
+
+    fn about(&self) -> &'static str {
+        "View health status of current profile"
     }
 
     fn is(&self, s: &str) -> bool {
         s.contains(self.name())
-    }
-
-    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
-        vec![]
     }
 
     async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {

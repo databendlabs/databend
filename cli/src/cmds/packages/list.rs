@@ -13,13 +13,16 @@
 // limitations under the License.
 
 use std::fs;
+use std::sync::Arc;
 
+use clap::App;
 use clap::ArgMatches;
 use comfy_table::Cell;
 use comfy_table::CellAlignment;
 use comfy_table::Color;
 use comfy_table::Table;
 
+use crate::cmds::command::Command;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::cmds::Writer;
@@ -34,7 +37,31 @@ impl ListCommand {
     pub fn create(conf: Config) -> Self {
         ListCommand { conf }
     }
-    pub fn exec_match(&self, writer: &mut Writer, _args: Option<&ArgMatches>) -> Result<()> {
+}
+
+#[async_trait::async_trait]
+impl Command for ListCommand {
+    fn name(&self) -> &str {
+        "list"
+    }
+
+    fn clap(&self) -> App<'static> {
+        App::new("list").about(self.about())
+    }
+
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
+    }
+
+    fn about(&self) -> &'static str {
+        "List all the packages"
+    }
+
+    fn is(&self, s: &str) -> bool {
+        s.contains(self.name())
+    }
+
+    async fn exec_matches(&self, writer: &mut Writer, _args: Option<&ArgMatches>) -> Result<()> {
         let bin_dir = format!("{}/bin", self.conf.databend_dir.clone());
         let paths = fs::read_dir(bin_dir)?;
 

@@ -309,7 +309,7 @@ impl Config {
                             .possible_values(&["bash", "zsh"]),
                     ),
             )
-            .subcommand(PackageCommand::generate())
+            .subcommand(PackageCommand::default().clap())
             .subcommand(VersionCommand::generate())
             .subcommand(ClusterCommand::default().clap())
             .subcommand(QueryCommand::generate())

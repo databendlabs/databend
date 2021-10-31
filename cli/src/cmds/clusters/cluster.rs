@@ -80,19 +80,11 @@ impl Command for ClusterCommand {
         let subcommands = self.subcommands();
         let app = App::new("cluster")
             .setting(AppSettings::DisableVersionFlag)
-            .about("Cluster life cycle management")
+            .about(self.about())
             .subcommand(subcommands[0].clap())
             .subcommand(subcommands[1].clap())
             .subcommand(subcommands[2].clap());
         app
-    }
-
-    fn about(&self) -> &str {
-        "Cluster life cycle management"
-    }
-
-    fn is(&self, s: &str) -> bool {
-        s.contains(self.name())
     }
 
     fn subcommands(&self) -> Vec<Arc<dyn Command>> {
@@ -101,6 +93,14 @@ impl Command for ClusterCommand {
             Arc::new(StopCommand::create(self.conf.clone())),
             Arc::new(ViewCommand::create(self.conf.clone())),
         ]
+    }
+
+    fn about(&self) -> &'static str {
+        "Cluster life cycle management"
+    }
+
+    fn is(&self, s: &str) -> bool {
+        s.contains(self.name())
     }
 
     async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {

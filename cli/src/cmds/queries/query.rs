@@ -296,7 +296,7 @@ impl Command for QueryCommand {
         self.clap.clone()
     }
 
-    fn about(&self) -> &str {
+    fn about(&self) -> &'static str {
         "Query on databend cluster"
     }
 

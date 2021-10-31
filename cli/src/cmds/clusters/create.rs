@@ -125,7 +125,7 @@ impl CreateCommand {
             .to_string())
     }
 
-    fn ensure_bin(&self, writer: &mut Writer, args: &ArgMatches) -> Result<LocalBinaryPaths> {
+    async fn ensure_bin(&self, writer: &mut Writer, args: &ArgMatches) -> Result<LocalBinaryPaths> {
         let mut status = Status::read(self.conf.clone())?;
 
         let mut paths = LocalBinaryPaths {
@@ -150,9 +150,13 @@ impl CreateCommand {
                 args.value_of("version").unwrap(),
                 status.mirrors
             ));
-            FetchCommand::create(self.conf.clone()).exec_match(writer, Some(args))?;
+            FetchCommand::create(self.conf.clone())
+                .exec_matches(writer, Some(args))
+                .await?;
         }
-        SwitchCommand::create(self.conf.clone()).exec_match(writer, Some(args))?;
+        SwitchCommand::create(self.conf.clone())
+            .exec_matches(writer, Some(args))
+            .await?;
         let status = Status::read(self.conf.clone())?;
         paths.query = self
             .binary_path(
@@ -518,6 +522,7 @@ impl CreateCommand {
                 // ensuring needed dependencies
                 let bin_path = self
                     .ensure_bin(writer, args)
+                    .await
                     .expect("cannot find binary path");
                 let meta_config = self
                     .generate_local_meta_config(args, bin_path.clone())
@@ -688,7 +693,7 @@ impl Command for CreateCommand {
     fn clap(&self) -> App<'static> {
         App::new("create")
             .setting(AppSettings::DisableVersionFlag)
-            .about("Create a databend cluster based on profile")
+            .about(self.about())
             .arg(
                 Arg::new("profile")
                     .long("profile")
@@ -784,16 +789,16 @@ impl Command for CreateCommand {
             )
     }
 
-    fn about(&self) -> &str {
-        "create" // TODO
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
+    }
+
+    fn about(&self) -> &'static str {
+        "Create a databend cluster based on profile"
     }
 
     fn is(&self, s: &str) -> bool {
         s.contains(self.name())
-    }
-
-    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
-        vec![]
     }
 
     async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {

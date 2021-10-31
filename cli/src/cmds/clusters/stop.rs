@@ -140,7 +140,7 @@ impl Command for StopCommand {
     fn clap(&self) -> App<'static> {
         App::new("stop")
             .setting(AppSettings::DisableVersionFlag)
-            .about("Delete a databend cluster (delete current cluster by default) ")
+            .about(self.about())
             .arg(
                 Arg::new("profile")
                     .long("profile")
@@ -156,16 +156,16 @@ impl Command for StopCommand {
             )
     }
 
-    fn about(&self) -> &str {
-        "stop" // TODO
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
+    }
+
+    fn about(&self) -> &'static str {
+        "Delete a databend cluster (delete current cluster by default)"
     }
 
     fn is(&self, s: &str) -> bool {
         s.contains(self.name())
-    }
-
-    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
-        vec![]
     }
 
     async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
