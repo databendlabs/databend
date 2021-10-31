@@ -31,10 +31,11 @@ members = [
 
     # Query
     "query",
-    "metasrv",
-
     # SQL Fuzz
     "query/fuzz",
+
+    # Meta
+    "metasrv",
 
     # CLI
     "cli"
