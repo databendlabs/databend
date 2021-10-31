@@ -10,11 +10,11 @@ edition = "2021"
 # Workspace dependencies
 common-exception = { path = "../exception" }
 common-infallible = { path = "../infallible" }
+common-tracing = { path = "../tracing" }
 
 # Crates.io dependencies
 lazy_static = "1.4.0"
 metrics = "0.17.0"
 metrics-exporter-prometheus = "0.6.0"
-tracing = "0.1.29"
 prometheus-parse = "0.2.2"
 serde = { version = "1.0", features = ["derive"] }
