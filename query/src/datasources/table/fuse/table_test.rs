@@ -138,11 +138,13 @@ async fn test_fuse_table_truncate() -> Result<()> {
     // 2. truncate table which has data
     let insert_into_plan = fixture.insert_plan_of_table(table.as_ref(), 10);
     table.append_data(io_ctx.clone(), insert_into_plan).await?;
-    let source_plan = table.read_plan(
-        io_ctx.clone(),
-        None,
-        Some(ctx.get_settings().get_max_threads()? as usize),
-    ).await?;
+    let source_plan = table
+        .read_plan(
+            io_ctx.clone(),
+            None,
+            Some(ctx.get_settings().get_max_threads()? as usize),
+        )
+        .await?;
 
     // get the latest tbl
     let prev_version = table.get_table_info().ident.version;
@@ -153,8 +155,9 @@ async fn test_fuse_table_truncate() -> Result<()> {
     assert_ne!(prev_version, table.get_table_info().ident.version);
 
     // ensure data ingested
-    let (stats, parts) =
-        table.read_partitions(io_ctx.clone(), source_plan.push_downs.clone(), None).await?;
+    let (stats, parts) = table
+        .read_partitions(io_ctx.clone(), source_plan.push_downs.clone(), None)
+        .await?;
     assert_eq!(parts.len(), 10);
     assert_eq!(stats.read_rows, 10 * 3);
 
@@ -169,8 +172,9 @@ async fn test_fuse_table_truncate() -> Result<()> {
         fixture.default_table().as_str(),
     )?;
     assert_ne!(prev_version, table.get_table_info().ident.version);
-    let (stats, parts) =
-        table.read_partitions(io_ctx.clone(), source_plan.push_downs.clone(), None).await?;
+    let (stats, parts) = table
+        .read_partitions(io_ctx.clone(), source_plan.push_downs.clone(), None)
+        .await?;
     // cleared?
     assert_eq!(parts.len(), 0);
     assert_eq!(stats.read_rows, 0);

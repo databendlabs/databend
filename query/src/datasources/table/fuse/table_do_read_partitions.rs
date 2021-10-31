@@ -27,7 +27,11 @@ use crate::datasources::table::fuse::MetaInfoReader;
 
 impl FuseTable {
     #[inline]
-    pub async fn do_read_partitions(&self, io_ctx: &TableIOContext, push_downs: Option<Extras>) -> Result<(Statistics, Partitions)> {
+    pub async fn do_read_partitions(
+        &self,
+        io_ctx: &TableIOContext,
+        push_downs: Option<Extras>,
+    ) -> Result<(Statistics, Partitions)> {
         match self.snapshot_loc() {
             None => Ok((Statistics::default(), vec![])),
             Some(location) => {
@@ -35,7 +39,8 @@ impl FuseTable {
                 let da = io_ctx.get_data_accessor()?;
                 let snapshot = read_obj(da.clone(), location).await?;
                 let meta_reader = MetaInfoReader::new(da, io_ctx.get_runtime());
-                let block_metas = index::range_filter(&snapshot, schema, push_downs, meta_reader).await?;
+                let block_metas =
+                    index::range_filter(&snapshot, schema, push_downs, meta_reader).await?;
                 Ok(self.to_partitions(&block_metas))
             }
         }

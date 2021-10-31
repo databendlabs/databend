@@ -63,7 +63,12 @@ impl Table for FuseTable {
         &self.table_info
     }
 
-    async fn read_partitions(&self, io_ctx: Arc<TableIOContext>, push_downs: Option<Extras>, _partition_num_hint: Option<usize>) -> Result<(Statistics, Partitions)> {
+    async fn read_partitions(
+        &self,
+        io_ctx: Arc<TableIOContext>,
+        push_downs: Option<Extras>,
+        _partition_num_hint: Option<usize>,
+    ) -> Result<(Statistics, Partitions)> {
         self.do_read_partitions(io_ctx.as_ref(), push_downs).await
     }
 

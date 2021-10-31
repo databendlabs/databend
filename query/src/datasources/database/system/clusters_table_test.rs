@@ -29,11 +29,13 @@ async fn test_clusters_table() -> Result<()> {
 
     let io_ctx = ctx.get_cluster_table_io_context()?;
     let io_ctx = Arc::new(io_ctx);
-    let source_plan = table.read_plan(
-        io_ctx.clone(),
-        None,
-        Some(ctx.get_settings().get_max_threads()? as usize),
-    ).await?;
+    let source_plan = table
+        .read_plan(
+            io_ctx.clone(),
+            None,
+            Some(ctx.get_settings().get_max_threads()? as usize),
+        )
+        .await?;
 
     let stream = table.read(io_ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;

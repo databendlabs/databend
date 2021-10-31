@@ -80,12 +80,17 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                                         //
                                         let io_ctx = self.ctx.get_single_node_table_io_context()?;
                                         futures::executor::block_on(async move {
-                                            table.read_plan(
-                                                Arc::new(io_ctx),
-                                                Some(dummy_scan_plan.push_downs.clone()),
-                                                Some(self.ctx.get_settings().get_max_threads()?
-                                                    as usize),
-                                            ).await.map(PlanNode::ReadSource)
+                                            table
+                                                .read_plan(
+                                                    Arc::new(io_ctx),
+                                                    Some(dummy_scan_plan.push_downs.clone()),
+                                                    Some(
+                                                        self.ctx.get_settings().get_max_threads()?
+                                                            as usize,
+                                                    ),
+                                                )
+                                                .await
+                                                .map(PlanNode::ReadSource)
                                         })
                                     }
                                     _unreachable_plan => {

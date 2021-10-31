@@ -31,11 +31,13 @@ async fn test_metrics_table() -> Result<()> {
     let table: Arc<dyn Table> = Arc::new(MetricsTable::create(1));
     let io_ctx = ctx.get_single_node_table_io_context()?;
     let io_ctx = Arc::new(io_ctx);
-    let source_plan = table.read_plan(
-        io_ctx.clone(),
-        None,
-        Some(ctx.get_settings().get_max_threads()? as usize),
-    ).await?;
+    let source_plan = table
+        .read_plan(
+            io_ctx.clone(),
+            None,
+            Some(ctx.get_settings().get_max_threads()? as usize),
+        )
+        .await?;
     metrics::counter!("test.test_metrics_table_count", 1);
     metrics::histogram!("test.test_metrics_table_histogram", 1.0);
 

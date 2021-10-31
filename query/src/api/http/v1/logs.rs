@@ -74,11 +74,13 @@ async fn execute_query(context: DatabendQueryContextRef) -> Result<SendableDataB
     let io_ctx = context.get_single_node_table_io_context()?;
     let io_ctx = Arc::new(io_ctx);
 
-    let tracing_table_read_plan = tracing_table.read_plan(
-        io_ctx.clone(),
-        None,
-        Some(context.get_settings().get_max_threads()? as usize),
-    ).await?;
+    let tracing_table_read_plan = tracing_table
+        .read_plan(
+            io_ctx.clone(),
+            None,
+            Some(context.get_settings().get_max_threads()? as usize),
+        )
+        .await?;
 
     tracing_table.read(io_ctx, &tracing_table_read_plan).await
 }

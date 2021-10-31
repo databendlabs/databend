@@ -82,11 +82,13 @@ async fn test_memorytable() -> Result<()> {
 
     // read.
     {
-        let source_plan = table.read_plan(
-            io_ctx.clone(),
-            None,
-            Some(ctx.get_settings().get_max_threads()? as usize),
-        ).await?;
+        let source_plan = table
+            .read_plan(
+                io_ctx.clone(),
+                None,
+                Some(ctx.get_settings().get_max_threads()? as usize),
+            )
+            .await?;
         ctx.try_set_partitions(source_plan.parts.clone())?;
         assert_eq!(table.engine(), "Memory");
 
@@ -117,11 +119,13 @@ async fn test_memorytable() -> Result<()> {
 
         let io_ctx = ctx.get_single_node_table_io_context()?;
         let io_ctx = Arc::new(io_ctx);
-        let source_plan = table.read_plan(
-            io_ctx.clone(),
-            None,
-            Some(ctx.get_settings().get_max_threads()? as usize),
-        ).await?;
+        let source_plan = table
+            .read_plan(
+                io_ctx.clone(),
+                None,
+                Some(ctx.get_settings().get_max_threads()? as usize),
+            )
+            .await?;
         let stream = table.read(io_ctx, &source_plan).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         assert_blocks_sorted_eq(vec!["++", "++"], &result);
