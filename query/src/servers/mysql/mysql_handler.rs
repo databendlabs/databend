@@ -121,6 +121,7 @@ impl Server for MySQLHandler {
         if !graceful {
             return;
         }
+
         self.abort_handle.abort();
 
         if let Some(join_handle) = self.join_handle.take() {
