@@ -75,8 +75,10 @@ fn parse_knobs(mut input: syn::ItemFn, is_test: bool, has_tracker: bool) -> Toke
 
     let wait_in_future = match has_tracker {
         true => quote::quote! {
-            let tracker = runtime.get_tracker();
-            main_impl(tracker.clone())
+            {
+                let tracker = runtime.get_tracker();
+                main_impl(tracker.clone())
+            }
         },
         false => quote::quote! { main_impl() },
     };
@@ -110,9 +112,9 @@ fn parse_knobs(mut input: syn::ItemFn, is_test: bool, has_tracker: bool) -> Toke
             #inner_impl
 
             {
-                use common_base::BlockingWait;
                 let runtime = #rt;
-                #tail_return #wait_in_future.wait_in(&runtime, None).unwrap()#tail_semicolon
+                let wait_future = #wait_in_future;
+                #tail_return runtime.block_on(wait_future)#tail_semicolon
             }
         }
     })
