@@ -23,6 +23,8 @@ pub struct Extras {
     pub filters: Vec<Expression>,
     /// Optional limit to skip read
     pub limit: Option<usize>,
+    /// Optional order_by expression plan
+    pub order_by: Vec<Expression>,
 }
 
 impl Extras {
@@ -31,6 +33,7 @@ impl Extras {
             projection: None,
             filters: vec![],
             limit: None,
+            order_by: vec![],
         }
     }
 }

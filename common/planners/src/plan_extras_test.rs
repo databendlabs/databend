@@ -20,7 +20,7 @@ use crate::*;
 #[test]
 fn test_plan_extras() -> Result<()> {
     let extras = Extras::default();
-    let expect = "Extras { projection: None, filters: [], limit: None }";
+    let expect = "Extras { projection: None, filters: [], limit: None, order_by: [] }";
     let actual = format!("{:?}", extras);
     assert_eq!(expect, actual);
     Ok(())

@@ -15,7 +15,7 @@ Projection: (number % 3) as c1:UInt8, (number % 2) as c2:UInt8
   Sort: (number % 3):UInt8, number:UInt64
     RedistributeStage[expr: 0]
       Expression: (number % 3):UInt8, (number % 2):UInt8, number:UInt64 (Before OrderBy)
-        ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]
+        ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: []
 0	1
 0	0
 0	1

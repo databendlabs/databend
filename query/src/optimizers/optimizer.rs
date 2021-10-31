@@ -23,6 +23,7 @@ use crate::optimizers::ConstantFoldingOptimizer;
 use crate::optimizers::ExprTransformOptimizer;
 use crate::optimizers::ProjectionPushDownOptimizer;
 use crate::optimizers::StatisticsExactOptimizer;
+use crate::optimizers::TopNPushDownOptimizer;
 use crate::sessions::DatabendQueryContextRef;
 
 pub trait Optimizer {
@@ -49,6 +50,7 @@ impl Optimizers {
                 Box::new(ConstantFoldingOptimizer::create(ctx.clone())),
                 Box::new(ExprTransformOptimizer::create(ctx.clone())),
                 Box::new(ProjectionPushDownOptimizer::create(ctx.clone())),
+                Box::new(TopNPushDownOptimizer::create(ctx.clone())),
                 Box::new(StatisticsExactOptimizer::create(ctx)),
             ],
         }

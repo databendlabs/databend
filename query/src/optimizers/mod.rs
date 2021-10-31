@@ -25,6 +25,9 @@ mod optimizer_statistics_exact_test;
 #[cfg(test)]
 mod optimizer_test;
 
+#[cfg(test)]
+mod optimizer_top_n_push_down_test;
+
 mod metrics;
 mod optimizer;
 mod optimizer_constant_folding;
@@ -32,6 +35,7 @@ mod optimizer_expression_transform;
 mod optimizer_projection_push_down;
 mod optimizer_scatters;
 mod optimizer_statistics_exact;
+mod optimizer_top_n_push_down;
 mod utils;
 
 pub use optimizer::Optimizer;
@@ -41,4 +45,5 @@ pub use optimizer_expression_transform::ExprTransformOptimizer;
 pub use optimizer_projection_push_down::ProjectionPushDownOptimizer;
 pub use optimizer_scatters::ScattersOptimizer;
 pub use optimizer_statistics_exact::StatisticsExactOptimizer;
+pub use optimizer_top_n_push_down::TopNPushDownOptimizer;
 pub use utils::RequireColumnsVisitor;

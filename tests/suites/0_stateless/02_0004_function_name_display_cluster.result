@@ -2,4 +2,4 @@ Projection: mIn(number):UInt64
   AggregatorFinal: groupBy=[[]], aggr=[[mIn(number)]]
     RedistributeStage[expr: 0]
       AggregatorPartial: groupBy=[[]], aggr=[[mIn(number)]]
-        ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]
+        ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: []

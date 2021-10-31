@@ -83,7 +83,7 @@ mod tests {
         \n  AggregatorFinal: groupBy=[[]], aggr=[[count(0)]]\
         \n    Projection: 904e as count(0):String\
         \n      Expression: 904e:String (Exact Statistics)\
-        \n        ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]";
+        \n        ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1], push_downs: []";
         let actual = format!("{:?}", optimized);
         assert_eq!(expect, actual);
         Ok(())

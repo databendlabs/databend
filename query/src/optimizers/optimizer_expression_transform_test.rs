@@ -34,7 +34,7 @@ mod tests {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: ((number <= 1) or (number > 3))\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: []",
             },
             Test {
                 name: "Complex expression",
@@ -42,7 +42,7 @@ mod tests {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: ((number < 5) and ((number >= 3) or (NOT toBoolean(number))))\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: []",
             },
             Test {
                 name: "Like and isNotNull expression",
@@ -50,7 +50,7 @@ mod tests {
                 expect: "\
                 Projection: name:String\
                 \n  Filter: (isnull(name) or (name not like %sys%))\
-                \n    ReadDataSource: scan partitions: [1], scan schema: [name:String], statistics: [read_rows: 0, read_bytes: 0]",
+                \n    ReadDataSource: scan partitions: [1], scan schema: [name:String], statistics: [read_rows: 0, read_bytes: 0], push_downs: []",
             },
             Test {
                 name: "Not like and isNull expression",
@@ -58,7 +58,7 @@ mod tests {
                 expect: "\
                 Projection: name:String\
                 \n  Filter: (isnotnull(name) and (name like a%))\
-                \n    ReadDataSource: scan partitions: [1], scan schema: [name:String], statistics: [read_rows: 0, read_bytes: 0]",
+                \n    ReadDataSource: scan partitions: [1], scan schema: [name:String], statistics: [read_rows: 0, read_bytes: 0], push_downs: []",
             },
             Test {
                 name: "Equal expression",
@@ -66,7 +66,7 @@ mod tests {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: ((number <> 1) and (number < 5))\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: []",
             },
             Test {
                 name: "Not equal expression",
@@ -74,7 +74,7 @@ mod tests {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: ((number = 1) or (number < 5))\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: []",
             },
             Test {
                 name: "Not expression",
@@ -82,7 +82,7 @@ mod tests {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: toBoolean(number)\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: []",
             },
             Test {
                 name: "Boolean transform",
@@ -90,7 +90,7 @@ mod tests {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: (number != 0)\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: []",
             },
             Test {
                 name: "Boolean and truth transform",
@@ -98,7 +98,7 @@ mod tests {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: (number = 0)\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: []",
             },
             Test {
                 name: "Literal boolean transform",
@@ -106,7 +106,7 @@ mod tests {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: false\
-                \n    ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0]",
+                \n    ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0], push_downs: []",
             },
             Test {
                 name: "Limit zero transform",
@@ -115,7 +115,7 @@ mod tests {
                 Limit: 0\
                 \n  Projection: number:UInt64\
                 \n    Filter: true\
-                \n      ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0]",
+                \n      ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0], push_downs: []",
             },
         ];
 
