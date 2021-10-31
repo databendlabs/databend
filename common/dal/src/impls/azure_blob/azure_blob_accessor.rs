@@ -27,7 +27,6 @@ use crate::AzureBlobInputStream;
 use crate::Bytes;
 use crate::DataAccessor;
 use crate::InputStream;
-use crate::SeekableReader;
 
 pub struct AzureBlobAccessor {
     client: Arc<StorageClient>,
@@ -102,14 +101,6 @@ impl AzureBlobAccessor {
 
 #[async_trait::async_trait]
 impl DataAccessor for AzureBlobAccessor {
-    fn get_reader(
-        &self,
-        _path: &str,
-        _stream_len: Option<u64>,
-    ) -> common_exception::Result<Box<dyn SeekableReader>> {
-        todo!()
-    }
-
     fn get_input_stream(
         &self,
         path: &str,

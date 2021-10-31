@@ -37,8 +37,6 @@ impl<T> SeekableReader for T where T: Read + Seek {}
 
 #[async_trait::async_trait]
 pub trait DataAccessor: Send + Sync {
-    fn get_reader(&self, path: &str, len: Option<u64>) -> Result<Box<dyn SeekableReader>>;
-
     fn get_input_stream(&self, path: &str, stream_len: Option<u64>) -> Result<InputStream>;
 
     async fn get(&self, path: &str) -> Result<Bytes>;

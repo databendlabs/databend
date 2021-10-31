@@ -15,6 +15,4 @@
 
 pub use table_snapshot::*;
 
-pub use crate::datasources::table::fuse::io::meta_info_reader::MetaInfoReader;
-
 mod table_snapshot;
