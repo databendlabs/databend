@@ -15,3 +15,20 @@ select * from system.databases where name not like '_ef_ul_' order by name;
 
 select * from numbers(10) where null = true;
 select * from numbers(10) where null and true;
+
+
+select '==compare_number_string==';
+-- todo: partial parse case
+-- select '123 ab' = 123;
+select '123' = 123;
+select '7.4' = 7.4;
+
+select '==compare_datetime==';
+-- compare with date/datetime
+SELECT '2021-03-05' = toDate('2021-03-05');
+SELECT '2021-03-05 01:01:01' = toDateTime('2021-03-05 01:01:01');
+SELECT '2021-03-05 01:01:02' > toDateTime('2021-03-05 01:01:01');
+SELECT '2021-03-06' > toDate('2021-03-05');
+SELECT toDateTime('2021-03-05 00:00:00') = toDate('2021-03-05');
+SELECT toDateTime('2021-03-05 00:00:01') > toDate('2021-03-05');
+SELECT toDateTime('2021-03-04 00:00:01') < toDate('2021-03-05');
