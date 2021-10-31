@@ -24,6 +24,7 @@ use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
+use crate::CreateUserPlan;
 use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
@@ -79,6 +80,7 @@ pub enum PlanNode {
     ShowCreateTable(ShowCreateTablePlan),
     SubQueryExpression(SubQueriesSetPlan),
     Kill(KillPlan),
+    CreateUser(CreateUserPlan),
 }
 
 impl PlanNode {
@@ -114,6 +116,7 @@ impl PlanNode {
             PlanNode::ShowCreateTable(v) => v.schema(),
             PlanNode::SubQueryExpression(v) => v.schema(),
             PlanNode::Kill(v) => v.schema(),
+            PlanNode::CreateUser(v) => v.schema(),
         }
     }
 
@@ -148,6 +151,7 @@ impl PlanNode {
             PlanNode::ShowCreateTable(_) => "ShowCreateTablePlan",
             PlanNode::SubQueryExpression(_) => "CreateSubQueriesSets",
             PlanNode::Kill(_) => "KillQuery",
+            PlanNode::CreateUser(_) => "CreateUser",
         }
     }
 

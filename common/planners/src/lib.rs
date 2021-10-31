@@ -91,6 +91,7 @@ mod plan_table_create;
 mod plan_table_drop;
 mod plan_truncate_table;
 mod plan_use_database;
+mod plan_user_create;
 mod plan_visitor;
 
 pub use plan_aggregator_final::AggregatorFinalPlan;
@@ -164,4 +165,5 @@ pub use plan_table_create::TableOptions;
 pub use plan_table_drop::DropTablePlan;
 pub use plan_truncate_table::TruncateTablePlan;
 pub use plan_use_database::UseDatabasePlan;
+pub use plan_user_create::CreateUserPlan;
 pub use plan_visitor::PlanVisitor;

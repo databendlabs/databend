@@ -20,6 +20,7 @@ use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
+use crate::CreateUserPlan;
 use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
@@ -119,6 +120,7 @@ pub trait PlanVisitor {
             PlanNode::ShowCreateTable(plan) => self.visit_show_create_table(plan),
             PlanNode::SubQueryExpression(plan) => self.visit_sub_queries_sets(plan),
             PlanNode::Kill(plan) => self.visit_kill_query(plan),
+            PlanNode::CreateUser(plan) => self.visit_create_user(plan),
         }
     }
 
@@ -239,6 +241,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_create_table(&mut self, _: &CreateTablePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_create_user(&mut self, _: &CreateUserPlan) -> Result<()> {
         Ok(())
     }
 

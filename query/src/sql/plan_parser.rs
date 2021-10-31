@@ -35,6 +35,7 @@ use common_planners::sort_to_inner_expr;
 use common_planners::unwrap_alias_exprs;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
+use common_planners::CreateUserPlan;
 use common_planners::DescribeTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
@@ -71,6 +72,7 @@ use crate::sql::sql_statement::DfCreateTable;
 use crate::sql::sql_statement::DfDropDatabase;
 use crate::sql::sql_statement::DfUseDatabase;
 use crate::sql::DfCreateDatabase;
+use crate::sql::DfCreateUser;
 use crate::sql::DfDescribeTable;
 use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
@@ -171,6 +173,7 @@ impl PlanParser {
             DfStatement::ShowMetrics(_) => self.build_from_sql("SELECT * FROM system.metrics"),
             DfStatement::KillQuery(v) => self.sql_kill_query_to_plan(v),
             DfStatement::KillConn(v) => self.sql_kill_connection_to_plan(v),
+            DfStatement::CreateUser(v) => self.sql_create_user_to_plan(v),
         }
     }
 
@@ -327,6 +330,13 @@ impl PlanParser {
                 engine: create.engine.clone(),
                 options,
             },
+        }))
+    }
+
+    #[tracing::instrument(level = "info", skip(self, create), fields(ctx.id = self.ctx.get_id().as_str()))]
+    pub fn sql_create_user_to_plan(&self, create: &DfCreateUser) -> Result<PlanNode> {
+        Ok(PlanNode::CreateUser(CreateUserPlan {
+            name: create.name.clone(),
         }))
     }
 

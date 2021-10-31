@@ -18,6 +18,7 @@
 use std::time::Instant;
 
 use common_exception::ErrorCode;
+use common_management::AuthType;
 use common_planners::ExplainType;
 use metrics::histogram;
 use sqlparser::ast::BinaryOperator;
@@ -39,6 +40,7 @@ use sqlparser::tokenizer::Whitespace;
 
 use crate::sql::DfCreateDatabase;
 use crate::sql::DfCreateTable;
+use crate::sql::DfCreateUser;
 use crate::sql::DfDescribeTable;
 use crate::sql::DfDropDatabase;
 use crate::sql::DfDropTable;
@@ -384,6 +386,7 @@ impl<'a> DfParser<'a> {
             Token::Word(w) => match w.keyword {
                 Keyword::TABLE => self.parse_create_table(),
                 Keyword::DATABASE => self.parse_create_database(),
+                Keyword::USER => self.parse_create_user(),
                 _ => self.expected("create statement", Token::Word(w)),
             },
             unexpected => self.expected("create statement", unexpected),
@@ -475,6 +478,60 @@ impl<'a> DfParser<'a> {
             true => self.parse_kill(DfStatement::KillConn),
             false => self.expected("Must KILL", self.parser.peek_token()),
         }
+    }
+
+    fn parse_create_user(&mut self) -> Result<DfStatement, ParserError> {
+        let if_not_exists =
+            self.parser
+                .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let name = self.parser.parse_literal_string()?;
+        let host_name = if self.consume_token("@") {
+            self.parser.parse_literal_string()?
+        } else {
+            String::from("%")
+        };
+
+        let exist_not_identified = self.parser.parse_keyword(Keyword::NOT);
+        let exist_identified = self.consume_token("IDENTIFIED");
+        let exist_with = self.consume_token("WITH");
+
+        let (auth_type, password) = if exist_not_identified || !exist_identified {
+            (AuthType::None, String::from(""))
+        } else {
+            let auth_type = if exist_with {
+                match self.parser.parse_literal_string()?.as_str() {
+                    "no_password" => AuthType::None,
+                    "plaintext_password" => AuthType::PlainText,
+                    "sha256_password" => AuthType::Sha256,
+                    "double_sha1_password" => AuthType::DoubleSha1,
+                    unexpected => return parser_err!(format!("Expected auth type {}, found: {}", "'no_password'|'plaintext_password'|'sha256_password'|'double_sha1_password'", unexpected))
+                }
+            } else {
+                AuthType::Sha256
+            };
+
+            if AuthType::None == auth_type {
+                (AuthType::None, String::from(""))
+            } else if self.parser.parse_keyword(Keyword::BY) {
+                let password = self.parser.parse_literal_string()?;
+                if password.is_empty() {
+                    return parser_err!("Missing password");
+                }
+                (auth_type, password)
+            } else {
+                return parser_err!("Expected keyword BY");
+            }
+        };
+
+        let create = DfCreateUser {
+            if_not_exists,
+            name,
+            host_name,
+            auth_type,
+            password,
+        };
+
+        Ok(DfStatement::CreateUser(create))
     }
 
     fn parse_create_table(&mut self) -> Result<DfStatement, ParserError> {
