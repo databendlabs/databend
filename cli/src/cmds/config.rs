@@ -206,7 +206,7 @@ pub fn choose_mirror(conf: &Config) -> Result<CustomMirror, CliError> {
     if let Some(mirror) = status.mirrors {
         let custom: CustomMirror = mirror.clone();
         if !custom.is_ok() {
-            writer.write_err(&*format!(
+            writer.write_err(format!(
                 "Mirror error: cannot connect to current mirror {:?}",
                 mirror
             ))

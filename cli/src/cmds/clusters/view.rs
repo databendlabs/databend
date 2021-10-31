@@ -70,17 +70,14 @@ impl ViewCommand {
                 if let Ok(t) = table {
                     writer.writeln(&t.trim_fmt());
                 } else {
-                    writer.write_err(
-                        format!(
-                            "cannot retrieve view table, error: {:?}",
-                            table.unwrap_err()
-                        )
-                        .as_str(),
-                    );
+                    writer.write_err(format!(
+                        "Cannot retrieve view table, error: {:?}",
+                        table.unwrap_err()
+                    ));
                 }
             }
             Err(e) => {
-                writer.write_err(format!("View precheck failed: {:?}", e).as_str());
+                writer.write_err(format!("View precheck failed: {:?}", e));
             }
         }
         Ok(())
@@ -217,11 +214,11 @@ impl Command for ViewCommand {
                     Ok(ClusterProfile::Cluster) => {
                         todo!()
                     }
-                    Err(e) => writer.write_err(format!("cannot parse profile, {:?}", e).as_str()),
+                    Err(e) => writer.write_err(format!("cannot parse profile, {:?}", e)),
                 }
             }
             None => {
-                writer.write_err(&*"cannot find available profile to view");
+                writer.write_err("cannot find available profile to view".to_string());
             }
         }
         Ok(())

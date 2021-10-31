@@ -67,7 +67,7 @@ impl Command for HelpCommand {
         for cmd in self.commands.iter() {
             table.add_row(Row::from([cmd.name(), cmd.about()]));
         }
-        writer.write_ok("Mode switch commands:");
+        writer.write_ok("Mode switch commands:".to_string());
         writer.writeln_width(
             "\\sql",
             "Switch to query mode, you could run query directly under this mode",
@@ -76,7 +76,7 @@ impl Command for HelpCommand {
             "\\admin",
             "Switch to cluster administration mode, you could profile/view/update databend cluster",
         );
-        writer.write_ok("Admin commands:");
+        writer.write_ok("Admin commands:".to_string());
         writer.writeln(&table.trim_fmt());
         Ok(())
     }

@@ -96,18 +96,16 @@ impl Command for SwitchCommand {
                 }
 
                 if !exists {
-                    writer.write_err(
-                        format!("Can't found version: {}, package list:", current_tag).as_str(),
-                    );
+                    writer.write_err(format!(
+                        "Can't found version: {}, package list:",
+                        current_tag
+                    ));
                     let list = ListCommand::create(self.conf.clone());
                     list.exec_matches(writer, args).await?;
-                    writer.write_err(
-                        format!(
-                            "Use command bendctl package fetch {} to retrieve this version",
-                            current_tag
-                        )
-                        .as_str(),
-                    );
+                    writer.write_err(format!(
+                        "Use command bendctl package fetch {} to retrieve this version",
+                        current_tag
+                    ));
                     return Ok(());
                 }
 
@@ -116,7 +114,7 @@ impl Command for SwitchCommand {
                 status.version = current_tag;
                 status.write()?;
 
-                writer.write_ok(format!("Package switch to {}", status.version).as_str());
+                writer.write_ok(format!("Package switch to {}", status.version));
 
                 Ok(())
             }

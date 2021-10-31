@@ -74,7 +74,7 @@ impl QueryCommand {
     async fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
         match self.local_exec_precheck(args) {
             Ok(_) => {
-                writer.write_debug("Query precheck passed!");
+                writer.write_ok("Query precheck passed!".to_string());
                 let status = Status::read(self.conf.clone())?;
                 let queries = match args.value_of("query") {
                     Some(val) => {
@@ -112,31 +112,24 @@ impl QueryCommand {
                         .map(|elem| format!("{};", elem))
                         .collect::<Vec<String>>()
                     {
-                        writer.write_debug(
-                            format!("Execute query {} on {}", query.clone(), url).as_str(),
-                        );
+                        writer.write_debug(format!("Execute query {} on {}", query.clone(), url));
                         if let Err(e) =
                             query_writer(&cli, url.as_str(), query.clone(), writer).await
                         {
-                            writer.write_err(
-                                format!("query {} execution error: {:?}", query, e).as_str(),
-                            );
+                            writer.write_err(format!("Query {} execution error: {:?}", query, e));
                         }
                     }
                 } else {
-                    writer.write_err(
-                        format!(
-                            "Query command error: cannot parse query url with error: {:?}",
-                            res.unwrap_err()
-                        )
-                        .as_str(),
-                    );
+                    writer.write_err(format!(
+                        "Query command error: cannot parse query url with error: {:?}",
+                        res.unwrap_err()
+                    ));
                 }
 
                 Ok(())
             }
             Err(e) => {
-                writer.write_err(&*format!("Query command precheck failed, error {:?}", e));
+                writer.write_err(format!("Query command precheck failed, error {:?}", e));
                 Ok(())
             }
         }
@@ -147,7 +140,7 @@ impl QueryCommand {
         let status = Status::read(self.conf.clone())?;
         if !status.has_local_configs() {
             return Err(CliError::Unknown(format!(
-                "Query command error: cannot find local configs in {}, please run `bendctl cluster create --profile local` to create a new local cluster",
+                "Query command error: cannot find local configs in {}, please run `bendctl cluster create` to create a new local cluster or '\\admin' switch to the admin mode",
                 status.local_config_dir
             )));
         }
@@ -203,18 +196,14 @@ async fn query_writer(
                         byte_per_sec.get_value(),
                         byte_per_sec.get_unit().to_string()
                     )
-                        .as_str(),
                 );
             }
         }
         Err(e) => {
-            writer.write_err(
-                format!(
-                    "Query command error: cannot execute query with error: {:?}",
-                    e
-                )
-                .as_str(),
-            );
+            writer.write_err(format!(
+                "Query command error: cannot execute query with error: {:?}",
+                e
+            ));
         }
     }
     Ok(())
@@ -311,12 +300,12 @@ impl Command for QueryCommand {
         "Query on databend cluster"
     }
 
-    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
-        vec![]
-    }
-
     fn is(&self, s: &str) -> bool {
         s.contains(self.name())
+    }
+
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
     }
 
     async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
@@ -330,7 +319,8 @@ impl Command for QueryCommand {
                     Ok(ClusterProfile::Cluster) => {
                         todo!()
                     }
-                    Err(_) => writer.write_err("currently profile only support cluster or local"),
+                    Err(_) => writer
+                        .write_err("Currently profile only support cluster or local".to_string()),
                 }
             }
             None => {

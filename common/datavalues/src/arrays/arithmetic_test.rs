@@ -12,30 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-
 use crate::prelude::*;
 
-#[test]
-fn test_add() -> Result<()> {
-    // array=[null, 1, 2, null, 4]
-    let array1 = DFUInt16Array::new_from_opt_slice(&[Some(5), Some(5), Some(10)]);
-    // array=[5, null, 7, 8, null]
-    let array2 = DFUInt16Array::new_from_opt_slice(&[Some(5), None, None]);
-
-    let array = (&array1 + &array2).unwrap();
-    let values = array.collect_values();
-    assert_eq!(values, vec![Some(10), None, None]);
-    Ok(())
+#[allow(dead_code)]
+struct Test<T> {
+    name: &'static str,
+    arg_1: DFPrimitiveArray<u16>,
+    arg_2: DFPrimitiveArray<u16>,
+    result: Vec<Option<u16>>,
+    func: fn(T, T) -> T,
 }
 
 #[test]
-fn test_mul() -> Result<()> {
-    // array=[null, 1, 2, null, 4]
-    let array1 = DFUInt16Array::new_from_opt_slice(&[Some(2), Some(5), Some(10)]);
-    // array=[5, null, 7, 8, null]
-    let array2 = DFUInt16Array::new_from_opt_slice(&[Some(7u16), None, None]);
-    let array = (&array1 * &array2).unwrap();
-    assert_eq!(array.collect_values(), vec![Some(14), None, None]);
-    Ok(())
+fn arithmetic_test() {
+    let tests: Vec<Test<DFPrimitiveArray<u16>>> = vec![
+        Test {
+            name: "test_add",
+            arg_1: DFUInt16Array::new_from_opt_slice(&[Some(5), Some(5), Some(10)]),
+            arg_2: DFUInt16Array::new_from_opt_slice(&[Some(5), None, None]),
+            result: vec![Some(10), None, None],
+            func: |array1, array2| (&array1 + &array2).unwrap(),
+        },
+        Test {
+            name: "test_mul",
+            arg_1: DFUInt16Array::new_from_opt_slice(&[Some(2), Some(5), Some(10)]),
+            arg_2: DFUInt16Array::new_from_opt_slice(&[Some(7u16), None, None]),
+            result: vec![Some(14), None, None],
+            func: |array1, array2| (&array1 * &array2).unwrap(),
+        },
+    ];
+    for t in tests {
+        let values = (t.func)(t.arg_1, t.arg_2);
+        assert_eq!(values.collect_values(), t.result);
+    }
 }
