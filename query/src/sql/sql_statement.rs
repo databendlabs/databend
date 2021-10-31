@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_management::AuthType;
 use common_planners::ExplainType;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take_till1;
@@ -108,6 +109,16 @@ pub struct DfKillStatement {
     pub object_id: Ident,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct DfCreateUser {
+    pub if_not_exists: bool,
+    /// User name
+    pub name: String,
+    pub host_name: String,
+    pub auth_type: AuthType,
+    pub password: String,
+}
+
 /// Tokens parsed by `DFParser` are converted into these values.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DfStatement {
@@ -141,6 +152,8 @@ pub enum DfStatement {
     // Kill
     KillQuery(DfKillStatement),
     KillConn(DfKillStatement),
+
+    CreateUser(DfCreateUser),
 }
 
 /// Comment hints from SQL.

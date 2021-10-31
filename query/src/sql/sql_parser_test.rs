@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_management::AuthType;
 use sqlparser::ast::*;
 
 use crate::sql::sql_statement::DfDropDatabase;
@@ -28,6 +29,12 @@ fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
         "Expected to parse exactly one statement"
     );
     assert_eq!(statements[0], expected);
+    Ok(())
+}
+
+fn expect_parse_err(sql: &str, expected: String) -> Result<()> {
+    let err = DfParser::parse_sql(sql).unwrap_err();
+    assert_eq!(err.message(), expected);
     Ok(())
 }
 
@@ -373,5 +380,128 @@ fn show_databases_test() -> Result<()> {
         }),
     )?;
 
+    Ok(())
+}
+
+#[test]
+fn create_user_test() -> Result<()> {
+    expect_parse_ok(
+        "CREATE USER 'test'@'localhost' IDENTIFIED BY 'password'",
+        DfStatement::CreateUser(DfCreateUser {
+            if_not_exists: false,
+            name: String::from("test"),
+            host_name: String::from("localhost"),
+            auth_type: AuthType::Sha256,
+            password: String::from("password"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE USER 'test'@'localhost' IDENTIFIED WITH plaintext_password BY 'password'",
+        DfStatement::CreateUser(DfCreateUser {
+            if_not_exists: false,
+            name: String::from("test"),
+            host_name: String::from("localhost"),
+            auth_type: AuthType::PlainText,
+            password: String::from("password"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY 'password'",
+        DfStatement::CreateUser(DfCreateUser {
+            if_not_exists: false,
+            name: String::from("test"),
+            host_name: String::from("localhost"),
+            auth_type: AuthType::Sha256,
+            password: String::from("password"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE USER 'test'@'localhost' IDENTIFIED WITH double_sha1_password BY 'password'",
+        DfStatement::CreateUser(DfCreateUser {
+            if_not_exists: false,
+            name: String::from("test"),
+            host_name: String::from("localhost"),
+            auth_type: AuthType::DoubleSha1,
+            password: String::from("password"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE USER 'test'@'localhost' IDENTIFIED WITH no_password",
+        DfStatement::CreateUser(DfCreateUser {
+            if_not_exists: false,
+            name: String::from("test"),
+            host_name: String::from("localhost"),
+            auth_type: AuthType::None,
+            password: String::from(""),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE USER IF NOT EXISTS 'test'@'localhost' IDENTIFIED WITH sha256_password BY 'password'",
+        DfStatement::CreateUser(DfCreateUser {
+            if_not_exists: true,
+            name: String::from("test"),
+            host_name: String::from("localhost"),
+            auth_type: AuthType::Sha256,
+            password: String::from("password"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE USER 'test@localhost' IDENTIFIED WITH sha256_password BY 'password'",
+        DfStatement::CreateUser(DfCreateUser {
+            if_not_exists: false,
+            name: String::from("test@localhost"),
+            host_name: String::from("%"),
+            auth_type: AuthType::Sha256,
+            password: String::from("password"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE USER 'test'@'localhost' NOT IDENTIFIED",
+        DfStatement::CreateUser(DfCreateUser {
+            if_not_exists: false,
+            name: String::from("test"),
+            host_name: String::from("localhost"),
+            auth_type: AuthType::None,
+            password: String::from(""),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE USER 'test'@'localhost'",
+        DfStatement::CreateUser(DfCreateUser {
+            if_not_exists: false,
+            name: String::from("test"),
+            host_name: String::from("localhost"),
+            auth_type: AuthType::None,
+            password: String::from(""),
+        }),
+    )?;
+
+    expect_parse_err(
+        "CREATE USER 'test'@'localhost' IDENTIFIED WITH no_password BY 'password'",
+        String::from("sql parser error: Expected end of statement, found: BY"),
+    )?;
+
+    expect_parse_err(
+        "CREATE USER 'test'@'localhost' IDENTIFIED WITH sha256_password",
+        String::from("sql parser error: Expected keyword BY"),
+    )?;
+
+    expect_parse_err(
+        "CREATE USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY",
+        String::from("sql parser error: Expected literal string, found: EOF"),
+    )?;
+
+    expect_parse_err(
+        "CREATE USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY ''",
+        String::from("sql parser error: Missing password"),
+    )?;
     Ok(())
 }
