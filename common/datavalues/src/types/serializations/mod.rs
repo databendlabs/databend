@@ -60,8 +60,8 @@ impl DataType {
                 DataType::Date16 => Ok(Box::new(DateSerializer::<u16> {
                     builder: PrimitiveArrayBuilder::<u16>::with_capacity(capacity),
                 })),
-                DataType::Date32 => Ok(Box::new(DateSerializer::<u32> {
-                    builder: PrimitiveArrayBuilder::<u32>::with_capacity(capacity),
+                DataType::Date32 => Ok(Box::new(DateSerializer::<i32> {
+                    builder: PrimitiveArrayBuilder::<i32>::with_capacity(capacity),
                 })),
                 DataType::DateTime32(tz) => {
                     let tz = tz.unwrap_or_else(|| "UTC".to_string());

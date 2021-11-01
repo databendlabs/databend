@@ -184,7 +184,7 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
                 DataType::UInt32 => result.column(name, column.u32()?.collect_values()),
                 DataType::Date32 => {
                     let c: Vec<Option<Date<Tz>>> = column
-                        .u32()?
+                        .i32()?
                         .into_iter()
                         .map(|x| x.map(|v| v.to_date(&utc)))
                         .collect();
@@ -257,7 +257,7 @@ pub fn to_clickhouse_block(block: DataBlock) -> Result<Block> {
                 }
                 DataType::Date32 => {
                     let c: Vec<Date<Tz>> = column
-                        .u32()?
+                        .i32()?
                         .into_no_null_iter()
                         .map(|v| v.to_date(&utc))
                         .collect();
