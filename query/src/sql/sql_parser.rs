@@ -20,7 +20,7 @@ use std::time::Instant;
 use common_exception::ErrorCode;
 use common_planners::ExplainType;
 use metrics::histogram;
-use sqlparser::ast::BinaryOperator;
+use sqlparser::ast::{BinaryOperator, Statement};
 use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ColumnOptionDef;
 use sqlparser::ast::Expr;
@@ -37,23 +37,24 @@ use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::Whitespace;
 
-use crate::sql::DfCreateDatabase;
-use crate::sql::DfCreateTable;
-use crate::sql::DfDescribeTable;
-use crate::sql::DfDropDatabase;
-use crate::sql::DfDropTable;
+use crate::sql::statements::{DfCreateDatabase, DfSetVariable, DfInsertStatement};
+use crate::sql::statements::DfCreateTable;
+use crate::sql::statements::DfDescribeTable;
+use crate::sql::statements::DfDropDatabase;
+use crate::sql::statements::DfDropTable;
 use crate::sql::DfExplain;
 use crate::sql::DfHint;
-use crate::sql::DfKillStatement;
-use crate::sql::DfShowCreateTable;
-use crate::sql::DfShowDatabases;
-use crate::sql::DfShowMetrics;
-use crate::sql::DfShowProcessList;
-use crate::sql::DfShowSettings;
-use crate::sql::DfShowTables;
+use crate::sql::statements::DfKillStatement;
+use crate::sql::statements::DfShowCreateTable;
+use crate::sql::statements::DfShowDatabases;
+use crate::sql::statements::DfShowMetrics;
+use crate::sql::statements::DfShowProcessList;
+use crate::sql::statements::DfShowSettings;
+use crate::sql::statements::DfShowTables;
 use crate::sql::DfStatement;
-use crate::sql::DfTruncateTable;
-use crate::sql::DfUseDatabase;
+use crate::sql::statements::DfTruncateTable;
+use crate::sql::statements::DfUseDatabase;
+use crate::sql::DfStatement::Statement;
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
@@ -202,10 +203,9 @@ impl<'a> DfParser<'a> {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
                     }
-                    Keyword::TRUNCATE => {
-                        self.parser.next_token();
-                        self.parse_truncate()
-                    }
+                    Keyword::TRUNCATE => self.parse_truncate(),
+                    Keyword::SET => self.parse_set(),
+                    Keyword::INSERT => self.parse_insert(),
                     Keyword::NoKeyword => match w.value.to_uppercase().as_str() {
                         // Use database
                         "USE" => self.parse_use_database(),
@@ -222,6 +222,41 @@ impl<'a> DfParser<'a> {
                 // use the native parser
                 Ok(DfStatement::Statement(self.parser.parse_statement()?))
             }
+        }
+    }
+
+    fn parse_set(&mut self) -> Result<DfStatement, ParserError> {
+        self.parser.next_token();
+        match self.parser.parse_set() {
+            Statement::SetVariable { local, hivevar, variable, value, } => {
+                Ok(DfStatement::SetVariable(
+                    DfSetVariable { local, hivevar, variable, value }
+                ))
+            }
+            _ => parser_err!("Expect set Variable statement"),
+        }
+    }
+
+    fn parse_insert(&mut self) -> Result<DfStatement, ParserError> {
+        self.parser.next_token();
+        match self.parser.parse_insert() {
+            Statement::Insert {
+                or, table_name, columns, overwrite,
+                source, partitioned, format, after_columns,
+                table, } => {
+                Ok(DfStatement::InsertQuery(DfInsertStatement {
+                    or,
+                    table_name,
+                    columns,
+                    overwrite,
+                    source,
+                    partitioned,
+                    format,
+                    after_columns,
+                    table,
+                }))
+            },
+            _ => parser_err!("Expect set insert statement"),
         }
     }
 
@@ -460,19 +495,21 @@ impl<'a> DfParser<'a> {
     }
 
     // Parse 'KILL statement'.
-    fn parse_kill<F>(&mut self, f: F) -> Result<DfStatement, ParserError>
-    where F: Fn(DfKillStatement) -> DfStatement {
-        Ok(f(DfKillStatement {
-            object_id: self.parser.parse_identifier()?,
-        }))
+    fn parse_kill<const kill_query: bool>(&mut self) -> Result<DfStatement, ParserError> {
+        Ok(DfStatement::KillStatement(
+            DfKillStatement {
+                object_id: self.parser.parse_identifier()?,
+                kill_query,
+            }
+        ))
     }
 
     // Parse 'KILL statement'.
     fn parse_kill_query(&mut self) -> Result<DfStatement, ParserError> {
         match self.consume_token("KILL") {
-            true if self.consume_token("QUERY") => self.parse_kill(DfStatement::KillQuery),
-            true if self.consume_token("CONNECTION") => self.parse_kill(DfStatement::KillConn),
-            true => self.parse_kill(DfStatement::KillConn),
+            true if self.consume_token("QUERY") => self.parse_kill::<true>(),
+            true if self.consume_token("CONNECTION") => self.parse_kill::<false>(),
+            true => self.parse_kill::<false>(),
             false => self.expected("Must KILL", self.parser.peek_token()),
         }
     }
@@ -535,6 +572,7 @@ impl<'a> DfParser<'a> {
     }
 
     fn parse_truncate(&mut self) -> Result<DfStatement, ParserError> {
+        self.parser.next_token();
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::TABLE => {

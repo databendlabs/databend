@@ -67,22 +67,23 @@ use sqlparser::ast::UnaryOperator;
 use crate::catalogs::ToReadDataSourcePlan;
 use crate::functions::ContextFunction;
 use crate::sessions::DatabendQueryContextRef;
-use crate::sql::sql_statement::DfCreateTable;
-use crate::sql::sql_statement::DfDropDatabase;
-use crate::sql::sql_statement::DfUseDatabase;
-use crate::sql::DfCreateDatabase;
-use crate::sql::DfDescribeTable;
-use crate::sql::DfDropTable;
+use crate::sql::statements::DfCreateTable;
+use crate::sql::statements::DfDropDatabase;
+use crate::sql::statements::DfUseDatabase;
+use crate::sql::statements::DfCreateDatabase;
+use crate::sql::statements::DfDescribeTable;
+use crate::sql::statements::DfDropTable;
 use crate::sql::DfExplain;
 use crate::sql::DfHint;
-use crate::sql::DfKillStatement;
+use crate::sql::statements::DfKillStatement;
 use crate::sql::DfParser;
-use crate::sql::DfShowCreateTable;
-use crate::sql::DfShowDatabases;
-use crate::sql::DfShowTables;
+use crate::sql::statements::DfShowCreateTable;
+use crate::sql::statements::DfShowDatabases;
+use crate::sql::statements::DfShowTables;
 use crate::sql::DfStatement;
-use crate::sql::DfTruncateTable;
+use crate::sql::statements::DfTruncateTable;
 use crate::sql::SQLCommon;
+use crate::sql::analyzer::AnalyzableStatement;
 
 pub struct PlanParser {
     ctx: DatabendQueryContextRef,
@@ -91,6 +92,10 @@ pub struct PlanParser {
 impl PlanParser {
     pub fn create(ctx: DatabendQueryContextRef) -> Self {
         Self { ctx }
+    }
+
+    pub async fn build_from_sql_new(query: &str, ctx: DatabendQueryContextRef) -> Result<PlanNode> {
+        PlanParser::create(ctx).build_from_sql(query)
     }
 
     pub fn build_from_sql(&self, query: &str) -> Result<PlanNode> {
@@ -121,56 +126,10 @@ impl PlanParser {
     }
 
     pub fn statement_to_plan(&self, statement: &DfStatement) -> Result<PlanNode> {
+        statement.analyze(self.ctx.clone());
         match statement {
             DfStatement::Statement(v) => self.sql_statement_to_plan(v),
             DfStatement::Explain(v) => self.sql_explain_to_plan(v),
-            DfStatement::ShowDatabases(v) => self.sql_show_databases_to_plan(v),
-            DfStatement::CreateDatabase(v) => self.sql_create_database_to_plan(v),
-            DfStatement::DropDatabase(v) => self.sql_drop_database_to_plan(v),
-            DfStatement::CreateTable(v) => self.sql_create_table_to_plan(v),
-            DfStatement::DescribeTable(v) => self.sql_describe_table_to_plan(v),
-            DfStatement::DropTable(v) => self.sql_drop_table_to_plan(v),
-            DfStatement::TruncateTable(v) => self.sql_truncate_table_to_plan(v),
-            DfStatement::UseDatabase(v) => self.sql_use_database_to_plan(v),
-            DfStatement::ShowCreateTable(v) => self.sql_show_create_table_to_plan(v),
-            DfStatement::ShowTables(df) => {
-                let show_sql = match df {
-                    DfShowTables::All => {
-                        format!(
-                            "SELECT name FROM system.tables where database = '{}' ORDER BY database, name",
-                            self.ctx.get_current_database()
-                        )
-                    }
-                    DfShowTables::Like(i) => {
-                        format!(
-                            "SELECT name FROM system.tables where database = '{}' AND name LIKE {} ORDER BY database, name",
-                            self.ctx.get_current_database(), i,
-                        )
-                    }
-                    DfShowTables::Where(e) => {
-                        format!(
-                            "SELECT name FROM system.tables where database = '{}' AND ({}) ORDER BY database, name",
-                            self.ctx.get_current_database(), e,
-                        )
-                    }
-                    DfShowTables::FromOrIn(name) => {
-                        format!(
-                            "SELECT name FROM system.tables where database = '{}' ORDER BY database, name",
-                            name.0[0].value.clone()
-                        )
-                    }
-                };
-                self.build_from_sql(show_sql.as_str())
-            }
-            DfStatement::ShowSettings(_) => {
-                self.build_from_sql("SELECT name, value FROM system.settings ORDER BY name")
-            }
-            DfStatement::ShowProcessList(_) => {
-                self.build_from_sql("SELECT * FROM system.processes")
-            }
-            DfStatement::ShowMetrics(_) => self.build_from_sql("SELECT * FROM system.metrics"),
-            DfStatement::KillQuery(v) => self.sql_kill_query_to_plan(v),
-            DfStatement::KillConn(v) => self.sql_kill_connection_to_plan(v),
         }
     }
 
@@ -179,20 +138,6 @@ impl PlanParser {
     pub fn sql_statement_to_plan(&self, statement: &sqlparser::ast::Statement) -> Result<PlanNode> {
         match statement {
             Statement::Query(query) => self.query_to_plan(query),
-            Statement::SetVariable {
-                variable, value, ..
-            } => self.set_variable_to_plan(variable, value),
-
-            Statement::Insert {
-                table_name,
-                columns,
-                source,
-                ..
-            } => {
-                let format_sql = format!("{}", statement);
-                self.insert_to_plan(table_name, columns, source, &format_sql)
-            }
-
             _ => Result::Err(ErrorCode::SyntaxException(format!(
                 "Unsupported statement {:?}",
                 statement
@@ -208,280 +153,6 @@ impl PlanParser {
             typ: explain.typ,
             input: Arc::new(plan),
         }))
-    }
-
-    /// DfCreateDatabase to plan.
-    #[tracing::instrument(level = "info", skip(self, create), fields(ctx.id = self.ctx.get_id().as_str()))]
-    pub fn sql_create_database_to_plan(&self, create: &DfCreateDatabase) -> Result<PlanNode> {
-        if create.name.0.is_empty() {
-            return Result::Err(ErrorCode::SyntaxException("Create database name is empty"));
-        }
-        let name = create.name.0[0].value.clone();
-
-        let mut options = HashMap::new();
-        for p in create.options.iter() {
-            options.insert(p.name.value.to_lowercase(), p.value.to_string());
-        }
-
-        Ok(PlanNode::CreateDatabase(CreateDatabasePlan {
-            if_not_exists: create.if_not_exists,
-            db: name,
-            options,
-        }))
-    }
-
-    /// DfShowDatabase to plan
-    #[tracing::instrument(level = "info", skip(self, show), fields(ctx.id = self.ctx.get_id().as_str()))]
-    pub fn sql_show_databases_to_plan(&self, show: &DfShowDatabases) -> Result<PlanNode> {
-        let where_clause = match &show.where_opt {
-            Some(expr) => format!("WHERE {}", expr),
-            None => String::from(""),
-        };
-
-        self.build_from_sql(
-            format!(
-                "SELECT name AS Database FROM system.databases {} ORDER BY name",
-                where_clause
-            )
-            .as_str(),
-        )
-    }
-
-    /// DfDropDatabase to plan.
-    #[tracing::instrument(level = "info", skip(self, drop), fields(ctx.id = self.ctx.get_id().as_str()))]
-    pub fn sql_drop_database_to_plan(&self, drop: &DfDropDatabase) -> Result<PlanNode> {
-        if drop.name.0.is_empty() {
-            return Result::Err(ErrorCode::SyntaxException("Drop database name is empty"));
-        }
-        let name = drop.name.0[0].value.clone();
-
-        Ok(PlanNode::DropDatabase(DropDatabasePlan {
-            if_exists: drop.if_exists,
-            db: name,
-        }))
-    }
-
-    #[tracing::instrument(level = "info", skip(self, use_db), fields(ctx.id = self.ctx.get_id().as_str()))]
-    pub fn sql_use_database_to_plan(&self, use_db: &DfUseDatabase) -> Result<PlanNode> {
-        let db = use_db.name.0[0].value.clone();
-        Ok(PlanNode::UseDatabase(UseDatabasePlan { db }))
-    }
-
-    #[tracing::instrument(level = "info", skip(self, kill), fields(ctx.id = self.ctx.get_id().as_str()))]
-    pub fn sql_kill_query_to_plan(&self, kill: &DfKillStatement) -> Result<PlanNode> {
-        let id = kill.object_id.value.clone();
-        Ok(PlanNode::Kill(KillPlan {
-            id,
-            kill_connection: false,
-        }))
-    }
-
-    #[tracing::instrument(level = "info", skip(self, kill), fields(ctx.id = self.ctx.get_id().as_str()))]
-    pub fn sql_kill_connection_to_plan(&self, kill: &DfKillStatement) -> Result<PlanNode> {
-        let id = kill.object_id.value.clone();
-        Ok(PlanNode::Kill(KillPlan {
-            id,
-            kill_connection: true,
-        }))
-    }
-
-    #[tracing::instrument(level = "info", skip(self, create), fields(ctx.id = self.ctx.get_id().as_str()))]
-    pub fn sql_create_table_to_plan(&self, create: &DfCreateTable) -> Result<PlanNode> {
-        let mut db = self.ctx.get_current_database();
-        if create.name.0.is_empty() {
-            return Result::Err(ErrorCode::SyntaxException("Create table name is empty"));
-        }
-        let mut table = create.name.0[0].value.clone();
-        if create.name.0.len() > 1 {
-            db = table;
-            table = create.name.0[1].value.clone();
-        }
-
-        let fields = create
-            .columns
-            .iter()
-            .map(|column| {
-                SQLCommon::make_data_type(&column.data_type)
-                    .map(|data_type| DataField::new(&column.name.value, data_type, false))
-            })
-            .collect::<Result<Vec<DataField>>>()?;
-
-        let mut options = HashMap::new();
-        for p in create.options.iter() {
-            options.insert(
-                p.name.value.to_lowercase(),
-                p.value
-                    .to_string()
-                    .trim_matches(|s| s == '\'' || s == '"')
-                    .to_string(),
-            );
-        }
-
-        let schema = DataSchemaRefExt::create(fields);
-        Ok(PlanNode::CreateTable(CreateTablePlan {
-            if_not_exists: create.if_not_exists,
-            db,
-            table,
-            table_meta: TableMeta {
-                schema,
-                engine: create.engine.clone(),
-                options,
-            },
-        }))
-    }
-
-    #[tracing::instrument(level = "info", skip(self, show_create), fields(ctx.id = self.ctx.get_id().as_str()))]
-    pub fn sql_show_create_table_to_plan(
-        &self,
-        show_create: &DfShowCreateTable,
-    ) -> Result<PlanNode> {
-        let mut db = self.ctx.get_current_database();
-        if show_create.name.0.is_empty() {
-            return Result::Err(ErrorCode::SyntaxException(
-                "Show create table name is empty",
-            ));
-        }
-        let mut table = show_create.name.0[0].value.clone();
-        if show_create.name.0.len() > 1 {
-            db = table;
-            table = show_create.name.0[1].value.clone();
-        }
-
-        let fields = vec![
-            DataField::new("Table", DataType::String, false),
-            DataField::new("Create Table", DataType::String, false),
-        ];
-
-        let schema = DataSchemaRefExt::create(fields);
-        Ok(PlanNode::ShowCreateTable(ShowCreateTablePlan {
-            db,
-            table,
-            schema,
-        }))
-    }
-
-    /// DfDescribeTable to plan.
-    #[tracing::instrument(level = "info", skip(self, describe), fields(ctx.id = self.ctx.get_id().as_str()))]
-    pub fn sql_describe_table_to_plan(&self, describe: &DfDescribeTable) -> Result<PlanNode> {
-        let mut db = self.ctx.get_current_database();
-        if describe.name.0.is_empty() {
-            return Result::Err(ErrorCode::SyntaxException("Describe table name is empty"));
-        }
-        let mut table = describe.name.0[0].value.clone();
-        if describe.name.0.len() > 1 {
-            db = table;
-            table = describe.name.0[1].value.clone();
-        }
-
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("Field", DataType::String, false),
-            DataField::new("Type", DataType::String, false),
-            DataField::new("Null", DataType::String, false),
-        ]);
-
-        Ok(PlanNode::DescribeTable(DescribeTablePlan {
-            db,
-            table,
-            schema,
-        }))
-    }
-
-    /// DfDropTable to plan.
-    #[tracing::instrument(level = "info", skip(self, drop), fields(ctx.id = self.ctx.get_id().as_str()))]
-    pub fn sql_drop_table_to_plan(&self, drop: &DfDropTable) -> Result<PlanNode> {
-        let mut db = self.ctx.get_current_database();
-        if drop.name.0.is_empty() {
-            return Result::Err(ErrorCode::SyntaxException("Drop table name is empty"));
-        }
-        let mut table = drop.name.0[0].value.clone();
-        if drop.name.0.len() > 1 {
-            db = table;
-            table = drop.name.0[1].value.clone();
-        }
-        Ok(PlanNode::DropTable(DropTablePlan {
-            if_exists: drop.if_exists,
-            db,
-            table,
-        }))
-    }
-
-    // DfTruncateTable to plan.
-    #[tracing::instrument(level = "info", skip(self, truncate), fields(ctx.id = self.ctx.get_id().as_str()))]
-    pub fn sql_truncate_table_to_plan(&self, truncate: &DfTruncateTable) -> Result<PlanNode> {
-        let mut db = self.ctx.get_current_database();
-        if truncate.name.0.is_empty() {
-            return Result::Err(ErrorCode::SyntaxException(
-                "TruncateTable table name is empty",
-            ));
-        }
-        let mut table = truncate.name.0[0].value.clone();
-        if truncate.name.0.len() > 1 {
-            db = table;
-            table = truncate.name.0[1].value.clone();
-        }
-
-        Ok(PlanNode::TruncateTable(TruncateTablePlan { db, table }))
-    }
-
-    #[tracing::instrument(level = "info", skip(self, table_name, columns, source), fields(ctx.id = self.ctx.get_id().as_str()))]
-    fn insert_to_plan(
-        &self,
-        table_name: &ObjectName,
-        columns: &[Ident],
-        source: &Option<Box<Query>>,
-        format_sql: &str,
-    ) -> Result<PlanNode> {
-        let mut db_name = self.ctx.get_current_database();
-        let mut tbl_name = table_name.0[0].value.clone();
-
-        if table_name.0.len() > 1 {
-            db_name = tbl_name;
-            tbl_name = table_name.0[1].value.clone();
-        }
-
-        let table = self.ctx.get_table(&db_name, &tbl_name)?;
-        let mut schema = table.schema();
-        let tbl_id = table.get_id();
-
-        if !columns.is_empty() {
-            let fields = columns
-                .iter()
-                .map(|ident| schema.field_with_name(&ident.value).map(|v| v.clone()))
-                .collect::<Result<Vec<_>>>()?;
-
-            schema = DataSchemaRefExt::create(fields);
-        }
-
-        let mut input_stream = futures::stream::iter::<Vec<DataBlock>>(vec![]);
-
-        if let Some(source) = source {
-            if let sqlparser::ast::SetExpr::Values(_vs) = &source.body {
-                tracing::debug!("{:?}", format_sql);
-                let index = format_sql.find_substring(" VALUES ").unwrap();
-                let values = &format_sql[index + " VALUES ".len()..];
-
-                let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
-                let mut source = ValueSource::new(values.as_bytes(), schema.clone(), block_size);
-                let mut blocks = vec![];
-                loop {
-                    let block = source.read()?;
-                    match block {
-                        Some(b) => blocks.push(b),
-                        None => break,
-                    }
-                }
-                input_stream = futures::stream::iter(blocks);
-            }
-        }
-
-        let plan_node = InsertIntoPlan {
-            db_name,
-            tbl_name,
-            tbl_id,
-            schema,
-            input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
-        };
-        Ok(PlanNode::InsertInto(plan_node))
     }
 
     /// Generate a logic plan from an SQL query
@@ -1184,23 +855,6 @@ impl PlanParser {
             name: subquery_name,
             query_plan: Arc::new(subquery),
         })
-    }
-
-    pub fn set_variable_to_plan(
-        &self,
-        variable: &sqlparser::ast::Ident,
-        values: &[sqlparser::ast::SetVariableValue],
-    ) -> Result<PlanNode> {
-        let mut vars = vec![];
-        for value in values {
-            let variable = variable.value.clone();
-            let value = match value {
-                sqlparser::ast::SetVariableValue::Ident(v) => v.value.clone(),
-                sqlparser::ast::SetVariableValue::Literal(v) => v.to_string(),
-            };
-            vars.push(VarValue { variable, value });
-        }
-        Ok(PlanNode::SetVariable(SettingPlan { vars }))
     }
 
     /// Apply a filter to the plan

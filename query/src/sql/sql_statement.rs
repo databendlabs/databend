@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_planners::ExplainType;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take_till1;
 use nom::character::complete::digit1;
@@ -26,86 +25,27 @@ use sqlparser::ast::ObjectName;
 use sqlparser::ast::SqlOption;
 use sqlparser::ast::Statement as SQLStatement;
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum DfShowTables {
-    All,
-    Like(Ident),
-    Where(Expr),
-    FromOrIn(ObjectName),
-}
+use common_planners::ExplainType;
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct DfShowDatabases {
-    pub where_opt: Option<Expr>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct DfShowSettings;
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct DfShowProcessList;
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct DfShowMetrics;
+use crate::sql::statements::{DfCreateDatabase, DfSetVariable, DfInsertStatement};
+use crate::sql::statements::DfCreateTable;
+use crate::sql::statements::DfDescribeTable;
+use crate::sql::statements::DfDropDatabase;
+use crate::sql::statements::DfDropTable;
+use crate::sql::statements::DfShowCreateTable;
+use crate::sql::statements::DfShowDatabases;
+use crate::sql::statements::DfShowMetrics;
+use crate::sql::statements::DfShowProcessList;
+use crate::sql::statements::DfShowSettings;
+use crate::sql::statements::DfShowTables;
+use crate::sql::statements::DfTruncateTable;
+use crate::sql::statements::DfUseDatabase;
+use crate::sql::statements::DfKillStatement;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfExplain {
     pub typ: ExplainType,
     pub statement: Box<SQLStatement>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct DfShowCreateTable {
-    pub name: ObjectName,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct DfCreateTable {
-    pub if_not_exists: bool,
-    /// Table name
-    pub name: ObjectName,
-    pub columns: Vec<ColumnDef>,
-    pub engine: String,
-    pub options: Vec<SqlOption>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct DfDescribeTable {
-    pub name: ObjectName,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct DfDropTable {
-    pub if_exists: bool,
-    pub name: ObjectName,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct DfTruncateTable {
-    pub name: ObjectName,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct DfCreateDatabase {
-    pub if_not_exists: bool,
-    pub name: ObjectName,
-    pub options: Vec<SqlOption>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct DfDropDatabase {
-    pub if_exists: bool,
-    pub name: ObjectName,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct DfUseDatabase {
-    pub name: ObjectName,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct DfKillStatement {
-    pub object_id: Ident,
 }
 
 /// Tokens parsed by `DFParser` are converted into these values.
@@ -139,8 +79,13 @@ pub enum DfStatement {
     ShowMetrics(DfShowMetrics),
 
     // Kill
-    KillQuery(DfKillStatement),
-    KillConn(DfKillStatement),
+    KillStatement(DfKillStatement),
+
+    // Set
+    SetVariable(DfSetVariable),
+
+    // Insert
+    InsertQuery(DfInsertStatement),
 }
 
 /// Comment hints from SQL.
