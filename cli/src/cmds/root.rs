@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use clap::AppSettings;
 use clap::Arg;
 use async_trait::async_trait;
 use clap::App;
@@ -23,6 +22,7 @@ use clap::ArgMatches;
 
 use crate::cmds::command::Command;
 use crate::cmds::queries::query::QueryCommand;
+use crate::cmds::completions::completion::CompletionCommand;
 use crate::cmds::ups::up::UpCommand;
 use crate::cmds::ClusterCommand;
 use crate::cmds::PackageCommand;
@@ -114,16 +114,7 @@ impl Command for RootCommand {
                     .global(true)
                     .takes_value(true),
             )
-            .subcommand(
-                App::new("completion")
-                    .setting(AppSettings::DisableVersionFlag)
-                    .about("Generate auto completion scripts for bash or zsh terminal")
-                    .arg(
-                        Arg::new("completion")
-                            .takes_value(true)
-                            .possible_values(&["bash", "zsh"]),
-                    ),
-            )
+            .subcommand(CompletionCommand::default().clap())
             .subcommand(PackageCommand::default().clap())
             .subcommand(VersionCommand::default().clap())
             .subcommand(ClusterCommand::default().clap())

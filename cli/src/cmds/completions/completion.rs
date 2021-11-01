@@ -75,8 +75,8 @@ impl Command for CompletionCommand {
         self.name() == s
     }
 
-    async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
-        let clap = self.clap();
+    async fn exec_matches(&self, _writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+        let mut clap = self.clap();
         match args.unwrap().subcommand_matches("completion").unwrap().value_of("completion") {
             Some("bash") => print_completions::<Bash>(Bash, &mut clap),
             Some("zsh") => print_completions::<Zsh>(Zsh, &mut clap),

@@ -15,8 +15,6 @@
 use std::fs;
 use std::io::Write;
 
-use clap_generate::generators::Bash;
-use clap_generate::generators::Zsh;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
@@ -51,6 +49,7 @@ enum MultilineType {
     BackSlash,
     None,
 }
+
 impl Processor {
     pub fn create(conf: Config) -> Self {
         fs::create_dir_all(conf.databend_dir.clone()).unwrap();
@@ -80,69 +79,12 @@ impl Processor {
             }
         }
 
-        match self.env.conf.clone().clap.subcommand_name() {
-            Some("package") => {
-                let cmd = PackageCommand::create(self.env.conf.clone());
-                return cmd
-                    .exec_matches(
-                        &mut writer,
-                        self.env.conf.clone().clap.subcommand_matches("package"),
-                    )
-                    .await;
-            }
-            Some("version") => {
-                let cmd = VersionCommand::create();
-                cmd.exec_matches(&mut writer, None).await
-            }
-            Some("cluster") => {
-                let cmd = ClusterCommand::create(self.env.conf.clone());
-                return cmd
-                    .exec_matches(
-                        &mut writer,
-                        self.env.conf.clone().clap.subcommand_matches("cluster"),
-                    )
-                    .await;
-            }
-            Some("query") => {
-                let cmd = QueryCommand::create(self.env.conf.clone());
-                cmd.exec_matches(
-                    &mut writer,
-                    self.env.conf.clone().clap.subcommand_matches("query"),
-                )
-                .await
-            }
-            Some("completion") => {
-                if let Some(generator) = self
-                    .env
-                    .conf
-                    .clone()
-                    .clap
-                    .subcommand_matches("completion")
-                    .unwrap()
-                    .value_of("completion")
-                {
-                    let mut app = RootCommand::create().clap();
-                    eprintln!("Generating completion file for {}...", generator);
-                    match generator {
-                        "bash" => print_completions::<Bash>(Bash, &mut app),
-                        "zsh" => print_completions::<Zsh>(Zsh, &mut app),
-                        _ => panic!("Unknown generator"),
-                    }
-                }
-                Ok(())
-            }
-            Some("up") => {
-                let cmd = UpCommand::create(self.env.conf.clone());
-                cmd.exec_matches(
-                    &mut writer,
-                    self.env.conf.clone().clap.subcommand_matches("up"),
-                )
-                .await
-            }
+        let cmd = RootCommand::create();
+        let args = cmd.clap().get_matches();
+        match args.subcommand_name() {
             None => self.process_run_interactive().await,
-            _ => {
-                println!("Some other subcommand was used");
-                Ok(())
+            Some(_) => {
+                cmd.exec_matches(&mut writer, Some(&args)).await
             }
         }
     }
