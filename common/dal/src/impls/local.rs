@@ -93,6 +93,7 @@ impl DataAccessor for Local {
         tokio::fs::create_dir_all(parent).await?;
         let mut new_file = tokio::fs::File::create(path).await?;
         new_file.write_all(&content).await?;
+        new_file.flush().await?;
         Ok(())
     }
 
@@ -118,6 +119,7 @@ impl DataAccessor for Local {
         while let Some(Ok(v)) = s.next().await {
             new_file.write_all(&v).await?
         }
+        new_file.flush().await?;
         Ok(())
     }
 }
