@@ -312,7 +312,7 @@ impl Config {
             .subcommand(PackageCommand::default().clap())
             .subcommand(VersionCommand::generate())
             .subcommand(ClusterCommand::default().clap())
-            .subcommand(QueryCommand::generate())
+            .subcommand(QueryCommand::default().clap())
             .subcommand(UpCommand::generate())
     }
 
