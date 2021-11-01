@@ -35,6 +35,7 @@ use crate::cmds::Env;
 use crate::cmds::HelpCommand;
 use crate::cmds::PackageCommand;
 use crate::cmds::VersionCommand;
+use crate::cmds::root::RootCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
@@ -79,6 +80,7 @@ impl Processor {
             query: QueryCommand::create(conf),
         }
     }
+
     pub async fn process_run(&mut self) -> Result<()> {
         let mut writer = Writer::create();
         if let Some(level) = self.env.conf.clap.value_of("log-level") {
@@ -86,6 +88,7 @@ impl Processor {
                 writer.debug = true;
             }
         }
+
         match self.env.conf.clone().clap.subcommand_name() {
             Some("package") => {
                 let cmd = PackageCommand::create(self.env.conf.clone());
@@ -127,7 +130,7 @@ impl Processor {
                     .unwrap()
                     .value_of("completion")
                 {
-                    let mut app = Config::build_cli();
+                    let mut app = RootCommand::create().clap();
                     eprintln!("Generating completion file for {}...", generator);
                     match generator {
                         "bash" => print_completions::<Bash>(Bash, &mut app),

@@ -30,6 +30,7 @@ mod status;
 mod ups;
 mod versions;
 mod writer;
+mod root;
 
 pub use clusters::cluster::ClusterCommand;
 pub use clusters::create::CreateCommand;
