@@ -464,8 +464,8 @@ fn is_like_pattern_escape(c: u8) -> bool {
 
 pub(crate) fn left_bound_for_like_pattern(pattern: &[u8]) -> Vec<u8> {
     let mut index = 0;
-    let mut prefix: Vec<u8> = Vec::new();
     let len = pattern.len();
+    let mut prefix: Vec<u8> = Vec::with_capacity(len);
     while index < len {
         match pattern[index] {
             b'%' | b'_' => break,
