@@ -37,6 +37,7 @@ use common_base::tokio;
 use common_base::tokio::sync::watch;
 use common_base::tokio::sync::Mutex;
 use common_base::tokio::sync::RwLock;
+use common_base::tokio::sync::RwLockReadGuard;
 use common_base::tokio::sync::RwLockWriteGuard;
 use common_base::tokio::task::JoinHandle;
 use common_exception::prelude::ErrorCode;
@@ -52,7 +53,6 @@ use common_meta_raft_store::state_machine::TableLookupKey;
 use common_meta_raft_store::state_machine::TableLookupValue;
 use common_meta_sled_store::get_sled_db;
 use common_meta_types::Cmd;
-use common_meta_types::DatabaseInfo;
 use common_meta_types::LogEntry;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
@@ -983,14 +983,8 @@ impl MetaNode {
         Ok(_resp)
     }
 
-    /// Get a database from local meta state machine.
-    /// The returned value may not be the latest written.
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_database(&self, name: &str) -> Result<Option<SeqV<DatabaseInfo>>, ErrorCode> {
-        // inconsistent get: from local state machine
-
-        let sm = self.sto.state_machine.read().await;
-        sm.get_database(name)
+    pub async fn get_state_machine(&self) -> RwLockReadGuard<'_, StateMachine> {
+        self.sto.state_machine.read().await
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
@@ -1008,13 +1002,6 @@ impl MetaNode {
                 table_name: name.to_string(),
             }),
         )
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_databases(&self) -> Result<Vec<(String, DatabaseInfo)>, ErrorCode> {
-        let sm = self.sto.state_machine.read().await;
-
-        sm.get_databases()
     }
 
     #[tracing::instrument(level = "debug", skip(self))]

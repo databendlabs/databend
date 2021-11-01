@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use async_raft::AppDataResponse;
-use common_meta_types::DatabaseInfo;
 use common_meta_types::Node;
 use common_meta_types::SeqV;
 use common_meta_types::TableIdent;
@@ -26,13 +25,6 @@ use serde::Serialize;
 #[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum AppliedState {
-    String {
-        // The value before applying a RaftRequest.
-        prev: Option<String>,
-        // The value after applying a RaftRequest.
-        result: Option<String>,
-    },
-
     Seq {
         seq: u64,
     },
@@ -42,12 +34,12 @@ pub enum AppliedState {
         result: Option<Node>,
     },
 
-    DataBase {
-        prev: Option<SeqDBInfo>,
-        result: Option<SeqDBInfo>,
+    DatabaseId {
+        prev: Option<SeqV<u64>>,
+        result: Option<SeqV<u64>>,
     },
 
-    Table {
+    TableMeta {
         prev: Option<SeqV<TableMeta>>,
         result: Option<SeqV<TableMeta>>,
     },
@@ -62,39 +54,14 @@ pub enum AppliedState {
         result: Option<SeqV<Vec<u8>>>,
     },
 
-    DataPartsCount {
-        prev: Option<usize>,
-        result: Option<usize>,
-    },
-
     None,
 }
 
 impl AppDataResponse for AppliedState {}
 
-// === raw applied result to AppliedState
-
-impl From<(Option<String>, Option<String>)> for AppliedState {
-    fn from(v: (Option<String>, Option<String>)) -> Self {
-        AppliedState::String {
-            prev: v.0,
-            result: v.1,
-        }
-    }
-}
-
 impl From<u64> for AppliedState {
     fn from(seq: u64) -> Self {
         AppliedState::Seq { seq }
-    }
-}
-
-impl From<(Option<usize>, Option<usize>)> for AppliedState {
-    fn from(v: (Option<usize>, Option<usize>)) -> Self {
-        AppliedState::DataPartsCount {
-            prev: v.0,
-            result: v.1,
-        }
     }
 }
 
@@ -107,11 +74,9 @@ impl From<(Option<Node>, Option<Node>)> for AppliedState {
     }
 }
 
-type SeqDBInfo = SeqV<DatabaseInfo>;
-
-impl From<(Option<SeqDBInfo>, Option<SeqDBInfo>)> for AppliedState {
-    fn from(v: (Option<SeqDBInfo>, Option<SeqDBInfo>)) -> Self {
-        AppliedState::DataBase {
+impl From<(Option<SeqV<u64>>, Option<SeqV<u64>>)> for AppliedState {
+    fn from(v: (Option<SeqV<u64>>, Option<SeqV<u64>>)) -> Self {
+        AppliedState::DatabaseId {
             prev: v.0,
             result: v.1,
         }
@@ -120,7 +85,7 @@ impl From<(Option<SeqDBInfo>, Option<SeqDBInfo>)> for AppliedState {
 
 impl From<(Option<SeqV<TableMeta>>, Option<SeqV<TableMeta>>)> for AppliedState {
     fn from(v: (Option<SeqV<TableMeta>>, Option<SeqV<TableMeta>>)) -> Self {
-        AppliedState::Table {
+        AppliedState::TableMeta {
             prev: v.0,
             result: v.1,
         }
@@ -174,29 +139,21 @@ impl AppliedState {
     /// Whether the state changed
     pub fn changed(&self) -> bool {
         match self {
-            AppliedState::String {
-                ref prev,
-                ref result,
-            } => prev != result,
             AppliedState::Seq { .. } => true,
             AppliedState::Node {
                 ref prev,
                 ref result,
             } => prev != result,
-            AppliedState::DataBase {
+            AppliedState::DatabaseId {
                 ref prev,
                 ref result,
             } => prev != result,
-            AppliedState::Table {
+            AppliedState::TableMeta {
                 ref prev,
                 ref result,
             } => prev != result,
             AppliedState::TableIdent { prev, result } => prev != result,
             AppliedState::KV {
-                ref prev,
-                ref result,
-            } => prev != result,
-            AppliedState::DataPartsCount {
                 ref prev,
                 ref result,
             } => prev != result,
@@ -222,28 +179,24 @@ impl AppliedState {
 
     pub fn prev_is_none(&self) -> bool {
         match self {
-            AppliedState::String { ref prev, .. } => prev.is_none(),
             AppliedState::Seq { .. } => false,
             AppliedState::Node { ref prev, .. } => prev.is_none(),
-            AppliedState::DataBase { ref prev, .. } => prev.is_none(),
-            AppliedState::Table { ref prev, .. } => prev.is_none(),
+            AppliedState::DatabaseId { ref prev, .. } => prev.is_none(),
+            AppliedState::TableMeta { ref prev, .. } => prev.is_none(),
             AppliedState::TableIdent { ref prev, .. } => prev.is_none(),
             AppliedState::KV { ref prev, .. } => prev.is_none(),
-            AppliedState::DataPartsCount { ref prev, .. } => prev.is_none(),
             AppliedState::None => true,
         }
     }
 
     pub fn result_is_none(&self) -> bool {
         match self {
-            AppliedState::String { ref result, .. } => result.is_none(),
             AppliedState::Seq { .. } => false,
             AppliedState::Node { ref result, .. } => result.is_none(),
-            AppliedState::DataBase { ref result, .. } => result.is_none(),
-            AppliedState::Table { ref result, .. } => result.is_none(),
+            AppliedState::DatabaseId { ref result, .. } => result.is_none(),
+            AppliedState::TableMeta { ref result, .. } => result.is_none(),
             AppliedState::TableIdent { ref result, .. } => result.is_none(),
             AppliedState::KV { ref result, .. } => result.is_none(),
-            AppliedState::DataPartsCount { ref result, .. } => result.is_none(),
             AppliedState::None => true,
         }
     }

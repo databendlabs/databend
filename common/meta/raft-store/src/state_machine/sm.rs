@@ -27,7 +27,6 @@ use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledTree;
 use common_meta_types::Cmd;
-use common_meta_types::DatabaseInfo;
 use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
@@ -314,16 +313,19 @@ impl StateMachine {
                 }
             }
 
-            Cmd::CreateDatabase {
-                ref name, ref db, ..
-            } => {
-                let mut db = db.clone();
-                db.database_id = self.incr_seq(SEQ_DATABASE_ID).await?;
+            Cmd::CreateDatabase { ref name } => {
+                let db_id = self.incr_seq(SEQ_DATABASE_ID).await?;
 
                 let dbs = self.databases();
 
                 let (prev, result) = self
-                    .sub_tree_upsert(dbs, name, &MatchSeq::Exact(0), Operation::Update(db), None)
+                    .sub_tree_upsert(
+                        dbs,
+                        name,
+                        &MatchSeq::Exact(0),
+                        Operation::Update(db_id),
+                        None,
+                    )
                     .await?;
 
                 // if it is just created
@@ -484,7 +486,7 @@ impl StateMachine {
                 };
 
                 if seq.match_seq(&prev).is_err() {
-                    let res = AppliedState::Table {
+                    let res = AppliedState::TableMeta {
                         prev: Some(prev.clone()),
                         result: Some(prev),
                     };
@@ -515,7 +517,7 @@ impl StateMachine {
 
                 self.tables().insert(table_id, &sv).await?;
 
-                Ok(AppliedState::Table {
+                Ok(AppliedState::TableMeta {
                     prev: Some(prev),
                     result: Some(sv),
                 })
@@ -598,7 +600,7 @@ impl StateMachine {
             .get(db_name)?
             .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
 
-        Ok(seq_dbi.data.database_id)
+        Ok(seq_dbi.data)
     }
 
     async fn client_last_resp_update(
@@ -660,13 +662,14 @@ impl StateMachine {
         sm_nodes.get(node_id)
     }
 
-    pub fn get_database(&self, name: &str) -> Result<Option<SeqV<DatabaseInfo>>, ErrorCode> {
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub fn get_database(&self, name: &str) -> Result<Option<SeqV<u64>>, ErrorCode> {
         let dbs = self.databases();
         let x = dbs.get(&name.to_string())?;
         Ok(x)
     }
 
-    pub fn get_databases(&self) -> Result<Vec<(String, DatabaseInfo)>, ErrorCode> {
+    pub fn get_databases(&self) -> Result<Vec<(String, u64)>, ErrorCode> {
         let mut res = vec![];
 
         let it = self.databases().range(..)?;
@@ -715,7 +718,7 @@ impl StateMachine {
             }
         };
 
-        let db_id = db.data.database_id;
+        let db_id = db.data;
 
         let mut tbls = vec![];
         let tables = self.tables();
