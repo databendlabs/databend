@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::convert::Infallible;
 
 use axum::body::Bytes;
 use axum::body::Full;
 use axum::extract::Extension;
+use axum::extract::Query;
 use axum::handler::post;
 use axum::http::header;
 use axum::http::Response;
@@ -89,6 +91,7 @@ struct HttpQuery {
     id: String,
     sql: String,
     state: Option<HttpQueryState>,
+    db: Option<String>,
 }
 
 struct HttpQueryState {
@@ -101,17 +104,21 @@ struct HttpQueryState {
 
 // TODO(youngsofun): add a HttpQueryManager in SessionManger to support async query.
 impl HttpQuery {
-    fn new(id: String, sql: String) -> HttpQuery {
+    fn new(id: String, sql: String, db: Option<String>) -> HttpQuery {
         HttpQuery {
             id,
             sql,
             state: None,
+            db,
         }
     }
 
     async fn start(&mut self, session_manager: SessionManagerRef) -> Result<HttpQueryState> {
         let session = session_manager.create_session("http-statement")?;
         let ctx = session.create_context().await?;
+        if self.db.is_some() && !self.db.clone().unwrap().is_empty() {
+            ctx.set_current_database(self.db.clone().unwrap())?;
+        }
         ctx.attach_query_str(&self.sql);
         let plan = PlanParser::create(ctx.clone()).build_from_sql(&self.sql)?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
@@ -172,10 +179,12 @@ impl HttpQueryState {
 pub(crate) async fn statement_handler(
     sessions_extension: Extension<SessionManagerRef>,
     sql: String,
+    Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
     let session_manager = sessions_extension.0;
     let query_id = uuid::Uuid::new_v4().to_string();
-    let mut query = HttpQuery::new(query_id, sql);
+    let db = params.get("db");
+    let mut query = HttpQuery::new(query_id, sql, db.cloned());
     query.initial_result(session_manager).await
 }
 
