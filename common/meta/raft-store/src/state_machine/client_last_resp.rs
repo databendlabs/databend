@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_sled_store::SledSerde;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -27,5 +26,3 @@ pub struct ClientLastRespValue {
     pub req_serial_num: u64,
     pub res: AppliedState,
 }
-
-impl SledSerde for ClientLastRespValue {}

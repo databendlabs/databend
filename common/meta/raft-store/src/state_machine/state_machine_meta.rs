@@ -19,7 +19,6 @@ use async_raft::LogId;
 use common_exception::ErrorCode;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::SledOrderedSerde;
-use common_meta_sled_store::SledSerde;
 use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
@@ -83,8 +82,6 @@ impl SledOrderedSerde for StateMachineMetaKey {
         Err(ErrorCode::MetaStoreDamaged("invalid key IVec"))
     }
 }
-
-impl SledSerde for StateMachineMetaValue {}
 
 impl From<StateMachineMetaValue> for LogId {
     fn from(v: StateMachineMetaValue) -> Self {

@@ -14,12 +14,10 @@
 
 use std::convert::TryInto;
 
-use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::KVMeta;
-use crate::SledSerde;
 
 /// Some value bound with a seq number
 #[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
@@ -28,8 +26,6 @@ pub struct SeqV<T = Vec<u8>> {
     pub meta: Option<KVMeta>,
     pub data: T,
 }
-
-impl<T: Serialize + DeserializeOwned> SledSerde for SeqV<T> {}
 
 pub trait IntoSeqV<T> {
     type Error;

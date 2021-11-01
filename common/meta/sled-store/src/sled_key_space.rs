@@ -41,7 +41,7 @@ pub trait SledKeySpace {
     type V: SledSerde + Debug;
 
     fn serialize_key(k: &Self::K) -> Result<sled::IVec, ErrorCode> {
-        let b = k.ser()?;
+        let b = <Self::K as SledOrderedSerde>::ser(k)?;
         let x = b.as_ref();
 
         let mut buf = Vec::with_capacity(1 + x.len());
@@ -56,7 +56,7 @@ pub trait SledKeySpace {
         if b[0] != Self::PREFIX {
             return Err(ErrorCode::MetaStoreDamaged("invalid prefix"));
         }
-        Self::K::de(&b[1..])
+        <Self::K as SledOrderedSerde>::de(&b[1..])
     }
 
     fn serialize_value(v: &Self::V) -> Result<sled::IVec, ErrorCode> {
