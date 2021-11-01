@@ -28,12 +28,14 @@ use crate::cmds::Writer;
 use crate::error::CliError;
 
 pub(crate) const GITHUB_BASE_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
-pub(crate) const GITHUB_DATABEND_URL: &str = "https://github.com/datafuselabs/databend/releases/download";
-pub(crate) const GITHUB_DATABEND_TAG_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
+pub(crate) const GITHUB_DATABEND_URL: &str =
+    "https://github.com/datafuselabs/databend/releases/download";
+pub(crate) const GITHUB_DATABEND_TAG_URL: &str =
+    "https://api.github.com/repos/datafuselabs/databend/tags";
 pub(crate) const GITHUB_PLAYGROUND_URL: &str =
     "https://github.com/datafuselabs/databend-playground/releases/download";
 
-pub(crate )const REPO_BASE_URL: &str = "https://repo.databend.rs/databend/tags.json";
+pub(crate) const REPO_BASE_URL: &str = "https://repo.databend.rs/databend/tags.json";
 pub(crate) const REPO_DATABEND_URL: &str = "https://repo.databend.rs/databend";
 pub(crate) const REPO_DATABEND_TAG_URL: &str = "https://repo.databend.rs/databend/tags.json";
 pub(crate) const REPO_PLAYGROUND_URL: &str = "https://repo.databend.rs/databend";

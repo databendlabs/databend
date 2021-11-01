@@ -14,31 +14,29 @@
 
 use std::sync::Arc;
 
-use clap::Arg;
 use async_trait::async_trait;
 use clap::App;
+use clap::Arg;
 use clap::ArgMatches;
 
-
 use crate::cmds::command::Command;
-use crate::cmds::queries::query::QueryCommand;
 use crate::cmds::completions::completion::CompletionCommand;
+use crate::cmds::config;
+use crate::cmds::config::Config;
+use crate::cmds::queries::query::QueryCommand;
 use crate::cmds::ups::up::UpCommand;
 use crate::cmds::ClusterCommand;
 use crate::cmds::PackageCommand;
 use crate::cmds::VersionCommand;
-use crate::cmds::config;
 use crate::cmds::Writer;
 use crate::error::Result;
-use crate::cmds::config::Config;
 
 #[derive(Clone)]
-pub struct RootCommand {
-}
+pub struct RootCommand {}
 
 impl RootCommand {
     pub fn create() -> Self {
-        RootCommand { }
+        RootCommand {}
     }
 }
 

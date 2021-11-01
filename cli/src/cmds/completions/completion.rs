@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
 use std::io;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use clap::App;
-use clap::Arg;
 use clap::AppSettings;
+use clap::Arg;
 use clap::ArgMatches;
 use clap_generate::generate;
-use clap_generate::Generator;
 use clap_generate::generators::Bash;
 use clap_generate::generators::Zsh;
+use clap_generate::Generator;
 
 use crate::cmds::command::Command;
 use crate::cmds::Writer;
@@ -77,7 +77,12 @@ impl Command for CompletionCommand {
 
     async fn exec_matches(&self, _writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         let mut clap = self.clap();
-        match args.unwrap().subcommand_matches("completion").unwrap().value_of("completion") {
+        match args
+            .unwrap()
+            .subcommand_matches("completion")
+            .unwrap()
+            .value_of("completion")
+        {
             Some("bash") => print_completions::<Bash>(Bash, &mut clap),
             Some("zsh") => print_completions::<Zsh>(Zsh, &mut clap),
             _ => panic!("Unknown generator"),

@@ -21,6 +21,7 @@ use rustyline::Editor;
 use crate::cmds::command::Command;
 use crate::cmds::config::Mode;
 use crate::cmds::queries::query::QueryCommand;
+use crate::cmds::root::RootCommand;
 use crate::cmds::ups::up::UpCommand;
 use crate::cmds::ClusterCommand;
 use crate::cmds::CommentCommand;
@@ -29,7 +30,6 @@ use crate::cmds::Env;
 use crate::cmds::HelpCommand;
 use crate::cmds::PackageCommand;
 use crate::cmds::VersionCommand;
-use crate::cmds::root::RootCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
@@ -83,9 +83,7 @@ impl Processor {
         let args = cmd.clap().get_matches();
         match args.subcommand_name() {
             None => self.process_run_interactive().await,
-            Some(_) => {
-                cmd.exec_matches(&mut writer, Some(&args)).await
-            }
+            Some(_) => cmd.exec_matches(&mut writer, Some(&args)).await,
         }
     }
 

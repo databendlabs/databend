@@ -18,6 +18,7 @@ mod status_test;
 mod clusters;
 mod command;
 mod comments;
+mod completions;
 mod config;
 #[cfg(test)]
 mod config_test;
@@ -26,12 +27,11 @@ mod helps;
 mod packages;
 mod processor;
 mod queries;
+mod root;
 mod status;
-mod completions;
 mod ups;
 mod versions;
 mod writer;
-mod root;
 
 pub use clusters::cluster::ClusterCommand;
 pub use clusters::create::CreateCommand;
