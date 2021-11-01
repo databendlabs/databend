@@ -79,8 +79,6 @@ impl Command for CompletionCommand {
         let mut clap = self.clap();
         match args
             .unwrap()
-            .subcommand_matches("completion")
-            .unwrap()
             .value_of("completion")
         {
             Some("bash") => print_completions::<Bash>(Bash, &mut clap),
