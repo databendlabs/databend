@@ -21,6 +21,7 @@ use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
 use common_meta_types::LogIndex;
+use common_meta_types::SeqV;
 
 use crate::get_sled_db;
 use crate::testing::fake_key_spaces::Files;
@@ -31,7 +32,6 @@ use crate::testing::fake_key_spaces::StateMachineMeta;
 use crate::testing::fake_state_machine_meta::StateMachineMetaKey::Initialized;
 use crate::testing::fake_state_machine_meta::StateMachineMetaKey::LastApplied;
 use crate::testing::fake_state_machine_meta::StateMachineMetaValue;
-use crate::SeqV;
 use crate::SledTree;
 
 /// 1. Open a temp sled::Db for all tests.
