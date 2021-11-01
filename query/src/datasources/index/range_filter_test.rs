@@ -33,8 +33,8 @@ fn test_range_filter() -> Result<()> {
 
     let mut stats: BlockStats = HashMap::new();
     stats.insert(0u32, ColStats {
-        min: DataValue::Int32(Some(1)),
-        max: DataValue::Int32(Some(20)),
+        min: DataValue::Int64(Some(1)),
+        max: DataValue::Int64(Some(20)),
         null_count: 1,
     });
     stats.insert(1u32, ColStats {
