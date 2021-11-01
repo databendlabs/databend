@@ -24,7 +24,7 @@ select '123' = 123;
 select '7.4' = 7.4;
 
 select '==compare_datetime==';
--- compare with date/datetime
+-- compare with date/datetime strings
 SELECT '2021-03-05' = toDate('2021-03-05');
 SELECT '2021-03-05 01:01:01' = toDateTime('2021-03-05 01:01:01');
 SELECT '2021-03-05 01:01:02' > toDateTime('2021-03-05 01:01:01');
@@ -32,3 +32,4 @@ SELECT '2021-03-06' > toDate('2021-03-05');
 SELECT toDateTime('2021-03-05 00:00:00') = toDate('2021-03-05');
 SELECT toDateTime('2021-03-05 00:00:01') > toDate('2021-03-05');
 SELECT toDateTime('2021-03-04 00:00:01') < toDate('2021-03-05');
+SELECT toDateTime(toDate('2021-03-05')) = toDate('2021-03-05');

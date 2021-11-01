@@ -89,7 +89,7 @@ impl Function for CastFunction {
                let arr = series.u16()?;
                match &self.cast_type {
                 Date32 => Ok(arr.apply_cast_numeric(|v| v as i32).into_series()),
-                DateTime32(_) => Ok(arr.apply_cast_numeric(|v|  Utc.timestamp(v as i64 * 24 * 3600, 0_u32).timestamp() ).into_series() ),
+                DateTime32(_) => Ok(arr.apply_cast_numeric(|v|  Utc.timestamp(v as i64 * 24 * 3600, 0_u32).timestamp() as u32 ).into_series() ),
                 String => Ok(DFStringArray::from_iter(arr.into_iter().map(|v| v.map(|x| datetime_to_string( Utc.timestamp(*x as i64 * 24 * 3600, 0_u32), DATE_FMT))) ).into_series()),
                 _ =>  Err(error)
                }
@@ -101,7 +101,7 @@ impl Function for CastFunction {
                let arr = series.i32()?;
                match &self.cast_type {
                 Date32 => Ok(arr.apply_cast_numeric(|v| v as i32).into_series()),
-                DateTime32(_) => Ok(arr.apply_cast_numeric(|v|  Utc.timestamp(v as i64 * 24 * 3600, 0_u32).timestamp() ).into_series() ),
+                DateTime32(_) => Ok(arr.apply_cast_numeric(|v|  Utc.timestamp(v as i64 * 24 * 3600, 0_u32).timestamp()  as u32).into_series() ),
                 String => Ok(DFStringArray::from_iter(arr.into_iter().map(|v| v.map(|x| datetime_to_string( Utc.timestamp(*x as i64 * 24 * 3600, 0_u32), DATE_FMT))) ).into_series()),
                 _ =>  Err(error)
                }
@@ -113,7 +113,7 @@ impl Function for CastFunction {
                let arr = series.u32()?;
                match &self.cast_type {
                 Date16 => Ok(arr.apply_cast_numeric(|v| (v as i64 / 24/ 3600) as u16).into_series()),
-                Date32 => Ok(arr.apply_cast_numeric(|v| (v as i64 / 24/ 3600) as u32).into_series()),
+                Date32 => Ok(arr.apply_cast_numeric(|v| (v as i64 / 24/ 3600) as i32).into_series()),
                 String => Ok(DFStringArray::from_iter(arr.into_iter().map(|v| v.map(|x| datetime_to_string( Utc.timestamp(*x as i64, 0_u32), TIME_FMT))) ).into_series()),
                 _ =>  Err(error)
                }

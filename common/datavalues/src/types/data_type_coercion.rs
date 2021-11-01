@@ -395,21 +395,22 @@ pub fn compare_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<Data
         }
     }
 
-    if is_date_or_date_time(lhs_type) && is_date_or_date_time(rhs_type) {
+    // one of is datetime and other is number or string
+    if is_date_or_date_time(lhs_type) || is_date_or_date_time(rhs_type) {
+        // one of is datetime
         if matches!(lhs_type, DataType::DateTime32(_))
             || matches!(rhs_type, DataType::DateTime32(_))
         {
             return Ok(DataType::DateTime32(None));
         }
 
-        if lhs_type == &DataType::Date32 || rhs_type == &DataType::Date32 {
-            return Ok(DataType::Date32);
-        }
-
-        return Ok(DataType::Date16);
+        return Ok(DataType::Date32);
     }
 
-    numerical_coercion(lhs_type, rhs_type, true)
+    Err(ErrorCode::IllegalDataType(format!(
+        "Can not compare {} with {}",
+        lhs_type, rhs_type
+    )))
 }
 
 // aggregate_types aggregates data types for a multi-argument function.
