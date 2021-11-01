@@ -40,6 +40,7 @@ pub use raft_types::LogId;
 pub use raft_types::LogIndex;
 pub use raft_types::NodeId;
 pub use raft_types::Term;
+pub use seq_num::SeqNum;
 pub use table_info::TableIdent;
 pub use table_info::TableInfo;
 pub use table_info::TableMeta;
@@ -57,6 +58,7 @@ mod match_seq;
 mod operation;
 mod raft_txid;
 mod raft_types;
+mod seq_num;
 mod table_info;
 mod table_reply;
 
