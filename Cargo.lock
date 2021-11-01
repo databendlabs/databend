@@ -1527,7 +1527,6 @@ dependencies = [
  "async-raft",
  "common-datavalues",
  "common-exception",
- "common-meta-sled-store",
  "pretty_assertions",
  "serde",
  "serde_json",
