@@ -310,10 +310,10 @@ impl Config {
                     ),
             )
             .subcommand(PackageCommand::default().clap())
-            .subcommand(VersionCommand::generate())
+            .subcommand(VersionCommand::default().clap())
             .subcommand(ClusterCommand::default().clap())
             .subcommand(QueryCommand::default().clap())
-            .subcommand(UpCommand::generate())
+            .subcommand(UpCommand::default().clap())
     }
 
     pub fn create() -> Self {
