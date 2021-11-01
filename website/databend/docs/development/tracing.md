@@ -22,9 +22,6 @@ select sum(number+1)+1 from numbers(10000) where number>0 group by number%3;
 ```
 
 Tracing log:
-<details>
-  <summary>Tracing</summary>
-
 ```
 [2021-06-10T08:40:36Z DEBUG clickhouse_srv::cmd] Got packet Query(QueryRequest { query_id: "bac2b254-6245-4cae-910d-3e5e979c8b68", client_info: QueryClientInfo { query_kind: 1, initial_user: "", initial_query_id: "", initial_address: "0.0.0.0:0", interface: 1, os_user: "bohu", client_hostname: "thinkpad", client_name: "ClickHouse ", client_version_major: 21, client_version_minor: 4, client_version_patch: 6, client_revision: 54447, http_method: 0, http_user_agent: "", quota_key: "" }, stage: 2, compression: 1, query: "select sum(number+1)+1 from numbers(10000) where number>0 group by number%3;" })
 Jun 10 16:40:36.131 DEBUG ThreadId(16) databend_query::sql::plan_parser: query="select sum(number+1)+1 from numbers(10000) where number>0 group by number%3;"
@@ -154,5 +151,3 @@ Jun 10 16:40:36.167 DEBUG ThreadId(309) databend_query::pipelines::transforms::t
 Jun 10 16:40:36.168 DEBUG ThreadId(309) databend_query::pipelines::transforms::transform_expression_executor: (projection executor) execute, actions: [Input(ActionInput { name: "(sum((number + 1)) + 1)", return_type: UInt64 })]
 Jun 10 16:40:36.168 DEBUG ThreadId(309) databend_query::pipelines::transforms::transform_projection: Projection cost: 241.864µs
 ```
-
-</details>
