@@ -33,6 +33,7 @@ use num_format::ToFormattedString;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::command::Command;
+use crate::cmds::status::LocalRuntime;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::cmds::Writer;
@@ -72,7 +73,7 @@ impl QueryCommand {
         app
     }
     async fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
-        match self.local_exec_precheck(args) {
+        match self.local_exec_precheck(args).await {
             Ok(_) => {
                 writer.write_ok("Query precheck passed!".to_string());
                 let status = Status::read(self.conf.clone())?;
@@ -129,23 +130,29 @@ impl QueryCommand {
                 Ok(())
             }
             Err(e) => {
-                writer.write_err(format!("Query command precheck failed, error {:?}", e));
+                writer.write_err(format!(
+                "Query command precheck failed, error {:?}, please run `bendctl cluster create` to create a new local cluster or '\\admin' switch to the admin mode", e));
                 Ok(())
             }
         }
     }
 
     /// precheck whether current local profile applicable for local host machine
-    fn local_exec_precheck(&self, _args: &ArgMatches) -> Result<()> {
+    async fn local_exec_precheck(&self, _args: &ArgMatches) -> Result<()> {
         let status = Status::read(self.conf.clone())?;
         if !status.has_local_configs() {
             return Err(CliError::Unknown(format!(
-                "Query command error: cannot find local configs in {}, please run `bendctl cluster create` to create a new local cluster or '\\admin' switch to the admin mode",
+                "cannot find local configs in {}",
                 status.local_config_dir
             )));
         }
 
-        Ok(())
+        let query_configs = status.get_local_query_configs();
+        let (_, query) = query_configs.first().expect("cannot find query configs");
+        match query.verify(None, None).await {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
+        }
     }
 
     pub async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
