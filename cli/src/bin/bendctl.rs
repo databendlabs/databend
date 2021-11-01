@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use bendctl::cmds::Command;
 use bendctl::cmds::Config;
 use bendctl::cmds::Processor;
 use bendctl::cmds::RootCommand;
 use bendctl::error::Result;
-use bendctl::cmds::Command;
 use common_base::tokio;
 
 #[tokio::main]

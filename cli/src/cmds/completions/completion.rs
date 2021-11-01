@@ -77,10 +77,7 @@ impl Command for CompletionCommand {
 
     async fn exec_matches(&self, _writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         let mut clap = self.clap();
-        match args
-            .unwrap()
-            .value_of("completion")
-        {
+        match args.unwrap().value_of("completion") {
             Some("bash") => print_completions::<Bash>(Bash, &mut clap),
             Some("zsh") => print_completions::<Zsh>(Zsh, &mut clap),
             _ => panic!("Unknown generator"),

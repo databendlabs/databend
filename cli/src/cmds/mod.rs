@@ -35,9 +35,8 @@ mod writer;
 
 pub use clusters::cluster::ClusterCommand;
 pub use clusters::create::CreateCommand;
-pub use comments::comment::CommentCommand;
-pub use root::RootCommand;
 pub use command::Command;
+pub use comments::comment::CommentCommand;
 pub use config::Config;
 pub use env::Env;
 pub use helps::help::HelpCommand;
@@ -46,6 +45,7 @@ pub use packages::list::ListCommand;
 pub use packages::package::PackageCommand;
 pub use packages::switch::SwitchCommand;
 pub use processor::Processor;
+pub use root::RootCommand;
 pub use status::Status;
 pub use versions::version::VersionCommand;
 pub use writer::Writer;
