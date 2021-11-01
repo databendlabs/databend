@@ -14,12 +14,15 @@
 
 use bendctl::cmds::Config;
 use bendctl::cmds::Processor;
+use bendctl::cmds::RootCommand;
 use bendctl::error::Result;
+use bendctl::cmds::Command;
 use common_base::tokio;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let conf = Config::create();
+    let cmd = RootCommand::create();
+    let conf = Config::create(cmd.clap());
     let mut processor = Processor::create(conf);
     processor.process_run().await
 }
