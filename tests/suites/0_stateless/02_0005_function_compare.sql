@@ -22,6 +22,8 @@ select '==compare_number_string==';
 -- select '123 ab' = 123;
 select '123' = 123;
 select '7.4' = 7.4;
+select '7.4' > 7;
+select '777.4' < 778;
 
 select '==compare_datetime==';
 -- compare with date/datetime strings

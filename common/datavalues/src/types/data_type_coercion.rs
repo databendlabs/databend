@@ -373,13 +373,10 @@ pub fn compare_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<Data
     }
 
     // one of is String and other is number
+    if (is_numeric(lhs_type) && rhs_type == &DataType::String)
+        || (is_numeric(rhs_type) && lhs_type == &DataType::String)
     {
-        if is_numeric(lhs_type) && rhs_type == &DataType::String {
-            return Ok(lhs_type.clone());
-        }
-        if is_numeric(rhs_type) && lhs_type == &DataType::String {
-            return Ok(rhs_type.clone());
-        }
+        return Ok(DataType::Float64);
     }
 
     // one of is datetime and other is number or string
