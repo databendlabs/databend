@@ -21,7 +21,6 @@ use serde::Serialize;
 use sled::IVec;
 
 use crate::SledOrderedSerde;
-use crate::SledSerde;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum StateMachineMetaKey {
@@ -82,8 +81,6 @@ impl SledOrderedSerde for StateMachineMetaKey {
         Err(ErrorCode::MetaStoreDamaged("invalid key IVec"))
     }
 }
-
-impl SledSerde for StateMachineMetaValue {}
 
 impl From<StateMachineMetaValue> for LogId {
     fn from(v: StateMachineMetaValue) -> Self {

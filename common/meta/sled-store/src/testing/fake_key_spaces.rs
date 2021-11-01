@@ -22,11 +22,6 @@ use crate::testing::fake_state_machine_meta::StateMachineMetaKey;
 use crate::testing::fake_state_machine_meta::StateMachineMetaValue;
 use crate::SeqV;
 use crate::SledKeySpace;
-use crate::SledSerde;
-
-// impl SledSerde for SeqValue<KVValue> {}
-
-impl SledSerde for Node {}
 
 /// Types for raft log in SledTree
 pub struct Logs {}
