@@ -15,12 +15,16 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
+use common_base::BlockingWait;
 use common_context::TableDataContext;
 use common_dal::InMemoryData;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_meta_api::MetaApi;
+use common_meta_embedded::MetaEmbedded;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
@@ -36,8 +40,9 @@ use common_planners::DropTablePlan;
 use common_tracing::tracing;
 
 use crate::catalogs::backends::MetaApiSync;
-use crate::catalogs::backends::MetaEmbeddedSync;
-use crate::catalogs::backends::MetaRemoteSync;
+use crate::catalogs::backends::MetaCached;
+use crate::catalogs::backends::MetaRemote;
+use crate::catalogs::backends::MetaSync;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::Database;
 use crate::catalogs::Table;
@@ -73,17 +78,39 @@ pub struct MetaStoreCatalog {
 }
 
 impl MetaStoreCatalog {
+    /// The component hierarchy is layered as:
+    /// ```text
+    /// Remote:
+    ///
+    ///                                        RPC
+    /// MetaSync -> MetaCached -> MetaRemote -------> Meta server      Meta server
+    ///                                               raft <---------> raft <----..
+    ///                                               MetaEmbedded     MetaEmbedded
+    ///
+    /// Embedded:
+    ///
+    /// MetaSync -> MetaCached -> MetaEmbedded
+    /// ```
     pub fn try_create_with_config(conf: Config) -> Result<Self> {
         let local_mode = conf.meta.meta_address.is_empty();
-        let meta: Arc<dyn MetaApiSync> = if local_mode {
+
+        let meta_store: Arc<dyn MetaApi> = if local_mode {
             tracing::info!("use embedded meta");
             // TODO(xp): This can only be used for test: data will be removed when program quit.
-            Arc::new(MetaEmbeddedSync::create()?)
+
+            let meta_embedded = MetaEmbedded::new_temp().wait(None)??;
+            Arc::new(meta_embedded)
         } else {
             tracing::info!("use remote meta");
-            let store_client_provider = Arc::new(MetaClientProvider::new(&conf));
-            Arc::new(MetaRemoteSync::create(store_client_provider))
+
+            let meta_client_provider = Arc::new(MetaClientProvider::new(&conf));
+            let meta_remote = MetaRemote::create(meta_client_provider);
+            Arc::new(meta_remote)
         };
+
+        let meta_cached = MetaCached::create(meta_store);
+        let meta_sync = MetaSync::create(Arc::new(meta_cached), Some(Duration::from_millis(5000)));
+        let meta: Arc<dyn MetaApiSync> = Arc::new(meta_sync);
 
         let plan = CreateDatabasePlan {
             if_not_exists: true,

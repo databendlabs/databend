@@ -16,5 +16,6 @@ mod backend;
 mod impls;
 
 pub use backend::MetaApiSync;
-pub use impls::MetaEmbeddedSync;
-pub use impls::MetaRemoteSync;
+pub use impls::MetaCached;
+pub use impls::MetaRemote;
+pub use impls::MetaSync;
