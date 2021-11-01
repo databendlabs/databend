@@ -13,14 +13,10 @@
 // limitations under the License.
 
 use std::fs;
-use std::io;
 use std::io::Write;
 
-use clap::App;
-use clap_generate::generate;
 use clap_generate::generators::Bash;
 use clap_generate::generators::Zsh;
-use clap_generate::Generator;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
@@ -55,11 +51,6 @@ enum MultilineType {
     BackSlash,
     None,
 }
-
-fn print_completions<G: Generator>(gen: G, app: &mut App) {
-    generate::<G, _>(gen, app, app.get_name().to_string(), &mut io::stdout());
-}
-
 impl Processor {
     pub fn create(conf: Config) -> Self {
         fs::create_dir_all(conf.databend_dir.clone()).unwrap();

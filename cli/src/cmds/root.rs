@@ -49,7 +49,6 @@ impl Command for RootCommand {
     }
 
     fn clap(&self) -> App<'static> {
-        let subcommands = self.subcommands();
         App::new("bendctl")
             .arg(
                 Arg::new("group")
