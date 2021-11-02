@@ -14,5 +14,4 @@
 //
 mod impls;
 
-pub use impls::MetaCached;
 pub use impls::MetaRemote;
