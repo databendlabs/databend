@@ -143,7 +143,7 @@ impl Catalog for MetaStoreCatalog {
     }
 
     async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
-        println!("MetaStoreCatalog::get_table: {} {}", db, table_name);
+        println!("MetaStoreCatalog::get_table: {} {}", db_name, table_name);
         let table_info = self.meta.get_table(db_name, table_name).await?;
         self.build_table(table_info.as_ref())
     }
