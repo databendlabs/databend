@@ -12,15 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::Change;
 use crate::SeqV;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct UpsertKVActionReply {
-    /// prev is the value before upsert.
-    pub prev: Option<SeqV<Vec<u8>>>,
-    /// result is the value after upsert.
-    pub result: Option<SeqV<Vec<u8>>>,
-}
+pub type UpsertKVActionReply = Change<Vec<u8>>;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct GetKVActionReply {
