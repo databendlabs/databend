@@ -19,6 +19,7 @@ use common_context::IOContext;
 use common_context::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -41,6 +42,7 @@ impl TablesTable {
             DataField::new("database", DataType::String, false),
             DataField::new("name", DataType::String, false),
             DataField::new("engine", DataType::String, false),
+            DataField::new("schema", DataType::String, false),
         ]);
 
         let table_info = TableInfo {
@@ -98,11 +100,25 @@ impl Table for TablesTable {
             .iter()
             .map(|(_, v)| v.engine().as_bytes())
             .collect();
+        let schemas: Vec<Vec<u8>> = database_tables
+            .iter()
+            .map(|(_, v)| {
+                serde_json::to_string(v.schema().fields())
+                    .map(|s| s.into_bytes())
+                    .map_err(|err| {
+                        ErrorCode::UnexpectedError(format!(
+                            "Serialize schema to json failed, cause: {}",
+                            err
+                        ))
+                    })
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         let block = DataBlock::create_by_array(self.table_info.schema(), vec![
             Series::new(databases),
             Series::new(names),
             Series::new(engines),
+            Series::new(schemas),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(
