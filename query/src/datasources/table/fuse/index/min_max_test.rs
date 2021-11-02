@@ -40,7 +40,7 @@ use crate::datasources::table::fuse::util::TBL_OPT_KEY_SNAPSHOT_LOC;
 
 #[tokio::test]
 async fn test_min_max_index() -> Result<()> {
-    let fixture = TestFixture::new();
+    let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
 
     let test_tbl_name = "test_index_helper";
@@ -62,10 +62,12 @@ async fn test_min_max_index() -> Result<()> {
     };
 
     let catalog = ctx.get_catalog();
-    catalog.create_table(crate_table_plan)?;
+    catalog.create_table(crate_table_plan).await?;
 
     // get table
-    let table = catalog.get_table(fixture.default_db().as_str(), test_tbl_name)?;
+    let table = catalog
+        .get_table(fixture.default_db().as_str(), test_tbl_name)
+        .await?;
 
     // prepare test blocks
     let num = 10;
@@ -91,7 +93,9 @@ async fn test_min_max_index() -> Result<()> {
     table.append_data(io_ctx.clone(), insert_into_plan).await?;
 
     // get the latest tbl
-    let table = catalog.get_table(fixture.default_db().as_str(), test_tbl_name)?;
+    let table = catalog
+        .get_table(fixture.default_db().as_str(), test_tbl_name)
+        .await?;
 
     let snapshot_loc = table
         .get_table_info()

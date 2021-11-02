@@ -27,9 +27,9 @@ use crate::datasources;
 pub type DatabaseCatalog = OverlaidCatalog;
 
 impl DatabaseCatalog {
-    pub fn try_create_with_config(conf: Config) -> Result<DatabaseCatalog> {
+    pub async fn try_create_with_config(conf: Config) -> Result<DatabaseCatalog> {
         let system_catalog = SystemCatalog::try_create_with_config(&conf)?;
-        let metastore_catalog = MetaStoreCatalog::try_create_with_config(conf)?;
+        let metastore_catalog = MetaStoreCatalog::try_create_with_config(conf).await?;
         let func_engine_registry = datasources::table_func::prelude::prelude_func_engines();
         let res = DatabaseCatalog::create(
             Arc::new(system_catalog),

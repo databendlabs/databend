@@ -64,20 +64,21 @@ impl OverlaidCatalog {
     }
 }
 
+#[async_trait::async_trait]
 impl Catalog for OverlaidCatalog {
-    fn get_databases(&self) -> common_exception::Result<Vec<Arc<dyn Database>>> {
-        let mut dbs = self.read_only.get_databases()?;
-        let mut other = self.bottom.get_databases()?;
+    async fn get_databases(&self) -> common_exception::Result<Vec<Arc<dyn Database>>> {
+        let mut dbs = self.read_only.get_databases().await?;
+        let mut other = self.bottom.get_databases().await?;
         dbs.append(&mut other);
         Ok(dbs)
     }
 
-    fn get_database(&self, db_name: &str) -> common_exception::Result<Arc<dyn Database>> {
-        let r = self.read_only.get_database(db_name);
+    async fn get_database(&self, db_name: &str) -> common_exception::Result<Arc<dyn Database>> {
+        let r = self.read_only.get_database(db_name).await;
         match r {
             Err(e) => {
                 if e.code() == ErrorCode::UnknownDatabase("").code() {
-                    self.bottom.get_database(db_name)
+                    self.bottom.get_database(db_name).await
                 } else {
                     Err(e)
                 }
@@ -86,17 +87,17 @@ impl Catalog for OverlaidCatalog {
         }
     }
 
-    fn get_table(
+    async fn get_table(
         &self,
         db_name: &str,
         table_name: &str,
     ) -> common_exception::Result<Arc<dyn Table>> {
-        let res = self.read_only.get_table(db_name, table_name);
+        let res = self.read_only.get_table(db_name, table_name).await;
         match res {
             Ok(v) => Ok(v),
             Err(e) => {
                 if e.code() == ErrorCode::UnknownDatabase("").code() {
-                    self.bottom.get_table(db_name, table_name)
+                    self.bottom.get_table(db_name, table_name).await
                 } else {
                     Err(e)
                 }
@@ -104,13 +105,13 @@ impl Catalog for OverlaidCatalog {
         }
     }
 
-    fn get_tables(&self, db_name: &str) -> common_exception::Result<Vec<Arc<dyn Table>>> {
-        let r = self.read_only.get_tables(db_name);
+    async fn get_tables(&self, db_name: &str) -> common_exception::Result<Vec<Arc<dyn Table>>> {
+        let r = self.read_only.get_tables(db_name).await;
         match r {
             Ok(x) => Ok(x),
             Err(e) => {
                 if e.code() == ErrorCode::UnknownDatabase("").code() {
-                    self.bottom.get_tables(db_name)
+                    self.bottom.get_tables(db_name).await
                 } else {
                     Err(e)
                 }
@@ -118,21 +119,25 @@ impl Catalog for OverlaidCatalog {
         }
     }
 
-    fn get_table_meta_by_id(
+    async fn get_table_meta_by_id(
         &self,
         table_id: MetaId,
     ) -> common_exception::Result<(TableIdent, Arc<TableMeta>)> {
-        self.read_only
-            .get_table_meta_by_id(table_id)
-            .or_else(|_e| self.bottom.get_table_meta_by_id(table_id))
+        let res = self.read_only.get_table_meta_by_id(table_id).await;
+
+        if let Ok(x) = res {
+            Ok(x)
+        } else {
+            self.bottom.get_table_meta_by_id(table_id).await
+        }
     }
 
-    fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
-        self.bottom.create_table(plan)
+    async fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
+        self.bottom.create_table(plan).await
     }
 
-    fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
-        self.bottom.drop_table(plan)
+    async fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
+        self.bottom.drop_table(plan).await
     }
 
     fn build_table(&self, table_info: &TableInfo) -> common_exception::Result<Arc<dyn Table>> {
@@ -163,7 +168,7 @@ impl Catalog for OverlaidCatalog {
         Ok(func)
     }
 
-    fn upsert_table_option(
+    async fn upsert_table_option(
         &self,
         table_id: MetaId,
         table_version: MetaVersion,
@@ -171,24 +176,26 @@ impl Catalog for OverlaidCatalog {
         table_option_value: String,
     ) -> common_exception::Result<UpsertTableOptionReply> {
         // upsert table option in BOTTOM layer only
-        self.bottom.upsert_table_option(
-            table_id,
-            table_version,
-            table_option_key,
-            table_option_value,
-        )
+        self.bottom
+            .upsert_table_option(
+                table_id,
+                table_version,
+                table_option_key,
+                table_option_value,
+            )
+            .await
     }
 
-    fn create_database(
+    async fn create_database(
         &self,
         plan: CreateDatabasePlan,
     ) -> common_exception::Result<CreateDatabaseReply> {
         // create db in BOTTOM layer only
-        self.bottom.create_database(plan)
+        self.bottom.create_database(plan).await
     }
 
-    fn drop_database(&self, plan: DropDatabasePlan) -> common_exception::Result<()> {
+    async fn drop_database(&self, plan: DropDatabasePlan) -> common_exception::Result<()> {
         // drop db in BOTTOM layer only
-        self.bottom.drop_database(plan)
+        self.bottom.drop_database(plan).await
     }
 }

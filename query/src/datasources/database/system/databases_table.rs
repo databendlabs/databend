@@ -74,24 +74,21 @@ impl Table for DatabasesTable {
             .get_user_data()?
             .expect("DatabendQueryContext should not be None");
 
-        ctx.get_catalog()
-            .get_databases()
-            .map(|databases_name| -> SendableDataBlockStream {
-                let databases_name_str: Vec<&[u8]> = databases_name
-                    .iter()
-                    .map(|database| database.name().as_bytes())
-                    .collect();
+        let dbs = ctx.get_catalog().get_databases().await?;
 
-                let block =
-                    DataBlock::create_by_array(self.table_info.schema(), vec![Series::new(
-                        databases_name_str,
-                    )]);
+        let db_names: Vec<&[u8]> = dbs
+            .iter()
+            .map(|database| database.name().as_bytes())
+            .collect();
 
-                Box::pin(DataBlockStream::create(
-                    self.table_info.schema(),
-                    None,
-                    vec![block],
-                ))
-            })
+        let block =
+            DataBlock::create_by_array(self.table_info.schema(), vec![Series::new(db_names)]);
+
+        let s = Box::pin(DataBlockStream::create(
+            self.table_info.schema(),
+            None,
+            vec![block],
+        ));
+        Ok(s)
     }
 }
