@@ -163,7 +163,9 @@ impl Processor {
                 }
                 Err(ReadlineError::Interrupted) => {
                     println!("CTRL-C");
-                    break;
+                    if self.env.conf.mode != Mode::Sql {
+                        break;
+                    }
                 }
                 Err(ReadlineError::Eof) => {
                     println!("CTRL-D");
