@@ -128,7 +128,7 @@ impl DatabendQueryContextShared {
                 let rt = self.try_get_runtime()?;
                 let database = database.to_string();
                 let table = table.to_string();
-                println!("ContextShared::Vacant: {:?}", table_meta_key);
+                println!("ContextShared::Vacant: {} {}", database, table);
                 let t = (async move { catalog.get_table(&database, &table).await })
                     .wait_in(&rt, Some(Duration::from_millis(5000)))??;
 
