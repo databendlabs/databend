@@ -30,6 +30,7 @@ fn test_dal_builder() -> common_exception::Result<()> {
         },
         s3: S3StorageConfig {
             region: "".to_string(),
+            endpoint_url: "".to_string(),
             access_key_id: "".to_string(),
             secret_access_key: "".to_string(),
             bucket: "".to_string(),

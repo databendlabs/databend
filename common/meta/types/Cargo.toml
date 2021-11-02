@@ -9,11 +9,12 @@ edition = "2021"
 [dependencies]
 common-datavalues = {path = "../../datavalues"}
 common-exception = {path = "../../exception"}
-common-meta-sled-store = {path = "../sled-store"}
 
+async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.14" }
+derive_more = "0.99.16"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.14" }
+
 
 [dev-dependencies]
 pretty_assertions = "1.0"

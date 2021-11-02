@@ -12,28 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod status_test;
+pub mod clusters;
+pub mod config;
+pub mod status;
 
-mod clusters;
 mod command;
 mod comments;
-mod config;
-#[cfg(test)]
-mod config_test;
+mod completions;
 mod env;
 mod helps;
 mod loads;
 mod packages;
 mod processor;
 mod queries;
-mod status;
+mod root;
 mod ups;
 mod versions;
 mod writer;
 
 pub use clusters::cluster::ClusterCommand;
 pub use clusters::create::CreateCommand;
+pub use command::Command;
 pub use comments::comment::CommentCommand;
 pub use config::Config;
 pub use env::Env;
@@ -43,6 +42,8 @@ pub use packages::list::ListCommand;
 pub use packages::package::PackageCommand;
 pub use packages::switch::SwitchCommand;
 pub use processor::Processor;
+pub use queries::query::build_query_endpoint;
+pub use root::RootCommand;
 pub use status::Status;
 pub use versions::version::VersionCommand;
 pub use writer::Writer;

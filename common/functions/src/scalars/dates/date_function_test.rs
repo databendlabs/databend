@@ -50,7 +50,7 @@ fn test_toyyyymm_function() -> Result<()> {
             func: ToYYYYMMFunction::try_create("c")?,
             columns: vec![Series::new(vec![0u16]).into()],
             nullable: false,
-            expect: Series::new(vec![197001]).into(),
+            expect: Series::new(vec![197001u32]).into(),
             error: "",
         },
         Test {
@@ -70,7 +70,7 @@ fn test_toyyyymm_function() -> Result<()> {
             func: ToYYYYMMFunction::try_create("a")?,
             columns: vec![Series::new(vec![0u32]).into()],
             nullable: false,
-            expect: Series::new(vec![197001]).into(),
+            expect: Series::new(vec![197001u32]).into(),
             error: "",
         },
         Test {
@@ -80,7 +80,7 @@ fn test_toyyyymm_function() -> Result<()> {
             func: ToYYYYMMFunction::try_create("c")?,
             columns: vec![DataColumn::Constant(DataValue::Int32(Some(0i32)), 10)],
             nullable: false,
-            expect: Series::new(vec![197001]).into(),
+            expect: Series::new(vec![197001u32]).into(),
             error: "",
         },
         Test {
@@ -90,7 +90,7 @@ fn test_toyyyymm_function() -> Result<()> {
             func: ToYYYYMMFunction::try_create("b")?,
             columns: vec![DataColumn::Constant(DataValue::Int32(Some(0i32)), 10)],
             nullable: false,
-            expect: Series::new(vec![197001]).into(),
+            expect: Series::new(vec![197001u32]).into(),
             error: "",
         },
         Test {
@@ -100,7 +100,7 @@ fn test_toyyyymm_function() -> Result<()> {
             func: ToYYYYMMFunction::try_create("a")?,
             columns: vec![DataColumn::Constant(DataValue::UInt32(Some(0u32)), 15)],
             nullable: false,
-            expect: Series::new(vec![197001]).into(),
+            expect: Series::new(vec![197001u32]).into(),
             error: "",
         },
         Test {
@@ -110,7 +110,7 @@ fn test_toyyyymm_function() -> Result<()> {
             func: ToYYYYMMDDFunction::try_create("c")?,
             columns: vec![Series::new(vec![0u16]).into()],
             nullable: false,
-            expect: Series::new(vec![19700101]).into(),
+            expect: Series::new(vec![19700101u32]).into(),
             error: "",
         },
         Test {
@@ -120,7 +120,7 @@ fn test_toyyyymm_function() -> Result<()> {
             func: ToYYYYMMDDFunction::try_create("b")?,
             columns: vec![Series::new(vec![0i32]).into()],
             nullable: false,
-            expect: Series::new(vec![19700101]).into(),
+            expect: Series::new(vec![19700101u32]).into(),
             error: "",
         },
         Test {
@@ -130,7 +130,7 @@ fn test_toyyyymm_function() -> Result<()> {
             func: ToYYYYMMDDFunction::try_create("a")?,
             columns: vec![Series::new(vec![1630833797u32]).into()],
             nullable: false,
-            expect: Series::new(vec![20210905]).into(),
+            expect: Series::new(vec![20210905u32]).into(),
             error: "",
         },
     ];
@@ -148,7 +148,7 @@ fn test_toyyyymmdd_function() -> Result<()> {
             func: ToYYYYMMDDFunction::try_create("c")?,
             columns: vec![Series::new(vec![0u16]).into()],
             nullable: false,
-            expect: Series::new(vec![19700101]).into(),
+            expect: Series::new(vec![19700101u32]).into(),
             error: "",
         },
         Test {
@@ -158,7 +158,7 @@ fn test_toyyyymmdd_function() -> Result<()> {
             func: ToYYYYMMDDFunction::try_create("b")?,
             columns: vec![Series::new(vec![0i32]).into()],
             nullable: false,
-            expect: Series::new(vec![19700101]).into(),
+            expect: Series::new(vec![19700101u32]).into(),
             error: "",
         },
         Test {
@@ -168,7 +168,7 @@ fn test_toyyyymmdd_function() -> Result<()> {
             func: ToYYYYMMDDFunction::try_create("a")?,
             columns: vec![Series::new(vec![1630833797u32]).into()],
             nullable: false,
-            expect: Series::new(vec![20210905]).into(),
+            expect: Series::new(vec![20210905u32]).into(),
             error: "",
         },
         Test {
@@ -178,7 +178,7 @@ fn test_toyyyymmdd_function() -> Result<()> {
             func: ToYYYYMMDDFunction::try_create("c")?,
             columns: vec![DataColumn::Constant(DataValue::UInt16(Some(0u16)), 5)],
             nullable: false,
-            expect: Series::new(vec![19700101]).into(),
+            expect: Series::new(vec![19700101u32]).into(),
             error: "",
         },
         Test {
@@ -188,7 +188,7 @@ fn test_toyyyymmdd_function() -> Result<()> {
             func: ToYYYYMMDDFunction::try_create("b")?,
             columns: vec![DataColumn::Constant(DataValue::Int32(Some(0i32)), 10)],
             nullable: false,
-            expect: Series::new(vec![19700101]).into(),
+            expect: Series::new(vec![19700101u32]).into(),
             error: "",
         },
         Test {
@@ -201,7 +201,7 @@ fn test_toyyyymmdd_function() -> Result<()> {
                 15,
             )],
             nullable: false,
-            expect: Series::new(vec![20210905]).into(),
+            expect: Series::new(vec![20210905u32]).into(),
             error: "",
         },
     ];
@@ -218,7 +218,7 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
             func: ToYYYYMMDDhhmmssFunction::try_create("c")?,
             columns: vec![Series::new(vec![0u16]).into()],
             nullable: false,
-            expect: Series::new(vec![19700101000000i64]).into(),
+            expect: Series::new(vec![19700101000000u64]).into(),
             error: "",
         },
         Test {
@@ -228,7 +228,7 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
             func: ToYYYYMMDDhhmmssFunction::try_create("b")?,
             columns: vec![Series::new(vec![0i32]).into()],
             nullable: false,
-            expect: Series::new(vec![19700101000000i64]).into(),
+            expect: Series::new(vec![19700101000000u64]).into(),
             error: "",
         },
         Test {
@@ -238,7 +238,7 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
             func: ToYYYYMMDDhhmmssFunction::try_create("a")?,
             columns: vec![Series::new(vec![1630833797u32]).into()],
             nullable: false,
-            expect: Series::new(vec![20210905092317i64]).into(),
+            expect: Series::new(vec![20210905092317u64]).into(),
             error: "",
         },
         Test {
@@ -248,7 +248,7 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
             func: ToYYYYMMDDhhmmssFunction::try_create("c")?,
             columns: vec![DataColumn::Constant(DataValue::UInt16(Some(0u16)), 5)],
             nullable: false,
-            expect: Series::new(vec![19700101000000i64]).into(),
+            expect: Series::new(vec![19700101000000u64]).into(),
             error: "",
         },
         Test {
@@ -258,7 +258,7 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
             func: ToYYYYMMDDhhmmssFunction::try_create("b")?,
             columns: vec![DataColumn::Constant(DataValue::Int32(Some(0i32)), 10)],
             nullable: false,
-            expect: Series::new(vec![19700101000000i64]).into(),
+            expect: Series::new(vec![19700101000000u64]).into(),
             error: "",
         },
         Test {
@@ -271,7 +271,7 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
                 15,
             )],
             nullable: false,
-            expect: Series::new(vec![20210905092317i64]).into(),
+            expect: Series::new(vec![20210905092317u64]).into(),
             error: "",
         },
     ];
@@ -289,7 +289,7 @@ fn test_tomonth_function() -> Result<()> {
             func: ToMonthFunction::try_create("c")?,
             columns: vec![Series::new(vec![0u16]).into()],
             nullable: false,
-            expect: Series::new(vec![1]).into(),
+            expect: Series::new(vec![1u8]).into(),
             error: "",
         },
         Test {
@@ -299,7 +299,7 @@ fn test_tomonth_function() -> Result<()> {
             func: ToMonthFunction::try_create("b")?,
             columns: vec![Series::new(vec![0i32]).into()],
             nullable: false,
-            expect: Series::new(vec![1]).into(),
+            expect: Series::new(vec![1u8]).into(),
             error: "",
         },
         Test {
@@ -309,7 +309,7 @@ fn test_tomonth_function() -> Result<()> {
             func: ToMonthFunction::try_create("a")?,
             columns: vec![Series::new(vec![1633081817u32]).into()],
             nullable: false,
-            expect: Series::new(vec![10]).into(),
+            expect: Series::new(vec![10u8]).into(),
             error: "",
         },
         Test {
@@ -319,7 +319,7 @@ fn test_tomonth_function() -> Result<()> {
             func: ToMonthFunction::try_create("c")?,
             columns: vec![DataColumn::Constant(DataValue::UInt16(Some(0u16)), 5)],
             nullable: false,
-            expect: Series::new(vec![1]).into(),
+            expect: Series::new(vec![1u8]).into(),
             error: "",
         },
         Test {
@@ -329,7 +329,7 @@ fn test_tomonth_function() -> Result<()> {
             func: ToMonthFunction::try_create("b")?,
             columns: vec![DataColumn::Constant(DataValue::Int32(Some(0i32)), 10)],
             nullable: false,
-            expect: Series::new(vec![1]).into(),
+            expect: Series::new(vec![1u8]).into(),
             error: "",
         },
         Test {
@@ -342,7 +342,7 @@ fn test_tomonth_function() -> Result<()> {
                 15,
             )],
             nullable: false,
-            expect: Series::new(vec![10]).into(),
+            expect: Series::new(vec![10u8]).into(),
             error: "",
         },
     ];
@@ -360,7 +360,7 @@ fn test_todayofyear_function() -> Result<()> {
             func: ToDayOfYearFunction::try_create("c")?,
             columns: vec![Series::new(vec![0u16]).into()],
             nullable: false,
-            expect: Series::new(vec![1]).into(),
+            expect: Series::new(vec![1u16]).into(),
             error: "",
         },
         Test {
@@ -370,7 +370,7 @@ fn test_todayofyear_function() -> Result<()> {
             func: ToDayOfYearFunction::try_create("b")?,
             columns: vec![Series::new(vec![0i32]).into()],
             nullable: false,
-            expect: Series::new(vec![1]).into(),
+            expect: Series::new(vec![1u16]).into(),
             error: "",
         },
         Test {
@@ -380,7 +380,7 @@ fn test_todayofyear_function() -> Result<()> {
             func: ToDayOfYearFunction::try_create("a")?,
             columns: vec![Series::new(vec![1633173324u32]).into()],
             nullable: false,
-            expect: Series::new(vec![275]).into(),
+            expect: Series::new(vec![275u16]).into(),
             error: "",
         },
         Test {
@@ -390,7 +390,7 @@ fn test_todayofyear_function() -> Result<()> {
             func: ToDayOfYearFunction::try_create("c")?,
             columns: vec![DataColumn::Constant(DataValue::UInt16(Some(0u16)), 5)],
             nullable: false,
-            expect: Series::new(vec![1]).into(),
+            expect: Series::new(vec![1u16]).into(),
             error: "",
         },
         Test {
@@ -400,7 +400,7 @@ fn test_todayofyear_function() -> Result<()> {
             func: ToDayOfYearFunction::try_create("b")?,
             columns: vec![DataColumn::Constant(DataValue::Int32(Some(0i32)), 10)],
             nullable: false,
-            expect: Series::new(vec![1]).into(),
+            expect: Series::new(vec![1u16]).into(),
             error: "",
         },
         Test {
@@ -413,7 +413,7 @@ fn test_todayofyear_function() -> Result<()> {
                 15,
             )],
             nullable: false,
-            expect: Series::new(vec![275]).into(),
+            expect: Series::new(vec![275u16]).into(),
             error: "",
         },
     ];
@@ -431,7 +431,7 @@ fn test_todatofweek_function() -> Result<()> {
             func: ToDayOfWeekFunction::try_create("c")?,
             columns: vec![Series::new(vec![0u16]).into()],
             nullable: false,
-            expect: Series::new(vec![4]).into(),
+            expect: Series::new(vec![4u8]).into(),
             error: "",
         },
         Test {
@@ -441,7 +441,7 @@ fn test_todatofweek_function() -> Result<()> {
             func: ToDayOfWeekFunction::try_create("b")?,
             columns: vec![Series::new(vec![0i32]).into()],
             nullable: false,
-            expect: Series::new(vec![4]).into(),
+            expect: Series::new(vec![4u8]).into(),
             error: "",
         },
         Test {
@@ -451,7 +451,7 @@ fn test_todatofweek_function() -> Result<()> {
             func: ToDayOfWeekFunction::try_create("a")?,
             columns: vec![Series::new(vec![1633173324u32]).into()],
             nullable: false,
-            expect: Series::new(vec![6]).into(),
+            expect: Series::new(vec![6u8]).into(),
             error: "",
         },
         Test {
@@ -461,7 +461,7 @@ fn test_todatofweek_function() -> Result<()> {
             func: ToDayOfWeekFunction::try_create("c")?,
             columns: vec![DataColumn::Constant(DataValue::UInt16(Some(0u16)), 5)],
             nullable: false,
-            expect: Series::new(vec![4]).into(),
+            expect: Series::new(vec![4u8]).into(),
             error: "",
         },
         Test {
@@ -471,7 +471,7 @@ fn test_todatofweek_function() -> Result<()> {
             func: ToDayOfWeekFunction::try_create("b")?,
             columns: vec![DataColumn::Constant(DataValue::Int32(Some(0i32)), 10)],
             nullable: false,
-            expect: Series::new(vec![4]).into(),
+            expect: Series::new(vec![4u8]).into(),
             error: "",
         },
         Test {
@@ -484,7 +484,7 @@ fn test_todatofweek_function() -> Result<()> {
                 15,
             )],
             nullable: false,
-            expect: Series::new(vec![6]).into(),
+            expect: Series::new(vec![6u8]).into(),
             error: "",
         },
     ];
@@ -502,7 +502,7 @@ fn test_todayofmonth_function() -> Result<()> {
             func: ToDayOfMonthFunction::try_create("c")?,
             columns: vec![Series::new(vec![0u16]).into()],
             nullable: false,
-            expect: Series::new(vec![1]).into(),
+            expect: Series::new(vec![1u8]).into(),
             error: "",
         },
         Test {
@@ -512,7 +512,7 @@ fn test_todayofmonth_function() -> Result<()> {
             func: ToDayOfMonthFunction::try_create("b")?,
             columns: vec![Series::new(vec![0i32]).into()],
             nullable: false,
-            expect: Series::new(vec![1]).into(),
+            expect: Series::new(vec![1u8]).into(),
             error: "",
         },
         Test {
@@ -522,7 +522,7 @@ fn test_todayofmonth_function() -> Result<()> {
             func: ToDayOfMonthFunction::try_create("a")?,
             columns: vec![Series::new(vec![1633173324u32]).into()],
             nullable: false,
-            expect: Series::new(vec![2]).into(),
+            expect: Series::new(vec![2u8]).into(),
             error: "",
         },
         Test {
@@ -532,7 +532,7 @@ fn test_todayofmonth_function() -> Result<()> {
             func: ToDayOfMonthFunction::try_create("c")?,
             columns: vec![DataColumn::Constant(DataValue::UInt16(Some(0u16)), 5)],
             nullable: false,
-            expect: Series::new(vec![1]).into(),
+            expect: Series::new(vec![1u8]).into(),
             error: "",
         },
         Test {
@@ -542,7 +542,7 @@ fn test_todayofmonth_function() -> Result<()> {
             func: ToDayOfMonthFunction::try_create("b")?,
             columns: vec![DataColumn::Constant(DataValue::Int32(Some(0i32)), 10)],
             nullable: false,
-            expect: Series::new(vec![1]).into(),
+            expect: Series::new(vec![1u8]).into(),
             error: "",
         },
         Test {
@@ -555,7 +555,7 @@ fn test_todayofmonth_function() -> Result<()> {
                 15,
             )],
             nullable: false,
-            expect: Series::new(vec![2]).into(),
+            expect: Series::new(vec![2u8]).into(),
             error: "",
         },
     ];
@@ -573,7 +573,7 @@ fn test_tohour_function() -> Result<()> {
             func: ToHourFunction::try_create("c")?,
             columns: vec![Series::new(vec![0u16]).into()],
             nullable: false,
-            expect: Series::new(vec![0]).into(),
+            expect: Series::new(vec![0u8]).into(),
             error: "",
         },
         Test {
@@ -583,7 +583,7 @@ fn test_tohour_function() -> Result<()> {
             func: ToHourFunction::try_create("b")?,
             columns: vec![Series::new(vec![0i32]).into()],
             nullable: false,
-            expect: Series::new(vec![0]).into(),
+            expect: Series::new(vec![0u8]).into(),
             error: "",
         },
         Test {
@@ -593,7 +593,7 @@ fn test_tohour_function() -> Result<()> {
             func: ToHourFunction::try_create("a")?,
             columns: vec![Series::new(vec![1634551542u32]).into()],
             nullable: false,
-            expect: Series::new(vec![10]).into(),
+            expect: Series::new(vec![10u8]).into(),
             error: "",
         },
         Test {
@@ -603,7 +603,7 @@ fn test_tohour_function() -> Result<()> {
             func: ToHourFunction::try_create("c")?,
             columns: vec![DataColumn::Constant(DataValue::UInt16(Some(0u16)), 5)],
             nullable: false,
-            expect: Series::new(vec![0]).into(),
+            expect: Series::new(vec![0u8]).into(),
             error: "",
         },
         Test {
@@ -613,7 +613,7 @@ fn test_tohour_function() -> Result<()> {
             func: ToHourFunction::try_create("b")?,
             columns: vec![DataColumn::Constant(DataValue::Int32(Some(0i32)), 10)],
             nullable: false,
-            expect: Series::new(vec![0]).into(),
+            expect: Series::new(vec![0u8]).into(),
             error: "",
         },
         Test {
@@ -626,7 +626,7 @@ fn test_tohour_function() -> Result<()> {
                 15,
             )],
             nullable: false,
-            expect: Series::new(vec![10]).into(),
+            expect: Series::new(vec![10u8]).into(),
             error: "",
         },
     ];
@@ -644,7 +644,7 @@ fn test_tominute_function() -> Result<()> {
             func: ToMinuteFunction::try_create("c")?,
             columns: vec![Series::new(vec![0u16]).into()],
             nullable: false,
-            expect: Series::new(vec![0]).into(),
+            expect: Series::new(vec![0u8]).into(),
             error: "",
         },
         Test {
@@ -654,7 +654,7 @@ fn test_tominute_function() -> Result<()> {
             func: ToMinuteFunction::try_create("b")?,
             columns: vec![Series::new(vec![0i32]).into()],
             nullable: false,
-            expect: Series::new(vec![0]).into(),
+            expect: Series::new(vec![0u8]).into(),
             error: "",
         },
         Test {
@@ -664,7 +664,7 @@ fn test_tominute_function() -> Result<()> {
             func: ToMinuteFunction::try_create("a")?,
             columns: vec![Series::new(vec![1634551542u32]).into()],
             nullable: false,
-            expect: Series::new(vec![5]).into(),
+            expect: Series::new(vec![5u8]).into(),
             error: "",
         },
         Test {
@@ -674,7 +674,7 @@ fn test_tominute_function() -> Result<()> {
             func: ToMinuteFunction::try_create("c")?,
             columns: vec![DataColumn::Constant(DataValue::UInt16(Some(0u16)), 5)],
             nullable: false,
-            expect: Series::new(vec![0]).into(),
+            expect: Series::new(vec![0u8]).into(),
             error: "",
         },
         Test {
@@ -684,7 +684,7 @@ fn test_tominute_function() -> Result<()> {
             func: ToMinuteFunction::try_create("b")?,
             columns: vec![DataColumn::Constant(DataValue::Int32(Some(0i32)), 10)],
             nullable: false,
-            expect: Series::new(vec![0]).into(),
+            expect: Series::new(vec![0u8]).into(),
             error: "",
         },
         Test {
@@ -697,7 +697,7 @@ fn test_tominute_function() -> Result<()> {
                 15,
             )],
             nullable: false,
-            expect: Series::new(vec![5]).into(),
+            expect: Series::new(vec![5u8]).into(),
             error: "",
         },
     ];
@@ -715,7 +715,7 @@ fn test_tosecond_function() -> Result<()> {
             func: ToSecondFunction::try_create("c")?,
             columns: vec![Series::new(vec![0u16]).into()],
             nullable: false,
-            expect: Series::new(vec![0]).into(),
+            expect: Series::new(vec![0u8]).into(),
             error: "",
         },
         Test {
@@ -725,7 +725,7 @@ fn test_tosecond_function() -> Result<()> {
             func: ToSecondFunction::try_create("b")?,
             columns: vec![Series::new(vec![0i32]).into()],
             nullable: false,
-            expect: Series::new(vec![0]).into(),
+            expect: Series::new(vec![0u8]).into(),
             error: "",
         },
         Test {
@@ -735,7 +735,7 @@ fn test_tosecond_function() -> Result<()> {
             func: ToSecondFunction::try_create("a")?,
             columns: vec![Series::new(vec![1634551542u32]).into()],
             nullable: false,
-            expect: Series::new(vec![42]).into(),
+            expect: Series::new(vec![42u8]).into(),
             error: "",
         },
         Test {
@@ -745,7 +745,7 @@ fn test_tosecond_function() -> Result<()> {
             func: ToSecondFunction::try_create("c")?,
             columns: vec![DataColumn::Constant(DataValue::UInt16(Some(0u16)), 5)],
             nullable: false,
-            expect: Series::new(vec![0]).into(),
+            expect: Series::new(vec![0u8]).into(),
             error: "",
         },
         Test {
@@ -755,7 +755,7 @@ fn test_tosecond_function() -> Result<()> {
             func: ToSecondFunction::try_create("b")?,
             columns: vec![DataColumn::Constant(DataValue::Int32(Some(0i32)), 10)],
             nullable: false,
-            expect: Series::new(vec![0]).into(),
+            expect: Series::new(vec![0u8]).into(),
             error: "",
         },
         Test {
@@ -768,7 +768,7 @@ fn test_tosecond_function() -> Result<()> {
                 15,
             )],
             nullable: false,
-            expect: Series::new(vec![42]).into(),
+            expect: Series::new(vec![42u8]).into(),
             error: "",
         },
     ];

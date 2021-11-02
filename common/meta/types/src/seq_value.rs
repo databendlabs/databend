@@ -14,12 +14,15 @@
 
 use std::convert::TryInto;
 
-use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::KVMeta;
-use crate::SledSerde;
+/// The meta data of a record in kv
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
+pub struct KVMeta {
+    /// expiration time in second since 1970
+    pub expire_at: Option<u64>,
+}
 
 /// Some value bound with a seq number
 #[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
@@ -28,8 +31,6 @@ pub struct SeqV<T = Vec<u8>> {
     pub meta: Option<KVMeta>,
     pub data: T,
 }
-
-impl<T: Serialize + DeserializeOwned> SledSerde for SeqV<T> {}
 
 pub trait IntoSeqV<T> {
     type Error;

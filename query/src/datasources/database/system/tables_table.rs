@@ -79,12 +79,12 @@ impl Table for TablesTable {
             .expect("DatabendQueryContext should not be None");
 
         let cata = ctx.get_catalog();
-        let databases = cata.get_databases()?;
+        let databases = cata.get_databases().await?;
 
         let mut database_tables = vec![];
         for database in databases {
             let name = database.name();
-            for table in cata.get_tables(name)? {
+            for table in cata.get_tables(name).await? {
                 database_tables.push((name.to_string(), table));
             }
         }

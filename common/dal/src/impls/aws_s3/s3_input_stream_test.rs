@@ -29,7 +29,8 @@ use crate::DataAccessor;
 use crate::S3;
 
 struct TestFixture {
-    region: Region,
+    region_name: String,
+    endpoint_url: String,
     bucket_name: String,
     test_key: String,
     content: Vec<u8>,
@@ -39,17 +40,35 @@ impl TestFixture {
     fn new(size: usize, key: String) -> Self {
         let random_bytes: Vec<u8> = (0..size).map(|_| rand::random::<u8>()).collect();
         Self {
-            region: Region::UsEast2,
-            bucket_name: "poc-datafuse".to_string(),
+            region_name: "us-east-1".to_string(),
+            endpoint_url: "http://localhost:9000".to_string(),
+            bucket_name: "test-bucket".to_string(),
             test_key: key,
             content: random_bytes,
         }
+    }
+
+    fn region(&self) -> Region {
+        Region::Custom {
+            name: self.region_name.clone(),
+            endpoint: self.endpoint_url.clone(),
+        }
+    }
+
+    fn data_accessor(&self) -> common_exception::Result<S3> {
+        S3::try_create(
+            self.region_name.as_str(),
+            self.endpoint_url.as_str(),
+            self.bucket_name.as_str(),
+            "",
+            "",
+        )
     }
 }
 
 impl TestFixture {
     async fn gen_test_obj(&self) -> common_exception::Result<()> {
-        let rusoto_client = S3Client::new(self.region.clone());
+        let rusoto_client = S3Client::new(self.region());
         let put_req = PutObjectRequest {
             bucket: self.bucket_name.clone(),
             key: self.test_key.clone(),
@@ -64,7 +83,6 @@ impl TestFixture {
     }
 }
 
-// CI has no AWS_SECRET_ACCESS_KEY and AWS_ACCESS_KEY_ID yet
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[ignore]
 async fn test_s3_input_stream_api() -> common_exception::Result<()> {
@@ -72,26 +90,9 @@ async fn test_s3_input_stream_api() -> common_exception::Result<()> {
     let fixture = TestFixture::new(1024 * 10, test_key.clone());
     fixture.gen_test_obj().await?;
 
-    let s3 = S3::new(fixture.region.clone(), fixture.bucket_name.clone());
+    let s3 = fixture.data_accessor()?;
     let mut input = s3.get_input_stream(&test_key, None)?;
     let mut buffer = vec![];
-    input.read_to_end(&mut buffer).await?;
-    assert_eq!(fixture.content, buffer);
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[ignore]
-async fn test_s3_cli_with_credentials() -> common_exception::Result<()> {
-    let test_key = "test_s3_input_stream".to_string();
-    let fixture = TestFixture::new(1024 * 10, test_key.clone());
-    fixture.gen_test_obj().await?;
-    let key = std::env::var("AWS_ACCESS_KEY_ID").unwrap();
-    let secret = std::env::var("AWS_SECRET_ACCESS_KEY").unwrap();
-
-    let s3 = S3::with_credentials(fixture.region.name(), &fixture.bucket_name, &key, &secret)?;
-    let mut buffer = vec![];
-    let mut input = s3.get_input_stream(&test_key, None)?;
     input.read_to_end(&mut buffer).await?;
     assert_eq!(fixture.content, buffer);
     Ok(())
@@ -100,11 +101,11 @@ async fn test_s3_cli_with_credentials() -> common_exception::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[ignore]
 async fn test_s3_input_stream_seek_api() -> common_exception::Result<()> {
-    let test_key = "test_s3_seek_stream".to_string();
+    let test_key = "test_s3_seek_stream_seek".to_string();
     let fixture = TestFixture::new(1024 * 10, test_key.clone());
     fixture.gen_test_obj().await?;
 
-    let s3 = S3::new(fixture.region.clone(), fixture.bucket_name.clone());
+    let s3 = fixture.data_accessor()?;
     let mut input = s3.get_input_stream(&test_key, None)?;
     let mut buffer = vec![];
     input.seek(SeekFrom::Current(1)).await?;

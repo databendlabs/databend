@@ -42,7 +42,7 @@ pub struct TestFixture {
 }
 
 impl TestFixture {
-    pub fn new() -> TestFixture {
+    pub async fn new() -> TestFixture {
         let tmp_dir = TempDir::new().unwrap();
         let mut config = Config::default();
         // make sure we are suing `Disk` storage
@@ -59,7 +59,7 @@ impl TestFixture {
             db: db_name,
             options: Default::default(),
         };
-        ctx.get_catalog().create_database(plan).unwrap();
+        ctx.get_catalog().create_database(plan).await.unwrap();
 
         Self {
             _tmp_dir: tmp_dir,

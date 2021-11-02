@@ -96,12 +96,7 @@ mod add {
                     predicate::eq(None),
                 )
                 .times(1)
-                .return_once(|_u, _s, _salt, _meta| {
-                    Ok(UpsertKVActionReply {
-                        prev: None,
-                        result: None,
-                    })
-                });
+                .return_once(|_u, _s, _salt, _meta| Ok(UpsertKVActionReply::new(None, None)));
             let api = Arc::new(api);
             let user_mgr = UserMgr::new(api, "tenant1");
             let res = user_mgr.add_user(user_info);
@@ -125,10 +120,10 @@ mod add {
                 )
                 .times(1)
                 .returning(|_u, _s, _salt, _meta| {
-                    Ok(UpsertKVActionReply {
-                        prev: Some(SeqV::new(1, vec![])),
-                        result: None,
-                    })
+                    Ok(UpsertKVActionReply::new(
+                        Some(SeqV::new(1, vec![])),
+                        Some(SeqV::new(1, vec![])),
+                    ))
                 });
 
             let api = Arc::new(api);
@@ -140,10 +135,10 @@ mod add {
                 auth_type.clone(),
             );
 
-            let res = user_mgr.add_user(user_info);
+            let res = user_mgr.add_user(user_info).await;
 
             assert_eq!(
-                res.await.unwrap_err().code(),
+                res.unwrap_err().code(),
                 ErrorCode::UserAlreadyExists("").code()
             );
         }
@@ -159,12 +154,7 @@ mod add {
                     predicate::eq(None),
                 )
                 .times(1)
-                .returning(|_u, _s, _salt, _meta| {
-                    Ok(UpsertKVActionReply {
-                        prev: None,
-                        result: None,
-                    })
-                });
+                .returning(|_u, _s, _salt, _meta| Ok(UpsertKVActionReply::new(None, None)));
 
             let kv = Arc::new(api);
 
@@ -174,10 +164,11 @@ mod add {
                 Vec::from(test_password),
                 auth_type,
             );
-            let res = user_mgr.add_user(user_info);
+
+            let res = user_mgr.add_user(user_info).await;
 
             assert_eq!(
-                res.await.unwrap_err().code(),
+                res.unwrap_err().code(),
                 ErrorCode::UnknownException("").code()
             );
         }
@@ -412,10 +403,7 @@ mod drop {
             )
             .times(1)
             .returning(|_k, _seq, _none, _meta| {
-                Ok(UpsertKVActionReply {
-                    prev: Some(SeqV::new(1, vec![])),
-                    result: None,
-                })
+                Ok(UpsertKVActionReply::new(Some(SeqV::new(1, vec![])), None))
             });
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
@@ -437,12 +425,7 @@ mod drop {
                 predicate::eq(None),
             )
             .times(1)
-            .returning(|_k, _seq, _none, _meta| {
-                Ok(UpsertKVActionReply {
-                    prev: None,
-                    result: None,
-                })
-            });
+            .returning(|_k, _seq, _none, _meta| Ok(UpsertKVActionReply::new(None, None)));
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
         let res = user_mgr.drop_user("test".to_string(), None);
@@ -507,10 +490,7 @@ mod update {
             )
             .times(1)
             .return_once(|_, _, _, _meta| {
-                Ok(UpsertKVActionReply {
-                    prev: None,
-                    result: Some(SeqV::new(0, vec![])),
-                })
+                Ok(UpsertKVActionReply::new(None, Some(SeqV::new(0, vec![]))))
             });
 
         let kv = Arc::new(kv);
@@ -556,10 +536,7 @@ mod update {
             )
             .times(1)
             .return_once(|_, _, _, _meta| {
-                Ok(UpsertKVActionReply {
-                    prev: None,
-                    result: Some(SeqV::new(0, vec![])),
-                })
+                Ok(UpsertKVActionReply::new(None, Some(SeqV::new(0, vec![]))))
             });
 
         let kv = Arc::new(kv);
@@ -638,12 +615,7 @@ mod update {
                 predicate::eq(None),
             )
             .times(1)
-            .returning(|_u, _s, _salt, _meta| {
-                Ok(UpsertKVActionReply {
-                    prev: None,
-                    result: None,
-                })
-            });
+            .returning(|_u, _s, _salt, _meta| Ok(UpsertKVActionReply::new(None, None)));
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");

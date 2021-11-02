@@ -17,8 +17,10 @@ use std::future::Future;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
+use std::time::Duration;
 
 use common_base::tokio::task::JoinHandle;
+use common_base::BlockingWait;
 use common_base::ProgressCallback;
 use common_base::ProgressValues;
 use common_base::Runtime;
@@ -179,7 +181,14 @@ impl DatabendQueryContext {
     }
 
     pub fn set_current_database(&self, new_database_name: String) -> Result<()> {
-        match self.get_catalog().get_database(new_database_name.as_str()) {
+        let rt = self.shared.try_get_runtime()?;
+        let cata = self.get_catalog();
+        let db_name = new_database_name.clone();
+
+        let res = (async move { cata.get_database(&db_name).await })
+            .wait_in(&rt, Some(Duration::from_millis(5000)))?;
+
+        match res {
             Ok(_) => self.shared.set_current_database(new_database_name),
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(

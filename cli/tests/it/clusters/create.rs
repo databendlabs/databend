@@ -14,16 +14,15 @@
 
 use std::fs;
 
+use bendctl::cmds::clusters::create::LocalBinaryPaths;
+use bendctl::cmds::config::GithubMirror;
+use bendctl::cmds::config::MirrorAsset;
+use bendctl::cmds::config::Mode;
+use bendctl::cmds::Command;
+use bendctl::cmds::Config;
+use bendctl::cmds::CreateCommand;
+use bendctl::error::Result;
 use tempfile::tempdir;
-
-use crate::cmds::clusters::create::LocalBinaryPaths;
-use crate::cmds::command::Command;
-use crate::cmds::config::GithubMirror;
-use crate::cmds::config::MirrorAsset;
-use crate::cmds::config::Mode;
-use crate::cmds::Config;
-use crate::cmds::CreateCommand;
-use crate::error::Result;
 
 #[test]
 fn test_generate_local_meta_config() -> Result<()> {

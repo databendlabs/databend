@@ -57,11 +57,16 @@ pub struct PipelineBuilder {
     ctx: DatabendQueryContextRef,
 
     limit: Option<usize>,
+    offset: usize,
 }
 
 impl PipelineBuilder {
     pub fn create(ctx: DatabendQueryContextRef) -> PipelineBuilder {
-        PipelineBuilder { ctx, limit: None }
+        PipelineBuilder {
+            ctx,
+            limit: None,
+            offset: 0,
+        }
     }
 
     #[tracing::instrument(level = "info", skip(self))]
@@ -231,6 +236,14 @@ impl PipelineBuilder {
     fn visit_sort(&mut self, plan: &SortPlan) -> Result<Pipeline> {
         let mut pipeline = self.visit(&*plan.input)?;
 
+        // The number of rows should be limit + offset. For example, for the query
+        // 'select * from numbers(100) order by number desc limit 10 offset 5', the
+        // sort pipeline should return at least 15 rows.
+        let rows_limit = match self.limit {
+            None => None,
+            Some(limit) => Some(limit + self.offset),
+        };
+
         // processor 1: block ---> sort_stream
         // processor 2: block ---> sort_stream
         // processor 3: block ---> sort_stream
@@ -238,7 +251,7 @@ impl PipelineBuilder {
             Ok(Box::new(SortPartialTransform::try_create(
                 plan.schema(),
                 plan.order_by.clone(),
-                self.limit,
+                rows_limit,
             )?))
         })?;
 
@@ -249,7 +262,7 @@ impl PipelineBuilder {
             Ok(Box::new(SortMergeTransform::try_create(
                 plan.schema(),
                 plan.order_by.clone(),
-                self.limit,
+                rows_limit,
             )?))
         })?;
 
@@ -264,7 +277,7 @@ impl PipelineBuilder {
                 Ok(Box::new(SortMergeTransform::try_create(
                     plan.schema(),
                     plan.order_by.clone(),
-                    self.limit,
+                    rows_limit,
                 )?))
             })?;
         }
@@ -273,6 +286,7 @@ impl PipelineBuilder {
 
     fn visit_limit(&mut self, node: &LimitPlan) -> Result<Pipeline> {
         self.limit = node.n;
+        self.offset = node.offset;
 
         let mut pipeline = self.visit(&*node.input)?;
         pipeline.merge_processor()?;

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::convert::TryInto;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -20,6 +21,7 @@ use common_exception::Result;
 use common_meta_api::MetaApi;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_raft_store::state_machine::TableLookupKey;
+use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
@@ -50,10 +52,8 @@ impl MetaApi for MetaEmbedded {
         let mut sm = self.inner.lock().await;
         let res = sm.apply_cmd(&cmd).await?;
 
-        let (prev, result) = match res {
-            AppliedState::DatabaseId { prev, result } => (prev, result),
-            _ => return Err(ErrorCode::MetaNodeInternalError("not a Database result")),
-        };
+        let ch: Change<u64> = res.try_into().unwrap();
+        let (prev, result) = ch.unpack_data();
 
         assert!(result.is_some());
 
@@ -65,7 +65,7 @@ impl MetaApi for MetaEmbedded {
         }
 
         Ok(CreateDatabaseReply {
-            database_id: result.unwrap().data,
+            database_id: result.unwrap(),
         })
     }
 
@@ -254,14 +254,8 @@ impl MetaApi for MetaEmbedded {
 
         let res = sm.apply_cmd(&cmd).await?;
         if !res.changed() {
-            let prev = match res {
-                AppliedState::TableMeta { prev, .. } => prev,
-                _ => {
-                    panic!("expect AppliedState::Table")
-                }
-            };
-
-            let prev = prev.unwrap();
+            let ch: Change<TableMeta> = res.try_into().unwrap();
+            let (prev, _result) = ch.unwrap();
 
             return Err(ErrorCode::TableVersionMissMatch(format!(
                 "targeting version {}, current version {}",

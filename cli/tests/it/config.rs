@@ -12,19 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use bendctl::cmds::config::choose_mirror;
+use bendctl::cmds::config::CustomMirror;
+use bendctl::cmds::config::GithubMirror;
+use bendctl::cmds::config::MirrorAsset;
+use bendctl::cmds::config::Mode;
+use bendctl::cmds::config::RepoMirror;
+use bendctl::cmds::Config;
+use bendctl::cmds::Status;
+use bendctl::error::Result;
 use httpmock::Method::GET;
 use httpmock::MockServer;
 use tempfile::tempdir;
-
-use crate::cmds::config::choose_mirror;
-use crate::cmds::config::CustomMirror;
-use crate::cmds::config::GithubMirror;
-use crate::cmds::config::MirrorAsset;
-use crate::cmds::config::Mode;
-use crate::cmds::config::RepoMirror;
-use crate::cmds::Config;
-use crate::cmds::Status;
-use crate::error::Result;
 
 #[test]
 fn test_mirror() -> Result<()> {

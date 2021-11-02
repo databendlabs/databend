@@ -13,14 +13,8 @@
 // limitations under the License.
 
 use std::fs;
-use std::io;
 use std::io::Write;
 
-use clap::App;
-use clap_generate::generate;
-use clap_generate::generators::Bash;
-use clap_generate::generators::Zsh;
-use clap_generate::Generator;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
@@ -28,6 +22,7 @@ use crate::cmds::command::Command;
 use crate::cmds::config::Mode;
 use crate::cmds::loads::load::LoadCommand;
 use crate::cmds::queries::query::QueryCommand;
+use crate::cmds::root::RootCommand;
 use crate::cmds::ups::up::UpCommand;
 use crate::cmds::ClusterCommand;
 use crate::cmds::CommentCommand;
@@ -56,10 +51,6 @@ enum MultilineType {
     None,
 }
 
-fn print_completions<G: Generator>(gen: G, app: &mut App) {
-    generate::<G, _>(gen, app, app.get_name().to_string(), &mut io::stdout());
-}
-
 impl Processor {
     pub fn create(conf: Config) -> Self {
         fs::create_dir_all(conf.databend_dir.clone()).unwrap();
@@ -81,6 +72,7 @@ impl Processor {
             query: QueryCommand::create(conf),
         }
     }
+
     pub async fn process_run(&mut self) -> Result<()> {
         let mut writer = Writer::create();
         if let Some(level) = self.env.conf.clap.value_of("log-level") {
@@ -88,78 +80,12 @@ impl Processor {
                 writer.debug = true;
             }
         }
-        match self.env.conf.clone().clap.subcommand_name() {
-            Some("package") => {
-                let cmd = PackageCommand::create(self.env.conf.clone());
-                return cmd
-                    .exec_matches(
-                        &mut writer,
-                        self.env.conf.clone().clap.subcommand_matches("package"),
-                    )
-                    .await;
-            }
-            Some("version") => {
-                let cmd = VersionCommand::create();
-                cmd.exec_matches(&mut writer, None).await
-            }
-            Some("cluster") => {
-                let cmd = ClusterCommand::create(self.env.conf.clone());
-                return cmd
-                    .exec_matches(
-                        &mut writer,
-                        self.env.conf.clone().clap.subcommand_matches("cluster"),
-                    )
-                    .await;
-            }
-            Some("query") => {
-                let cmd = QueryCommand::create(self.env.conf.clone());
-                cmd.exec_matches(
-                    &mut writer,
-                    self.env.conf.clone().clap.subcommand_matches("query"),
-                )
-                .await
-            }
-            Some("completion") => {
-                if let Some(generator) = self
-                    .env
-                    .conf
-                    .clone()
-                    .clap
-                    .subcommand_matches("completion")
-                    .unwrap()
-                    .value_of("completion")
-                {
-                    let mut app = Config::build_cli();
-                    eprintln!("Generating completion file for {}...", generator);
-                    match generator {
-                        "bash" => print_completions::<Bash>(Bash, &mut app),
-                        "zsh" => print_completions::<Zsh>(Zsh, &mut app),
-                        _ => panic!("Unknown generator"),
-                    }
-                }
-                Ok(())
-            }
-            Some("up") => {
-                let cmd = UpCommand::create(self.env.conf.clone());
-                cmd.exec_matches(
-                    &mut writer,
-                    self.env.conf.clone().clap.subcommand_matches("up"),
-                )
-                .await
-            }
-            Some("load") => {
-                let cmd = LoadCommand::create(self.env.conf.clone());
-                cmd.exec_matches(
-                    &mut writer,
-                    self.env.conf.clone().clap.subcommand_matches("load"),
-                )
-                .await
-            }
+
+        let cmd = RootCommand::create();
+        let args = cmd.clap().get_matches();
+        match args.subcommand_name() {
             None => self.process_run_interactive().await,
-            _ => {
-                println!("Some other subcommand was used");
-                Ok(())
-            }
+            Some(_) => cmd.exec_matches(&mut writer, Some(&args)).await,
         }
     }
 

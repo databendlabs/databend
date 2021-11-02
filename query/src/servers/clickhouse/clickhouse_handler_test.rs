@@ -20,6 +20,7 @@ use clickhouse_rs::Block;
 use clickhouse_rs::ClientHandle;
 use clickhouse_rs::Pool;
 use common_base::tokio;
+use common_base::uuid::Uuid;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use tempfile::TempDir;
@@ -82,20 +83,24 @@ async fn test_clickhouse_insert_to_fuse_table() -> Result<()> {
     let listening = handler.start(listening).await?;
     let mut handler = create_conn(listening.port()).await?;
 
-    let query_str = "CREATE TABLE IF NOT EXISTS t1(a UInt32, b UInt64, c String) Engine = fuse";
-    execute(&mut handler, query_str).await?;
+    let test_tbl_name = format!("tbl_{}", Uuid::new_v4().to_simple().to_string());
+    let query_str = format!(
+        "CREATE TABLE {}(a UInt32, b UInt64, c String) Engine = fuse",
+        test_tbl_name
+    );
+    execute(&mut handler, &query_str).await?;
 
     let block = Block::new();
     let block = block.column("a", vec![1u32, 2]);
     let block = block.column("b", vec![1u64, 2]);
     let block = block.column("c", vec!["1", "'\"2\"-\"2\"'"]);
-    insert(&mut handler, "t1", block.clone()).await?;
+    insert(&mut handler, &test_tbl_name, block.clone()).await?;
     // we give another insertion here, to test if everything still doing well
     // see issue #2460 https://github.com/datafuselabs/databend/issues/2460
-    insert(&mut handler, "t1", block).await?;
+    insert(&mut handler, &test_tbl_name, block).await?;
 
-    let query_str = "SELECT * from t1";
-    let block = query(&mut handler, query_str).await?;
+    let query_str = format!("SELECT * from {}", test_tbl_name);
+    let block = query(&mut handler, &query_str).await?;
     assert_eq!(block.row_count(), 4);
     assert_eq!(block.column_count(), 3);
     Ok(())

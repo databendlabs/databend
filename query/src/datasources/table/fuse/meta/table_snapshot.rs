@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 
-use common_arrow::parquet::statistics::Statistics;
 use common_base::uuid;
 use common_datavalues::DataSchema;
 use common_datavalues::DataValue;
@@ -102,6 +101,3 @@ pub struct ColStats {
     pub max: DataValue,
     pub null_count: usize,
 }
-
-#[allow(dead_code)]
-pub type RawBlockStats = HashMap<u32, std::sync::Arc<dyn Statistics>>;

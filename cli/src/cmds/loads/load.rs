@@ -114,6 +114,10 @@ impl LoadCommand {
         let clap = LoadCommand::generate();
         LoadCommand { conf, clap }
     }
+    pub fn default() -> Self {
+        LoadCommand::create(Config::default())
+    }
+
     pub fn generate() -> App<'static> {
         let app = App::new("load")
             .setting(AppSettings::DisableVersionFlag)

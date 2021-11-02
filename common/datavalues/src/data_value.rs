@@ -355,7 +355,7 @@ impl From<&DataType> for DataValue {
             DataType::Float32 => DataValue::Float32(None),
             DataType::Float64 => DataValue::Float64(None),
             DataType::Date16 => DataValue::UInt16(None),
-            DataType::Date32 => DataValue::UInt32(None),
+            DataType::Date32 => DataValue::Int32(None),
             DataType::DateTime32(_) => DataValue::UInt32(None),
             DataType::List(f) => DataValue::List(None, f.data_type().clone()),
             DataType::Struct(_) => DataValue::Struct(vec![]),

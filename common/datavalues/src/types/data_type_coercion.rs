@@ -351,14 +351,63 @@ pub fn numerical_unary_arithmetic_coercion(
     }
 }
 
-// coercion rules for equality operations. This is a superset of all numerical coercion rules.
-pub fn equal_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType> {
+// coercion rules for compare operations. This is a superset of all numerical coercion rules.
+pub fn compare_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType> {
     if lhs_type == rhs_type {
         // same type => equality is possible
         return Ok(lhs_type.clone());
     }
 
-    numerical_coercion(lhs_type, rhs_type, true)
+    if is_numeric(lhs_type) && is_numeric(rhs_type) {
+        return numerical_coercion(lhs_type, rhs_type, true);
+    }
+
+    //  one of is null
+    {
+        if rhs_type == &DataType::Null {
+            return Ok(lhs_type.clone());
+        }
+        if lhs_type == &DataType::Null {
+            return Ok(rhs_type.clone());
+        }
+    }
+
+    // one of is String and other is number
+    if (is_numeric(lhs_type) && rhs_type == &DataType::String)
+        || (is_numeric(rhs_type) && lhs_type == &DataType::String)
+    {
+        return Ok(DataType::Float64);
+    }
+
+    // one of is datetime and other is number or string
+    {
+        if (is_numeric(lhs_type) || lhs_type == &DataType::String) && is_date_or_date_time(rhs_type)
+        {
+            return Ok(rhs_type.clone());
+        }
+
+        if (is_numeric(rhs_type) || rhs_type == &DataType::String) && is_date_or_date_time(lhs_type)
+        {
+            return Ok(lhs_type.clone());
+        }
+    }
+
+    // one of is datetime and other is number or string
+    if is_date_or_date_time(lhs_type) || is_date_or_date_time(rhs_type) {
+        // one of is datetime
+        if matches!(lhs_type, DataType::DateTime32(_))
+            || matches!(rhs_type, DataType::DateTime32(_))
+        {
+            return Ok(DataType::DateTime32(None));
+        }
+
+        return Ok(DataType::Date32);
+    }
+
+    Err(ErrorCode::IllegalDataType(format!(
+        "Can not compare {} with {}",
+        lhs_type, rhs_type
+    )))
 }
 
 // aggregate_types aggregates data types for a multi-argument function.

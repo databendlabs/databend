@@ -54,8 +54,8 @@ pub struct CreateCommand {
 
 #[derive(Clone)]
 pub struct LocalBinaryPaths {
-    pub(crate) query: String,
-    pub(crate) meta: String,
+    pub query: String,
+    pub meta: String,
 }
 
 async fn reconcile_local_meta(status: &mut Status) -> Result<()> {
