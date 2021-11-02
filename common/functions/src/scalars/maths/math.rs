@@ -13,13 +13,14 @@
 // limitations under the License.
 
 use crate::scalars::function_factory::FunctionFactory;
-use crate::scalars::maths::AbsFunction;
+use crate::scalars::AbsFunction;
+use crate::scalars::PiFunction;
 
-#[derive(Clone)]
-pub struct MathFunction;
+pub struct MathsFunction;
 
-impl MathFunction {
+impl MathsFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register("abs", AbsFunction::desc())
+        factory.register("pi", PiFunction::desc());
+        factory.register("abs", AbsFunction::desc());
     }
 }

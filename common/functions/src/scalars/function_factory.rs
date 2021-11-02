@@ -26,7 +26,7 @@ use crate::scalars::DateFunction;
 use crate::scalars::Function;
 use crate::scalars::HashesFunction;
 use crate::scalars::LogicFunction;
-use crate::scalars::MathFunction;
+use crate::scalars::MathsFunction;
 use crate::scalars::NullableFunction;
 use crate::scalars::OtherFunction;
 use crate::scalars::StringFunction;
@@ -105,8 +105,8 @@ lazy_static! {
         ToCastFunction::register(&mut function_factory);
         ConditionalFunction::register(&mut function_factory);
         DateFunction::register(&mut function_factory);
-        MathFunction::register(&mut function_factory);
         OtherFunction::register(&mut function_factory);
+        MathsFunction::register(&mut function_factory);
 
         Arc::new(function_factory)
     };

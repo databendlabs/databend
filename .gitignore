@@ -10,6 +10,16 @@ distro/*
 cli/e2e/bendctl
 .cargo/config.toml
 
+# OS related
+### MacOS ###
+.DS_Store
+.AppleDouble
+.LSOverride
+
+### Linux(include WSL) ###
+
+### Windows ###
+
 # profile
 flamegraph.*
 perf.*

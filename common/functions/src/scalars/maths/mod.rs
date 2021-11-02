@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(test)]
+mod pi_test;
+
 mod math;
 mod math_abs;
+mod pi;
 
-#[cfg(test)]
-mod math_abs_test;
-
-pub use math::MathFunction;
+pub use math::MathsFunction;
 pub use math_abs::AbsFunction;
+pub use pi::PiFunction;

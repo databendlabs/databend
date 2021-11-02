@@ -18,33 +18,27 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use clap::App;
-use clap::AppSettings;
-use clap::Arg;
 use clap::ArgMatches;
 use colored::Colorize;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::cmds::command::Command;
-use crate::cmds::queries::query::QueryCommand;
-use crate::cmds::ups::up::UpCommand;
-use crate::cmds::ClusterCommand;
-use crate::cmds::PackageCommand;
 use crate::cmds::Status;
-use crate::cmds::VersionCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;
 
-const GITHUB_BASE_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
-const GITHUB_DATABEND_URL: &str = "https://github.com/datafuselabs/databend/releases/download";
-const GITHUB_DATABEND_TAG_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
-const GITHUB_PLAYGROUND_URL: &str =
+pub(crate) const GITHUB_BASE_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
+pub(crate) const GITHUB_DATABEND_URL: &str =
+    "https://github.com/datafuselabs/databend/releases/download";
+pub(crate) const GITHUB_DATABEND_TAG_URL: &str =
+    "https://api.github.com/repos/datafuselabs/databend/tags";
+pub(crate) const GITHUB_PLAYGROUND_URL: &str =
     "https://github.com/datafuselabs/databend-playground/releases/download";
 
-const REPO_BASE_URL: &str = "https://repo.databend.rs/databend/tags.json";
-const REPO_DATABEND_URL: &str = "https://repo.databend.rs/databend";
-const REPO_DATABEND_TAG_URL: &str = "https://repo.databend.rs/databend/tags.json";
-const REPO_PLAYGROUND_URL: &str = "https://repo.databend.rs/databend";
+pub(crate) const REPO_BASE_URL: &str = "https://repo.databend.rs/databend/tags.json";
+pub(crate) const REPO_DATABEND_URL: &str = "https://repo.databend.rs/databend";
+pub(crate) const REPO_DATABEND_TAG_URL: &str = "https://repo.databend.rs/databend/tags.json";
+pub(crate) const REPO_PLAYGROUND_URL: &str = "https://repo.databend.rs/databend";
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -233,91 +227,8 @@ pub fn choose_mirror(conf: &Config) -> Result<CustomMirror, CliError> {
 }
 
 impl Config {
-    pub(crate) fn build_cli() -> App<'static> {
-        App::new("bendctl")
-            .arg(
-                Arg::new("group")
-                    .long("group")
-                    .about("Sets the group name for configuration")
-                    .default_value("local")
-                    .env("DATABEND_GROUP")
-                    .global(true)
-                    .takes_value(true),
-            )
-            .arg(
-                Arg::new("databend_dir")
-                    .long("databend_dir")
-                    .about("Sets the directory to store databend binaries(query and store)")
-                    .default_value("~/.databend")
-                    .env("databend_dir")
-                    .global(true)
-                    .takes_value(true)
-                    .value_hint(clap::ValueHint::DirPath),
-            )
-            .arg(
-                Arg::new("download_url")
-                    .long("download_url")
-                    .about("Sets the url to download databend binaries")
-                    .default_value(REPO_DATABEND_URL)
-                    .env("DOWNLOAD_URL")
-                    .global(true)
-                    .takes_value(true),
-            )
-            .arg(
-                Arg::new("tag_url")
-                    .long("tag_url")
-                    .about("Sets the url to for databend tags")
-                    .default_value(REPO_DATABEND_TAG_URL)
-                    .env("DOWNLOAD_URL")
-                    .global(true)
-                    .takes_value(true),
-            )
-            .arg(
-                Arg::new("validation_url")
-                    .long("validation_url")
-                    .about("Sets the url to validate on custom download network connection")
-                    .env("DOWNLOAD_VALIDATION_URL")
-                    .default_value(REPO_DATABEND_TAG_URL)
-                    .global(true)
-                    .takes_value(true),
-            )
-            .arg(
-                Arg::new("playground_url")
-                    .long("playground_url")
-                    .about("Sets the url to download databend playground")
-                    .env("DOWNLOAD_PLAYGROUND_URL")
-                    .default_value(REPO_PLAYGROUND_URL)
-                    .global(true)
-                    .takes_value(true),
-            )
-            .arg(
-                Arg::new("log-level")
-                    .long("log-level")
-                    .about("Sets the log-level for current settings")
-                    .env("BEND_LOG_LEVEL")
-                    .default_value("info")
-                    .global(true)
-                    .takes_value(true),
-            )
-            .subcommand(
-                App::new("completion")
-                    .setting(AppSettings::DisableVersionFlag)
-                    .about("Generate auto completion scripts for bash or zsh terminal")
-                    .arg(
-                        Arg::new("completion")
-                            .takes_value(true)
-                            .possible_values(&["bash", "zsh"]),
-                    ),
-            )
-            .subcommand(PackageCommand::default().clap())
-            .subcommand(VersionCommand::generate())
-            .subcommand(ClusterCommand::default().clap())
-            .subcommand(QueryCommand::generate())
-            .subcommand(UpCommand::generate())
-    }
-
-    pub fn create() -> Self {
-        let clap = Config::build_cli().get_matches();
+    pub fn create(clap: App<'static>) -> Self {
+        let clap = clap.get_matches();
         let config = Config {
             group: clap.clone().value_of("group").unwrap().parse().unwrap(),
             mode: Mode::Sql,
