@@ -31,13 +31,31 @@ use crate::tests::SessionManagerBuilder;
 #[tokio::test]
 async fn test_statement() -> Result<()> {
     {
-        let (status, result) = test_sql("select * from system.tables limit 10").await?;
+        let (status, result) = test_sql("select * from system.tables limit 10", None).await?;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(result.data.unwrap().len(), 10);
         assert!(!result.error.is_some());
     }
     {
-        let (status, result) = test_sql("bad sql").await?;
+        let (status, result) = test_sql("select * from tables limit 10", Some("system")).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(result.data.unwrap().len(), 10);
+        assert!(!result.error.is_some());
+    }
+    {
+        let (status, result) = test_sql("show tables", Some("system")).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert!(!result.data.unwrap().is_empty());
+        assert!(!result.error.is_some());
+    }
+    {
+        let (status, result) = test_sql("show tables", Some("")).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(result.data.unwrap().len(), 0);
+        assert!(!result.error.is_some());
+    }
+    {
+        let (status, result) = test_sql("bad sql", None).await?;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(result.data, None);
         assert!(result.error.is_some());
@@ -45,17 +63,24 @@ async fn test_statement() -> Result<()> {
     Ok(())
 }
 
-async fn test_sql(sql: &'static str) -> Result<(StatusCode, HttpQueryResult)> {
+async fn test_sql(
+    sql: &'static str,
+    database: Option<&str>,
+) -> Result<(StatusCode, HttpQueryResult)> {
     let path = "/v1/statement";
     let sessions = SessionManagerBuilder::create().build()?;
     let cluster_router = Router::new()
         .route(path, post(statement_handler))
         .layer(AddExtensionLayer::new(sessions));
+    let uri = match database {
+        Some(db) => format!("{}?db={:}", path, db),
+        None => path.into(),
+    };
     let response = cluster_router
         .clone()
         .oneshot(
             Request::builder()
-                .uri(path)
+                .uri(uri)
                 .method(http::Method::POST)
                 .body(Body::from(sql))
                 .unwrap(),
