@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::borrow::Borrow;
-use std::io::{Read, BufRead};
+use std::io::{Read, Cursor};
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
@@ -44,12 +44,16 @@ use std::iter::Map;
 use databend_query::common::HashMap;
 use std::collections::BTreeMap;
 use crate::cmds::queries::query::{build_query_endpoint, execute_query_json};
-use reqwest::Client;
 use common_base::tokio::io::{BufReader, AsyncBufReadExt, AsyncRead};
 use rayon::prelude::*;
-use futures::StreamExt;
 use common_base::tokio::fs::File;
+use common_base::tokio::macros::support::Pin;
+use common_base::tokio::time;
+use tokio_util::compat::FuturesAsyncReadCompatExt;
 
+// Lets us call into_async_read() to convert a futures::stream::Stream into a
+// futures::io::AsyncRead.
+use futures::stream::TryStreamExt;
 // Support different file format to be loaded
 pub enum FileFormat {
     CSV,
@@ -157,58 +161,59 @@ impl LoadCommand {
     async fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
         match self.local_exec_precheck(args).await {
             Ok(_) => {
-                 match args.value_of("load") {
-                    Some(val) => {
-                        if Path::new(val).exists() {
-                            let buffer =
-                                std::fs::read(Path::new(val)).expect("cannot read query from file");
-                            String::from_utf8_lossy(&*buffer).to_string();
-                        }
+                let mut reader = build_reader(args.value_of("load")).await.lines();
+                for _ in 0..args.value_of("skip-head-lines").unwrap_or("0").parse::<usize>().unwrap() {
+                    if let None = reader.next_line().await? {
+                        return Ok(())
+                    }
+                }
+                let table = args.value_of("table").unwrap();
+                let schema = args.value_of("schema");
+                let table_format = match schema {
+                    Some(_) => {
+                        let schema : Schema = args.value_of_t("schema").expect("cannot build schema");
+                        format!("{} ({})", table, schema.schema.keys().into_iter().join(", "))
                     }
                     None => {
-                        let io = common_base::tokio::io::stdin();
-                        let mut reader = BufReader::new(io).lines();
-                        for i in 0..args.value_of("skip-head-lines").unwrap_or("0").parse::<usize>().unwrap() {
-                            if let None = reader.next_line().await? {
-                                return Ok(())
-                            }
-                        }
-                        let table = args.value_of("table").unwrap();
-                        let schema = args.value_of("schema");
-                        let table_format = match schema {
-                            Some(s) => {
-                                let schema : Schema = args.value_of_t("schema").expect("cannot build schema");
-                                format!("{} ({})", table, schema.schema.keys().into_iter().join(", "))
-                            }
-                            None => {
-                                table.to_string()
-                            }
-                        };
-                        let status = Status::read(self.conf.clone())?;
-                        let (cli, url) = build_query_endpoint(&status)?;
-                        loop {
-                            let mut batch = vec![];
-                            for _ in 0..100_000 {
-                                if let Some(line) = reader.next_line().await? {
-                                    batch.push(line);
-                                } else {
-                                    break;
-                                }
-                            }
-                            if batch.is_empty() {
-                                break;
-                            }
-                            let values = batch.into_iter().par_bridge().map(|e| format!("({})", e.trim())).filter(|e| !e.trim().is_empty() ).reduce_with(|a, b | format!("{}, {}", a, b));
-                            if let Some(values) = values {
-                                let query = format!("INSERT INTO {} VALUES {}", table_format, values);
-                                if let Err(e) = execute_query_json(&cli, &url, query).await {
-                                    writer.write_err(format!("cannot insert data into {}, error: {:?}", table, e))
-                                }
-                            }
-
-                        }
+                        table.to_string()
                     }
                 };
+                let start = time::Instant::now();
+                let status = Status::read(self.conf.clone())?;
+                let (cli, url) = build_query_endpoint(&status)?;
+                let mut count = 0;
+                loop {
+                    let mut batch = vec![];
+                    // possible optimization is to run iterator in parallel
+                    for _ in 0..100_000 {
+                        if let Some(line) = reader.next_line().await? {
+                            batch.push(line);
+                            count+=1;
+                        } else {
+                            break;
+                        }
+                    }
+                    if batch.is_empty() {
+                        break;
+                    }
+                    let values = batch.into_iter().par_bridge().map(|e| format!("({})", e.trim())).filter(|e| !e.trim().is_empty() ).reduce_with(|a, b | format!("{}, {}", a, b));
+                    if let Some(values) = values {
+                        let query = format!("INSERT INTO {} VALUES {}", table_format, values);
+                        if let Err(e) = execute_query_json(&cli, &url, query).await {
+                            writer.write_err(format!("cannot insert data into {}, error: {:?}", table, e))
+                        }
+                    }
+                }
+                let elapsed = start.elapsed();
+                let time = elapsed.as_millis() as f64 / 1000f64;
+                writer.write_ok(
+                    format!(
+                        "successfully loaded {} lines, rows/src: {} (rows/sec). time: {} sec",
+                        count.to_formatted_string(&Locale::en),
+                        (count as f64 / time).as_u128().to_formatted_string(&Locale::en),
+                        time
+                    )
+                );
                 Ok(())
             }
             Err(e) => {
@@ -240,39 +245,49 @@ impl LoadCommand {
                     return create_table_if_not_exists(&status,args.value_of("table"), schema).await
                 }
                 Err(e) => {
-                    return Err(CliError::Unknown(format!("{} schema is not in valid format",  args.value_of("table").unwrap())))
+                    return Err(CliError::Unknown(format!("{} schema is not in valid format, error: {:?}",  args.value_of("table").unwrap(), e)))
                 }
             }
         }
     }
 }
 
-async fn build_reader<R>(load: Option<&str>) -> BufReader<R>
-where R: AsyncRead
+async fn build_reader(load: Option<&str>) -> BufReader<Pin<Box<dyn AsyncRead + Send>>>
 {
     match load {
         Some(val) => {
             if Path::new(val).exists() {
                 let f = File::open(val).await.expect("cannot open file: permission denied");
-                return BufReader::new(f)
-            } else if val.starts_with("http://") || val.starts_with("https://") {
-                let res = reqwest::get(val)
-                    .await
-                    .expect("cannot fetch query from url")
-                    .text()
-                    .await
-                    .expect("cannot fetch response body");
-                res
+                return BufReader::new(Box::pin(f))
+            } else if val.contains("://"){
+                // Attempt to download ferris..
+                let target = reqwest::get(val)
+                    .await.expect("cannot connect to target url")
+                    .error_for_status().expect("return code is not OK"); // generate an error if server didn't respond OK
+
+                // Convert the body of the response into a futures::io::Stream.
+                let target_stream = target.bytes_stream();
+
+                // Convert the stream into an futures::io::AsyncRead.
+                // We must first convert the reqwest::Error into an futures::io::Error.
+                let target_stream = target_stream
+                    .map_err(|e| futures::io::Error::new(futures::io::ErrorKind::Other, e))
+                    .into_async_read();
+
+                // Convert the futures::io::AsyncRead into a tokio::io::AsyncRead.
+                let mut target_stream = target_stream.compat();
+
+                return BufReader::new(Box::pin(target_stream))
             } else {
-                val.to_string()
+                let bytes = val.to_string();
+                return BufReader::new(Box::pin(Cursor::new(bytes.to_owned().as_bytes().to_owned())))
             }
         }
         None => {
             let io = common_base::tokio::io::stdin();
-            return BufReader::new(io)
+            return BufReader::new(Box::pin(io))
         }
     }
-    BufReader::new(io)
 }
 
 async fn table_exists(status: &Status, table: Option<&str>) -> Result<()>  {
