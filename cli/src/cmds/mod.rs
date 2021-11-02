@@ -21,6 +21,7 @@ mod comments;
 mod completions;
 mod env;
 mod helps;
+mod loads;
 mod packages;
 mod processor;
 mod queries;
