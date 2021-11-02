@@ -30,7 +30,7 @@ use common_base::ProgressValues;
 use lexical_util::num::AsPrimitive;
 use num_format::Locale;
 use num_format::ToFormattedString;
-
+use common_datavalues::prelude::*;
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::command::Command;
 use crate::cmds::Config;
@@ -38,6 +38,7 @@ use crate::cmds::Status;
 use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
+use serde_json::Value;
 
 #[derive(Clone)]
 pub struct QueryCommand {
@@ -138,7 +139,7 @@ impl QueryCommand {
     /// precheck whether current local profile applicable for local host machine
     fn local_exec_precheck(&self, _args: &ArgMatches) -> Result<()> {
         let status = Status::read(self.conf.clone())?;
-        if !status.has_local_configs() {
+        if status.current_profile.is_none() {
             return Err(CliError::Unknown(format!(
                 "Query command error: cannot find local configs in {}, please run `bendctl cluster create` to create a new local cluster or '\\admin' switch to the admin mode",
                 status.local_config_dir
@@ -187,14 +188,14 @@ async fn query_writer(
                 .get_appropriate_unit(false);
                 writer.write_ok(
                     format!(
-                        "read rows: {}, read bytes: {}, rows/sec: {} (rows/sec), bytes/sec: {} ({}/sec)",
+                        "read rows: {}, read bytes: {}, rows/sec: {} (rows/sec), bytes/sec: {} ({}/sec), time: {} sec",
                         stat.read_rows.to_formatted_string(&Locale::en),
                         byte_unit::Byte::from_bytes(stat.read_bytes as u128)
                             .get_appropriate_unit(false)
                             .to_string(),
                         (stat.read_rows as f64 / time).as_u128().to_formatted_string(&Locale::en),
                         byte_per_sec.get_value(),
-                        byte_per_sec.get_unit().to_string()
+                        byte_per_sec.get_unit().to_string(), time
                     )
                 );
             }
@@ -236,11 +237,11 @@ pub fn build_query_endpoint(status: &Status) -> Result<(reqwest::Client, String)
     Ok((client, url))
 }
 
-async fn execute_query(
+pub async fn execute_query_json(
     cli: &reqwest::Client,
     url: &str,
     query: String,
-) -> Result<(String, Option<ProgressValues>)> {
+) -> Result<(Option<DataSchemaRef>, Option<Vec<Vec<Value>>>, Option<ProgressValues>)> {
     let ans = cli
         .post(url)
         .body(query.clone())
@@ -256,34 +257,43 @@ async fn execute_query(
         )));
     } else {
         let ans = ans.unwrap();
-        let mut table = Table::new();
         if ans.error.is_some() {
             return Err(CliError::Unknown(format!(
                 "Query has error: {:?}",
                 ans.error.unwrap()
             )));
         }
-        table.load_preset("||--+-++|    ++++++");
-        if let Some(column) = ans.columns {
-            table.set_header(
-                column
-                    .fields()
-                    .iter()
-                    .map(|field| Cell::new(field.name().as_str()).fg(Color::Green)),
-            );
-        }
-        if let Some(rows) = ans.data {
-            if rows.is_empty() {
-                return Ok(("".to_string(), ans.stats));
-            } else {
-                for row in rows {
-                    table.add_row(row.iter().map(|elem| Cell::new(elem.to_string())));
-                }
-                return Ok((table.trim_fmt(), ans.stats));
-            }
-        }
-        Ok(("".to_string(), ans.stats))
+        return Ok((ans.columns, ans.data, ans.stats))
     }
+}
+
+async fn execute_query(
+    cli: &reqwest::Client,
+    url: &str,
+    query: String,
+) -> Result<(String, Option<ProgressValues>)> {
+    let (columns, data, stats) = execute_query_json(cli, url, query).await?;
+    let mut table = Table::new();
+    table.load_preset("||--+-++|    ++++++");
+    if let Some(column) = columns {
+        table.set_header(
+            column
+                .fields()
+                .iter()
+                .map(|field| Cell::new(field.name().as_str()).fg(Color::Green)),
+        );
+    }
+    if let Some(rows) = data {
+        if rows.is_empty() {
+            return Ok(("".to_string(), stats));
+        } else {
+            for row in rows {
+                table.add_row(row.iter().map(|elem| Cell::new(elem.to_string())));
+            }
+            return Ok((table.trim_fmt(), stats));
+        }
+    }
+    Ok(("".to_string(), stats))
 }
 
 #[async_trait]

@@ -17,6 +17,8 @@ path = "src/bin/bendctl.rs"
 # Workspace dependencies
 databend-query = {path = "../query"}
 common-base = {path = "../common/base" }
+common-datavalues = { path = "../common/datavalues" }
+itertools = "0.10.1"
 shellwords = "1.1.0"
 databend-meta = {path = "../metasrv" }
 common-meta-raft-store= {path = "../common/meta/raft-store"}
@@ -55,6 +57,7 @@ async-trait = "0.1"
 webbrowser = "0.5.5"
 async-std = "1.10.0"
 tryhard = "0.4.0"
+rayon = "1.5.1"
 
 [dev-dependencies]
 pretty_assertions = "1.0"

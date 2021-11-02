@@ -38,6 +38,7 @@ use crate::cmds::VersionCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
+use crate::cmds::loads::load::LoadCommand;
 
 pub struct Processor {
     env: Env,
@@ -68,6 +69,7 @@ impl Processor {
             Box::new(PackageCommand::create(conf.clone())),
             Box::new(ClusterCommand::create(conf.clone())),
             Box::new(UpCommand::create(conf.clone())),
+            Box::new(LoadCommand::create(conf.clone())),
         ];
         let help_command = HelpCommand::create(admin_commands.clone());
         Processor {
@@ -144,6 +146,14 @@ impl Processor {
                     self.env.conf.clone().clap.subcommand_matches("up"),
                 )
                 .await
+            }
+            Some("load") => {
+                let cmd = LoadCommand::create(self.env.conf.clone());
+                cmd.exec_matches(
+                    &mut writer,
+                    self.env.conf.clone().clap.subcommand_matches("load"),
+                )
+                    .await
             }
             None => self.process_run_interactive().await,
             _ => {

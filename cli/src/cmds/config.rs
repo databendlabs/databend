@@ -34,6 +34,7 @@ use crate::cmds::Status;
 use crate::cmds::VersionCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;
+use crate::cmds::loads::load::LoadCommand;
 
 const GITHUB_BASE_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
 const GITHUB_DATABEND_URL: &str = "https://github.com/datafuselabs/databend/releases/download";
@@ -202,21 +203,12 @@ pub fn choose_mirror(conf: &Config) -> Result<CustomMirror, CliError> {
     }
 
     let status = Status::read(conf).expect("cannot configure status");
-    let mut writer = Writer::create();
     if let Some(mirror) = status.mirrors {
-        let custom: CustomMirror = mirror.clone();
-        if !custom.is_ok() {
-            writer.write_err(format!(
-                "Mirror error: cannot connect to current mirror {:?}",
-                mirror
-            ))
-        } else {
-            return Ok(mirror);
-        }
+        return Ok(mirror)
     }
 
     let default_mirrors: Vec<Box<dyn MirrorAsset>> =
-        vec![Box::new(GithubMirror {}), Box::new(RepoMirror {})];
+        vec![ Box::new(RepoMirror {}), Box::new(GithubMirror {})];
     for _ in 0..2 {
         for i in &default_mirrors {
             if i.is_ok() {
@@ -314,6 +306,7 @@ impl Config {
             .subcommand(ClusterCommand::default().clap())
             .subcommand(QueryCommand::generate())
             .subcommand(UpCommand::generate())
+            .subcommand(LoadCommand::generate())
     }
 
     pub fn create() -> Self {
