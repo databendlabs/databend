@@ -122,7 +122,15 @@ impl DatabendQueryContextShared {
         let mut tables_refs = self.tables_refs.lock();
 
         let ent = match tables_refs.entry(table_meta_key) {
-            Entry::Occupied(entry) => entry.get().clone(),
+            Entry::Occupied(entry) => {
+                println!(
+                    "ContextShared::Occupied: {} {}, {:?}",
+                    database,
+                    table,
+                    entry.get().get_table_info()
+                );
+                entry.get().clone()
+            }
             Entry::Vacant(entry) => {
                 let catalog = self.get_catalog();
                 let rt = self.try_get_runtime()?;
