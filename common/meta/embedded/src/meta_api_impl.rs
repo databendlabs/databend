@@ -180,6 +180,7 @@ impl MetaApi for MetaEmbedded {
     }
 
     async fn get_table(&self, db: &str, table_name: &str) -> Result<Arc<TableInfo>> {
+        println!("get_table: {} {}", db, table_name);
         let sm = self.inner.lock().await;
 
         let seq_db = sm.get_database(db)?.ok_or_else(|| {
@@ -210,6 +211,8 @@ impl MetaApi for MetaEmbedded {
             name: table_name.to_string(),
             meta: table_meta,
         };
+
+        println!("got table: {:?}", table_info);
 
         Ok(Arc::new(table_info))
     }
@@ -242,6 +245,10 @@ impl MetaApi for MetaEmbedded {
         option_key: String,
         option_value: String,
     ) -> Result<UpsertTableOptionReply> {
+        println!(
+            "upsert_table_option: {} {} {} {}",
+            table_id, table_version, option_key, option_value
+        );
         let mut sm = self.inner.lock().await;
 
         let cmd = Cmd::UpsertTableOptions {
