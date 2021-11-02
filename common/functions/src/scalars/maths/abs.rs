@@ -44,7 +44,7 @@ impl AbsFunction {
 
 macro_rules! impl_abs_function {
     ($column:expr, $data_type:expr, $type:ident) => {{
-        let array = $column.column().to_array()?.get_array_ref();
+        let array = $column.column().to_minimal_array()?.get_array_ref();
         let primitive_array = array
             .as_any()
             .downcast_ref::<PrimitiveArray<$type>>()

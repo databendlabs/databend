@@ -13,14 +13,14 @@
 // limitations under the License.
 
 #[cfg(test)]
-mod pi_test;
-#[cfg(test)]
 mod abs_test;
+#[cfg(test)]
+mod pi_test;
 
-mod math;
 mod abs;
+mod math;
 mod pi;
 
-pub use math::MathsFunction;
 pub use abs::AbsFunction;
+pub use math::MathsFunction;
 pub use pi::PiFunction;
