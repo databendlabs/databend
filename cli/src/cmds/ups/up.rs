@@ -160,7 +160,6 @@ const PLAYGROUND_VERSION: &str = "v0.4.1-nightly";
 pub struct UpCommand {
     #[allow(dead_code)]
     conf: Config,
-    clap: App<'static>,
 }
 
 // Support to load datasets from official resource
@@ -223,30 +222,11 @@ fn render(ddl: &str, template: serde_json::Value) -> Result<String> {
 
 impl UpCommand {
     pub fn create(conf: Config) -> Self {
-        let clap = UpCommand::generate();
-        UpCommand { conf, clap }
+        UpCommand { conf }
     }
-    pub fn generate() -> App<'static> {
-        let app = App::new("up")
-            .setting(AppSettings::DisableVersionFlag)
-            .about("Set up a cluster and load prepared dataset for demo")
-            .arg(
-                Arg::new("profile")
-                    .long("profile")
-                    .about("Profile to run queries")
-                    .required(false)
-                    .possible_values(&["local"])
-                    .default_value("local"),
-            )
-            .arg(
-                Arg::new("dataset")
-                    .about("Prepared datasets")
-                    .takes_value(true)
-                    .possible_values(&["ontime_mini"])
-                    .default_value("ontime_mini")
-                    .required(false),
-            );
-        app
+
+    pub fn default() -> Self {
+        UpCommand::create(Config::default())
     }
 
     async fn download_dataset(&self, dataset: DataSets) -> Result<String> {
@@ -481,7 +461,25 @@ impl Command for UpCommand {
     }
 
     fn clap(&self) -> App<'static> {
-        self.clap.clone()
+        App::new("up")
+            .setting(AppSettings::DisableVersionFlag)
+            .about("Set up a cluster and load prepared dataset for demo")
+            .arg(
+                Arg::new("profile")
+                    .long("profile")
+                    .about("Profile to run queries")
+                    .required(false)
+                    .possible_values(&["local"])
+                    .default_value("local"),
+            )
+            .arg(
+                Arg::new("dataset")
+                    .about("Prepared datasets")
+                    .takes_value(true)
+                    .possible_values(&["ontime_mini"])
+                    .default_value("ontime_mini")
+                    .required(false),
+            )
     }
 
     fn about(&self) -> &'static str {

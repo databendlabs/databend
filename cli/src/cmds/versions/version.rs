@@ -33,8 +33,8 @@ impl VersionCommand {
         VersionCommand {}
     }
 
-    pub fn generate() -> App<'static> {
-        return App::new("version").about("Version info for local cli and remote cluster");
+    pub fn default() -> Self {
+        VersionCommand::create()
     }
 
     fn cli_sha_info(&self) -> Option<String> {
@@ -71,7 +71,7 @@ impl Command for VersionCommand {
     }
 
     fn clap(&self) -> App<'static> {
-        VersionCommand::generate()
+        App::new("version").about("Version info for local cli and remote cluster")
     }
 
     fn about(&self) -> &'static str {

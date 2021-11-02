@@ -44,34 +44,17 @@ use crate::error::Result;
 pub struct QueryCommand {
     #[allow(dead_code)]
     conf: Config,
-    clap: App<'static>,
 }
 
 impl QueryCommand {
     pub fn create(conf: Config) -> Self {
-        let clap = QueryCommand::generate();
-        QueryCommand { conf, clap }
+        QueryCommand { conf }
     }
-    pub fn generate() -> App<'static> {
-        let app = App::new("query")
-            .setting(AppSettings::DisableVersionFlag)
-            .about("Query on databend cluster")
-            .arg(
-                Arg::new("profile")
-                    .long("profile")
-                    .about("Profile to run queries")
-                    .required(false)
-                    .possible_values(&["local"])
-                    .default_value("local"),
-            )
-            .arg(
-                Arg::new("query")
-                    .about("Query statements to run")
-                    .takes_value(true)
-                    .required(true),
-            );
-        app
+
+    pub fn default() -> Self {
+        QueryCommand::create(Config::default())
     }
+
     async fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
         match self.local_exec_precheck(args).await {
             Ok(_) => {
@@ -157,7 +140,7 @@ impl QueryCommand {
 
     pub async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
         match self
-            .clap
+            .clap()
             .clone()
             .try_get_matches_from(vec!["query", args.as_str()])
         {
@@ -300,7 +283,23 @@ impl Command for QueryCommand {
     }
 
     fn clap(&self) -> App<'static> {
-        self.clap.clone()
+        App::new("query")
+            .setting(AppSettings::DisableVersionFlag)
+            .about("Query on databend cluster")
+            .arg(
+                Arg::new("profile")
+                    .long("profile")
+                    .about("Profile to run queries")
+                    .required(false)
+                    .possible_values(&["local"])
+                    .default_value("local"),
+            )
+            .arg(
+                Arg::new("query")
+                    .about("Query statements to run")
+                    .takes_value(true)
+                    .required(true),
+            )
     }
 
     fn about(&self) -> &'static str {
