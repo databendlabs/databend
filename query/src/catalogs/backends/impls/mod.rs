@@ -13,8 +13,6 @@
 //  limitations under the License.
 //
 
-mod meta_cached;
 mod meta_remote;
 
-pub use meta_cached::MetaCached;
 pub use meta_remote::MetaRemote;
