@@ -13,7 +13,9 @@
 //  limitations under the License.
 //
 
-use common_base::BlockingWait;
+use std::sync::Arc;
+
+use common_dal::DataAccessor;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_planners::Extras;
@@ -24,22 +26,21 @@ use crate::datasources::index::RangeFilter;
 use crate::datasources::table::fuse::util;
 use crate::datasources::table::fuse::util::BlockStats;
 use crate::datasources::table::fuse::BlockMeta;
-use crate::datasources::table::fuse::MetaInfoReader;
 use crate::datasources::table::fuse::SegmentInfo;
 use crate::datasources::table::fuse::TableSnapshot;
 
 pub struct MinMaxIndex {
     table_snapshot_loc: String,
-    meta_reader: MetaInfoReader,
+    da: Arc<dyn DataAccessor>,
 }
 
 impl MinMaxIndex {
-    pub fn new(table_snapshot: &TableSnapshot, meta_reader: &MetaInfoReader) -> Self {
+    pub fn new(table_snapshot: &TableSnapshot, da: Arc<dyn DataAccessor>) -> Self {
         Self {
             table_snapshot_loc: util::snapshot_location(
                 table_snapshot.snapshot_id.to_simple().to_string(),
             ),
-            meta_reader: meta_reader.clone(),
+            da,
         }
     }
 
@@ -65,9 +66,8 @@ impl MinMaxIndex {
             pred_true()
         };
 
-        let da = self.meta_reader.data_accessor();
         let snapshot =
-            common_dal::read_obj::<TableSnapshot>(da.clone(), self.table_snapshot_loc.clone())
+            common_dal::read_obj::<TableSnapshot>(self.da.clone(), self.table_snapshot_loc.clone())
                 .await?;
         let segment_num = snapshot.segments.len();
         let segment_locs = snapshot.segments;
@@ -76,7 +76,8 @@ impl MinMaxIndex {
         };
         let res = futures::stream::iter(segment_locs)
             .map(|seg_loc| async {
-                let segment_info = common_dal::read_obj::<SegmentInfo>(da.clone(), seg_loc).await?;
+                let segment_info =
+                    common_dal::read_obj::<SegmentInfo>(self.da.clone(), seg_loc).await?;
                 let r = if block_pred(&segment_info.summary.col_stats)? {
                     segment_info.blocks.into_iter().try_fold(
                         Vec::new(),
@@ -101,13 +102,12 @@ impl MinMaxIndex {
     }
 }
 
-pub fn range_filter(
+pub async fn range_filter(
     table_snapshot: &TableSnapshot,
     schema: DataSchemaRef,
     push_down: Option<Extras>,
-    meta_reader: MetaInfoReader,
+    data_accessor: Arc<dyn DataAccessor>,
 ) -> common_exception::Result<Vec<BlockMeta>> {
-    let range_index = MinMaxIndex::new(table_snapshot, &meta_reader);
-    async move { range_index.apply(schema, push_down).await }
-        .wait_in(meta_reader.runtime(), None)?
+    let range_index = MinMaxIndex::new(table_snapshot, data_accessor);
+    range_index.apply(schema, push_down).await
 }

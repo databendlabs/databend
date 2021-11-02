@@ -44,8 +44,9 @@ impl DataAccessorBuilder for ContextDalBuilder {
         match scheme {
             StorageScheme::S3 => {
                 let conf = &conf.s3;
-                Ok(Arc::new(S3::with_credentials(
+                Ok(Arc::new(S3::try_create(
                     &conf.region,
+                    &conf.endpoint_url,
                     &conf.bucket,
                     &conf.access_key_id,
                     &conf.secret_access_key,

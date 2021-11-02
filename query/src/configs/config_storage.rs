@@ -27,6 +27,8 @@ pub const DISK_STORAGE_DATA_PATH: &str = "DISK_STORAGE_DATA_PATH";
 
 // S3 Storage env.
 const S3_STORAGE_REGION: &str = "S3_STORAGE_REGION";
+const S3_STORAGE_ENDPOINT_URL: &str = "S3_STORAGE_ENDPOINT_URL";
+
 const S3_STORAGE_ACCESS_KEY_ID: &str = "S3_STORAGE_ACCESS_KEY_ID";
 const S3_STORAGE_SECRET_ACCESS_KEY: &str = "S3_STORAGE_SECRET_ACCESS_KEY";
 const S3_STORAGE_BUCKET: &str = "S3_STORAGE_BUCKET";
@@ -80,6 +82,10 @@ pub struct S3StorageConfig {
     #[serde(default)]
     pub region: String,
 
+    #[structopt(long, env = S3_STORAGE_ENDPOINT_URL, default_value = "", help = "Endpoint URL for S3 storage")]
+    #[serde(default)]
+    pub endpoint_url: String,
+
     #[structopt(long, env = S3_STORAGE_ACCESS_KEY_ID, default_value = "", help = "Access key for S3 storage")]
     #[serde(default)]
     pub access_key_id: String,
@@ -97,6 +103,7 @@ impl S3StorageConfig {
     pub fn default() -> Self {
         S3StorageConfig {
             region: "".to_string(),
+            endpoint_url: "".to_string(),
             access_key_id: "".to_string(),
             secret_access_key: "".to_string(),
             bucket: "".to_string(),
@@ -108,6 +115,8 @@ impl fmt::Debug for S3StorageConfig {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{{")?;
         write!(f, "s3.storage.region: \"{}\", ", self.region)?;
+        write!(f, "s3.storage.endpoint_url: \"{}\", ", self.endpoint_url)?;
+        write!(f, "s3.storage.bucket: \"{}\", ", self.bucket)?;
         write!(f, "}}")
     }
 }
@@ -192,6 +201,13 @@ impl StorageConfig {
 
         // S3.
         env_helper!(mut_config.storage, s3, region, String, S3_STORAGE_REGION);
+        env_helper!(
+            mut_config.storage,
+            s3,
+            endpoint_url,
+            String,
+            S3_STORAGE_ENDPOINT_URL
+        );
         env_helper!(
             mut_config.storage,
             s3,

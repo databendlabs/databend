@@ -15,15 +15,9 @@
 
 pub(crate) use block_appender::*;
 pub use block_reader::*;
-pub use segment_reader::*;
-
-// consider remove these, read_util seems to be enough (type could be inferred)
-mod segment_reader;
-// end
 
 mod block_appender;
 mod block_reader;
-pub(crate) mod meta_info_reader;
 
 #[cfg(test)]
 mod block_appender_test;

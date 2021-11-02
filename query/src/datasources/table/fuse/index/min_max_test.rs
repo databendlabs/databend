@@ -37,7 +37,6 @@ use crate::catalogs::Catalog;
 use crate::datasources::table::fuse::index::min_max::range_filter;
 use crate::datasources::table::fuse::table_test_fixture::TestFixture;
 use crate::datasources::table::fuse::util::TBL_OPT_KEY_SNAPSHOT_LOC;
-use crate::datasources::table::fuse::MetaInfoReader;
 
 #[tokio::test]
 async fn test_min_max_index() -> Result<()> {
@@ -100,7 +99,6 @@ async fn test_min_max_index() -> Result<()> {
         .get(TBL_OPT_KEY_SNAPSHOT_LOC)
         .unwrap();
     let snapshot = read_obj(da.clone(), snapshot_loc.clone()).await?;
-    let meta_reader = MetaInfoReader::new(da.clone(), ctx.get_shared_runtime()?);
 
     // no pruning
     let push_downs = None;
@@ -108,8 +106,9 @@ async fn test_min_max_index() -> Result<()> {
         &snapshot,
         table.get_table_info().schema(),
         push_downs,
-        meta_reader.clone(),
-    )?;
+        da.clone(),
+    )
+    .await?;
     let rows: u64 = blocks.iter().map(|b| b.row_count).sum();
     assert_eq!(rows, num * 3u64);
     assert_eq!(10, blocks.len());
@@ -123,8 +122,9 @@ async fn test_min_max_index() -> Result<()> {
         &snapshot,
         table.get_table_info().schema(),
         Some(extra),
-        meta_reader.clone(),
-    )?;
+        da.clone(),
+    )
+    .await?;
     assert_eq!(0, blocks.len());
 
     // one block pruned
@@ -132,12 +132,7 @@ async fn test_min_max_index() -> Result<()> {
     let pred = col("a").gt(lit(3)).and(col("b").gt(lit(3)));
     extra.filters = vec![pred];
 
-    let blocks = range_filter(
-        &snapshot,
-        table.get_table_info().schema(),
-        Some(extra),
-        meta_reader,
-    )?;
+    let blocks = range_filter(&snapshot, table.get_table_info().schema(), Some(extra), da).await?;
     assert_eq!(num - 1, blocks.len() as u64);
 
     Ok(())

@@ -79,6 +79,7 @@ data_path = \"\"
 
 [storage.s3]
 region = \"\"
+endpoint_url = \"\"
 access_key_id = \"\"
 secret_access_key = \"\"
 bucket = \"\"
@@ -111,6 +112,7 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("STORAGE_TYPE", "s3");
     std::env::set_var("DISK_STORAGE_DATA_PATH", "/tmp/test");
     std::env::set_var("S3_STORAGE_REGION", "us.region");
+    std::env::set_var("S3_STORAGE_ENDPOINT_URL", "");
     std::env::set_var("S3_STORAGE_ACCESS_KEY_ID", "us.key.id");
     std::env::set_var("S3_STORAGE_SECRET_ACCESS_KEY", "us.key");
     std::env::set_var("S3_STORAGE_BUCKET", "us.bucket");
@@ -137,6 +139,7 @@ fn test_env_config() -> Result<()> {
     assert_eq!("/tmp/test", configured.storage.disk.data_path);
 
     assert_eq!("us.region", configured.storage.s3.region);
+    assert_eq!("", configured.storage.s3.endpoint_url);
     assert_eq!("us.key.id", configured.storage.s3.access_key_id);
     assert_eq!("us.key", configured.storage.s3.secret_access_key);
     assert_eq!("us.bucket", configured.storage.s3.bucket);

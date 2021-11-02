@@ -31,7 +31,6 @@ use tokio::io::AsyncWriteExt;
 use crate::Bytes;
 use crate::DataAccessor;
 use crate::InputStream;
-use crate::SeekableReader;
 
 pub struct Local {
     root: PathBuf,
@@ -65,10 +64,6 @@ impl Local {
 
 #[async_trait::async_trait]
 impl DataAccessor for Local {
-    fn get_reader(&self, path: &str, _len: Option<u64>) -> Result<Box<dyn SeekableReader>> {
-        Ok(Box::new(std::fs::File::open(path)?))
-    }
-
     fn get_input_stream(&self, path: &str, _stream_len: Option<u64>) -> Result<InputStream> {
         let path = self.prefix_with_root(path)?;
         let std_file = std::fs::File::open(path)?;
