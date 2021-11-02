@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -23,12 +24,14 @@ use async_raft::raft::MembershipConfig;
 use async_raft::LogId;
 use common_base::tokio;
 use common_exception::ErrorCode;
+use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
+use common_meta_types::TableMeta;
 use common_tracing::tracing;
 use maplit::btreeset;
 use maplit::hashmap;
@@ -138,10 +141,7 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
             .await?;
 
         let (prev, result) = match resp {
-            AppliedState::DatabaseId { prev, result } => (
-                prev.map(|kv_value| kv_value.data),
-                result.map(|kv_value| kv_value.data),
-            ),
+            AppliedState::DatabaseId(ch) => ch.map(|x| x.data),
             _ => {
                 panic!("expect AppliedState::Database")
             }
@@ -213,12 +213,8 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
             })
             .await?;
 
-        let (prev, result) = match resp {
-            AppliedState::TableMeta { prev, result } => (prev.unwrap(), result.unwrap()),
-            _ => {
-                panic!("expect AppliedState::TableIdent")
-            }
-        };
+        let ch: Change<TableMeta> = resp.try_into().unwrap();
+        let (prev, result) = ch.unwrap();
 
         tracing::info!("--- check prev state is returned");
         {
@@ -278,12 +274,9 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
             })
             .await?;
 
-        let (prev, result) = match resp {
-            AppliedState::TableMeta { prev, result } => (prev.unwrap(), result.unwrap()),
-            _ => {
-                panic!("expect AppliedState::Table")
-            }
-        };
+        let ch: Change<TableMeta> = resp.try_into().unwrap();
+        let (prev, result) = ch.unwrap();
+
         assert_eq!(prev, result);
     }
 
@@ -300,12 +293,8 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
             })
             .await?;
 
-        let (prev, result) = match resp {
-            AppliedState::TableMeta { prev, result } => (prev.unwrap(), result.unwrap()),
-            _ => {
-                panic!("expect AppliedState::TableIdent")
-            }
-        };
+        let ch: Change<TableMeta> = resp.try_into().unwrap();
+        let (prev, result) = ch.unwrap();
 
         tracing::info!("--- check prev state is returned");
         assert_eq!(version, prev.seq);
@@ -447,10 +436,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
             })
             .await?;
         assert_eq!(
-            AppliedState::KV {
-                prev: c.prev.clone(),
-                result: c.result.clone(),
-            },
+            AppliedState::KV(Change::new(c.prev.clone(), c.result.clone())),
             resp,
             "write: {}",
             mes,
@@ -514,10 +500,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
         .await?;
 
     assert_eq!(
-        AppliedState::KV {
-            prev: None,
-            result: None,
-        },
+        AppliedState::KV(Change::new(None, None)),
         resp,
         "update meta of None does nothing",
     );
@@ -631,10 +614,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
             })
             .await?;
         assert_eq!(
-            AppliedState::KV {
-                prev: c.prev.clone(),
-                result: c.result.clone(),
-            },
+            AppliedState::KV(Change::new(c.prev.clone(), c.result.clone())),
             resp,
             "delete: {}",
             mes,

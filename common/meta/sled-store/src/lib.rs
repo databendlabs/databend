@@ -18,10 +18,6 @@
 pub use db::get_sled_db;
 pub use db::init_sled_db;
 pub use db::init_temp_sled_db;
-pub use kv::KVMeta;
-pub use seq_num::SeqNum;
-pub use seq_value::IntoSeqV;
-pub use seq_value::SeqV;
 pub use sled;
 pub use sled_key_space::SledKeySpace;
 pub use sled_serde::SledOrderedSerde;
@@ -32,9 +28,6 @@ pub use sled_tree::SledTree;
 pub use sled_tree::SledValueToKey;
 
 mod db;
-mod kv;
-mod seq_num;
-mod seq_value;
 mod sled_key_space;
 mod sled_serde;
 mod sled_tree;

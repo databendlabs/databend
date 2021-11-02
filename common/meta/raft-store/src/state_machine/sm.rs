@@ -26,6 +26,7 @@ use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledTree;
+use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
@@ -335,7 +336,7 @@ impl StateMachine {
                 }
 
                 tracing::debug!("applied create Database: {} {:?}", name, result);
-                Ok((prev, result).into())
+                Ok(Change::new(prev, result).into())
             }
 
             Cmd::DropDatabase { ref name } => {
@@ -352,7 +353,7 @@ impl StateMachine {
                 }
 
                 tracing::debug!("applied drop Database: {} {:?}", name, result);
-                Ok((prev, result).into())
+                Ok(Change::new(prev, result).into())
             }
 
             Cmd::CreateTable {
@@ -427,7 +428,7 @@ impl StateMachine {
                 let seq_table_id = table_lookup_tree.get(&lookup_key)?;
 
                 if seq_table_id.is_none() {
-                    return Ok((None::<SeqV<TableMeta>>, None).into());
+                    return Ok(Change::<TableMeta>::new(None, None).into());
                 }
 
                 self.sub_tree_upsert(
@@ -453,7 +454,7 @@ impl StateMachine {
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
                 }
                 tracing::debug!("applied drop Table: {} {:?}", table_name, result);
-                Ok((prev, result).into())
+                Ok(Change::new(prev, result).into())
             }
 
             Cmd::UpsertKV {
@@ -467,7 +468,7 @@ impl StateMachine {
                     .await?;
 
                 tracing::debug!("applied UpsertKV: {} {:?}", key, result);
-                Ok((prev, result).into())
+                Ok(Change::new(prev, result).into())
             }
 
             Cmd::UpsertTableOptions {
@@ -486,10 +487,7 @@ impl StateMachine {
                 };
 
                 if seq.match_seq(&prev).is_err() {
-                    let res = AppliedState::TableMeta {
-                        prev: Some(prev.clone()),
-                        result: Some(prev),
-                    };
+                    let res = AppliedState::TableMeta(Change::new(Some(prev.clone()), Some(prev)));
                     return Ok(res);
                 }
 
@@ -517,10 +515,7 @@ impl StateMachine {
 
                 self.tables().insert(table_id, &sv).await?;
 
-                Ok(AppliedState::TableMeta {
-                    prev: Some(prev),
-                    result: Some(sv),
-                })
+                Ok(AppliedState::TableMeta(Change::new(Some(prev), Some(sv))))
             }
         }
     }

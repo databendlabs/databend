@@ -126,10 +126,10 @@ impl MirrorAsset for RepoMirror {
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct CustomMirror {
-    pub(crate) base_url: String,
-    pub(crate) databend_url: String,
-    pub(crate) databend_tag_url: String,
-    pub(crate) playground_url: String,
+    pub base_url: String,
+    pub databend_url: String,
+    pub databend_tag_url: String,
+    pub playground_url: String,
 }
 
 impl CustomMirror {

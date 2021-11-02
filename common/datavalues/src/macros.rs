@@ -59,7 +59,7 @@ macro_rules! match_data_type_apply_macro_ca {
             DataType::Float32 => $macro!($self.f32().unwrap() $(, $opt_args)*),
             DataType::Float64 => $macro!($self.f64().unwrap() $(, $opt_args)*),
             DataType::Date16 => $macro!($self.u16().unwrap() $(, $opt_args)*),
-            DataType::Date32 => $macro!($self.u32().unwrap() $(, $opt_args)*),
+            DataType::Date32 => $macro!($self.i32().unwrap() $(, $opt_args)*),
             _ => unimplemented!(),
         }
     }};
@@ -81,7 +81,7 @@ macro_rules! apply_method_numeric_series {
             DataType::Float32 => $self.f32().unwrap().$method($($args),*),
             DataType::Float64 => $self.f64().unwrap().$method($($args),*),
             DataType::Date16 => $self.u16().unwrap().$method($($args),*),
-            DataType::Date32 => $self.u32().unwrap().$method($($args),*),
+            DataType::Date32 => $self.i32().unwrap().$method($($args),*),
 
             _ => unimplemented!(),
         }

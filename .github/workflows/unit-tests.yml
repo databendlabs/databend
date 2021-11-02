@@ -42,11 +42,7 @@ jobs:
           RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
 
       - name: Install grcov
-        uses: actions-rs/install@v0.1
-        with:
-          crate: grcov
-          version: latest
-          use-tool-cache: true
+        run: cargo install --locked grcov
 
       - name: Run code coverage
         uses: actions-rs/grcov@v0.1.5

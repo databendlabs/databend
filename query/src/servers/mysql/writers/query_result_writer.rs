@@ -153,7 +153,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                 (DataType::Date16, DataValue::UInt16(Some(v))) => {
                                     row_writer.write_col(v.to_date(&utc).naive_local())?
                                 }
-                                (DataType::Date32, DataValue::UInt32(Some(v))) => {
+                                (DataType::Date32, DataValue::Int32(Some(v))) => {
                                     row_writer.write_col(v.to_date(&utc).naive_local())?
                                 }
                                 (DataType::DateTime32(tz), DataValue::UInt32(Some(v))) => {

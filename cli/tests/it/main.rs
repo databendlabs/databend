@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2020 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,12 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use serde::Deserialize;
-use serde::Serialize;
-
-/// The meta data of a record in kv
-#[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
-pub struct KVMeta {
-    /// expiration time in second since 1970
-    pub expire_at: Option<u64>,
-}
+mod basic;
+mod clusters;
+mod config;
+mod query;
+mod status;

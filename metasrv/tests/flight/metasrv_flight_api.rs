@@ -50,14 +50,14 @@ async fn test_restart() -> anyhow::Result<()> {
         tracing::debug!("set kv res: {:?}", res);
         let res = res?;
         assert_eq!(
-            UpsertKVActionReply {
-                prev: None,
-                result: Some(SeqV {
+            UpsertKVActionReply::new(
+                None,
+                Some(SeqV {
                     seq: 1,
                     meta: None,
                     data: b"bar".to_vec(),
                 })
-            },
+            ),
             res,
             "upsert kv"
         );

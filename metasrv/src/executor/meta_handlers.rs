@@ -13,6 +13,7 @@
 // limitations under the License.
 //
 
+use std::convert::TryInto;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -27,6 +28,7 @@ use common_meta_flight::GetTableExtReq;
 use common_meta_flight::GetTablesAction;
 use common_meta_flight::UpsertTableOptionReq;
 use common_meta_raft_store::state_machine::AppliedState;
+use common_meta_types::Change;
 use common_meta_types::Cmd::CreateDatabase;
 use common_meta_types::Cmd::CreateTable;
 use common_meta_types::Cmd::DropDatabase;
@@ -39,6 +41,7 @@ use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use log::info;
 use maplit::hashmap;
@@ -64,16 +67,14 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
             },
         };
 
-        let rst = self
+        let res = self
             .meta_node
             .write(cr)
             .await
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
-        let (prev, result) = match rst {
-            AppliedState::DatabaseId { prev, result } => (prev, result),
-            _ => return Err(ErrorCode::MetaNodeInternalError("not a Database result")),
-        };
+        let ch: Change<u64> = res.try_into().unwrap();
+        let (prev, result) = ch.unpack_data();
 
         if prev.is_some() && !if_not_exists {
             return Err(ErrorCode::DatabaseAlreadyExists(format!(
@@ -84,7 +85,7 @@ impl RequestHandler<CreateDatabaseAction> for ActionHandler {
 
         Ok(CreateDatabaseReply {
             // TODO(xp): return DatabaseInfo?
-            database_id: result.unwrap().data,
+            database_id: result.unwrap(),
         })
     }
 }
@@ -128,7 +129,7 @@ impl RequestHandler<DropDatabaseAction> for ActionHandler {
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
         let (prev, _result) = match rst {
-            AppliedState::DatabaseId { prev, result } => (prev, result),
+            AppliedState::DatabaseId(Change { prev, result }) => (prev, result),
             _ => return Err(ErrorCode::MetaNodeInternalError("not a Database result")),
         };
 
@@ -203,15 +204,14 @@ impl RequestHandler<DropTableAction> for ActionHandler {
             },
         };
 
-        let rst = self
+        let res = self
             .meta_node
             .write(cr)
             .await
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
-        let (prev, _result) = match rst {
-            AppliedState::TableMeta { prev, result } => (prev, result),
-            _ => return Err(ErrorCode::MetaNodeInternalError("not a Table result")),
-        };
+
+        let ch: Change<TableMeta> = res.try_into().unwrap();
+        let (prev, _result) = ch.unpack();
 
         if prev.is_some() || if_exists {
             Ok(())
@@ -334,14 +334,8 @@ impl RequestHandler<UpsertTableOptionReq> for ActionHandler {
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
         if !res.changed() {
-            let prev = match res {
-                AppliedState::TableMeta { prev, .. } => prev,
-                _ => {
-                    panic!("expect AppliedState::Table")
-                }
-            };
-
-            let prev = prev.unwrap();
+            let ch: Change<TableMeta> = res.try_into().unwrap();
+            let (prev, _result) = ch.unwrap();
 
             return Err(ErrorCode::TableVersionMissMatch(format!(
                 "targeting version {}, current version {}",
