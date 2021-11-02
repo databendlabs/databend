@@ -15,8 +15,6 @@
 
 mod meta_cached;
 mod meta_remote;
-mod meta_sync;
 
 pub use meta_cached::MetaCached;
 pub use meta_remote::MetaRemote;
-pub use meta_sync::MetaSync;

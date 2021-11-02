@@ -15,7 +15,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use common_base::BlockingWait;
 use common_context::TableDataContext;
@@ -39,10 +38,8 @@ use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_tracing::tracing;
 
-use crate::catalogs::backends::MetaApiSync;
 use crate::catalogs::backends::MetaCached;
 use crate::catalogs::backends::MetaRemote;
-use crate::catalogs::backends::MetaSync;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::Database;
 use crate::catalogs::Table;
@@ -60,7 +57,7 @@ use crate::datasources::table_engine_registry::TableEngineRegistry;
 pub struct MetaStoreCatalog {
     table_engine_registry: Arc<TableEngineRegistry>,
 
-    meta: Arc<dyn MetaApiSync>,
+    meta: Arc<dyn MetaApi>,
 
     /// The data layer that supports MemoryTable or else.
     ///
@@ -91,7 +88,7 @@ impl MetaStoreCatalog {
     ///
     /// MetaSync -> MetaCached -> MetaEmbedded
     /// ```
-    pub fn try_create_with_config(conf: Config) -> Result<Self> {
+    pub async fn try_create_with_config(conf: Config) -> Result<Self> {
         let local_mode = conf.meta.meta_address.is_empty();
 
         let meta_store: Arc<dyn MetaApi> = if local_mode {
@@ -109,19 +106,19 @@ impl MetaStoreCatalog {
         };
 
         let meta_cached = MetaCached::create(meta_store);
-        let meta_sync = MetaSync::create(Arc::new(meta_cached), Some(Duration::from_millis(5000)));
-        let meta: Arc<dyn MetaApiSync> = Arc::new(meta_sync);
+        let meta: Arc<dyn MetaApi> = Arc::new(meta_cached);
+
+        let table_engine_registry = Arc::new(TableEngineRegistry::new());
+
+        register_prelude_tbl_engines(&table_engine_registry)?;
 
         let plan = CreateDatabasePlan {
             if_not_exists: true,
             db: "default".to_string(),
             options: Default::default(),
         };
-        meta.create_database(plan)?;
 
-        let table_engine_registry = Arc::new(TableEngineRegistry::new());
-
-        register_prelude_tbl_engines(&table_engine_registry)?;
+        meta.create_database(plan).await?;
 
         let cat = MetaStoreCatalog {
             table_engine_registry,
@@ -144,9 +141,11 @@ impl MetaStoreCatalog {
     }
 }
 
+#[async_trait::async_trait]
 impl Catalog for MetaStoreCatalog {
-    fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
-        let dbs = self.meta.get_databases()?;
+    async fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
+        let dbs = self.meta.get_databases().await?;
+
         dbs.iter().try_fold(vec![], |mut acc, item| {
             let db = self.build_db_instance(item)?;
             acc.push(db);
@@ -154,23 +153,24 @@ impl Catalog for MetaStoreCatalog {
         })
     }
 
-    fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
         {
             if let Some(db) = self.db_instances.read().get(db_name) {
                 return Ok(db.clone());
             }
         }
-        let db_info = self.meta.get_database(db_name)?;
+        let db_info = self.meta.get_database(db_name).await?;
+
         self.build_db_instance(&db_info)
     }
 
-    fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
-        let table_info = self.meta.get_table(db_name, table_name)?;
+    async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
+        let table_info = self.meta.get_table(db_name, table_name).await?;
         self.build_table(table_info.as_ref())
     }
 
-    fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
-        let table_infos = self.meta.get_tables(db_name)?;
+    async fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+        let table_infos = self.meta.get_tables(db_name).await?;
 
         table_infos.iter().try_fold(vec![], |mut acc, item| {
             let tbl = self.build_table(item.as_ref())?;
@@ -179,42 +179,44 @@ impl Catalog for MetaStoreCatalog {
         })
     }
 
-    fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
-        self.meta.get_table_by_id(table_id)
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
+        self.meta.get_table_by_id(table_id).await
     }
 
-    fn upsert_table_option(
+    async fn upsert_table_option(
         &self,
         table_id: MetaId,
         table_version: MetaVersion,
         table_option_key: String,
         table_option_value: String,
     ) -> Result<UpsertTableOptionReply> {
-        self.meta.upsert_table_option(
-            table_id,
-            table_version,
-            table_option_key,
-            table_option_value,
-        )
+        self.meta
+            .upsert_table_option(
+                table_id,
+                table_version,
+                table_option_key,
+                table_option_value,
+            )
+            .await
     }
 
-    fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
+    async fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
         // TODO validate table parameters by using TableFactory
-        self.meta.create_table(plan)?;
+        self.meta.create_table(plan).await?;
         Ok(())
     }
 
-    fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
-        self.meta.drop_table(plan)
+    async fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
+        self.meta.drop_table(plan).await
     }
 
-    fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
-        self.meta.create_database(plan)
+    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
+        self.meta.create_database(plan).await
     }
 
-    fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
+    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
         let name = plan.db.clone();
-        self.meta.drop_database(plan)?;
+        self.meta.drop_database(plan).await?;
         self.db_instances.write().remove(&name);
         Ok(())
     }

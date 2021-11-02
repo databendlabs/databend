@@ -54,12 +54,14 @@ impl FuseTable {
             let catalog = ctx.get_catalog();
             let table_id = self.get_id();
             // TODO backoff retry
-            catalog.upsert_table_option(
-                table_id,
-                self.table_info.ident.version,
-                TBL_OPT_KEY_SNAPSHOT_LOC.to_string(),
-                new_snapshot_loc,
-            )?
+            catalog
+                .upsert_table_option(
+                    table_id,
+                    self.table_info.ident.version,
+                    TBL_OPT_KEY_SNAPSHOT_LOC.to_string(),
+                    new_snapshot_loc,
+                )
+                .await?
         }
 
         Ok(())

@@ -37,23 +37,24 @@ use crate::datasources::table_func_engine::TableArgs;
 /// or others(like MySQL-Database, engine=MySQL)
 /// When we create a new database, we first to get the engine from the registered engines,
 /// and use the engine to create them.
+#[async_trait::async_trait]
 pub trait Catalog {
     // Get all the databases.
-    fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>>;
+    async fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>>;
 
     // Get the database by name.
-    fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>>;
+    async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>>;
 
     // Get one table by db and table name.
-    fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>>;
+    async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>>;
 
-    fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
+    async fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
 
-    fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)>;
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)>;
 
-    fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
+    async fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
 
-    fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
+    async fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
 
     /// Build a `Arc<dyn Table>` from `TableInfo`.
     fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
@@ -67,7 +68,7 @@ pub trait Catalog {
         unimplemented!()
     }
 
-    fn upsert_table_option(
+    async fn upsert_table_option(
         &self,
         table_id: MetaId,
         table_version: MetaVersion,
@@ -76,7 +77,7 @@ pub trait Catalog {
     ) -> common_exception::Result<UpsertTableOptionReply>;
 
     // Operation with database.
-    fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply>;
+    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply>;
 
-    fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
+    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
 }

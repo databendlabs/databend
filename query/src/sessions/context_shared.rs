@@ -16,7 +16,9 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
+use std::time::Duration;
 
+use common_base::BlockingWait;
 use common_base::Progress;
 use common_base::Runtime;
 use common_exception::Result;
@@ -122,7 +124,11 @@ impl DatabendQueryContextShared {
             Entry::Occupied(entry) => entry.get().clone(),
             Entry::Vacant(entry) => {
                 let catalog = self.get_catalog();
-                let t = catalog.get_table(database, table)?;
+                let rt = self.try_get_runtime()?;
+                let database = database.to_string();
+                let table = table.to_string();
+                let t = (async move { catalog.get_table(&database, &table).await })
+                    .wait_in(&rt, Some(Duration::from_millis(5000)))??;
 
                 entry.insert(t).clone()
             }

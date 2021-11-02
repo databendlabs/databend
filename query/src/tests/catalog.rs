@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::BlockingWait;
+use common_base::Runtime;
 use common_exception::Result;
 
 use crate::catalogs::impls::DatabaseCatalog;
@@ -19,6 +21,7 @@ use crate::configs::Config;
 
 pub fn try_create_catalog() -> Result<DatabaseCatalog> {
     let conf = Config::default();
-    let catalog = DatabaseCatalog::try_create_with_config(conf)?;
+    let rt = Runtime::with_worker_threads(1).unwrap();
+    let catalog = DatabaseCatalog::try_create_with_config(conf).wait_in(&rt, None)??;
     Ok(catalog)
 }
