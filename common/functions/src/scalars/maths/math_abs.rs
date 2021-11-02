@@ -48,7 +48,13 @@ macro_rules! impl_abs_function {
         let primitive_array = array
             .as_any()
             .downcast_ref::<PrimitiveArray<$type>>()
-            .unwrap();
+            .ok_or_else(|| {
+                ErrorCode::UnexpectedError(format!(
+                    "Downcast failed to type PrimitiveArray<{}>, value: {:?}",
+                    std::any::type_name::<$type>(),
+                    array
+                ))
+            })?;
         let result = unary(primitive_array, |v| v.abs(), $data_type.to_arrow());
         Ok(DFPrimitiveArray::new(result).into())
     }};

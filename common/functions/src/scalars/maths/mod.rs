@@ -15,5 +15,8 @@
 mod math;
 mod math_abs;
 
+#[cfg(test)]
+mod math_abs_test;
+
 pub use math::MathFunction;
 pub use math_abs::AbsFunction;
