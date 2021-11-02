@@ -15,23 +15,22 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
+use bendctl::cmds::config::GithubMirror;
+use bendctl::cmds::config::MirrorAsset;
+use bendctl::cmds::config::Mode;
+use bendctl::cmds::status::LocalDashboardConfig;
+use bendctl::cmds::status::LocalMetaConfig;
+use bendctl::cmds::status::LocalQueryConfig;
+use bendctl::cmds::status::LocalRuntime;
+use bendctl::cmds::Config;
+use bendctl::cmds::Status;
+use bendctl::error::Result;
 use common_base::tokio;
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
 use httpmock::Method::GET;
 use httpmock::MockServer;
 use tempfile::tempdir;
-
-use crate::cmds::config::GithubMirror;
-use crate::cmds::config::MirrorAsset;
-use crate::cmds::config::Mode;
-use crate::cmds::status::LocalDashboardConfig;
-use crate::cmds::status::LocalMetaConfig;
-use crate::cmds::status::LocalQueryConfig;
-use crate::cmds::status::LocalRuntime;
-use crate::cmds::Config;
-use crate::cmds::Status;
-use crate::error::Result;
 
 #[test]
 fn test_status() -> Result<()> {

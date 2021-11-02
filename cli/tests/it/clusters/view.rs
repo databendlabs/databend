@@ -14,6 +14,16 @@
 
 use std::time::Duration;
 
+use bendctl::cmds::clusters::view::HealthStatus;
+use bendctl::cmds::clusters::view::ViewCommand;
+use bendctl::cmds::config::GithubMirror;
+use bendctl::cmds::config::MirrorAsset;
+use bendctl::cmds::config::Mode;
+use bendctl::cmds::status::LocalMetaConfig;
+use bendctl::cmds::status::LocalQueryConfig;
+use bendctl::cmds::Config;
+use bendctl::cmds::Status;
+use bendctl::error::Result;
 use comfy_table::Cell;
 use comfy_table::Color;
 use comfy_table::Table;
@@ -23,17 +33,6 @@ use databend_query::configs::Config as QueryConfig;
 use httpmock::Method::GET;
 use httpmock::MockServer;
 use tempfile::tempdir;
-
-use crate::cmds::clusters::view::HealthStatus;
-use crate::cmds::clusters::view::ViewCommand;
-use crate::cmds::config::GithubMirror;
-use crate::cmds::config::MirrorAsset;
-use crate::cmds::config::Mode;
-use crate::cmds::status::LocalMetaConfig;
-use crate::cmds::status::LocalQueryConfig;
-use crate::cmds::Config;
-use crate::cmds::Status;
-use crate::error::Result;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_build_table() -> Result<()> {

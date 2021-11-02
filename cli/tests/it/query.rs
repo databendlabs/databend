@@ -12,19 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use bendctl::cmds::build_query_endpoint;
+use bendctl::cmds::config::GithubMirror;
+use bendctl::cmds::config::MirrorAsset;
+use bendctl::cmds::config::Mode;
+use bendctl::cmds::status::LocalMetaConfig;
+use bendctl::cmds::status::LocalQueryConfig;
+use bendctl::cmds::Config;
+use bendctl::cmds::Status;
+use bendctl::error::Result;
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
 use tempfile::tempdir;
-
-use crate::cmds::config::GithubMirror;
-use crate::cmds::config::MirrorAsset;
-use crate::cmds::config::Mode;
-use crate::cmds::queries::query::build_query_endpoint;
-use crate::cmds::status::LocalMetaConfig;
-use crate::cmds::status::LocalQueryConfig;
-use crate::cmds::Config;
-use crate::cmds::Status;
-use crate::error::Result;
 
 macro_rules! build_status {
     ($conf: expr, $http_port: expr) => {

@@ -13,11 +13,6 @@
 // limitations under the License.
 pub mod cluster;
 pub mod create;
-#[cfg(test)]
-mod create_test;
 pub mod stop;
 mod utils;
 pub mod view;
-
-#[cfg(test)]
-mod view_test;
