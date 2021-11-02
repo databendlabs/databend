@@ -14,11 +14,13 @@
 
 #[cfg(test)]
 mod pi_test;
+#[cfg(test)]
+mod abs_test;
 
 mod math;
-mod math_abs;
+mod abs;
 mod pi;
 
 pub use math::MathsFunction;
-pub use math_abs::AbsFunction;
+pub use abs::AbsFunction;
 pub use pi::PiFunction;
