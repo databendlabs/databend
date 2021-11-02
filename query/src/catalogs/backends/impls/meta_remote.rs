@@ -104,6 +104,7 @@ impl MetaApi for MetaRemote {
     }
 
     async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableInfo>> {
+        println!("MetaRemote::get_table {} {}", db_name, table_name);
         let table_name = table_name.to_string();
         let db_name = db_name.to_string();
         self.query_backend(move |cli| async move { cli.get_table(&db_name, &table_name).await })

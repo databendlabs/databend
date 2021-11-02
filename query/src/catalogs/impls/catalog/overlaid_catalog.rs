@@ -92,6 +92,7 @@ impl Catalog for OverlaidCatalog {
         db_name: &str,
         table_name: &str,
     ) -> common_exception::Result<Arc<dyn Table>> {
+        println!("MetaStoreCatalog::get_table: {} {}", db, table_name);
         let res = self.read_only.get_table(db_name, table_name).await;
         match res {
             Ok(v) => Ok(v),

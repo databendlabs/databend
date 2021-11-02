@@ -115,6 +115,7 @@ impl DatabendQueryContextShared {
     }
 
     pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
+        println!("ContextShared::get_table: {} {}", database, table);
         // Always get same table metadata in the same query
         let table_meta_key = (database.to_string(), table.to_string());
 
@@ -127,6 +128,7 @@ impl DatabendQueryContextShared {
                 let rt = self.try_get_runtime()?;
                 let database = database.to_string();
                 let table = table.to_string();
+                println!("ContextShared::Vacant: {:?}", table_meta_key);
                 let t = (async move { catalog.get_table(&database, &table).await })
                     .wait_in(&rt, Some(Duration::from_millis(5000)))??;
 
