@@ -1343,6 +1343,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-io",
+ "crc32fast",
  "dyn-clone",
  "float-cmp 0.9.0",
  "indexmap",
