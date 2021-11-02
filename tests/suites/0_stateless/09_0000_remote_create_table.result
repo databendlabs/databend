@@ -1,1 +1,1 @@
-db1	t1	fuse
+db1	t1	fuse	[{"name":"a","data_type":"Int32","nullable":false},{"name":"b","data_type":"String","nullable":false}]

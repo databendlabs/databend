@@ -1,1 +1,1 @@
-system	tables	SystemTables
+system	tables	SystemTables	[{"name":"database","data_type":"String","nullable":false},{"name":"name","data_type":"String","nullable":false},{"name":"engine","data_type":"String","nullable":false},{"name":"schema","data_type":"String","nullable":false}]
