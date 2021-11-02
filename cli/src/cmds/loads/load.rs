@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
-use std::io::{Read, Cursor};
-use std::net::SocketAddr;
+use std::collections::BTreeMap;
+use std::io::Cursor;
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -23,40 +23,34 @@ use clap::App;
 use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
-use comfy_table::Cell;
-use comfy_table::Color;
-use comfy_table::Table;
-use common_base::ProgressValues;
+use common_base::tokio::fs::File;
+use common_base::tokio::io::AsyncBufReadExt;
+use common_base::tokio::io::AsyncRead;
+use common_base::tokio::io::BufReader;
+use common_base::tokio::macros::support::Pin;
+use common_base::tokio::time;
+// Lets us call into_async_read() to convert a futures::stream::Stream into a
+// futures::io::AsyncRead.
+use futures::stream::TryStreamExt;
+use itertools::Itertools;
 use lexical_util::num::AsPrimitive;
 use num_format::Locale;
 use num_format::ToFormattedString;
-use itertools::Itertools;
+use rayon::prelude::*;
+use tokio_util::compat::FuturesAsyncReadCompatExt;
+
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::command::Command;
+use crate::cmds::queries::query::build_query_endpoint;
+use crate::cmds::queries::query::execute_query_json;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::cmds::Writer;
 use crate::error::CliError;
-
 use crate::error::Result;
-use std::str::FromStr;
-use std::iter::Map;
-use databend_query::common::HashMap;
-use std::collections::BTreeMap;
-use crate::cmds::queries::query::{build_query_endpoint, execute_query_json};
-use common_base::tokio::io::{BufReader, AsyncBufReadExt, AsyncRead};
-use rayon::prelude::*;
-use common_base::tokio::fs::File;
-use common_base::tokio::macros::support::Pin;
-use common_base::tokio::time;
-use tokio_util::compat::FuturesAsyncReadCompatExt;
-
-// Lets us call into_async_read() to convert a futures::stream::Stream into a
-// futures::io::AsyncRead.
-use futures::stream::TryStreamExt;
 // Support different file format to be loaded
 pub enum FileFormat {
-    CSV,
+    Csv,
 }
 
 impl FromStr for FileFormat {
@@ -64,14 +58,14 @@ impl FromStr for FileFormat {
 
     fn from_str(s: &str) -> std::result::Result<FileFormat, &'static str> {
         match s {
-            "csv" => Ok(FileFormat::CSV),
+            "csv" => Ok(FileFormat::Csv),
             _ => Err("no match for profile"),
         }
     }
 }
 
 pub struct Schema {
-    schema: BTreeMap<String, String>
+    schema: BTreeMap<String, String>,
 }
 
 impl FromStr for Schema {
@@ -79,14 +73,20 @@ impl FromStr for Schema {
 
     fn from_str(s: &str) -> std::result::Result<Schema, &'static str> {
         let mut str = String::from(s);
-        let mut schema = Schema{ schema: BTreeMap::new() };
+        let mut schema = Schema {
+            schema: BTreeMap::new(),
+        };
         str.retain(|e| e != ' ');
-        for field in str.split(","){
-            let elems :Vec<&str> = field.split(':').filter(|e| !e.is_empty() ).collect();
+        for field in str.split(',') {
+            let elems: Vec<&str> = field.split(':').filter(|e| !e.is_empty()).collect();
             if elems.len() != 2 {
-                return Err("not a valid schema, please input schema in format like a:uint8,b:uint64")
+                return Err(
+                    "not a valid schema, please input schema in format like a:uint8,b:uint64",
+                );
             }
-            schema.schema.insert(elems[0].to_string(), elems[1].to_string());
+            schema
+                .schema
+                .insert(elems[0].to_string(), elems[1].to_string());
         }
         Ok(schema)
     }
@@ -94,7 +94,11 @@ impl FromStr for Schema {
 
 impl ToString for Schema {
     fn to_string(&self) -> String {
-        return self.schema.iter().map(|(a,b) | a.to_owned() + " " + &*b.to_owned()).join(",")
+        return self
+            .schema
+            .iter()
+            .map(|(a, b)| a.to_owned() + " " + &*b.to_owned())
+            .join(",");
     }
 }
 
@@ -162,21 +166,29 @@ impl LoadCommand {
         match self.local_exec_precheck(args).await {
             Ok(_) => {
                 let mut reader = build_reader(args.value_of("load")).await.lines();
-                for _ in 0..args.value_of("skip-head-lines").unwrap_or("0").parse::<usize>().unwrap() {
-                    if let None = reader.next_line().await? {
-                        return Ok(())
+                for _ in 0..args
+                    .value_of("skip-head-lines")
+                    .unwrap_or("0")
+                    .parse::<usize>()
+                    .unwrap()
+                {
+                    if reader.next_line().await?.is_none() {
+                        return Ok(());
                     }
                 }
                 let table = args.value_of("table").unwrap();
                 let schema = args.value_of("schema");
                 let table_format = match schema {
                     Some(_) => {
-                        let schema : Schema = args.value_of_t("schema").expect("cannot build schema");
-                        format!("{} ({})", table, schema.schema.keys().into_iter().join(", "))
+                        let schema: Schema =
+                            args.value_of_t("schema").expect("cannot build schema");
+                        format!(
+                            "{} ({})",
+                            table,
+                            schema.schema.keys().into_iter().join(", ")
+                        )
                     }
-                    None => {
-                        table.to_string()
-                    }
+                    None => table.to_string(),
                 };
                 let start = time::Instant::now();
                 let status = Status::read(self.conf.clone())?;
@@ -188,7 +200,7 @@ impl LoadCommand {
                     for _ in 0..100_000 {
                         if let Some(line) = reader.next_line().await? {
                             batch.push(line);
-                            count+=1;
+                            count += 1;
                         } else {
                             break;
                         }
@@ -196,24 +208,32 @@ impl LoadCommand {
                     if batch.is_empty() {
                         break;
                     }
-                    let values = batch.into_iter().par_bridge().map(|e| format!("({})", e.trim())).filter(|e| !e.trim().is_empty() ).reduce_with(|a, b | format!("{}, {}", a, b));
+                    let values = batch
+                        .into_iter()
+                        .par_bridge()
+                        .map(|e| format!("({})", e.trim()))
+                        .filter(|e| !e.trim().is_empty())
+                        .reduce_with(|a, b| format!("{}, {}", a, b));
                     if let Some(values) = values {
                         let query = format!("INSERT INTO {} VALUES {}", table_format, values);
                         if let Err(e) = execute_query_json(&cli, &url, query).await {
-                            writer.write_err(format!("cannot insert data into {}, error: {:?}", table, e))
+                            writer.write_err(format!(
+                                "cannot insert data into {}, error: {:?}",
+                                table, e
+                            ))
                         }
                     }
                 }
                 let elapsed = start.elapsed();
                 let time = elapsed.as_millis() as f64 / 1000f64;
-                writer.write_ok(
-                    format!(
-                        "successfully loaded {} lines, rows/src: {} (rows/sec). time: {} sec",
-                        count.to_formatted_string(&Locale::en),
-                        (count as f64 / time).as_u128().to_formatted_string(&Locale::en),
-                        time
-                    )
-                );
+                writer.write_ok(format!(
+                    "successfully loaded {} lines, rows/src: {} (rows/sec). time: {} sec",
+                    count.to_formatted_string(&Locale::en),
+                    (count as f64 / time)
+                        .as_u128()
+                        .to_formatted_string(&Locale::en),
+                    time
+                ));
                 Ok(())
             }
             Err(e) => {
@@ -236,34 +256,42 @@ impl LoadCommand {
         // TODO typecheck
         if args.value_of("schema").is_none() {
             if let Err(e) = table_exists(&status, args.value_of("table")).await {
-                return Err(e)
+                return Err(e);
             }
             Ok(())
         } else {
             match args.value_of_t::<Schema>("schema") {
                 Ok(schema) => {
-                    return create_table_if_not_exists(&status,args.value_of("table"), schema).await
+                    return create_table_if_not_exists(&status, args.value_of("table"), schema)
+                        .await
                 }
                 Err(e) => {
-                    return Err(CliError::Unknown(format!("{} schema is not in valid format, error: {:?}",  args.value_of("table").unwrap(), e)))
+                    return Err(CliError::Unknown(format!(
+                        "{} schema is not in valid format, error: {:?}",
+                        args.value_of("table").unwrap(),
+                        e
+                    )))
                 }
             }
         }
     }
 }
 
-async fn build_reader(load: Option<&str>) -> BufReader<Pin<Box<dyn AsyncRead + Send>>>
-{
+async fn build_reader(load: Option<&str>) -> BufReader<Pin<Box<dyn AsyncRead + Send>>> {
     match load {
         Some(val) => {
             if Path::new(val).exists() {
-                let f = File::open(val).await.expect("cannot open file: permission denied");
-                return BufReader::new(Box::pin(f))
-            } else if val.contains("://"){
+                let f = File::open(val)
+                    .await
+                    .expect("cannot open file: permission denied");
+                BufReader::new(Box::pin(f))
+            } else if val.contains("://") {
                 // Attempt to download ferris..
                 let target = reqwest::get(val)
-                    .await.expect("cannot connect to target url")
-                    .error_for_status().expect("return code is not OK"); // generate an error if server didn't respond OK
+                    .await
+                    .expect("cannot connect to target url")
+                    .error_for_status()
+                    .expect("return code is not OK"); // generate an error if server didn't respond OK
 
                 // Convert the body of the response into a futures::io::Stream.
                 let target_stream = target.bytes_stream();
@@ -275,50 +303,54 @@ async fn build_reader(load: Option<&str>) -> BufReader<Pin<Box<dyn AsyncRead + S
                     .into_async_read();
 
                 // Convert the futures::io::AsyncRead into a tokio::io::AsyncRead.
-                let mut target_stream = target_stream.compat();
+                let target_stream = target_stream.compat();
 
-                return BufReader::new(Box::pin(target_stream))
+                BufReader::new(Box::pin(target_stream))
             } else {
                 let bytes = val.to_string();
-                return BufReader::new(Box::pin(Cursor::new(bytes.to_owned().as_bytes().to_owned())))
+                BufReader::new(Box::pin(Cursor::new(bytes.as_bytes().to_owned())))
             }
         }
         None => {
             let io = common_base::tokio::io::stdin();
-            return BufReader::new(Box::pin(io))
+            BufReader::new(Box::pin(io))
         }
     }
 }
 
-async fn table_exists(status: &Status, table: Option<&str>) -> Result<()>  {
+async fn table_exists(status: &Status, table: Option<&str>) -> Result<()> {
     match table {
         Some(t) => {
             let (cli, url) = build_query_endpoint(status)?;
             let query = format!("SHOW TABLES LIKE '{}';", t);
             let (col, data, _) = execute_query_json(&cli, &url, query).await?;
             if col.is_none() || data.is_none() || data.unwrap().is_empty() {
-                return Err(CliError::Unknown(format!("table {} not found", t)))
+                return Err(CliError::Unknown(format!("table {} not found", t)));
             }
         }
-        None => {
-            return Err(CliError::Unknown("no table found in argument".to_string()))
-        }
+        None => return Err(CliError::Unknown("no table found in argument".to_string())),
     }
     Ok(())
 }
 
-async fn create_table_if_not_exists(status: &Status, table: Option<&str>, schema: Schema) -> Result<()> {
+async fn create_table_if_not_exists(
+    status: &Status,
+    table: Option<&str>,
+    schema: Schema,
+) -> Result<()> {
     return match table_exists(status, table).await {
-        Ok(_) => {
-            Ok(())
-        }
+        Ok(_) => Ok(()),
         Err(_) => {
             let (cli, url) = build_query_endpoint(status)?;
-            let query = format!("CREATE TABLE {}({}) Engine = Fuse;", table.unwrap(), schema.to_string());
+            let query = format!(
+                "CREATE TABLE {}({}) Engine = Fuse;",
+                table.unwrap(),
+                schema.to_string()
+            );
             execute_query_json(&cli, &url, query).await?;
             Ok(())
         }
-    }
+    };
 }
 
 #[async_trait]

@@ -26,15 +26,14 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::cmds::command::Command;
+use crate::cmds::loads::load::LoadCommand;
 use crate::cmds::queries::query::QueryCommand;
 use crate::cmds::ups::up::UpCommand;
 use crate::cmds::ClusterCommand;
 use crate::cmds::PackageCommand;
 use crate::cmds::Status;
 use crate::cmds::VersionCommand;
-use crate::cmds::Writer;
 use crate::error::CliError;
-use crate::cmds::loads::load::LoadCommand;
 
 const GITHUB_BASE_URL: &str = "https://api.github.com/repos/datafuselabs/databend/tags";
 const GITHUB_DATABEND_URL: &str = "https://github.com/datafuselabs/databend/releases/download";
@@ -204,11 +203,11 @@ pub fn choose_mirror(conf: &Config) -> Result<CustomMirror, CliError> {
 
     let status = Status::read(conf).expect("cannot configure status");
     if let Some(mirror) = status.mirrors {
-        return Ok(mirror)
+        return Ok(mirror);
     }
 
     let default_mirrors: Vec<Box<dyn MirrorAsset>> =
-        vec![ Box::new(RepoMirror {}), Box::new(GithubMirror {})];
+        vec![Box::new(RepoMirror {}), Box::new(GithubMirror {})];
     for _ in 0..2 {
         for i in &default_mirrors {
             if i.is_ok() {

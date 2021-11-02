@@ -26,6 +26,7 @@ use rustyline::Editor;
 
 use crate::cmds::command::Command;
 use crate::cmds::config::Mode;
+use crate::cmds::loads::load::LoadCommand;
 use crate::cmds::queries::query::QueryCommand;
 use crate::cmds::ups::up::UpCommand;
 use crate::cmds::ClusterCommand;
@@ -38,7 +39,6 @@ use crate::cmds::VersionCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
-use crate::cmds::loads::load::LoadCommand;
 
 pub struct Processor {
     env: Env,
@@ -153,7 +153,7 @@ impl Processor {
                     &mut writer,
                     self.env.conf.clone().clap.subcommand_matches("load"),
                 )
-                    .await
+                .await
             }
             None => self.process_run_interactive().await,
             _ => {

@@ -27,10 +27,12 @@ use comfy_table::Cell;
 use comfy_table::Color;
 use comfy_table::Table;
 use common_base::ProgressValues;
+use common_datavalues::prelude::*;
 use lexical_util::num::AsPrimitive;
 use num_format::Locale;
 use num_format::ToFormattedString;
-use common_datavalues::prelude::*;
+use serde_json::Value;
+
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::command::Command;
 use crate::cmds::Config;
@@ -38,7 +40,6 @@ use crate::cmds::Status;
 use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
-use serde_json::Value;
 
 #[derive(Clone)]
 pub struct QueryCommand {
@@ -241,7 +242,11 @@ pub async fn execute_query_json(
     cli: &reqwest::Client,
     url: &str,
     query: String,
-) -> Result<(Option<DataSchemaRef>, Option<Vec<Vec<Value>>>, Option<ProgressValues>)> {
+) -> Result<(
+    Option<DataSchemaRef>,
+    Option<Vec<Vec<Value>>>,
+    Option<ProgressValues>,
+)> {
     let ans = cli
         .post(url)
         .body(query.clone())
@@ -263,7 +268,7 @@ pub async fn execute_query_json(
                 ans.error.unwrap()
             )));
         }
-        return Ok((ans.columns, ans.data, ans.stats))
+        Ok((ans.columns, ans.data, ans.stats))
     }
 }
 

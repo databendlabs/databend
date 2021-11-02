@@ -610,6 +610,7 @@ dependencies = [
  "tar",
  "tempfile",
  "thiserror",
+ "tokio-util",
  "tryhard",
  "ureq",
  "webbrowser",

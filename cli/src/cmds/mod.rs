@@ -23,6 +23,7 @@ mod config;
 mod config_test;
 mod env;
 mod helps;
+mod loads;
 mod packages;
 mod processor;
 mod queries;
@@ -30,7 +31,6 @@ mod status;
 mod ups;
 mod versions;
 mod writer;
-mod loads;
 
 pub use clusters::cluster::ClusterCommand;
 pub use clusters::create::CreateCommand;
