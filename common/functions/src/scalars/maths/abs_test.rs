@@ -35,7 +35,7 @@ fn test_abs_function() -> Result<()> {
                 Series::new([-1]).into(),
                 DataField::new("arg1", DataType::Int32, false),
             ),
-            expect: Ok(Series::new(vec![1 as u32]).into()),
+            expect: Ok(Series::new(vec![1_u32]).into()),
         },
         Test {
             name: "abs(-10086)",
@@ -44,17 +44,26 @@ fn test_abs_function() -> Result<()> {
                 Series::new([-10086]).into(),
                 DataField::new("arg1", DataType::Int32, false),
             ),
-            expect: Ok(Series::new(vec![10086 as u32]).into()),
+            expect: Ok(Series::new(vec![10086_u32]).into()),
         },
         Test {
-            name: "abs('str')",
-            func: AbsFunction::try_create("abs('str')")?,
+            name: "abs('-2.0')",
+            func: AbsFunction::try_create("abs('-2.0')")?,
             arg: DataColumnWithField::new(
-                Series::new([-10086]).into(),
+                Series::new(["-2.0"]).into(),
                 DataField::new("arg1", DataType::String, false),
             ),
+            expect: Ok(Series::new(vec![2.0_f64]).into()),
+        },
+        Test {
+            name: "abs(true)",
+            func: AbsFunction::try_create("abs(false)")?,
+            arg: DataColumnWithField::new(
+                Series::new([false]).into(),
+                DataField::new("arg1", DataType::Boolean, false),
+            ),
             expect: Err(ErrorCode::IllegalDataType(
-                "Expected numeric types, but got String",
+                "Expected numeric types, but got Boolean",
             )),
         },
     ];

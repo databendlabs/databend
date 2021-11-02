@@ -43,20 +43,38 @@ impl AbsFunction {
 }
 
 macro_rules! impl_abs_function {
-    ($column:expr, $data_type:expr, $type:ident, $cast_type:expr) => {{
-        let array = $column.column().to_minimal_array()?.get_array_ref();
-        let primitive_array = array
+    ($column:expr, $type:ident, $cast_type:expr) => {{
+        // coerce String to Float
+        let (data_type, arrow_array) = match &$column.data_type() {
+            DataType::String => (
+                DataType::Float64,
+                $column
+                    .column()
+                    .to_minimal_array()?
+                    .cast_with_type(&DataType::Float64)?
+                    .get_array_ref(),
+            ),
+            _ => (
+                $column.data_type().clone(),
+                $column.column().to_minimal_array()?.get_array_ref(),
+            ),
+        };
+
+        let primitive_array = arrow_array
             .as_any()
             .downcast_ref::<PrimitiveArray<$type>>()
             .ok_or_else(|| {
                 ErrorCode::UnexpectedError(format!(
                     "Downcast failed to type PrimitiveArray<{}>, value: {:?}",
                     std::any::type_name::<$type>(),
-                    array
+                    arrow_array
                 ))
             })?;
-        let result = unary(primitive_array, |v| v.abs(), $data_type.to_arrow());
-        Ok(DFPrimitiveArray::new(result).cast_with_type(&$cast_type)?.into())
+        let result = unary(primitive_array, |v| v.abs(), data_type.to_arrow());
+        let column: DataColumn = DFPrimitiveArray::new(result)
+            .cast_with_type(&$cast_type)?
+            .into();
+        Ok(column.resize_constant($column.column().len()))
     }};
 }
 
@@ -75,6 +93,7 @@ impl Function for AbsFunction {
             DataType::Int16 => DataType::UInt16,
             DataType::Int32 => DataType::UInt32,
             DataType::Int64 => DataType::UInt64,
+            DataType::String => DataType::Float64,
             dt => dt.clone(),
         })
     }
@@ -85,12 +104,13 @@ impl Function for AbsFunction {
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         match columns[0].data_type() {
-            DataType::Int8 => impl_abs_function!(columns[0], DataType::Int8, i8, DataType::UInt8),
-            DataType::Int16 => impl_abs_function!(columns[0], DataType::Int16, i16, DataType::UInt16),
-            DataType::Int32 => impl_abs_function!(columns[0], DataType::Int32, i32, DataType::UInt32),
-            DataType::Int64 => impl_abs_function!(columns[0], DataType::Int64, i64, DataType::UInt16),
-            DataType::Float32 => impl_abs_function!(columns[0], DataType::Float32, f32, DataType::Float32),
-            DataType::Float64 => impl_abs_function!(columns[0], DataType::Float64, f64, DataType::Float64),
+            DataType::Int8 => impl_abs_function!(columns[0], i8, DataType::UInt8),
+            DataType::Int16 => impl_abs_function!(columns[0], i16, DataType::UInt16),
+            DataType::Int32 => impl_abs_function!(columns[0], i32, DataType::UInt32),
+            DataType::Int64 => impl_abs_function!(columns[0], i64, DataType::UInt16),
+            DataType::Float32 => impl_abs_function!(columns[0], f32, DataType::Float32),
+            DataType::Float64 => impl_abs_function!(columns[0], f64, DataType::Float64),
+            DataType::String => impl_abs_function!(columns[0], f64, DataType::Float64),
             DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64 => {
                 Ok(columns[0].column().clone())
             }
