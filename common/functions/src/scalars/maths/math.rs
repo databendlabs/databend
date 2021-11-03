@@ -14,6 +14,7 @@
 
 use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::AbsFunction;
+use crate::scalars::CRC32Function;
 use crate::scalars::PiFunction;
 use crate::scalars::TrigonometricCosFunction;
 use crate::scalars::TrigonometricCotFunction;
@@ -30,5 +31,6 @@ impl MathsFunction {
         factory.register("cos", TrigonometricCosFunction::desc());
         factory.register("tan", TrigonometricTanFunction::desc());
         factory.register("cot", TrigonometricCotFunction::desc());
+        factory.register("crc32", CRC32Function::desc());
     }
 }
