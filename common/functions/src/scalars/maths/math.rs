@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use crate::scalars::function_factory::FunctionFactory;
+use crate::scalars::AbsFunction;
 use crate::scalars::CRC32Function;
 use crate::scalars::PiFunction;
 use crate::scalars::TrigonometricCosFunction;
@@ -25,6 +26,7 @@ pub struct MathsFunction;
 impl MathsFunction {
     pub fn register(factory: &mut FunctionFactory) {
         factory.register("pi", PiFunction::desc());
+        factory.register("abs", AbsFunction::desc());
         factory.register("sin", TrigonometricSinFunction::desc());
         factory.register("cos", TrigonometricCosFunction::desc());
         factory.register("tan", TrigonometricTanFunction::desc());
