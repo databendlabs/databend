@@ -14,19 +14,7 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-
-use crate::scalars::dates::number_function::ToDayOfMonthFunction;
-use crate::scalars::dates::number_function::ToDayOfWeekFunction;
-use crate::scalars::dates::number_function::ToDayOfYearFunction;
-use crate::scalars::dates::number_function::ToMinuteFunction;
-use crate::scalars::dates::number_function::ToMondayFunction;
-use crate::scalars::dates::number_function::ToMonthFunction;
-use crate::scalars::Function;
-use crate::scalars::ToHourFunction;
-use crate::scalars::ToSecondFunction;
-use crate::scalars::ToYYYYMMDDFunction;
-use crate::scalars::ToYYYYMMDDhhmmssFunction;
-use crate::scalars::ToYYYYMMFunction;
+use common_functions::scalars::*;
 
 #[allow(dead_code)]
 struct Test {

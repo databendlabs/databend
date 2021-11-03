@@ -15,8 +15,7 @@
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-
-use crate::scalars::*;
+use common_functions::scalars::*;
 
 #[test]
 fn test_abs_function() -> Result<()> {

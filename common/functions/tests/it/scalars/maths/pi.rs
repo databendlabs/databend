@@ -12,49 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::f64::consts::PI;
+
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use pretty_assertions::assert_eq;
-
-use crate::scalars::*;
+use common_functions::scalars::*;
 
 #[test]
-fn test_database_function() -> Result<()> {
+fn test_pi_function() -> Result<()> {
     #[allow(dead_code)]
     struct Test {
         name: &'static str,
         display: &'static str,
-        nullable: bool,
-        columns: Vec<DataColumnWithField>,
-        expect: DataColumn,
         error: &'static str,
         func: Box<dyn Function>,
+        expect: DataColumn,
     }
-    let dummy = DataField::new("dummy", DataType::String, false);
-
     let tests = vec![Test {
-        name: "database-function-passed",
-        display: "database",
-        nullable: false,
-        func: DatabaseFunction::try_create("database")?,
-        columns: vec![
-            DataColumnWithField::new(Series::new(vec!["default"]).into(), dummy.clone()),
-            DataColumnWithField::new(Series::new(vec![4]).into(), dummy),
-        ],
-        expect: Series::new(vec!["default"]).into(),
+        name: "pi-function-passed",
+        display: "pi()",
+        func: PiFunction::try_create("pi()")?,
+        expect: Series::new(vec![PI]).into(),
         error: "",
     }];
 
     for t in tests {
-        let rows = t.columns[0].column().len();
         let func = t.func;
-
-        match func.eval(&t.columns, rows) {
+        match func.eval(&[], 1) {
             Ok(v) => {
                 // Display check.
                 let expect_display = t.display.to_string();
                 let actual_display = format!("{}", func);
                 assert_eq!(expect_display, actual_display);
+
                 assert_eq!(&v, &t.expect);
             }
             Err(e) => {
@@ -62,6 +52,5 @@ fn test_database_function() -> Result<()> {
             }
         }
     }
-
     Ok(())
 }

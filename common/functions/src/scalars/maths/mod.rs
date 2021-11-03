@@ -12,15 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod abs_test;
-#[cfg(test)]
-mod crc32_test;
-#[cfg(test)]
-mod pi_test;
-#[cfg(test)]
-mod trigonometric_test;
-
 mod abs;
 mod crc32;
 mod math;

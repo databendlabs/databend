@@ -13,61 +13,57 @@
 // limitations under the License.
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataType;
 use common_exception::Result;
+use common_functions::scalars::*;
 use pretty_assertions::assert_eq;
 
-use crate::scalars::*;
-
 #[test]
-fn test_to_type_name_function() -> Result<()> {
+fn test_if_function() -> Result<()> {
     #[allow(dead_code)]
     struct Test {
         name: &'static str,
         display: &'static str,
         nullable: bool,
-        arg_names: Vec<&'static str>,
+        args: Vec<DataType>,
         columns: Vec<DataColumn>,
-        expect: DataColumn,
+        expect: Series,
         error: &'static str,
         func: Box<dyn Function>,
     }
 
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Boolean, false)]);
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new("a", DataType::Int32, false),
+        DataField::new("b", DataType::Int64, false),
+    ]);
 
     let tests = vec![Test {
-        name: "to_type_name-example-passed",
-        display: "toTypeName",
+        name: "if-passed",
+        display: "IF",
         nullable: false,
-        arg_names: vec!["a"],
-        func: ToTypeNameFunction::try_create("toTypeName")?,
-        columns: vec![Series::new(vec![true, true, true, false]).into()],
-        expect: Series::new(vec!["Boolean", "Boolean", "Boolean", "Boolean"]).into(),
+        func: IfFunction::try_create_func("")?,
+        args: vec![
+            DataType::Boolean,
+            schema.field_with_name("a")?.data_type().clone(),
+            DataType::Float64,
+        ],
+        columns: vec![
+            Series::new(vec![true, false, false, true]).into(),
+            Series::new(vec![1i32, 2, 3, 4]).into(),
+            DataColumn::Constant(DataValue::Float64(Some(2.5)), 4),
+        ],
+        expect: Series::new(vec![1f64, 2.5, 2.5, 4f64]),
         error: "",
     }];
 
     for t in tests {
-        let rows = t.columns[0].len();
-
         let func = t.func;
-
-        // Type check.
-        let mut args = vec![];
-        let mut fields = vec![];
-        for name in t.arg_names {
-            args.push(schema.field_with_name(name)?.data_type().clone());
-            fields.push(schema.field_with_name(name)?.clone());
-        }
 
         let columns: Vec<DataColumnWithField> = t
             .columns
             .iter()
-            .zip(fields.iter())
-            .map(|(c, f)| DataColumnWithField::new(c.clone(), f.clone()))
+            .map(|c| DataColumnWithField::new(c.clone(), DataField::new("a", c.data_type(), false)))
             .collect();
-
-        if let Err(e) = func.eval(&columns, rows) {
-            assert_eq!(t.error, e.to_string());
-        }
 
         // Display check.
         let expect_display = t.display.to_string();
@@ -79,12 +75,15 @@ fn test_to_type_name_function() -> Result<()> {
         let actual_null = func.nullable(&schema)?;
         assert_eq!(expect_null, actual_null);
 
-        let v = &(func.eval(&columns, rows)?);
-        let expect_type = func.return_type(&args)?;
+        let v = &(func.eval(&columns, t.columns[0].len())?);
+        // Type check.
+        let expect_type = func.return_type(&t.args)?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
 
-        assert!(v.to_array()?.series_equal(&t.expect.to_array()?));
+        let cmp = v.to_array()?.eq(&t.expect)?;
+        assert!(cmp.all_true());
     }
+
     Ok(())
 }

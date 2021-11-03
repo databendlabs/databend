@@ -15,8 +15,7 @@
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-
-use crate::scalars::SipHashFunction;
+use common_functions::scalars::SipHashFunction;
 
 #[test]
 fn test_siphash_function() -> Result<()> {

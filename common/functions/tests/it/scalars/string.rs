@@ -16,8 +16,8 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
-use crate::scalars::Function;
-use crate::scalars::SubstringFunction;
+use common_functions::scalars::Function;
+use common_functions::scalars::SubstringFunction;
 
 #[test]
 fn test_substring_function() -> Result<()> {

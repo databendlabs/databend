@@ -14,8 +14,7 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-
-use crate::scalars::*;
+use common_functions::scalars::*;
 
 #[test]
 fn test_crc32_function() -> Result<()> {
