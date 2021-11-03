@@ -202,6 +202,7 @@ nav:
           - COS: sqlstatement/numeric-functions/cos.md
           - TAN: sqlstatement/numeric-functions/tan.md
           - COT: sqlstatement/numeric-functions/cot.md
+          - CRC32: sqlstatement/numeric-functions/crc32.md
       - String Functions:
           - SUBSTRING: sqlstatement/string-functions/substring.md
       - Test Functions:
