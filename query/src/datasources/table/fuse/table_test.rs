@@ -73,7 +73,6 @@ async fn test_fuse_table_simple_case() -> Result<()> {
             parts: Default::default(),
             statistics: Default::default(),
             description: "".to_string(),
-            scan_plan: Arc::new(Default::default()),
             tbl_args: None,
             push_downs: None,
         })

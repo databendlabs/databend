@@ -73,16 +73,16 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                                 table_schema: &table.schema(),
                                 table_args: None,
                             };
-                            PlanBuilder::scan(db_name, tbl_scan_info, None, None)
+                            PlanBuilder::scan(db_name, tbl_scan_info)
                                 .and_then(|builder| builder.build())
                                 .and_then(|dummy_scan_plan| match dummy_scan_plan {
-                                    PlanNode::Scan(ref dummy_scan_plan) => {
+                                    PlanNode::Scan(_) => {
                                         //
                                         let io_ctx = self.ctx.get_single_node_table_io_context()?;
                                         table
                                             .read_plan(
                                                 Arc::new(io_ctx),
-                                                Some(dummy_scan_plan.push_downs.clone()),
+                                                None,
                                                 Some(self.ctx.get_settings().get_max_threads()?
                                                     as usize),
                                             )

@@ -53,7 +53,6 @@ mod tests {
                 statistics.read_rows,
                 statistics.read_bytes
             ),
-            scan_plan: Arc::new(ScanPlan::empty()),
             tbl_args: None,
             push_downs: None,
         });

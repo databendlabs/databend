@@ -22,7 +22,6 @@ use common_meta_types::TableInfo;
 use crate::Expression;
 use crate::Extras;
 use crate::Partitions;
-use crate::ScanPlan;
 use crate::Statistics;
 
 // TODO: Delete the scan plan field, but it depends on plan_parser:L394
@@ -30,39 +29,49 @@ use crate::Statistics;
 pub struct ReadDataSourcePlan {
     pub table_info: TableInfo,
 
-    /// Required fields to scan.
-    ///
-    /// After optimization, only a sub set of the fields in `table_info.schema().fields` are needed.
-    /// The key is the index of the field in original `table_info.schema().fields`.
-    ///
-    /// If it is None, one should use `table_info.schema().fields()`.
-    pub scan_fields: Option<BTreeMap<usize, DataField>>,
-
     pub parts: Partitions,
     pub statistics: Statistics,
     pub description: String,
-    pub scan_plan: Arc<ScanPlan>,
-
     pub tbl_args: Option<Vec<Expression>>,
     pub push_downs: Option<Extras>,
+    pub benefit_column_prune: bool,
 }
 
 impl ReadDataSourcePlan {
     /// Return schema after the projection
+    ///
+    /// After optimization, only a sub set of the fields in `table_info.schema().fields` are needed.
+    /// This is stored inside push_downs
     pub fn schema(&self) -> DataSchemaRef {
-        self.scan_fields
-            .clone()
-            .map(|x| {
-                let fields: Vec<_> = x.iter().map(|(_, f)| f.clone()).collect();
-                Arc::new(self.table_info.schema().project(fields))
-            })
-            .unwrap_or_else(|| self.table_info.schema())
+        if !self.benefit_column_prune {
+            self.table_info.schema()
+        } else {
+            self.push_downs
+                .clone()
+                .and_then(|x| x.projection)
+                .and_then(|project_indexes| {
+                    Some(Arc::new(self.table_info.schema().project(&project_indexes)))
+                })
+                .unwrap_or_else(|| self.table_info.schema())
+        }
     }
 
     /// Return designated required fields or all fields in a hash map.
     pub fn scan_fields(&self) -> BTreeMap<usize, DataField> {
-        self.scan_fields
-            .clone()
-            .unwrap_or_else(|| self.table_info.schema().fields_map())
+        if !self.benefit_column_prune {
+            self.table_info.schema().fields_map()
+        } else {
+            self.push_downs
+                .clone()
+                .and_then(|x| x.projection)
+                .and_then(|project_indexes| {
+                    let fields = project_indexes
+                        .iter()
+                        .map(|i| self.table_info.schema().field(*i).clone());
+
+                    Some((project_indexes.iter().cloned().zip(fields)).collect::<BTreeMap<_, _>>())
+                })
+                .unwrap_or_else(|| self.table_info.schema().fields_map())
+        }
     }
 }

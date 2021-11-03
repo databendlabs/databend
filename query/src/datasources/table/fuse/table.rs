@@ -63,6 +63,10 @@ impl Table for FuseTable {
         &self.table_info
     }
 
+    fn benefit_column_prune(&self) -> bool {
+        true
+    }
+
     fn read_partitions(
         &self,
         io_ctx: Arc<TableIOContext>,

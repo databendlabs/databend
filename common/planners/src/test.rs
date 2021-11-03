@@ -53,7 +53,6 @@ impl Test {
                 "(Read from system.numbers_mt table, Exactly Read Rows:{}, Read Bytes:{})",
                 statistics.read_rows, statistics.read_bytes
             ),
-            scan_plan: Arc::new(ScanPlan::empty()),
             tbl_args: None,
             push_downs: None,
         }))

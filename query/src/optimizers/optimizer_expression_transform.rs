@@ -244,7 +244,6 @@ impl PlanRewriter for ExprTransformImpl {
             // then we overwrites the ReadDataSourcePlan to an empty one.
             let node = PlanNode::ReadSource(ReadDataSourcePlan {
                 table_info: plan.table_info.clone(),
-                scan_fields: plan.scan_fields.clone(),
                 parts: vec![], // set parts to empty vector, read_table should return None immediately
                 statistics: Statistics {
                     read_rows: 0,
@@ -252,9 +251,9 @@ impl PlanRewriter for ExprTransformImpl {
                     is_exact: true,
                 },
                 description: format!("(Read from {} table)", plan.table_info.desc),
-                scan_plan: plan.scan_plan.clone(),
                 tbl_args: plan.tbl_args.clone(),
                 push_downs: plan.push_downs.clone(),
+                benefit_column_prune: plan.benefit_column_prune,
             });
             return Ok(node);
         }

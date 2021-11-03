@@ -57,6 +57,11 @@ pub trait Table: Sync + Send {
 
     fn get_table_info(&self) -> &TableInfo;
 
+    /// whether column prune(projection) can help in table read
+    fn benefit_column_prune(&self) -> bool {
+        false
+    }
+
     // defaults to generate one single part and empty statistics
     fn read_partitions(
         &self,
@@ -145,14 +150,12 @@ impl ToReadDataSourcePlan for dyn Table {
 
         Ok(ReadDataSourcePlan {
             table_info: table_info.clone(),
-
-            scan_fields: None,
             parts,
             statistics,
             description,
-            scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
             tbl_args: self.table_args(),
             push_downs,
+            benefit_column_prune: self.benefit_column_prune(),
         })
     }
 }

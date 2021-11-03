@@ -729,16 +729,16 @@ impl PlanParser {
                 table_args: None,
             };
 
-            PlanBuilder::scan(db_name, tbl_scan_info, None, None)
+            PlanBuilder::scan(db_name, tbl_scan_info)
                 .and_then(|builder| builder.build())
                 .and_then(|dummy_scan_plan| match dummy_scan_plan {
-                    PlanNode::Scan(ref dummy_scan_plan) => {
+                    PlanNode::Scan(_) => {
                         // TODO(xp): is it possible to use get_cluster_table_io_context() here?
                         let io_ctx = self.ctx.get_single_node_table_io_context()?;
                         table
                             .read_plan(
                                 Arc::new(io_ctx),
-                                Some(dummy_scan_plan.push_downs.clone()),
+                                None,
                                 Some(self.ctx.get_settings().get_max_threads()? as usize),
                             )
                             .map(PlanNode::ReadSource)
@@ -810,21 +810,19 @@ impl PlanParser {
                         table_schema: &table.schema(),
                         table_args,
                     };
-                    PlanBuilder::scan(&db_name, tbl_scan_info, None, None)
-                        .and_then(|builder| builder.build())
+                    PlanBuilder::scan(&db_name, tbl_scan_info).and_then(|builder| builder.build())
                 };
 
                 // TODO: Move ReadSourcePlan to SelectInterpreter
                 let partitions = self.ctx.get_settings().get_max_threads()? as usize;
                 scan.and_then(|scan| match scan {
-                    PlanNode::Scan(ref scan) => {
+                    PlanNode::Scan(_) => {
                         // TODO(xp): is it possible to use get_cluster_table_io_context() here?
-
                         let io_ctx = self.ctx.get_single_node_table_io_context()?;
                         table
                             .read_plan(
                                 Arc::new(io_ctx),
-                                Some(scan.push_downs.clone()),
+                                None,
                                 // TODO(xp): remove partitions, partitioning hint has been included in io_ctx.max_threads and io_ctx.query_nodes
                                 Some(partitions),
                             )

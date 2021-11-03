@@ -116,7 +116,12 @@ impl DataSchema {
     }
 
     /// project will do column pruning.
-    pub fn project(&self, fields: Vec<DataField>) -> Self {
+    pub fn project(&self, project_indexes: &[usize]) -> Self {
+        let fields = project_indexes
+            .iter()
+            .map(|i| self.fields[*i].clone())
+            .collect::<Vec<_>>();
+
         Self::new_from(fields, self.meta().clone())
     }
 
