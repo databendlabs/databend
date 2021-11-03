@@ -29,6 +29,7 @@ use crate::cmds::command::Command;
 use crate::cmds::Config;
 use crate::cmds::Writer;
 use crate::error::Result;
+use crate::cmds::clusters::add::AddCommand;
 
 #[derive(Clone)]
 pub struct ClusterCommand {
@@ -83,7 +84,8 @@ impl Command for ClusterCommand {
             .about(self.about())
             .subcommand(subcommands[0].clap())
             .subcommand(subcommands[1].clap())
-            .subcommand(subcommands[2].clap());
+            .subcommand(subcommands[2].clap())
+            .subcommand(subcommands[3].clap());
         app
     }
 
@@ -92,6 +94,7 @@ impl Command for ClusterCommand {
             Arc::new(CreateCommand::create(self.conf.clone())),
             Arc::new(StopCommand::create(self.conf.clone())),
             Arc::new(ViewCommand::create(self.conf.clone())),
+            Arc::new(AddCommand::create(self.conf.clone())),
         ]
     }
 

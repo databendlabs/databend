@@ -16,3 +16,4 @@ pub mod create;
 pub mod stop;
 mod utils;
 pub mod view;
+pub mod add;
