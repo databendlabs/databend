@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub use clusters_table::ClustersTable;
+pub use columns_table::ColumnsTable;
 pub use configs_table::ConfigsTable;
 pub use contributors_table::ContributorsTable;
 pub use credits_table::CreditsTable;
@@ -26,10 +27,11 @@ pub use system_database::SystemDatabase;
 pub use tables_table::TablesTable;
 pub use tracing_table::TracingTable;
 pub use tracing_table_stream::TracingTableStream;
-pub use columns_table::ColumnsTable;
 
 #[cfg(test)]
 mod clusters_table_test;
+#[cfg(test)]
+mod columns_table_test;
 #[cfg(test)]
 mod configs_table_test;
 #[cfg(test)]
