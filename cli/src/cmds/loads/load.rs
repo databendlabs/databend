@@ -144,11 +144,11 @@ impl LoadCommand {
                     .required(false),
             )
             .arg(
-                Arg::new("skip-head-lines").long("skip-head-lines")
-                    .about("skip head line in file for example: \
-                    bendctl load test.csv --skip-head-lines 10 would ignore the first ten lines in csv file")
-                    .takes_value(true)
-                    .required(false),
+                Arg::new("with_header").long("with_header")
+                    .about("state on whether CSV has dataset header for example: \
+                    bendctl load test.csv --with_header true would ignore the first ten lines in csv file")
+                    .required(false)
+                    .takes_value(false),
             )
             .arg(
                 Arg::new("table").long("table")
@@ -162,7 +162,8 @@ impl LoadCommand {
     async fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
         match self.local_exec_precheck(args).await {
             Ok(_) => {
-                let mut reader = build_reader(args.value_of("load")).await;
+                let mut reader =
+                    build_reader(args.value_of("load"), args.value_of("with_header")).await;
                 let mut record = reader.records();
                 let table = args.value_of("table").unwrap();
                 let schema = args.value_of("schema");
@@ -286,12 +287,18 @@ impl LoadCommand {
     }
 }
 
-async fn build_reader(load: Option<&str>) -> csv::Reader<Box<dyn std::io::Read + Send + Sync>> {
+async fn build_reader(
+    load: Option<&str>,
+    header: Option<&str>,
+) -> csv::Reader<Box<dyn std::io::Read + Send + Sync>> {
+    let header = header.is_some();
     match load {
         Some(val) => {
             if Path::new(val).exists() {
                 let f = std::fs::File::open(val).expect("cannot open file: permission denied");
-                csv::ReaderBuilder::new().from_reader(Box::new(f))
+                csv::ReaderBuilder::new()
+                    .has_headers(header)
+                    .from_reader(Box::new(f))
             } else if val.contains("://") {
                 let target = reqwest::get(val)
                     .await
@@ -301,15 +308,20 @@ async fn build_reader(load: Option<&str>) -> csv::Reader<Box<dyn std::io::Read +
                     .text()
                     .await
                     .expect("cannot fetch for target"); // generate an error if server didn't respond
-                csv::ReaderBuilder::new().from_reader(Box::new(Cursor::new(target)))
+                csv::ReaderBuilder::new()
+                    .has_headers(header)
+                    .from_reader(Box::new(Cursor::new(target)))
             } else {
                 csv::ReaderBuilder::new()
+                    .has_headers(header)
                     .from_reader(Box::new(Cursor::new(val.to_string().as_bytes().to_owned())))
             }
         }
         None => {
             let io = std::io::stdin();
-            csv::ReaderBuilder::new().from_reader(Box::new(io))
+            csv::ReaderBuilder::new()
+                .has_headers(header)
+                .from_reader(Box::new(io))
         }
     }
 }
