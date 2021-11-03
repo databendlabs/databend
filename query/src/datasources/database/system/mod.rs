@@ -26,6 +26,7 @@ pub use system_database::SystemDatabase;
 pub use tables_table::TablesTable;
 pub use tracing_table::TracingTable;
 pub use tracing_table_stream::TracingTableStream;
+pub use columns_table::ColumnsTable;
 
 #[cfg(test)]
 mod clusters_table_test;
@@ -49,6 +50,7 @@ mod tables_table_test;
 mod tracing_table_test;
 
 mod clusters_table;
+mod columns_table;
 mod configs_table;
 mod contributors_table;
 mod credits_table;
