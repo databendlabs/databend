@@ -19,6 +19,7 @@ SELECT
     [HAVING expr]
     [ORDER BY {col_name | expr} [ASC | DESC], ...]
     [LIMIT row_count]
+    [OFFSET row_count]
     ]
 ```
 
@@ -144,6 +145,29 @@ mysql> SELECT number FROM numbers(1000000000) LIMIT 1;
 |      0 |
 +--------+
 1 row in set (0.00 sec)
+
+mysql> SELECT number FROM numbers(100000) ORDER BY number LIMIT 2 OFFSET 10;
++--------+
+| number |
++--------+
+|     10 |
+|     11 |
++--------+
+2 rows in set (0.02 sec)
+```
+
+## OFFSET clause
+
+```
+mysql> SELECT number FROM numbers(5) ORDER BY number OFFSET 2;
++--------+
+| number |
++--------+
+|      2 |
+|      3 |
+|      4 |
++--------+
+3 rows in set (0.02 sec)
 ```
 
 ## Nested Sub-Selects
