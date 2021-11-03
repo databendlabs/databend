@@ -66,8 +66,8 @@ where
             return Ok(());
         }
 
-        match lexical_core::parse::<T>(reader) {
-            Ok(v) => {
+        match lexical_core::parse_partial::<T>(reader) {
+            Ok((v, _)) => {
                 self.builder.append_value(v);
                 Ok(())
             }

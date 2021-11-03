@@ -13,7 +13,6 @@
 //  limitations under the License.
 //
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::BlockingWait;
@@ -65,12 +64,6 @@ pub struct MetaStoreCatalog {
     ///           There should be a dedicate component to serve this duty.
     ///           Maybe as part of `Session`.
     in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
-
-    // this is not for performance:
-    // some tables are stateful, cached in database, thus, instances of Database have to be kept as well.
-    //
-    // if we drop Database Trait, and create tables by using catalog directly, things may be easier
-    db_instances: RwLock<HashMap<String, Arc<dyn Database>>>,
 }
 
 impl MetaStoreCatalog {
@@ -120,7 +113,6 @@ impl MetaStoreCatalog {
             table_engine_registry,
             meta,
             in_memory_data: Default::default(),
-            db_instances: RwLock::new(HashMap::new()),
         };
 
         Ok(cat)
@@ -128,11 +120,7 @@ impl MetaStoreCatalog {
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
         let db = DefaultDatabase::new(&db_info.db);
-
         let db = Arc::new(db);
-
-        let name = db_info.db.clone();
-        self.db_instances.write().insert(name, db.clone());
         Ok(db)
     }
 }
@@ -150,13 +138,7 @@ impl Catalog for MetaStoreCatalog {
     }
 
     async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
-        {
-            if let Some(db) = self.db_instances.read().get(db_name) {
-                return Ok(db.clone());
-            }
-        }
         let db_info = self.meta.get_database(db_name).await?;
-
         self.build_db_instance(&db_info)
     }
 
@@ -211,9 +193,7 @@ impl Catalog for MetaStoreCatalog {
     }
 
     async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
-        let name = plan.db.clone();
         self.meta.drop_database(plan).await?;
-        self.db_instances.write().remove(&name);
         Ok(())
     }
 

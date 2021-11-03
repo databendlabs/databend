@@ -154,7 +154,7 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     /// Unpack to DFArray of data_type u64
     fn u64(&self) -> Result<&DFUInt64Array> {
         Err(ErrorCode::IllegalDataType(format!(
-            "{:?} != u32",
+            "{:?} != u64",
             self.data_type()
         )))
     }

@@ -13,10 +13,26 @@
 // limitations under the License.
 
 #[cfg(test)]
+mod abs_test;
+#[cfg(test)]
+mod crc32_test;
+#[cfg(test)]
 mod pi_test;
+#[cfg(test)]
+mod trigonometric_test;
 
+mod abs;
+mod crc32;
 mod math;
 mod pi;
+mod trigonometric;
 
+pub use abs::AbsFunction;
+pub use crc32::CRC32Function;
 pub use math::MathsFunction;
 pub use pi::PiFunction;
+pub use trigonometric::Trigonometric;
+pub use trigonometric::TrigonometricCosFunction;
+pub use trigonometric::TrigonometricCotFunction;
+pub use trigonometric::TrigonometricSinFunction;
+pub use trigonometric::TrigonometricTanFunction;
