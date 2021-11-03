@@ -14,8 +14,6 @@
 
 use std::fmt;
 
-use common_arrow::arrow::array::PrimitiveArray;
-use common_arrow::arrow::compute::arity::unary;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -44,34 +42,16 @@ impl AbsFunction {
 
 macro_rules! impl_abs_function {
     ($column:expr, $type:ident, $cast_type:expr) => {{
-        // coerce String to Float
-        let (data_type, arrow_array) = match &$column.data_type() {
-            DataType::String => (
-                DataType::Float64,
-                $column
-                    .column()
-                    .to_minimal_array()?
-                    .cast_with_type(&DataType::Float64)?
-                    .get_array_ref(),
-            ),
-            _ => (
-                $column.data_type().clone(),
-                $column.column().to_minimal_array()?.get_array_ref(),
-            ),
-        };
+        let mut series = $column.column().to_minimal_array()?;
 
-        let primitive_array = arrow_array
-            .as_any()
-            .downcast_ref::<PrimitiveArray<$type>>()
-            .ok_or_else(|| {
-                ErrorCode::UnexpectedError(format!(
-                    "Downcast failed to type PrimitiveArray<{}>, value: {:?}",
-                    std::any::type_name::<$type>(),
-                    arrow_array
-                ))
-            })?;
-        let result = unary(primitive_array, |v| v.abs(), data_type.to_arrow());
-        let column: DataColumn = DFPrimitiveArray::new(result)
+        // coerce String to Float
+        if *$column.data_type() == DataType::String {
+            series = series.cast_with_type(&DataType::Float64)?;
+        }
+
+        let primitive_array = series.$type()?;
+        let column: DataColumn = primitive_array
+            .apply_cast_numeric(|v| v.abs())
             .cast_with_type(&$cast_type)?
             .into();
         Ok(column.resize_constant($column.column().len()))
