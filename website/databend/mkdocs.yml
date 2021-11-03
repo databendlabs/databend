@@ -198,6 +198,10 @@ nav:
           - isNotNull: sqlstatement/nullable-functions/isnotnull.md
       - Numeric Functions:
           - PI: sqlstatement/numeric-functions/pi.md
+          - SIN: sqlstatement/numeric-functions/sin.md
+          - COS: sqlstatement/numeric-functions/cos.md
+          - TAN: sqlstatement/numeric-functions/tan.md
+          - COT: sqlstatement/numeric-functions/cot.md
       - String Functions:
           - SUBSTRING: sqlstatement/string-functions/substring.md
       - Test Functions:
