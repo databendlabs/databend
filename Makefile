@@ -18,6 +18,11 @@ miri:
 	cargo miri setup
 	MIRIFLAGS="-Zmiri-disable-isolation" cargo miri test
 
+cluster: build
+	mkdir -p ./.databend/local/bin/test
+	cp ./target/release/databend-query ./.databend/local/bin/test/databend-query
+	cp ./target/release/databend-meta ./.databend/local/bin/test/databend-meta
+	./target/release/bendctl cluster create --databend_dir ./.databend --group local --version test --force
 run: build
 	bash ./scripts/deploy/databend-query-standalone.sh release
 

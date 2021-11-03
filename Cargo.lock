@@ -576,6 +576,7 @@ dependencies = [
  "common-building",
  "common-datavalues",
  "common-meta-raft-store",
+ "csv",
  "databend-meta",
  "databend-query",
  "dirs",

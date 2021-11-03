@@ -23,21 +23,14 @@ use clap::App;
 use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
-use common_base::tokio::fs::File;
-use common_base::tokio::io::AsyncBufReadExt;
-use common_base::tokio::io::AsyncRead;
-use common_base::tokio::io::BufReader;
-use common_base::tokio::macros::support::Pin;
 use common_base::tokio::time;
 // Lets us call into_async_read() to convert a futures::stream::Stream into a
 // futures::io::AsyncRead.
-use futures::stream::TryStreamExt;
 use itertools::Itertools;
 use lexical_util::num::AsPrimitive;
 use num_format::Locale;
 use num_format::ToFormattedString;
 use rayon::prelude::*;
-use tokio_util::compat::FuturesAsyncReadCompatExt;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::command::Command;
@@ -151,11 +144,11 @@ impl LoadCommand {
                     .required(false),
             )
             .arg(
-                Arg::new("skip-head-lines").long("skip-head-lines")
-                    .about("skip head line in file for example: \
-                    bendctl load test.csv --skip-head-lines 10 would ignore the first ten lines in csv file")
-                    .takes_value(true)
-                    .required(false),
+                Arg::new("with_header").long("with_header")
+                    .about("state on whether CSV has dataset header for example: \
+                    bendctl load test.csv --with_header true would ignore the first ten lines in csv file")
+                    .required(false)
+                    .takes_value(false),
             )
             .arg(
                 Arg::new("table").long("table")
@@ -169,17 +162,9 @@ impl LoadCommand {
     async fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
         match self.local_exec_precheck(args).await {
             Ok(_) => {
-                let mut reader = build_reader(args.value_of("load")).await.lines();
-                for _ in 0..args
-                    .value_of("skip-head-lines")
-                    .unwrap_or("0")
-                    .parse::<usize>()
-                    .unwrap()
-                {
-                    if reader.next_line().await?.is_none() {
-                        return Ok(());
-                    }
-                }
+                let mut reader =
+                    build_reader(args.value_of("load"), args.value_of("with_header")).await;
+                let mut record = reader.records();
                 let table = args.value_of("table").unwrap();
                 let schema = args.value_of("schema");
                 let table_format = match schema {
@@ -202,9 +187,17 @@ impl LoadCommand {
                     let mut batch = vec![];
                     // possible optimization is to run iterator in parallel
                     for _ in 0..100_000 {
-                        if let Some(line) = reader.next_line().await? {
-                            batch.push(line);
-                            count += 1;
+                        if let Some(line) = record.next() {
+                            if let Ok(line) = line {
+                                batch.push(line);
+                                count += 1;
+                            } else {
+                                writer.write_err(format!(
+                                    "cannot read csv line {}, error: {}",
+                                    count,
+                                    line.unwrap_err()
+                                ))
+                            }
                         } else {
                             break;
                         }
@@ -215,6 +208,17 @@ impl LoadCommand {
                     let values = batch
                         .into_iter()
                         .par_bridge()
+                        .map(|s| {
+                            s.iter()
+                                .map(|i| {
+                                    if i.trim().is_empty() {
+                                        "null".to_string()
+                                    } else {
+                                        "'".to_owned() + i + &*"'".to_owned()
+                                    }
+                                })
+                                .join(",")
+                        })
                         .map(|e| format!("({})", e.trim()))
                         .filter(|e| !e.trim().is_empty())
                         .reduce_with(|a, b| format!("{}, {}", a, b));
@@ -228,6 +232,7 @@ impl LoadCommand {
                         }
                     }
                 }
+
                 let elapsed = start.elapsed();
                 let time = elapsed.as_millis() as f64 / 1000f64;
                 writer.write_ok(format!(
@@ -238,6 +243,7 @@ impl LoadCommand {
                         .to_formatted_string(&Locale::en),
                     time
                 ));
+
                 Ok(())
             }
             Err(e) => {
@@ -281,43 +287,41 @@ impl LoadCommand {
     }
 }
 
-async fn build_reader(load: Option<&str>) -> BufReader<Pin<Box<dyn AsyncRead + Send>>> {
+async fn build_reader(
+    load: Option<&str>,
+    header: Option<&str>,
+) -> csv::Reader<Box<dyn std::io::Read + Send + Sync>> {
+    let header = header.is_some();
     match load {
         Some(val) => {
             if Path::new(val).exists() {
-                let f = File::open(val)
-                    .await
-                    .expect("cannot open file: permission denied");
-                BufReader::new(Box::pin(f))
+                let f = std::fs::File::open(val).expect("cannot open file: permission denied");
+                csv::ReaderBuilder::new()
+                    .has_headers(header)
+                    .from_reader(Box::new(f))
             } else if val.contains("://") {
-                // Attempt to download ferris..
                 let target = reqwest::get(val)
                     .await
                     .expect("cannot connect to target url")
                     .error_for_status()
-                    .expect("return code is not OK"); // generate an error if server didn't respond OK
-
-                // Convert the body of the response into a futures::io::Stream.
-                let target_stream = target.bytes_stream();
-
-                // Convert the stream into an futures::io::AsyncRead.
-                // We must first convert the reqwest::Error into an futures::io::Error.
-                let target_stream = target_stream
-                    .map_err(|e| futures::io::Error::new(futures::io::ErrorKind::Other, e))
-                    .into_async_read();
-
-                // Convert the futures::io::AsyncRead into a tokio::io::AsyncRead.
-                let target_stream = target_stream.compat();
-
-                BufReader::new(Box::pin(target_stream))
+                    .expect("return code is not OK")
+                    .text()
+                    .await
+                    .expect("cannot fetch for target"); // generate an error if server didn't respond
+                csv::ReaderBuilder::new()
+                    .has_headers(header)
+                    .from_reader(Box::new(Cursor::new(target)))
             } else {
-                let bytes = val.to_string();
-                BufReader::new(Box::pin(Cursor::new(bytes.as_bytes().to_owned())))
+                csv::ReaderBuilder::new()
+                    .has_headers(header)
+                    .from_reader(Box::new(Cursor::new(val.to_string().as_bytes().to_owned())))
             }
         }
         None => {
-            let io = common_base::tokio::io::stdin();
-            BufReader::new(Box::pin(io))
+            let io = std::io::stdin();
+            csv::ReaderBuilder::new()
+                .has_headers(header)
+                .from_reader(Box::new(io))
         }
     }
 }

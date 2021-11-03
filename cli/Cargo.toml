@@ -63,6 +63,7 @@ async-std = "1.10.0"
 tryhard = "0.4.0"
 rayon = "1.5.1"
 tokio-util = "0.6.9"
+csv = "1.1"
 
 [dev-dependencies]
 pretty_assertions = "1.0"
