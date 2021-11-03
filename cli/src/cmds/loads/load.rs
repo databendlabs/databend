@@ -169,17 +169,63 @@ impl LoadCommand {
     async fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
         match self.local_exec_precheck(args).await {
             Ok(_) => {
-                let mut reader = build_reader(args.value_of("load")).await.lines();
-                for _ in 0..args
-                    .value_of("skip-head-lines")
-                    .unwrap_or("0")
-                    .parse::<usize>()
-                    .unwrap()
-                {
-                    if reader.next_line().await?.is_none() {
-                        return Ok(());
+                let mut reader = build_reader(args.value_of("load")).await;
+                let mut record = reader.records();
+                let table = args.value_of("table").unwrap();
+                let schema = args.value_of("schema");
+                let table_format = match schema {
+                    Some(_) => {
+                        let schema: Schema =
+                            args.value_of_t("schema").expect("cannot build schema");
+                        format!(
+                            "{} ({})",
+                            table,
+                            schema.schema.keys().into_iter().join(", ")
+                        )
+                    }
+                    None => table.to_string(),
+                };
+                let start = time::Instant::now();
+                let status = Status::read(self.conf.clone())?;
+                let (cli, url) = build_query_endpoint(&status)?;
+                let mut count = 0;
+                let mut batch = vec![];
+                for r in record {
+                    if let Ok(r) = r {
+                        batch.push(r);
+                        count += 1;
                     }
                 }
+                let values = batch
+                    .into_iter()
+                    .par_bridge()
+                    .map(|s| s.iter().map(|i| if i.trim().is_empty() {"null".to_string()} else {"'".to_owned() + i + &*"'".to_owned() }).join(","))
+                    .map(|e| format!("({})", e.trim()))
+                    .filter(|e| !e.trim().is_empty())
+                    .reduce_with(|a, b| format!("{}, {}", a, b));
+                if let Some(values) = values {
+                    let query = format!("INSERT INTO {} VALUES {}", table_format, values);
+                    panic!("{}", query);
+                    if let Err(e) = execute_query_json(&cli, &url, query).await {
+                        writer.write_err(format!(
+                            "cannot insert data into {}, error: {:?}",
+                            table, e
+                        ))
+                    }
+                }
+                let elapsed = start.elapsed();
+                let time = elapsed.as_millis() as f64 / 1000f64;
+                writer.write_ok(format!(
+                    "successfully loaded {} lines, rows/src: {} (rows/sec). time: {} sec",
+                    count.to_formatted_string(&Locale::en),
+                    (count as f64 / time)
+                        .as_u128()
+                        .to_formatted_string(&Locale::en),
+                    time
+                ));
+
+
+                /***
                 let table = args.value_of("table").unwrap();
                 let schema = args.value_of("schema");
                 let table_format = match schema {
@@ -238,6 +284,8 @@ impl LoadCommand {
                         .to_formatted_string(&Locale::en),
                     time
                 ));
+
+                 */
                 Ok(())
             }
             Err(e) => {
@@ -281,43 +329,45 @@ impl LoadCommand {
     }
 }
 
-async fn build_reader(load: Option<&str>) -> BufReader<Pin<Box<dyn AsyncRead + Send>>> {
+async fn build_reader(load: Option<&str>) -> csv::Reader<Box<dyn std::io::Read + Send + Sync>> {
     match load {
         Some(val) => {
             if Path::new(val).exists() {
-                let f = File::open(val)
-                    .await
+                let f = std::fs::File::open(val)
                     .expect("cannot open file: permission denied");
-                BufReader::new(Box::pin(f))
-            } else if val.contains("://") {
-                // Attempt to download ferris..
-                let target = reqwest::get(val)
-                    .await
-                    .expect("cannot connect to target url")
-                    .error_for_status()
-                    .expect("return code is not OK"); // generate an error if server didn't respond OK
-
-                // Convert the body of the response into a futures::io::Stream.
-                let target_stream = target.bytes_stream();
-
-                // Convert the stream into an futures::io::AsyncRead.
-                // We must first convert the reqwest::Error into an futures::io::Error.
-                let target_stream = target_stream
-                    .map_err(|e| futures::io::Error::new(futures::io::ErrorKind::Other, e))
-                    .into_async_read();
-
-                // Convert the futures::io::AsyncRead into a tokio::io::AsyncRead.
-                let target_stream = target_stream.compat();
-
-                BufReader::new(Box::pin(target_stream))
+                csv::ReaderBuilder::new().from_reader(Box::new(f))
             } else {
-                let bytes = val.to_string();
-                BufReader::new(Box::pin(Cursor::new(bytes.as_bytes().to_owned())))
+                todo!()
             }
+            // } else if val.contains("://") {
+            //     // Attempt to download ferris..
+            //     let target = reqwest::get(val)
+            //         .await
+            //         .expect("cannot connect to target url")
+            //         .error_for_status()
+            //         .expect("return code is not OK"); // generate an error if server didn't respond OK
+            //
+            //     // Convert the body of the response into a futures::io::Stream.
+            //     let target_stream = target.bytes_stream();
+            //
+            //     // Convert the stream into an futures::io::AsyncRead.
+            //     // We must first convert the reqwest::Error into an futures::io::Error.
+            //     let target_stream = target_stream
+            //         .map_err(|e| futures::io::Error::new(futures::io::ErrorKind::Other, e))
+            //         .into_async_read();
+            //
+            //     // Convert the futures::io::AsyncRead into a tokio::io::AsyncRead.
+            //     let target_stream = target_stream.compat();
+            //
+            //     BufReader::new(Box::pin(target_stream))
+            // } else {
+            //     let bytes = val.to_string();
+            //     BufReader::new(Box::pin(Cursor::new(bytes.as_bytes().to_owned())))
+            // }
         }
         None => {
-            let io = common_base::tokio::io::stdin();
-            BufReader::new(Box::pin(io))
+            let io = std::io::stdin();
+            csv::ReaderBuilder::new().from_reader(Box::new(io))
         }
     }
 }

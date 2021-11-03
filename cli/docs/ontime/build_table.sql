@@ -109,4 +109,4 @@ CREATE TABLE ontime
     Div5LongestGTime                String,
     Div5WheelsOff                   String,
     Div5TailNum                     String
-) ENGINE = CSV location = {{ .csv_location }};
+) ENGINE = FUSE;
