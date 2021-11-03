@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod arithmetic;
-mod comparison;
-mod conditional;
+mod arithmetics;
+mod comparisons;
+mod conditionals;
 mod dates;
-mod expression;
+mod expressions;
 mod function_column;
-mod hash;
-mod logic;
+mod hashes;
+mod logics;
 mod maths;
-mod nullable;
-mod other;
+mod nullables;
+mod others;
 mod udfs;
