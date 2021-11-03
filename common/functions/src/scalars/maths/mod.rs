@@ -14,9 +14,17 @@
 
 #[cfg(test)]
 mod pi_test;
+#[cfg(test)]
+mod trigonometric_test;
 
 mod math;
 mod pi;
+mod trigonometric;
 
 pub use math::MathsFunction;
 pub use pi::PiFunction;
+pub use trigonometric::Trigonometric;
+pub use trigonometric::TrigonometricCosFunction;
+pub use trigonometric::TrigonometricCotFunction;
+pub use trigonometric::TrigonometricSinFunction;
+pub use trigonometric::TrigonometricTanFunction;
