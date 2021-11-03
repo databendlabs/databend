@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
@@ -24,7 +22,6 @@ use crate::Part;
 use crate::Partitions;
 use crate::PlanNode;
 use crate::ReadDataSourcePlan;
-use crate::ScanPlan;
 use crate::Statistics;
 
 pub struct Test {}
@@ -46,7 +43,6 @@ impl Test {
 
         Ok(PlanNode::ReadSource(ReadDataSourcePlan {
             table_info: TableInfo::simple("system", "numbers_mt", schema),
-            scan_fields: None,
             parts: Self::generate_partitions(8, total as u64),
             statistics: statistics.clone(),
             description: format!(
@@ -55,6 +51,7 @@ impl Test {
             ),
             tbl_args: None,
             push_downs: None,
+            benefit_column_prune: false,
         }))
     }
 

@@ -27,12 +27,6 @@ fn test_scan_plan() -> Result<()> {
         table_version: None,
         table_schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::String, false)]),
         table_args: None,
-        projected_schema: DataSchemaRefExt::create(vec![DataField::new(
-            "a",
-            DataType::String,
-            false,
-        )]),
-        push_downs: Extras::default(),
     });
 
     let _ = scan.schema();

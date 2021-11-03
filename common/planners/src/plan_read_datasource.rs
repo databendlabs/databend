@@ -49,9 +49,7 @@ impl ReadDataSourcePlan {
             self.push_downs
                 .clone()
                 .and_then(|x| x.projection)
-                .and_then(|project_indexes| {
-                    Some(Arc::new(self.table_info.schema().project(&project_indexes)))
-                })
+                .map(|project_indexes| Arc::new(self.table_info.schema().project(&project_indexes)))
                 .unwrap_or_else(|| self.table_info.schema())
         }
     }
@@ -64,12 +62,12 @@ impl ReadDataSourcePlan {
             self.push_downs
                 .clone()
                 .and_then(|x| x.projection)
-                .and_then(|project_indexes| {
+                .map(|project_indexes| {
                     let fields = project_indexes
                         .iter()
                         .map(|i| self.table_info.schema().field(*i).clone());
 
-                    Some((project_indexes.iter().cloned().zip(fields)).collect::<BTreeMap<_, _>>())
+                    (project_indexes.iter().cloned().zip(fields)).collect::<BTreeMap<_, _>>()
                 })
                 .unwrap_or_else(|| self.table_info.schema().fields_map())
         }

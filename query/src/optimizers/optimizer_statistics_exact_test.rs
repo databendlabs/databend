@@ -15,7 +15,6 @@
 #[cfg(test)]
 mod tests {
     use std::mem::size_of;
-    use std::sync::Arc;
 
     use common_datavalues::*;
     use common_exception::Result;
@@ -44,7 +43,6 @@ mod tests {
                     DataField::new("c", DataType::String, false),
                 ]),
             ),
-            scan_fields: None,
             parts: generate_partitions(8, total as u64),
             statistics: statistics.clone(),
             description: format!(
@@ -55,6 +53,7 @@ mod tests {
             ),
             tbl_args: None,
             push_downs: None,
+            benefit_column_prune: false,
         });
 
         let aggr_expr = Expression::AggregateFunction {

@@ -69,12 +69,12 @@ async fn test_fuse_table_simple_case() -> Result<()> {
     let stream = table
         .read(io_ctx, &ReadDataSourcePlan {
             table_info: Default::default(),
-            scan_fields: None,
             parts: Default::default(),
             statistics: Default::default(),
             description: "".to_string(),
             tbl_args: None,
             push_downs: None,
+            benefit_column_prune: false,
         })
         .await?;
     let blocks = stream.try_collect::<Vec<_>>().await?;

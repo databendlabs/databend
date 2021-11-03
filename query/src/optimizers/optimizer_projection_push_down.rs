@@ -118,6 +118,11 @@ impl PlanRewriter for ProjectionPushDownImpl {
     fn rewrite_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<PlanNode> {
         self.get_projection(plan.table_info.schema().as_ref())
             .map(|projection| {
+                // No need to rewrite projection if it is full
+                if projection.len() == plan.table_info.schema().fields().len() {
+                    return PlanNode::ReadSource(plan.clone());
+                }
+
                 let mut new_plan = plan.clone();
                 new_plan.push_downs = match &plan.push_downs {
                     Some(extras) => {
