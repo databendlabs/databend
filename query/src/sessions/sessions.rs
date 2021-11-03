@@ -51,7 +51,7 @@ pub type SessionManagerRef = Arc<SessionManager>;
 
 impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<SessionManagerRef> {
-        let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone())?);
+        let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
 
         // Cluster discovery.
         let discovery = ClusterDiscovery::create_global(conf.clone()).await?;

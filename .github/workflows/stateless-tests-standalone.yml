@@ -42,6 +42,34 @@ jobs:
         env:
           CARGO_INCREMENTAL: '0'
 
+      - name: Minio Setup for (ubuntu-latest only)
+        if: matrix.config.os == 'ubuntu-latest'
+        run: |
+          docker run -d -p 9000:9000 --name minio \
+                  -e "MINIO_ACCESS_KEY=minioadmin" \
+                  -e "MINIO_SECRET_KEY=minioadmin" \
+                  -v /tmp/data:/data \
+                  -v /tmp/config:/root/.minio \
+                  minio/minio server /data
+
+          export AWS_ACCESS_KEY_ID=minioadmin
+          export AWS_SECRET_ACCESS_KEY=minioadmin
+          export AWS_EC2_METADATA_DISABLED=true
+
+          aws --endpoint-url http://127.0.0.1:9000/ s3 mb s3://testbucket
+
+      - name: Run Stateless Tests with Standalone mode (ubuntu-latest only)
+        if: matrix.config.os == 'ubuntu-latest'
+        run: |
+          export STORAGE_TYPE=s3
+          export S3_STORAGE_BUCKET=testbucket
+          export S3_STORAGE_REGION=us-east-1
+          export S3_STORAGE_ENDPOINT_URL=http://127.0.0.1:9000
+          export S3_STORAGE_ACCESS_KEY_ID=minioadmin
+          export S3_STORAGE_SECRET_ACCESS_KEY=minioadmin
+          bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
+
       - name: Run Stateless Tests with Standalone mode
+        if: matrix.config.os != 'ubuntu-latest'
         run: |
           bash ./scripts/ci/ci-run-stateless-tests-standalone.sh

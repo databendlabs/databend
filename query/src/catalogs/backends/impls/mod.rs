@@ -13,14 +13,6 @@
 //  limitations under the License.
 //
 
-mod embedded_backend;
-mod meta_cached;
 mod meta_remote;
-mod meta_sync;
-mod remote_backend;
 
-pub use embedded_backend::MetaEmbeddedSync;
-pub use meta_cached::MetaCached;
 pub use meta_remote::MetaRemote;
-pub use meta_sync::MetaSync;
-pub use remote_backend::MetaRemoteSync;

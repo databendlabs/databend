@@ -88,7 +88,8 @@ impl FuseTable {
                 table_id,
                 self.table_info.ident.version,
                 snapshot_loc,
-            )?;
+            )
+            .await?;
         }
         Ok(())
     }
@@ -115,7 +116,7 @@ fn merge_snapshot(
     }
 }
 
-fn commit(
+async fn commit(
     io_ctx: &TableIOContext,
     table_id: MetaId,
     table_version: MetaVersion,
@@ -126,10 +127,12 @@ fn commit(
         .get_user_data()?
         .expect("DatabendQueryContext should not be None");
     let catalog = ctx.get_catalog();
-    catalog.upsert_table_option(
-        table_id,
-        table_version,
-        TBL_OPT_KEY_SNAPSHOT_LOC.to_string(),
-        new_snapshot_location,
-    )
+    catalog
+        .upsert_table_option(
+            table_id,
+            table_version,
+            TBL_OPT_KEY_SNAPSHOT_LOC.to_string(),
+            new_snapshot_location,
+        )
+        .await
 }

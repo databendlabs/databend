@@ -15,6 +15,10 @@
 use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::AbsFunction;
 use crate::scalars::PiFunction;
+use crate::scalars::TrigonometricCosFunction;
+use crate::scalars::TrigonometricCotFunction;
+use crate::scalars::TrigonometricSinFunction;
+use crate::scalars::TrigonometricTanFunction;
 
 pub struct MathsFunction;
 
@@ -22,5 +26,9 @@ impl MathsFunction {
     pub fn register(factory: &mut FunctionFactory) {
         factory.register("pi", PiFunction::desc());
         factory.register("abs", AbsFunction::desc());
+        factory.register("sin", TrigonometricSinFunction::desc());
+        factory.register("cos", TrigonometricCosFunction::desc());
+        factory.register("tan", TrigonometricTanFunction::desc());
+        factory.register("cot", TrigonometricCotFunction::desc());
     }
 }

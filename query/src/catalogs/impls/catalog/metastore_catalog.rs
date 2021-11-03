@@ -13,14 +13,16 @@
 //  limitations under the License.
 //
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_base::BlockingWait;
 use common_context::TableDataContext;
 use common_dal::InMemoryData;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_meta_api::MetaApi;
+use common_meta_embedded::MetaEmbedded;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
@@ -35,9 +37,7 @@ use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_tracing::tracing;
 
-use crate::catalogs::backends::MetaApiSync;
-use crate::catalogs::backends::MetaEmbeddedSync;
-use crate::catalogs::backends::MetaRemoteSync;
+use crate::catalogs::backends::MetaRemote;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::Database;
 use crate::catalogs::Table;
@@ -55,7 +55,7 @@ use crate::datasources::table_engine_registry::TableEngineRegistry;
 pub struct MetaStoreCatalog {
     table_engine_registry: Arc<TableEngineRegistry>,
 
-    meta: Arc<dyn MetaApiSync>,
+    meta: Arc<dyn MetaApi>,
 
     /// The data layer that supports MemoryTable or else.
     ///
@@ -64,43 +64,55 @@ pub struct MetaStoreCatalog {
     ///           There should be a dedicate component to serve this duty.
     ///           Maybe as part of `Session`.
     in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
-
-    // this is not for performance:
-    // some tables are stateful, cached in database, thus, instances of Database have to be kept as well.
-    //
-    // if we drop Database Trait, and create tables by using catalog directly, things may be easier
-    db_instances: RwLock<HashMap<String, Arc<dyn Database>>>,
 }
 
 impl MetaStoreCatalog {
-    pub fn try_create_with_config(conf: Config) -> Result<Self> {
+    /// The component hierarchy is layered as:
+    /// ```text
+    /// Remote:
+    ///
+    ///                                        RPC
+    /// MetaRemote -------> Meta server      Meta server
+    ///                     raft <---------> raft <----..
+    ///                     MetaEmbedded     MetaEmbedded
+    ///
+    /// Embedded:
+    ///
+    /// MetaEmbedded
+    /// ```
+    pub async fn try_create_with_config(conf: Config) -> Result<Self> {
         let local_mode = conf.meta.meta_address.is_empty();
-        let meta: Arc<dyn MetaApiSync> = if local_mode {
+
+        let meta: Arc<dyn MetaApi> = if local_mode {
             tracing::info!("use embedded meta");
             // TODO(xp): This can only be used for test: data will be removed when program quit.
-            Arc::new(MetaEmbeddedSync::create()?)
+
+            let meta_embedded = MetaEmbedded::new_temp().wait(None)??;
+            Arc::new(meta_embedded)
         } else {
             tracing::info!("use remote meta");
-            let store_client_provider = Arc::new(MetaClientProvider::new(&conf));
-            Arc::new(MetaRemoteSync::create(store_client_provider))
+
+            let meta_client_provider = Arc::new(MetaClientProvider::new(&conf));
+            let meta_remote = MetaRemote::create(meta_client_provider);
+            Arc::new(meta_remote)
         };
+
+        let table_engine_registry = Arc::new(TableEngineRegistry::new());
+
+        register_prelude_tbl_engines(&table_engine_registry)?;
 
         let plan = CreateDatabasePlan {
             if_not_exists: true,
             db: "default".to_string(),
             options: Default::default(),
         };
-        meta.create_database(plan)?;
 
-        let table_engine_registry = Arc::new(TableEngineRegistry::new());
-
-        register_prelude_tbl_engines(&table_engine_registry)?;
+        meta.create_database(plan).await?;
 
         let cat = MetaStoreCatalog {
             table_engine_registry,
             meta,
             in_memory_data: Default::default(),
-            db_instances: RwLock::new(HashMap::new()),
         };
 
         Ok(cat)
@@ -108,18 +120,16 @@ impl MetaStoreCatalog {
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
         let db = DefaultDatabase::new(&db_info.db);
-
         let db = Arc::new(db);
-
-        let name = db_info.db.clone();
-        self.db_instances.write().insert(name, db.clone());
         Ok(db)
     }
 }
 
+#[async_trait::async_trait]
 impl Catalog for MetaStoreCatalog {
-    fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
-        let dbs = self.meta.get_databases()?;
+    async fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
+        let dbs = self.meta.get_databases().await?;
+
         dbs.iter().try_fold(vec![], |mut acc, item| {
             let db = self.build_db_instance(item)?;
             acc.push(db);
@@ -127,23 +137,18 @@ impl Catalog for MetaStoreCatalog {
         })
     }
 
-    fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
-        {
-            if let Some(db) = self.db_instances.read().get(db_name) {
-                return Ok(db.clone());
-            }
-        }
-        let db_info = self.meta.get_database(db_name)?;
+    async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
+        let db_info = self.meta.get_database(db_name).await?;
         self.build_db_instance(&db_info)
     }
 
-    fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
-        let table_info = self.meta.get_table(db_name, table_name)?;
+    async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
+        let table_info = self.meta.get_table(db_name, table_name).await?;
         self.build_table(table_info.as_ref())
     }
 
-    fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
-        let table_infos = self.meta.get_tables(db_name)?;
+    async fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+        let table_infos = self.meta.get_tables(db_name).await?;
 
         table_infos.iter().try_fold(vec![], |mut acc, item| {
             let tbl = self.build_table(item.as_ref())?;
@@ -152,43 +157,43 @@ impl Catalog for MetaStoreCatalog {
         })
     }
 
-    fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
-        self.meta.get_table_by_id(table_id)
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
+        self.meta.get_table_by_id(table_id).await
     }
 
-    fn upsert_table_option(
+    async fn upsert_table_option(
         &self,
         table_id: MetaId,
         table_version: MetaVersion,
         table_option_key: String,
         table_option_value: String,
     ) -> Result<UpsertTableOptionReply> {
-        self.meta.upsert_table_option(
-            table_id,
-            table_version,
-            table_option_key,
-            table_option_value,
-        )
+        self.meta
+            .upsert_table_option(
+                table_id,
+                table_version,
+                table_option_key,
+                table_option_value,
+            )
+            .await
     }
 
-    fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
+    async fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
         // TODO validate table parameters by using TableFactory
-        self.meta.create_table(plan)?;
+        self.meta.create_table(plan).await?;
         Ok(())
     }
 
-    fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
-        self.meta.drop_table(plan)
+    async fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
+        self.meta.drop_table(plan).await
     }
 
-    fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
-        self.meta.create_database(plan)
+    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
+        self.meta.create_database(plan).await
     }
 
-    fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
-        let name = plan.db.clone();
-        self.meta.drop_database(plan)?;
-        self.db_instances.write().remove(&name);
+    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
+        self.meta.drop_database(plan).await?;
         Ok(())
     }
 

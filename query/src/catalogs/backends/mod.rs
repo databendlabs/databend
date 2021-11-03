@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-mod backend;
 mod impls;
 
-pub use backend::MetaApiSync;
-pub use impls::MetaEmbeddedSync;
-pub use impls::MetaRemoteSync;
+pub use impls::MetaRemote;

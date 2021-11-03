@@ -20,6 +20,7 @@ use rustyline::Editor;
 
 use crate::cmds::command::Command;
 use crate::cmds::config::Mode;
+use crate::cmds::loads::load::LoadCommand;
 use crate::cmds::queries::query::QueryCommand;
 use crate::cmds::root::RootCommand;
 use crate::cmds::ups::up::UpCommand;
@@ -59,6 +60,7 @@ impl Processor {
             Box::new(PackageCommand::create(conf.clone())),
             Box::new(ClusterCommand::create(conf.clone())),
             Box::new(UpCommand::create(conf.clone())),
+            Box::new(LoadCommand::create(conf.clone())),
         ];
         let help_command = HelpCommand::create(admin_commands.clone());
         Processor {
