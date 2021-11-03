@@ -497,6 +497,10 @@ impl LocalRuntime for LocalQueryConfig {
                 conf.storage.storage_type,
             )
             .env(
+                databend_query::configs::config_meta::META_EMBEDDED_DIR,
+                "/tmp/embedded",
+            )
+            .env(
                 databend_query::configs::config_storage::DISK_STORAGE_DATA_PATH,
                 conf.storage.disk.data_path,
             )

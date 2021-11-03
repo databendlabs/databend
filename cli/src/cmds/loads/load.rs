@@ -23,21 +23,14 @@ use clap::App;
 use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
-use common_base::tokio::fs::File;
-use common_base::tokio::io::AsyncBufReadExt;
-use common_base::tokio::io::AsyncRead;
-use common_base::tokio::io::BufReader;
-use common_base::tokio::macros::support::Pin;
 use common_base::tokio::time;
 // Lets us call into_async_read() to convert a futures::stream::Stream into a
 // futures::io::AsyncRead.
-use futures::stream::TryStreamExt;
 use itertools::Itertools;
 use lexical_util::num::AsPrimitive;
 use num_format::Locale;
 use num_format::ToFormattedString;
 use rayon::prelude::*;
-use tokio_util::compat::FuturesAsyncReadCompatExt;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::command::Command;
@@ -189,68 +182,21 @@ impl LoadCommand {
                 let status = Status::read(self.conf.clone())?;
                 let (cli, url) = build_query_endpoint(&status)?;
                 let mut count = 0;
-                let mut batch = vec![];
-                for r in record {
-                    if let Ok(r) = r {
-                        batch.push(r);
-                        count += 1;
-                    }
-                }
-                let values = batch
-                    .into_iter()
-                    .par_bridge()
-                    .map(|s| s.iter().map(|i| if i.trim().is_empty() {"null".to_string()} else {"'".to_owned() + i + &*"'".to_owned() }).join(","))
-                    .map(|e| format!("({})", e.trim()))
-                    .filter(|e| !e.trim().is_empty())
-                    .reduce_with(|a, b| format!("{}, {}", a, b));
-                if let Some(values) = values {
-                    let query = format!("INSERT INTO {} VALUES {}", table_format, values);
-                    panic!("{}", query);
-                    if let Err(e) = execute_query_json(&cli, &url, query).await {
-                        writer.write_err(format!(
-                            "cannot insert data into {}, error: {:?}",
-                            table, e
-                        ))
-                    }
-                }
-                let elapsed = start.elapsed();
-                let time = elapsed.as_millis() as f64 / 1000f64;
-                writer.write_ok(format!(
-                    "successfully loaded {} lines, rows/src: {} (rows/sec). time: {} sec",
-                    count.to_formatted_string(&Locale::en),
-                    (count as f64 / time)
-                        .as_u128()
-                        .to_formatted_string(&Locale::en),
-                    time
-                ));
-
-
-                /***
-                let table = args.value_of("table").unwrap();
-                let schema = args.value_of("schema");
-                let table_format = match schema {
-                    Some(_) => {
-                        let schema: Schema =
-                            args.value_of_t("schema").expect("cannot build schema");
-                        format!(
-                            "{} ({})",
-                            table,
-                            schema.schema.keys().into_iter().join(", ")
-                        )
-                    }
-                    None => table.to_string(),
-                };
-                let start = time::Instant::now();
-                let status = Status::read(self.conf.clone())?;
-                let (cli, url) = build_query_endpoint(&status)?;
-                let mut count = 0;
                 loop {
                     let mut batch = vec![];
                     // possible optimization is to run iterator in parallel
                     for _ in 0..100_000 {
-                        if let Some(line) = reader.next_line().await? {
-                            batch.push(line);
-                            count += 1;
+                        if let Some(line) = record.next() {
+                            if let Ok(line) = line {
+                                batch.push(line);
+                                count += 1;
+                            } else {
+                                writer.write_err(format!(
+                                    "cannot read csv line {}, error: {}",
+                                    count,
+                                    line.unwrap_err()
+                                ))
+                            }
                         } else {
                             break;
                         }
@@ -261,6 +207,17 @@ impl LoadCommand {
                     let values = batch
                         .into_iter()
                         .par_bridge()
+                        .map(|s| {
+                            s.iter()
+                                .map(|i| {
+                                    if i.trim().is_empty() {
+                                        "null".to_string()
+                                    } else {
+                                        "'".to_owned() + i + &*"'".to_owned()
+                                    }
+                                })
+                                .join(",")
+                        })
                         .map(|e| format!("({})", e.trim()))
                         .filter(|e| !e.trim().is_empty())
                         .reduce_with(|a, b| format!("{}, {}", a, b));
@@ -274,6 +231,7 @@ impl LoadCommand {
                         }
                     }
                 }
+
                 let elapsed = start.elapsed();
                 let time = elapsed.as_millis() as f64 / 1000f64;
                 writer.write_ok(format!(
@@ -285,7 +243,6 @@ impl LoadCommand {
                     time
                 ));
 
-                 */
                 Ok(())
             }
             Err(e) => {
@@ -333,37 +290,22 @@ async fn build_reader(load: Option<&str>) -> csv::Reader<Box<dyn std::io::Read +
     match load {
         Some(val) => {
             if Path::new(val).exists() {
-                let f = std::fs::File::open(val)
-                    .expect("cannot open file: permission denied");
+                let f = std::fs::File::open(val).expect("cannot open file: permission denied");
                 csv::ReaderBuilder::new().from_reader(Box::new(f))
+            } else if val.contains("://") {
+                let target = reqwest::get(val)
+                    .await
+                    .expect("cannot connect to target url")
+                    .error_for_status()
+                    .expect("return code is not OK")
+                    .text()
+                    .await
+                    .expect("cannot fetch for target"); // generate an error if server didn't respond
+                csv::ReaderBuilder::new().from_reader(Box::new(Cursor::new(target)))
             } else {
-                todo!()
+                csv::ReaderBuilder::new()
+                    .from_reader(Box::new(Cursor::new(val.to_string().as_bytes().to_owned())))
             }
-            // } else if val.contains("://") {
-            //     // Attempt to download ferris..
-            //     let target = reqwest::get(val)
-            //         .await
-            //         .expect("cannot connect to target url")
-            //         .error_for_status()
-            //         .expect("return code is not OK"); // generate an error if server didn't respond OK
-            //
-            //     // Convert the body of the response into a futures::io::Stream.
-            //     let target_stream = target.bytes_stream();
-            //
-            //     // Convert the stream into an futures::io::AsyncRead.
-            //     // We must first convert the reqwest::Error into an futures::io::Error.
-            //     let target_stream = target_stream
-            //         .map_err(|e| futures::io::Error::new(futures::io::ErrorKind::Other, e))
-            //         .into_async_read();
-            //
-            //     // Convert the futures::io::AsyncRead into a tokio::io::AsyncRead.
-            //     let target_stream = target_stream.compat();
-            //
-            //     BufReader::new(Box::pin(target_stream))
-            // } else {
-            //     let bytes = val.to_string();
-            //     BufReader::new(Box::pin(Cursor::new(bytes.as_bytes().to_owned())))
-            // }
         }
         None => {
             let io = std::io::stdin();
