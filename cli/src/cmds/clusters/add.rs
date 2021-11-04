@@ -46,58 +46,13 @@ use crate::cmds::SwitchCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
+use crate::cmds::clusters::utils::get_profile;
+use crate::cmds::clusters::view::poll_health;
+use crate::cmds::clusters::create::{generate_local_query_config, provision_local_query_service, get_bin, generate_local_log_dir};
 
 #[derive(Clone)]
 pub struct AddCommand {
     conf: Config,
-}
-
-#[derive(Clone)]
-pub struct LocalBinaryPaths {
-    pub query: String,
-    pub meta: String,
-}
-
-async fn reconcile_local_meta(status: &mut Status) -> Result<()> {
-    let s = System::new_all();
-    if let Some((_, meta)) = status.get_local_meta_config() {
-        if meta.pid.is_none() || s.process(meta.pid.unwrap()).is_none() {
-            return Err(CliError::Unknown(
-                "meta service process not found".to_string(),
-            ));
-        }
-        if meta.verify(None, None).await.is_err() {
-            return Err(CliError::Unknown("cannot verify meta service".to_string()));
-        }
-    }
-    Ok(())
-}
-
-async fn reconcile_local_query(status: &mut Status) -> Result<()> {
-    let s = System::new_all();
-    for (_, query) in status.get_local_query_configs() {
-        if query.pid.is_none() || s.process(query.pid.unwrap()).is_none() {
-            return Err(CliError::Unknown(
-                "query service process not found".to_string(),
-            ));
-        }
-        if query.verify(None, None).await.is_err() {
-            return Err(CliError::Unknown("cannot verify query service".to_string()));
-        }
-    }
-    Ok(())
-}
-
-async fn reconcile_local(status: &mut Status) -> Result<()> {
-    if status.has_local_configs() {
-        if let Err(e) = reconcile_local_meta(status).await {
-            return Err(e);
-        }
-        if let Err(e) = reconcile_local_query(status).await {
-            return Err(e);
-        }
-    }
-    Ok(())
 }
 
 impl AddCommand {
@@ -106,170 +61,49 @@ impl AddCommand {
     }
 
     async fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
-        match self.local_exec_precheck(writer, args).await {
+        match self.local_exec_precheck(args).await {
             Ok(_) => {
-                writer.write_ok("Databend cluster pre-check passed!".to_string());
-                // ensuring needed dependencies
-                let bin_path = self
-                    .ensure_bin(writer, args)
-                    .await
-                    .expect("cannot find binary path");
-                let meta_config = self
-                    .generate_local_meta_config(args, bin_path.clone())
-                    .expect("Cannot generate meta-service config");
-                {
-                    let res = self
-                        .provision_local_meta_service(writer, meta_config.clone())
-                        .await;
-                    if res.is_err() {
-                        writer.write_err(format!(
-                            "Cannot provision meta service, error: {:?}, please check the logs output by: tail -n 100 {}/*",
-                            res.unwrap_err(),
-                            meta_config.log_dir.unwrap_or_else(|| "unknown log_dir".into()),
-                        ));
-                        return Ok(());
-                    }
-                }
-                let meta_status = meta_config.verify(None, None).await;
-                if meta_status.is_err() {
-                    let mut status = Status::read(self.conf.clone())?;
-                    writer.write_err(format!(
-                        "Cannot connect to meta service: {:?}",
-                        meta_status.unwrap_err()
-                    ));
-                    StopCommand::stop_current_local_services(&mut status, writer)
-                        .await
-                        .unwrap();
-                    return Ok(());
-                }
-                let query_config = self.generate_local_query_config(args, bin_path, &meta_config);
-                if query_config.is_err() {
-                    let mut status = Status::read(self.conf.clone())?;
-                    writer.write_err(format!(
-                        "Cannot generate query configurations, error: {:?}",
-                        query_config.as_ref().unwrap_err()
-                    ));
-                    StopCommand::stop_current_local_services(&mut status, writer)
-                        .await
-                        .unwrap();
-                }
-                writer.write_ok(format!(
-                    "Local data would be stored in {}",
-                    query_config
-                        .as_ref()
-                        .unwrap()
-                        .config
-                        .storage
-                        .disk
-                        .data_path
-                        .as_str()
-                ));
-                {
-                    let res = self
-                        .provision_local_query_service(
-                            writer,
-                            query_config.as_ref().unwrap().clone(),
-                        )
-                        .await;
-                    if res.is_err() {
-                        let mut status = Status::read(self.conf.clone())?;
-                        writer.write_err(format!(
-                            "Cannot provison query service, error: {:?}, please check the logs output by: tail -n 100 {}/*",
-                            res.unwrap_err(),
-                            query_config.as_ref().unwrap().config.log.log_dir,
-                        ));
-                        StopCommand::stop_current_local_services(&mut status, writer)
-                            .await
-                            .unwrap();
-                    }
-                }
+                writer.write_ok(format!("cluster add precheck passed"));
                 let mut status = Status::read(self.conf.clone())?;
-                status.current_profile =
-                    Some(serde_json::to_string::<ClusterProfile>(&ClusterProfile::Local).unwrap());
-                status.write()?;
-
+                let bin_path = get_bin(&self.conf, &status)?;
+                let (_, meta) = status.get_local_meta_config().unwrap();
+                let local_log_dir = generate_local_log_dir(&self.conf, format!("local_query_log_{}", status.get_local_query_configs().len()).as_str());
+                let local_query = generate_local_query_config(self.conf.clone(), args, bin_path, &meta, local_log_dir)?;
+                let file_name = format!("query_config_{}.yaml", status.get_local_query_configs().len());
+                if let Err(e) = provision_local_query_service(&mut status, writer, local_query, file_name).await {
+                    writer.write_err(format!("Cannot provision query service, error: {:?}", e));
+                }
+                writer.write_ok(format!("successfully added query instance on local"));
                 Ok(())
             }
             Err(e) => {
-                writer.write_err(format!("Cluster precheck failed, error {:?}", e));
+                writer.write_err(format!("{:?}", e));
                 Ok(())
             }
         }
     }
 
     /// precheck whether current local profile applicable for local host machine
-    async fn local_exec_precheck(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
-        let mut status = Status::read(self.conf.clone())?;
-        if args.is_present("force") {
-            writer.write_ok("Delete existing cluster".to_string());
-            StopCommand::stop_current_local_services(&mut status, writer)
-                .await
-                .expect("cannot stop current services");
-            let s = System::new_all();
-            for elem in s.process_by_name("databend-meta") {
-                elem.kill(Signal::Term);
-            }
-            for elem in s.process_by_name("databend-query") {
-                elem.kill(Signal::Term);
-            }
-            for elem in s.process_by_name("databend-dashboard") {
-                elem.kill(Signal::Term);
+    async fn local_exec_precheck(&self, args: &ArgMatches) -> Result<()> {
+        let status = Status::read(self.conf.clone())?;
+        //check on cluster status
+        let (_, meta, _) = poll_health(&ClusterProfile::Local, &status, None, None).await;
+        if meta.is_none() || meta.unwrap().1.is_err() {
+            return Err(CliError::Unknown("current meta service is deleted or unavailable".to_string()))
+        }
+        if status.version.is_empty() {
+            return Err(CliError::Unknown("no existing version exists, please create a cluster at first".to_string()))
+        }
+        if let Some(port) = args.value_of("mysql_handler_port") {
+            if !portpicker::is_free(port.parse().unwrap()) {
+                return Err(CliError::Unknown(format!("mysql handler port {} is used by other processes", port)))
             }
         }
-        if let Err(e) = reconcile_local(&mut status).await {
-            writer.write_ok(format!(
-                "Local environment has problem {:?}, start reconcile",
-                e
-            ));
-            if let Err(e) = StopCommand::stop_current_local_services(&mut status, writer).await {
-                writer.write_err(format!("Cannot delete existing service, error: {:?}", e));
-                return Err(e);
+        if let Some(port) = args.value_of("clickhouse_handler_port") {
+            if !portpicker::is_free(port.parse().unwrap()) {
+                return Err(CliError::Unknown(format!("clickhouse handler port {} is used by other processes", port)))
             }
         }
-        if status.has_local_configs() {
-            return Err(CliError::Unknown(format!(
-                "❗ found previously existed cluster with config in {}",
-                status.local_config_dir
-            )));
-        }
-        let s = System::new_all();
-
-        if !s.process_by_name("databend-meta").is_empty() {
-            return Err(CliError::Unknown(
-                "❗ have installed databend-meta process before, please stop them and retry"
-                    .parse()
-                    .unwrap(),
-            ));
-        }
-        if !s.process_by_name("databend-query").is_empty() {
-            return Err(CliError::Unknown(
-                "❗ have installed databend-query process before, please stop them and retry"
-                    .parse()
-                    .unwrap(),
-            ));
-        }
-        if args.value_of("meta_address").is_some()
-            && !args.value_of("meta_address").unwrap().is_empty()
-        {
-            let meta_address = SocketAddr::from_str(args.value_of("meta_address").unwrap());
-            match meta_address {
-                Ok(addr) => {
-                    if !portpicker::is_free(addr.port()) {
-                        return Err(CliError::Unknown(format!(
-                            "Address {} has been used for local meta service",
-                            addr.port()
-                        )));
-                    }
-                }
-                Err(e) => {
-                    return Err(CliError::Unknown(format!(
-                        "Cannot parse meta service address, error: {:?}",
-                        e
-                    )))
-                }
-            }
-        }
-
         Ok(())
     }
 }
@@ -306,7 +140,7 @@ impl Command for AddCommand {
                     .env(databend_query::configs::config_query::QUERY_NUM_CPUS)
                     .takes_value(true)
                     .about("Set number of cpus for query instance to use")
-                    .default_value(""),
+                    .default_value("2"),
             )
             .arg(
                 Arg::new("query_namespace")
@@ -324,6 +158,42 @@ impl Command for AddCommand {
                     .about("Set the tenant for query to work on")
                     .default_value("test"),
             )
+            .arg(
+                Arg::new("version")
+                    .long("version")
+                    .takes_value(true)
+                    .about("Set databend version to run")
+            )
+            .arg(
+                Arg::new("storage_type")
+                    .long("storage-type")
+                    .takes_value(true)
+                    .env(databend_query::configs::config_storage::STORAGE_TYPE)
+                    .about("Set the storage medium to store datasets, support disk or s3 object storage ")
+                    .possible_values(&["disk", "s3"]).default_value("disk"),
+            )
+            .arg(
+                Arg::new("disk_path")
+                    .long("disk-path")
+                    .takes_value(true)
+                    // .env(databend_query::configs::config_storage::DISK_STORAGE_DATA_PATH)
+                    .about("Set the root directory to store all datasets")
+                    .value_hint(ValueHint::DirPath),
+            )
+            .arg(
+                Arg::new("mysql_handler_port")
+                    .long("mysql-handler-port")
+                    .takes_value(true)
+                    .env(databend_query::configs::config_query::QUERY_MYSQL_HANDLER_PORT)
+                    .about("Configure the port for mysql endpoint to run queries in mysql client"),
+            )
+            .arg(
+                Arg::new("clickhouse_handler_port")
+                    .long("clickhouse-handler-port")
+                    .env(databend_query::configs::config_query::QUERY_CLICKHOUSE_HANDLER_HOST)
+                    .takes_value(true)
+                    .about("Configure the port clickhouse endpoint to run queries in clickhouse client"),
+            )
     }
 
     fn subcommands(&self) -> Vec<Arc<dyn Command>> {
@@ -331,7 +201,7 @@ impl Command for AddCommand {
     }
 
     fn about(&self) -> &'static str {
-        "Create a databend cluster based on profile"
+        "Add a query instance on existing cluster"
     }
 
     fn is(&self, s: &str) -> bool {
@@ -341,7 +211,8 @@ impl Command for AddCommand {
     async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         match args {
             Some(matches) => {
-                let profile = matches.value_of_t("profile");
+                let status = Status::read(self.conf.clone())?;
+                let profile = get_profile(status, matches.value_of("profile"));
                 match profile {
                     Ok(ClusterProfile::Local) => {
                         return self.local_exec_match(writer, matches).await;

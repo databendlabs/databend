@@ -57,6 +57,55 @@ impl fmt::Display for HealthStatus {
     }
 }
 
+// poll_health would check the health of active meta service and query service, and return their status quo
+// first element is the health status in dashboard service and the second element is the health status of meta services
+// the third element is the health status in query services
+pub async fn poll_health(profile: &ClusterProfile, status: &Status, retry: Option<u32>,
+                         duration: Option<Duration>,) -> (Option<(String, Result<()>)>, Option<(String, Result<()>)>, (Vec<String>, Vec<Result<()>>)) {
+    match profile {
+        ClusterProfile::Local => {
+            let meta_config = status.get_local_meta_config();
+            let query_config = status.get_local_query_configs();
+            let dashboard_config = status.get_local_dashboard_config();
+            let mut handles = Vec::with_capacity(query_config.len() + 2);
+            let mut fs_vec = Vec::with_capacity(query_config.len() + 2);
+            for (fs, dashboard_config) in dashboard_config.iter() {
+                fs_vec.push(fs.clone());
+                handles.push(dashboard_config.verify(retry, duration));
+            }
+            for (fs, meta_config) in meta_config.iter() {
+                fs_vec.push(fs.clone());
+                handles.push(meta_config.verify(retry, duration));
+            }
+            for (fs, query_config) in query_config.iter() {
+                fs_vec.push(fs.clone());
+                handles.push(query_config.verify(retry, duration));
+            }
+            let mut res = futures::future::join_all(handles).await;
+            let dash_res = match dashboard_config {
+                Some(_) => {
+                    Some((fs_vec.remove(0), res.remove(0)))
+                }
+                None => {
+                    None
+                }
+            };
+            let meta_res = match meta_config {
+                Some(_) => {
+                    Some((fs_vec.remove(0), res.remove(0)))
+                }
+                None => {
+                    None
+                }
+            };
+            (dash_res, meta_res, (fs_vec, res))
+        }
+        ClusterProfile::Cluster => {
+            todo!()
+        }
+    }
+}
+
 impl ViewCommand {
     pub fn create(conf: Config) -> Self {
         ViewCommand { conf }
@@ -146,26 +195,15 @@ impl ViewCommand {
             Cell::new("Tls"),
             Cell::new("Config"),
         ]);
-        let dash_config = status.get_local_dashboard_config();
-        let meta_config = status.get_local_meta_config();
-        let query_config = status.get_local_query_configs();
-        let mut fs_vec = Vec::with_capacity(query_config.len() + 2);
-        let mut handles = Vec::with_capacity(query_config.len() + 2);
-        for (fs, dash_config) in dash_config.iter() {
-            fs_vec.push(fs);
-            handles.push(dash_config.verify(retry, duration));
+        let (dashboard, meta, query) = poll_health(&ClusterProfile::Local, status, retry, duration).await;
+        if let Some(meta) = meta {
+            table.add_row(ViewCommand::build_row(&*meta.0, &meta.1));
         }
-        for (fs, meta_config) in meta_config.iter() {
-            fs_vec.push(fs);
-            handles.push(meta_config.verify(retry, duration));
+        for (i, fs) in query.0.iter().enumerate() {
+            table.add_row(ViewCommand::build_row(fs, query.1.get(i).unwrap()));
         }
-        for (fs, query_config) in query_config.iter() {
-            fs_vec.push(fs);
-            handles.push(query_config.verify(retry, duration));
-        }
-        let res = futures::future::join_all(handles).await;
-        for (i, fs) in fs_vec.iter().enumerate() {
-            table.add_row(ViewCommand::build_row(fs, res.get(i).unwrap()));
+        if let Some(dashboard) = dashboard {
+            table.add_row(ViewCommand::build_row(&*dashboard.0, &dashboard.1));
         }
         Ok(table)
     }

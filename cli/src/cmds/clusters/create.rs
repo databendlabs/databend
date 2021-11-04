@@ -100,79 +100,327 @@ async fn reconcile_local(status: &mut Status) -> Result<()> {
     Ok(())
 }
 
+pub fn generate_query_config() -> QueryConfig {
+    let mut config = QueryConfig::default();
+    if config.query.http_api_address.parse::<SocketAddr>().is_err()
+        || !portpicker::is_free(
+        config
+            .query
+            .http_api_address
+            .parse::<SocketAddr>()
+            .unwrap()
+            .port(),
+    )
+    {
+        config.query.http_api_address = Status::find_unused_local_port()
+    }
+
+    if config
+        .query
+        .metric_api_address
+        .parse::<SocketAddr>()
+        .is_err()
+        || !portpicker::is_free(
+        config
+            .query
+            .metric_api_address
+            .parse::<SocketAddr>()
+            .unwrap()
+            .port(),
+    )
+    {
+        config.query.metric_api_address = Status::find_unused_local_port()
+    }
+    if config
+        .query
+        .flight_api_address
+        .parse::<SocketAddr>()
+        .is_err()
+        || !portpicker::is_free(
+        config
+            .query
+            .flight_api_address
+            .parse::<SocketAddr>()
+            .unwrap()
+            .port(),
+    )
+    {
+        config.query.flight_api_address = Status::find_unused_local_port()
+    }
+    if config.query.mysql_handler_host.is_empty() {
+        config.query.mysql_handler_host = "0.0.0.0".to_string();
+    }
+    if config.query.clickhouse_handler_host.is_empty() {
+        config.query.clickhouse_handler_host = "0.0.0.0".to_string();
+    }
+
+    if config.query.http_handler_host.is_empty() {
+        config.query.http_handler_host = "0.0.0.0".to_string();
+    }
+    if !portpicker::is_free(config.query.mysql_handler_port) {
+        config.query.mysql_handler_port = portpicker::pick_unused_port().unwrap();
+    }
+    if !portpicker::is_free(config.query.clickhouse_handler_port) {
+        config.query.clickhouse_handler_port = portpicker::pick_unused_port().unwrap();
+    }
+    if !portpicker::is_free(config.query.http_handler_port) {
+        config.query.http_handler_port = portpicker::pick_unused_port().unwrap();
+    }
+    config
+}
+
+pub async fn provision_local_query_service(
+    mut status: &mut Status,
+    writer: &mut Writer,
+    mut query_config: LocalQueryConfig,
+    file_name: String
+) -> Result<()> {
+    match query_config.start().await {
+        Ok(_) => {
+            assert!(query_config.get_pid().is_some());
+            Status::save_local_config::<LocalQueryConfig>(
+                &mut status,
+                "query".to_string(),
+                file_name,
+                &query_config.clone(),
+            )?;
+            status.write()?;
+            writer.write_ok("Successfully started query service.".to_string());
+            writer.write_ok(
+                "To run queries through bendctl, run: bendctl query 'your SQL'".to_string(),
+            );
+            writer.write_ok(
+                "For example: bendctl query 'SELECT sum(number), avg(number) FROM numbers(100)'".to_string()
+            );
+            writer.write_ok(format!(
+                "To process mysql queries, run: mysql -h{} -P{} -uroot",
+                query_config.config.query.mysql_handler_host,
+                query_config.config.query.mysql_handler_port
+            ));
+            writer.write_ok(
+                format!(
+                    "To process clickhouse queries, run: clickhouse client --host {} --port {} --user root",
+                    query_config.config.query.clickhouse_handler_host,
+                    query_config.config.query.clickhouse_handler_port
+                )
+            );
+            writer.write_ok(
+                format!(
+                    "To process HTTP REST queries, run: curl --location --request POST '{}:{}/v1/statement/' --header 'Content-Type: text/plain' --data-raw 'your SQL'",
+                    query_config.config.query.http_handler_host,
+                    query_config.config.query.http_handler_port
+                )
+            );
+
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
+}
+
+
+pub fn generate_local_log_dir(conf: &Config, dir_name: &str) -> String {
+    let log_base = format!("{}/logs", conf.clone().databend_dir);
+    if !Path::new(log_base.as_str()).exists() {
+        fs::create_dir(Path::new(log_base.as_str()))
+            .unwrap_or_else(|_| panic!("cannot create directory {}", log_base));
+    }
+    let query_log_dir = format!("{}/{}", log_base, dir_name);
+    if !Path::new(query_log_dir.as_str()).exists() {
+        fs::create_dir(Path::new(query_log_dir.as_str())).unwrap_or_else(|_| {
+            panic!("cannot create meta serivce log directory {}", query_log_dir)
+        });
+    }
+    query_log_dir
+}
+
+pub fn generate_local_query_config(
+    conf: Config,
+    args: &ArgMatches,
+    bin_path: LocalBinaryPaths,
+    meta_config: &LocalMetaConfig,
+    log_dir: String,
+) -> Result<LocalQueryConfig> {
+    let mut config = generate_query_config();
+    // configure meta address based on provisioned meta service
+
+    config.meta.meta_address = meta_config.clone().config.flight_api_address;
+
+    config.meta.meta_username = "root".to_string();
+    config.meta.meta_password = "root".to_string();
+    // tenant
+    if args.value_of("query_namespace").is_some()
+        && !args.value_of("query_namespace").unwrap().is_empty()
+    {
+        config.query.namespace = args.value_of("query_namespace").unwrap().to_string();
+    }
+
+    if args.value_of("query_tenant").is_some()
+        && !args.value_of("query_tenant").unwrap().is_empty()
+    {
+        config.query.tenant = args.value_of("query_tenant").unwrap().to_string();
+    }
+
+    if args.value_of("num_cpus").is_some() && !args.value_of("num_cpus").unwrap().is_empty() {
+        config.query.num_cpus = args.value_of("num_cpus").unwrap().parse::<u64>().unwrap();
+    }
+
+    // mysql handler
+    if args.value_of("mysql_handler_port").is_some()
+        && !args.value_of("mysql_handler_port").unwrap().is_empty()
+    {
+        config.query.mysql_handler_port = args
+            .value_of("mysql_handler_port")
+            .unwrap()
+            .parse::<u16>()
+            .unwrap();
+    }
+
+    // clickhouse handler
+    if args.value_of("clickhouse_handler_port").is_some()
+        && !args.value_of("clickhouse_handler_port").unwrap().is_empty()
+    {
+        config.query.clickhouse_handler_port = args
+            .value_of("clickhouse_handler_port")
+            .unwrap()
+            .parse::<u16>()
+            .unwrap();
+    }
+    // storage
+    let storage_type = args.value_of("storage_type");
+    match storage_type {
+        Some("disk") => {
+            if args.value_of("disk_path").is_some()
+                && !args.value_of("disk_path").unwrap().is_empty()
+            {
+                if !Path::new(&args.value_of("disk_path").unwrap()).exists() {
+                    return Err(CliError::Unknown(format!(
+                        "cannot find local disk_path in {}",
+                        args.value_of("disk_path").unwrap()
+                    )));
+                }
+                config.storage.disk.data_path =
+                    fs::canonicalize(&args.value_of("disk_path").unwrap())
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                        .to_string()
+            } else {
+                let data_dir = format!("{}/data", conf.clone().databend_dir);
+                if !Path::new(data_dir.as_str()).exists()
+                    && fs::create_dir(Path::new(data_dir.as_str())).is_err()
+                {
+                    return Err(CliError::Unknown(format!(
+                        "cannot find local disk_path in {}",
+                        data_dir
+                    )));
+                }
+
+                config.storage.disk.data_path = fs::canonicalize(data_dir)
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string()
+            }
+        }
+        Some("s3") => {
+            todo!()
+        }
+        Some(_) | None => {
+            return Err(CliError::Unknown(
+                "storage type is not supported for now".parse().unwrap(),
+            ))
+        }
+    }
+
+    // log
+    config.log.log_level = args.value_of("log_level").unwrap().to_string();
+    let query_log_dir = log_dir;
+
+    config.log.log_dir = query_log_dir.clone();
+    Ok(LocalQueryConfig {
+        config,
+        pid: None,
+        path: Some(bin_path.query),
+        log_dir: Some(query_log_dir),
+    })
+}
+
+pub fn get_bin(conf: &Config, status: &Status) -> Result<LocalBinaryPaths> {
+    let mut paths = LocalBinaryPaths {
+        query: "".to_string(),
+        meta: "".to_string(),
+    };
+    paths.query = binary_path(
+        format!("{}/bin", conf.databend_dir),
+        status.version.clone(),
+        "databend-query".to_string(),
+    )
+        .expect("cannot find query bin");
+    paths.meta = binary_path(
+        format!("{}/bin", conf.databend_dir),
+        status.version.clone(),
+        "databend-meta".to_string(),
+    )
+        .expect("cannot find meta service binary");
+    Ok(paths)
+}
+
+async fn ensure_bin(conf: Config, version: String, writer: &mut Writer, args: &ArgMatches) -> Result<LocalBinaryPaths> {
+    let mut status = Status::read(conf.clone())?;
+
+
+    let current_version = version;
+    status.version = current_version.clone();
+    status.write()?;
+    if binary_path(
+            format!("{}/bin", conf.databend_dir),
+            current_version,
+            "databend-query".to_string(),
+        )
+        .is_err()
+    {
+        // fetch latest version of databend binary if version not found
+        writer.write_ok(format!(
+            "Cannot find databend binary path in version {}, start to download from {:?}",
+            args.value_of("version").unwrap(),
+            status.mirrors
+        ));
+        FetchCommand::create(conf.clone())
+            .exec_matches(writer, Some(args))
+            .await?;
+    }
+    SwitchCommand::create(conf.clone())
+        .exec_matches(writer, Some(args))
+        .await?;
+    let status = Status::read(conf.clone())?;
+    let paths = get_bin(&conf, &status)?;
+    Ok(paths)
+}
+
+fn binary_path(dir: String, version: String, name: String) -> Result<String> {
+    if version.is_empty() {
+        return Err(CliError::Unknown(
+            "cannot find binary path, current version is empty".to_string(),
+        ));
+    }
+    let bin_path = format!("{}/{}/{}", dir, version, name);
+    if !Path::new(bin_path.as_str()).exists() {
+        return Err(CliError::Unknown(format!(
+            "cannot find binary path in {}",
+            bin_path
+        )));
+    }
+    Ok(fs::canonicalize(&bin_path)
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string())
+}
+
 impl CreateCommand {
     pub fn create(conf: Config) -> Self {
         CreateCommand { conf }
-    }
-
-    fn binary_path(&self, dir: String, version: String, name: String) -> Result<String> {
-        if version.is_empty() {
-            return Err(CliError::Unknown(
-                "cannot find binary path, current version is empty".to_string(),
-            ));
-        }
-        let bin_path = format!("{}/{}/{}", dir, version, name);
-        if !Path::new(bin_path.as_str()).exists() {
-            return Err(CliError::Unknown(format!(
-                "cannot find binary path in {}",
-                bin_path
-            )));
-        }
-        Ok(fs::canonicalize(&bin_path)
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string())
-    }
-
-    async fn ensure_bin(&self, writer: &mut Writer, args: &ArgMatches) -> Result<LocalBinaryPaths> {
-        let mut status = Status::read(self.conf.clone())?;
-
-        let mut paths = LocalBinaryPaths {
-            query: "".to_string(),
-            meta: "".to_string(),
-        };
-        let current_version =
-            get_version(&self.conf, args.value_of("version").map(|s| s.to_string()))?;
-        status.version = current_version.clone();
-        status.write()?;
-        if self
-            .binary_path(
-                format!("{}/bin", self.conf.databend_dir),
-                current_version,
-                "databend-query".to_string(),
-            )
-            .is_err()
-        {
-            // fetch latest version of databend binary if version not found
-            writer.write_ok(format!(
-                "Cannot find databend binary path in version {}, start to download from {:?}",
-                args.value_of("version").unwrap(),
-                status.mirrors
-            ));
-            FetchCommand::create(self.conf.clone())
-                .exec_matches(writer, Some(args))
-                .await?;
-        }
-        SwitchCommand::create(self.conf.clone())
-            .exec_matches(writer, Some(args))
-            .await?;
-        let status = Status::read(self.conf.clone())?;
-        paths.query = self
-            .binary_path(
-                format!("{}/bin", self.conf.databend_dir),
-                status.version.clone(),
-                "databend-query".to_string(),
-            )
-            .expect("cannot find query bin");
-        paths.meta = self
-            .binary_path(
-                format!("{}/bin", self.conf.databend_dir),
-                status.version,
-                "databend-meta".to_string(),
-            )
-            .expect("cannot find meta service binary");
-        Ok(paths)
     }
 
     fn generate_meta_config(&self) -> MetaConfig {
@@ -259,188 +507,6 @@ impl CreateCommand {
         })
     }
 
-    fn generate_query_config(&self) -> QueryConfig {
-        let mut config = QueryConfig::default();
-        if config.query.http_api_address.parse::<SocketAddr>().is_err()
-            || !portpicker::is_free(
-                config
-                    .query
-                    .http_api_address
-                    .parse::<SocketAddr>()
-                    .unwrap()
-                    .port(),
-            )
-        {
-            config.query.http_api_address = Status::find_unused_local_port()
-        }
-
-        if config
-            .query
-            .metric_api_address
-            .parse::<SocketAddr>()
-            .is_err()
-            || !portpicker::is_free(
-                config
-                    .query
-                    .metric_api_address
-                    .parse::<SocketAddr>()
-                    .unwrap()
-                    .port(),
-            )
-        {
-            config.query.metric_api_address = Status::find_unused_local_port()
-        }
-        if config
-            .query
-            .flight_api_address
-            .parse::<SocketAddr>()
-            .is_err()
-            || !portpicker::is_free(
-                config
-                    .query
-                    .flight_api_address
-                    .parse::<SocketAddr>()
-                    .unwrap()
-                    .port(),
-            )
-        {
-            config.query.flight_api_address = Status::find_unused_local_port()
-        }
-        if config.query.mysql_handler_host.is_empty() {
-            config.query.mysql_handler_host = "0.0.0.0".to_string();
-        }
-        if config.query.clickhouse_handler_host.is_empty() {
-            config.query.clickhouse_handler_host = "0.0.0.0".to_string();
-        }
-
-        if config.query.http_handler_host.is_empty() {
-            config.query.http_handler_host = "0.0.0.0".to_string();
-        }
-        if !portpicker::is_free(config.query.http_handler_port) {
-            config.query.http_handler_port = portpicker::pick_unused_port().unwrap();
-        }
-        config
-    }
-
-    pub fn generate_local_query_config(
-        &self,
-        args: &ArgMatches,
-        bin_path: LocalBinaryPaths,
-        meta_config: &LocalMetaConfig,
-    ) -> Result<LocalQueryConfig> {
-        let mut config = self.generate_query_config();
-        // configure meta address based on provisioned meta service
-
-        config.meta.meta_address = meta_config.clone().config.flight_api_address;
-
-        config.meta.meta_username = "root".to_string();
-        config.meta.meta_password = "root".to_string();
-        // tenant
-        if args.value_of("query_namespace").is_some()
-            && !args.value_of("query_namespace").unwrap().is_empty()
-        {
-            config.query.namespace = args.value_of("query_namespace").unwrap().to_string();
-        }
-
-        if args.value_of("query_tenant").is_some()
-            && !args.value_of("query_tenant").unwrap().is_empty()
-        {
-            config.query.tenant = args.value_of("query_tenant").unwrap().to_string();
-        }
-
-        if args.value_of("num_cpus").is_some() && !args.value_of("num_cpus").unwrap().is_empty() {
-            config.query.num_cpus = args.value_of("num_cpus").unwrap().parse::<u64>().unwrap();
-        }
-
-        // mysql handler
-        if args.value_of("mysql_handler_port").is_some()
-            && !args.value_of("mysql_handler_port").unwrap().is_empty()
-        {
-            config.query.mysql_handler_port = args
-                .value_of("mysql_handler_port")
-                .unwrap()
-                .parse::<u16>()
-                .unwrap();
-        }
-
-        // clickhouse handler
-        if args.value_of("clickhouse_handler_port").is_some()
-            && !args.value_of("clickhouse_handler_port").unwrap().is_empty()
-        {
-            config.query.clickhouse_handler_port = args
-                .value_of("clickhouse_handler_port")
-                .unwrap()
-                .parse::<u16>()
-                .unwrap();
-        }
-        // storage
-        let storage_type = args.value_of("storage_type");
-        match storage_type {
-            Some("disk") => {
-                if args.value_of("disk_path").is_some()
-                    && !args.value_of("disk_path").unwrap().is_empty()
-                {
-                    if !Path::new(&args.value_of("disk_path").unwrap()).exists() {
-                        return Err(CliError::Unknown(format!(
-                            "cannot find local disk_path in {}",
-                            args.value_of("disk_path").unwrap()
-                        )));
-                    }
-                    config.storage.disk.data_path =
-                        fs::canonicalize(&args.value_of("disk_path").unwrap())
-                            .unwrap()
-                            .to_str()
-                            .unwrap()
-                            .to_string()
-                } else {
-                    let data_dir = format!("{}/data", self.conf.clone().databend_dir);
-                    if !Path::new(data_dir.as_str()).exists()
-                        && fs::create_dir(Path::new(data_dir.as_str())).is_err()
-                    {
-                        return Err(CliError::Unknown(format!(
-                            "cannot find local disk_path in {}",
-                            data_dir
-                        )));
-                    }
-
-                    config.storage.disk.data_path = fs::canonicalize(data_dir)
-                        .unwrap()
-                        .to_str()
-                        .unwrap()
-                        .to_string()
-                }
-            }
-            Some("s3") => {
-                todo!()
-            }
-            Some(_) | None => {
-                return Err(CliError::Unknown(
-                    "storage type is not supported for now".parse().unwrap(),
-                ))
-            }
-        }
-
-        // log
-        config.log.log_level = args.value_of("log_level").unwrap().to_string();
-        let log_base = format!("{}/logs", self.conf.clone().databend_dir);
-        if !Path::new(log_base.as_str()).exists() {
-            fs::create_dir(Path::new(log_base.as_str()))
-                .unwrap_or_else(|_| panic!("cannot create directory {}", log_base));
-        }
-        let query_log_dir = format!("{}/local_query_log_0", log_base);
-        if !Path::new(query_log_dir.as_str()).exists() {
-            fs::create_dir(Path::new(query_log_dir.as_str())).unwrap_or_else(|_| {
-                panic!("cannot create meta serivce log directory {}", query_log_dir)
-            });
-        }
-        config.log.log_dir = query_log_dir.clone();
-        Ok(LocalQueryConfig {
-            config,
-            pid: None,
-            path: Some(bin_path.query),
-            log_dir: Some(query_log_dir),
-        })
-    }
     async fn provision_local_meta_service(
         &self,
         writer: &mut Writer,
@@ -466,62 +532,13 @@ impl CreateCommand {
         }
     }
 
-    async fn provision_local_query_service(
-        &self,
-        writer: &mut Writer,
-        mut query_config: LocalQueryConfig,
-    ) -> Result<()> {
-        match query_config.start().await {
-            Ok(_) => {
-                assert!(query_config.get_pid().is_some());
-                let mut status = Status::read(self.conf.clone())?;
-                Status::save_local_config::<LocalQueryConfig>(
-                    &mut status,
-                    "query".to_string(),
-                    "query_config_0.yaml".to_string(),
-                    &query_config.clone(),
-                )?;
-                status.write()?;
-                writer.write_ok("Successfully started query service.".to_string());
-                writer.write_ok(
-                    "To run queries through bendctl, run: bendctl query 'your SQL'".to_string(),
-                );
-                writer.write_ok(
-                    "For example: bendctl query 'SELECT sum(number), avg(number) FROM numbers(100)'".to_string()
-                );
-                writer.write_ok(format!(
-                    "To process mysql queries, run: mysql -h{} -P{} -uroot",
-                    query_config.config.query.mysql_handler_host,
-                    query_config.config.query.mysql_handler_port
-                ));
-                writer.write_ok(
-                    format!(
-                        "To process clickhouse queries, run: clickhouse client --host {} --port {} --user root",
-                        query_config.config.query.clickhouse_handler_host,
-                        query_config.config.query.clickhouse_handler_port
-                    )
-                );
-                writer.write_ok(
-                    format!(
-                        "To process HTTP REST queries, run: curl --location --request POST '{}:{}/v1/statement/' --header 'Content-Type: text/plain' --data-raw 'your SQL'",
-                        query_config.config.query.http_handler_host,
-                        query_config.config.query.http_handler_port
-                    )
-                );
-
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
-    }
-
     async fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
         match self.local_exec_precheck(writer, args).await {
             Ok(_) => {
                 writer.write_ok("Databend cluster pre-check passed!".to_string());
                 // ensuring needed dependencies
-                let bin_path = self
-                    .ensure_bin(writer, args)
+                let version = get_version(&self.conf, args.value_of("version").map(|s| s.to_string()))?;
+                let bin_path = ensure_bin(self.conf.clone(),version, writer, args)
                     .await
                     .expect("cannot find binary path");
                 let meta_config = self
@@ -552,7 +569,8 @@ impl CreateCommand {
                         .unwrap();
                     return Ok(());
                 }
-                let query_config = self.generate_local_query_config(args, bin_path, &meta_config);
+                let local_log_dir = generate_local_log_dir(&self.conf,"local_query_0");
+                let query_config = generate_local_query_config(self.conf.clone(), args, bin_path, &meta_config, local_log_dir);
                 if query_config.is_err() {
                     let mut status = Status::read(self.conf.clone())?;
                     writer.write_err(format!(
@@ -575,10 +593,12 @@ impl CreateCommand {
                         .as_str()
                 ));
                 {
-                    let res = self
-                        .provision_local_query_service(
-                            writer,
-                            query_config.as_ref().unwrap().clone(),
+                    let mut status = Status::read(self.conf.clone())?;
+                    let res = provision_local_query_service(
+                        &mut status,
+                        writer,
+                        query_config.as_ref().unwrap().clone(),
+                        "query_config_0.yaml".to_string()
                         )
                         .await;
                     if res.is_err() {
