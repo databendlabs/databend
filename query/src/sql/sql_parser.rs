@@ -32,12 +32,14 @@ use sqlparser::ast::Value;
 use sqlparser::dialect::keywords::Keyword;
 use sqlparser::dialect::Dialect;
 use sqlparser::dialect::GenericDialect;
+use sqlparser::parser::IsOptional;
 use sqlparser::parser::Parser;
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::Whitespace;
 
+use super::DfCopy;
 use crate::sql::DfCreateDatabase;
 use crate::sql::DfCreateTable;
 use crate::sql::DfCreateUser;
@@ -214,6 +216,7 @@ impl<'a> DfParser<'a> {
                         "KILL" => self.parse_kill_query(),
                         _ => self.expected("Keyword", self.parser.peek_token()),
                     },
+                    Keyword::COPY => self.parse_copy(),
                     _ => {
                         // use the native parser
                         Ok(DfStatement::Statement(self.parser.parse_statement()?))
@@ -603,6 +606,24 @@ impl<'a> DfParser<'a> {
             },
             unexpected => self.expected("truncate statement", unexpected),
         }
+    }
+
+    fn parse_copy(&mut self) -> Result<DfStatement, ParserError> {
+        let name = self.parser.parse_object_name()?;
+        let columns = self
+            .parser
+            .parse_parenthesized_column_list(IsOptional::Optional)?;
+        self.parser.expect_keyword(Keyword::FROM)?;
+        let location = self.parser.parse_literal_string()?;
+        self.parser.expect_keyword(Keyword::FORMAT)?;
+        let format = self.parser.parse_literal_string()?;
+
+        Ok(DfStatement::Copy(DfCopy {
+            name,
+            columns,
+            location,
+            format,
+        }))
     }
 
     fn consume_token(&mut self, expected: &str) -> bool {

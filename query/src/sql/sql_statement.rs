@@ -119,6 +119,15 @@ pub struct DfCreateUser {
     pub password: String,
 }
 
+// https://www.postgresql.org/docs/13/sql-copy.html
+#[derive(Debug, Clone, PartialEq)]
+pub struct DfCopy {
+    pub name: ObjectName,
+    pub columns: Vec<Ident>,
+    pub location: String,
+    pub format: String,
+}
+
 /// Tokens parsed by `DFParser` are converted into these values.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DfStatement {
@@ -139,6 +148,9 @@ pub enum DfStatement {
     DescribeTable(DfDescribeTable),
     DropTable(DfDropTable),
     TruncateTable(DfTruncateTable),
+
+    // COPY
+    Copy(DfCopy),
 
     // Settings.
     ShowSettings(DfShowSettings),

@@ -52,7 +52,9 @@ use common_planners::TableScanInfo;
 use common_planners::TruncateTablePlan;
 use common_planners::UseDatabasePlan;
 use common_planners::VarValue;
+use common_streams::CsvSource;
 use common_streams::Source;
+use common_streams::SourceStream;
 use common_streams::ValueSource;
 use common_tracing::tracing;
 use nom::FindSubstring;
@@ -65,6 +67,7 @@ use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
 use sqlparser::ast::UnaryOperator;
 
+use super::DfCopy;
 use crate::catalogs::ToReadDataSourcePlan;
 use crate::functions::ContextFunction;
 use crate::sessions::DatabendQueryContextRef;
@@ -174,6 +177,7 @@ impl PlanParser {
             DfStatement::KillQuery(v) => self.sql_kill_query_to_plan(v),
             DfStatement::KillConn(v) => self.sql_kill_connection_to_plan(v),
             DfStatement::CreateUser(v) => self.sql_create_user_to_plan(v),
+            DfStatement::Copy(v) => self.copy_to_plan(v),
         }
     }
 
@@ -431,6 +435,27 @@ impl PlanParser {
         }
 
         Ok(PlanNode::TruncateTable(TruncateTablePlan { db, table }))
+    }
+
+    // we can transform copy plan into insert plan
+    #[tracing::instrument(level = "info", skip(self, copy_stmt), fields(ctx.id = self.ctx.get_id().as_str()))]
+    pub fn copy_to_plan(&self, copy_stmt: &DfCopy) -> Result<PlanNode> {
+        let mut insert_plan =
+            self.insert_to_plan(&copy_stmt.name, &copy_stmt.columns, &None, "")?;
+        match insert_plan {
+            PlanNode::InsertInto(v) => match copy_stmt.format.to_uppercase().as_str() {
+                "CSV" => {
+                    let file = std::fs::File::open(copy_stmt.location.as_str())?;
+                    let block_size = self.ctx.get_settings().get_max_block_size()?;
+                    let source = CsvSource::new(file, v.schema(), block_size as usize);
+                    v.set_input_stream(Box::pin(SourceStream::create(Box::new(source))));
+
+                    Ok(PlanNode::InsertInto(v))
+                }
+                _ => unimplemented!("Only support copy csv file into table for now"),
+            },
+            _ => unreachable!(),
+        }
     }
 
     #[tracing::instrument(level = "info", skip(self, table_name, columns, source), fields(ctx.id = self.ctx.get_id().as_str()))]
