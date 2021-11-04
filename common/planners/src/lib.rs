@@ -37,8 +37,6 @@ mod plan_projection_test;
 #[cfg(test)]
 mod plan_rewriter_test;
 #[cfg(test)]
-mod plan_scan_test;
-#[cfg(test)]
 mod plan_select_test;
 #[cfg(test)]
 mod test;
@@ -78,7 +76,6 @@ mod plan_projection;
 mod plan_read_datasource;
 mod plan_remote;
 mod plan_rewriter;
-mod plan_scan;
 mod plan_select;
 mod plan_setting;
 mod plan_show_table_create;
@@ -148,7 +145,6 @@ pub use plan_read_datasource::ReadDataSourcePlan;
 pub use plan_remote::RemotePlan;
 pub use plan_rewriter::PlanRewriter;
 pub use plan_rewriter::RewriteHelper;
-pub use plan_scan::ScanPlan;
 pub use plan_select::SelectPlan;
 pub use plan_setting::SettingPlan;
 pub use plan_setting::VarValue;

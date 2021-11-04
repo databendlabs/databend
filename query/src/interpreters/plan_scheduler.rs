@@ -28,6 +28,7 @@ use common_planners::EmptyPlan;
 use common_planners::Expression;
 use common_planners::ExpressionPlan;
 use common_planners::Expressions;
+use common_planners::Extras;
 use common_planners::FilterPlan;
 use common_planners::HavingPlan;
 use common_planners::LimitByPlan;
@@ -37,7 +38,6 @@ use common_planners::PlanNode;
 use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::RemotePlan;
-use common_planners::ScanPlan;
 use common_planners::SelectPlan;
 use common_planners::SortPlan;
 use common_planners::StageKind;
@@ -788,7 +788,7 @@ impl PlanScheduler {
         match table.is_local() {
             true => self.visit_local_data_source(plan),
             false => {
-                let cluster_source = self.cluster_source(&plan.scan_plan, table.clone())?;
+                let cluster_source = self.cluster_source(&plan.push_downs, table.clone())?;
                 self.visit_cluster_data_source(&cluster_source)
             }
         }
@@ -838,14 +838,17 @@ impl PlanScheduler {
 }
 
 impl PlanScheduler {
-    fn cluster_source(&mut self, node: &ScanPlan, table: TablePtr) -> Result<ReadDataSourcePlan> {
+    fn cluster_source(
+        &mut self,
+        push_downs: &Option<Extras>,
+        table: TablePtr,
+    ) -> Result<ReadDataSourcePlan> {
         let io_ctx = self.query_context.get_cluster_table_io_context()?;
-
         let io_ctx = Arc::new(io_ctx);
 
         table.read_plan(
             io_ctx.clone(),
-            Some(node.push_downs.clone()),
+            push_downs.clone(),
             Some(io_ctx.get_max_threads() * io_ctx.get_query_node_ids().len()),
         )
     }

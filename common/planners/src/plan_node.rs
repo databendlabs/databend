@@ -40,7 +40,6 @@ use crate::LimitPlan;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
-use crate::ScanPlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateTablePlan;
@@ -65,7 +64,6 @@ pub enum PlanNode {
     Sort(SortPlan),
     Limit(LimitPlan),
     LimitBy(LimitByPlan),
-    Scan(ScanPlan),
     ReadSource(ReadDataSourcePlan),
     Select(SelectPlan),
     Explain(ExplainPlan),
@@ -92,7 +90,6 @@ impl PlanNode {
             PlanNode::Stage(v) => v.schema(),
             PlanNode::Broadcast(v) => v.schema(),
             PlanNode::Remote(v) => v.schema(),
-            PlanNode::Scan(v) => v.schema(),
             PlanNode::Projection(v) => v.schema(),
             PlanNode::Expression(v) => v.schema(),
             PlanNode::AggregatorPartial(v) => v.schema(),
@@ -126,7 +123,6 @@ impl PlanNode {
             PlanNode::Empty(_) => "EmptyPlan",
             PlanNode::Stage(_) => "StagePlan",
             PlanNode::Broadcast(_) => "BroadcastPlan",
-            PlanNode::Scan(_) => "ScanPlan",
             PlanNode::Remote(_) => "RemotePlan",
             PlanNode::Projection(_) => "ProjectionPlan",
             PlanNode::Expression(_) => "ExpressionPlan",

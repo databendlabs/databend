@@ -150,7 +150,6 @@ impl ToReadDataSourcePlan for dyn Table {
             parts,
             statistics,
             description,
-            scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
             tbl_args: self.table_args(),
             push_downs,
         })
