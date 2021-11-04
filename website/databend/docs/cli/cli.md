@@ -140,3 +140,11 @@ Mode switched to admin mode
 [ok] 🚀 Stopped all services
 [local] [admin]> 
 ```
+
+## 6. Demo
+
+<figure>
+  <img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/bendctl-how-to-use.gif"/>
+  <figcaption>bendctl on AWS arm64-server</figcaption>
+</figure>
+
