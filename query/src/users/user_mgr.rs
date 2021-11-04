@@ -54,7 +54,7 @@ impl UserManager {
         match user {
             // TODO(BohuTANG): Mock, need removed.
             "default" | "" | "root" => {
-                let user = User::new(user, "", AuthType::None);
+                let user = User::new(user, "%", "", AuthType::None);
                 Ok(user.into())
             }
             _ => {

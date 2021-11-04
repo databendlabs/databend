@@ -27,12 +27,13 @@ async fn test_user_manager() -> Result<()> {
     config.query.tenant = "tenant1".to_string();
 
     let user = "test-user1";
+    let host_name = "localhost";
     let pwd = "test-pwd";
     let user_mgr = UserManager::create_global(config).await?;
 
     // add.
     {
-        let user_info = User::new(user, pwd, AuthType::PlainText);
+        let user_info = User::new(user, host_name, pwd, AuthType::PlainText);
         user_mgr.add_user(user_info.into()).await?;
     }
 
