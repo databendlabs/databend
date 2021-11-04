@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod abs;
+mod angle;
 mod crc32;
 mod pi;
 mod trigonometric;
