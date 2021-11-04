@@ -126,7 +126,6 @@ impl PlanRewriter for ProjectionPushDownImpl {
                     parts: plan.parts.clone(),
                     statistics: plan.statistics.clone(),
                     description: plan.description.to_string(),
-                    scan_plan: plan.scan_plan.clone(),
                     tbl_args: plan.tbl_args.clone(),
                     push_downs: plan.push_downs.clone(),
                 })

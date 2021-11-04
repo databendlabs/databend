@@ -30,24 +30,12 @@ async fn test_number_table() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let table = NumbersTable::create("system", "numbers_mt", 1, tbl_args)?;
 
-    let scan = &ScanPlan {
-        schema_name: "scan_test".to_string(),
-        table_id: 0,
-        table_version: None,
-        table_schema: DataSchemaRefExt::create(vec![]),
-        projected_schema: DataSchemaRefExt::create(vec![DataField::new(
-            "number",
-            DataType::UInt64,
-            false,
-        )]),
-        push_downs: Extras::default(),
-    };
     let partitions = ctx.get_settings().get_max_threads()? as usize;
     let io_ctx = ctx.get_single_node_table_io_context()?;
     let io_ctx = Arc::new(io_ctx);
     let source_plan = table.clone().as_table().read_plan(
         io_ctx.clone(),
-        Some(scan.push_downs.clone()),
+        Some(Extras::default()),
         Some(partitions),
     )?;
     ctx.try_set_partitions(source_plan.parts.clone())?;

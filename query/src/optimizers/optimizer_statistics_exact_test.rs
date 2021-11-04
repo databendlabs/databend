@@ -15,7 +15,6 @@
 #[cfg(test)]
 mod tests {
     use std::mem::size_of;
-    use std::sync::Arc;
 
     use common_datavalues::*;
     use common_exception::Result;
@@ -53,7 +52,6 @@ mod tests {
                 statistics.read_rows,
                 statistics.read_bytes
             ),
-            scan_plan: Arc::new(ScanPlan::empty()),
             tbl_args: None,
             push_downs: None,
         });
