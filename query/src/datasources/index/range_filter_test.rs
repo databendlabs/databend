@@ -223,10 +223,10 @@ fn test_build_verifiable_function() -> Result<()> {
             expect: "((min_c != sys\\s) or (max_c != sys\\s))",
         },
         Test {
-            name: "c not like 'sys%%'",
+            name: "c not like 'sys%'",
             expr: Expression::create_binary_expression("not like", vec![
                 col("c"),
-                lit("sys%%".as_bytes()),
+                lit("sys%".as_bytes()),
             ]),
             expect: "((min_c < sys) or (max_c >= syt))",
         },
