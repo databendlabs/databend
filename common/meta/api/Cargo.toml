@@ -18,7 +18,7 @@ common-tracing = { path = "../../tracing" }
 
 
 
-anyhow = "1.0.44"
+anyhow = "1.0.45"
 async-trait = "0.1"
 futures = "0.3"
 maplit = "1.0.2"
