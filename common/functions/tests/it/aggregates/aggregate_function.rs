@@ -15,10 +15,9 @@
 use bumpalo::Bump;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_functions::aggregates::*;
 use float_cmp::approx_eq;
 use pretty_assertions::assert_eq;
-
-use crate::aggregates::*;
 
 #[test]
 fn test_aggregate_function() -> Result<()> {

@@ -15,9 +15,8 @@
 use bumpalo::Bump;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_functions::aggregates::AggregateFunctionFactory;
 use pretty_assertions::assert_eq;
-
-use crate::aggregates::aggregate_function_factory::AggregateFunctionFactory;
 
 #[test]
 fn test_aggregate_combinator_function() -> Result<()> {

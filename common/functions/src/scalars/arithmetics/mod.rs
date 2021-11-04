@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod arithmetic_test;
-
 mod arithmetic;
 mod arithmetic_div;
 mod arithmetic_minus;

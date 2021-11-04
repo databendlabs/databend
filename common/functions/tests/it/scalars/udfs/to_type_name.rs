@@ -12,50 +12,59 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
 use common_exception::Result;
-
-use crate::scalars::*;
+use common_functions::scalars::*;
+use pretty_assertions::assert_eq;
 
 #[test]
-fn test_udf_example_function() -> Result<()> {
+fn test_to_type_name_function() -> Result<()> {
     #[allow(dead_code)]
     struct Test {
         name: &'static str,
         display: &'static str,
         nullable: bool,
+        arg_names: Vec<&'static str>,
         columns: Vec<DataColumn>,
         expect: DataColumn,
         error: &'static str,
         func: Box<dyn Function>,
     }
 
-    let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Boolean, false),
-        DataField::new("b", DataType::Boolean, false),
-    ]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Boolean, false)]);
 
     let tests = vec![Test {
-        name: "udf-example-passed",
-        display: "example()",
+        name: "to_type_name-example-passed",
+        display: "toTypeName",
         nullable: false,
-        func: UdfExampleFunction::try_create("example")?,
-        columns: vec![
-            Series::new(vec![true, true, true, false]).into(),
-            Series::new(vec![true, false, true, true]).into(),
-        ],
-        expect: Series::new(vec![true, true, true, true]).into(),
+        arg_names: vec!["a"],
+        func: ToTypeNameFunction::try_create("toTypeName")?,
+        columns: vec![Series::new(vec![true, true, true, false]).into()],
+        expect: Series::new(vec!["Boolean", "Boolean", "Boolean", "Boolean"]).into(),
         error: "",
     }];
 
     for t in tests {
+        let rows = t.columns[0].len();
+
         let func = t.func;
 
-        if let Err(e) = func.eval(&[], t.columns[0].len()) {
+        // Type check.
+        let mut args = vec![];
+        let mut fields = vec![];
+        for name in t.arg_names {
+            args.push(schema.field_with_name(name)?.data_type().clone());
+            fields.push(schema.field_with_name(name)?.clone());
+        }
+
+        let columns: Vec<DataColumnWithField> = t
+            .columns
+            .iter()
+            .zip(fields.iter())
+            .map(|(c, f)| DataColumnWithField::new(c.clone(), f.clone()))
+            .collect();
+
+        if let Err(e) = func.eval(&columns, rows) {
             assert_eq!(t.error, e.to_string());
         }
 
@@ -69,12 +78,12 @@ fn test_udf_example_function() -> Result<()> {
         let actual_null = func.nullable(&schema)?;
         assert_eq!(expect_null, actual_null);
 
-        let columns = vec![];
-        let v = &(func.eval(&columns, t.columns[0].len())?);
-        let expect_type = func.return_type(&[])?;
+        let v = &(func.eval(&columns, rows)?);
+        let expect_type = func.return_type(&args)?;
         let actual_type = v.data_type();
         assert_eq!(expect_type, actual_type);
-        assert_eq!(v, &t.expect);
+
+        assert!(v.to_array()?.series_equal(&t.expect.to_array()?));
     }
     Ok(())
 }

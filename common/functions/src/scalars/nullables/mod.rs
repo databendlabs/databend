@@ -15,8 +15,6 @@
 mod is_not_null;
 mod is_null;
 mod nullable;
-#[cfg(test)]
-mod nullable_test;
 
 pub use is_not_null::IsNotNullFunction;
 pub use is_null::IsNullFunction;

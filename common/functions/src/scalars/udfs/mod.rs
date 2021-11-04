@@ -12,15 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod database_test;
-#[cfg(test)]
-mod to_type_name_test;
-#[cfg(test)]
-mod udf_example_test;
-#[cfg(test)]
-mod version_test;
-
 mod crash_me;
 mod database;
 mod exists;

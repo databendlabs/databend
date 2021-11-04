@@ -20,8 +20,6 @@ mod expressions;
 mod function;
 mod function_alias;
 mod function_column;
-#[cfg(test)]
-mod function_column_test;
 mod function_factory;
 mod function_literal;
 mod hashes;

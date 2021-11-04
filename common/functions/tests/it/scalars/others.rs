@@ -19,8 +19,7 @@ use common_arrow::arrow::array::Int64Array;
 use common_datablocks::*;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-
-use crate::scalars::RunningDifferenceFunction;
+use common_functions::scalars::RunningDifferenceFunction;
 
 macro_rules! run_difference_constant_test {
     ($method_name:ident, $primitive_type:ty, $logic_type:ident, $result_primitive_type:ty, $result_logic_type:ident, $array_type:ident) => {

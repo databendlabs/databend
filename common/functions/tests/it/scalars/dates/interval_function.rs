@@ -16,9 +16,8 @@ use common_datablocks::DataBlock;
 use common_datavalues::chrono::DateTime;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-
-use crate::scalars::MonthsArithmeticFunction;
-use crate::scalars::SecondsArithmeticFunction;
+use common_functions::scalars::MonthsArithmeticFunction;
+use common_functions::scalars::SecondsArithmeticFunction;
 
 #[test]
 fn test_add_months() -> Result<()> {

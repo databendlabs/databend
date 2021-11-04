@@ -15,9 +15,8 @@
 use common_datavalues::prelude::*;
 use common_datavalues::DataType;
 use common_exception::Result;
+use common_functions::scalars::*;
 use pretty_assertions::assert_eq;
-
-use crate::scalars::*;
 
 #[test]
 fn test_nullable_function() -> Result<()> {
