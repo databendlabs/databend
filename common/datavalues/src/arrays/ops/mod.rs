@@ -27,27 +27,6 @@ mod take_single;
 mod to_values;
 mod vec_hash;
 
-#[cfg(test)]
-mod agg_test;
-#[cfg(test)]
-mod apply_test;
-#[cfg(test)]
-mod cast_test;
-#[cfg(test)]
-mod contain_test;
-#[cfg(test)]
-mod fill_test;
-#[cfg(test)]
-mod group_hash_test;
-#[cfg(test)]
-mod if_test;
-#[cfg(test)]
-mod scatter_test;
-#[cfg(test)]
-mod take_random_test;
-#[cfg(test)]
-mod take_test;
-
 pub use agg::*;
 pub use apply::*;
 pub use boolean::*;

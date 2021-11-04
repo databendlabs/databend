@@ -15,10 +15,8 @@
 use std::borrow::Cow;
 
 use common_arrow::arrow::array::Array;
+use common_datavalues::prelude::*;
 use common_exception::Result;
-
-use crate::arrays::ops::apply::ArrayApply;
-use crate::prelude::*;
 
 fn new_test_uint16_array(cap: usize, begin: i32, end: i32) -> DFPrimitiveArray<u16> {
     let mut builder = PrimitiveArrayBuilder::<u16>::with_capacity(cap);

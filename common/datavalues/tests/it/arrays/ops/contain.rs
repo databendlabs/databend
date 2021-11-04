@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::prelude::*;
 use common_exception::Result;
-
-use crate::arrays::ops::contain::ArrayContain;
-use crate::prelude::*;
-use crate::series::Series;
 
 #[test]
 fn test_contain() -> Result<()> {

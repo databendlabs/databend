@@ -11,14 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-mod arithmetic;
-mod comparison;
-mod series_debug;
-mod series_impl;
-mod wrap;
 
-pub use arithmetic::*;
-pub use comparison::*;
-pub use series_debug::*;
-pub use series_impl::*;
-pub use wrap::SeriesWrap;
+mod arithmetic;
+mod boolean;
+mod ops;
+mod primitive;
+mod string;
