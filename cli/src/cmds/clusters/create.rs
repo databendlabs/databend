@@ -104,13 +104,13 @@ pub fn generate_query_config() -> QueryConfig {
     let mut config = QueryConfig::default();
     if config.query.http_api_address.parse::<SocketAddr>().is_err()
         || !portpicker::is_free(
-        config
-            .query
-            .http_api_address
-            .parse::<SocketAddr>()
-            .unwrap()
-            .port(),
-    )
+            config
+                .query
+                .http_api_address
+                .parse::<SocketAddr>()
+                .unwrap()
+                .port(),
+        )
     {
         config.query.http_api_address = Status::find_unused_local_port()
     }
@@ -121,13 +121,13 @@ pub fn generate_query_config() -> QueryConfig {
         .parse::<SocketAddr>()
         .is_err()
         || !portpicker::is_free(
-        config
-            .query
-            .metric_api_address
-            .parse::<SocketAddr>()
-            .unwrap()
-            .port(),
-    )
+            config
+                .query
+                .metric_api_address
+                .parse::<SocketAddr>()
+                .unwrap()
+                .port(),
+        )
     {
         config.query.metric_api_address = Status::find_unused_local_port()
     }
@@ -137,13 +137,13 @@ pub fn generate_query_config() -> QueryConfig {
         .parse::<SocketAddr>()
         .is_err()
         || !portpicker::is_free(
-        config
-            .query
-            .flight_api_address
-            .parse::<SocketAddr>()
-            .unwrap()
-            .port(),
-    )
+            config
+                .query
+                .flight_api_address
+                .parse::<SocketAddr>()
+                .unwrap()
+                .port(),
+        )
     {
         config.query.flight_api_address = Status::find_unused_local_port()
     }
@@ -173,7 +173,7 @@ pub async fn provision_local_query_service(
     mut status: &mut Status,
     writer: &mut Writer,
     mut query_config: LocalQueryConfig,
-    file_name: String
+    file_name: String,
 ) -> Result<()> {
     match query_config.start().await {
         Ok(_) => {
@@ -190,7 +190,8 @@ pub async fn provision_local_query_service(
                 "To run queries through bendctl, run: bendctl query 'your SQL'".to_string(),
             );
             writer.write_ok(
-                "For example: bendctl query 'SELECT sum(number), avg(number) FROM numbers(100)'".to_string()
+                "For example: bendctl query 'SELECT sum(number), avg(number) FROM numbers(100)'"
+                    .to_string(),
             );
             writer.write_ok(format!(
                 "To process mysql queries, run: mysql -h{} -P{} -uroot",
@@ -217,7 +218,6 @@ pub async fn provision_local_query_service(
         Err(e) => Err(e),
     }
 }
-
 
 pub fn generate_local_log_dir(conf: &Config, dir_name: &str) -> String {
     let log_base = format!("{}/logs", conf.clone().databend_dir);
@@ -255,8 +255,7 @@ pub fn generate_local_query_config(
         config.query.namespace = args.value_of("query_namespace").unwrap().to_string();
     }
 
-    if args.value_of("query_tenant").is_some()
-        && !args.value_of("query_tenant").unwrap().is_empty()
+    if args.value_of("query_tenant").is_some() && !args.value_of("query_tenant").unwrap().is_empty()
     {
         config.query.tenant = args.value_of("query_tenant").unwrap().to_string();
     }
@@ -306,7 +305,7 @@ pub fn generate_local_query_config(
                         .unwrap()
                         .to_string()
             } else {
-                let data_dir = format!("{}/data", conf.clone().databend_dir);
+                let data_dir = format!("{}/data", conf.databend_dir);
                 if !Path::new(data_dir.as_str()).exists()
                     && fs::create_dir(Path::new(data_dir.as_str())).is_err()
                 {
@@ -356,29 +355,33 @@ pub fn get_bin(conf: &Config, status: &Status) -> Result<LocalBinaryPaths> {
         status.version.clone(),
         "databend-query".to_string(),
     )
-        .expect("cannot find query bin");
+    .expect("cannot find query bin");
     paths.meta = binary_path(
         format!("{}/bin", conf.databend_dir),
         status.version.clone(),
         "databend-meta".to_string(),
     )
-        .expect("cannot find meta service binary");
+    .expect("cannot find meta service binary");
     Ok(paths)
 }
 
-async fn ensure_bin(conf: Config, version: String, writer: &mut Writer, args: &ArgMatches) -> Result<LocalBinaryPaths> {
+async fn ensure_bin(
+    conf: Config,
+    version: String,
+    writer: &mut Writer,
+    args: &ArgMatches,
+) -> Result<LocalBinaryPaths> {
     let mut status = Status::read(conf.clone())?;
-
 
     let current_version = version;
     status.version = current_version.clone();
     status.write()?;
     if binary_path(
-            format!("{}/bin", conf.databend_dir),
-            current_version,
-            "databend-query".to_string(),
-        )
-        .is_err()
+        format!("{}/bin", conf.databend_dir),
+        current_version,
+        "databend-query".to_string(),
+    )
+    .is_err()
     {
         // fetch latest version of databend binary if version not found
         writer.write_ok(format!(
@@ -537,8 +540,9 @@ impl CreateCommand {
             Ok(_) => {
                 writer.write_ok("Databend cluster pre-check passed!".to_string());
                 // ensuring needed dependencies
-                let version = get_version(&self.conf, args.value_of("version").map(|s| s.to_string()))?;
-                let bin_path = ensure_bin(self.conf.clone(),version, writer, args)
+                let version =
+                    get_version(&self.conf, args.value_of("version").map(|s| s.to_string()))?;
+                let bin_path = ensure_bin(self.conf.clone(), version, writer, args)
                     .await
                     .expect("cannot find binary path");
                 let meta_config = self
@@ -569,8 +573,14 @@ impl CreateCommand {
                         .unwrap();
                     return Ok(());
                 }
-                let local_log_dir = generate_local_log_dir(&self.conf,"local_query_0");
-                let query_config = generate_local_query_config(self.conf.clone(), args, bin_path, &meta_config, local_log_dir);
+                let local_log_dir = generate_local_log_dir(&self.conf, "local_query_0");
+                let query_config = generate_local_query_config(
+                    self.conf.clone(),
+                    args,
+                    bin_path,
+                    &meta_config,
+                    local_log_dir,
+                );
                 if query_config.is_err() {
                     let mut status = Status::read(self.conf.clone())?;
                     writer.write_err(format!(
@@ -598,9 +608,9 @@ impl CreateCommand {
                         &mut status,
                         writer,
                         query_config.as_ref().unwrap().clone(),
-                        "query_config_0.yaml".to_string()
-                        )
-                        .await;
+                        "query_config_0.yaml".to_string(),
+                    )
+                    .await;
                     if res.is_err() {
                         let mut status = Status::read(self.conf.clone())?;
                         writer.write_err(format!(

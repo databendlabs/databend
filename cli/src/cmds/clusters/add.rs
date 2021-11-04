@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fs;
-use std::net::SocketAddr;
-use std::path::Path;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -24,31 +20,20 @@ use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
 use clap::ValueHint;
-use databend_meta::configs::Config as MetaConfig;
-use databend_query::configs::Config as QueryConfig;
-use lexical_util::num::AsPrimitive;
-use sysinfo::ProcessExt;
-use sysinfo::Signal;
-use sysinfo::System;
-use sysinfo::SystemExt;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
-use crate::cmds::clusters::stop::StopCommand;
+use crate::cmds::clusters::create::generate_local_log_dir;
+use crate::cmds::clusters::create::generate_local_query_config;
+use crate::cmds::clusters::create::get_bin;
+use crate::cmds::clusters::create::provision_local_query_service;
+use crate::cmds::clusters::utils::get_profile;
+use crate::cmds::clusters::view::poll_health;
 use crate::cmds::command::Command;
-use crate::cmds::packages::fetch::get_version;
-use crate::cmds::status::LocalMetaConfig;
-use crate::cmds::status::LocalQueryConfig;
-use crate::cmds::status::LocalRuntime;
 use crate::cmds::Config;
-use crate::cmds::FetchCommand;
 use crate::cmds::Status;
-use crate::cmds::SwitchCommand;
 use crate::cmds::Writer;
 use crate::error::CliError;
 use crate::error::Result;
-use crate::cmds::clusters::utils::get_profile;
-use crate::cmds::clusters::view::poll_health;
-use crate::cmds::clusters::create::{generate_local_query_config, provision_local_query_service, get_bin, generate_local_log_dir};
 
 #[derive(Clone)]
 pub struct AddCommand {
@@ -63,17 +48,39 @@ impl AddCommand {
     async fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
         match self.local_exec_precheck(args).await {
             Ok(_) => {
-                writer.write_ok(format!("cluster add precheck passed"));
+                writer.write_ok("cluster add precheck passed".to_string());
                 let mut status = Status::read(self.conf.clone())?;
                 let bin_path = get_bin(&self.conf, &status)?;
                 let (_, meta) = status.get_local_meta_config().unwrap();
-                let local_log_dir = generate_local_log_dir(&self.conf, format!("local_query_log_{}", status.get_local_query_configs().len()).as_str());
-                let local_query = generate_local_query_config(self.conf.clone(), args, bin_path, &meta, local_log_dir)?;
-                let file_name = format!("query_config_{}.yaml", status.get_local_query_configs().len());
-                if let Err(e) = provision_local_query_service(&mut status, writer, local_query, file_name).await {
+                let local_log_dir = generate_local_log_dir(
+                    &self.conf,
+                    format!("local_query_log_{}", status.get_local_query_configs().len()).as_str(),
+                );
+                let local_query = generate_local_query_config(
+                    self.conf.clone(),
+                    args,
+                    bin_path,
+                    &meta,
+                    local_log_dir,
+                )?;
+                let file_name = format!(
+                    "query_config_{}.yaml",
+                    status.get_local_query_configs().len()
+                );
+                if let Err(e) = provision_local_query_service(
+                    &mut status,
+                    writer,
+                    local_query,
+                    file_name.clone(),
+                )
+                .await
+                {
                     writer.write_err(format!("Cannot provision query service, error: {:?}", e));
                 }
-                writer.write_ok(format!("successfully added query instance on local"));
+                writer.write_ok(format!(
+                    "successfully added query instance {} on local",
+                    file_name
+                ));
                 Ok(())
             }
             Err(e) => {
@@ -89,19 +96,29 @@ impl AddCommand {
         //check on cluster status
         let (_, meta, _) = poll_health(&ClusterProfile::Local, &status, None, None).await;
         if meta.is_none() || meta.unwrap().1.is_err() {
-            return Err(CliError::Unknown("current meta service is deleted or unavailable".to_string()))
+            return Err(CliError::Unknown(
+                "current meta service is deleted or unavailable".to_string(),
+            ));
         }
         if status.version.is_empty() {
-            return Err(CliError::Unknown("no existing version exists, please create a cluster at first".to_string()))
+            return Err(CliError::Unknown(
+                "no existing version exists, please create a cluster at first".to_string(),
+            ));
         }
         if let Some(port) = args.value_of("mysql_handler_port") {
             if !portpicker::is_free(port.parse().unwrap()) {
-                return Err(CliError::Unknown(format!("mysql handler port {} is used by other processes", port)))
+                return Err(CliError::Unknown(format!(
+                    "mysql handler port {} is used by other processes",
+                    port
+                )));
             }
         }
         if let Some(port) = args.value_of("clickhouse_handler_port") {
             if !portpicker::is_free(port.parse().unwrap()) {
-                return Err(CliError::Unknown(format!("clickhouse handler port {} is used by other processes", port)))
+                return Err(CliError::Unknown(format!(
+                    "clickhouse handler port {} is used by other processes",
+                    port
+                )));
             }
         }
         Ok(())

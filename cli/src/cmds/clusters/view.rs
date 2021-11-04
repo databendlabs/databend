@@ -60,8 +60,16 @@ impl fmt::Display for HealthStatus {
 // poll_health would check the health of active meta service and query service, and return their status quo
 // first element is the health status in dashboard service and the second element is the health status of meta services
 // the third element is the health status in query services
-pub async fn poll_health(profile: &ClusterProfile, status: &Status, retry: Option<u32>,
-                         duration: Option<Duration>,) -> (Option<(String, Result<()>)>, Option<(String, Result<()>)>, (Vec<String>, Vec<Result<()>>)) {
+pub async fn poll_health(
+    profile: &ClusterProfile,
+    status: &Status,
+    retry: Option<u32>,
+    duration: Option<Duration>,
+) -> (
+    Option<(String, Result<()>)>,
+    Option<(String, Result<()>)>,
+    (Vec<String>, Vec<Result<()>>),
+) {
     match profile {
         ClusterProfile::Local => {
             let meta_config = status.get_local_meta_config();
@@ -82,22 +90,8 @@ pub async fn poll_health(profile: &ClusterProfile, status: &Status, retry: Optio
                 handles.push(query_config.verify(retry, duration));
             }
             let mut res = futures::future::join_all(handles).await;
-            let dash_res = match dashboard_config {
-                Some(_) => {
-                    Some((fs_vec.remove(0), res.remove(0)))
-                }
-                None => {
-                    None
-                }
-            };
-            let meta_res = match meta_config {
-                Some(_) => {
-                    Some((fs_vec.remove(0), res.remove(0)))
-                }
-                None => {
-                    None
-                }
-            };
+            let dash_res = dashboard_config.map(|_| (fs_vec.remove(0), res.remove(0)));
+            let meta_res = meta_config.map(|_| (fs_vec.remove(0), res.remove(0)));
             (dash_res, meta_res, (fs_vec, res))
         }
         ClusterProfile::Cluster => {
@@ -195,7 +189,8 @@ impl ViewCommand {
             Cell::new("Tls"),
             Cell::new("Config"),
         ]);
-        let (dashboard, meta, query) = poll_health(&ClusterProfile::Local, status, retry, duration).await;
+        let (dashboard, meta, query) =
+            poll_health(&ClusterProfile::Local, status, retry, duration).await;
         if let Some(meta) = meta {
             table.add_row(ViewCommand::build_row(&*meta.0, &meta.1));
         }

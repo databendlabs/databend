@@ -22,6 +22,7 @@ use clap::ArgMatches;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::cmds::clusters::add::AddCommand;
 use crate::cmds::clusters::create::CreateCommand;
 use crate::cmds::clusters::stop::StopCommand;
 use crate::cmds::clusters::view::ViewCommand;
@@ -29,7 +30,6 @@ use crate::cmds::command::Command;
 use crate::cmds::Config;
 use crate::cmds::Writer;
 use crate::error::Result;
-use crate::cmds::clusters::add::AddCommand;
 
 #[derive(Clone)]
 pub struct ClusterCommand {
