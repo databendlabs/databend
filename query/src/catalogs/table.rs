@@ -57,6 +57,15 @@ pub trait Table: Sync + Send {
 
     fn get_table_info(&self) -> &TableInfo;
 
+    /// whether column prune(projection) can help in table read
+    fn benefit_column_prune(&self) -> bool {
+        false
+    }
+
+    fn summary(&self, _io_ctx: &TableIOContext) -> Result<Statistics> {
+        Ok(Statistics::default())
+    }
+
     // defaults to generate one single part and empty statistics
     fn read_partitions(
         &self,
@@ -108,6 +117,9 @@ pub trait Table: Sync + Send {
 pub type TablePtr = Arc<dyn Table>;
 
 pub trait ToReadDataSourcePlan {
+    /// prepare ReadDataSourcePlan in PlanParser stage
+    fn prepare_read_plan(&self, io_ctx: &TableIOContext) -> Result<ReadDataSourcePlan>;
+
     fn read_plan(
         &self,
         io_ctx: Arc<TableIOContext>,
@@ -117,6 +129,24 @@ pub trait ToReadDataSourcePlan {
 }
 
 impl ToReadDataSourcePlan for dyn Table {
+    fn prepare_read_plan(&self, io_ctx: &TableIOContext) -> Result<ReadDataSourcePlan> {
+        let table_info = self.get_table_info();
+        let statistics = self.summary(io_ctx)?;
+
+        let description = get_description(table_info, &statistics);
+
+        Ok(ReadDataSourcePlan {
+            table_info: table_info.clone(),
+            tbl_args: self.table_args(),
+
+            scan_fields: None,
+            parts: vec![],
+            statistics,
+            description,
+            push_downs: None,
+        })
+    }
+
     fn read_plan(
         &self,
         io_ctx: Arc<TableIOContext>,
@@ -126,32 +156,45 @@ impl ToReadDataSourcePlan for dyn Table {
         let (statistics, parts) =
             self.read_partitions(io_ctx, push_downs.clone(), partition_num_hint)?;
         let table_info = self.get_table_info();
+        let description = get_description(table_info, &statistics);
 
-        let description = if statistics.read_rows > 0 {
-            format!(
-                "(Read from {} table, {} Read Rows:{}, Read Bytes:{})",
-                table_info.desc,
-                if statistics.is_exact {
-                    "Exactly"
-                } else {
-                    "Approximately"
-                },
-                statistics.read_rows,
-                statistics.read_bytes,
-            )
-        } else {
-            format!("(Read from {} table)", table_info.desc)
+        let scan_fields = match (self.benefit_column_prune(), &push_downs) {
+            (true, Some(push_downs)) => match &push_downs.projection {
+                Some(projection) if projection.len() < table_info.schema().fields().len() => {
+                    todo!()
+                }
+                _ => None,
+            },
+            _ => None,
         };
 
         Ok(ReadDataSourcePlan {
             table_info: table_info.clone(),
 
-            scan_fields: None,
+            scan_fields,
             parts,
             statistics,
             description,
             tbl_args: self.table_args(),
             push_downs,
         })
+    }
+}
+
+fn get_description(table_info: &TableInfo, statistics: &Statistics) -> String {
+    if statistics.read_rows > 0 {
+        format!(
+            "(Read from {} table, {} Read Rows:{}, Read Bytes:{})",
+            table_info.desc,
+            if statistics.is_exact {
+                "Exactly"
+            } else {
+                "Approximately"
+            },
+            statistics.read_rows,
+            statistics.read_bytes,
+        )
+    } else {
+        format!("(Read from {} table)", table_info.desc)
     }
 }

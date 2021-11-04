@@ -21,7 +21,6 @@ use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::Expression;
 use common_planners::ExpressionPlan;
-use common_planners::Extras;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
@@ -64,13 +63,7 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                     let table = self.ctx.get_table(db_name, table_name)?;
 
                     let io_ctx = self.ctx.get_single_node_table_io_context()?;
-                    let io_ctx = Arc::new(io_ctx);
-
-                    let source_plan = table.read_plan(
-                        io_ctx,
-                        Some(Extras::default()),
-                        Some(self.ctx.get_settings().get_max_threads()? as usize),
-                    )?;
+                    let source_plan = table.prepare_read_plan(&io_ctx)?;
                     let dummy_read_plan = PlanNode::ReadSource(source_plan);
 
                     let mut body: Vec<u8> = Vec::new();

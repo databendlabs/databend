@@ -786,7 +786,7 @@ impl PlanScheduler {
         let table = self.query_context.build_table_from_source_plan(plan)?;
 
         match table.is_local() {
-            true => self.visit_local_data_source(plan),
+            true => self.visit_local_data_source(plan, table.clone()),
             false => {
                 let cluster_source = self.cluster_source(&plan.push_downs, table.clone())?;
                 self.visit_cluster_data_source(&cluster_source)
@@ -794,8 +794,23 @@ impl PlanScheduler {
         }
     }
 
-    fn visit_local_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<()> {
+    fn visit_local_data_source(
+        &mut self,
+        plan: &ReadDataSourcePlan,
+        table: TablePtr,
+    ) -> Result<()> {
         self.running_mode = RunningMode::Standalone;
+
+        let io_ctx = self.query_context.get_single_node_table_io_context()?;
+        let io_ctx = Arc::new(io_ctx);
+
+        // read_plan again, because we want to really push_down to read_data_source (todo: sundy)
+        let plan = table.read_plan(
+            io_ctx.clone(),
+            plan.push_downs.clone(),
+            Some(self.query_context.get_settings().get_max_threads()? as usize),
+        )?;
+
         self.nodes_plan[self.local_pos] = PlanNode::ReadSource(plan.clone());
         Ok(())
     }

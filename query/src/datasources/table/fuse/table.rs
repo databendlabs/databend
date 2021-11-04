@@ -16,6 +16,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_base::BlockingWait;
 use common_context::DataContext;
 use common_context::IOContext;
 use common_context::TableIOContext;
@@ -61,6 +62,37 @@ impl Table for FuseTable {
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
+    }
+
+    fn benefit_column_prune(&self) -> bool {
+        true
+    }
+
+    // let schema = self.table_info.schema();
+    // let block_metas = async {
+    //     let snapshot = read_obj(da.clone(), loc).await?;
+    //     index::range_filter(&snapshot, schema, push_downs, da).await
+    // }
+    // .wait_in(&io_ctx.get_runtime(), None)??;
+
+    fn summary(&self, io_ctx: &TableIOContext) -> Result<Statistics> {
+        let location = self.snapshot_loc();
+        if let Some(loc) = location {
+            let da = io_ctx.get_data_accessor()?;
+            let snapshot: Result<TableSnapshot> = {
+                async move { read_obj(da.clone(), loc).await }
+                    .wait_in(&io_ctx.get_runtime(), None)?
+            };
+            let snapshot = snapshot?;
+
+            let stats = snapshot.summary;
+            Ok(Statistics::new_exact(
+                stats.row_count as usize,
+                stats.block_count as usize,
+            ))
+        } else {
+            Ok(Statistics::default())
+        }
     }
 
     fn read_partitions(

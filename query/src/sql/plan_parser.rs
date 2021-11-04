@@ -788,17 +788,8 @@ impl PlanParser {
 
                 // TODO(xp): is it possible to use get_cluster_table_io_context() here?
                 let io_ctx = self.ctx.get_single_node_table_io_context()?;
-                let io_ctx = Arc::new(io_ctx);
-
-                let partitions = self.ctx.get_settings().get_max_threads()? as usize;
-
                 // TODO: Move ReadSourcePlan to SelectInterpreter
-                let source_plan = table.read_plan(
-                    io_ctx,
-                    Some(Extras::default()),
-                    // TODO(xp): remove partitions, partitioning hint has been included in io_ctx.max_threads and io_ctx.query_nodes
-                    Some(partitions),
-                )?;
+                let source_plan = table.prepare_read_plan(&io_ctx)?;
 
                 let dummy_read_plan = PlanNode::ReadSource(source_plan);
                 Ok(dummy_read_plan)

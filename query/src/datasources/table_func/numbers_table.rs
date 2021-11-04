@@ -117,6 +117,13 @@ impl Table for NumbersTable {
         )))])
     }
 
+    fn summary(&self, _io_ctx: &TableIOContext) -> Result<Statistics> {
+        Ok(Statistics::new_exact(
+            self.total as usize,
+            ((self.total) * size_of::<u64>() as u64) as usize,
+        ))
+    }
+
     fn read_partitions(
         &self,
         io_ctx: Arc<TableIOContext>,
