@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_context::TableIOContext;
@@ -120,6 +121,7 @@ pub trait ToReadDataSourcePlan {
     /// prepare ReadDataSourcePlan in PlanParser stage
     fn prepare_read_plan(&self, io_ctx: &TableIOContext) -> Result<ReadDataSourcePlan>;
 
+    /// Real read_plan to access partitions/push_downs
     fn read_plan(
         &self,
         io_ctx: Arc<TableIOContext>,
@@ -161,7 +163,11 @@ impl ToReadDataSourcePlan for dyn Table {
         let scan_fields = match (self.benefit_column_prune(), &push_downs) {
             (true, Some(push_downs)) => match &push_downs.projection {
                 Some(projection) if projection.len() < table_info.schema().fields().len() => {
-                    todo!()
+                    let fields = projection
+                        .iter()
+                        .map(|i| table_info.schema().field(*i).clone());
+
+                    Some((projection.iter().cloned().zip(fields)).collect::<BTreeMap<_, _>>())
                 }
                 _ => None,
             },

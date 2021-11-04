@@ -804,14 +804,13 @@ impl PlanScheduler {
         let io_ctx = self.query_context.get_single_node_table_io_context()?;
         let io_ctx = Arc::new(io_ctx);
 
-        // read_plan again, because we want to really push_down to read_data_source (todo: sundy)
-        let plan = table.read_plan(
-            io_ctx.clone(),
+        let source_plan = table.read_plan(
+            io_ctx,
             plan.push_downs.clone(),
             Some(self.query_context.get_settings().get_max_threads()? as usize),
         )?;
 
-        self.nodes_plan[self.local_pos] = PlanNode::ReadSource(plan.clone());
+        self.nodes_plan[self.local_pos] = PlanNode::ReadSource(source_plan);
         Ok(())
     }
 
