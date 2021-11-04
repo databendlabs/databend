@@ -338,6 +338,9 @@ impl PlanParser {
     pub fn sql_create_user_to_plan(&self, create: &DfCreateUser) -> Result<PlanNode> {
         Ok(PlanNode::CreateUser(CreateUserPlan {
             name: create.name.clone(),
+            password: Vec::from(create.password.clone()),
+            host_name: create.host_name.clone(),
+            auth_type: create.auth_type.clone(),
         }))
     }
 

@@ -15,11 +15,11 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_management::AuthType;
 use common_management::UserInfo;
 use common_management::UserMgr;
 use common_management::UserMgrApi;
 use common_meta_api::KVApi;
+use common_meta_types::AuthType;
 use sha2::Digest;
 
 use crate::common::MetaClientProvider;

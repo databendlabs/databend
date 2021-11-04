@@ -17,15 +17,8 @@ use std::convert::TryFrom;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::AuthType;
 use common_meta_types::SeqV;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub enum AuthType {
-    None = 0,
-    PlainText = 1,
-    DoubleSha1 = 2,
-    Sha256 = 3,
-}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct UserInfo {

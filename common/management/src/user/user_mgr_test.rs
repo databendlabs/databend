@@ -29,7 +29,6 @@ use common_meta_types::UpsertKVActionReply;
 use mockall::predicate::*;
 use mockall::*;
 
-use crate::user::user_api::AuthType;
 use crate::user::user_api::UserInfo;
 use crate::user::user_api::UserMgrApi;
 use crate::UserMgr;
@@ -66,6 +65,7 @@ mock! {
 }
 
 mod add {
+    use common_meta_types::AuthType;
 
     use super::*;
 
@@ -177,6 +177,7 @@ mod add {
 }
 
 mod get {
+    use common_meta_types::AuthType;
 
     use super::*;
 
@@ -309,6 +310,7 @@ mod get {
 }
 
 mod get_users {
+    use common_meta_types::AuthType;
 
     use super::*;
 
@@ -438,6 +440,7 @@ mod drop {
 }
 
 mod update {
+    use common_meta_types::AuthType;
 
     use super::*;
 
