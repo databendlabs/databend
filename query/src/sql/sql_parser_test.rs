@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_management::AuthType;
+use common_meta_types::AuthType;
 use sqlparser::ast::*;
 
 use crate::sql::sql_statement::DfDropDatabase;

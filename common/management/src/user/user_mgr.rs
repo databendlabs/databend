@@ -20,12 +20,12 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_meta_api::KVApi;
 use common_meta_types::AddResult;
+use common_meta_types::AuthType;
 use common_meta_types::IntoSeqV;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::SeqV;
 
-use super::user_api::AuthType;
 use crate::user::user_api::UserInfo;
 use crate::user::user_api::UserMgrApi;
 

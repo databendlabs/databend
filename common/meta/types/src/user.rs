@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,13 +11,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
-mod namespace;
-mod user;
-
-pub use namespace::NamespaceApi;
-pub use namespace::NamespaceMgr;
-pub use user::user_api::UserInfo;
-pub use user::user_api::UserMgrApi;
-pub use user::user_mgr::UserMgr;
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub enum AuthType {
+    None = 0,
+    PlainText = 1,
+    DoubleSha1 = 2,
+    Sha256 = 3,
+}

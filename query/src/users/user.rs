@@ -13,8 +13,8 @@
 // limitations under the License.
 //
 
-use common_management::AuthType;
 use common_management::UserInfo;
+use common_meta_types::AuthType;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct User {
