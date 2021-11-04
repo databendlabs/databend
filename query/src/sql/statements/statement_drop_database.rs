@@ -30,7 +30,7 @@ impl DfDropDatabase {
             return Result::Err(ErrorCode::SyntaxException("Create database name is empty"));
         }
 
-        self.name.0[0].value.clone()
+        Ok(self.name.0[0].value.clone())
     }
 }
 

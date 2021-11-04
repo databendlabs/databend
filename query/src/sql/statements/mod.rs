@@ -15,6 +15,7 @@ mod statement_kill;
 mod statement_set_variable;
 mod statement_insert;
 mod statement_select;
+mod statement_common;
 
 pub use statement_show_tables::DfShowTables;
 pub use statement_show_databases::DfShowDatabases;
@@ -32,3 +33,5 @@ pub use statement_truncate_table::DfTruncateTable;
 pub use statement_kill::DfKillStatement;
 pub use statement_set_variable::DfSetVariable;
 pub use statement_insert::DfInsertStatement;
+pub use statement_select::AnalyzeData;
+pub use statement_select::QueryRelation;

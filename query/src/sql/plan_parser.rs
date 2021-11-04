@@ -67,7 +67,7 @@ use sqlparser::ast::UnaryOperator;
 use crate::catalogs::ToReadDataSourcePlan;
 use crate::functions::ContextFunction;
 use crate::sessions::DatabendQueryContextRef;
-use crate::sql::statements::DfCreateTable;
+use crate::sql::statements::{DfCreateTable, AnalyzeData, QueryRelation};
 use crate::sql::statements::DfDropDatabase;
 use crate::sql::statements::DfUseDatabase;
 use crate::sql::statements::DfCreateDatabase;
@@ -83,7 +83,7 @@ use crate::sql::statements::DfShowTables;
 use crate::sql::DfStatement;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::SQLCommon;
-use crate::sql::analyzer::AnalyzableStatement;
+use crate::sql::analyzer::{AnalyzableStatement, AnalyzedResult};
 
 pub struct PlanParser {
     ctx: DatabendQueryContextRef,
@@ -95,7 +95,39 @@ impl PlanParser {
     }
 
     pub async fn build_from_sql_new(query: &str, ctx: DatabendQueryContextRef) -> Result<PlanNode> {
-        PlanParser::create(ctx).build_from_sql(query)
+        let (mut statements, _) = DfParser::parse_sql(query)?;
+
+        if statements.len() != 1 {
+            return Err(ErrorCode::SyntaxException("Only support single query"));
+        }
+
+        match statements.remove(0).analyze(ctx.clone()).await? {
+            AnalyzedResult::SimpleQuery(plan) => Ok(plan),
+            AnalyzedResult::SelectQuery(data) => Self::create_query_plan(&data, ctx),
+        }
+    }
+
+    fn create_query_plan(data: &AnalyzeData, ctx: DatabendQueryContextRef) -> Result<PlanNode> {
+        let from = PlanParser::from_query_plan(&data, ctx)?;
+        let query_plan_builder = PlanBuilder::from(&from);
+
+        if let Some(predicate) = &data.filter_predicate {
+            query_plan_builder.filter(predicate.clone());
+        }
+
+        if !data.before_group_by_expressions.is_empty() {
+
+        }
+
+        query_plan_builder.build()
+    }
+
+    fn from_query_plan(data: &&AnalyzeData, ctx: DatabendQueryContextRef) -> Result<PlanNode> {
+        match &data.relation {
+            None => Err(ErrorCode::SyntaxException("")),
+            Some(QueryRelation::Nested(data)) => Self::create_query_plan(data, ctx),
+            Some(QueryRelation::FromTable(plan)) => Ok(PlanNode::ReadSource(plan.clone()))
+        }
     }
 
     pub fn build_from_sql(&self, query: &str) -> Result<PlanNode> {
@@ -509,6 +541,7 @@ impl PlanParser {
             }
         }
     }
+
     fn process_compound_ident(
         &self,
         ids: &[Ident],
