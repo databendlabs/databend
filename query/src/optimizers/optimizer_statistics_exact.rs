@@ -67,11 +67,9 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                             let table_version = Some(table.get_table_info().ident.version);
 
                             let tbl_scan_info = TableScanInfo {
-                                table_name,
                                 table_id,
                                 table_version,
                                 table_schema: &table.schema(),
-                                table_args: None,
                             };
                             PlanBuilder::scan(db_name, tbl_scan_info, None, None)
                                 .and_then(|builder| builder.build())

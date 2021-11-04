@@ -49,6 +49,7 @@ use crate::StagePlan;
 use crate::TruncateTablePlan;
 use crate::UseDatabasePlan;
 
+#[allow(clippy::large_enum_variant)]
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum PlanNode {
     Empty(EmptyPlan),

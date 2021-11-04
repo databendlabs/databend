@@ -19,7 +19,6 @@ use common_datavalues::DataSchemaRef;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 
-use crate::Expression;
 use crate::Extras;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -30,7 +29,6 @@ pub struct ScanPlan {
     pub table_version: Option<MetaVersion>,
     // The schema of the source data
     pub table_schema: DataSchemaRef,
-    pub table_args: Option<Expression>,
     pub projected_schema: DataSchemaRef,
     // Extras.
     pub push_downs: Extras,
@@ -48,7 +46,6 @@ impl ScanPlan {
             table_version,
             table_schema: Arc::new(DataSchema::empty()),
             projected_schema: Arc::new(DataSchema::empty()),
-            table_args: None,
             push_downs: Extras::default(),
         }
     }
@@ -60,7 +57,6 @@ impl ScanPlan {
             table_version: None,
             table_schema: Arc::new(DataSchema::empty()),
             projected_schema: Arc::new(DataSchema::empty()),
-            table_args: None,
             push_downs: Extras::default(),
         }
     }

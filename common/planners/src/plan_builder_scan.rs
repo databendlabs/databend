@@ -19,18 +19,15 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
 
-use crate::Expression;
 use crate::Extras;
 use crate::PlanBuilder;
 use crate::PlanNode;
 use crate::ScanPlan;
 
 pub struct TableScanInfo<'a> {
-    pub table_name: &'a str,
     pub table_id: u64,
     pub table_version: Option<u64>,
     pub table_schema: &'a DataSchema,
-    pub table_args: Option<Expression>,
 }
 
 impl PlanBuilder {
@@ -58,7 +55,6 @@ impl PlanBuilder {
             table_version: table_scan_info.table_version,
             table_schema,
             projected_schema,
-            table_args: table_scan_info.table_args,
             push_downs: Extras {
                 projection,
                 filters: vec![],
