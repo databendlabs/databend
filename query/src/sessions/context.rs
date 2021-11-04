@@ -33,6 +33,7 @@ use common_meta_types::NodeInfo;
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
+use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
@@ -40,11 +41,9 @@ use common_streams::SendableDataBlockStream;
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::Catalog;
 use crate::catalogs::Table;
-use crate::catalogs::TableFunction;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::datasources::common::ContextDalBuilder;
-use crate::datasources::table_func_engine::TableArgs;
 use crate::sessions::context_shared::DatabendQueryContextShared;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
@@ -157,13 +156,25 @@ impl DatabendQueryContext {
         self.shared.get_table(database, table)
     }
 
-    pub fn get_table_function(
+    /// Build a table instance the plan wants to operate on.
+    ///
+    /// A plan just contains raw information about a table or table function.
+    /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
+    pub fn build_table_from_source_plan(
         &self,
-        function_name: &str,
-        tbl_args: TableArgs,
-    ) -> Result<Arc<dyn TableFunction>> {
-        self.get_catalog()
-            .get_table_function(function_name, tbl_args)
+        plan: &ReadDataSourcePlan,
+    ) -> Result<Arc<dyn Table>> {
+        let catalog = self.get_catalog();
+
+        let t = if plan.tbl_args.is_none() {
+            catalog.build_table(&plan.table_info)?
+        } else {
+            catalog
+                .get_table_function(&plan.table_info.name, plan.tbl_args.clone())?
+                .as_table()
+        };
+
+        Ok(t)
     }
 
     pub fn get_id(&self) -> String {

@@ -23,7 +23,6 @@ use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
-use crate::catalogs::Catalog;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::sessions::DatabendQueryContextRef;
@@ -42,16 +41,7 @@ impl SourceTransform {
     }
 
     async fn read_table(&self) -> Result<SendableDataBlockStream> {
-        let table = if self.source_plan.tbl_args.is_none() {
-            let catalog = self.ctx.get_catalog();
-            catalog.build_table(&self.source_plan.table_info)?
-        } else {
-            let func_meta = self.ctx.get_table_function(
-                &self.source_plan.table_info.name,
-                self.source_plan.tbl_args.clone(),
-            )?;
-            func_meta.as_table()
-        };
+        let table = self.ctx.build_table_from_source_plan(&self.source_plan)?;
 
         // TODO(xp): get_single_node_table_io_context() or
         //           get_cluster_table_io_context()?
