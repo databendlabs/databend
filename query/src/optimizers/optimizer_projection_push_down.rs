@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::collections::HashSet;
 
-use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -25,6 +23,7 @@ use common_planners::AggregatorPartialPlan;
 use common_planners::EmptyPlan;
 use common_planners::Expression;
 use common_planners::ExpressionPlan;
+use common_planners::Extras;
 use common_planners::FilterPlan;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
@@ -117,18 +116,27 @@ impl PlanRewriter for ProjectionPushDownImpl {
     }
 
     fn rewrite_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<PlanNode> {
-        // TODO: rewrite scan
-        self.get_projected_fields(plan.table_info.schema().as_ref())
-            .map(|projected_fields| {
-                PlanNode::ReadSource(ReadDataSourcePlan {
-                    table_info: plan.table_info.clone(),
-                    scan_fields: Some(projected_fields),
-                    parts: plan.parts.clone(),
-                    statistics: plan.statistics.clone(),
-                    description: plan.description.to_string(),
-                    tbl_args: plan.tbl_args.clone(),
-                    push_downs: plan.push_downs.clone(),
-                })
+        self.get_projection(plan.table_info.schema().as_ref())
+            .map(|projection| {
+                // No need to rewrite projection if it is full
+                if projection.len() == plan.table_info.schema().fields().len() {
+                    return PlanNode::ReadSource(plan.clone());
+                }
+
+                let mut new_plan = plan.clone();
+                new_plan.push_downs = match &plan.push_downs {
+                    Some(extras) => {
+                        let mut new_extras = extras.clone();
+                        new_extras.projection = Some(projection);
+                        Some(new_extras)
+                    }
+                    None => {
+                        let mut extras = Extras::default();
+                        extras.projection = Some(projection);
+                        Some(extras)
+                    }
+                };
+                PlanNode::ReadSource(new_plan)
             })
     }
 }
@@ -163,7 +171,7 @@ impl ProjectionPushDownImpl {
         Ok(())
     }
 
-    fn get_projected_fields(&self, schema: &DataSchema) -> Result<BTreeMap<usize, DataField>> {
+    fn get_projection(&self, schema: &DataSchema) -> Result<Vec<usize>> {
         // Discard non-existing columns, e.g. when the column derives from aggregation
 
         let mut projection: Vec<usize> = self
@@ -180,17 +188,11 @@ impl ProjectionPushDownImpl {
             } else {
                 // for table scan without projection
                 // just return all columns
-                return Ok(schema.fields_map());
+                return Ok((0..schema.fields().len()).collect());
             }
         }
 
-        let mut res = BTreeMap::new();
-
-        for i in &projection {
-            res.insert(*i, schema.fields()[*i].clone());
-        }
-
-        Ok(res)
+        Ok(projection)
     }
 }
 
