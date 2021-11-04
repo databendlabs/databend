@@ -65,6 +65,7 @@ use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
 use sqlparser::ast::UnaryOperator;
 
+use crate::catalogs::Catalog;
 use crate::catalogs::ToReadDataSourcePlan;
 use crate::functions::ContextFunction;
 use crate::sessions::DatabendQueryContextRef;
@@ -788,7 +789,10 @@ impl PlanParser {
                         },
                     )?;
 
-                    let table_func = self.ctx.get_table_function(&table_name, Some(table_args))?;
+                    let table_func = self
+                        .ctx
+                        .get_catalog()
+                        .get_table_function(&table_name, Some(table_args))?;
                     meta_id = table_func.get_id();
                     meta_version = table_func.get_table_info().ident.version;
                     table = table_func.as_table();

@@ -55,7 +55,13 @@ impl Display for TableIdent {
 pub struct TableInfo {
     pub ident: TableIdent,
 
+    /// For a table it is `db_name.table_name`.
+    /// For a table function, it is `table_name(args)`
     pub desc: String,
+
+    /// `name` is meant to be used with table-function.
+    /// Table-function is identified by `name`.
+    /// A table in the contrast, can only be identified by table-id.
     pub name: String,
 
     /// The essential information about a table definition.
