@@ -35,7 +35,6 @@ async fn test_number_table() -> Result<()> {
         table_id: 0,
         table_version: None,
         table_schema: DataSchemaRefExt::create(vec![]),
-        table_args: Some(Expression::create_literal(DataValue::UInt64(Some(8)))),
         projected_schema: DataSchemaRefExt::create(vec![DataField::new(
             "number",
             DataType::UInt64,

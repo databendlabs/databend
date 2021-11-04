@@ -722,11 +722,9 @@ impl PlanParser {
             let table_version = Some(table.get_table_info().ident.version);
 
             let tbl_scan_info = TableScanInfo {
-                table_name,
                 table_id,
                 table_version,
                 table_schema: &table.schema(),
-                table_args: None,
             };
 
             PlanBuilder::scan(db_name, tbl_scan_info, None, None)
@@ -761,7 +759,6 @@ impl PlanParser {
                     db_name = name.0[0].to_string();
                     table_name = name.0[1].to_string();
                 }
-                let table_args = None;
                 let meta_id;
                 let meta_version;
                 let table;
@@ -794,7 +791,6 @@ impl PlanParser {
                     let table_func = self.ctx.get_table_function(&table_name, Some(table_args))?;
                     meta_id = table_func.get_id();
                     meta_version = table_func.get_table_info().ident.version;
-                    table_name = table_func.name().to_string();
                     table = table_func.as_table();
                 } else {
                     table = self.ctx.get_table(&db_name, &table_name)?;
@@ -804,11 +800,9 @@ impl PlanParser {
 
                 let scan = {
                     let tbl_scan_info = TableScanInfo {
-                        table_name: &table_name,
                         table_id: meta_id,
                         table_version: Some(meta_version),
                         table_schema: &table.schema(),
-                        table_args,
                     };
                     PlanBuilder::scan(&db_name, tbl_scan_info, None, None)
                         .and_then(|builder| builder.build())

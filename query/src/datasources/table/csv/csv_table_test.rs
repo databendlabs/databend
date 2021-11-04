@@ -66,7 +66,6 @@ async fn test_csv_table() -> Result<()> {
         table_schema: DataSchemaRefExt::create(vec![]),
         table_id: 0,
         table_version: None,
-        table_args: None,
         projected_schema: DataSchemaRefExt::create(vec![DataField::new(
             "column1",
             DataType::UInt64,
@@ -145,7 +144,6 @@ async fn test_csv_table_parse_error() -> Result<()> {
         table_id: 0,
         table_version: None,
         table_schema: DataSchemaRefExt::create(vec![]),
-        table_args: None,
         projected_schema: DataSchemaRefExt::create(vec![DataField::new(
             "column2",
             DataType::UInt64,
