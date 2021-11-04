@@ -1,0 +1,41 @@
+# Global rule
+*    @BohuTANG
+
+# Query rule
+/query/                  @datafuselabs/query-guys
+/common/array/           @datafuselabs/query-guys
+/common/cache/           @datafuselabs/query-guys
+/common/clickhouse-srv/  @datafuselabs/query-guys
+/common/context/         @datafuselabs/query-guys
+/common/datablocks/      @datafuselabs/query-guys
+/common/datavalues/      @datafuselabs/query-guys
+/common/flight-rpc/      @datafuselabs/query-guys
+/common/functions/       @datafuselabs/query-guys
+/common/infallible/      @datafuselabs/query-guys
+/common/io/              @datafuselabs/query-guys
+/common/management/      @datafuselabs/query-guys
+/common/mem-allocator/   @datafuselabs/query-guys
+/common/metrics/         @datafuselabs/query-guys
+/common/planners/        @datafuselabs/query-guys
+/common/streams/         @datafuselabs/query-guys
+/common/tracing/         @datafuselabs/query-guys
+
+# Meta rule
+/metasrv                 @datafuselabs/meta-guys
+/kvsrv                   @datafuselabs/meta-guys
+/dfs                     @datafuselabs/meta-guys
+/common/dal/             @datafuselabs/meta-guys
+/common/meta/            @datafuselabs/meta-guys
+/common/raft-store/      @datafuselabs/meta-guys
+/common/sled-store/      @datafuselabs/meta-guys
+
+# Cli rule
+/docker                  @datafuselabs/cli-guys
+/cli                     @datafuselabs/cli-guys
+/common/base/            @datafuselabs/cli-guys
+/common/building/        @datafuselabs/cli-guys
+
+# Tests rule
+
+# Website rule
+/website  @Chasen-Zhang  @wubx
