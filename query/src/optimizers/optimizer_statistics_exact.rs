@@ -21,10 +21,10 @@ use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::Expression;
 use common_planners::ExpressionPlan;
+use common_planners::Extras;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
-use common_planners::TableScanInfo;
 
 use crate::catalogs::ToReadDataSourcePlan;
 use crate::optimizers::Optimizer;
@@ -61,36 +61,18 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                     let db_name = "system";
                     let table_name = "one";
 
-                    let dummy_read_plan =
-                        self.ctx.get_table(db_name, table_name).and_then(|table| {
-                            let table_id = table.get_id();
-                            let table_version = Some(table.get_table_info().ident.version);
+                    let table = self.ctx.get_table(db_name, table_name)?;
 
-                            let tbl_scan_info = TableScanInfo {
-                                table_id,
-                                table_version,
-                                table_schema: &table.schema(),
-                            };
-                            PlanBuilder::scan(db_name, tbl_scan_info, None, None)
-                                .and_then(|builder| builder.build())
-                                .and_then(|dummy_scan_plan| match dummy_scan_plan {
-                                    PlanNode::Scan(ref dummy_scan_plan) => {
-                                        //
-                                        let io_ctx = self.ctx.get_single_node_table_io_context()?;
-                                        table
-                                            .read_plan(
-                                                Arc::new(io_ctx),
-                                                Some(dummy_scan_plan.push_downs.clone()),
-                                                Some(self.ctx.get_settings().get_max_threads()?
-                                                    as usize),
-                                            )
-                                            .map(PlanNode::ReadSource)
-                                    }
-                                    _unreachable_plan => {
-                                        panic!("Logical error: cannot downcast to scan plan")
-                                    }
-                                })
-                        })?;
+                    let io_ctx = self.ctx.get_single_node_table_io_context()?;
+                    let io_ctx = Arc::new(io_ctx);
+
+                    let source_plan = table.read_plan(
+                        io_ctx,
+                        Some(Extras::default()),
+                        Some(self.ctx.get_settings().get_max_threads()? as usize),
+                    )?;
+                    let dummy_read_plan = PlanNode::ReadSource(source_plan);
+
                     let mut body: Vec<u8> = Vec::new();
                     body.write_uvarint(read_source_plan.statistics.read_rows as u64)?;
                     let expr = Expression::create_literal(DataValue::String(Some(body)));
