@@ -19,9 +19,8 @@ use common_arrow::arrow::compute::comparison::compare_scalar;
 use common_arrow::arrow::compute::comparison::Operator;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::scalar::PrimitiveScalar;
+use common_datavalues::prelude::*;
 use common_exception::Result;
-
-use crate::prelude::*;
 
 #[test]
 fn test_array_if() -> Result<()> {

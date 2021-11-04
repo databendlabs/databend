@@ -11,14 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-mod arithmetic;
-mod comparison;
-mod series_debug;
-mod series_impl;
-mod wrap;
 
-pub use arithmetic::*;
-pub use comparison::*;
-pub use series_debug::*;
-pub use series_impl::*;
-pub use wrap::SeriesWrap;
+use common_datavalues::prelude::*;
+use common_exception::Result;
+
+#[test]
+fn test_array_cast() -> Result<()> {
+    let array = DFUInt16Array::new_from_iter(1_u16..4u16);
+    let result = array.cast_with_type(&DataType::UInt8)?;
+    let expected = Series::new(vec![1_u8, 2, 3]);
+    assert!(result.series_equal(&expected));
+    Ok(())
+}

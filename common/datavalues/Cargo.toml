@@ -6,6 +6,10 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lib]
+doctest = false
+test = false
+
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-arrow = { path = "../arrow" }
@@ -27,7 +31,6 @@ strength_reduce = "0.2.3"
 lexical-core = "0.8.2"
 chrono = "0.4.0"
 chrono-tz = "0.6"
-
 
 [dev-dependencies]
 pretty_assertions = "1.0"
