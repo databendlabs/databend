@@ -44,6 +44,7 @@ async fn test_tables_table() -> Result<()> {
         "| database | name         | engine             |",
         "+----------+--------------+--------------------+",
         "| system   | clusters     | SystemClusters     |",
+        "| system   | columns      | SystemColumns      |",
         "| system   | configs      | SystemConfigs      |",
         "| system   | contributors | SystemContributors |",
         "| system   | credits      | SystemCredits      |",

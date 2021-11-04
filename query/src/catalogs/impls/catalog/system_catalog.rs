@@ -75,6 +75,7 @@ impl SystemCatalog {
             Arc::new(system::ProcessesTable::create(next_id())),
             Arc::new(system::ConfigsTable::create(next_id())),
             Arc::new(system::MetricsTable::create(next_id())),
+            Arc::new(system::ColumnsTable::create(next_id())),
         ];
 
         let mut tables = InMemoryMetas::create();
