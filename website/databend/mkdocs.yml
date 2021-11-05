@@ -203,6 +203,8 @@ nav:
           - TAN: sqlstatement/numeric-functions/tan.md
           - COT: sqlstatement/numeric-functions/cot.md
           - CRC32: sqlstatement/numeric-functions/crc32.md
+          - DEGREES: sqlstatement/numeric-functions/degrees.md
+          - RADIANS: sqlstatement/numeric-functions/radians.md
       - String Functions:
           - SUBSTRING: sqlstatement/string-functions/substring.md
       - Test Functions:
