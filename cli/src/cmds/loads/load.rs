@@ -144,11 +144,12 @@ impl LoadCommand {
                     .required(false),
             )
             .arg(
-                Arg::new("with_header").long("with_header")
+                Arg::new("skip_header_lines").long("skip-header-lines")
                     .about("state on whether CSV has dataset header for example: \
                     bendctl load test.csv --with_header true would ignore the first ten lines in csv file")
+                    .default_value("1")
                     .required(false)
-                    .takes_value(false),
+                    .takes_value(true),
             )
             .arg(
                 Arg::new("table").long("table")
@@ -183,6 +184,9 @@ impl LoadCommand {
                 let status = Status::read(self.conf.clone())?;
                 let (cli, url) = build_query_endpoint(&status)?;
                 let mut count = 0;
+                for _ in 0..args.value_of("skip_header_lines").unwrap().parse().unwrap() {
+                    record.next();
+                }
                 loop {
                     let mut batch = vec![];
                     // possible optimization is to run iterator in parallel
@@ -224,10 +228,10 @@ impl LoadCommand {
                         .reduce_with(|a, b| format!("{}, {}", a, b));
                     if let Some(values) = values {
                         let query = format!("INSERT INTO {} VALUES {}", table_format, values);
-                        if let Err(e) = execute_query_json(&cli, &url, query).await {
+                        if let Err(e) = execute_query_json(&cli, &url, query.clone()).await {
                             writer.write_err(format!(
-                                "cannot insert data into {}, error: {:?}",
-                                table, e
+                                "cannot insert data into {} with query {}, error: {:?}",
+                                table,query, e
                             ))
                         }
                     }
@@ -291,13 +295,11 @@ async fn build_reader(
     load: Option<&str>,
     header: Option<&str>,
 ) -> csv::Reader<Box<dyn std::io::Read + Send + Sync>> {
-    let header = header.is_some();
     match load {
         Some(val) => {
             if Path::new(val).exists() {
                 let f = std::fs::File::open(val).expect("cannot open file: permission denied");
-                csv::ReaderBuilder::new()
-                    .has_headers(header)
+                csv::ReaderBuilder::new().has_headers(false)
                     .from_reader(Box::new(f))
             } else if val.contains("://") {
                 let target = reqwest::get(val)
@@ -309,18 +311,18 @@ async fn build_reader(
                     .await
                     .expect("cannot fetch for target"); // generate an error if server didn't respond
                 csv::ReaderBuilder::new()
-                    .has_headers(header)
+                    .has_headers(false)
                     .from_reader(Box::new(Cursor::new(target)))
             } else {
                 csv::ReaderBuilder::new()
-                    .has_headers(header)
+                    .has_headers(false)
                     .from_reader(Box::new(Cursor::new(val.to_string().as_bytes().to_owned())))
             }
         }
         None => {
             let io = std::io::stdin();
             csv::ReaderBuilder::new()
-                .has_headers(header)
+                .has_headers(false)
                 .from_reader(Box::new(io))
         }
     }
