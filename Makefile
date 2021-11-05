@@ -83,6 +83,11 @@ stateless-test: build-debug
 	rm -rf ./_meta/
 	ulimit -n 10000; bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
 
+stateful-test:
+	rm -rf ./_meta/
+	rm -rf ./.databend/
+	ulimit -n 10000; bash ./scripts/ci/ci-run-stateful-tests-standalone.sh
+
 stateless-cluster-test: build-debug
 	rm -rf ./_meta/
 	bash ./scripts/ci/ci-run-stateless-tests-cluster.sh
