@@ -68,13 +68,6 @@ impl Table for FuseTable {
         true
     }
 
-    // let schema = self.table_info.schema();
-    // let block_metas = async {
-    //     let snapshot = read_obj(da.clone(), loc).await?;
-    //     index::range_filter(&snapshot, schema, push_downs, da).await
-    // }
-    // .wait_in(&io_ctx.get_runtime(), None)??;
-
     fn summary(&self, io_ctx: &TableIOContext) -> Result<Statistics> {
         let location = self.snapshot_loc();
         if let Some(loc) = location {
@@ -149,16 +142,32 @@ impl FuseTable {
         }
     }
 
-    pub(crate) fn to_partitions(&self, blocks_metas: &[BlockMeta]) -> (Statistics, Partitions) {
+    pub(crate) fn to_partitions(
+        &self,
+        blocks_metas: &[BlockMeta],
+        push_downs: Option<Extras>,
+    ) -> (Statistics, Partitions) {
         blocks_metas.iter().fold(
             (Statistics::default(), Partitions::default()),
             |(mut stats, mut parts), item| {
-                stats.read_rows += item.row_count as usize;
-                stats.read_bytes += item.block_size as usize;
                 parts.push(Part {
                     name: item.location.location.clone(),
                     version: 0,
                 });
+
+                if let Some(Extras {
+                    projection: Some(_),
+                    ..
+                }) = &push_downs
+                {
+                    // todo: zhaobr add column stats
+                    stats.read_rows += item.row_count as usize;
+                    stats.read_bytes += item.block_size as usize;
+                } else {
+                    stats.read_rows += item.row_count as usize;
+                    stats.read_bytes += item.block_size as usize;
+                }
+
                 (stats, parts)
             },
         )

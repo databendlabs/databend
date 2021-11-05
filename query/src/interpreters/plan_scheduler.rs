@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_context::IOContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::NodeInfo;
@@ -47,8 +46,6 @@ use common_tracing::tracing;
 use crate::api::BroadcastAction;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;
-use crate::catalogs::TablePtr;
-use crate::catalogs::ToReadDataSourcePlan;
 use crate::sessions::DatabendQueryContext;
 use crate::sessions::DatabendQueryContextRef;
 
@@ -106,10 +103,16 @@ impl PlanScheduler {
     #[tracing::instrument(level = "info", skip(self, plan))]
     pub fn reschedule(mut self, plan: &PlanNode) -> Result<Tasks> {
         let context = self.query_context.clone();
+        let cluster = context.get_cluster();
         let mut tasks = Tasks::create(context);
 
-        self.visit_plan_node(plan, &mut tasks)?;
-        tasks.finalize(&self.nodes_plan[self.local_pos])
+        match cluster.is_empty() {
+            true => tasks.finalize(plan),
+            false => {
+                self.visit_plan_node(plan, &mut tasks)?;
+                tasks.finalize(&self.nodes_plan[self.local_pos])
+            }
+        }
     }
 }
 
@@ -779,48 +782,21 @@ impl PlanScheduler {
         let table = self.query_context.build_table_from_source_plan(plan)?;
 
         match table.is_local() {
-            true => self.visit_local_data_source(plan, table.clone()),
-            false => self.visit_cluster_data_source(plan, table.clone()),
+            true => self.visit_local_data_source(plan),
+            false => self.visit_cluster_data_source(plan),
         }
     }
 
-    fn visit_local_data_source(
-        &mut self,
-        plan: &ReadDataSourcePlan,
-        table: TablePtr,
-    ) -> Result<()> {
+    fn visit_local_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<()> {
         self.running_mode = RunningMode::Standalone;
-
-        let io_ctx = self.query_context.get_single_node_table_io_context()?;
-        let io_ctx = Arc::new(io_ctx);
-
-        let source_plan = table.read_plan(
-            io_ctx,
-            plan.push_downs.clone(),
-            Some(self.query_context.get_settings().get_max_threads()? as usize),
-        )?;
-
-        self.nodes_plan[self.local_pos] = PlanNode::ReadSource(source_plan);
+        self.nodes_plan[self.local_pos] = PlanNode::ReadSource(plan.clone());
         Ok(())
     }
 
-    fn visit_cluster_data_source(
-        &mut self,
-        plan: &ReadDataSourcePlan,
-        table: TablePtr,
-    ) -> Result<()> {
-        let io_ctx = self.query_context.get_cluster_table_io_context()?;
-        let io_ctx = Arc::new(io_ctx);
-
-        let plan = table.read_plan(
-            io_ctx.clone(),
-            plan.push_downs.clone(),
-            Some(io_ctx.get_max_threads() * io_ctx.get_query_node_ids().len()),
-        )?;
-
+    fn visit_cluster_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<()> {
         self.running_mode = RunningMode::Cluster;
 
-        let nodes_parts = self.repartition(&plan);
+        let nodes_parts = self.repartition(plan);
         for index in 0..self.nodes_plan.len() {
             let mut read_plan = plan.clone();
             read_plan.parts = nodes_parts[index].clone();

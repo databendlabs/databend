@@ -213,15 +213,15 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
             plan.statistics.read_bytes,
         )?;
 
+        write!(f, ", push_downs: [")?;
         if plan.push_downs.is_some() {
             let extras = plan.push_downs.clone().unwrap();
-            write!(f, ", push_downs: [")?;
             if extras.limit.is_some() {
                 write!(f, "limit: {}", extras.limit.unwrap())?;
                 write!(f, ", order_by: {:?}", extras.order_by)?;
             }
-            write!(f, "]")?;
         }
+        write!(f, "]")?;
         Ok(())
     }
 

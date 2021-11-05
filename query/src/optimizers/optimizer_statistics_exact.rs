@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_io::prelude::BinaryWrite;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::Expression;
@@ -31,6 +30,7 @@ use crate::sessions::DatabendQueryContextRef;
 
 struct StatisticsExactImpl<'a> {
     ctx: &'a DatabendQueryContextRef,
+    rewritten: bool,
 }
 
 pub struct StatisticsExactOptimizer {
@@ -66,12 +66,15 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                     let source_plan = table.prepare_read_plan(&io_ctx)?;
                     let dummy_read_plan = PlanNode::ReadSource(source_plan);
 
-                    let mut body: Vec<u8> = Vec::new();
-                    body.write_uvarint(read_source_plan.statistics.read_rows as u64)?;
-                    let expr = Expression::create_literal(DataValue::String(Some(body)));
+                    let expr = Expression::create_literal(DataValue::UInt64(Some(
+                        read_source_plan.statistics.read_rows as u64,
+                    )));
+
+                    self.rewritten = true;
+                    let alias_name = plan.aggr_expr[0].column_name();
                     PlanBuilder::from(&dummy_read_plan)
                         .expression(&[expr.clone()], "Exact Statistics")?
-                        .project(&[expr.alias("count(0)")])?
+                        .project(&[expr.alias(&alias_name)])?
                         .build()?
                 }
                 _ => PlanNode::AggregatorPartial(plan.clone()),
@@ -82,12 +85,19 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
     }
 
     fn rewrite_aggregate_final(&mut self, plan: &AggregatorFinalPlan) -> Result<PlanNode> {
+        let input = self.rewrite_plan_node(plan.input.as_ref())?;
+
+        if self.rewritten {
+            self.rewritten = false;
+            return Ok(input);
+        }
+
         Ok(PlanNode::AggregatorFinal(AggregatorFinalPlan {
             schema: plan.schema.clone(),
             schema_before_group_by: plan.schema_before_group_by.clone(),
             aggr_expr: plan.aggr_expr.clone(),
             group_expr: plan.group_expr.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: Arc::new(input),
         }))
     }
 }
@@ -106,7 +116,10 @@ impl Optimizer for StatisticsExactOptimizer {
                     )
                 )
         */
-        let mut visitor = StatisticsExactImpl { ctx: &self.ctx };
+        let mut visitor = StatisticsExactImpl {
+            ctx: &self.ctx,
+            rewritten: false,
+        };
         visitor.rewrite_plan_node(plan)
     }
 }

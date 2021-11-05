@@ -55,6 +55,9 @@ mod interpreter_table_drop;
 mod interpreter_truncate_table;
 mod interpreter_use_database;
 mod interpreter_user_create;
+mod plan_do_readsource;
+mod utils;
+
 #[allow(clippy::needless_range_loop)]
 mod plan_scheduler;
 
