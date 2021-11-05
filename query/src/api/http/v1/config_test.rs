@@ -15,38 +15,35 @@
  *
  */
 use common_base::tokio;
+use poem::get;
+use poem::http::Method;
+use poem::http::StatusCode;
+use poem::http::Uri;
+use poem::Endpoint;
+use poem::EndpointExt;
+use poem::Request;
+use poem::Route;
 
 #[tokio::test]
 async fn test_config() -> common_exception::Result<()> {
-    use axum::body::Body;
-    use axum::handler::get;
-    use axum::http::Request;
-    use axum::http::StatusCode;
-    use axum::http::{self};
-    use axum::AddExtensionLayer;
-    use axum::Router;
     use pretty_assertions::assert_eq;
-    use tower::ServiceExt;
 
     use crate::api::http::v1::config::config_handler;
     use crate::configs::Config; // for `app.oneshot()`
 
     let conf = Config::default();
-    let cluster_router = Router::new()
-        .route("/v1/config", get(config_handler))
-        .layer(AddExtensionLayer::new(conf.clone()));
+    let cluster_router = Route::new()
+        .at("/v1/config", get(config_handler))
+        .data(conf.clone());
 
     let response = cluster_router
-        .clone()
-        .oneshot(
+        .call(
             Request::builder()
-                .uri("/v1/config")
-                .method(http::Method::GET)
-                .body(Body::empty())
-                .unwrap(),
+                .uri(Uri::from_static("/v1/config"))
+                .method(Method::GET)
+                .finish(),
         )
-        .await
-        .unwrap();
+        .await;
 
     assert_eq!(response.status(), StatusCode::OK);
     Ok(())

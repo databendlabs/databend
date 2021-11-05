@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use axum::body::Body;
-use axum::handler::get;
-use axum::http::Request;
-use axum::http::StatusCode;
-use axum::http::{self};
-use axum::AddExtensionLayer;
-use axum::Router;
 use common_base::tokio;
 use common_exception::Result;
+use poem::get;
+use poem::http::Method;
+use poem::http::StatusCode;
+use poem::http::Uri;
+use poem::Endpoint;
+use poem::EndpointExt;
+use poem::Request;
+use poem::Route;
 use pretty_assertions::assert_eq;
-use tower::ServiceExt;
 
 use crate::api::http::v1::logs::logs_handler;
 use crate::tests::SessionManagerBuilder;
@@ -31,20 +31,18 @@ use crate::tests::SessionManagerBuilder;
 async fn test_logs() -> Result<()> {
     let sessions = SessionManagerBuilder::create().build()?;
 
-    let test_router = Router::new()
-        .route("/v1/logs", get(logs_handler))
-        .layer(AddExtensionLayer::new(sessions));
+    let test_router = Route::new()
+        .at("/v1/logs", get(logs_handler))
+        .data(sessions);
     {
         let response = test_router
-            .oneshot(
+            .call(
                 Request::builder()
-                    .uri("/v1/logs")
-                    .method(http::Method::GET)
-                    .body(Body::empty())
-                    .unwrap(),
+                    .uri(Uri::from_static("/v1/logs"))
+                    .method(Method::GET)
+                    .finish(),
             )
-            .await
-            .unwrap();
+            .await;
 
         assert_eq!(response.status(), StatusCode::OK);
     }
