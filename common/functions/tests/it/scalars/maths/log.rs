@@ -20,11 +20,9 @@ use common_functions::scalars::*;
 
 #[test]
 fn test_log_function() -> Result<()> {
-    #[allow(dead_code)]
     struct Test {
         name: &'static str,
         display: &'static str,
-        nullable: bool,
         args: Vec<DataColumnWithField>,
         expect: DataColumn,
         error: &'static str,
@@ -35,7 +33,6 @@ fn test_log_function() -> Result<()> {
         Test {
             name: "log-with-literal",
             display: "LOG",
-            nullable: false,
             args: vec![
                 DataColumnWithField::new(
                     Series::new([10]).into(),
@@ -54,7 +51,6 @@ fn test_log_function() -> Result<()> {
         Test {
             name: "log-with-series",
             display: "LOG",
-            nullable: false,
             args: vec![
                 DataColumnWithField::new(
                     Series::new([10, 10, 10]).into(),
@@ -73,7 +69,6 @@ fn test_log_function() -> Result<()> {
         Test {
             name: "log-with-one-arg",
             display: "LOG",
-            nullable: false,
             args: vec![DataColumnWithField::new(
                 Series::new([E, E, E]).into(),
                 DataField::new("num", DataType::String, false),
