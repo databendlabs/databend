@@ -100,7 +100,7 @@ fn test_aggregate() -> Result<()> {
     \n      AggregatorFinal: groupBy=[[(number % 10)]], aggr=[[sum(number)]]\
     \n        AggregatorPartial: groupBy=[[(number % 10)]], aggr=[[sum(number)]]\
     \n          Expression: (number % 10):UInt8, number:UInt64 (Before GroupBy)\
-    \n            ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 1000, read_bytes: 8000], push_downs: []";
+    \n            ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 1000, read_bytes: 8000]";
 
     let actual = format!("{:?}", plan_node);
     assert_eq!(expect, actual);

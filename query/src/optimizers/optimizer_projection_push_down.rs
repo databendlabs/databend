@@ -192,6 +192,7 @@ impl ProjectionPushDownImpl {
             }
         }
 
+        projection.sort();
         Ok(projection)
     }
 }

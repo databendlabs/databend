@@ -45,7 +45,7 @@ async fn test_fuse_table_simple_case() -> Result<()> {
 
     // insert 10 blocks
     let num_blocks = 5;
-    let io_ctx = Arc::new(ctx.get_single_node_table_io_context()?);
+    let io_ctx = Arc::new(ctx.get_cluster_table_io_context()?);
     let insert_into_plan = fixture.insert_plan_of_table(table.as_ref(), num_blocks);
     table.append_data(io_ctx.clone(), insert_into_plan).await?;
 
@@ -59,7 +59,7 @@ async fn test_fuse_table_simple_case() -> Result<()> {
         .await?;
     assert_ne!(prev_version, table.get_table_info().ident.version);
 
-    let (stats, parts) = table.read_partitions(io_ctx.clone(), None, None)?;
+    let (stats, parts) = table.read_partitions(io_ctx.clone(), None)?;
     assert_eq!(parts.len(), num_blocks as usize);
     assert_eq!(stats.read_rows, num_blocks as usize * 3);
 
@@ -123,7 +123,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
         )
         .await?;
 
-    let io_ctx = Arc::new(ctx.get_single_node_table_io_context()?);
+    let io_ctx = Arc::new(ctx.get_cluster_table_io_context()?);
     let truncate_plan = TruncateTablePlan {
         db: "".to_string(),
         table: "".to_string(),
@@ -145,11 +145,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
     // 2. truncate table which has data
     let insert_into_plan = fixture.insert_plan_of_table(table.as_ref(), 10);
     table.append_data(io_ctx.clone(), insert_into_plan).await?;
-    let source_plan = table.read_plan(
-        io_ctx.clone(),
-        None,
-        Some(ctx.get_settings().get_max_threads()? as usize),
-    )?;
+    let source_plan = table.read_plan(io_ctx.clone(), None)?;
 
     // get the latest tbl
     let prev_version = table.get_table_info().ident.version;
@@ -162,8 +158,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
     assert_ne!(prev_version, table.get_table_info().ident.version);
 
     // ensure data ingested
-    let (stats, parts) =
-        table.read_partitions(io_ctx.clone(), source_plan.push_downs.clone(), None)?;
+    let (stats, parts) = table.read_partitions(io_ctx.clone(), source_plan.push_downs.clone())?;
     assert_eq!(parts.len(), 10);
     assert_eq!(stats.read_rows, 10 * 3);
 
@@ -180,8 +175,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
         )
         .await?;
     assert_ne!(prev_version, table.get_table_info().ident.version);
-    let (stats, parts) =
-        table.read_partitions(io_ctx.clone(), source_plan.push_downs.clone(), None)?;
+    let (stats, parts) = table.read_partitions(io_ctx.clone(), source_plan.push_downs.clone())?;
     // cleared?
     assert_eq!(parts.len(), 0);
     assert_eq!(stats.read_rows, 0);

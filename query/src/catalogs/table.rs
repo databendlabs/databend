@@ -63,16 +63,11 @@ pub trait Table: Sync + Send {
         false
     }
 
-    fn summary(&self, _io_ctx: &TableIOContext) -> Result<Statistics> {
-        Ok(Statistics::default())
-    }
-
     // defaults to generate one single part and empty statistics
     fn read_partitions(
         &self,
         _io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
-        _partition_num_hint: Option<usize>,
     ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::default(), vec![Part {
             name: "".to_string(),
@@ -118,45 +113,21 @@ pub trait Table: Sync + Send {
 pub type TablePtr = Arc<dyn Table>;
 
 pub trait ToReadDataSourcePlan {
-    /// prepare ReadDataSourcePlan in PlanParser stage
-    fn prepare_read_plan(&self, io_ctx: &TableIOContext) -> Result<ReadDataSourcePlan>;
-
     /// Real read_plan to access partitions/push_downs
     fn read_plan(
         &self,
         io_ctx: Arc<TableIOContext>,
         push_downs: Option<Extras>,
-        partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan>;
 }
 
 impl ToReadDataSourcePlan for dyn Table {
-    fn prepare_read_plan(&self, io_ctx: &TableIOContext) -> Result<ReadDataSourcePlan> {
-        let table_info = self.get_table_info();
-        let statistics = self.summary(io_ctx)?;
-
-        let description = get_description(table_info, &statistics);
-
-        Ok(ReadDataSourcePlan {
-            table_info: table_info.clone(),
-            tbl_args: self.table_args(),
-
-            scan_fields: None,
-            parts: vec![],
-            statistics,
-            description,
-            push_downs: None,
-        })
-    }
-
     fn read_plan(
         &self,
         io_ctx: Arc<TableIOContext>,
         push_downs: Option<Extras>,
-        partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
-        let (statistics, parts) =
-            self.read_partitions(io_ctx, push_downs.clone(), partition_num_hint)?;
+        let (statistics, parts) = self.read_partitions(io_ctx, push_downs.clone())?;
         let table_info = self.get_table_info();
         let description = get_description(table_info, &statistics);
 

@@ -16,7 +16,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_base::BlockingWait;
 use common_context::DataContext;
 use common_context::IOContext;
 use common_context::TableIOContext;
@@ -68,31 +67,10 @@ impl Table for FuseTable {
         true
     }
 
-    fn summary(&self, io_ctx: &TableIOContext) -> Result<Statistics> {
-        let location = self.snapshot_loc();
-        if let Some(loc) = location {
-            let da = io_ctx.get_data_accessor()?;
-            let snapshot: Result<TableSnapshot> = {
-                async move { read_obj(da.clone(), loc).await }
-                    .wait_in(&io_ctx.get_runtime(), None)?
-            };
-            let snapshot = snapshot?;
-
-            let stats = snapshot.summary;
-            Ok(Statistics::new_exact(
-                stats.row_count as usize,
-                stats.block_count as usize,
-            ))
-        } else {
-            Ok(Statistics::default())
-        }
-    }
-
     fn read_partitions(
         &self,
         io_ctx: Arc<TableIOContext>,
         push_downs: Option<Extras>,
-        _partition_num_hint: Option<usize>,
     ) -> Result<(Statistics, Partitions)> {
         self.do_read_partitions(io_ctx.as_ref(), push_downs)
     }
@@ -145,7 +123,7 @@ impl FuseTable {
     pub(crate) fn to_partitions(
         &self,
         blocks_metas: &[BlockMeta],
-        push_downs: Option<Extras>,
+        _push_downs: Option<Extras>,
     ) -> (Statistics, Partitions) {
         blocks_metas.iter().fold(
             (Statistics::default(), Partitions::default()),
@@ -155,18 +133,15 @@ impl FuseTable {
                     version: 0,
                 });
 
-                if let Some(Extras {
-                    projection: Some(_),
-                    ..
-                }) = &push_downs
-                {
-                    // todo: zhaobr add column stats
-                    stats.read_rows += item.row_count as usize;
-                    stats.read_bytes += item.block_size as usize;
-                } else {
-                    stats.read_rows += item.row_count as usize;
-                    stats.read_bytes += item.block_size as usize;
-                }
+                stats.read_rows += item.row_count as usize;
+                stats.read_bytes += item.block_size as usize;
+
+                // todo: @zhaobr add column stats
+                // if let Some(Extras {
+                //     projection: Some(_),
+                //     ..
+                // }) = &push_downs
+                // {}
 
                 (stats, parts)
             },

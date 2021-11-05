@@ -43,7 +43,7 @@ impl SourceTransform {
     async fn read_table(&self) -> Result<SendableDataBlockStream> {
         let table = self.ctx.build_table_from_source_plan(&self.source_plan)?;
 
-        // TODO(xp): get_single_node_table_io_context() or
+        // TODO(xp): get_cluster_table_io_context() or
         //           get_cluster_table_io_context()?
         let io_ctx = Arc::new(self.ctx.get_cluster_table_io_context()?);
         let table_stream = table.read(io_ctx, &self.source_plan);

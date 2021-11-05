@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_context::IOContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -45,25 +44,9 @@ impl PlanDoReadSource {
 impl PlanRewriter for PlanDoReadSource {
     fn rewrite_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<PlanNode> {
         let table = self.context.build_table_from_source_plan(plan)?;
-
-        let plan = if table.is_local() {
-            let io_ctx = self.context.get_single_node_table_io_context()?;
-            let io_ctx = Arc::new(io_ctx);
-
-            table.read_plan(
-                io_ctx,
-                plan.push_downs.clone(),
-                Some(self.context.get_settings().get_max_threads()? as usize),
-            )
-        } else {
-            let io_ctx = self.context.get_cluster_table_io_context()?;
-            let io_ctx = Arc::new(io_ctx);
-            table.read_plan(
-                io_ctx.clone(),
-                plan.push_downs.clone(),
-                Some(io_ctx.get_max_threads() * io_ctx.get_query_node_ids().len()),
-            )
-        }?;
+        let io_ctx = self.context.get_cluster_table_io_context()?;
+        let io_ctx = Arc::new(io_ctx);
+        let plan = table.read_plan(io_ctx, plan.push_downs.clone())?;
 
         Ok(PlanNode::ReadSource(plan))
     }
