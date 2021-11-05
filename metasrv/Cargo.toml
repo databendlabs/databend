@@ -65,8 +65,7 @@ tonic = { version = "0.5.2", features = ["tls"]}
 
 sha2 = "0.9.8"
 uuid = { version = "0.8", features = ["serde", "v4"] }
-axum = {version = "0.2.8", features=["headers"] }
-axum-server = { version = "0.2", features = ["tls-rustls"] }
+poem = { version = "1.0.21", features = ["tls"] }
 
 [dev-dependencies]
 common-meta-api = {path = "../common/meta/api" }
@@ -74,7 +73,6 @@ common-meta-api = {path = "../common/meta/api" }
 pretty_assertions = "1.0"
 test-env-log = "0.2.7"
 flaky_test = "0.1"
-tower = { version = "0.4", default-features = false, features = ["util", "buffer", "make"] }
 reqwest = { version = "0.11", features = ["json"] }
 
 [build-dependencies]

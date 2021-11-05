@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use axum::body::Body;
-use axum::extract::Query;
-use axum::response::IntoResponse;
 use common_base::tokio::time::Duration;
 use common_base::Profiling;
 use common_tracing::tracing;
+use poem::web::Query;
+use poem::IntoResponse;
 
 use crate::api::http::debug::PProfRequest;
 
 // run pprof
 // example: /debug/pprof/profile?seconds=5&frequency=99
 // req query contains pprofrequest information
+#[poem::handler]
 pub async fn debug_pprof_handler(req: Option<Query<PProfRequest>>) -> impl IntoResponse {
     let profile = match req {
         Some(query) => {
@@ -48,5 +48,5 @@ pub async fn debug_pprof_handler(req: Option<Query<PProfRequest>>) -> impl IntoR
     let body = profile.dump_flamegraph().await.unwrap();
 
     tracing::info!("finished pprof request");
-    Body::from(body).into_response()
+    body
 }

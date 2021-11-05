@@ -23,7 +23,7 @@ simd = ["common-arrow/simd"]
 # Workspace dependencies
 common-arrow = { path = "../common/arrow" }
 common-base = { path = "../common/base" }
-common-cache = { path = "../common/cache"}
+common-cache = { path = "../common/cache" }
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }
 common-context = { path = "../common/context" }
 common-dal = { path = "../common/dal" }
@@ -38,9 +38,9 @@ common-management = { path = "../common/management" }
 common-mem-allocator = { path = "../common/mem-allocator" }
 common-meta-api = { path = "../common/meta/api" }
 common-meta-embedded = { path = "../common/meta/embedded" }
-common-meta-flight = {path = "../common/meta/flight" }
+common-meta-flight = { path = "../common/meta/flight" }
 common-meta-sled-store = { path = "../common/meta/sled-store" }
-common-meta-types = {path = "../common/meta/types"}
+common-meta-types = { path = "../common/meta/types" }
 common-macros = { path = "../common/macros" }
 common-metrics = { path = "../common/metrics" }
 common-planners = { path = "../common/planners" }
@@ -56,14 +56,13 @@ sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "cd
 ahash = "0.7.6"
 async-compat = "0.2.1"
 async-trait = "0.1"
-axum = {version = "0.2.8", features=["headers"] }
-axum-server = { version = "0.2", features = ["tls-rustls"] }
+poem = { version = "1.0.21", features = ["tls"] }
 bumpalo = "3.8.0"
 byteorder = "1"
 bytes = "1"
 cargo-license = "0.4.2"
 cargo_metadata = "0.14.1"
-chrono =  "0.4.0"
+chrono = "0.4.0"
 chrono-tz = "0.6"
 crossbeam = "0.8"
 crossbeam-queue = "0.3.2"
@@ -109,10 +108,9 @@ mysql = "21.0.1"
 pretty_assertions = "1.0"
 reqwest = { version = "0.11", features = ["json", "native-tls"] }
 tempfile = "3.2.0"
-tower = { version = "0.4", default-features = false, features = ["util", "buffer", "make"] }
 
 [build-dependencies]
-common-building = {path = "../common/building"}
+common-building = { path = "../common/building" }
 
 [[bench]]
 name = "bench_main"
