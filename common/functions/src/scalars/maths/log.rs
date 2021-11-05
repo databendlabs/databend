@@ -79,10 +79,20 @@ impl Function for LogFunction {
                 .cast_with_type(&DataType::Float64)?;
             let base_column: &DataColumn =
                 &columns[0].column().cast_with_type(&DataType::Float64)?;
-            num_series.f64()?.apply_with_idx(|(idx, v)| {
-                let base = DFTryFrom::try_from(base_column.try_get(idx).unwrap()).unwrap();
-                v.log(base)
-            })
+            match base_column {
+                DataColumn::Constant(v, _) => {
+                    let base = DFTryFrom::try_from(v.clone())?;
+                    num_series.f64()?.apply_cast_numeric(|v| v.log(base))
+                }
+                DataColumn::Array(base_series) => {
+                    let iter = num_series
+                        .f64()?
+                        .into_no_null_iter()
+                        .zip(base_series.f64()?.into_no_null_iter())
+                        .map(|(num, base)| num.log(*base));
+                    DFFloat64Array::from_iter(iter)
+                }
+            }
         };
 
         let column: DataColumn = result.into();
