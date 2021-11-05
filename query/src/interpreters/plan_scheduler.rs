@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_context::IOContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::NodeInfo;
@@ -37,7 +36,6 @@ use common_planners::PlanNode;
 use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::RemotePlan;
-use common_planners::ScanPlan;
 use common_planners::SelectPlan;
 use common_planners::SortPlan;
 use common_planners::StageKind;
@@ -48,9 +46,6 @@ use common_tracing::tracing;
 use crate::api::BroadcastAction;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;
-use crate::catalogs::Catalog;
-use crate::catalogs::TablePtr;
-use crate::catalogs::ToReadDataSourcePlan;
 use crate::sessions::DatabendQueryContext;
 use crate::sessions::DatabendQueryContextRef;
 
@@ -784,21 +779,11 @@ impl PlanScheduler {
     }
 
     fn visit_data_source(&mut self, plan: &ReadDataSourcePlan, _: &mut Tasks) -> Result<()> {
-        let table = if plan.tbl_args.is_none() {
-            let catalog = self.query_context.get_catalog();
-            catalog.build_table(&plan.table_info)?
-        } else {
-            self.query_context
-                .get_table_function(&plan.table_info.name, plan.tbl_args.clone())?
-                .as_table()
-        };
+        let table = self.query_context.build_table_from_source_plan(plan)?;
 
         match table.is_local() {
             true => self.visit_local_data_source(plan),
-            false => {
-                let cluster_source = self.cluster_source(&plan.scan_plan, table.clone())?;
-                self.visit_cluster_data_source(&cluster_source)
-            }
+            false => self.visit_cluster_data_source(plan),
         }
     }
 
@@ -810,8 +795,8 @@ impl PlanScheduler {
 
     fn visit_cluster_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<()> {
         self.running_mode = RunningMode::Cluster;
-        let nodes_parts = self.repartition(plan);
 
+        let nodes_parts = self.repartition(plan);
         for index in 0..self.nodes_plan.len() {
             let mut read_plan = plan.clone();
             read_plan.parts = nodes_parts[index].clone();
@@ -846,18 +831,6 @@ impl PlanScheduler {
 }
 
 impl PlanScheduler {
-    fn cluster_source(&mut self, node: &ScanPlan, table: TablePtr) -> Result<ReadDataSourcePlan> {
-        let io_ctx = self.query_context.get_cluster_table_io_context()?;
-
-        let io_ctx = Arc::new(io_ctx);
-
-        table.read_plan(
-            io_ctx.clone(),
-            Some(node.push_downs.clone()),
-            Some(io_ctx.get_max_threads() * io_ctx.get_query_node_ids().len()),
-        )
-    }
-
     fn repartition(&mut self, cluster_source: &ReadDataSourcePlan) -> Vec<Partitions> {
         // We always put adjacent partitions in the same node
         let nodes = self.cluster_nodes.clone();

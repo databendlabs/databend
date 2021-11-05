@@ -14,15 +14,22 @@
 
 use std::net::SocketAddr;
 
-use axum_server::Handle;
+use common_base::tokio::sync::oneshot;
 use common_base::tokio::task::JoinHandle;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use futures::FutureExt;
+use poem::listener::Acceptor;
+use poem::listener::AcceptorExt;
+use poem::listener::Listener;
+use poem::listener::TcpListener;
+use poem::listener::TlsConfig;
+use poem::Endpoint;
 
 pub struct HttpShutdownHandler {
     service_name: String,
     join_handle: Option<JoinHandle<std::io::Result<()>>>,
-    pub(crate) abort_handle: Handle,
+    abort_handle: Option<oneshot::Sender<()>>,
 }
 
 impl HttpShutdownHandler {
@@ -30,39 +37,61 @@ impl HttpShutdownHandler {
         HttpShutdownHandler {
             service_name,
             join_handle: None,
-            abort_handle: axum_server::Handle::new(),
+            abort_handle: None,
         }
     }
 
-    pub async fn try_listen(
+    pub async fn start_service(
         &mut self,
-        join_handler: JoinHandle<std::io::Result<()>>,
+        listening: SocketAddr,
+        tls_config: Option<TlsConfig>,
+        ep: impl Endpoint + 'static,
     ) -> Result<SocketAddr> {
-        self.join_handle = Some(join_handler);
-        self.abort_handle.listening().await;
+        assert!(self.join_handle.is_none());
+        assert!(self.abort_handle.is_none());
 
-        match self.abort_handle.listening_addrs() {
-            None => Err(ErrorCode::CannotListenerPort("")),
-            Some(addresses) if addresses.is_empty() => Err(ErrorCode::CannotListenerPort("")),
-            Some(addresses) => {
-                // 0.0.0.0, for multiple network interface, we may listen to multiple address
-                let first_address = addresses[0];
-                for address in addresses {
-                    if address.port() != first_address.port() {
-                        return Err(ErrorCode::CannotListenerPort(""));
-                    }
-                }
-                Ok(first_address)
-            }
+        let mut acceptor = TcpListener::bind(listening)
+            .into_acceptor()
+            .await
+            .map_err(|err| ErrorCode::CannotListenerPort(err.to_string()))?
+            .boxed();
+
+        let addr = acceptor
+            .local_addr()
+            .pop()
+            .and_then(|addr| addr.0.as_socket_addr().cloned())
+            .expect("socket addr");
+
+        if let Some(tls_config) = tls_config {
+            acceptor = acceptor
+                .tls(tls_config)
+                .map_err(|err| {
+                    ErrorCode::TLSConfigurationFailure(format!(
+                        "Cannot build TLS config for http service, cause {}",
+                        err
+                    ))
+                })?
+                .boxed();
         }
+
+        let (tx, rx) = oneshot::channel();
+        let join_handle = common_base::tokio::spawn(
+            poem::Server::new_with_acceptor(acceptor).run_with_graceful_shutdown(
+                ep,
+                rx.map(|_| ()),
+                None,
+            ),
+        );
+        self.join_handle = Some(join_handle);
+        self.abort_handle = Some(tx);
+        Ok(addr)
     }
 
     pub async fn shutdown(&mut self, graceful: bool) {
         if graceful {
-            self.abort_handle.graceful_shutdown();
-        } else {
-            self.abort_handle.shutdown();
-
+            if let Some(abort_handle) = self.abort_handle.take() {
+                let _ = abort_handle.send(());
+            }
             if let Some(join_handle) = self.join_handle.take() {
                 if let Err(error) = join_handle.await {
                     log::error!(
@@ -72,6 +101,8 @@ impl HttpShutdownHandler {
                     );
                 }
             }
+        } else if let Some(join_handle) = self.join_handle.take() {
+            join_handle.abort();
         }
     }
 }

@@ -376,7 +376,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                 } = &self.args[1]
                 {
                     // Only support such as 'abc' or 'ab%'.
-                    match check_pattern_type(v) {
+                    match check_pattern_type(v, true) {
                         // e.g. col not like 'abc' => min_col != 'abc' or max_col != 'abc'
                         PatternType::OrdinalStr => {
                             let const_arg = left_bound_for_like_pattern(v);
@@ -498,43 +498,4 @@ pub(crate) fn right_bound_for_like_pattern(prefix: Vec<u8>) -> Vec<u8> {
     }
 
     res
-}
-
-enum PatternType {
-    // e.g. "abc"
-    OrdinalStr,
-    // e.g. "a%c" or "ab_"
-    PatternStr,
-    // e.g. "ab%"
-    EndOfPercent,
-}
-
-// check not like pattern type.
-fn check_pattern_type(pattern: &[u8]) -> PatternType {
-    let mut index = 0;
-    let mut percent = false;
-    let len = pattern.len();
-    while index < len {
-        match pattern[index] {
-            b'_' => return PatternType::PatternStr,
-            b'%' => percent = true,
-            b'\\' => {
-                if percent {
-                    return PatternType::PatternStr;
-                }
-                index += 1;
-            }
-            _ => {
-                if percent {
-                    return PatternType::PatternStr;
-                }
-            }
-        }
-        index += 1;
-    }
-    if percent {
-        PatternType::EndOfPercent
-    } else {
-        PatternType::OrdinalStr
-    }
 }

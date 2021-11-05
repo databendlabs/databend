@@ -17,27 +17,27 @@ use std::convert::TryFrom;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::AuthType;
 use common_meta_types::SeqV;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub enum AuthType {
-    None = 0,
-    PlainText = 1,
-    DoubleSha1 = 2,
-    Sha256 = 3,
-}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct UserInfo {
     pub name: String,
+    pub host_name: String,
     pub password: Vec<u8>,
     pub auth_type: AuthType,
 }
 
 impl UserInfo {
-    pub(crate) fn new(name: String, password: Vec<u8>, auth_type: AuthType) -> Self {
+    pub(crate) fn new(
+        name: String,
+        host_name: String,
+        password: Vec<u8>,
+        auth_type: AuthType,
+    ) -> Self {
         UserInfo {
             name,
+            host_name,
             password,
             auth_type,
         }
@@ -55,6 +55,7 @@ pub trait UserMgrApi: Sync + Send {
     async fn update_user(
         &self,
         username: String,
+        new_host_name: Option<String>,
         new_password: Option<Vec<u8>>,
         new_auth: Option<AuthType>,
         seq: Option<u64>,

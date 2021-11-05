@@ -13,12 +13,15 @@
 // limitations under the License.
 
 mod abs;
+mod angle;
 mod crc32;
 mod math;
 mod pi;
 mod trigonometric;
 
 pub use abs::AbsFunction;
+pub use angle::DegressFunction;
+pub use angle::RadiansFunction;
 pub use crc32::CRC32Function;
 pub use math::MathsFunction;
 pub use pi::PiFunction;

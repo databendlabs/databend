@@ -18,7 +18,6 @@ mod user;
 
 pub use namespace::NamespaceApi;
 pub use namespace::NamespaceMgr;
-pub use user::user_api::AuthType;
 pub use user::user_api::UserInfo;
 pub use user::user_api::UserMgrApi;
 pub use user::user_mgr::UserMgr;

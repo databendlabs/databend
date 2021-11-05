@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use axum::http::StatusCode;
-use axum::response::IntoResponse;
-use axum::response::Json;
+use poem::http::StatusCode;
+use poem::web::Json;
+use poem::IntoResponse;
 
 #[derive(serde::Serialize)]
 pub struct HealthCheckResponse {
@@ -27,10 +27,10 @@ pub enum HealthCheckStatus {
     Pass,
 }
 
+#[poem::handler]
 pub async fn health_handler() -> impl IntoResponse {
     let check = HealthCheckResponse {
         status: HealthCheckStatus::Pass,
     };
-
     (StatusCode::OK, Json(check))
 }

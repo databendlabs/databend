@@ -252,7 +252,6 @@ impl PlanRewriter for ExprTransformImpl {
                     is_exact: true,
                 },
                 description: format!("(Read from {} table)", plan.table_info.desc),
-                scan_plan: plan.scan_plan.clone(),
                 tbl_args: plan.tbl_args.clone(),
                 push_downs: plan.push_downs.clone(),
             });

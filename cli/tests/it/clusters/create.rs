@@ -14,6 +14,8 @@
 
 use std::fs;
 
+use bendctl::cmds::clusters::create::generate_local_log_dir;
+use bendctl::cmds::clusters::create::generate_local_query_config;
 use bendctl::cmds::clusters::create::LocalBinaryPaths;
 use bendctl::cmds::config::GithubMirror;
 use bendctl::cmds::config::MirrorAsset;
@@ -136,8 +138,14 @@ fn test_generate_local_query_config() -> Result<()> {
         };
         let meta_config = create.generate_local_meta_config(&matches, mock_bin.clone());
         assert!(meta_config.is_some());
-        let query_config =
-            create.generate_local_query_config(&matches, mock_bin, &meta_config.unwrap());
+        let log_dir = generate_local_log_dir(&conf, "local_query_log_0");
+        let query_config = generate_local_query_config(
+            conf.clone(),
+            &matches,
+            mock_bin,
+            &meta_config.unwrap(),
+            log_dir,
+        );
 
         assert_eq!(
             query_config.as_ref().unwrap().log_dir,
@@ -230,8 +238,15 @@ fn test_generate_local_query_config() -> Result<()> {
         };
         let meta_config = create.generate_local_meta_config(&matches, mock_bin.clone());
         assert!(meta_config.is_some());
-        let query_config =
-            create.generate_local_query_config(&matches, mock_bin, &meta_config.unwrap());
+        let log_dir = generate_local_log_dir(&conf, "local_query_log_0");
+
+        let query_config = generate_local_query_config(
+            conf.clone(),
+            &matches,
+            mock_bin,
+            &meta_config.unwrap(),
+            log_dir,
+        );
         assert_eq!(query_config.as_ref().unwrap().config.query.num_cpus, 2);
         assert_eq!(
             query_config.as_ref().unwrap().log_dir,

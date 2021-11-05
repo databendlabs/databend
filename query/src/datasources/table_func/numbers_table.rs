@@ -121,7 +121,6 @@ impl Table for NumbersTable {
         &self,
         io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
-        _partition_num_hint: Option<usize>,
     ) -> Result<(Statistics, Partitions)> {
         let statistics = Statistics::new_exact(
             self.total as usize,

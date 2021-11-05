@@ -401,53 +401,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 
 [[package]]
-name = "axum"
-version = "0.2.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f08f95a202e827209db1491047aa57c18c8adb4c5efcfcfd4a2da4838ee3a72"
-dependencies = [
- "async-trait",
- "bitflags",
- "bytes",
- "futures-util",
- "headers",
- "http",
- "http-body",
- "hyper",
- "pin-project-lite",
- "regex",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "sync_wrapper",
- "tokio",
- "tokio-util",
- "tower",
- "tower-http",
- "tower-layer",
- "tower-service",
-]
-
-[[package]]
-name = "axum-server"
-version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "269f4732d25f53214f81364220e033b991154aa0afae8d9acede67b74ed16b89"
-dependencies = [
- "futures-util",
- "http",
- "http-body",
- "hyper",
- "parking_lot",
- "rustls",
- "tokio",
- "tokio-rustls",
- "tower-http",
- "tower-layer",
- "tower-service",
-]
-
-[[package]]
 name = "azure_core_mirror"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1290,8 +1243,10 @@ dependencies = [
  "num",
  "ordered-float 2.8.0",
  "pretty_assertions",
+ "regex",
  "serde",
  "serde_json",
+ "simdutf8",
  "strength_reduce",
 ]
 
@@ -2025,8 +1980,6 @@ dependencies = [
  "anyhow",
  "async-raft",
  "async-trait",
- "axum",
- "axum-server",
  "byteorder",
  "common-arrow",
  "common-base",
@@ -2056,6 +2009,7 @@ dependencies = [
  "metrics-exporter-prometheus",
  "num",
  "num_cpus",
+ "poem",
  "pretty_assertions",
  "prost",
  "rand 0.8.4",
@@ -2073,7 +2027,6 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tonic-build",
- "tower",
  "uuid",
 ]
 
@@ -2084,8 +2037,6 @@ dependencies = [
  "ahash",
  "async-compat",
  "async-trait",
- "axum",
- "axum-server",
  "bumpalo",
  "byteorder",
  "bytes",
@@ -2140,6 +2091,7 @@ dependencies = [
  "num_cpus",
  "parquet-format-async-temp",
  "paste",
+ "poem",
  "pretty_assertions",
  "prost",
  "quantiles",
@@ -2161,7 +2113,6 @@ dependencies = [
  "tokio-stream",
  "toml",
  "tonic",
- "tower",
  "uuid",
  "walkdir",
 ]
@@ -3945,6 +3896,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a60c7ce501c71e03a9c9c0d35b861413ae925bd979cc7a4e30d060069aaac8d"
 
 [[package]]
+name = "mime_guess"
+version = "2.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2684d4c2e97d99848d30b324b00c8fcc7e5c897b7cbb5819b09e7c90e8baf212"
+dependencies = [
+ "mime",
+ "unicase",
+]
+
+[[package]]
 name = "minimal-lexical"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4851,6 +4812,51 @@ dependencies = [
 ]
 
 [[package]]
+name = "poem"
+version = "1.0.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a70978aaae37dc18bbd43e5ed31cfd665a79a07bba612477eb808520eb5b1dde"
+dependencies = [
+ "async-trait",
+ "base64 0.13.0",
+ "bytes",
+ "futures-util",
+ "headers",
+ "http",
+ "hyper",
+ "mime",
+ "mime_guess",
+ "nom 7.0.0",
+ "parking_lot",
+ "percent-encoding",
+ "pin-project-lite",
+ "poem-derive",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "sha1",
+ "smallvec",
+ "tokio",
+ "tokio-rustls",
+ "tokio-stream",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
+name = "poem-derive"
+version = "1.0.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3795975cfc1663ca3932a2fc341b77ace2d81c0f2e1e4ea22348b6767d9d9b75"
+dependencies = [
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "polling"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4958,6 +4964,16 @@ dependencies = [
  "ctor",
  "diff",
  "output_vt100",
+]
+
+[[package]]
+name = "proc-macro-crate"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ebace6889caf889b4d3f76becee12e90353f2b8c7d875534a71e5742f8f6f83"
+dependencies = [
+ "thiserror",
+ "toml",
 ]
 
 [[package]]
@@ -6317,12 +6333,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sync_wrapper"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20518fe4a4c9acf048008599e464deb21beeae3d3578418951a189c235a7a9a8"
-
-[[package]]
 name = "synstructure"
 version = "0.12.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6776,22 +6786,6 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
-]
-
-[[package]]
-name = "tower-http"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b7b56efe69aa0ad2b5da6b942e57ea9f6fe683b7a314d4ff48662e2c8838de1"
-dependencies = [
- "bytes",
- "futures-core",
- "futures-util",
- "http",
- "http-body",
- "pin-project",
- "tower-layer",
- "tower-service",
 ]
 
 [[package]]

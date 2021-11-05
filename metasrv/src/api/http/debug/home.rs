@@ -14,8 +14,8 @@
 
 use std::num::NonZeroI32;
 
-use axum::response::Html;
-use axum::response::IntoResponse;
+use poem::web::Html;
+use poem::IntoResponse;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct PProfRequest {
@@ -35,10 +35,10 @@ impl PProfRequest {
 }
 
 // return home page for default pprof results
+#[poem::handler]
 pub async fn debug_home_handler() -> impl IntoResponse {
-    return Html(format!(
+    Html(format!(
         r#"<a href="/debug/pprof/profile?seconds={}">pprof/profile</a>"#,
         PProfRequest::default_seconds()
     ))
-    .into_response();
 }

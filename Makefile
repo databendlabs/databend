@@ -2,7 +2,8 @@ HUB ?= datafuselabs
 TAG ?= latest
 PLATFORM ?= linux/amd64
 VERSION ?= latest
-
+ADD_NODES ?= 0
+NUM_CPUS ?= 2
 # Setup dev toolchain
 setup:
 	bash ./scripts/setup/dev_setup.sh
@@ -19,10 +20,16 @@ miri:
 	MIRIFLAGS="-Zmiri-disable-isolation" cargo miri test
 
 cluster: build
-	mkdir -p ./.databend/local/bin/test
+	mkdir -p ./.databend/local/bin && ./target/release/bendctl cluster stop --databend_dir ./.databend --group local
 	cp ./target/release/databend-query ./.databend/local/bin/test/databend-query
 	cp ./target/release/databend-meta ./.databend/local/bin/test/databend-meta
-	./target/release/bendctl cluster create --databend_dir ./.databend --group local --version test --force
+	./target/release/bendctl cluster create --databend_dir ./.databend --group local --version test --num-cpus ${NUM_CPUS} --force
+	for i in `seq 1 ${ADD_NODES}`; do make cluster_add; done;
+	make cluster_view
+cluster_add:
+	./target/release/bendctl cluster add --databend_dir ./.databend --group local --num-cpus ${NUM_CPUS}
+cluster_view:
+	./target/release/bendctl cluster view --databend_dir ./.databend --group local
 run: build
 	bash ./scripts/deploy/databend-query-standalone.sh release
 

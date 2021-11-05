@@ -15,9 +15,6 @@
 mod builder;
 mod iterator;
 
-#[cfg(test)]
-mod builder_test;
-
 pub use builder::*;
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;

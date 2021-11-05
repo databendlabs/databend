@@ -18,7 +18,7 @@
 use std::time::Instant;
 
 use common_exception::ErrorCode;
-use common_management::AuthType;
+use common_meta_types::AuthType;
 use common_planners::ExplainType;
 use metrics::histogram;
 use sqlparser::ast::BinaryOperator;

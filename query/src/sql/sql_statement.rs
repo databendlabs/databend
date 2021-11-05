@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_management::AuthType;
+use common_meta_types::AuthType;
 use common_planners::ExplainType;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take_till1;

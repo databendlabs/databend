@@ -22,6 +22,7 @@ use clap::ArgMatches;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::cmds::clusters::add::AddCommand;
 use crate::cmds::clusters::create::CreateCommand;
 use crate::cmds::clusters::stop::StopCommand;
 use crate::cmds::clusters::view::ViewCommand;
@@ -83,7 +84,8 @@ impl Command for ClusterCommand {
             .about(self.about())
             .subcommand(subcommands[0].clap())
             .subcommand(subcommands[1].clap())
-            .subcommand(subcommands[2].clap());
+            .subcommand(subcommands[2].clap())
+            .subcommand(subcommands[3].clap());
         app
     }
 
@@ -92,6 +94,7 @@ impl Command for ClusterCommand {
             Arc::new(CreateCommand::create(self.conf.clone())),
             Arc::new(StopCommand::create(self.conf.clone())),
             Arc::new(ViewCommand::create(self.conf.clone())),
+            Arc::new(AddCommand::create(self.conf.clone())),
         ]
     }
 

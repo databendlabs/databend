@@ -20,12 +20,12 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_meta_api::KVApi;
 use common_meta_types::AddResult;
+use common_meta_types::AuthType;
 use common_meta_types::IntoSeqV;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::SeqV;
 
-use super::user_api::AuthType;
 use crate::user::user_api::UserInfo;
 use crate::user::user_api::UserMgrApi;
 
@@ -100,24 +100,31 @@ impl UserMgrApi for UserMgr {
     async fn update_user(
         &self,
         username: String,
+        new_host_name: Option<String>,
         new_password: Option<Vec<u8>>,
         new_auth: Option<AuthType>,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
-        if new_password.is_none() && new_auth.is_none() {
+        if new_password.is_none() && new_auth.is_none() && new_host_name.is_none() {
             return Ok(seq);
         }
-        let partial_update = new_auth.is_none() || new_password.is_none();
-        let user_info = if partial_update {
+        let full_update = new_auth.is_some() && new_password.is_some() && new_host_name.is_some();
+        let user_info = if full_update {
+            UserInfo::new(
+                username.clone(),
+                new_host_name.unwrap(),
+                new_password.unwrap(),
+                new_auth.unwrap(),
+            )
+        } else {
             let user_val_seq = self.get_user(username.clone(), seq);
             let user_info = user_val_seq.await?.data;
             UserInfo::new(
                 username.clone(),
+                new_host_name.unwrap_or(user_info.host_name),
                 new_password.map_or(user_info.password, |v| v.to_vec()),
-                new_auth.map_or(user_info.auth_type, |v| v),
+                new_auth.unwrap_or(user_info.auth_type),
             )
-        } else {
-            UserInfo::new(username.clone(), new_password.unwrap(), new_auth.unwrap())
         };
 
         let key = format!("{}/{}", self.user_prefix, user_info.name);
