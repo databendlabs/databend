@@ -28,7 +28,6 @@ use common_planners::EmptyPlan;
 use common_planners::Expression;
 use common_planners::ExpressionPlan;
 use common_planners::Expressions;
-use common_planners::Extras;
 use common_planners::FilterPlan;
 use common_planners::HavingPlan;
 use common_planners::LimitByPlan;
@@ -107,16 +106,10 @@ impl PlanScheduler {
     #[tracing::instrument(level = "info", skip(self, plan))]
     pub fn reschedule(mut self, plan: &PlanNode) -> Result<Tasks> {
         let context = self.query_context.clone();
-        let cluster = context.get_cluster();
         let mut tasks = Tasks::create(context);
 
-        match cluster.is_empty() {
-            true => tasks.finalize(plan),
-            false => {
-                self.visit_plan_node(plan, &mut tasks)?;
-                tasks.finalize(&self.nodes_plan[self.local_pos])
-            }
-        }
+        self.visit_plan_node(plan, &mut tasks)?;
+        tasks.finalize(&self.nodes_plan[self.local_pos])
     }
 }
 
@@ -787,10 +780,7 @@ impl PlanScheduler {
 
         match table.is_local() {
             true => self.visit_local_data_source(plan, table.clone()),
-            false => {
-                let cluster_source = self.cluster_source(&plan.push_downs, table.clone())?;
-                self.visit_cluster_data_source(&cluster_source)
-            }
+            false => self.visit_cluster_data_source(plan, table.clone()),
         }
     }
 
@@ -814,10 +804,23 @@ impl PlanScheduler {
         Ok(())
     }
 
-    fn visit_cluster_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<()> {
-        self.running_mode = RunningMode::Cluster;
-        let nodes_parts = self.repartition(plan);
+    fn visit_cluster_data_source(
+        &mut self,
+        plan: &ReadDataSourcePlan,
+        table: TablePtr,
+    ) -> Result<()> {
+        let io_ctx = self.query_context.get_cluster_table_io_context()?;
+        let io_ctx = Arc::new(io_ctx);
 
+        let plan = table.read_plan(
+            io_ctx.clone(),
+            plan.push_downs.clone(),
+            Some(io_ctx.get_max_threads() * io_ctx.get_query_node_ids().len()),
+        )?;
+
+        self.running_mode = RunningMode::Cluster;
+
+        let nodes_parts = self.repartition(&plan);
         for index in 0..self.nodes_plan.len() {
             let mut read_plan = plan.clone();
             read_plan.parts = nodes_parts[index].clone();
@@ -852,21 +855,6 @@ impl PlanScheduler {
 }
 
 impl PlanScheduler {
-    fn cluster_source(
-        &mut self,
-        push_downs: &Option<Extras>,
-        table: TablePtr,
-    ) -> Result<ReadDataSourcePlan> {
-        let io_ctx = self.query_context.get_cluster_table_io_context()?;
-        let io_ctx = Arc::new(io_ctx);
-
-        table.read_plan(
-            io_ctx.clone(),
-            push_downs.clone(),
-            Some(io_ctx.get_max_threads() * io_ctx.get_query_node_ids().len()),
-        )
-    }
-
     fn repartition(&mut self, cluster_source: &ReadDataSourcePlan) -> Vec<Partitions> {
         // We always put adjacent partitions in the same node
         let nodes = self.cluster_nodes.clone();
