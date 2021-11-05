@@ -91,6 +91,11 @@ stateful-test:
 	rm -rf ./.databend/
 	ulimit -n 10000; bash ./scripts/ci/ci-run-stateful-tests-standalone.sh
 
+stateful-cluster-test:
+	rm -rf ./_meta/
+	rm -rf ./.databend/
+	bash ./scripts/ci/ci-run-stateful-tests-cluster.sh
+
 stateless-cluster-test: build-debug
 	rm -rf ./_meta/
 	bash ./scripts/ci/ci-run-stateless-tests-cluster.sh

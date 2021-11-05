@@ -29,6 +29,7 @@ perf.*
 *.stdout
 *.out
 *.err
+*.error
 *.swp
 _local_fs/*
 _meta/*
