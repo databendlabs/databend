@@ -17,6 +17,7 @@ use std::task::Poll;
 use std::usize;
 
 use common_datablocks::DataBlock;
+use common_datablocks::SortColumnDescription;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use futures::stream::Stream;
@@ -34,15 +35,24 @@ pub struct NumbersStream {
     schema: DataSchemaRef,
     block_index: usize,
     blocks: Vec<BlockRange>,
+    sort_columns_descriptions: Vec<SortColumnDescription>,
+    limit: Option<usize>,
 }
 
 impl NumbersStream {
-    pub fn try_create(ctx: DatabendQueryContextRef, schema: DataSchemaRef) -> Result<Self> {
+    pub fn try_create(
+        ctx: DatabendQueryContextRef,
+        schema: DataSchemaRef,
+        sort_columns_descriptions: Vec<SortColumnDescription>,
+        limit: Option<usize>,
+    ) -> Result<Self> {
         Ok(Self {
             ctx,
             schema,
             block_index: 0,
             blocks: vec![],
+            sort_columns_descriptions,
+            limit,
         })
     }
 
@@ -108,6 +118,11 @@ impl NumbersStream {
 
             let series = DFUInt64Array::new_from_aligned_vec(av).into_series();
             let block = DataBlock::create_by_array(self.schema.clone(), vec![series]);
+            if !self.sort_columns_descriptions.is_empty() {
+                let block_top_n =
+                    DataBlock::sort_block(&block, &self.sort_columns_descriptions, self.limit)?;
+                return Ok(Some(block_top_n));
+            }
             Some(block)
         })
     }

@@ -40,6 +40,7 @@ use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
 use crate::datasources::common::generate_parts;
 use crate::datasources::table_func_engine::TableArgs;
+use crate::pipelines::transforms::get_sort_descriptions;
 use crate::sessions::DatabendQueryContext;
 
 pub struct NumbersTable {
@@ -134,13 +135,28 @@ impl Table for NumbersTable {
     async fn read(
         &self,
         io_ctx: Arc<TableIOContext>,
-        _plan: &ReadDataSourcePlan,
+        plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let ctx: Arc<DatabendQueryContext> = io_ctx
             .get_user_data()?
             .expect("DatabendQueryContext should not be None");
 
-        Ok(Box::pin(NumbersStream::try_create(ctx, self.schema())?))
+        if let Some(extras) = &plan.push_downs {
+            if extras.limit.is_some() {
+                let sort_descriptions =
+                    get_sort_descriptions(&self.table_info.schema(), &extras.order_by)?;
+                let stream =
+                    NumbersStream::try_create(ctx, self.schema(), sort_descriptions, extras.limit)?;
+                return Ok(Box::pin(stream));
+            }
+        }
+
+        Ok(Box::pin(NumbersStream::try_create(
+            ctx,
+            self.schema(),
+            vec![],
+            None,
+        )?))
     }
 }
 
