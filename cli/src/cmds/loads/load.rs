@@ -163,8 +163,7 @@ impl LoadCommand {
     async fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
         match self.local_exec_precheck(args).await {
             Ok(_) => {
-                let mut reader =
-                    build_reader(args.value_of("load"), args.value_of("with_header")).await;
+                let mut reader = build_reader(args.value_of("load")).await;
                 let mut record = reader.records();
                 let table = args.value_of("table").unwrap();
                 let schema = args.value_of("schema");
@@ -231,7 +230,7 @@ impl LoadCommand {
                         if let Err(e) = execute_query_json(&cli, &url, query.clone()).await {
                             writer.write_err(format!(
                                 "cannot insert data into {} with query {}, error: {:?}",
-                                table,query, e
+                                table, query, e
                             ))
                         }
                     }
@@ -291,15 +290,13 @@ impl LoadCommand {
     }
 }
 
-async fn build_reader(
-    load: Option<&str>,
-    header: Option<&str>,
-) -> csv::Reader<Box<dyn std::io::Read + Send + Sync>> {
+async fn build_reader(load: Option<&str>) -> csv::Reader<Box<dyn std::io::Read + Send + Sync>> {
     match load {
         Some(val) => {
             if Path::new(val).exists() {
                 let f = std::fs::File::open(val).expect("cannot open file: permission denied");
-                csv::ReaderBuilder::new().has_headers(false)
+                csv::ReaderBuilder::new()
+                    .has_headers(false)
                     .from_reader(Box::new(f))
             } else if val.contains("://") {
                 let target = reqwest::get(val)

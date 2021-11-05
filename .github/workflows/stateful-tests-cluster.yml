@@ -13,6 +13,6 @@ jobs:
       - name: Rust setup
         run: |
           bash ./scripts/setup/dev_setup.sh -o -t
-      - name: Run Stateful Tests with Standalone mode
+      - name: Run Stateful Tests with Cluster mode
         run: |
           make stateful-cluster-test

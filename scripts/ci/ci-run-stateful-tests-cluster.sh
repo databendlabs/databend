@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0.
 export DATASET_SHA256=429c47cdd49b7d75eec9b9244c8b1288edd132506203e37d2d1e70e1ac1eccc7
 
-echo "Starting standalone databend cluster through bendctl"
+echo "Starting 3 nodes databend cluster through bendctl"
 killall databend-query
 killall databend-meta
-make cluster
+echo "Bootstrap 3 nodes databend cluster through bendctl"
+ADD_NODES=2 NUM_CPUS=1 make cluster
 if [ $? -eq 0 ]; then
     echo "provisioned cluster"
 else
