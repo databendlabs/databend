@@ -1,0 +1,18 @@
+name: Stateful test(stand alone)
+on: [push, pull_request]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  stateful-standalone:
+    name: "Tests"
+    runs-on: stateful-test
+    steps:
+      - uses: actions/checkout@v2
+      - name: Rust setup
+        run: |
+          bash ./scripts/setup/dev_setup.sh -o -t
+      - name: Run Stateful Tests with Standalone mode
+        run: |
+          make stateful-test
