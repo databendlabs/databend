@@ -63,11 +63,14 @@ impl Table for FuseTable {
         &self.table_info
     }
 
+    fn benefit_column_prune(&self) -> bool {
+        true
+    }
+
     fn read_partitions(
         &self,
         io_ctx: Arc<TableIOContext>,
         push_downs: Option<Extras>,
-        _partition_num_hint: Option<usize>,
     ) -> Result<(Statistics, Partitions)> {
         self.do_read_partitions(io_ctx.as_ref(), push_downs)
     }
@@ -117,16 +120,29 @@ impl FuseTable {
         }
     }
 
-    pub(crate) fn to_partitions(&self, blocks_metas: &[BlockMeta]) -> (Statistics, Partitions) {
+    pub(crate) fn to_partitions(
+        &self,
+        blocks_metas: &[BlockMeta],
+        _push_downs: Option<Extras>,
+    ) -> (Statistics, Partitions) {
         blocks_metas.iter().fold(
             (Statistics::default(), Partitions::default()),
             |(mut stats, mut parts), item| {
-                stats.read_rows += item.row_count as usize;
-                stats.read_bytes += item.block_size as usize;
                 parts.push(Part {
                     name: item.location.location.clone(),
                     version: 0,
                 });
+
+                stats.read_rows += item.row_count as usize;
+                stats.read_bytes += item.block_size as usize;
+
+                // todo: @zhaobr add column stats
+                // if let Some(Extras {
+                //     projection: Some(_),
+                //     ..
+                // }) = &push_downs
+                // {}
+
                 (stats, parts)
             },
         )

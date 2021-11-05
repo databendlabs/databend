@@ -22,6 +22,7 @@ use common_planners::ExplainType;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
+use crate::interpreters::utils::apply_plan_rewrite;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
@@ -66,7 +67,11 @@ impl ExplainInterpreter {
 
     fn explain_graph(&self) -> Result<DataBlock> {
         let schema = self.schema();
-        let plan = Optimizers::create(self.ctx.clone()).optimize(&self.explain.input)?;
+        let plan = apply_plan_rewrite(
+            self.ctx.clone(),
+            Optimizers::create(self.ctx.clone()),
+            &self.explain.input,
+        )?;
         let formatted_plan = Series::new(
             format!("{}", plan.display_graphviz())
                 .lines()
@@ -78,7 +83,11 @@ impl ExplainInterpreter {
 
     fn explain_syntax(&self) -> Result<DataBlock> {
         let schema = self.schema();
-        let plan = Optimizers::create(self.ctx.clone()).optimize(&self.explain.input)?;
+        let plan = apply_plan_rewrite(
+            self.ctx.clone(),
+            Optimizers::create(self.ctx.clone()),
+            &self.explain.input,
+        )?;
         let formatted_plan = Series::new(
             format!("{:?}", plan)
                 .lines()
@@ -90,7 +99,9 @@ impl ExplainInterpreter {
 
     fn explain_pipeline(&self) -> Result<DataBlock> {
         let schema = self.schema();
-        let plan = Optimizers::without_scatters(self.ctx.clone()).optimize(&self.explain.input)?;
+        let optimizer = Optimizers::without_scatters(self.ctx.clone());
+        let plan = apply_plan_rewrite(self.ctx.clone(), optimizer, &self.explain.input)?;
+
         let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
         let pipeline = pipeline_builder.build(&plan)?;
         let formatted_pipeline = Series::new(
