@@ -20,12 +20,11 @@ use std::io::{self};
 use std::path::Path;
 use std::path::PathBuf;
 
+use common_cache::DiskCacheError;
+use common_cache::LruDiskCache;
 use filetime::set_file_times;
 use filetime::FileTime;
 use tempfile::TempDir;
-
-use crate::DiskCacheError;
-use crate::LruDiskCache;
 
 struct TestFixture {
     /// Temp directory.
