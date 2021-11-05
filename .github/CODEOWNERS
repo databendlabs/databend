@@ -22,11 +22,13 @@
 /common/base/            @datafuselabs/query-members
 /common/building/        @datafuselabs/query-members
 
+# Storage rule
+/common/dal/             @datafuselabs/storage-members
+/query/src/datasources/  @datafuselabs/storage-members
+
 # Meta rule
 /metasrv                 @datafuselabs/meta-members
 /kvsrv                   @datafuselabs/meta-members
-/dfs                     @datafuselabs/meta-members
-/common/dal/             @datafuselabs/meta-members
 /common/meta/            @datafuselabs/meta-members
 /common/raft-store/      @datafuselabs/meta-members
 /common/sled-store/      @datafuselabs/meta-members
@@ -34,7 +36,6 @@
 # Cli rule
 /docker                  @datafuselabs/cli-members
 /cli                     @datafuselabs/cli-members
-
 
 # Tests rule
 
