@@ -112,7 +112,7 @@ fn is_like_pattern_escape(c: u8) -> bool {
     c == b'%' || c == b'_' || c == b'\\'
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum PatternType {
     // e.g. 'Arrow'
     OrdinalStr,
@@ -198,23 +198,21 @@ pub fn like_pattern_to_regex(pattern: &str) -> String {
             }
             '%' => regex.push_str(".*"),
             '_' => regex.push('.'),
-            '\\' => {
-                if let Some(v) = chars.peek().cloned() {
-                    match v {
-                        '%' | '_' => {
-                            regex.push(v);
-                            chars.next();
-                        }
-                        '\\' => {
-                            regex.push_str("\\\\");
-                            chars.next();
-                        }
-                        _ => regex.push_str("\\\\"),
-                    };
-                } else {
-                    regex.push_str("\\\\");
+            '\\' => match chars.peek().cloned() {
+                Some('%') => {
+                    regex.push('%');
+                    chars.next();
                 }
-            }
+                Some('_') => {
+                    regex.push('_');
+                    chars.next();
+                }
+                Some('\\') => {
+                    regex.push_str("\\\\");
+                    chars.next();
+                }
+                _ => regex.push_str("\\\\"),
+            },
             _ => regex.push(c),
         }
     }
