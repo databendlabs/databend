@@ -15,12 +15,10 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use common_base::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use tokio::time::Duration;
-
-use crate::runtime::BlockingWait;
-use crate::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn test_runtime() -> Result<()> {
