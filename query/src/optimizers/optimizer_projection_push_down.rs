@@ -111,7 +111,7 @@ impl PlanRewriter for ProjectionPushDownImpl {
         self.collect_column_names_from_expr_vec(plan.order_by.as_slice())?;
         let new_input = self.rewrite_plan_node(&plan.input)?;
         PlanBuilder::from(&new_input)
-            .sort(&self.rewrite_exprs(&new_input.schema(), &plan.order_by)?)?
+            .sort(&self.rewrite_exprs(&new_input.schema(), &plan.order_by)?)?s
             .build()
     }
 
@@ -192,7 +192,7 @@ impl ProjectionPushDownImpl {
             }
         }
 
-        projection.sort();
+        projection.sort_unstable();
         Ok(projection)
     }
 }
