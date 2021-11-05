@@ -444,8 +444,7 @@ impl PlanParser {
     // we can transform copy plan into insert plan
     #[tracing::instrument(level = "info", skip(self, copy_stmt), fields(ctx.id = self.ctx.get_id().as_str()))]
     pub fn copy_to_plan(&self, copy_stmt: &DfCopy) -> Result<PlanNode> {
-        let mut insert_plan =
-            self.insert_to_plan(&copy_stmt.name, &copy_stmt.columns, &None, "")?;
+        let insert_plan = self.insert_to_plan(&copy_stmt.name, &copy_stmt.columns, &None, "")?;
         match insert_plan {
             PlanNode::InsertInto(v) => match copy_stmt.format.to_uppercase().as_str() {
                 "CSV" => {
@@ -491,7 +490,7 @@ impl PlanParser {
             schema = DataSchemaRefExt::create(fields);
         }
 
-        let mut input_stream = futures::stream::iter::<Vec<DataBlock>>(vec![]);
+        let mut input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(vec![]);
 
         if let Some(source) = source {
             if let sqlparser::ast::SetExpr::Values(_vs) = &source.body {
@@ -503,10 +502,13 @@ impl PlanParser {
                 let mut source = ValueSource::new(values.as_bytes(), schema.clone(), block_size);
                 let mut blocks = vec![];
                 loop {
-                    let block = source.read()?;
+                    let block = source.read();
                     match block {
-                        Some(b) => blocks.push(b),
-                        None => break,
+                        Ok(Some(block)) => {
+                            blocks.push(Ok(block));
+                        }
+                        Err(e) => blocks.push(Err(e)),
+                        Ok(None) => break,
                     }
                 }
                 input_stream = futures::stream::iter(blocks);

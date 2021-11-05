@@ -139,7 +139,7 @@ impl Table for MemoryTable {
 
         while let Some(block) = s.next().await {
             let mut blocks = self.blocks.write();
-            blocks.push(block);
+            blocks.push(block?);
         }
         Ok(())
     }

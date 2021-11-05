@@ -30,8 +30,9 @@ use crate::datasources::table::fuse::util;
 use crate::datasources::table::fuse::SegmentInfo;
 use crate::datasources::table::fuse::Stats;
 
-pub type BlockStream =
-    std::pin::Pin<Box<dyn futures::stream::Stream<Item = DataBlock> + Sync + Send + 'static>>;
+pub type BlockStream = std::pin::Pin<
+    Box<dyn futures::stream::Stream<Item = Result<DataBlock>> + Sync + Send + 'static>,
+>;
 
 /// dummy struct, namespace placeholder
 pub struct BlockAppender;
@@ -48,6 +49,7 @@ impl BlockAppender {
 
         // accumulate the stats and save the blocks
         while let Some(block) = stream.next().await {
+            let block = block?;
             stats_acc.acc(&block)?;
             let schema = block.schema().to_arrow();
             let location = util::gen_unique_block_location();

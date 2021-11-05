@@ -80,6 +80,7 @@ impl Table for NullTable {
         .ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
 
         while let Some(block) = s.next().await {
+            let block = block?;
             info!("Ignore one block rows: {}", block.num_rows())
         }
         Ok(())

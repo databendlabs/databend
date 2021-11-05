@@ -152,7 +152,7 @@ pub struct FromClickHouseBlockStream {
 }
 
 impl futures::stream::Stream for FromClickHouseBlockStream {
-    type Item = DataBlock;
+    type Item = Result<DataBlock>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
@@ -161,16 +161,7 @@ impl futures::stream::Stream for FromClickHouseBlockStream {
         self.input.poll_next_unpin(cx).map(|x| match x {
             Some(v) => {
                 let block = from_clickhouse_block(self.schema.clone(), v);
-                match block {
-                    Ok(block) => Some(block),
-                    Err(e) => {
-                        log::error!(
-                            "failed to convert ClickHouseBlock to block , breaking out, {:?}",
-                            e
-                        );
-                        None
-                    }
-                }
+                Some(block)
             }
             _ => None,
         })
