@@ -211,7 +211,7 @@ fn test_metered_cache_oversize() {
 #[cfg(not(target_os = "macos"))]
 #[test]
 fn test_heapsize_cache() {
-    use crate::HeapSize;
+    use common_cache::HeapSize;
 
     let mut cache = LruCache::<&str, (u8, u8, u8), _, _>::with_meter(8, HeapSize);
     cache.put("foo1", (1, 2, 3));
