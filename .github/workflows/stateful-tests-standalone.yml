@@ -7,7 +7,7 @@ env:
 jobs:
   stateful-standalone:
     name: "Tests"
-    runs-on: stateful-test
+    runs-on: stateful-runner
     steps:
       - uses: actions/checkout@v2
       - name: Rust setup
