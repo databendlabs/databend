@@ -10,5 +10,8 @@ SELECT abs(TRUE); -- {ErrorCode 7}
 SELECT abs(NULL); -- {ErrorCode 7}
 SELECT abs(value) FROM math_sample_numbers;
 SELECT abs(value) + abs(-1) FROM math_sample_numbers;
+SELECT log(NULL);
+SELECT log(NULL, NULL);
+SELECT log('10', 100);
 
 DROP TABLE math_sample_numbers;
