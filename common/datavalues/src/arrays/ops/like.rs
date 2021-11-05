@@ -112,6 +112,7 @@ fn is_like_pattern_escape(c: u8) -> bool {
     c == b'%' || c == b'_' || c == b'\\'
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub enum PatternType {
     // e.g. 'Arrow'
     OrdinalStr,
@@ -183,7 +184,7 @@ pub fn check_pattern_type(pattern: &[u8], is_pruning: bool) -> PatternType {
 
 /// Transform the like pattern to regex pattern.
 /// e.g. 'Hello\._World%\%' tranform to '^Hello\\\..World.*%$'.
-pub(crate) fn like_pattern_to_regex(pattern: &str) -> String {
+pub fn like_pattern_to_regex(pattern: &str) -> String {
     let mut regex = String::with_capacity(pattern.len() * 2);
     regex.push('^');
 
