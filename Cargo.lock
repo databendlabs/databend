@@ -1290,8 +1290,10 @@ dependencies = [
  "num",
  "ordered-float 2.8.0",
  "pretty_assertions",
+ "regex",
  "serde",
  "serde_json",
+ "simdutf8",
  "strength_reduce",
 ]
 
