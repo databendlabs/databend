@@ -75,12 +75,12 @@ impl Function for LogFunction {
                 .apply_cast_numeric(|v| v.log(self.default_base))
         } else {
             // Log(base, num) if two args
+            let base_column: &DataColumn =
+                &columns[0].column().cast_with_type(&DataType::Float64)?;
             let num_series = columns[1]
                 .column()
                 .to_minimal_array()?
                 .cast_with_type(&DataType::Float64)?;
-            let base_column: &DataColumn =
-                &columns[0].column().cast_with_type(&DataType::Float64)?;
             match base_column {
                 DataColumn::Constant(v, _) => {
                     let base = DFTryFrom::try_from(v.clone())?;
