@@ -22,6 +22,7 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::compute::arity::unary;
 use common_arrow::arrow::compute::cast;
+use common_arrow::arrow::compute::cast::CastOptions;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
@@ -62,7 +63,10 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
     pub fn from_arrow_array(array: &dyn Array) -> Self {
         let expected_arrow_type = T::data_type().to_arrow();
         let arrow_type = get_physical_arrow_type(array.data_type());
-
+        let cast_options = CastOptions {
+            wrapped: true,
+            partial: true,
+        };
         if &expected_arrow_type != arrow_type {
             match array.data_type() {
                 // u32
@@ -78,17 +82,17 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
                     Self::from_arrow_array(&array)
                 }
                 ArrowDataType::Date32 => {
-                    let array = cast::cast(array, &ArrowDataType::Int32)
+                    let array = cast::cast(array, &ArrowDataType::Int32, cast_options)
                         .expect("primitive cast should be ok");
-                    let array = cast::cast(array.as_ref(), &expected_arrow_type)
+                    let array = cast::cast(array.as_ref(), &expected_arrow_type, cast_options)
                         .expect("primitive cast should be ok");
 
                     Self::from_arrow_array(array.as_ref())
                 }
                 ArrowDataType::Date64 => {
-                    let array = cast::cast(array, &ArrowDataType::Int64)
+                    let array = cast::cast(array, &ArrowDataType::Int64, cast_options)
                         .expect("primitive cast should be ok");
-                    let array = cast::cast(array.as_ref(), &expected_arrow_type)
+                    let array = cast::cast(array.as_ref(), &expected_arrow_type, cast_options)
                         .expect("primitive cast should be ok");
 
                     Self::from_arrow_array(array.as_ref())
