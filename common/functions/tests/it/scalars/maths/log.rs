@@ -83,7 +83,7 @@ fn test_log_function() -> Result<()> {
             display: "LOG",
             args: vec![
                 DataColumnWithField::new(
-                    Series::new([None as Option<f64>, Some(10_f64), Some(10_f64)]).into(),
+                    Series::new([None, Some(10_f64), Some(10_f64)]).into(),
                     DataField::new("base", DataType::Float64, false),
                 ),
                 DataColumnWithField::new(
@@ -93,7 +93,7 @@ fn test_log_function() -> Result<()> {
             ],
             input_rows: 1,
             func: LogFunction::try_create("log")?,
-            expect: Series::new([None as Option<f64>, None, Some(1_f64)]).into(),
+            expect: Series::new([None, None, Some(1_f64)]).into(),
             error: "",
         },
     ];
@@ -110,13 +110,7 @@ fn test_log_function() -> Result<()> {
         assert_eq!(expect_display, actual_display);
 
         let v = &(func.eval(&t.args, t.input_rows)?);
-        assert_eq!(
-            v,
-            &t.expect,
-            "case: {} got_values: {:?}",
-            t.name,
-            v.to_values()
-        );
+        assert_eq!(v.to_values()?, t.expect.to_values()?, "case: {}", t.name);
     }
     Ok(())
 }

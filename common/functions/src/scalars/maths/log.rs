@@ -15,6 +15,8 @@
 use std::f64::consts::E;
 use std::fmt;
 
+use common_arrow::arrow::array::PrimitiveArray;
+use common_arrow::arrow::buffer::Buffer;
 use common_datavalues::prelude::*;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
@@ -85,12 +87,23 @@ impl Function for LogFunction {
                     num_series.f64()?.apply_cast_numeric(|v| v.log(base))
                 }
                 DataColumn::Array(base_series) => {
-                    let iter = num_series
-                        .f64()?
-                        .into_no_null_iter()
-                        .zip(base_series.f64()?.into_no_null_iter())
-                        .map(|(num, base)| num.log(*base));
-                    DFFloat64Array::from_iter(iter)
+                    let validity = combine_validities(
+                        num_series.get_array_ref().validity(),
+                        base_series.get_array_ref().validity(),
+                    );
+                    let values = Buffer::from_trusted_len_iter(
+                        num_series
+                            .f64()?
+                            .into_no_null_iter()
+                            .zip(base_series.f64()?.into_no_null_iter())
+                            .map::<f64, _>(|(num, base)| num.log(*base)),
+                    );
+                    let array = PrimitiveArray::<f64>::from_data(
+                        DataType::Float64.to_arrow(),
+                        values,
+                        validity,
+                    );
+                    DFFloat64Array::from_arrow_array(&array)
                 }
             }
         };
