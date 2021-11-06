@@ -213,14 +213,26 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
             plan.statistics.read_bytes,
         )?;
 
-        if plan.push_downs.is_some() {
-            let extras = plan.push_downs.clone().unwrap();
-            write!(f, ", push_downs: [")?;
-            if extras.limit.is_some() {
-                write!(f, "limit: {}", extras.limit.unwrap())?;
-                write!(f, ", order_by: {:?}", extras.order_by)?;
+        if let Some(p) = &plan.push_downs {
+            if p.limit.is_some() || p.projection.is_some() {
+                write!(f, ", push_downs: [")?;
+                let mut comma = false;
+                if p.projection.is_some() {
+                    write!(f, "projections: {:?}", p.projection.clone().unwrap())?;
+                    comma = true;
+                }
+
+                if p.limit.is_some() {
+                    if comma {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "limit: {:?}", p.limit.unwrap())?;
+                    write!(f, ", order_by: {:?}", p.order_by)?;
+                }
+
+                write!(f, "]")?;
             }
-            write!(f, "]")?;
         }
         Ok(())
     }

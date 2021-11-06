@@ -88,7 +88,7 @@ async fn test_min_max_index() -> Result<()> {
         schema: test_schema.clone(),
         input_stream: Arc::new(Mutex::new(Some(Box::pin(futures::stream::iter(blocks))))),
     };
-    let io_ctx = Arc::new(ctx.get_single_node_table_io_context()?);
+    let io_ctx = Arc::new(ctx.get_cluster_table_io_context()?);
     let da = io_ctx.get_data_accessor()?;
     table.append_data(io_ctx.clone(), insert_into_plan).await?;
 

@@ -61,10 +61,9 @@ async fn test_csv_table() -> Result<()> {
         Arc::new(TableDataContext::default()),
     )?;
 
-    let partitions = ctx.get_settings().get_max_threads()? as usize;
-    let io_ctx = ctx.get_single_node_table_io_context()?;
+    let io_ctx = ctx.get_cluster_table_io_context()?;
     let io_ctx = Arc::new(io_ctx);
-    let source_plan = table.read_plan(io_ctx.clone(), Some(Extras::default()), Some(partitions))?;
+    let source_plan = table.read_plan(io_ctx.clone(), Some(Extras::default()))?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
     let stream = table.read(io_ctx, &source_plan).await?;
@@ -123,10 +122,9 @@ async fn test_csv_table_parse_error() -> Result<()> {
         Arc::new(TableDataContext::default()),
     )?;
 
-    let partitions = ctx.get_settings().get_max_threads()? as usize;
-    let io_ctx = ctx.get_single_node_table_io_context()?;
+    let io_ctx = ctx.get_cluster_table_io_context()?;
     let io_ctx = Arc::new(io_ctx);
-    let source_plan = table.read_plan(io_ctx.clone(), Some(Extras::default()), Some(partitions))?;
+    let source_plan = table.read_plan(io_ctx.clone(), Some(Extras::default()))?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
     let stream = table.read(io_ctx, &source_plan).await?;

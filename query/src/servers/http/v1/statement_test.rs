@@ -12,17 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use axum::body::Body;
-use axum::handler::post;
-use axum::http;
-use axum::http::Request;
-use axum::http::StatusCode;
-use axum::AddExtensionLayer;
-use axum::Router;
 use common_base::tokio;
 use common_exception::Result;
+use poem::http::Method;
+use poem::http::StatusCode;
+use poem::post;
+use poem::Endpoint;
+use poem::EndpointExt;
+use poem::Request;
+use poem::Route;
 use pretty_assertions::assert_eq;
-use tower::ServiceExt;
 
 use crate::servers::http::v1::statement::statement_handler;
 use crate::servers::http::v1::statement::HttpQueryResult;
@@ -69,27 +68,24 @@ async fn test_sql(
 ) -> Result<(StatusCode, HttpQueryResult)> {
     let path = "/v1/statement";
     let sessions = SessionManagerBuilder::create().build()?;
-    let cluster_router = Router::new()
-        .route(path, post(statement_handler))
-        .layer(AddExtensionLayer::new(sessions));
+    let cluster_router = Route::new()
+        .at(path, post(statement_handler))
+        .data(sessions);
     let uri = match database {
         Some(db) => format!("{}?db={:}", path, db),
         None => path.into(),
     };
     let response = cluster_router
-        .clone()
-        .oneshot(
+        .call(
             Request::builder()
-                .uri(uri)
-                .method(http::Method::POST)
-                .body(Body::from(sql))
-                .unwrap(),
+                .uri(uri.parse().unwrap())
+                .method(Method::POST)
+                .body(sql),
         )
-        .await
-        .unwrap();
+        .await;
 
     let status = response.status();
-    let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
-    let result = serde_json::from_slice::<HttpQueryResult>(&body[..])?;
+    let body = response.into_body().into_vec().await.unwrap();
+    let result = serde_json::from_slice::<HttpQueryResult>(&body)?;
     Ok((status, result))
 }

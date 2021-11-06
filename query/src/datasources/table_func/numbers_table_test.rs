@@ -30,14 +30,12 @@ async fn test_number_table() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let table = NumbersTable::create("system", "numbers_mt", 1, tbl_args)?;
 
-    let partitions = ctx.get_settings().get_max_threads()? as usize;
-    let io_ctx = ctx.get_single_node_table_io_context()?;
+    let io_ctx = ctx.get_cluster_table_io_context()?;
     let io_ctx = Arc::new(io_ctx);
-    let source_plan = table.clone().as_table().read_plan(
-        io_ctx.clone(),
-        Some(Extras::default()),
-        Some(partitions),
-    )?;
+    let source_plan = table
+        .clone()
+        .as_table()
+        .read_plan(io_ctx.clone(), Some(Extras::default()))?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
     let stream = table.read(io_ctx, &source_plan).await?;

@@ -110,6 +110,7 @@ impl PlanRewriter for TopNPushDownImpl {
                 None => {
                     let mut extras = Extras::default();
                     extras.limit = Some(n);
+                    extras.order_by = self.order_by.clone();
                     Some(extras)
                 }
             };

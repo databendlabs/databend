@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,11 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use poem::web::Data;
+use common_exception::Result;
+use common_planners::PlanNode;
+use common_planners::PlanRewriter;
 
-use crate::configs::Config;
+use super::plan_do_readsource::PlanDoReadSource;
+use crate::optimizers::Optimizers;
+use crate::sessions::DatabendQueryContextRef;
 
-#[poem::handler]
-pub async fn config_handler(cfg: Data<&Config>) -> String {
-    format!("{:?}", cfg.0)
+pub fn apply_plan_rewrite(
+    context: DatabendQueryContextRef,
+    optimizer: Optimizers,
+    plan: &PlanNode,
+) -> Result<PlanNode> {
+    let mut optimizer = optimizer;
+    let plan = optimizer.optimize(plan)?;
+    let plan = PlanDoReadSource::create(context).rewrite_plan_node(&plan)?;
+    Ok(plan)
 }

@@ -29,7 +29,6 @@ use common_context::TableIOContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_meta_types::NodeInfo;
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
@@ -245,29 +244,11 @@ impl DatabendQueryContext {
         self.shared.try_get_runtime()
     }
 
-    /// Build a TableIOContext for single node service.
-    pub fn get_single_node_table_io_context(self: &Arc<Self>) -> Result<TableIOContext> {
-        let nodes = vec![Arc::new(NodeInfo {
-            id: self.get_cluster().local_id(),
-            ..Default::default()
-        })];
-
-        let settings = self.get_settings();
-        let max_threads = settings.get_max_threads()? as usize;
-
-        Ok(TableIOContext::new(
-            self.get_shared_runtime()?,
-            Arc::new(ContextDalBuilder::new(self.get_config().storage)),
-            max_threads,
-            nodes,
-            Some(self.clone()),
-        ))
-    }
-
     /// Build a TableIOContext that contains cluster information so that one using it could distributed data evenly in the cluster.
     pub fn get_cluster_table_io_context(self: &Arc<Self>) -> Result<TableIOContext> {
         let cluster = self.get_cluster();
         let nodes = cluster.get_nodes();
+
         let settings = self.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
 
