@@ -21,7 +21,7 @@ select * from numbers(10) where null and true;
 
 select '==compare_number_string==';
 -- todo: partial parse case
--- select '123 ab' = 123;
+select '123 ab' = 123;
 select '123' = 123;
 select '7.4' = 7.4;
 select '7.4' > 7;
