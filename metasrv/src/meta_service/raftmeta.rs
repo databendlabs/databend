@@ -62,6 +62,12 @@ use common_meta_types::TableMeta;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 
+use crate::meta_service::errors::ConnectionError;
+use crate::meta_service::message::AdminRequest;
+use crate::meta_service::message::AdminResponse;
+use crate::meta_service::meta_leader::MetaLeader;
+use crate::meta_service::ForwardToLeader;
+use crate::meta_service::MetaError;
 use crate::meta_service::MetaServiceImpl;
 use crate::meta_service::Network;
 use crate::meta_service::RetryableError;
@@ -943,6 +949,58 @@ impl MetaNode {
         sm.get_node(node_id)
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn handle_admin_req(&self, req: AdminRequest) -> Result<AdminResponse, MetaError> {
+        let forward = req.forward_to_leader;
+
+        let l = self.as_leader().await;
+        let res = match l {
+            Ok(l) => l.handle_admin_req(req.clone()).await,
+            Err(e) => Err(MetaError::ForwardToLeader(e)),
+        };
+
+        let e = match res {
+            Ok(x) => return Ok(x),
+            Err(e) => e,
+        };
+
+        let e = match e {
+            MetaError::ForwardToLeader(e) => e,
+            _ => return Err(e),
+        };
+
+        if !forward {
+            return Err(MetaError::ForwardToLeader(e));
+        }
+
+        let leader_id = match e.leader {
+            Some(leader_id) => leader_id,
+            None => return Err(MetaError::ForwardToLeader(e)),
+        };
+
+        let mut r2 = req.clone();
+        // Avoid infinite forward
+        r2.set_forward(false);
+
+        let res: AdminResponse = self.forward(&leader_id, r2).await?;
+
+        Ok(res)
+    }
+
+    /// Return a MetaLeader if `self` believes it is the leader.
+    ///
+    /// Otherwise it returns the leader in a ForwardToLeader error.
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn as_leader(&self) -> Result<MetaLeader<'_>, ForwardToLeader> {
+        let curr_leader = self.get_leader().await;
+        if curr_leader == self.sto.id {
+            return Ok(MetaLeader::new(self));
+        }
+        Err(ForwardToLeader {
+            leader: Some(curr_leader),
+        })
+    }
+
     /// Add a new node into this cluster.
     /// The node info is committed with raft, thus it must be called on an initialized node.
     #[tracing::instrument(level = "debug", skip(self))]
@@ -952,7 +1010,7 @@ impl MetaNode {
         addr: String,
     ) -> common_exception::Result<AppliedState> {
         // TODO: use txid?
-        let _resp = self
+        let resp = self
             .write(LogEntry {
                 txid: None,
                 cmd: Cmd::AddNode {
@@ -964,7 +1022,7 @@ impl MetaNode {
                 },
             })
             .await?;
-        Ok(_resp)
+        Ok(resp)
     }
 
     pub async fn get_state_machine(&self) -> RwLockReadGuard<'_, StateMachine> {
@@ -1092,6 +1150,32 @@ impl MetaNode {
                 return 0;
             }
         }
+    }
+
+    #[tracing::instrument(level = "info", skip(self))]
+    pub async fn forward(
+        &self,
+        node_id: &NodeId,
+        req: AdminRequest,
+    ) -> Result<AdminResponse, MetaError> {
+        let addr = self
+            .sto
+            .get_node_addr(node_id)
+            .await
+            .map_err(|e| MetaError::UnknownError(e.to_string()))?;
+
+        let mut client = MetaServiceClient::connect(format!("http://{}", addr))
+            .await
+            .map_err(|e| ConnectionError::new(e, format!("address: {}", addr)))?;
+
+        let resp = client
+            .forward(req)
+            .await
+            .map_err(|e| MetaError::UnknownError(e.to_string()))?;
+        let raft_mes = resp.into_inner();
+
+        let res: Result<AdminResponse, MetaError> = raft_mes.into();
+        res
     }
 
     /// Write a meta log through local raft node.

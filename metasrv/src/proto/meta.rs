@@ -164,6 +164,21 @@ pub mod meta_service_client {
             let path = http::uri::PathAndQuery::from_static("/meta.MetaService/Get");
             self.inner.unary(request.into_request(), path, codec).await
         }
+        #[doc = "/ Forward a request to other"]
+        pub async fn forward(
+            &mut self,
+            request: impl tonic::IntoRequest<super::RaftMes>,
+        ) -> Result<tonic::Response<super::RaftMes>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/meta.MetaService/Forward");
+            self.inner.unary(request.into_request(), path, codec).await
+        }
         pub async fn append_entries(
             &mut self,
             request: impl tonic::IntoRequest<super::RaftMes>,
@@ -223,6 +238,11 @@ pub mod meta_service_server {
             &self,
             request: tonic::Request<super::GetReq>,
         ) -> Result<tonic::Response<super::GetReply>, tonic::Status>;
+        #[doc = "/ Forward a request to other"]
+        async fn forward(
+            &self,
+            request: tonic::Request<super::RaftMes>,
+        ) -> Result<tonic::Response<super::RaftMes>, tonic::Status>;
         async fn append_entries(
             &self,
             request: tonic::Request<super::RaftMes>,
@@ -322,6 +342,37 @@ pub mod meta_service_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
+                            accept_compression_encodings,
+                            send_compression_encodings,
+                        );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/meta.MetaService/Forward" => {
+                    #[allow(non_camel_case_types)]
+                    struct ForwardSvc<T: MetaService>(pub Arc<T>);
+                    impl<T: MetaService> tonic::server::UnaryService<super::RaftMes> for ForwardSvc<T> {
+                        type Response = super::RaftMes;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::RaftMes>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).forward(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = ForwardSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec).apply_compression_config(
                             accept_compression_encodings,

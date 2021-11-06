@@ -12,10 +12,68 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::ErrorCode;
 use common_meta_types::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
+
+use crate::any_error::AnyError;
+
+/// Top level error MetaNode would return.
+#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum MetaError {
+    #[error(transparent)]
+    ForwardToLeader(#[from] ForwardToLeader),
+
+    #[error("MembershipChangeInProgress")]
+    MembershipChangeInProgress,
+
+    #[error(transparent)]
+    InvalidMembership(#[from] InvalidMembership),
+
+    #[error(transparent)]
+    ConnectionError(#[from] ConnectionError),
+
+    #[error("{0}")]
+    UnknownError(String),
+    // TODO(xp): RaftError needs impl Serialize etc.
+    // #[error(transparent)]
+    // RaftError(RaftError)
+}
+
+impl From<MetaError> for ErrorCode {
+    fn from(e: MetaError) -> Self {
+        ErrorCode::MetaServiceError(e.to_string())
+    }
+}
+
+#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[error("ConnectionError: {msg} source: {source}")]
+pub struct ConnectionError {
+    msg: String,
+    #[source]
+    source: AnyError,
+}
+
+impl ConnectionError {
+    pub fn new(source: tonic::transport::Error, msg: String) -> Self {
+        Self {
+            msg,
+            source: AnyError::new(&source),
+        }
+    }
+}
+
+#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[error("InvalidMembership")]
+pub struct InvalidMembership {}
+
+#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[error("ForwardToLeader: {leader:?}")]
+pub struct ForwardToLeader {
+    pub leader: Option<NodeId>,
+}
 
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum RetryableError {

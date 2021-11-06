@@ -21,6 +21,7 @@ use std::sync::Arc;
 use common_meta_types::LogEntry;
 use common_tracing::tracing;
 
+use crate::meta_service::message::AdminRequest;
 use crate::meta_service::MetaNode;
 use crate::proto::meta_service_server::MetaService;
 use crate::proto::GetReply;
@@ -78,6 +79,25 @@ impl MetaService for MetaServiceImpl {
         };
 
         Ok(tonic::Response::new(rst))
+    }
+
+    #[tracing::instrument(level = "info", skip(self))]
+    async fn forward(
+        &self,
+        request: tonic::Request<RaftMes>,
+    ) -> Result<tonic::Response<RaftMes>, tonic::Status> {
+        common_tracing::extract_remote_span_as_parent(&request);
+
+        let req = request.into_inner();
+
+        let admin_req: AdminRequest = serde_json::from_str(&req.data)
+            .map_err(|x| tonic::Status::invalid_argument(x.to_string()))?;
+
+        let res = self.meta_node.handle_admin_req(admin_req).await;
+
+        let raft_mes: RaftMes = res.into();
+
+        Ok(tonic::Response::new(raft_mes))
     }
 
     #[tracing::instrument(level = "info", skip(self, request))]
