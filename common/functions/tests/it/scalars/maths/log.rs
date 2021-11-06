@@ -71,11 +71,29 @@ fn test_log_function() -> Result<()> {
             display: "LOG",
             args: vec![DataColumnWithField::new(
                 Series::new([E, E, E]).into(),
-                DataField::new("num", DataType::String, false),
+                DataField::new("num", DataType::Float64, false),
             )],
             input_rows: 3,
             func: LogFunction::try_create("log")?,
             expect: Series::new([1_f64, 1_f64, 1_f64]).into(),
+            error: "",
+        },
+        Test {
+            name: "log-with-null",
+            display: "LOG",
+            args: vec![
+                DataColumnWithField::new(
+                    Series::new([None as Option<f64>, Some(10_f64), Some(10_f64)]).into(),
+                    DataField::new("base", DataType::Float64, false),
+                ),
+                DataColumnWithField::new(
+                    Series::new([Some(10_f64), None, Some(10_f64)]).into(),
+                    DataField::new("num", DataType::Float64, false),
+                ),
+            ],
+            input_rows: 1,
+            func: LogFunction::try_create("log")?,
+            expect: Series::new([None as Option<f64>, None, Some(1_f64)]).into(),
             error: "",
         },
     ];
