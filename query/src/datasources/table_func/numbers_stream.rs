@@ -56,6 +56,38 @@ impl NumbersStream {
         })
     }
 
+    fn try_apply_top_n(&self, begin: u64, end: u64) -> (u64, u64) {
+        // no limit found, do nothing
+        if self.limit.is_none() {
+            return (begin, end);
+        }
+
+        let n = self.limit.unwrap();
+        // if the range of top-n is larger than the range, do nothing
+        if n as u64 > end - begin {
+            return (begin, end);
+        }
+
+        let ascending_order: Option<bool> = match &self.sort_columns_descriptions[..] {
+            // if no order-by expression, we just apply top-n in asc order
+            [] => Some(true),
+            [col] => {
+                if col.column_name == "number" {
+                    Some(col.asc)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+
+        match ascending_order {
+            Some(true) => (begin, end.min(begin + n as u64)),
+            Some(false) => (begin.max(end - n as u64), end),
+            None => (begin, end),
+        }
+    }
+
     #[inline]
     fn try_get_one_block(&mut self) -> Result<Option<DataBlock>> {
         if (self.block_index as usize) == self.blocks.len() {
@@ -73,6 +105,8 @@ impl NumbersStream {
                 let names: Vec<_> = part.name.split('-').collect();
                 let begin: u64 = names[1].parse()?;
                 let end: u64 = names[2].parse()?;
+
+                let (begin, end) = self.try_apply_top_n(begin, end);
 
                 let diff = end - begin;
                 let block_nums = diff / block_size;
@@ -118,11 +152,6 @@ impl NumbersStream {
 
             let series = DFUInt64Array::new_from_aligned_vec(av).into_series();
             let block = DataBlock::create_by_array(self.schema.clone(), vec![series]);
-            if !self.sort_columns_descriptions.is_empty() {
-                let block_top_n =
-                    DataBlock::sort_block(&block, &self.sort_columns_descriptions, self.limit)?;
-                return Ok(Some(block_top_n));
-            }
             Some(block)
         })
     }
