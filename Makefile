@@ -19,10 +19,10 @@ miri:
 	cargo miri setup
 	MIRIFLAGS="-Zmiri-disable-isolation" cargo miri test
 
-cluster: build cli-build
+cluster: build-debug cli-build-debug
 	mkdir -p ./.databend/local/bin/test/ && make cluster_stop || echo "stop"
-	cp ./target/release/databend-query ./.databend/local/bin/test/databend-query
-	cp ./target/release/databend-meta ./.databend/local/bin/test/databend-meta
+	cp ./target/debug/databend-query ./.databend/local/bin/test/databend-query
+	cp ./target/debug/databend-meta ./.databend/local/bin/test/databend-meta
 	./target/release/bendctl cluster create --databend_dir ./.databend --group local --version test --num-cpus ${NUM_CPUS} --force
 	for i in `seq 1 ${ADD_NODES}`; do make cluster_add; done;
 	make cluster_view
@@ -69,6 +69,8 @@ cross-compile-release:
 cli-build:
 	bash ./scripts/build/build-cli.sh build-cli
 
+cli-build-debug:
+	bash ./scripts/build/build-cli.sh build-cli-debug
 cli-install:
 	bash ./scripts/build/build-cli.sh install-cli
 
