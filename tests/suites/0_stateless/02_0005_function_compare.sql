@@ -9,6 +9,7 @@ select number from numbers_mt(10) where number   between 4 + 0.1  and 8 - 0.1  o
 select * from system.databases where name like '%sys%';
 select * from system.databases where name like '_ef_ul_';
 select '%' like '\%';
+select '%' like '\\%';
 
 -- not like
 select * from system.databases where name not like '%sys%' order by name;
