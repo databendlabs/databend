@@ -52,6 +52,7 @@ async fn test_tables_table() -> Result<()> {
         "| system   | settings     | SystemSettings     |",
         "| system   | tables       | SystemTables       |",
         "| system   | tracing      | SystemTracing      |",
+        "| system   | users        | SystemUsers        |",
         "+----------+--------------+--------------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

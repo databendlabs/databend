@@ -114,7 +114,7 @@ pub struct DfCreateUser {
     pub if_not_exists: bool,
     /// User name
     pub name: String,
-    pub host_name: String,
+    pub hostname: String,
     pub auth_type: AuthType,
     pub password: String,
 }
