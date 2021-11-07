@@ -15,9 +15,11 @@ mod statement_kill;
 mod statement_set_variable;
 mod statement_insert;
 mod statement_select;
-mod statement_common;
+mod analyzer_expr;
 mod analyzer;
 mod statement_explain;
+mod analyzer_schema;
+mod analyzer_expr_value;
 
 pub use analyzer::AnalyzedResult;
 pub use analyzer::AnalyzableStatement;

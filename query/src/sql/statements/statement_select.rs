@@ -4,13 +4,14 @@ use crate::sessions::{DatabendQueryContextRef, DatabendQueryContext};
 use common_exception::{Result, ErrorCode};
 use crate::catalogs::ToReadDataSourcePlan;
 use std::sync::Arc;
-use common_planners::{PlanNode, ReadDataSourcePlan, Expression, extract_aliases, resolve_aliases_to_exprs, find_aggregate_exprs, find_aggregate_exprs_in_expr, expand_aggregate_arg_exprs, rebase_expr, Expressions};
+use common_planners::{PlanNode, ReadDataSourcePlan, Expression, extract_aliases, resolve_aliases_to_exprs, find_aggregate_exprs, find_aggregate_exprs_in_expr, expand_aggregate_arg_exprs, rebase_expr, Expressions, expr_as_column_expr};
 use common_datavalues::{DataSchema, DataSchemaRef};
 use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::future::Future;
-use crate::sql::statements::statement_common::{TableSchema, ExpressionAnalyzer};
+use crate::sql::statements::analyzer_expr::{TableSchema, ExpressionAnalyzer};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use sqlparser::parser::ParserError;
+use crate::sql::statements::analyzer_schema::AnalyzedSchema;
 
 pub struct DfQueryStatement {
     pub from: Vec<TableWithJoins>,
@@ -42,6 +43,7 @@ pub struct AnalyzeData {
     pub projection_expressions: Vec<Expression>,
 
     tables_schema: Vec<TableSchema>,
+    from_schema: AnalyzedSchema,
     finalize_schema: DataSchemaRef,
     projection_aliases: HashMap<String, Expression>,
 }
@@ -101,10 +103,8 @@ impl DfQueryStatement {
     pub async fn analyze_filter(&self, data: &mut AnalyzeData) -> Result<()> {
         if let Some(predicate) = &self.selection {
             // TODO: collect pushdown predicates
-            let query_context = data.ctx.clone();
-            let query_tables_schema = data.tables_schema.clone();
-            let analyzer = ExpressionAnalyzer::with_tables(query_context, query_tables_schema);
-            data.filter_predicate = Some(analyzer.analyze(predicate)?);
+            let expr_analyzer = data.get_expr_analyze::<false>();
+            data.filter_predicate = Some(expr_analyzer.analyze(predicate)?);
         }
 
         Ok(())
@@ -122,29 +122,21 @@ impl DfQueryStatement {
 
     /// Push group by exprs and aggregate function inputs into before_group_by_expressions
     pub async fn analyze_group_by(&self, data: &mut AnalyzeData) -> Result<()> {
-        let expr_analyzer = data.get_expr_analyze();
+        let expr_analyzer = data.get_expr_analyze::<false>();
         let projection_aliases = &data.projection_aliases;
 
         for group_by_expr in &self.group_by {
             let analyzed_expr = expr_analyzer.analyze(group_by_expr)?;
-            match find_aggregate_exprs_in_expr(&analyzed_expr) {
-                aggregate_func if !aggregate_func.is_empty() => {
-                    Err(ErrorCode::SyntaxException(format!(
-                        "Cannot contain aggregate function({:?}) in group by expression",
-                        aggregate_func
-                    )))
-                },
-                _ => {
-                    let analyzed_expr = resolve_aliases_to_exprs(&analyzed_expr, projection_aliases)?;
+            let analyzed_expr = resolve_aliases_to_exprs(&analyzed_expr, projection_aliases)?;
 
-                    if !data.group_by_expressions.contains(&analyzed_expr) {
-                        data.group_by_expressions.push(analyzed_expr.clone());
-                    }
+            if !data.group_by_expressions.contains(&analyzed_expr) {
+                // The expr completed in before_group_by_expressions.
+                let group_by_expression = expr_as_column_expr(&analyzed_expr)?;
+                data.group_by_expressions.push(group_by_expression);
+            }
 
-                    if !data.before_group_by_expressions.contains(&analyzed_expr) {
-                        data.before_group_by_expressions.push(analyzed_expr.clone());
-                    }
-                }
+            if !data.before_group_by_expressions.contains(&analyzed_expr) {
+                data.before_group_by_expressions.push(analyzed_expr);
             }
         }
 
@@ -155,7 +147,7 @@ impl DfQueryStatement {
         if let Some(predicate) = &self.having {
             let expr = Self::analyze_expr_with_alias(predicate, data)?;
 
-            data.add_aggregate_function(&expr);
+            data.add_aggregate_function(&expr)?;
             data.having_predicate = Some(Self::after_group_by_expr(&expr, data)?);
         }
         Ok(())
@@ -169,7 +161,7 @@ impl DfQueryStatement {
             let after_group_by_expr = Self::after_group_by_expr(&expr, data)?;
             data.before_having_expressions.push(after_group_by_expr);
             data.order_by_expressions.push(Expression::Sort {
-                expr: Box::new(Expression::Column(after_group_by_expr.column_name())),
+                expr: Box::new(expr_as_column_expr(&after_group_by_expr)?),
                 asc: order_by_expr.asc.unwrap_or(true),
                 nulls_first: order_by_expr.asc.unwrap_or(true),
             });
@@ -190,7 +182,7 @@ impl DfQueryStatement {
     }
 
     fn analyze_expr_with_alias(expr: &Expr, data: &mut AnalyzeData) -> Result<Expression> {
-        let analyzed_expr = data.get_expr_analyze().analyze(expr)?;
+        let analyzed_expr = data.get_expr_analyze::<true>().analyze(expr)?;
         let projection_aliases = &data.projection_aliases;
         resolve_aliases_to_exprs(&analyzed_expr, projection_aliases)
     }
@@ -218,6 +210,7 @@ impl DfQueryStatement {
                     return Err(ErrorCode::UnImplement("Cannot SELECT LATERAL subquery."));
                 }
 
+                let subquery = subquery.as_ref().clone();
                 let query_statement = DfQueryStatement::try_from(subquery)?;
                 match query_statement.analyze(data.ctx.clone()).await? {
                     AnalyzedResult::SelectQuery(new_data) => {
@@ -268,10 +261,10 @@ impl AnalyzeData {
         AnalyzeData { ctx, ..Default::default() }
     }
 
-    pub fn get_expr_analyze(&self) -> ExpressionAnalyzer {
+    pub fn get_expr_analyze<const allow_aggr: bool>(&self) -> ExpressionAnalyzer<allow_aggr> {
         let query_context = self.ctx.clone();
         let query_tables_schema = self.tables_schema.clone();
-        ExpressionAnalyzer::with_tables(query_context, query_tables_schema)
+        ExpressionAnalyzer::<allow_aggr>::with_tables(query_context, query_tables_schema)
     }
 
     pub fn add_aggregate_function(&mut self, expr: &Expression) -> Result<()> {
@@ -332,11 +325,13 @@ impl AnalyzeData {
         match alias {
             None => {
                 let schema = read_table.schema();
+                // let analyzed_schema = AnalyzedSchema::unnamed_table(database, table, schema);
                 let table_schema = TableSchema::Default { database, table, schema };
                 self.tables_schema.push(table_schema);
             }
             Some(table_alias) => {
                 let alias = table_alias.name.value.clone();
+                // let analyzed_schema = AnalyzedSchema::named_table(alias, schema);
                 self.tables_schema.push(TableSchema::Named(alias, read_table.schema()));
             }
         }

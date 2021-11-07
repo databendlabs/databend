@@ -1,13 +1,16 @@
 use common_exception::{Result, ErrorCode};
-use sqlparser::ast::{Expr, Select, UnaryOperator, FunctionArg, Value, Ident, BinaryOperator, Query, DataType};
-use common_datavalues::{DataSchema, DataValue, DataSchemaRef};
+use sqlparser::ast::{Expr, Select, UnaryOperator, FunctionArg, Value, Ident, BinaryOperator, Query, DataType, DateTimeField};
+use common_datavalues::{DataSchema, DataValue, DataSchemaRef, IntervalUnit};
 use common_planners::Expression;
 use crate::functions::ContextFunction;
 use common_functions::aggregates::AggregateFunctionFactory;
-use crate::sql::SQLCommon;
+use crate::sql::{SQLCommon, DfStatement};
 use crate::sessions::DatabendQueryContextRef;
-
-struct StatementCommon;
+use crate::sql::statements::analyzer_schema::AnalyzedSchema;
+use std::sync::Arc;
+use crate::sql::statements::analyzer_expr_value::ValueExprAnalyzer;
+use crate::sql::statements::DfQueryStatement;
+use std::convert::TryFrom;
 
 /// Such as `SELECT * FROM table_name AS alias_name`
 pub enum TableSchema {
@@ -18,49 +21,50 @@ pub enum TableSchema {
 
 pub type TablesSchema = Vec<TableSchema>;
 
-pub struct ExpressionAnalyzer {
+pub struct ExpressionAnalyzer<const allow_aggr: bool> {
     tables: TablesSchema,
-    ctx: DatabendQueryContextRef,
+    schema: Arc<AnalyzedSchema>,
+    context: DatabendQueryContextRef,
 }
 
-impl ExpressionAnalyzer {
-    pub fn create(ctx: DatabendQueryContextRef) -> ExpressionAnalyzer {
-        ExpressionAnalyzer { ctx, ..Default::default() }
+impl<const allow_aggr: bool> ExpressionAnalyzer<allow_aggr> {
+    pub fn create(ctx: DatabendQueryContextRef) -> ExpressionAnalyzer<allow_aggr> {
+        ExpressionAnalyzer::<allow_aggr> { context: ctx, ..Default::default() }
     }
 
-    pub fn with_tables(ctx: DatabendQueryContextRef, tables: TablesSchema) -> ExpressionAnalyzer {
-        ExpressionAnalyzer { ctx, tables }
+    pub fn with_tables(ctx: DatabendQueryContextRef, tables: TablesSchema) -> ExpressionAnalyzer<allow_aggr> {
+        ExpressionAnalyzer::<allow_aggr> { context: ctx, tables }
     }
 
     pub fn analyze(&self, expr: &Expr) -> Result<Expression> {
         match expr {
-            Expr::Value(value) => self.analyze_value(value),
-            Expr::Identifier(ref v) => self.analyze_identifier(v),
-            Expr::BinaryOp { left, op, right } => self.analyze_binary_expr(left, op, right),
-            Expr::UnaryOp { op, expr } => self.analyze_unary_expr(op, expr),
+            Expr::Nested(expr) => self.analyze(expr),
+            Expr::Value(value) => ValueExprAnalyzer::analyze(value),
+            Expr::Identifier(ident) => self.analyze_identifier(ident),
+            Expr::CompoundIdentifier(idents) => self.analyze_identifiers(idents),
             Expr::IsNull(expr) => self.analyze_is_null(expr),
             Expr::IsNotNull(expr) => self.analyze_is_not_null(expr),
-            Expr::Nested(expr) => self.analyze(expr),
+            Expr::UnaryOp { op, expr } => self.analyze_unary_expr(op, expr),
+            Expr::BinaryOp { left, op, right } => self.analyze_binary_expr(left, op, right),
+            Expr::Wildcard => self.analyze_wildcard(),
+
             Expr::Exists(subquery) => self.analyze_exists(subquery),
-            Expr::Subquery(q) => Ok(self.scalar_subquery_to_rex(q)?),
-            Expr::CompoundIdentifier(ids) => {
-                self.process_compound_ident(ids.as_slice())
-            }
-            Expr::Function(e) => {
-                let mut args = Vec::with_capacity(e.args.len());
+            Expr::Subquery(subquery) => Ok(self.scalar_subquery_to_rex(subquery)?),
+            Expr::Function(function) => {
+                let mut args = Vec::with_capacity(function.args.len());
 
                 // 1. Get the args from context by function name. such as SELECT database()
                 // common::ScalarFunctions::udf::database arg is ctx.get_default()
                 let ctx_args = ContextFunction::build_args_from_ctx(
-                    e.name.to_string().as_str(),
-                    self.ctx.clone(),
+                    function.name.to_string().as_str(),
+                    self.context.clone(),
                 )?;
                 if !ctx_args.is_empty() {
                     args.extend_from_slice(ctx_args.as_slice());
                 }
 
                 // 2. Get args from the ast::Expr:Function
-                for arg in &e.args {
+                for arg in &function.args {
                     match &arg {
                         FunctionArg::Named { arg, .. } => {
                             args.push(Self::sql_to_rex(arg, schema)?);
@@ -71,7 +75,7 @@ impl ExpressionAnalyzer {
                     }
                 }
 
-                let op = e.name.to_string();
+                let op = function.name.to_string();
                 if AggregateFunctionFactory::instance().check(&op) {
                     let args = match op.to_lowercase().as_str() {
                         "count" => args
@@ -84,7 +88,7 @@ impl ExpressionAnalyzer {
                         _ => args,
                     };
 
-                    let params = e
+                    let params = function
                         .params
                         .iter()
                         .map(|v| {
@@ -102,7 +106,7 @@ impl ExpressionAnalyzer {
 
                     return Ok(Expression::AggregateFunction {
                         op,
-                        distinct: e.distinct,
+                        distinct: function.distinct,
                         params,
                         args,
                     });
@@ -110,9 +114,9 @@ impl ExpressionAnalyzer {
 
                 Ok(Expression::ScalarFunction { op, args })
             }
-            Expr::Wildcard => self.analyze_wildcard(),
-            Expr::TypedString { data_type, value } => self.analyze_typed_string(data_type, value),
+
             Expr::Cast { expr, data_type } => self.analyze_cast(expr, data_type),
+            Expr::TypedString { data_type, value } => self.analyze_typed_string(data_type, value),
             Expr::Substring { expr, substring_from, substring_for, } => self.analyze_substring(expr, substring_from, substring_for),
             Expr::Between { expr, negated, low, high } => self.analyze_between(expr, negated, low, high),
             other => Result::Err(ErrorCode::SyntaxException(format!(
@@ -122,10 +126,45 @@ impl ExpressionAnalyzer {
         }
     }
 
+    fn analyze_identifier(&self, ident: &Ident) -> Result<Expression> {
+        let column_name = ident.clone().value;
+
+        match self.schema.contains_column(&column_name) {
+            true => Ok(Expression::Column(column_name)),
+            false => Err(ErrorCode::UnknownColumn(format!("Unknown column {}. columns: {:?}", column_name, self.schema)))
+        }
+    }
+
+    fn analyze_identifiers(&self, idents: &[Ident]) -> Result<Expression> {}
+
     fn analyze_exists(&self, subquery: &Query) -> Result<Expression> {
         Ok(Expression::ScalarFunction {
             op: "EXISTS".to_lowercase(),
             args: vec![self.subquery_to_rex(subquery)?],
+        })
+    }
+
+    pub fn subquery_to_rex(&self, subquery: &Query) -> Result<Expression> {
+        let cloned_sub_query = subquery.clone();
+        let subquery_statement = DfQueryStatement::try_from(cloned_sub_query)?;
+
+        // TODO: build subquery to plan.
+        let query = DfStatement::Query(subquery_statement);
+
+        let subquery = self.query_to_plan(subquery)?;
+        let subquery_name = self.context.get_subquery_name(&subquery);
+        Ok(Expression::Subquery {
+            name: subquery_name,
+            query_plan: Arc::new(subquery),
+        })
+    }
+
+    pub fn scalar_subquery_to_rex(&self, subquery: &Query) -> Result<Expression> {
+        let subquery = self.query_to_plan(subquery)?;
+        let subquery_name = self.ctx.get_subquery_name(&subquery);
+        Ok(Expression::ScalarSubquery {
+            name: subquery_name,
+            query_plan: Arc::new(subquery),
         })
     }
 
@@ -199,79 +238,11 @@ impl ExpressionAnalyzer {
         }
     }
 
-    fn analyze_identifier(&self, v: &Ident) -> Result<Expression> {
-        Ok(Expression::Column(v.clone().value))
-    }
-
     fn analyze_is_null(&self, expr: &Expr) -> Result<Expression> {
-        Ok(Expression::ScalarFunction {
-            op: String::from("is_null"),
-            args: vec![self.analyze(expr)?],
-        })
+        Ok(Expression::create_scalar_function("is_null", vec![self.analyze(expr)?]))
     }
 
     fn analyze_is_not_null(&self, expr: &Expr) -> Result<Expression> {
-        Ok(Expression::ScalarFunction {
-            op: String::from("isnotnull"),
-            args: vec![self.analyze(expr)?],
-        })
-    }
-}
-
-struct ValueAnalyzer;
-
-impl ValueAnalyzer {
-    pub fn analyze(value: &Value) -> Result<Expression> {}
-}
-
-impl StatementCommon {
-    fn value_to_rex(value: &Value) -> Result<Expression> {
-        match value {
-            Value::Number(ref n, _) => {
-                DataValue::try_from_literal(n).map(Expression::create_literal)
-            }
-            Value::SingleQuotedString(ref value) => {
-                Ok(Expression::create_literal(
-                    DataValue::String(Some(value.clone().into_bytes())),
-                ))
-            }
-            Value::Boolean(b) => {
-                Ok(Expression::create_literal(DataValue::Boolean(Some(*b))))
-            }
-            Value::Interval {
-                value: value_expr,
-                leading_field,
-                leading_precision,
-                last_field,
-                fractional_seconds_precision,
-            } => {
-                // We don't support full interval expression like 'Interval ..To.. '. Currently only partial interval expression like "interval [num] [unit]" is supported.
-                if leading_precision.is_some()
-                    || last_field.is_some()
-                    || fractional_seconds_precision.is_some()
-                {
-                    return Result::Err(ErrorCode::SyntaxException(format!(
-                        "Unsupported interval expression: {}.",
-                        value
-                    )));
-                }
-
-                // When the input is like "interval '1 hour'", leading_field will be None and value_expr will be '1 hour'.
-                // We may want to support this pattern in native paser (sqlparser-rs), to have a parsing result that leading_field is Some(Hour) and value_expr is number '1'.
-                if leading_field.is_none() {
-                    //TODO: support parsing literal interval like '1 hour'
-                    return Result::Err(ErrorCode::SyntaxException(format!(
-                        "Unsupported interval expression: {}.",
-                        value
-                    )));
-                }
-                Self::interval_to_rex(value_expr, leading_field.clone().unwrap())
-            }
-            Value::Null => Ok(Expression::create_literal(DataValue::Null)),
-            other => Result::Err(ErrorCode::SyntaxException(format!(
-                "Unsupported value expression: {}, type: {:?}",
-                value, other
-            ))),
-        }
+        Ok(Expression::create_scalar_function("isnotnull", vec![self.analyze(expr)?]))
     }
 }
