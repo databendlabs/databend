@@ -15,7 +15,7 @@
 use std::convert::TryInto;
 
 use common_arrow::arrow::io::flight::serialize_batch;
-use common_arrow::arrow::io::ipc::write::common::IpcWriteOptions;
+use common_arrow::arrow::io::ipc::write::WriteOptions;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_base::tokio::macros::support::Pin;
 use common_base::tokio::macros::support::Poll;
@@ -27,14 +27,14 @@ use tonic::Status;
 
 pub struct FlightDataStream {
     input: Receiver<common_exception::Result<DataBlock>>,
-    options: IpcWriteOptions,
+    options: WriteOptions,
 }
 
 impl FlightDataStream {
     pub fn create(input: Receiver<common_exception::Result<DataBlock>>) -> FlightDataStream {
         FlightDataStream {
             input,
-            options: IpcWriteOptions::default(),
+            options: WriteOptions { compression: None },
         }
     }
 }
