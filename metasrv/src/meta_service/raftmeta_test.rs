@@ -615,7 +615,12 @@ async fn setup_non_voter(
     let mut tc = new_test_context();
     let addr = tc.config.raft_config.raft_api_addr();
 
-    let mn = MetaNode::boot_non_voter(id, &tc.config.raft_config).await?;
+    let mut config = tc.config.raft_config.clone();
+    config.id = id;
+
+    let (mn, is_open) = MetaNode::open_create_boot(&config, None, Some(()), None).await?;
+    assert!(!is_open);
+
     tc.meta_nodes.push(mn.clone());
 
     {

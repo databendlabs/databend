@@ -882,7 +882,11 @@ impl MetaNode {
         // 2. Initialize itself as leader, because it is the only one in the new cluster.
         // 3. Add itself to the cluster storage by committing an `add-node` log so that the cluster members(only this node) is persisted.
 
-        let mn = MetaNode::boot_non_voter(node_id, config).await?;
+        let mut config = config.clone();
+        config.id = node_id;
+
+        let (mn, _is_open) = Self::open_create_boot(&config, None, Some(()), None).await?;
+
         mn.init_cluster(config.raft_api_addr()).await?;
 
         Ok(mn)
@@ -909,26 +913,6 @@ impl MetaNode {
         self.add_node(node_id, addr).await?;
 
         Ok(())
-    }
-
-    /// Boot a node that is going to join an existent cluster.
-    /// For every node this should be called exactly once.
-    /// When successfully initialized(e.g. received logs from raft leader), a node should be started with MetaNode::open().
-    #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
-    pub async fn boot_non_voter(
-        node_id: NodeId,
-        config: &RaftConfig,
-    ) -> common_exception::Result<Arc<MetaNode>> {
-        // TODO(xp): what if fill in the node info into an empty state-machine, then MetaNode can be started without delaying grpc.
-
-        let mut config = config.clone();
-        config.id = node_id;
-
-        let (mn, _is_open) = Self::open_create_boot(&config, None, Some(()), None).await?;
-
-        tracing::info!("booted non-voter: {:?}", config);
-
-        Ok(mn)
     }
 
     /// When a leader is established, it is the leader's responsibility to setup replication from itself to non-voters, AKA learners.
