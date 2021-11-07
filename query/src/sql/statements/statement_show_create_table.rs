@@ -1,5 +1,5 @@
 use sqlparser::ast::{ObjectName, Ident};
-use crate::sql::analyzer::{AnalyzableStatement, AnalyzedResult};
+use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
 use crate::sessions::DatabendQueryContextRef;
 use common_exception::{Result, ErrorCode};
 use common_datavalues::{DataField, DataType, DataSchemaRefExt, DataSchemaRef};

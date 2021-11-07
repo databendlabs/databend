@@ -73,7 +73,7 @@ use crate::sql::statements::DfUseDatabase;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropTable;
-use crate::sql::DfExplain;
+use crate::sql::statements::DfExplain;
 use crate::sql::DfHint;
 use crate::sql::statements::DfKillStatement;
 use crate::sql::DfParser;
@@ -83,7 +83,7 @@ use crate::sql::statements::DfShowTables;
 use crate::sql::DfStatement;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::SQLCommon;
-use crate::sql::analyzer::{AnalyzableStatement, AnalyzedResult};
+use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
 
 pub struct PlanParser {
     ctx: DatabendQueryContextRef,
@@ -158,33 +158,7 @@ impl PlanParser {
     }
 
     pub fn statement_to_plan(&self, statement: &DfStatement) -> Result<PlanNode> {
-        statement.analyze(self.ctx.clone());
-        match statement {
-            DfStatement::Statement(v) => self.sql_statement_to_plan(v),
-            DfStatement::Explain(v) => self.sql_explain_to_plan(v),
-        }
-    }
-
-    /// Builds plan from AST statement.
-    #[tracing::instrument(level = "info", skip(self, statement))]
-    pub fn sql_statement_to_plan(&self, statement: &sqlparser::ast::Statement) -> Result<PlanNode> {
-        match statement {
-            Statement::Query(query) => self.query_to_plan(query),
-            _ => Result::Err(ErrorCode::SyntaxException(format!(
-                "Unsupported statement {:?}",
-                statement
-            ))),
-        }
-    }
-
-    /// Generate a logic plan from an EXPLAIN
-    #[tracing::instrument(level = "info", skip(self, explain))]
-    pub fn sql_explain_to_plan(&self, explain: &DfExplain) -> Result<PlanNode> {
-        let plan = self.sql_statement_to_plan(&explain.statement)?;
-        Ok(PlanNode::Explain(ExplainPlan {
-            typ: explain.typ,
-            input: Arc::new(plan),
-        }))
+        unimplemented!()
     }
 
     /// Generate a logic plan from an SQL query

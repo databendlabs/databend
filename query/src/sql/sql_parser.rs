@@ -37,12 +37,12 @@ use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::Whitespace;
 
-use crate::sql::statements::{DfCreateDatabase, DfSetVariable, DfInsertStatement};
+use crate::sql::statements::{DfCreateDatabase, DfSetVariable, DfInsertStatement, DfQueryStatement};
 use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropDatabase;
 use crate::sql::statements::DfDropTable;
-use crate::sql::DfExplain;
+use crate::sql::statements::DfExplain;
 use crate::sql::DfHint;
 use crate::sql::statements::DfKillStatement;
 use crate::sql::statements::DfShowCreateTable;
@@ -54,7 +54,8 @@ use crate::sql::statements::DfShowTables;
 use crate::sql::DfStatement;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
-use crate::sql::DfStatement::Statement;
+use crate::sql::DfStatement::Query;
+use std::convert::TryFrom;
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
@@ -206,23 +207,24 @@ impl<'a> DfParser<'a> {
                     Keyword::TRUNCATE => self.parse_truncate(),
                     Keyword::SET => self.parse_set(),
                     Keyword::INSERT => self.parse_insert(),
+                    Keyword::SELECT | Keyword::WITH | Keyword::VALUES => self.parse_query(),
                     Keyword::NoKeyword => match w.value.to_uppercase().as_str() {
                         // Use database
                         "USE" => self.parse_use_database(),
                         "KILL" => self.parse_kill_query(),
                         _ => self.expected("Keyword", self.parser.peek_token()),
                     },
-                    _ => {
-                        // use the native parser
-                        Ok(DfStatement::Statement(self.parser.parse_statement()?))
-                    }
+                    _ => self.expected("an SQL statement", Token::Word(w)),
                 }
             }
-            _ => {
-                // use the native parser
-                Ok(DfStatement::Statement(self.parser.parse_statement()?))
-            }
+            Token::LParen => self.parse_query()
         }
+    }
+
+    fn parse_query(&mut self) -> Result<DfStatement, ParserError> {
+        self.parser.prev_token();
+        let native_query = self.parser.parse_query()?;
+        Ok(DfStatement::Query(DfQueryStatement::try_from(native_query)?))
     }
 
     fn parse_set(&mut self) -> Result<DfStatement, ParserError> {
@@ -279,9 +281,8 @@ impl<'a> DfParser<'a> {
             _ => ExplainType::Syntax,
         };
 
-        let statement = Box::new(self.parser.parse_statement()?);
-        let explain_plan = DfExplain { typ, statement };
-        Ok(DfStatement::Explain(explain_plan))
+        let statement = self.parse_query()?;
+        Ok(DfStatement::Explain(DfExplain { typ, statement }))
     }
 
     // parse show databases where database = xxx or where database

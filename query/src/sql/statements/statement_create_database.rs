@@ -1,5 +1,5 @@
 use sqlparser::ast::{ObjectName, SqlOption};
-use crate::sql::analyzer::{AnalyzableStatement, AnalyzedResult};
+use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
 use crate::sessions::DatabendQueryContextRef;
 use common_exception::ErrorCode;
 use std::collections::HashMap;

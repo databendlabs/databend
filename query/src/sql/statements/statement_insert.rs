@@ -1,4 +1,4 @@
-use crate::sql::analyzer::{AnalyzableStatement, AnalyzedResult};
+use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
 use crate::sessions::DatabendQueryContextRef;
 use sqlparser::ast::{SqliteOnConflict, ObjectName, Ident, Expr, Query};
 use common_exception::{Result, ErrorCode};
