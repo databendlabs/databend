@@ -108,8 +108,8 @@ k8s-docker:
 	cp ./target/aarch64-unknown-linux-gnu/release/databend-meta ./distro/linux/arm64
 	cp ./target/aarch64-unknown-linux-gnu/release/databend-query ./distro/linux/arm64
 	mkdir -p ./distro/linux/arm64
-	docker buildx build . -f ./docker/cloud/meta/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend-meta:${TAG} --push
-	docker buildx build . -f ./docker/cloud/query/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend-query:${TAG} --push
+	docker buildx build . -f ./docker/meta/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend-meta:${TAG} --push
+	docker buildx build . -f ./docker/query/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend-query:${TAG} --push
 
 docker_release:
 	docker buildx build . -f ./docker/release/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend:${TAG} --build-arg VERSION=${VERSION}--push
