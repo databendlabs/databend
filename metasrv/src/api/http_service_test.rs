@@ -16,6 +16,7 @@ use std::fs::File;
 use std::io::Read;
 
 use common_base::tokio;
+use common_base::Stoppable;
 use common_exception::Result;
 
 use crate::api::HttpService;
@@ -58,6 +59,5 @@ async fn test_http_service_tls_server() -> Result<()> {
         assert!(resp.status().is_success());
         assert_eq!("/v1/health", resp.url().path());
     });
-
     Ok(())
 }

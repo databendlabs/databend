@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio::sync::broadcast;
+use common_base::HttpShutdownHandler;
+use common_base::Stoppable;
 use common_exception::Result;
 use poem::get;
-use poem::listener::Listener;
-use poem::listener::TcpListener;
 use poem::listener::TlsConfig;
 use poem::Endpoint;
 use poem::EndpointExt;
@@ -25,11 +26,15 @@ use crate::configs::Config;
 
 pub struct HttpService {
     cfg: Config,
+    shutdown_handler: HttpShutdownHandler,
 }
 
 impl HttpService {
     pub fn create(cfg: Config) -> Box<Self> {
-        Box::new(HttpService { cfg })
+        Box::new(HttpService {
+            cfg,
+            shutdown_handler: HttpShutdownHandler::create("http api".to_string()),
+        })
     }
 
     fn build_router(&self) -> impl Endpoint {
@@ -47,29 +52,57 @@ impl HttpService {
             .data(self.cfg.clone())
     }
 
-    pub async fn start(&mut self) -> Result<()> {
-        let app = self.build_router();
-
-        let conf = self.cfg.clone();
+    fn build_tls(config: &Config) -> Result<TlsConfig> {
+        let conf = config.clone();
         let tls_cert = conf.admin_tls_server_cert;
         let tls_key = conf.admin_tls_server_key;
 
-        let address = conf.admin_api_address;
+        let cfg = TlsConfig::new()
+            .cert(std::fs::read(tls_cert.as_str())?)
+            .key(std::fs::read(tls_key.as_str())?);
+        Ok(cfg)
+    }
 
-        if !tls_cert.is_empty() && !tls_key.is_empty() {
-            log::info!("Http API TLS enabled");
-            poem::Server::new(
-                TcpListener::bind(address).tls(TlsConfig::new().key(tls_key).cert(tls_cert)),
-            )
-            .await?
-            .run(app)
+    async fn start_with_tls(&mut self, listening: String) -> Result<()> {
+        log::info!("Http API TLS enabled");
+
+        let tls_config = Self::build_tls(&self.cfg.clone())?;
+        self.shutdown_handler
+            .start_service(listening, Some(tls_config), self.build_router())
             .await?;
-        } else {
-            log::warn!("Http API TLS not set");
-            poem::Server::new(TcpListener::bind(address))
-                .await?
-                .run(app)
-                .await?;
+        Ok(())
+    }
+
+    async fn start_without_tls(&mut self, listening: String) -> Result<()> {
+        log::warn!("Http API TLS not set");
+
+        self.shutdown_handler
+            .start_service(listening, None, self.build_router())
+            .await?;
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl Stoppable for HttpService {
+    async fn start(&mut self) -> Result<()> {
+        let conf = self.cfg.clone();
+        match conf.admin_tls_server_key.is_empty() || conf.admin_tls_server_cert.is_empty() {
+            true => self.start_without_tls(conf.admin_api_address).await,
+            false => self.start_with_tls(conf.admin_api_address).await,
+        }
+    }
+
+    async fn stop(&mut self, force: Option<broadcast::Receiver<()>>) -> Result<()> {
+        self.shutdown_handler.shutdown(true).await;
+        if let Some(mut force) = force {
+            log::info!("waiting for force");
+            let _ = force
+                .recv()
+                .await
+                .expect("Failed to recv the shutdown signal");
+            log::info!("shutdown the service force");
+            self.shutdown_handler.shutdown(false).await;
         }
         Ok(())
     }
