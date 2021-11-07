@@ -38,10 +38,7 @@ members = [
     "metasrv",
 
     # CLI
-    "cli",
-
-    # Integration test
-    "tests/local"
+    "cli"
 ]
 
 [profile.release]
