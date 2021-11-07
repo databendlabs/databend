@@ -39,6 +39,7 @@ common-macros = { path = "../common/macros" }
 anyhow = "1.0.45"
 async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.14" }
 async-trait = "0.1"
+backtrace = "0.3.63"
 byteorder = "1.1.0"
 env_logger = "0.9"
 futures = "0.3"
