@@ -56,17 +56,17 @@ async fn test_memorytable() -> Result<()> {
 
     // append data.
     {
-        let block = DataBlock::create_by_array(schema.clone(), vec![
+        let block = Ok(DataBlock::create_by_array(schema.clone(), vec![
             Series::new(vec![1u64, 2]),
             Series::new(vec![11u64, 22]),
-        ]);
-        let block2 = DataBlock::create_by_array(schema.clone(), vec![
+        ]));
+        let block2 = Ok(DataBlock::create_by_array(schema.clone(), vec![
             Series::new(vec![4u64, 3]),
             Series::new(vec![33u64, 33]),
-        ]);
-        let blocks = vec![block, block2];
+        ]));
+        let blocks: Vec<Result<DataBlock>> = vec![block, block2];
 
-        let input_stream = futures::stream::iter::<Vec<DataBlock>>(blocks.clone());
+        let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks.clone());
         let insert_plan = InsertIntoPlan {
             db_name: "default".to_string(),
             tbl_name: "a".to_string(),

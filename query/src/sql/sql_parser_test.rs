@@ -315,6 +315,25 @@ fn hint_test() -> Result<()> {
 }
 
 #[test]
+fn copy_test() -> Result<()> {
+    let ident = Ident::new("test_csv");
+    let v = vec![ident];
+    let name = ObjectName(v);
+
+    expect_parse_ok(
+        "copy test_csv from 'tests/data/sample.csv' format csv;",
+        DfStatement::Copy(DfCopy {
+            name,
+            columns: vec![],
+            location: "tests/data/sample.csv".to_string(),
+            format: "csv".to_string(),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
 fn show_databases_test() -> Result<()> {
     expect_parse_ok(
         "SHOW DATABASES",
@@ -503,5 +522,6 @@ fn create_user_test() -> Result<()> {
         "CREATE USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY ''",
         String::from("sql parser error: Missing password"),
     )?;
+
     Ok(())
 }

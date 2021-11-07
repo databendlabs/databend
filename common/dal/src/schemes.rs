@@ -16,7 +16,6 @@
 use std::str::FromStr;
 
 use common_exception::ErrorCode;
-use common_exception::Result;
 
 use self::StorageScheme::AzureStorageBlob;
 use self::StorageScheme::LocalFs;
@@ -31,7 +30,7 @@ pub enum StorageScheme {
 
 impl FromStr for StorageScheme {
     type Err = common_exception::ErrorCode;
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.to_uppercase();
         match s.as_str() {
             "S3" => Ok(S3),

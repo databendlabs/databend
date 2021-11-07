@@ -216,7 +216,10 @@ impl<'a> DfParser<'a> {
                         "KILL" => self.parse_kill_query(),
                         _ => self.expected("Keyword", self.parser.peek_token()),
                     },
-                    Keyword::COPY => self.parse_copy(),
+                    Keyword::COPY => {
+                        self.parser.next_token();
+                        self.parse_copy()
+                    }
                     _ => {
                         // use the native parser
                         Ok(DfStatement::Statement(self.parser.parse_statement()?))
@@ -572,7 +575,7 @@ impl<'a> DfParser<'a> {
     fn parse_table_engine(&mut self) -> Result<String, ParserError> {
         // TODO make ENGINE as a keyword
         if !self.consume_token("ENGINE") {
-            return Ok("NULL".to_string());
+            return Ok("FUSE".to_string());
         }
 
         self.parser.expect_token(&Token::Eq)?;
@@ -616,7 +619,7 @@ impl<'a> DfParser<'a> {
         self.parser.expect_keyword(Keyword::FROM)?;
         let location = self.parser.parse_literal_string()?;
         self.parser.expect_keyword(Keyword::FORMAT)?;
-        let format = self.parser.parse_literal_string()?;
+        let format = self.parser.next_token().to_string();
 
         Ok(DfStatement::Copy(DfCopy {
             name,

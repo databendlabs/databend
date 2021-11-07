@@ -22,6 +22,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
+use common_exception::Result;
 use common_infallible::Mutex;
 use common_meta_types::TableMeta;
 use common_planners::CreateDatabasePlan;
@@ -109,13 +110,15 @@ impl TestFixture {
         }
     }
 
-    pub fn gen_block_stream(num: u32) -> Vec<DataBlock> {
+    pub fn gen_block_stream(num: u32) -> Vec<Result<DataBlock>> {
         (0..num)
             .into_iter()
             .map(|_v| {
                 let schema =
                     DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
-                DataBlock::create_by_array(schema, vec![Series::new(vec![1, 2, 3])])
+                Ok(DataBlock::create_by_array(schema, vec![Series::new(vec![
+                    1, 2, 3,
+                ])]))
             })
             .collect()
     }

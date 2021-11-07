@@ -32,7 +32,7 @@ async fn test_fuse_table_block_appender() {
     let local_fs = common_dal::Local::with_path(tmp_dir.path().to_owned());
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
-    let block_stream = futures::stream::iter(vec![block]);
+    let block_stream = futures::stream::iter(vec![Ok(block)]);
     let r =
         BlockAppender::append_blocks(Arc::new(local_fs), Box::pin(block_stream), schema.as_ref())
             .await;

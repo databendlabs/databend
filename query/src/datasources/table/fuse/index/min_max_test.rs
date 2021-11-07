@@ -74,10 +74,10 @@ async fn test_min_max_index() -> Result<()> {
     let blocks = (0..num)
         .into_iter()
         .map(|idx| {
-            DataBlock::create_by_array(test_schema.clone(), vec![
+            Ok(DataBlock::create_by_array(test_schema.clone(), vec![
                 Series::new(vec![idx + 1, idx + 2, idx + 3]),
                 Series::new(vec![idx * num + 1, idx * num + 2, idx * num + 3]),
-            ])
+            ]))
         })
         .collect::<Vec<_>>();
 

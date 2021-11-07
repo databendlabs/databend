@@ -64,9 +64,9 @@ async fn test_null_table() -> Result<()> {
             Series::new(vec![1u64, 2]),
             Series::new(vec![11u64, 22]),
         ]);
-        let blocks = vec![block];
+        let blocks = vec![Ok(block)];
 
-        let input_stream = futures::stream::iter::<Vec<DataBlock>>(blocks.clone());
+        let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks.clone());
         let insert_plan = InsertIntoPlan {
             db_name: "default".to_string(),
             tbl_name: "a".to_string(),
