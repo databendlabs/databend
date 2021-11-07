@@ -390,7 +390,7 @@ fn create_user_test() -> Result<()> {
         DfStatement::CreateUser(DfCreateUser {
             if_not_exists: false,
             name: String::from("test"),
-            host_name: String::from("localhost"),
+            hostname: String::from("localhost"),
             auth_type: AuthType::Sha256,
             password: String::from("password"),
         }),
@@ -401,7 +401,7 @@ fn create_user_test() -> Result<()> {
         DfStatement::CreateUser(DfCreateUser {
             if_not_exists: false,
             name: String::from("test"),
-            host_name: String::from("localhost"),
+            hostname: String::from("localhost"),
             auth_type: AuthType::PlainText,
             password: String::from("password"),
         }),
@@ -412,7 +412,7 @@ fn create_user_test() -> Result<()> {
         DfStatement::CreateUser(DfCreateUser {
             if_not_exists: false,
             name: String::from("test"),
-            host_name: String::from("localhost"),
+            hostname: String::from("localhost"),
             auth_type: AuthType::Sha256,
             password: String::from("password"),
         }),
@@ -423,7 +423,7 @@ fn create_user_test() -> Result<()> {
         DfStatement::CreateUser(DfCreateUser {
             if_not_exists: false,
             name: String::from("test"),
-            host_name: String::from("localhost"),
+            hostname: String::from("localhost"),
             auth_type: AuthType::DoubleSha1,
             password: String::from("password"),
         }),
@@ -434,7 +434,7 @@ fn create_user_test() -> Result<()> {
         DfStatement::CreateUser(DfCreateUser {
             if_not_exists: false,
             name: String::from("test"),
-            host_name: String::from("localhost"),
+            hostname: String::from("localhost"),
             auth_type: AuthType::None,
             password: String::from(""),
         }),
@@ -445,7 +445,7 @@ fn create_user_test() -> Result<()> {
         DfStatement::CreateUser(DfCreateUser {
             if_not_exists: true,
             name: String::from("test"),
-            host_name: String::from("localhost"),
+            hostname: String::from("localhost"),
             auth_type: AuthType::Sha256,
             password: String::from("password"),
         }),
@@ -456,7 +456,7 @@ fn create_user_test() -> Result<()> {
         DfStatement::CreateUser(DfCreateUser {
             if_not_exists: false,
             name: String::from("test@localhost"),
-            host_name: String::from("%"),
+            hostname: String::from("%"),
             auth_type: AuthType::Sha256,
             password: String::from("password"),
         }),
@@ -467,7 +467,7 @@ fn create_user_test() -> Result<()> {
         DfStatement::CreateUser(DfCreateUser {
             if_not_exists: false,
             name: String::from("test"),
-            host_name: String::from("localhost"),
+            hostname: String::from("localhost"),
             auth_type: AuthType::None,
             password: String::from(""),
         }),
@@ -478,7 +478,7 @@ fn create_user_test() -> Result<()> {
         DfStatement::CreateUser(DfCreateUser {
             if_not_exists: false,
             name: String::from("test"),
-            host_name: String::from("localhost"),
+            hostname: String::from("localhost"),
             auth_type: AuthType::None,
             password: String::from(""),
         }),

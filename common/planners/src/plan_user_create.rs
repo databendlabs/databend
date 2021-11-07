@@ -22,7 +22,7 @@ use common_meta_types::AuthType;
 pub struct CreateUserPlan {
     pub name: String,
     pub password: Vec<u8>,
-    pub host_name: String,
+    pub hostname: String,
     pub auth_type: AuthType,
 }
 

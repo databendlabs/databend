@@ -19,7 +19,7 @@ use common_meta_types::AuthType;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct User {
     name: String,
-    host_name: String,
+    hostname: String,
     password: String,
     auth_type: AuthType,
 }
@@ -27,13 +27,13 @@ pub struct User {
 impl User {
     pub fn new(
         name: impl Into<String>,
-        host_name: impl Into<String>,
+        hostname: impl Into<String>,
         password: impl Into<String>,
         auth_type: AuthType,
     ) -> Self {
         User {
             name: name.into(),
-            host_name: host_name.into(),
+            hostname: hostname.into(),
             password: password.into(),
             auth_type,
         }
@@ -44,7 +44,7 @@ impl From<&User> for UserInfo {
     fn from(user: &User) -> Self {
         UserInfo {
             name: user.name.clone(),
-            host_name: user.host_name.clone(),
+            hostname: user.hostname.clone(),
             password: Vec::from(user.password.clone()),
             auth_type: user.auth_type.clone(),
         }

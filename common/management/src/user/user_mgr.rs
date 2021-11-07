@@ -100,19 +100,19 @@ impl UserMgrApi for UserMgr {
     async fn update_user(
         &self,
         username: String,
-        new_host_name: Option<String>,
+        new_hostname: Option<String>,
         new_password: Option<Vec<u8>>,
         new_auth: Option<AuthType>,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
-        if new_password.is_none() && new_auth.is_none() && new_host_name.is_none() {
+        if new_password.is_none() && new_auth.is_none() && new_hostname.is_none() {
             return Ok(seq);
         }
-        let full_update = new_auth.is_some() && new_password.is_some() && new_host_name.is_some();
+        let full_update = new_auth.is_some() && new_password.is_some() && new_hostname.is_some();
         let user_info = if full_update {
             UserInfo::new(
                 username.clone(),
-                new_host_name.unwrap(),
+                new_hostname.unwrap(),
                 new_password.unwrap(),
                 new_auth.unwrap(),
             )
@@ -121,7 +121,7 @@ impl UserMgrApi for UserMgr {
             let user_info = user_val_seq.await?.data;
             UserInfo::new(
                 username.clone(),
-                new_host_name.unwrap_or(user_info.host_name),
+                new_hostname.unwrap_or(user_info.hostname),
                 new_password.map_or(user_info.password, |v| v.to_vec()),
                 new_auth.unwrap_or(user_info.auth_type),
             )
