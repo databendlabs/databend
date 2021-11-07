@@ -448,6 +448,7 @@ impl PlanParser {
         match insert_plan {
             PlanNode::InsertInto(v) => match copy_stmt.format.to_uppercase().as_str() {
                 "CSV" => {
+                    // TODO: support s3/hdfs/oss/azure
                     let file = std::fs::File::open(copy_stmt.location.as_str())?;
                     let block_size = self.ctx.get_settings().get_max_block_size()?;
                     let source = CsvSource::new(file, v.schema(), block_size as usize);
