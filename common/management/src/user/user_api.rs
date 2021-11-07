@@ -19,13 +19,15 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthType;
 use common_meta_types::SeqV;
+use common_meta_types::UserPrivilege;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct UserInfo {
     pub name: String,
     pub host_name: String,
     pub password: Vec<u8>,
     pub auth_type: AuthType,
+    pub privileges: UserPrivilege,
 }
 
 impl UserInfo {
@@ -35,11 +37,14 @@ impl UserInfo {
         password: Vec<u8>,
         auth_type: AuthType,
     ) -> Self {
+        // Default is no privileges.
+        let privileges = UserPrivilege::empty();
         UserInfo {
             name,
             host_name,
             password,
             auth_type,
+            privileges,
         }
     }
 }
