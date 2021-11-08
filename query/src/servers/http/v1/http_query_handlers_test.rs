@@ -49,8 +49,8 @@ async fn test_simple_sql() -> Result<()> {
     let (status, result) = post_sql(sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 10);
-    assert!(result.next_uri.is_none(), "{:?}", result);
     assert_eq!(result.query_state, Some(STATE_STOPPED.to_string()));
+    assert!(result.next_uri.is_none(), "{:?}", result);
     assert!(result.query_error.is_none());
     assert!(result.query_progress.is_some());
     assert!(result.columns.is_some());
@@ -64,7 +64,7 @@ async fn test_bad_sql() -> Result<()> {
     assert_eq!(result.data.len(), 0);
     assert!(result.next_uri.is_none());
     assert!(result.query_state.is_none());
-    assert!(result.query_error.is_none());
+    assert!(result.query_error.is_some());
     assert!(result.request_error.is_some());
     assert!(result.query_progress.is_none());
     assert!(result.columns.is_none());

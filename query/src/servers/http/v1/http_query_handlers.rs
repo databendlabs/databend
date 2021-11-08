@@ -19,6 +19,7 @@ use std::time::Instant;
 
 use common_base::ProgressValues;
 use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use hyper::http::header;
 use poem::get;
@@ -99,15 +100,30 @@ impl QueryResponse {
                     request_error: None,
                 }
             }
-            Err(e) => QueryResponse::simple_error(Some(id), e.message()),
+            Err(e) => QueryResponse::request_error(Some(id), e.message()),
         }
     }
 
     fn not_found(query_id: String) -> QueryResponse {
-        QueryResponse::simple_error(None, format!("query id not found {}", query_id))
+        QueryResponse::request_error(None, format!("query id not found {}", query_id))
     }
 
-    fn simple_error(id: Option<String>, message: String) -> QueryResponse {
+    fn fail_to_start_sql(err: ErrorCode) -> QueryResponse {
+        QueryResponse {
+            id: None,
+            data: Arc::new(vec![]),
+            query_state: None,
+            columns: None,
+            query_progress: None,
+            next_uri: None,
+            state_uri: None,
+            delete_uri: None,
+            query_error: Some(err.message()),
+            request_error: Some("fail to start query".to_string()),
+        }
+    }
+
+    fn request_error(id: Option<String>, message: String) -> QueryResponse {
         QueryResponse {
             id,
             data: Arc::new(vec![]),
@@ -228,7 +244,7 @@ pub(crate) async fn query_handler(
             let result = query.get_response_page(0, &wait_type, true).await;
             QueryResponse::from_internal(query.id.to_string(), &result)
         }
-        Err(e) => QueryResponse::simple_error(None, e.message()),
+        Err(e) => QueryResponse::fail_to_start_sql(e),
     }
 }
 
