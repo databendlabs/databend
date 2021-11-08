@@ -79,7 +79,7 @@ pub struct Stats {
 }
 
 /// Meta information of a block (currently, the parquet file)
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct BlockMeta {
     /// Pointer of the data Block
     pub row_count: u64,
@@ -88,7 +88,7 @@ pub struct BlockMeta {
     pub location: BlockLocation,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct BlockLocation {
     pub location: Location,
     // for parquet, this filed can be used to fetch the meta data without seeking around
@@ -99,5 +99,6 @@ pub struct BlockLocation {
 pub struct ColStats {
     pub min: DataValue,
     pub max: DataValue,
-    pub null_count: usize,
+    pub null_count: u64,
+    pub in_memory_size: u64,
 }

@@ -43,7 +43,7 @@ impl FuseTable {
             }
             .wait_in(&io_ctx.get_runtime(), None)??;
 
-            let (statistics, parts) = self.to_partitions(&block_metas, push_downs);
+            let (statistics, parts) = Self::to_partitions(&block_metas, push_downs);
             Ok((statistics, parts))
         } else {
             Ok((Statistics::default(), vec![]))
