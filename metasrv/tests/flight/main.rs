@@ -13,4 +13,5 @@
 // limitations under the License.
 
 pub mod metasrv_flight_api;
+pub mod metasrv_flight_kv_api;
 pub mod metasrv_flight_tls;

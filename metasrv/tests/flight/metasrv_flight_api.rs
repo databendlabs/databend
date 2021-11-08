@@ -16,7 +16,6 @@
 
 use common_base::tokio;
 use common_meta_api::KVApi;
-use common_meta_api::KVApiTestSuite;
 use common_meta_api::MetaApiTestSuite;
 use common_meta_flight::MetaFlightClient;
 use common_meta_types::MatchSeq;
@@ -202,92 +201,6 @@ async fn test_join() -> anyhow::Result<()> {
     }
 
     Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_generic_kv_mget() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
-
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    KVApiTestSuite {}.kv_mget(&client).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_generic_kv_list() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
-
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    KVApiTestSuite {}.kv_list(&client).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_generic_kv_delete() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
-
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    KVApiTestSuite {}.kv_delete(&client).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_generic_kv_update() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
-
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    KVApiTestSuite {}.kv_update(&client).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_generic_kv_update_meta() -> anyhow::Result<()> {
-    // Only update meta, do not touch the value part.
-
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
-
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    KVApiTestSuite {}.kv_meta(&client).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_generic_kv_timeout() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
-
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    KVApiTestSuite {}.kv_timeout(&client).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_generic_kv() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
-
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    KVApiTestSuite {}.kv_write_read(&client).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
