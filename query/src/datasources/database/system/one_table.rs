@@ -69,7 +69,6 @@ impl Table for OneTable {
         &self,
         _io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
-        _partition_num_hint: Option<usize>,
     ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::new_exact(1, 1), vec![Part {
             name: "".to_string(),

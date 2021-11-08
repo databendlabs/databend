@@ -13,8 +13,6 @@
 // limitations under the License.
 
 pub mod lru;
-#[cfg(test)]
-mod lru_test;
 
 use std::borrow::Borrow;
 use std::hash::BuildHasher;

@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use axum::extract::Extension;
+use poem::web::Data;
 
 use crate::configs::Config;
 
-pub async fn config_handler(cfg: Extension<Config>) -> String {
+#[poem::handler]
+pub async fn config_handler(cfg: Data<&Config>) -> String {
     format!("{:?}", cfg.0)
 }

@@ -12,26 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+mod meta_raft_store;
+#[cfg(test)]
+mod meta_raft_store_test;
 
-#[test]
-fn test_progress() -> Result<()> {
-    use crate::*;
-
-    let progress = Progress::create();
-    let values = ProgressValues {
-        read_rows: 2,
-        read_bytes: 10,
-        total_rows_to_read: 10,
-    };
-
-    progress.incr(&values);
-
-    assert_eq!(2, progress.get_values().read_rows);
-    assert_eq!(10, progress.get_values().read_bytes);
-    progress.reset();
-
-    assert_eq!(0, progress.get_values().read_rows);
-    assert_eq!(0, progress.get_values().read_bytes);
-    Ok(())
-}
+pub use meta_raft_store::MetaRaftStore;

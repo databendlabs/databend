@@ -14,33 +14,30 @@
  * limitations under the License.
  *
  */
-use axum::body::Body;
-use axum::handler::get;
-use axum::http;
-use axum::http::Request;
-use axum::http::StatusCode;
-use axum::Router;
 use common_base::tokio;
+use poem::get;
+use poem::http::Method;
+use poem::http::StatusCode;
+use poem::http::Uri;
+use poem::Endpoint;
+use poem::Request;
+use poem::Route;
 use pretty_assertions::assert_eq;
-use tower::ServiceExt;
 
 use crate::api::http::v1::health::health_handler;
 
 #[tokio::test]
 async fn test_health() -> common_exception::Result<()> {
-    let cluster_router = Router::new().route("/v1/health", get(health_handler));
+    let cluster_router = Route::new().at("/v1/health", get(health_handler));
     // health check
     let response = cluster_router
-        .clone()
-        .oneshot(
+        .call(
             Request::builder()
-                .uri("/v1/health")
-                .method(http::Method::GET)
-                .body(Body::empty())
-                .unwrap(),
+                .uri(Uri::from_static("/v1/health"))
+                .method(Method::GET)
+                .finish(),
         )
-        .await
-        .unwrap();
+        .await;
 
     assert_eq!(response.status(), StatusCode::OK);
 

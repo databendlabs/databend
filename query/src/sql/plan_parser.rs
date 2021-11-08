@@ -175,6 +175,9 @@ impl PlanParser {
             DfStatement::KillQuery(v) => self.sql_kill_query_to_plan(v),
             DfStatement::KillConn(v) => self.sql_kill_connection_to_plan(v),
             DfStatement::CreateUser(v) => self.sql_create_user_to_plan(v),
+            DfStatement::ShowUsers(_) => {
+                self.build_from_sql("SELECT * FROM system.users ORDER BY name")
+            }
         }
     }
 
@@ -339,7 +342,7 @@ impl PlanParser {
         Ok(PlanNode::CreateUser(CreateUserPlan {
             name: create.name.clone(),
             password: Vec::from(create.password.clone()),
-            host_name: create.host_name.clone(),
+            hostname: create.hostname.clone(),
             auth_type: create.auth_type.clone(),
         }))
     }
@@ -724,14 +727,10 @@ impl PlanParser {
         let table = self.ctx.get_table(db_name, table_name)?;
 
         // TODO(xp): is it possible to use get_cluster_table_io_context() here?
-        let io_ctx = self.ctx.get_single_node_table_io_context()?;
+        let io_ctx = self.ctx.get_cluster_table_io_context()?;
         let io_ctx = Arc::new(io_ctx);
 
-        let source_plan = table.read_plan(
-            io_ctx,
-            Some(Extras::default()),
-            Some(self.ctx.get_settings().get_max_threads()? as usize),
-        )?;
+        let source_plan = table.read_plan(io_ctx, Some(Extras::default()))?;
 
         let dummy_read_plan = PlanNode::ReadSource(source_plan);
         Ok(dummy_read_plan)
@@ -786,19 +785,9 @@ impl PlanParser {
                     table = self.ctx.get_table(&db_name, &table_name)?;
                 }
 
-                // TODO(xp): is it possible to use get_cluster_table_io_context() here?
-                let io_ctx = self.ctx.get_single_node_table_io_context()?;
-                let io_ctx = Arc::new(io_ctx);
-
-                let partitions = self.ctx.get_settings().get_max_threads()? as usize;
-
+                let io_ctx = self.ctx.get_cluster_table_io_context()?;
                 // TODO: Move ReadSourcePlan to SelectInterpreter
-                let source_plan = table.read_plan(
-                    io_ctx,
-                    Some(Extras::default()),
-                    // TODO(xp): remove partitions, partitioning hint has been included in io_ctx.max_threads and io_ctx.query_nodes
-                    Some(partitions),
-                )?;
+                let source_plan = table.read_plan(Arc::new(io_ctx), None)?;
 
                 let dummy_read_plan = PlanNode::ReadSource(source_plan);
                 Ok(dummy_read_plan)

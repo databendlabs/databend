@@ -16,7 +16,6 @@
 use std::sync::Arc;
 
 use common_base::tokio;
-use common_context::IOContext;
 use common_context::TableDataContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -56,7 +55,7 @@ async fn test_null_table() -> Result<()> {
         Arc::new(TableDataContext::default()),
     )?;
 
-    let io_ctx = ctx.get_single_node_table_io_context()?;
+    let io_ctx = ctx.get_cluster_table_io_context()?;
     let io_ctx = Arc::new(io_ctx);
 
     // append data.
@@ -83,11 +82,7 @@ async fn test_null_table() -> Result<()> {
 
     // read.
     {
-        let source_plan = table.read_plan(
-            io_ctx.clone(),
-            None,
-            Some(io_ctx.get_max_threads() as usize),
-        )?;
+        let source_plan = table.read_plan(io_ctx.clone(), None)?;
         assert_eq!(table.engine(), "Null");
 
         let stream = table.read(io_ctx.clone(), &source_plan).await?;

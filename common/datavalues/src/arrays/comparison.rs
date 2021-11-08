@@ -20,7 +20,6 @@ use common_arrow::arrow::compute::comparison::compare;
 use common_arrow::arrow::compute::comparison::primitive_compare_scalar;
 use common_arrow::arrow::compute::comparison::Operator;
 use common_arrow::arrow::compute::comparison::Simd8;
-use common_arrow::arrow::compute::like;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::Num;
@@ -220,25 +219,20 @@ impl DFStringArray {
         Ok(array.into())
     }
 
-    // pub fn like_binary<O: Offset>(lhs: &BinaryArray<O>, rhs: &BinaryArray<O>)
     fn like(&self, rhs: &DFStringArray) -> Result<DFBooleanArray> {
-        let array = like::like_binary(&self.array, &rhs.array)?;
-        Ok(array.into())
+        self.a_like_binary(rhs, |x| x)
     }
 
     fn like_scalar(&self, rhs: &[u8]) -> Result<DFBooleanArray> {
-        let array = like::like_binary_scalar(&self.array, rhs)?;
-        Ok(array.into())
+        self.a_like_binary_scalar(rhs, |x| x)
     }
 
     fn nlike(&self, rhs: &DFStringArray) -> Result<DFBooleanArray> {
-        let array = like::nlike_binary(&self.array, &rhs.array)?;
-        Ok(array.into())
+        self.a_like_binary(rhs, |x| !x)
     }
 
     fn nlike_scalar(&self, rhs: &[u8]) -> Result<DFBooleanArray> {
-        let array = like::nlike_binary_scalar(&self.array, rhs)?;
-        Ok(array.into())
+        self.a_like_binary_scalar(rhs, |x| !x)
     }
 }
 

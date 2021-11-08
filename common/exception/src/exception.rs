@@ -263,7 +263,6 @@ build_exceptions! {
     NamespaceIllegalNodeFormat(4050),
 
     // storage-api error codes
-    IllegalScanPlan(5000),
     ReadFileError(5001),
     BrokenChannel(5002),
 

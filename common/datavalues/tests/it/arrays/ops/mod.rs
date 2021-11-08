@@ -19,6 +19,7 @@ mod contain;
 mod fill;
 mod group_hash;
 mod r#if;
+mod like;
 mod scatter;
 mod take;
 mod take_random;

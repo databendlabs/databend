@@ -15,7 +15,6 @@
 #[cfg(test)]
 mod tests {
     use std::mem::size_of;
-    use std::sync::Arc;
 
     use common_datavalues::*;
     use common_exception::Result;
@@ -53,7 +52,6 @@ mod tests {
                 statistics.read_rows,
                 statistics.read_bytes
             ),
-            scan_plan: Arc::new(ScanPlan::empty()),
             tbl_args: None,
             push_downs: None,
         });
@@ -80,10 +78,9 @@ mod tests {
 
         let expect = "\
         Projection: count(0):UInt64\
-        \n  AggregatorFinal: groupBy=[[]], aggr=[[count(0)]]\
-        \n    Projection: 904e as count(0):String\
-        \n      Expression: 904e:String (Exact Statistics)\
-        \n        ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1], push_downs: []";
+        \n  Projection: 10000 as count(0):UInt64\
+        \n    Expression: 10000:UInt64 (Exact Statistics)\
+        \n      ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]";
         let actual = format!("{:?}", optimized);
         assert_eq!(expect, actual);
         Ok(())

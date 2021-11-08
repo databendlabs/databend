@@ -43,12 +43,12 @@ impl FuseTable {
                 .collect::<Vec<usize>>()
         };
 
-        let projection = if let Some(push_down) = push_downs {
-            if let Some(prj) = &push_down.projection {
-                prj.clone()
-            } else {
-                default_proj()
-            }
+        let projection = if let Some(Extras {
+            projection: Some(prj),
+            ..
+        }) = push_downs
+        {
+            prj.clone()
         } else {
             default_proj()
         };

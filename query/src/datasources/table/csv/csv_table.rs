@@ -79,7 +79,6 @@ impl Table for CsvTable {
         &self,
         io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
-        _partition_num_hint: Option<usize>,
     ) -> Result<(Statistics, Partitions)> {
         let start_line: usize = if self.has_header { 1 } else { 0 };
         let file = &self.file;

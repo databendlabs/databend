@@ -20,13 +20,14 @@ use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
+use common_tracing::tracing;
 #[allow(unused_imports)]
 use log::info;
 use pretty_assertions::assert_eq;
 
+use crate::errors::RetryableError;
 use crate::meta_service::MetaNode;
-use crate::meta_service::MetaServiceClient;
-use crate::meta_service::RetryableError;
+use crate::proto::meta_service_client::MetaServiceClient;
 use crate::tests::assert_meta_connection;
 use crate::tests::service::new_test_context;
 
@@ -130,8 +131,12 @@ async fn test_meta_cluster_write_on_non_leader() -> anyhow::Result<()> {
     assert_meta_connection(&addr0).await?;
 
     {
-        // add node 1 as non-voter
-        let mn1 = MetaNode::boot_non_voter(1, &tc1.config.raft_config).await?;
+        tracing::info!("--- add node 1 as non-voter");
+
+        let mut config = tc1.config.raft_config.clone();
+        config.id = 1;
+        let (mn1, _is_open) = MetaNode::open_create_boot(&config, None, Some(()), None).await?;
+
         assert_meta_connection(&addr0).await?;
 
         let resp = mn0.add_node(1, addr1.clone()).await?;

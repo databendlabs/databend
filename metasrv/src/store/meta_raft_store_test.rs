@@ -29,7 +29,7 @@ use common_meta_raft_store::state_machine::StateMachineMetaValue;
 use common_tracing::tracing;
 use maplit::btreeset;
 
-use crate::meta_service::MetaRaftStore;
+use crate::store::MetaRaftStore;
 use crate::tests::service::new_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

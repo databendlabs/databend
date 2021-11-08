@@ -133,3 +133,14 @@ jobs:
           file: ./docker/release/Dockerfile
           build-args: |
             VERSION=${{ steps.get_version.outputs.VERSION }}
+
+      - name: Download binaries for usage
+        id: download_binaries
+        run: |
+          wget https://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
+          wget https://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/databend-${{ steps.get_version.outputs.VERSION }}-aarch64-unknown-linux-gnu.tar.gz
+          mkdir -p ./target/x86_64-unknown-linux-gnu/release
+          mkdir -p ./target/aarch64-unknown-linux-gnu/release
+          tar xC ./target/x86_64-unknown-linux-gnu/release -f ./databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
+          tar xC ./target/aarch64-unknown-linux-gnu/release -f ./databend-${{ steps.get_version.outputs.VERSION }}-aarch64-unknown-linux-gnu.tar.gz
+          HUB= ${{ secrets.DOCKERHUB_NAMESPACE }} TAG=${{ steps.get_version.outputs.VERSION }}  make k8s-docker
