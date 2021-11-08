@@ -53,7 +53,7 @@ impl Interpreter for CreatUserInterpreter {
         let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
         let user_info = UserInfo {
             name: plan.name,
-            host_name: plan.host_name,
+            hostname: plan.hostname,
             password: plan.password,
             auth_type: plan.auth_type,
             privileges: UserPrivilege::empty(),

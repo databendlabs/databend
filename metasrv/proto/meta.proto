@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-// meta data types for DatabendStore
+// meta data types for Databend meta server
 package meta;
 
 // TODO(zbr): keep it or remove
@@ -76,6 +76,9 @@ service MetaService {
 
   rpc Write(RaftMes) returns (RaftMes) {}
   rpc Get(GetReq) returns (GetReply) {}
+
+  /// Forward a request to other
+  rpc Forward(RaftMes) returns (RaftMes) {}
 
   // raft RPC
 

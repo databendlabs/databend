@@ -15,6 +15,7 @@
 mod abs;
 mod angle;
 mod crc32;
+mod log;
 mod math;
 mod pi;
 mod trigonometric;
@@ -23,6 +24,7 @@ pub use abs::AbsFunction;
 pub use angle::DegressFunction;
 pub use angle::RadiansFunction;
 pub use crc32::CRC32Function;
+pub use log::LogFunction;
 pub use math::MathsFunction;
 pub use pi::PiFunction;
 pub use trigonometric::Trigonometric;

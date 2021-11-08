@@ -1981,6 +1981,7 @@ dependencies = [
  "anyhow",
  "async-raft",
  "async-trait",
+ "backtrace",
  "byteorder",
  "common-arrow",
  "common-base",
@@ -1999,6 +2000,7 @@ dependencies = [
  "common-meta-types",
  "common-planners",
  "common-tracing",
+ "derive_more",
  "env_logger 0.9.0",
  "flaky_test",
  "futures",
@@ -6124,7 +6126,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.11.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=cdd2ce1#cdd2ce1fed83be78eb5c8e19ca17364794fead95"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=eca5b86#eca5b866518e2efe1eada3f14a96245dc8859c52"
 dependencies = [
  "log",
 ]

@@ -27,12 +27,14 @@ use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::LogEntry;
 use common_meta_types::NodeId;
 use common_tracing::tracing;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 use tonic::transport::channel::Channel;
 
 use crate::meta_service::MetaRaftStore;
-use crate::meta_service::MetaServiceClient;
-use crate::meta_service::RaftMes;
 use crate::meta_service::RetryableError;
+use crate::proto::meta_service_client::MetaServiceClient;
+use crate::proto::RaftMes;
 
 /// Impl grpc method `write`
 impl tonic::IntoRequest<RaftMes> for LogEntry {
@@ -189,24 +191,43 @@ impl From<AppliedState> for RaftMes {
     }
 }
 
-impl From<Result<AppliedState, RetryableError>> for RaftMes {
-    fn from(rst: Result<AppliedState, RetryableError>) -> Self {
-        match rst {
-            Ok(resp) => resp.into(),
-            Err(err) => err.into(),
+impl<T, E> From<RaftMes> for Result<T, E>
+where
+    T: DeserializeOwned,
+    E: DeserializeOwned,
+{
+    fn from(msg: RaftMes) -> Self {
+        if !msg.data.is_empty() {
+            let resp: T = serde_json::from_str(&msg.data).expect("fail to deserialize");
+            Ok(resp)
+        } else {
+            let err: E = serde_json::from_str(&msg.error).expect("fail to deserialize");
+            Err(err)
         }
     }
 }
 
-impl From<RaftMes> for Result<AppliedState, RetryableError> {
-    fn from(msg: RaftMes) -> Self {
-        if !msg.data.is_empty() {
-            let resp: AppliedState = serde_json::from_str(&msg.data).expect("fail to deserialize");
-            Ok(resp)
-        } else {
-            let err: RetryableError =
-                serde_json::from_str(&msg.error).expect("fail to deserialize");
-            Err(err)
+impl<T, E> From<Result<T, E>> for RaftMes
+where
+    T: Serialize,
+    E: Serialize,
+{
+    fn from(r: Result<T, E>) -> Self {
+        match r {
+            Ok(x) => {
+                let data = serde_json::to_string(&x).expect("fail to serialize");
+                RaftMes {
+                    data,
+                    error: Default::default(),
+                }
+            }
+            Err(e) => {
+                let error = serde_json::to_string(&e).expect("fail to serialize");
+                RaftMes {
+                    data: Default::default(),
+                    error,
+                }
+            }
         }
     }
 }

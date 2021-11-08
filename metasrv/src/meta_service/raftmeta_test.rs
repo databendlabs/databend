@@ -31,8 +31,12 @@ use maplit::btreeset;
 use pretty_assertions::assert_eq;
 
 use crate::configs;
+use crate::meta_service::message::AdminRequest;
+use crate::meta_service::AdminRequestInner;
+use crate::meta_service::JoinRequest;
 use crate::meta_service::MetaNode;
 use crate::meta_service::RetryableError;
+use crate::proto::meta_service_client::MetaServiceClient;
 use crate::tests::assert_meta_connection;
 use crate::tests::service::new_test_context;
 use crate::tests::service::KVSrvTestContext;
@@ -373,6 +377,95 @@ async fn test_meta_node_cluster_1_2_2() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
+async fn test_meta_node_join() -> anyhow::Result<()> {
+    // - Bring up a cluster
+    // - Join a new node by sending a Join request to leader.
+    // - Join a new node by sending a Join request to a non-voter.
+
+    let (_log_guards, ut_span) = init_meta_ut!();
+    let _ent = ut_span.enter();
+
+    let span = tracing::span!(tracing::Level::INFO, "test_meta_node_join");
+    let _ent = span.enter();
+
+    let (mut _nlog, tcs) = setup_cluster(btreeset![0], btreeset![1]).await?;
+    let mut all = test_context_nodes(&tcs);
+
+    tracing::info!("--- bring up non-voter 2");
+
+    let node_id = 2;
+    let tc2 = new_test_context();
+    let mut raft_config = tc2.config.raft_config.clone();
+    raft_config.id = node_id;
+    let addr2 = raft_config.raft_api_addr();
+
+    let (mn2, is_open) = MetaNode::open_create_boot(&raft_config, None, Some(()), None).await?;
+    assert!(!is_open);
+
+    tracing::info!("--- join non-voter 2 to cluster by leader");
+
+    let leader_id = all[0].get_leader().await;
+    let leader = all[leader_id as usize].clone();
+    leader
+        .handle_admin_req(AdminRequest {
+            forward_to_leader: false,
+            req: AdminRequestInner::Join(JoinRequest {
+                node_id,
+                address: addr2,
+            }),
+        })
+        .await?;
+
+    all.push(mn2.clone());
+    for mn in all.iter() {
+        mn.raft
+            .wait(timeout())
+            .members(btreeset! {0,2}, format!("node-2 is joined: {}", mn.sto.id))
+            .await?;
+    }
+
+    tracing::info!("--- bring up non-voter 3");
+
+    let node_id = 3;
+    let tc3 = new_test_context();
+    let mut raft_config = tc3.config.raft_config.clone();
+    raft_config.id = node_id;
+    let addr3 = raft_config.raft_api_addr();
+
+    let (mn3, is_open) = MetaNode::open_create_boot(&raft_config, None, Some(()), None).await?;
+    assert!(!is_open);
+
+    tracing::info!("--- join node-3 by sending rpc `join`");
+
+    let to_addr = tcs[1].config.raft_config.raft_api_addr();
+
+    let mut client = MetaServiceClient::connect(format!("http://{}", to_addr)).await?;
+    let admin_req = AdminRequest {
+        forward_to_leader: true,
+        req: AdminRequestInner::Join(JoinRequest {
+            node_id,
+            address: addr3,
+        }),
+    };
+    client.forward(admin_req).await?;
+
+    tracing::info!("--- check all nodes has node-3 joined");
+
+    all.push(mn3.clone());
+    for mn in all.iter() {
+        mn.raft
+            .wait(timeout())
+            .members(
+                btreeset! {0,2,3},
+                format!("node-2 is joined: {}", mn.sto.id),
+            )
+            .await?;
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_restart() -> anyhow::Result<()> {
     // TODO check restarted follower.
     // - Start a leader and a non-voter;
@@ -483,7 +576,10 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     }
 
     tracing::info!("--- reopen MetaNode");
-    let leader = MetaNode::open(&tc.config.raft_config).await?;
+
+    let (leader, _is_open) =
+        MetaNode::open_create_boot(&tc.config.raft_config, Some(()), None, None).await?;
+
     log_cnt += 1;
 
     wait_for_state(&leader, State::Leader).await?;
@@ -615,7 +711,12 @@ async fn setup_non_voter(
     let mut tc = new_test_context();
     let addr = tc.config.raft_config.raft_api_addr();
 
-    let mn = MetaNode::boot_non_voter(id, &tc.config.raft_config).await?;
+    let mut raft_config = tc.config.raft_config.clone();
+    raft_config.id = id;
+
+    let (mn, is_open) = MetaNode::open_create_boot(&raft_config, None, Some(()), None).await?;
+    assert!(!is_open);
+
     tc.meta_nodes.push(mn.clone());
 
     {

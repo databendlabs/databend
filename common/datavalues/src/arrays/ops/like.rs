@@ -23,7 +23,7 @@ use crate::prelude::*;
 
 impl DFStringArray {
     /// QUOTE: (From arrow2::arrow::compute::like::a_like_binary)
-    pub fn a_like_binary<F>(&self, rhs: &DFStringArray, op: F) -> Result<DFBooleanArray>
+    pub fn a_like_binary<F>(&self, rhs: &Self, op: F) -> Result<DFBooleanArray>
     where F: Fn(bool) -> bool {
         if self.len() != rhs.len() {
             return Err(ErrorCode::BadArguments(

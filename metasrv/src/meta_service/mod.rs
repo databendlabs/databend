@@ -12,21 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub use errors::ForwardToLeader;
+pub use errors::InvalidMembership;
+pub use errors::MetaError;
 pub use errors::RetryableError;
 pub use errors::ShutdownError;
+pub use message::AdminRequest;
+pub use message::AdminRequestInner;
+pub use message::JoinRequest;
 pub use meta_service_impl::MetaServiceImpl;
 pub use network::Network;
 pub use raftmeta::MetaNode;
 pub use raftmeta::MetaRaftStore;
 
-pub use crate::protobuf::meta_service_client::MetaServiceClient;
-pub use crate::protobuf::meta_service_server::MetaService;
-pub use crate::protobuf::meta_service_server::MetaServiceServer;
-pub use crate::protobuf::GetReply;
-pub use crate::protobuf::GetReq;
-pub use crate::protobuf::RaftMes;
-
 pub mod errors;
+mod message;
+mod meta_leader;
 pub mod meta_service_impl;
 pub mod network;
 pub mod raftmeta;

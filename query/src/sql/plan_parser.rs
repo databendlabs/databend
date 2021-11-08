@@ -175,6 +175,9 @@ impl PlanParser {
             DfStatement::KillQuery(v) => self.sql_kill_query_to_plan(v),
             DfStatement::KillConn(v) => self.sql_kill_connection_to_plan(v),
             DfStatement::CreateUser(v) => self.sql_create_user_to_plan(v),
+            DfStatement::ShowUsers(_) => {
+                self.build_from_sql("SELECT * FROM system.users ORDER BY name")
+            }
         }
     }
 
@@ -339,7 +342,7 @@ impl PlanParser {
         Ok(PlanNode::CreateUser(CreateUserPlan {
             name: create.name.clone(),
             password: Vec::from(create.password.clone()),
-            host_name: create.host_name.clone(),
+            hostname: create.hostname.clone(),
             auth_type: create.auth_type.clone(),
         }))
     }
