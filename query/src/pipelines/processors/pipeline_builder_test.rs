@@ -19,6 +19,7 @@ use pretty_assertions::assert_eq;
 
 use crate::pipelines::processors::*;
 use crate::sql::*;
+use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_local_pipeline_builds() -> Result<()> {
@@ -143,7 +144,7 @@ async fn test_local_pipeline_builds() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
     for test in tests {
         // Plan build check.
-        let plan = PlanParser::create(ctx.clone()).build_from_sql(test.query)?;
+        let plan = parse_query(test.query, &ctx)?;
         let actual_plan = format!("{:?}", plan);
         assert_eq!(test.plan, actual_plan, "{:#?}", test.name);
 

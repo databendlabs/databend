@@ -164,7 +164,7 @@ fn do_action_request(query_id: &str, stage_id: &str) -> Result<Request<Action>> 
     let flight_action = FlightAction::PrepareShuffleAction(ShuffleAction {
         query_id: String::from(query_id),
         stage_id: String::from(stage_id),
-        plan: parse_query("SELECT number FROM numbers(5)")?,
+        plan: parse_query_with_context("SELECT number FROM numbers(5)")?,
         sinks: vec![String::from("stream_id")],
         scatters_expression: Expression::create_literal(DataValue::UInt64(Some(1))),
     });

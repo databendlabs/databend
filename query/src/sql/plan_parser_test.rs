@@ -16,6 +16,7 @@ use common_exception::Result;
 use pretty_assertions::assert_eq;
 
 use crate::sql::PlanParser;
+use crate::tests::parse_query;
 
 #[test]
 fn test_plan_parser() -> Result<()> {
@@ -212,8 +213,7 @@ fn test_plan_parser() -> Result<()> {
 
     let ctx = crate::tests::try_create_context()?;
     for t in tests {
-        let plan = PlanParser::create(ctx.clone()).build_from_sql(t.sql);
-        match plan {
+        match parse_query(t.sql, &ctx) {
             Ok(v) => {
                 assert_eq!(t.expect, format!("{:?}", v), "{}", t.name);
             }

@@ -14,7 +14,7 @@ impl AnalyzableStatement for DfShowDatabases {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let rewritten_query = self.rewritten_query();
-        let rewritten_query_plan = PlanParser::build_from_sql_new(rewritten_query.as_str(), ctx);
+        let rewritten_query_plan = PlanParser::parse(rewritten_query.as_str(), ctx);
         Ok(AnalyzedResult::SimpleQuery(rewritten_query_plan.await?))
     }
 }

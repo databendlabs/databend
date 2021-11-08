@@ -24,6 +24,7 @@ use pretty_assertions::assert_eq;
 use crate::optimizers::optimizer_test::*;
 use crate::optimizers::*;
 use crate::sql::*;
+use crate::tests::parse_query;
 
 #[test]
 fn test_projection_push_down_optimizer_1() -> Result<()> {
@@ -66,9 +67,14 @@ fn test_projection_push_down_optimizer_1() -> Result<()> {
 fn test_projection_push_down_optimizer_group_by() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
-    let plan = PlanParser::create(ctx.clone())
-        .build_from_sql("select max(value) as c1, name as c2 from system.settings group by c2")?;
+    static TEST_SELECT_QUERY: &str = "\
+        SELECT \
+            max(value) AS c1, name AS c2 \
+        FROM system.settings \
+        GROUP BY c2\
+    ";
 
+    let plan = parse_query(TEST_SELECT_QUERY, &ctx)?;
     let mut project_push_down = ProjectionPushDownOptimizer::create(ctx);
     let optimized = project_push_down.optimize(&plan)?;
 
@@ -210,9 +216,13 @@ fn test_projection_push_down_optimizer_3() -> Result<()> {
 fn test_projection_push_down_optimizer_4() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
-    let plan = PlanParser::create(ctx.clone())
-        .build_from_sql("select substring(value from 1 for 3)  as c1 from system.settings")?;
+    static TEST_SELECT_QUERY: &str = "\
+        SELECT \
+            substring(value from 1 for 3) AS c1 \
+        FROM system.settings\
+    ";
 
+    let plan = parse_query(TEST_SELECT_QUERY, &ctx)?;
     let mut project_push_down = ProjectionPushDownOptimizer::create(ctx);
     let optimized = project_push_down.optimize(&plan)?;
 

@@ -17,6 +17,7 @@ use common_exception::Result;
 use common_planners::*;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
+use crate::tests::parse_query;
 
 use crate::interpreters::*;
 use crate::sql::*;
@@ -25,9 +26,7 @@ use crate::sql::*;
 async fn test_setting_interpreter() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
-    if let PlanNode::SetVariable(plan) =
-        PlanParser::create(ctx.clone()).build_from_sql("set max_block_size=1")?
-    {
+    if let PlanNode::SetVariable(plan) = parse_query("SET max_block_size=1", &ctx)? {
         let executor = SettingInterpreter::try_create(ctx, plan)?;
         assert_eq!(executor.name(), "SettingInterpreter");
 
@@ -44,9 +43,7 @@ async fn test_setting_interpreter() -> Result<()> {
 async fn test_setting_interpreter_error() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
-    if let PlanNode::SetVariable(plan) =
-        PlanParser::create(ctx.clone()).build_from_sql("set xx=1")?
-    {
+    if let PlanNode::SetVariable(plan) = parse_query("SET xx = 1", &ctx)? {
         let executor = SettingInterpreter::try_create(ctx, plan)?;
         if let Err(e) = executor.execute().await {
             let expect = "Code: 20, displayText = Unknown variable: \"xx\".";

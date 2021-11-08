@@ -31,7 +31,7 @@ pub async fn select_executor(sql: &str) -> Result<()> {
     let executor_session = sessions.create_session("Benches")?;
     let ctx = executor_session.create_context().await?;
 
-    if let PlanNode::Select(plan) = PlanParser::create(ctx.clone()).build_from_sql(sql)? {
+    if let PlanNode::Select(plan) = PlanParser::parse(sql, ctx.clone).await? {
         let executor = SelectInterpreter::try_create(ctx, plan)?;
         let mut stream = executor.execute().await?;
         while let Some(_block) = stream.next().await {}

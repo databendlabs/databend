@@ -17,7 +17,7 @@ pub trait AnalyzableStatement {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfStatement {
-    async fn analyze(self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         match self {
             DfStatement::Query(v) => v.analyze(ctx).await,
             DfStatement::Explain(v) => v.analyze(ctx).await,

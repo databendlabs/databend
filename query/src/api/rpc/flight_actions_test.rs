@@ -29,7 +29,7 @@ async fn test_shuffle_action_try_into() -> Result<()> {
     let shuffle_action = ShuffleAction {
         query_id: String::from("query_id"),
         stage_id: String::from("stage_id"),
-        plan: parse_query("SELECT number FROM numbers(5)")?,
+        plan: parse_query_with_context("SELECT number FROM numbers(5)")?,
         sinks: vec![String::from("stream_id")],
         scatters_expression: Expression::create_literal(DataValue::UInt64(Some(1))),
     };
@@ -43,7 +43,7 @@ async fn test_shuffle_action_try_into() -> Result<()> {
         FlightAction::PrepareShuffleAction(action) => {
             assert_eq!(action.query_id, "query_id");
             assert_eq!(action.stage_id, "stage_id");
-            assert_eq!(action.plan, parse_query("SELECT number FROM numbers(5)")?);
+            assert_eq!(action.plan, parse_query_with_context("SELECT number FROM numbers(5)")?);
             assert_eq!(action.sinks, vec![String::from("stream_id")]);
             assert_eq!(
                 action.scatters_expression,

@@ -9,7 +9,7 @@ pub struct DfShowMetrics;
 impl AnalyzableStatement for DfShowMetrics {
     async fn analyze(self, ctx: DatabendQueryContextRef) -> common_exception::Result<AnalyzedResult> {
         let rewritten_query = "SELECT * FROM system.metrics";
-        let rewritten_query_plan = PlanParser::build_from_sql_new(rewritten_query, ctx);
+        let rewritten_query_plan = PlanParser::parse(rewritten_query, ctx);
         Ok(AnalyzedResult::SimpleQuery(rewritten_query_plan.await?))
     }
 }

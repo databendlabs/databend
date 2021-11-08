@@ -17,6 +17,7 @@ use common_exception::Result;
 use common_planners::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
+use crate::tests::parse_query;
 
 use crate::interpreters::*;
 use crate::sql::*;
@@ -25,9 +26,7 @@ use crate::sql::*;
 async fn test_drop_database_interpreter() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
-    if let PlanNode::DropDatabase(plan) =
-        PlanParser::create(ctx.clone()).build_from_sql("drop database default")?
-    {
+    if let PlanNode::DropDatabase(plan) = parse_query_with_context("drop database default")? {
         let executor = DropDatabaseInterpreter::try_create(ctx, plan.clone())?;
         assert_eq!(executor.name(), "DropDatabaseInterpreter");
         let stream = executor.execute().await?;

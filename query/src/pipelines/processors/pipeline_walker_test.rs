@@ -18,14 +18,20 @@ use pretty_assertions::assert_eq;
 
 use crate::pipelines::processors::*;
 use crate::sql::*;
+use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_pipeline_walker() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
-    let plan = PlanParser::create(ctx.clone()).build_from_sql(
-        "select sum(number+1)+2 as sumx from numbers_mt(80000) where (number+1)=4 limit 1",
-    )?;
+    static TEST_SELECT_QUERY: &str = "\
+        SELECT sum(number + 1) + 2 AS sumx \
+        FROM numbers_mt(80000) \
+        WHERE (number + 1) = 4 \
+        LIMIT 1\
+    ";
+
+    let paln = parse_query(TEST_SELECT_QUERY, &ctx)?;
     let pipeline_builder = PipelineBuilder::create(ctx);
     let pipeline = pipeline_builder.build(&plan)?;
 

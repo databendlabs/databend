@@ -94,21 +94,29 @@ impl PlanParser {
         Self { ctx }
     }
 
-    pub async fn build_from_sql_new(query: &str, ctx: DatabendQueryContextRef) -> Result<PlanNode> {
-        let (mut statements, _) = DfParser::parse_sql(query)?;
+    pub async fn parse(query: &str, ctx: DatabendQueryContextRef) -> Result<PlanNode> {
+        let (statements, _) = DfParser::parse_sql(query)?;
+        PlanParser::build_plan(statements, ctx).await
+    }
 
+    pub async fn parse_with_hint(&self, query: &str) -> (Result<PlanNode>, Vec<DfHint>) {
+        let (statements, hints) = DfParser::parse_sql(query)?;
+        (PlanParser::build_plan(statements, ctx).await, hints)
+    }
+
+    async fn build_plan(statements: Vec<DfStatement>, ctx: DatabendQueryContextRef) -> Result<PlanNode> {
         if statements.len() != 1 {
             return Err(ErrorCode::SyntaxException("Only support single query"));
         }
 
-        match statements.remove(0).analyze(ctx.clone()).await? {
+        match statements[0].analyze(ctx.clone()).await? {
             AnalyzedResult::SimpleQuery(plan) => Ok(plan),
             AnalyzedResult::SelectQuery(data) => Self::build_query_plan(&data),
             AnalyzedResult::ExplainQuery(data) => Self::build_explain_plan(&data, &ctx),
         }
     }
 
-    fn build_query_plan(data: &AnalyzeData) -> Result<PlanNode> {
+    pub fn build_query_plan(data: &AnalyzeData) -> Result<PlanNode> {
         let from = Self::build_from_plan(data)?;
         let filter = Self::build_filter_plan(from, data)?;
         let group_by = Self::build_group_by_plan(filter, data)?;
@@ -131,14 +139,6 @@ impl PlanParser {
             Some(QueryRelation::Nested(data)) => Self::build_query_plan(data),
             Some(QueryRelation::FromTable(plan)) => Ok(PlanNode::ReadSource(plan.clone()))
         }
-    }
-
-    pub fn build_from_sql(&self, query: &str) -> Result<PlanNode> {
-        unimplemented!()
-    }
-
-    pub fn build_with_hint_from_sql(&self, query: &str) -> (Result<PlanNode>, Vec<DfHint>) {
-        unimplemented!()
     }
 
     /// Apply a filter to the plan

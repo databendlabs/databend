@@ -19,6 +19,7 @@ use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 use crate::interpreters::*;
+use crate::tests::parse_query;
 use crate::sql::*;
 
 #[tokio::test]
@@ -27,9 +28,13 @@ async fn interpreter_show_create_table_test() -> Result<()> {
 
     // Create table.
     {
-        if let PlanNode::CreateTable(plan) = PlanParser::create(ctx.clone())
-            .build_from_sql("create table default.a(a bigint, b int, c varchar(255), d smallint, e Date ) Engine = Null")?
-        {
+        static TEST_CREATE_QUERY: &str = "\
+            CREATE TABLE default.a(\
+                a bigint, b int, c varchar(255), d smallint, e Date\
+            ) Engine = Null\
+        ";
+
+        if let PlanNode::CreateTable(plan) = parse_query(TEST_CREATE_QUERY, &ctx)? {
             let executor = CreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
             let _ = executor.execute().await?;
         }
@@ -37,9 +42,7 @@ async fn interpreter_show_create_table_test() -> Result<()> {
 
     // Show create table.
     {
-        if let PlanNode::ShowCreateTable(plan) =
-            PlanParser::create(ctx.clone()).build_from_sql("show create table a")?
-        {
+        if let PlanNode::ShowCreateTable(plan) = parse_query("SHOW CREATE TABLE a", &ctx)? {
             let executor = ShowCreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
             assert_eq!(executor.name(), "ShowCreateTableInterpreter");
             let stream = executor.execute().await?;

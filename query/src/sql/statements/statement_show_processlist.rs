@@ -9,7 +9,7 @@ pub struct DfShowProcessList;
 impl AnalyzableStatement for DfShowProcessList {
     async fn analyze(self, ctx: DatabendQueryContextRef) -> common_exception::Result<AnalyzedResult> {
         let rewritten_query = "SELECT name, value FROM system.settings ORDER BY name";
-        let rewritten_query_plan = PlanParser::build_from_sql_new(rewritten_query, ctx);
+        let rewritten_query_plan = PlanParser::parse(rewritten_query, ctx);
         Ok(AnalyzedResult::SimpleQuery(rewritten_query_plan.await?))
     }
 }

@@ -4,12 +4,12 @@ use common_datavalues::{DataSchema, DataValue, DataSchemaRef, IntervalUnit};
 use common_planners::Expression;
 use crate::functions::ContextFunction;
 use common_functions::aggregates::AggregateFunctionFactory;
-use crate::sql::{SQLCommon, DfStatement};
-use crate::sessions::DatabendQueryContextRef;
+use crate::sql::{SQLCommon, DfStatement, PlanParser};
+use crate::sessions::{DatabendQueryContextRef, DatabendQueryContext};
 use crate::sql::statements::analyzer_schema::AnalyzedSchema;
 use std::sync::Arc;
 use crate::sql::statements::analyzer_expr_value::ValueExprAnalyzer;
-use crate::sql::statements::DfQueryStatement;
+use crate::sql::statements::{DfQueryStatement, AnalyzableStatement, AnalyzedResult};
 use std::convert::TryFrom;
 
 /// Such as `SELECT * FROM table_name AS alias_name`
@@ -47,10 +47,8 @@ impl<const allow_aggr: bool> ExpressionAnalyzer<allow_aggr> {
             Expr::UnaryOp { op, expr } => self.analyze_unary_expr(op, expr).await,
             Expr::BinaryOp { left, op, right } => self.analyze_binary_expr(left, op, right).await,
             Expr::Wildcard => self.analyze_wildcard(),
-
             Expr::Exists(subquery) => self.analyze_exists(subquery).await,
-            Expr::Subquery(subquery) => Ok(self.scalar_subquery_to_rex(subquery).await?),
-
+            Expr::Subquery(subquery) => self.analyze_scalar_subquery(subquery).await,
             Expr::Function(function) => self.analyze_function(function).await,
             Expr::Cast { expr, data_type } => self.analyze_cast(expr, data_type).await,
             Expr::TypedString { data_type, value } => self.analyze_typed_string(data_type, value).await,
@@ -64,6 +62,11 @@ impl<const allow_aggr: bool> ExpressionAnalyzer<allow_aggr> {
     }
 
     async fn analyze_function(&self, function: &Function) -> Result<Expression> {
+        let name = function.name.to_string();
+        if AggregateFunctionFactory::instance().check(&name) {
+            self.analyze_aggr_function(&name, function).await;
+        }
+
         let mut args = Vec::with_capacity(function.args.len());
 
         // 1. Get the args from context by function name. such as SELECT database()
@@ -88,11 +91,6 @@ impl<const allow_aggr: bool> ExpressionAnalyzer<allow_aggr> {
                     args.push(self.analyze(arg).await?);
                 }
             }
-        }
-
-        let name = function.name.to_string();
-        if AggregateFunctionFactory::instance().check(&name) {
-            self.analyze_aggr_function(&name, function).await;
         }
 
         Ok(Expression::ScalarFunction { op: name, args })
@@ -157,37 +155,47 @@ impl<const allow_aggr: bool> ExpressionAnalyzer<allow_aggr> {
 
     fn analyze_identifiers(&self, idents: &[Ident]) -> Result<Expression> {}
 
-    fn analyze_exists(&self, subquery: &Query) -> Result<Expression> {
+    async fn analyze_exists(&self, subquery: &Query) -> Result<Expression> {
         Ok(Expression::ScalarFunction {
             op: "EXISTS".to_lowercase(),
-            args: vec![self.subquery_to_rex(subquery)?],
+            args: vec![self.analyze_subquery(subquery).await?],
         })
     }
 
-    pub fn subquery_to_rex(&self, subquery: &Query) -> Result<Expression> {
-        // let cloned_sub_query = subquery.clone();
-        // let subquery_statement = DfQueryStatement::try_from(cloned_sub_query)?;
-        //
-        // // TODO: build subquery to plan.
-        // let query = DfStatement::Query(subquery_statement);
-        //
-        // let subquery = self.query_to_plan(subquery)?;
-        // let subquery_name = self.context.get_subquery_name(&subquery);
-        // Ok(Expression::Subquery {
-        //     name: subquery_name,
-        //     query_plan: Arc::new(subquery),
-        // })
-        unimplemented!()
+    pub async fn analyze_subquery(&self, subquery: &Query) -> Result<Expression> {
+        let statement = DfQueryStatement::try_from(subquery.clone())?;
+
+        let query_context = self.context.clone();
+        let subquery_context = DatabendQueryContext::new(query_context);
+
+        let analyze_subquery = statement.analyze(subquery_context);
+        if let AnalyzedResult::SelectQuery(analyze_data) = analyze_subquery.await? {
+            let subquery_plan = PlanParser::build_query_plan(&analyze_data)?;
+            return Ok(Expression::Subquery {
+                name: query_context.get_subquery_name(&subquery_plan),
+                query_plan: Arc::new(subquery_plan),
+            });
+        }
+
+        Err(ErrorCode::SyntaxException(format!("Unsupported subquery type {:?}", subquery)))
     }
 
-    pub fn scalar_subquery_to_rex(&self, subquery: &Query) -> Result<Expression> {
-        // let subquery = self.query_to_plan(subquery)?;
-        // let subquery_name = self.ctx.get_subquery_name(&subquery);
-        // Ok(Expression::ScalarSubquery {
-        //     name: subquery_name,
-        //     query_plan: Arc::new(subquery),
-        // })
-        unimplemented!("")
+    pub async fn analyze_scalar_subquery(&self, subquery: &Query) -> Result<Expression> {
+        let statement = DfQueryStatement::try_from(subquery.clone())?;
+
+        let query_context = self.context.clone();
+        let subquery_context = DatabendQueryContext::new(query_context);
+
+        let analyze_subquery = statement.analyze(subquery_context);
+        if let AnalyzedResult::SelectQuery(analyze_data) = analyze_subquery.await? {
+            let subquery_plan = PlanParser::build_query_plan(&analyze_data)?;
+            return Ok(Expression::ScalarSubquery {
+                name: query_context.get_subquery_name(&subquery_plan),
+                query_plan: Arc::new(subquery_plan),
+            });
+        }
+
+        Err(ErrorCode::SyntaxException(format!("Unsupported subquery type {:?}", subquery)))
     }
 
     async fn analyze_between(&self, expr: &Expr, negated: &bool, low: &Expr, high: &Expr) -> Result<Expression> {
