@@ -15,6 +15,7 @@
 
 use common_management::UserInfo;
 use common_meta_types::AuthType;
+use common_meta_types::UserPrivilege;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct User {
@@ -42,11 +43,13 @@ impl User {
 
 impl From<&User> for UserInfo {
     fn from(user: &User) -> Self {
+        let privileges = UserPrivilege::empty();
         UserInfo {
             name: user.name.clone(),
             hostname: user.hostname.clone(),
             password: Vec::from(user.password.clone()),
             auth_type: user.auth_type.clone(),
+            privileges,
         }
     }
 }
