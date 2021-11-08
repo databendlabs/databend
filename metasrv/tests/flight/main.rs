@@ -14,4 +14,5 @@
 
 pub mod metasrv_flight_api;
 pub mod metasrv_flight_kv_api;
+pub mod metasrv_flight_meta_api;
 pub mod metasrv_flight_tls;
