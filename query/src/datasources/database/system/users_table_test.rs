@@ -18,6 +18,7 @@ use common_base::tokio;
 use common_exception::Result;
 use common_management::UserInfo;
 use common_meta_types::AuthType;
+use common_meta_types::UserPrivilege;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
@@ -36,6 +37,7 @@ async fn test_users_table() -> Result<()> {
             hostname: "localhost".to_string(),
             password: Vec::from(""),
             auth_type: AuthType::None,
+            privileges: UserPrivilege::empty(),
         })
         .await?;
     ctx.get_sessions_manager()
@@ -45,6 +47,7 @@ async fn test_users_table() -> Result<()> {
             hostname: "%".to_string(),
             password: Vec::from("123456789"),
             auth_type: AuthType::PlainText,
+            privileges: UserPrivilege::empty(),
         })
         .await?;
 
