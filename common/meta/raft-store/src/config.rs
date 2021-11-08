@@ -111,6 +111,12 @@ pub struct RaftConfig {
     )]
     pub single: bool,
 
+    /// Bring up a metasrv node and join a cluster.
+    ///
+    /// The value is one or more addresses of a node in the cluster, to which this node sends a `join` request.
+    #[structopt(long, env = "METASRV_JOIN")]
+    pub join: Vec<String>,
+
     #[structopt(
     long,
     env = KVSRV_ID,
