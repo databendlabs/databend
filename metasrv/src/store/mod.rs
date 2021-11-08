@@ -12,20 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use message::AdminRequest;
-pub use message::AdminRequestInner;
-pub use message::JoinRequest;
-pub use meta_service_impl::MetaServiceImpl;
-pub use network::Network;
-pub use raftmeta::MetaNode;
-
-mod message;
-mod meta_leader;
-pub mod meta_service_impl;
-pub mod network;
-pub mod raftmeta;
-
+mod meta_raft_store;
 #[cfg(test)]
-mod meta_service_impl_test;
-#[cfg(test)]
-pub mod raftmeta_test;
+mod meta_raft_store_test;
+
+pub use meta_raft_store::MetaRaftStore;

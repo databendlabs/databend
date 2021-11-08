@@ -31,10 +31,10 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tonic::transport::channel::Channel;
 
-use crate::meta_service::MetaRaftStore;
-use crate::meta_service::RetryableError;
+use crate::errors::RetryableError;
 use crate::proto::meta_service_client::MetaServiceClient;
 use crate::proto::RaftMes;
+use crate::store::MetaRaftStore;
 
 /// Impl grpc method `write`
 impl tonic::IntoRequest<RaftMes> for LogEntry {
