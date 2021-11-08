@@ -26,8 +26,8 @@ use log::info;
 use pretty_assertions::assert_eq;
 
 use crate::meta_service::MetaNode;
-use crate::meta_service::MetaServiceClient;
 use crate::meta_service::RetryableError;
+use crate::proto::meta_service_client::MetaServiceClient;
 use crate::tests::assert_meta_connection;
 use crate::tests::service::new_test_context;
 

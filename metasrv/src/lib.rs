@@ -13,9 +13,7 @@
 // limitations under the License.
 
 #[allow(clippy::all)]
-pub mod protobuf {
-    include!(concat!(env!("OUT_DIR"), concat!("/meta.rs")));
-}
+pub mod proto;
 
 #[macro_use]
 pub mod tests;
