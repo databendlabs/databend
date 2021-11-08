@@ -62,12 +62,12 @@ use common_meta_types::TableMeta;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 
-use crate::meta_service::MetaServiceClient;
 use crate::meta_service::MetaServiceImpl;
-use crate::meta_service::MetaServiceServer;
 use crate::meta_service::Network;
 use crate::meta_service::RetryableError;
 use crate::meta_service::ShutdownError;
+use crate::proto::meta_service_client::MetaServiceClient;
+use crate::proto::meta_service_server::MetaServiceServer;
 
 /// An storage system implementing the `async_raft::RaftStorage` trait.
 ///

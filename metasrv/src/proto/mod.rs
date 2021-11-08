@@ -12,21 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use errors::RetryableError;
-pub use errors::ShutdownError;
-pub use meta_service_impl::MetaServiceImpl;
-pub use network::Network;
-pub use raftmeta::MetaNode;
-pub use raftmeta::MetaRaftStore;
+mod meta;
 
-pub mod errors;
-pub mod meta_service_impl;
-pub mod network;
-pub mod raftmeta;
-
-#[cfg(test)]
-mod meta_service_impl_test;
-#[cfg(test)]
-mod meta_store_test;
-#[cfg(test)]
-pub mod raftmeta_test;
+pub use meta::*;

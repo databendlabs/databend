@@ -24,9 +24,9 @@ use tempfile::TempDir;
 
 use crate::api::FlightServer;
 use crate::configs;
-use crate::meta_service::GetReq;
 use crate::meta_service::MetaNode;
-use crate::meta_service::MetaServiceClient;
+use crate::proto::meta_service_client::MetaServiceClient;
+use crate::proto::GetReq;
 
 // Start one random service and get the session manager.
 #[tracing::instrument(level = "info")]

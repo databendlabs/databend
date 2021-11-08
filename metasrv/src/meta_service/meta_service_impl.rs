@@ -21,11 +21,11 @@ use std::sync::Arc;
 use common_meta_types::LogEntry;
 use common_tracing::tracing;
 
-use crate::meta_service::GetReply;
-use crate::meta_service::GetReq;
 use crate::meta_service::MetaNode;
-use crate::meta_service::MetaService;
-use crate::meta_service::RaftMes;
+use crate::proto::meta_service_server::MetaService;
+use crate::proto::GetReply;
+use crate::proto::GetReq;
+use crate::proto::RaftMes;
 
 pub struct MetaServiceImpl {
     pub meta_node: Arc<MetaNode>,

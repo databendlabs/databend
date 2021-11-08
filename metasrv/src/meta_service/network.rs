@@ -30,9 +30,9 @@ use common_tracing::tracing;
 use tonic::transport::channel::Channel;
 
 use crate::meta_service::MetaRaftStore;
-use crate::meta_service::MetaServiceClient;
-use crate::meta_service::RaftMes;
 use crate::meta_service::RetryableError;
+use crate::proto::meta_service_client::MetaServiceClient;
+use crate::proto::RaftMes;
 
 /// Impl grpc method `write`
 impl tonic::IntoRequest<RaftMes> for LogEntry {
