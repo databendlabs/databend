@@ -104,7 +104,7 @@ impl DfQueryStatement {
         if let Some(predicate) = &self.selection {
             // TODO: collect pushdown predicates
             let expr_analyzer = data.get_expr_analyze::<false>();
-            data.filter_predicate = Some(expr_analyzer.analyze(predicate)?);
+            data.filter_predicate = Some(expr_analyzer.analyze(predicate).await?);
         }
 
         Ok(())
@@ -113,7 +113,7 @@ impl DfQueryStatement {
     /// Expand wildcard and create columns alias map(alias -> expression) for named projection item
     pub async fn analyze_projection(&self, data: &mut AnalyzeData) -> Result<()> {
         let items = &self.projection;
-        let projection_expressions = Self::projection_exprs(items, data)?;
+        let projection_expressions = Self::projection_exprs(items, data).await?;
         // TODO: expand_wildcard
         data.projection_aliases = extract_aliases(&projection_expressions);
         data.projection_expressions = projection_expressions;
@@ -126,7 +126,7 @@ impl DfQueryStatement {
         let projection_aliases = &data.projection_aliases;
 
         for group_by_expr in &self.group_by {
-            let analyzed_expr = expr_analyzer.analyze(group_by_expr)?;
+            let analyzed_expr = expr_analyzer.analyze(group_by_expr).await?;
             let analyzed_expr = resolve_aliases_to_exprs(&analyzed_expr, projection_aliases)?;
 
             if !data.group_by_expressions.contains(&analyzed_expr) {
@@ -145,7 +145,7 @@ impl DfQueryStatement {
 
     pub async fn analyze_having(&self, data: &mut AnalyzeData) -> Result<()> {
         if let Some(predicate) = &self.having {
-            let expr = Self::analyze_expr_with_alias(predicate, data)?;
+            let expr = Self::analyze_expr_with_alias(predicate, data).await?;
 
             data.add_aggregate_function(&expr)?;
             data.having_predicate = Some(Self::after_group_by_expr(&expr, data)?);
@@ -155,7 +155,7 @@ impl DfQueryStatement {
 
     pub async fn analyze_order_by(&self, data: &mut AnalyzeData) -> Result<()> {
         for order_by_expr in &self.order_by {
-            let expr = Self::analyze_expr_with_alias(&order_by_expr.expr, data)?;
+            let expr = Self::analyze_expr_with_alias(&order_by_expr.expr, data).await?;
 
             data.add_aggregate_function(&expr)?;
             let after_group_by_expr = Self::after_group_by_expr(&expr, data)?;
@@ -181,8 +181,8 @@ impl DfQueryStatement {
         rebase_expr(&rebased_expr, &data.before_group_by_expressions)
     }
 
-    fn analyze_expr_with_alias(expr: &Expr, data: &mut AnalyzeData) -> Result<Expression> {
-        let analyzed_expr = data.get_expr_analyze::<true>().analyze(expr)?;
+    async fn analyze_expr_with_alias(expr: &Expr, data: &mut AnalyzeData) -> Result<Expression> {
+        let analyzed_expr = data.get_expr_analyze::<true>().analyze(expr).await?;
         let projection_aliases = &data.projection_aliases;
         resolve_aliases_to_exprs(&analyzed_expr, projection_aliases)
     }
@@ -227,7 +227,7 @@ impl DfQueryStatement {
         }
     }
 
-    fn projection_exprs(items: &[SelectItem], data: &mut AnalyzeData) -> Result<Vec<Expression>> {
+    async fn projection_exprs(items: &[SelectItem], data: &mut AnalyzeData) -> Result<Vec<Expression>> {
         // XXX: We do not allow projection to be used in projection, such as:
         // SELECT column_a + 1 AS alias_b, alias_b + 1 AS alias_c FROM table_name_1;
         // This is also not supported in MySQL, but maybe we should to support it?
@@ -241,11 +241,11 @@ impl DfQueryStatement {
             match item {
                 SelectItem::Wildcard => output_columns.push(Expression::Wildcard),
                 SelectItem::UnnamedExpr(expr) => {
-                    output_columns.push(expr_analyzer.analyze(expr)?);
+                    output_columns.push(expr_analyzer.analyze(expr).await?);
                 },
                 SelectItem::ExprWithAlias { expr, alias } => {
                     let expr_alias = alias.value.clone();
-                    let expr = Box::new(expr_analyzer.analyze(expr)?);
+                    let expr = Box::new(expr_analyzer.analyze(expr).await?);
                     output_columns.push(Expression::Alias(expr_alias, expr));
                 }
                 _ => { return Err(ErrorCode::SyntaxException(format!("SelectItem: {:?} are not supported", item))); }

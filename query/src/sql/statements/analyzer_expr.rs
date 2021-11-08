@@ -1,5 +1,5 @@
 use common_exception::{Result, ErrorCode};
-use sqlparser::ast::{Expr, Select, UnaryOperator, FunctionArg, Value, Ident, BinaryOperator, Query, DataType, DateTimeField};
+use sqlparser::ast::{Expr, Select, UnaryOperator, FunctionArg, Value, Ident, BinaryOperator, Query, DataType, DateTimeField, Function};
 use common_datavalues::{DataSchema, DataValue, DataSchemaRef, IntervalUnit};
 use common_planners::Expression;
 use crate::functions::ContextFunction;
@@ -36,94 +36,114 @@ impl<const allow_aggr: bool> ExpressionAnalyzer<allow_aggr> {
         ExpressionAnalyzer::<allow_aggr> { context: ctx, tables }
     }
 
-    pub fn analyze(&self, expr: &Expr) -> Result<Expression> {
+    pub async fn analyze(&self, expr: &Expr) -> Result<Expression> {
         match expr {
-            Expr::Nested(expr) => self.analyze(expr),
+            Expr::Nested(expr) => self.analyze(expr).await,
             Expr::Value(value) => ValueExprAnalyzer::analyze(value),
             Expr::Identifier(ident) => self.analyze_identifier(ident),
             Expr::CompoundIdentifier(idents) => self.analyze_identifiers(idents),
-            Expr::IsNull(expr) => self.analyze_is_null(expr),
-            Expr::IsNotNull(expr) => self.analyze_is_not_null(expr),
-            Expr::UnaryOp { op, expr } => self.analyze_unary_expr(op, expr),
-            Expr::BinaryOp { left, op, right } => self.analyze_binary_expr(left, op, right),
+            Expr::IsNull(expr) => self.analyze_is_null(expr).await,
+            Expr::IsNotNull(expr) => self.analyze_is_not_null(expr).await,
+            Expr::UnaryOp { op, expr } => self.analyze_unary_expr(op, expr).await,
+            Expr::BinaryOp { left, op, right } => self.analyze_binary_expr(left, op, right).await,
             Expr::Wildcard => self.analyze_wildcard(),
 
-            Expr::Exists(subquery) => self.analyze_exists(subquery),
-            Expr::Subquery(subquery) => Ok(self.scalar_subquery_to_rex(subquery)?),
-            Expr::Function(function) => {
-                let mut args = Vec::with_capacity(function.args.len());
+            Expr::Exists(subquery) => self.analyze_exists(subquery).await,
+            Expr::Subquery(subquery) => Ok(self.scalar_subquery_to_rex(subquery).await?),
 
-                // 1. Get the args from context by function name. such as SELECT database()
-                // common::ScalarFunctions::udf::database arg is ctx.get_default()
-                let ctx_args = ContextFunction::build_args_from_ctx(
-                    function.name.to_string().as_str(),
-                    self.context.clone(),
-                )?;
-                if !ctx_args.is_empty() {
-                    args.extend_from_slice(ctx_args.as_slice());
-                }
-
-                // 2. Get args from the ast::Expr:Function
-                for arg in &function.args {
-                    match &arg {
-                        FunctionArg::Named { arg, .. } => {
-                            args.push(Self::sql_to_rex(arg, schema)?);
-                        }
-                        FunctionArg::Unnamed(arg) => {
-                            args.push(Self::sql_to_rex(arg, schema)?);
-                        }
-                    }
-                }
-
-                let op = function.name.to_string();
-                if AggregateFunctionFactory::instance().check(&op) {
-                    let args = match op.to_lowercase().as_str() {
-                        "count" => args
-                            .iter()
-                            .map(|c| match c {
-                                Expression::Wildcard => common_planners::lit(0i64),
-                                _ => c.clone(),
-                            })
-                            .collect(),
-                        _ => args,
-                    };
-
-                    let params = function
-                        .params
-                        .iter()
-                        .map(|v| {
-                            let expr = Self::value_to_rex(v);
-                            if let Ok(Expression::Literal { value, .. }) = expr {
-                                Ok(value)
-                            } else {
-                                Result::Err(ErrorCode::SyntaxException(format!(
-                                    "Unsupported value expression: {:?}, must be datavalue",
-                                    expr
-                                )))
-                            }
-                        })
-                        .collect::<Result<Vec<_>>>()?;
-
-                    return Ok(Expression::AggregateFunction {
-                        op,
-                        distinct: function.distinct,
-                        params,
-                        args,
-                    });
-                }
-
-                Ok(Expression::ScalarFunction { op, args })
-            }
-
-            Expr::Cast { expr, data_type } => self.analyze_cast(expr, data_type),
-            Expr::TypedString { data_type, value } => self.analyze_typed_string(data_type, value),
-            Expr::Substring { expr, substring_from, substring_for, } => self.analyze_substring(expr, substring_from, substring_for),
+            Expr::Function(function) => self.analyze_function(function).await,
+            Expr::Cast { expr, data_type } => self.analyze_cast(expr, data_type).await,
+            Expr::TypedString { data_type, value } => self.analyze_typed_string(data_type, value).await,
+            Expr::Substring { expr, substring_from, substring_for, } => self.analyze_substring(expr, substring_from, substring_for).await,
             Expr::Between { expr, negated, low, high } => self.analyze_between(expr, negated, low, high),
             other => Result::Err(ErrorCode::SyntaxException(format!(
                 "Unsupported expression: {}, type: {:?}",
                 expr, other
             ))),
         }
+    }
+
+    async fn analyze_function(&self, function: &Function) -> Result<Expression> {
+        let mut args = Vec::with_capacity(function.args.len());
+
+        // 1. Get the args from context by function name. such as SELECT database()
+        // common::ScalarFunctions::udf::database arg is ctx.get_default()
+        let ctx_args = ContextFunction::build_args_from_ctx(
+            function.name.to_string().as_str(),
+            self.context.clone(),
+        )?;
+
+        if !ctx_args.is_empty() {
+            args.extend_from_slice(ctx_args.as_slice());
+        }
+
+        // 2. Get args from the ast::Expr:Function
+        let mut args = Vec::with_capacity(function.args.len());
+        for arg in &function.args {
+            match &arg {
+                FunctionArg::Named { arg, .. } => {
+                    args.push(self.analyze(arg).await?);
+                }
+                FunctionArg::Unnamed(arg) => {
+                    args.push(self.analyze(arg).await?);
+                }
+            }
+        }
+
+        let name = function.name.to_string();
+        if AggregateFunctionFactory::instance().check(&name) {
+            self.analyze_aggr_function(&name, function).await;
+        }
+
+        Ok(Expression::ScalarFunction { op: name, args })
+    }
+
+    async fn analyze_aggr_function(&self, name: &str, function: &Function) {
+        let mut arguments = Vec::with_capacity(function.args.len());
+        for function_argument in &function.args {
+            match &function_argument {
+                FunctionArg::Named { arg, .. } => {
+                    arguments.push(self.analyze(arg).await?);
+                }
+                FunctionArg::Unnamed(arg) => {
+                    arguments.push(self.analyze(arg).await?);
+                }
+            }
+        }
+
+        let args = match name.to_lowercase().as_str() {
+            "count" => arguments
+                .iter()
+                .map(|c| match c {
+                    Expression::Wildcard => common_planners::lit(0i64),
+                    _ => c.clone(),
+                })
+                .collect(),
+            _ => arguments,
+        };
+
+        let params = function
+            .params
+            .iter()
+            .map(|v| {
+                let expr = Self::value_to_rex(v);
+                if let Ok(Expression::Literal { value, .. }) = expr {
+                    Ok(value)
+                } else {
+                    Result::Err(ErrorCode::SyntaxException(format!(
+                        "Unsupported value expression: {:?}, must be datavalue",
+                        expr
+                    )))
+                }
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        return Ok(Expression::AggregateFunction {
+            op: name,
+            distinct: function.distinct,
+            params,
+            args,
+        });
     }
 
     fn analyze_identifier(&self, ident: &Ident) -> Result<Expression> {
@@ -145,33 +165,35 @@ impl<const allow_aggr: bool> ExpressionAnalyzer<allow_aggr> {
     }
 
     pub fn subquery_to_rex(&self, subquery: &Query) -> Result<Expression> {
-        let cloned_sub_query = subquery.clone();
-        let subquery_statement = DfQueryStatement::try_from(cloned_sub_query)?;
-
-        // TODO: build subquery to plan.
-        let query = DfStatement::Query(subquery_statement);
-
-        let subquery = self.query_to_plan(subquery)?;
-        let subquery_name = self.context.get_subquery_name(&subquery);
-        Ok(Expression::Subquery {
-            name: subquery_name,
-            query_plan: Arc::new(subquery),
-        })
+        // let cloned_sub_query = subquery.clone();
+        // let subquery_statement = DfQueryStatement::try_from(cloned_sub_query)?;
+        //
+        // // TODO: build subquery to plan.
+        // let query = DfStatement::Query(subquery_statement);
+        //
+        // let subquery = self.query_to_plan(subquery)?;
+        // let subquery_name = self.context.get_subquery_name(&subquery);
+        // Ok(Expression::Subquery {
+        //     name: subquery_name,
+        //     query_plan: Arc::new(subquery),
+        // })
+        unimplemented!()
     }
 
     pub fn scalar_subquery_to_rex(&self, subquery: &Query) -> Result<Expression> {
-        let subquery = self.query_to_plan(subquery)?;
-        let subquery_name = self.ctx.get_subquery_name(&subquery);
-        Ok(Expression::ScalarSubquery {
-            name: subquery_name,
-            query_plan: Arc::new(subquery),
-        })
+        // let subquery = self.query_to_plan(subquery)?;
+        // let subquery_name = self.ctx.get_subquery_name(&subquery);
+        // Ok(Expression::ScalarSubquery {
+        //     name: subquery_name,
+        //     query_plan: Arc::new(subquery),
+        // })
+        unimplemented!("")
     }
 
-    fn analyze_between(&self, expr: &Expr, negated: &bool, low: &Expr, high: &Expr) -> Result<Expression> {
-        let expression = self.analyze(expr)?;
-        let low_expression = self.analyze(low)?;
-        let high_expression = self.analyze(high)?;
+    async fn analyze_between(&self, expr: &Expr, negated: &bool, low: &Expr, high: &Expr) -> Result<Expression> {
+        let expression = self.analyze(expr).await?;
+        let low_expression = self.analyze(low).await?;
+        let high_expression = self.analyze(high).await?;
         Ok(match *negated {
             false => expression
                 .gt_eq(low_expression)
@@ -201,8 +223,8 @@ impl<const allow_aggr: bool> ExpressionAnalyzer<allow_aggr> {
         })
     }
 
-    fn analyze_cast(&self, expr: &Expr, data_type: &DataType) -> Result<Expression> {
-        let expr = self.analyze(expr)?;
+    async fn analyze_cast(&self, expr: &Expr, data_type: &DataType) -> Result<Expression> {
+        let expr = self.analyze(expr).await?;
         let cast_to_type = SQLCommon::make_data_type(data_type)?;
         Ok(Expression::Cast { expr: Box::new(expr), data_type: cast_to_type })
     }
@@ -228,21 +250,21 @@ impl<const allow_aggr: bool> ExpressionAnalyzer<allow_aggr> {
         })
     }
 
-    fn analyze_unary_expr(&self, op: &UnaryOperator, expr: &Expr) -> Result<Expression> {
+    async fn analyze_unary_expr(&self, op: &UnaryOperator, expr: &Expr) -> Result<Expression> {
         match op {
-            UnaryOperator::Plus => self.analyze(expr),
+            UnaryOperator::Plus => self.analyze(expr).await,
             _other_operator => Ok(Expression::UnaryExpression {
                 op: format!("{}", op),
-                expr: Box::new(self.analyze(expr)?),
+                expr: Box::new(self.analyze(expr).await?),
             }),
         }
     }
 
-    fn analyze_is_null(&self, expr: &Expr) -> Result<Expression> {
-        Ok(Expression::create_scalar_function("is_null", vec![self.analyze(expr)?]))
+    async fn analyze_is_null(&self, expr: &Expr) -> Result<Expression> {
+        Ok(Expression::create_scalar_function("is_null", vec![self.analyze(expr).await?]))
     }
 
-    fn analyze_is_not_null(&self, expr: &Expr) -> Result<Expression> {
-        Ok(Expression::create_scalar_function("isnotnull", vec![self.analyze(expr)?]))
+    async fn analyze_is_not_null(&self, expr: &Expr) -> Result<Expression> {
+        Ok(Expression::create_scalar_function("isnotnull", vec![self.analyze(expr).await?]))
     }
 }
