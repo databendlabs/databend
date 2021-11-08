@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::TryFrom;
 use std::sync::Arc;
 
 use async_raft::async_trait::async_trait;
@@ -23,77 +22,13 @@ use async_raft::raft::InstallSnapshotResponse;
 use async_raft::raft::VoteRequest;
 use async_raft::raft::VoteResponse;
 use async_raft::RaftNetwork;
-use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::LogEntry;
 use common_meta_types::NodeId;
 use common_tracing::tracing;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 use tonic::transport::channel::Channel;
 
-use crate::meta_service::MetaRaftStore;
-use crate::meta_service::RetryableError;
 use crate::proto::meta_service_client::MetaServiceClient;
-use crate::proto::RaftMes;
-
-/// Impl grpc method `write`
-impl tonic::IntoRequest<RaftMes> for LogEntry {
-    fn into_request(self) -> tonic::Request<RaftMes> {
-        let mes = RaftMes {
-            data: serde_json::to_string(&self).expect("fail to serialize"),
-            error: "".to_string(),
-        };
-        tonic::Request::new(mes)
-    }
-}
-
-impl TryFrom<RaftMes> for LogEntry {
-    type Error = tonic::Status;
-
-    fn try_from(mes: RaftMes) -> Result<Self, Self::Error> {
-        let req: LogEntry =
-            serde_json::from_str(&mes.data).map_err(|e| tonic::Status::internal(e.to_string()))?;
-        Ok(req)
-    }
-}
-
-impl tonic::IntoRequest<RaftMes> for AppendEntriesRequest<LogEntry> {
-    fn into_request(self) -> tonic::Request<RaftMes> {
-        let mes = RaftMes {
-            data: serde_json::to_string(&self).expect("fail to serialize"),
-            error: "".to_string(),
-        };
-        tonic::Request::new(mes)
-    }
-}
-impl tonic::IntoRequest<RaftMes> for InstallSnapshotRequest {
-    fn into_request(self) -> tonic::Request<RaftMes> {
-        let mes = RaftMes {
-            data: serde_json::to_string(&self).expect("fail to serialize"),
-            error: "".to_string(),
-        };
-        tonic::Request::new(mes)
-    }
-}
-impl tonic::IntoRequest<RaftMes> for VoteRequest {
-    fn into_request(self) -> tonic::Request<RaftMes> {
-        let mes = RaftMes {
-            data: serde_json::to_string(&self).expect("fail to serialize"),
-            error: "".to_string(),
-        };
-        tonic::Request::new(mes)
-    }
-}
-
-impl From<RetryableError> for RaftMes {
-    fn from(err: RetryableError) -> Self {
-        let error = serde_json::to_string(&err).expect("fail to serialize");
-        RaftMes {
-            data: "".to_string(),
-            error,
-        }
-    }
-}
+use crate::store::MetaRaftStore;
 
 pub struct Network {
     sto: Arc<MetaRaftStore>,
@@ -176,58 +111,5 @@ impl RaftNetwork<LogEntry> for Network {
         let resp = serde_json::from_str(&mes.data)?;
 
         Ok(resp)
-    }
-}
-
-// === from and to transport message
-
-impl From<AppliedState> for RaftMes {
-    fn from(msg: AppliedState) -> Self {
-        let data = serde_json::to_string(&msg).expect("fail to serialize");
-        RaftMes {
-            data,
-            error: "".to_string(),
-        }
-    }
-}
-
-impl<T, E> From<RaftMes> for Result<T, E>
-where
-    T: DeserializeOwned,
-    E: DeserializeOwned,
-{
-    fn from(msg: RaftMes) -> Self {
-        if !msg.data.is_empty() {
-            let resp: T = serde_json::from_str(&msg.data).expect("fail to deserialize");
-            Ok(resp)
-        } else {
-            let err: E = serde_json::from_str(&msg.error).expect("fail to deserialize");
-            Err(err)
-        }
-    }
-}
-
-impl<T, E> From<Result<T, E>> for RaftMes
-where
-    T: Serialize,
-    E: Serialize,
-{
-    fn from(r: Result<T, E>) -> Self {
-        match r {
-            Ok(x) => {
-                let data = serde_json::to_string(&x).expect("fail to serialize");
-                RaftMes {
-                    data,
-                    error: Default::default(),
-                }
-            }
-            Err(e) => {
-                let error = serde_json::to_string(&e).expect("fail to serialize");
-                RaftMes {
-                    data: Default::default(),
-                    error,
-                }
-            }
-        }
     }
 }

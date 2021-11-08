@@ -25,8 +25,8 @@ use common_tracing::tracing;
 use log::info;
 use pretty_assertions::assert_eq;
 
+use crate::errors::RetryableError;
 use crate::meta_service::MetaNode;
-use crate::meta_service::RetryableError;
 use crate::proto::meta_service_client::MetaServiceClient;
 use crate::tests::assert_meta_connection;
 use crate::tests::service::new_test_context;
