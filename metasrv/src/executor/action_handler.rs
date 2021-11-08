@@ -56,7 +56,6 @@ impl ActionHandler {
 
         match action {
             MetaFlightAction::UpsertKV(a) => s.serialize(self.handle(a).await?),
-            MetaFlightAction::UpdateKVMeta(a) => s.serialize(self.handle(a).await?),
             MetaFlightAction::GetKV(a) => s.serialize(self.handle(a).await?),
             MetaFlightAction::MGetKV(a) => s.serialize(self.handle(a).await?),
             MetaFlightAction::PrefixListKV(a) => s.serialize(self.handle(a).await?),

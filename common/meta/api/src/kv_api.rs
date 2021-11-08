@@ -34,13 +34,6 @@ pub trait KVApi: Send + Sync {
         value_meta: Option<KVMeta>,
     ) -> common_exception::Result<UpsertKVActionReply>;
 
-    async fn update_kv_meta(
-        &self,
-        key: &str,
-        seq: MatchSeq,
-        value_meta: Option<KVMeta>,
-    ) -> common_exception::Result<UpsertKVActionReply>;
-
     async fn get_kv(&self, key: &str) -> common_exception::Result<GetKVActionReply>;
 
     // mockall complains about AsRef... so we use String here
@@ -59,15 +52,6 @@ impl KVApi for Arc<dyn KVApi> {
         value_meta: Option<KVMeta>,
     ) -> common_exception::Result<UpsertKVActionReply> {
         self.as_ref().upsert_kv(key, seq, value, value_meta).await
-    }
-
-    async fn update_kv_meta(
-        &self,
-        key: &str,
-        seq: MatchSeq,
-        value_meta: Option<KVMeta>,
-    ) -> common_exception::Result<UpsertKVActionReply> {
-        self.as_ref().update_kv_meta(key, seq, value_meta).await
     }
 
     async fn get_kv(&self, key: &str) -> common_exception::Result<GetKVActionReply> {

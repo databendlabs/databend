@@ -24,7 +24,6 @@ use common_meta_types::UpsertKVActionReply;
 use common_tracing::tracing;
 
 use crate::GetKVAction;
-use crate::KVMetaAction;
 use crate::MGetKVAction;
 use crate::MetaFlightClient;
 use crate::PrefixListReq;
@@ -44,20 +43,6 @@ impl KVApi for MetaFlightClient {
             key: key.to_string(),
             seq,
             value,
-            value_meta,
-        })
-        .await
-    }
-
-    async fn update_kv_meta(
-        &self,
-        key: &str,
-        seq: MatchSeq,
-        value_meta: Option<KVMeta>,
-    ) -> Result<UpsertKVActionReply> {
-        self.do_action(KVMetaAction {
-            key: key.to_string(),
-            seq,
             value_meta,
         })
         .await

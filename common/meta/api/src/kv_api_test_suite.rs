@@ -346,9 +346,10 @@ impl KVApiTestSuite {
         tracing::info!("--- mismatching seq does nothing");
 
         let r = client
-            .update_kv_meta(
+            .upsert_kv(
                 test_key,
                 MatchSeq::Exact(seq + 1),
+                Operation::AsIs,
                 Some(KVMeta {
                     expire_at: Some(now + 20),
                 }),
@@ -360,9 +361,10 @@ impl KVApiTestSuite {
         tracing::info!("--- matching seq only update meta");
 
         let r = client
-            .update_kv_meta(
+            .upsert_kv(
                 test_key,
                 MatchSeq::Exact(seq),
+                Operation::AsIs,
                 Some(KVMeta {
                     expire_at: Some(now + 20),
                 }),

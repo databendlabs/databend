@@ -77,7 +77,6 @@ pub enum MetaFlightAction {
 
     // general purpose kv
     UpsertKV(UpsertKVAction),
-    UpdateKVMeta(KVMetaAction),
     GetKV(GetKVAction),
     MGetKV(MGetKVAction),
     PrefixListKV(PrefixListReq),
@@ -174,19 +173,6 @@ action_declare!(
     UpsertKVAction,
     UpsertKVActionReply,
     MetaFlightAction::UpsertKV
-);
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct KVMetaAction {
-    pub key: String,
-    pub seq: MatchSeq,
-    pub value_meta: Option<KVMeta>,
-}
-
-action_declare!(
-    KVMetaAction,
-    UpsertKVActionReply,
-    MetaFlightAction::UpdateKVMeta
 );
 
 // == database actions ==

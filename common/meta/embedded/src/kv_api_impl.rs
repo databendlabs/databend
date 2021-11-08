@@ -40,31 +40,7 @@ impl KVApi for MetaEmbedded {
         let cmd = Cmd::UpsertKV {
             key: key.to_string(),
             seq,
-            value: value.into(),
-            value_meta,
-        };
-
-        let mut sm = self.inner.lock().await;
-        let res = sm.apply_cmd(&cmd).await?;
-
-        match res {
-            AppliedState::KV(x) => Ok(x),
-            _ => {
-                panic!("expect AppliedState::KV");
-            }
-        }
-    }
-
-    async fn update_kv_meta(
-        &self,
-        key: &str,
-        seq: MatchSeq,
-        value_meta: Option<KVMeta>,
-    ) -> Result<UpsertKVActionReply> {
-        let cmd = Cmd::UpsertKV {
-            key: key.to_string(),
-            seq,
-            value: Operation::AsIs,
+            value,
             value_meta,
         };
 

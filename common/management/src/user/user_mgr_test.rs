@@ -47,13 +47,6 @@ mock! {
             value_meta: Option<KVMeta>
         ) -> common_exception::Result<UpsertKVActionReply>;
 
-        async fn update_kv_meta(
-            &self,
-            key: &str,
-            seq: MatchSeq,
-            value_meta: Option<KVMeta>
-        ) -> common_exception::Result<UpsertKVActionReply>;
-
         async fn get_kv(&self, key: &str) -> common_exception::Result<GetKVActionReply>;
 
         async fn mget_kv(

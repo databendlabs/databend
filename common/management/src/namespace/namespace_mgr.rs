@@ -205,7 +205,7 @@ impl NamespaceApi for NamespaceMgr {
             Some(exact) => MatchSeq::Exact(exact),
         };
 
-        let upsert_meta = self.kv_api.update_kv_meta(&node_key, seq, meta);
+        let upsert_meta = self.kv_api.upsert_kv(&node_key, seq, Operation::AsIs, meta);
 
         match upsert_meta.await? {
             UpsertKVActionReply {
