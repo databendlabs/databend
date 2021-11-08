@@ -12,7 +12,7 @@ pub struct DfKillStatement {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfKillStatement {
-    async fn analyze(self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let id = self.object_id.value.clone();
         let kill_connection = !self.kill_query;
         Ok(AnalyzedResult::SimpleQuery(

@@ -13,7 +13,7 @@ pub struct DfSetVariable {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfSetVariable {
-    async fn analyze(self, _: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, _: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         if self.hivevar {
             return Err(ErrorCode::SyntaxException("Unsupport hive style set varible"));
         }

@@ -14,7 +14,7 @@ pub enum DfShowTables {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfShowTables {
-    async fn analyze(self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let rewritten_query = self.rewritten_query();
         let rewritten_query_plan = PlanParser::parse(rewritten_query.as_str(), ctx);
         Ok(AnalyzedResult::SimpleQuery(rewritten_query_plan.await?))

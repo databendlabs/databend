@@ -31,13 +31,13 @@ pub struct DfInsertStatement {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfInsertStatement {
-    async fn analyze(self, ctx: DatabendQueryContextRef) -> common_exception::Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         self.is_supported()?;
 
         let (db, table) = self.resolve_table(ctx)?;
-        let table = ctx.get_table(&db, &table)?;
-        let mut schema = table.schema();
-        let table_meta_id = table.get_id();
+        let source = ctx.get_table(&db, &table)?;
+        let mut schema = source.schema();
+        let table_meta_id = source.get_id();
 
         if !self.columns.is_empty() {
             let fields = self.columns
@@ -70,7 +70,13 @@ impl AnalyzableStatement for DfInsertStatement {
         let input_stream = Arc::new(Mutex::new(Some(Box::pin(input_stream))));
         Ok(AnalyzedResult::SimpleQuery(
             PlanNode::InsertInto(
-                InsertIntoPlan { db_name, tbl_name, tbl_id: table_meta_id, schema, input_stream }
+                InsertIntoPlan {
+                    db_name: db,
+                    tbl_name: table,
+                    tbl_id: table_meta_id,
+                    schema,
+                    input_stream,
+                }
             )
         ))
     }

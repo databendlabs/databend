@@ -53,7 +53,7 @@ impl<const allow_aggr: bool> ExpressionAnalyzer<allow_aggr> {
             Expr::Cast { expr, data_type } => self.analyze_cast(expr, data_type).await,
             Expr::TypedString { data_type, value } => self.analyze_typed_string(data_type, value).await,
             Expr::Substring { expr, substring_from, substring_for, } => self.analyze_substring(expr, substring_from, substring_for).await,
-            Expr::Between { expr, negated, low, high } => self.analyze_between(expr, negated, low, high),
+            Expr::Between { expr, negated, low, high } => self.analyze_between(expr, negated, low, high).await,
             other => Result::Err(ErrorCode::SyntaxException(format!(
                 "Unsupported expression: {}, type: {:?}",
                 expr, other
@@ -212,22 +212,23 @@ impl<const allow_aggr: bool> ExpressionAnalyzer<allow_aggr> {
         })
     }
 
-    fn analyze_substring(&self, expr: &Expr, from: &Option<Box<Expr>>, length: &Option<Box<Expr>>) -> Result<Expression> {
-        let mut args = Vec::with_capacity(3);
-        args.push(Self::sql_to_rex(expr, schema)?);
+    async fn analyze_substring(&self, expr: &Expr, from: &Option<Box<Expr>>, length: &Option<Box<Expr>>) -> Result<Expression> {
+        let mut arguments = Vec::with_capacity(3);
+
+        arguments.push(self.analyze(expr).await?);
         if let Some(from) = from {
-            args.push(Self::sql_to_rex(from, schema)?);
+            arguments.push(self.analyze(from).await?);
         } else {
-            args.push(Expression::create_literal(DataValue::Int64(Some(1))));
+            arguments.push(Expression::create_literal(DataValue::Int64(Some(1))));
         }
 
         if let Some(len) = length {
-            args.push(Self::sql_to_rex(len, schema)?);
+            arguments.push(self.analyze(len).await?);
         }
 
         Ok(Expression::ScalarFunction {
             op: "substring".to_string(),
-            args,
+            args: arguments,
         })
     }
 
@@ -237,7 +238,7 @@ impl<const allow_aggr: bool> ExpressionAnalyzer<allow_aggr> {
         Ok(Expression::Cast { expr: Box::new(expr), data_type: cast_to_type })
     }
 
-    fn analyze_typed_string(&self, data_type: &DataType, value: &str) -> Result<Expression> {
+    async fn analyze_typed_string(&self, data_type: &DataType, value: &str) -> Result<Expression> {
         SQLCommon::make_data_type(data_type).map(|data_type| Expression::Cast {
             expr: Box::new(Expression::create_literal(DataValue::String(Some(
                 value.clone().into_bytes(),
@@ -250,11 +251,11 @@ impl<const allow_aggr: bool> ExpressionAnalyzer<allow_aggr> {
         Ok(Expression::Wildcard)
     }
 
-    fn analyze_binary_expr(&self, left: &Expr, op: &BinaryOperator, right: &Expr) -> Result<Expression> {
+    async fn analyze_binary_expr(&self, left: &Expr, op: &BinaryOperator, right: &Expr) -> Result<Expression> {
         Ok(Expression::BinaryExpression {
             op: format!("{}", op),
-            left: Box::new(Self::sql_to_rex(left, schema)?),
-            right: Box::new(Self::sql_to_rex(right, schema)?),
+            left: Box::new(self.analyze(left).await?),
+            right: Box::new(self.analyze(right).await?),
         })
     }
 

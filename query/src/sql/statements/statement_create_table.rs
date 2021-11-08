@@ -20,7 +20,7 @@ pub struct DfCreateTable {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfCreateTable {
-    async fn analyze(self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let table_meta = self.table_meta()?;
         let if_not_exists = self.if_not_exists;
         let (db, table) = self.resolve_table(ctx)?;

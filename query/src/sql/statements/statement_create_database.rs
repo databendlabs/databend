@@ -15,7 +15,7 @@ pub struct DfCreateDatabase {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfCreateDatabase {
-    async fn analyze(self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let db = self.database_name()?;
         let options = self.database_options();
         let if_not_exists = self.if_not_exists;
@@ -34,12 +34,12 @@ impl DfCreateDatabase {
             return Result::Err(ErrorCode::SyntaxException("Create database name is empty"));
         }
 
-        self.name.0[0].value.clone()
+        Ok(self.name.0[0].value.clone())
     }
 
     fn database_options(self) -> HashMap<String, String> {
         self.options.iter()
-            .map(|option| (p.name.value.to_lowercase(), p.value.to_string()))
+            .map(|option| (option.name.value.to_lowercase(), option.value.to_string()))
             .collect()
     }
 }

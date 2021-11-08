@@ -8,7 +8,7 @@ use common_exception::{Result, ErrorCode};
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfExplain {
     pub typ: ExplainType,
-    pub statement: DfStatement,
+    pub statement: Box<DfStatement>,
 }
 
 #[async_trait::async_trait]

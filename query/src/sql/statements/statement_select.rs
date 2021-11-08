@@ -1,16 +1,19 @@
-use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
-use sqlparser::ast::{Query, SetExpr, Select, TableWithJoins, TableFactor, ObjectName, TableAlias, FunctionArg, Expr, SelectItem, OrderByExpr, Offset};
-use crate::sessions::{DatabendQueryContextRef, DatabendQueryContext};
-use common_exception::{Result, ErrorCode};
-use crate::catalogs::ToReadDataSourcePlan;
-use std::sync::Arc;
-use common_planners::{PlanNode, ReadDataSourcePlan, Expression, extract_aliases, resolve_aliases_to_exprs, find_aggregate_exprs, find_aggregate_exprs_in_expr, expand_aggregate_arg_exprs, rebase_expr, Expressions, expr_as_column_expr};
-use common_datavalues::{DataSchema, DataSchemaRef};
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::future::Future;
-use crate::sql::statements::analyzer_expr::{TableSchema, ExpressionAnalyzer};
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::sync::Arc;
+
+use sqlparser::ast::{Expr, FunctionArg, ObjectName, Offset, OrderByExpr, Query, Select, SelectItem, SetExpr, TableAlias, TableFactor, TableWithJoins};
 use sqlparser::parser::ParserError;
+
+use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::future::Future;
+use common_datavalues::{DataSchema, DataSchemaRef};
+use common_exception::{ErrorCode, Result};
+use common_planners::{expand_aggregate_arg_exprs, expr_as_column_expr, Expression, Expressions, extract_aliases, find_aggregate_exprs, find_aggregate_exprs_in_expr, PlanNode, ReadDataSourcePlan, rebase_expr, resolve_aliases_to_exprs};
+
+use crate::catalogs::ToReadDataSourcePlan;
+use crate::sessions::{DatabendQueryContext, DatabendQueryContextRef};
+use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
+use crate::sql::statements::analyzer_expr::{ExpressionAnalyzer, TableSchema};
 use crate::sql::statements::analyzer_schema::AnalyzedSchema;
 
 pub struct DfQueryStatement {
@@ -26,13 +29,13 @@ pub struct DfQueryStatement {
 
 pub enum QueryRelation {
     FromTable(ReadDataSourcePlan),
-    Nested(AnalyzeData),
+    Nested(Box<AnalyzeData>),
 }
 
 pub struct AnalyzeData {
     ctx: DatabendQueryContextRef,
 
-    pub relation: Option<QueryRelation>,
+    pub relation: Option<Box<QueryRelation>>,
     pub filter_predicate: Option<Expression>,
     pub before_group_by_expressions: Vec<Expression>,
     pub group_by_expressions: Vec<Expression>,
@@ -61,9 +64,9 @@ impl AnalyzableStatement for DfQueryStatement {
             return Err(cause.add_message_back("(while in analyze select filter)."));
         }
 
-        /// We will analyze the projection before GROUP BY, HAVING, and ORDER BY,
-        /// because they may access the columns in the projection. Such as:
-        /// SELECT a + 1 AS b, SUM(c) FROM table_a GROUP BY b;
+        // We will analyze the projection before GROUP BY, HAVING, and ORDER BY,
+        // because they may access the columns in the projection. Such as:
+        // SELECT a + 1 AS b, SUM(c) FROM table_a GROUP BY b;
         if let Err(cause) = self.analyze_projection(&mut data).await {
             return Err(cause.add_message_back("(while in analyze select projection)."));
         }
@@ -206,23 +209,13 @@ impl DfQueryStatement {
                 }
             },
             TableFactor::Derived { lateral, subquery, alias } => {
-                if lateral {
+                if *lateral {
                     return Err(ErrorCode::UnImplement("Cannot SELECT LATERAL subquery."));
                 }
 
-                let subquery = subquery.as_ref().clone();
-                let query_statement = DfQueryStatement::try_from(subquery)?;
-                match query_statement.analyze(data.ctx.clone()).await? {
-                    AnalyzedResult::SelectQuery(new_data) => {
-                        // TODO: named subquery
-                        let subquery_finalize_schema = new_data.finalize_schema.clone();
-                        data.tables_schema.push(TableSchema::UnNamed(subquery_finalize_schema));
-                        Ok(())
-                    }
-                    _ => unreachable!()
-                }
+                data.subquery(subquery, alias).await
             },
-            TableFactor::NestedJoin(nested) => Self::analyze_join(nested, data),
+            TableFactor::NestedJoin(nested) => Self::analyze_join(nested, data).await,
             TableFactor::TableFunction { .. } => Err(ErrorCode::UnImplement("Unsupported table function")),
         }
     }
@@ -337,6 +330,31 @@ impl AnalyzeData {
         }
 
         Ok(())
+    }
+
+    pub async fn subquery(&mut self, subquery: &Query, alias: &Option<TableAlias>) -> Result<()> {
+        // TODO: remove clone.
+        let subquery = subquery.clone();
+        let query_statement = DfQueryStatement::try_from(subquery)?;
+        let analyzed_subquery = query_statement.analyze(self.ctx.clone()).await?;
+
+        match analyzed_subquery {
+            AnalyzedResult::SelectQuery(analyzed_subquery) => match alias {
+                None => {
+                    let subquery_finalize_schema = analyzed_subquery.finalize_schema.clone();
+                    self.tables_schema.push(TableSchema::UnNamed(subquery_finalize_schema));
+                    Ok(())
+                }
+                Some(TableAlias { name, .. }) => {
+                    let subquery_alias = name.value.clone();
+                    let subquery_finalize_schema = analyzed_subquery.finalize_schema.clone();
+                    let named_schema = TableSchema::Named(subquery_alias, subquery_finalize_schema);
+                    self.tables_schema.push(named_schema);
+                    Ok(())
+                }
+            }
+            _ => unreachable!()
+        }
     }
 
     fn resolve_table(&self, name: &ObjectName) -> Result<(String, String)> {

@@ -276,8 +276,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let context = self.session.create_context().await?;
         context.attach_query_str(query);
 
-        let query_parser = PlanParser::create(context.clone());
-        let (plan, hints) = query_parser.parse_with_hint(query).await;
+        let (plan, hints) = PlanParser::parse_with_hint(query, context.clone()).await;
 
         match hints
             .iter()

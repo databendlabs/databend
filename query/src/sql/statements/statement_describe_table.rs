@@ -12,7 +12,7 @@ pub struct DfDescribeTable {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfDescribeTable {
-    async fn analyze(self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let schema = Self::schema();
         let (db, table) = self.resolve_table(ctx)?;
 

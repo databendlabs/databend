@@ -390,7 +390,7 @@ impl From<serde_json::Error> for ErrorCode {
 
 impl From<sqlparser::parser::ParserError> for ErrorCode {
     fn from(error: sqlparser::parser::ParserError) -> Self {
-        ErrorCode::from_std_error(error)
+        ErrorCode::SyntaxException(format!("{:?}", error))
     }
 }
 

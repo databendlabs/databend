@@ -99,9 +99,11 @@ impl PlanParser {
         PlanParser::build_plan(statements, ctx).await
     }
 
-    pub async fn parse_with_hint(&self, query: &str) -> (Result<PlanNode>, Vec<DfHint>) {
-        let (statements, hints) = DfParser::parse_sql(query)?;
-        (PlanParser::build_plan(statements, ctx).await, hints)
+    pub async fn parse_with_hint(query: &str, ctx: DatabendQueryContextRef) -> (Result<PlanNode>, Vec<DfHint>) {
+        match DfParser::parse_sql(query) {
+            Err(cause) => (Err(cause), vec![]),
+            Ok((statements, hints)) => (PlanParser::build_plan(statements, ctx).await, hints)
+        }
     }
 
     async fn build_plan(statements: Vec<DfStatement>, ctx: DatabendQueryContextRef) -> Result<PlanNode> {

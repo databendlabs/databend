@@ -12,7 +12,7 @@ pub struct DfTruncateTable {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfTruncateTable {
-    async fn analyze(self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let (db, table) = self.resolve_table(ctx)?;
         Ok(AnalyzedResult::SimpleQuery(
             PlanNode::TruncateTable(

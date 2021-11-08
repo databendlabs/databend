@@ -12,7 +12,7 @@ pub struct DfDropTable {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfDropTable {
-    async fn analyze(self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let if_exists = self.if_exists;
         let (db, table) = self.resolve_table(ctx)?;
 
