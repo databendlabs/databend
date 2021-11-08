@@ -67,6 +67,10 @@ message GetReply {
   string value = 3;
 }
 
+message RaftRequest {
+  string data = 1;
+}
+
 message RaftReply {
   string data = 1;
   string error = 2;
@@ -74,15 +78,15 @@ message RaftReply {
 
 service MetaService {
 
-  rpc Write(RaftReply) returns (RaftReply) {}
+  rpc Write(RaftRequest) returns (RaftReply) {}
   rpc Get(GetReq) returns (GetReply) {}
 
   /// Forward a request to other
-  rpc Forward(RaftReply) returns (RaftReply) {}
+  rpc Forward(RaftRequest) returns (RaftReply) {}
 
   // raft RPC
 
-  rpc AppendEntries(RaftReply) returns (RaftReply);
-  rpc InstallSnapshot(RaftReply) returns (RaftReply);
-  rpc vote(RaftReply) returns (RaftReply);
+  rpc AppendEntries(RaftRequest) returns (RaftReply);
+  rpc InstallSnapshot(RaftRequest) returns (RaftReply);
+  rpc vote(RaftRequest) returns (RaftReply);
 }
