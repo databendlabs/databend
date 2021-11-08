@@ -53,6 +53,7 @@ use crate::sql::DfShowMetrics;
 use crate::sql::DfShowProcessList;
 use crate::sql::DfShowSettings;
 use crate::sql::DfShowTables;
+use crate::sql::DfShowUsers;
 use crate::sql::DfStatement;
 use crate::sql::DfTruncateTable;
 use crate::sql::DfUseDatabase;
@@ -200,6 +201,8 @@ impl<'a> DfParser<'a> {
                             Ok(DfStatement::ShowProcessList(DfShowProcessList))
                         } else if self.consume_token("METRICS") {
                             Ok(DfStatement::ShowMetrics(DfShowMetrics))
+                        } else if self.consume_token("USERS") {
+                            Ok(DfStatement::ShowUsers(DfShowUsers))
                         } else {
                             self.expected("tables or settings", self.parser.peek_token())
                         }

@@ -175,6 +175,7 @@ impl PlanParser {
             DfStatement::KillQuery(v) => self.sql_kill_query_to_plan(v),
             DfStatement::KillConn(v) => self.sql_kill_connection_to_plan(v),
             DfStatement::CreateUser(v) => self.sql_create_user_to_plan(v),
+            DfStatement::ShowUsers(_) => self.build_from_sql("SELECT * FROM system.users"),
         }
     }
 
