@@ -119,6 +119,9 @@ pub struct DfCreateUser {
     pub password: String,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct DfShowUsers;
+
 /// Tokens parsed by `DFParser` are converted into these values.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DfStatement {
@@ -153,7 +156,9 @@ pub enum DfStatement {
     KillQuery(DfKillStatement),
     KillConn(DfKillStatement),
 
+    // User
     CreateUser(DfCreateUser),
+    ShowUsers(DfShowUsers),
 }
 
 /// Comment hints from SQL.
