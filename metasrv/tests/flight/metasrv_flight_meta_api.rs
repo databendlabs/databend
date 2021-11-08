@@ -18,7 +18,7 @@ use common_meta_flight::MetaFlightClient;
 use databend_meta::init_meta_ut;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_database_create_get_drop() -> anyhow::Result<()> {
+async fn test_meta_api_database_create_get_drop() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -30,7 +30,7 @@ async fn test_database_create_get_drop() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_database_list() -> anyhow::Result<()> {
+async fn test_meta_api_database_list() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -42,7 +42,7 @@ async fn test_database_list() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_table_create_get_drop() -> anyhow::Result<()> {
+async fn test_meta_api_table_create_get_drop() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -54,7 +54,7 @@ async fn test_table_create_get_drop() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_table_list() -> anyhow::Result<()> {
+async fn test_meta_api_table_list() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -70,7 +70,7 @@ async fn test_table_list() -> anyhow::Result<()> {
 
 /*
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
+async fn test_meta_api_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
     let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
@@ -148,7 +148,7 @@ async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_get_database_meta_empty_db() -> anyhow::Result<()> {
+async fn test_meta_api_flight_get_database_meta_empty_db() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
     let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
@@ -162,7 +162,7 @@ async fn test_flight_get_database_meta_empty_db() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
+async fn test_meta_api_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
     let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
