@@ -20,10 +20,10 @@ pub mod proto;
 #[macro_use]
 pub mod tests;
 
+mod any_error;
 pub mod api;
 pub mod configs;
+pub mod errors;
 pub mod executor;
 pub mod meta_service;
 pub mod metrics;
-
-mod any_error;

@@ -62,7 +62,7 @@ use common_meta_types::TableMeta;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 
-use crate::meta_service::errors::ConnectionError;
+use crate::errors::ConnectionError;
 use crate::meta_service::message::AdminRequest;
 use crate::meta_service::message::AdminResponse;
 use crate::meta_service::meta_leader::MetaLeader;
