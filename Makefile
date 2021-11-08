@@ -19,8 +19,8 @@ miri:
 	cargo miri setup
 	MIRIFLAGS="-Zmiri-disable-isolation" cargo miri test
 
-cluster: build
-	mkdir -p ./.databend/local/bin && make cluster_stop
+cluster: build cli-build
+	mkdir -p ./.databend/local/bin/test/ && make cluster_stop || echo "stop"
 	cp ./target/release/databend-query ./.databend/local/bin/test/databend-query
 	cp ./target/release/databend-meta ./.databend/local/bin/test/databend-meta
 	./target/release/bendctl cluster create --databend_dir ./.databend --group local --version test --num-cpus ${NUM_CPUS} --force
@@ -84,6 +84,16 @@ embedded-meta-test: build-debug
 stateless-test: build-debug
 	rm -rf ./_meta/
 	ulimit -n 10000; bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
+
+stateful-test:
+	rm -rf ./_meta/
+	rm -rf ./.databend/
+	ulimit -n 10000; bash ./scripts/ci/ci-run-stateful-tests-standalone.sh
+
+stateful-cluster-test:
+	rm -rf ./_meta/
+	rm -rf ./.databend/
+	bash ./scripts/ci/ci-run-stateful-tests-cluster.sh
 
 stateless-cluster-test: build-debug
 	rm -rf ./_meta/
