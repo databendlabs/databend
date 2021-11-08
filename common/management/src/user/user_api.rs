@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_meta_types::AuthType;
 use common_meta_types::SeqV;
 use common_meta_types::UserPrivilege;
+use common_meta_types::UserQuota;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct UserInfo {
@@ -28,6 +29,7 @@ pub struct UserInfo {
     pub password: Vec<u8>,
     pub auth_type: AuthType,
     pub privileges: UserPrivilege,
+    pub quota: UserQuota,
 }
 
 impl UserInfo {
@@ -39,12 +41,15 @@ impl UserInfo {
     ) -> Self {
         // Default is no privileges.
         let privileges = UserPrivilege::empty();
+        let quota = UserQuota::no_limit();
+
         UserInfo {
             name,
             hostname,
             password,
             auth_type,
             privileges,
+            quota,
         }
     }
 }

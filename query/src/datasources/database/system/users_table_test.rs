@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_management::UserInfo;
 use common_meta_types::AuthType;
 use common_meta_types::UserPrivilege;
+use common_meta_types::UserQuota;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
@@ -38,6 +39,7 @@ async fn test_users_table() -> Result<()> {
             password: Vec::from(""),
             auth_type: AuthType::None,
             privileges: UserPrivilege::empty(),
+            quota: UserQuota::no_limit(),
         })
         .await?;
     ctx.get_sessions_manager()
@@ -48,6 +50,7 @@ async fn test_users_table() -> Result<()> {
             password: Vec::from("123456789"),
             auth_type: AuthType::PlainText,
             privileges: UserPrivilege::empty(),
+            quota: UserQuota::no_limit(),
         })
         .await?;
 

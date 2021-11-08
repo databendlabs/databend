@@ -20,6 +20,8 @@ mod cluster_test;
 mod match_seq_test;
 #[cfg(test)]
 mod user_privilege_test;
+#[cfg(test)]
+mod user_quota_test;
 
 pub use change::AddResult;
 pub use change::Change;
@@ -57,6 +59,7 @@ pub use table_reply::CreateTableReply;
 pub use user_auth::AuthType;
 pub use user_privilege::UserPrivilege;
 pub use user_privilege::UserPrivilegeType;
+pub use user_quota::UserQuota;
 
 mod change;
 mod cluster;
@@ -77,3 +80,4 @@ mod table_info;
 mod table_reply;
 mod user_auth;
 mod user_privilege;
+mod user_quota;
