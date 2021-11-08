@@ -198,11 +198,7 @@ mod get {
         kv.expect_get_kv()
             .with(predicate::function(move |v| v == test_key.as_str()))
             .times(1)
-            .return_once(move |_k| {
-                Ok(GetKVActionReply {
-                    result: Some(SeqV::new(1, value)),
-                })
-            });
+            .return_once(move |_k| Ok(Some(SeqV::new(1, value))));
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
@@ -230,11 +226,7 @@ mod get {
         kv.expect_get_kv()
             .with(predicate::function(move |v| v == test_key.as_str()))
             .times(1)
-            .return_once(move |_k| {
-                Ok(GetKVActionReply {
-                    result: Some(SeqV::new(100, value)),
-                })
-            });
+            .return_once(move |_k| Ok(Some(SeqV::new(100, value))));
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
@@ -252,7 +244,7 @@ mod get {
         kv.expect_get_kv()
             .with(predicate::function(move |v| v == test_key.as_str()))
             .times(1)
-            .return_once(move |_k| Ok(GetKVActionReply { result: None }));
+            .return_once(move |_k| Ok(None));
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
@@ -271,11 +263,7 @@ mod get {
         kv.expect_get_kv()
             .with(predicate::function(move |v| v == test_key.as_str()))
             .times(1)
-            .return_once(move |_k| {
-                Ok(GetKVActionReply {
-                    result: Some(SeqV::new(1, vec![])),
-                })
-            });
+            .return_once(move |_k| Ok(Some(SeqV::new(1, vec![]))));
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
@@ -294,11 +282,7 @@ mod get {
         kv.expect_get_kv()
             .with(predicate::function(move |v| v == test_key.as_str()))
             .times(1)
-            .return_once(move |_k| {
-                Ok(GetKVActionReply {
-                    result: Some(SeqV::new(1, vec![])),
-                })
-            });
+            .return_once(move |_k| Ok(Some(SeqV::new(1, vec![]))));
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
@@ -475,11 +459,7 @@ mod update {
             kv.expect_get_kv()
                 .with(predicate::function(move |v| v == test_key.as_str()))
                 .times(1)
-                .return_once(move |_k| {
-                    Ok(GetKVActionReply {
-                        result: Some(SeqV::new(0, prev_value)),
-                    })
-                });
+                .return_once(move |_k| Ok(Some(SeqV::new(0, prev_value))));
         }
 
         // and then, update_kv should be called
@@ -595,7 +575,7 @@ mod update {
         kv.expect_get_kv()
             .with(predicate::function(move |v| v == test_key.as_str()))
             .times(1)
-            .return_once(move |_k| Ok(GetKVActionReply { result: None }));
+            .return_once(move |_k| Ok(None));
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");

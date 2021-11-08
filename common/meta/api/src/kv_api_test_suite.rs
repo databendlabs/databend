@@ -98,7 +98,7 @@ impl KVApiTestSuite {
             .await?;
 
         let current = client.get_kv(test_key).await?;
-        if let Some(SeqV { seq, .. }) = current.result {
+        if let Some(SeqV { seq, .. }) = current {
             // seq mismatch
             let wrong_seq = Some(seq + 1);
             let res = client
@@ -115,7 +115,7 @@ impl KVApiTestSuite {
 
             // read nothing
             let r = client.get_kv(test_key).await?;
-            assert!(r.result.is_none());
+            assert!(r.is_none());
         } else {
             panic!("expecting a value, but got nothing");
         }
@@ -210,8 +210,8 @@ impl KVApiTestSuite {
 
         // value updated
         let kv = client.get_kv(test_key).await?;
-        assert!(kv.result.is_some());
-        let kv = kv.result.unwrap();
+        assert!(kv.is_some());
+        let kv = kv.unwrap();
         assert_eq!(kv, SeqV::with_meta(kv.seq, None, b"v3".to_vec()));
         Ok(())
     }
@@ -241,7 +241,7 @@ impl KVApiTestSuite {
         tracing::info!("---get unexpired");
         {
             let res = client.get_kv(&"k1".to_string()).await?;
-            assert!(res.result.is_some(), "got unexpired");
+            assert!(res.is_some(), "got unexpired");
         }
 
         tracing::info!("---get expired");
@@ -249,7 +249,7 @@ impl KVApiTestSuite {
             tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
             let res = client.get_kv(&"k1".to_string()).await?;
             tracing::debug!("got k1:{:?}", res);
-            assert!(res.result.is_none(), "got expired");
+            assert!(res.is_none(), "got expired");
         }
 
         let now = SystemTime::now()
@@ -284,7 +284,7 @@ impl KVApiTestSuite {
             let res = client
                 .mget_kv(&["k1".to_string(), "k2".to_string()])
                 .await?;
-            assert_eq!(res.result, vec![
+            assert_eq!(res, vec![
                 None,
                 Some(SeqV::with_meta(
                     3,
@@ -318,7 +318,7 @@ impl KVApiTestSuite {
                 .await?;
 
             let res = client.get_kv(&"k2".to_string()).await?;
-            assert!(res.result.is_none(), "k2 expired");
+            assert!(res.is_none(), "k2 expired");
         }
 
         Ok(())
@@ -384,7 +384,7 @@ impl KVApiTestSuite {
 
         tracing::info!("--- get returns the value with meta and seq updated");
         let kv = client.get_kv(test_key).await?;
-        assert!(kv.result.is_some());
+        assert!(kv.is_some());
         assert_eq!(
             SeqV::with_meta(
                 seq + 1,
@@ -393,7 +393,7 @@ impl KVApiTestSuite {
                 }),
                 b"v1".to_vec()
             ),
-            kv.result.unwrap(),
+            kv.unwrap(),
         );
 
         Ok(())
@@ -453,7 +453,7 @@ impl KVApiTestSuite {
         let res = client
             .mget_kv(&["k1".to_string(), "k2".to_string()])
             .await?;
-        assert_eq!(res.result, vec![
+        assert_eq!(res, vec![
             Some(SeqV::with_meta(1, None, b"v1".to_vec(),)),
             // NOTE, the sequence number is increased globally (inside the namespace of generic kv)
             Some(SeqV::with_meta(2, None, b"v2".to_vec(),)),
@@ -462,7 +462,7 @@ impl KVApiTestSuite {
         let res = client
             .mget_kv(&["k1".to_string(), "key_no exist".to_string()])
             .await?;
-        assert_eq!(res.result, vec![Some(SeqV::new(1, b"v1".to_vec())), None]);
+        assert_eq!(res, vec![Some(SeqV::new(1, b"v1".to_vec())), None]);
 
         Ok(())
     }

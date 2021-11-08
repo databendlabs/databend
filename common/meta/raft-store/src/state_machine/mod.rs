@@ -26,6 +26,7 @@ pub use table_lookup::TableLookupValue;
 pub mod applied_state;
 pub mod client_last_resp;
 pub mod sm;
+mod sm_kv_api_impl;
 pub mod snapshot;
 pub mod state_machine_meta;
 pub mod table_lookup;

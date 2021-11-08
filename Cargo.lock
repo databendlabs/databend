@@ -1450,6 +1450,7 @@ dependencies = [
  "common-base",
  "common-exception",
  "common-io",
+ "common-meta-api",
  "common-meta-sled-store",
  "common-meta-types",
  "common-tracing",

@@ -70,9 +70,8 @@ impl UserMgrApi for UserMgr {
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
-        let seq_value = res
-            .result
-            .ok_or_else(|| ErrorCode::UnknownUser(format!("unknown user {}", username)))?;
+        let seq_value =
+            res.ok_or_else(|| ErrorCode::UnknownUser(format!("unknown user {}", username)))?;
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
             // Ok(_) => Ok(SeqV::new(seq_value.seq, seq_value.data.try_into()?)),

@@ -58,7 +58,7 @@ impl RequestHandler<UpsertKVAction> for ActionHandler {
 impl RequestHandler<GetKVAction> for ActionHandler {
     async fn handle(&self, act: GetKVAction) -> common_exception::Result<GetKVActionReply> {
         let result = self.meta_node.get_kv(&act.key).await?;
-        Ok(GetKVActionReply { result })
+        Ok(result)
     }
 }
 
@@ -66,7 +66,7 @@ impl RequestHandler<GetKVAction> for ActionHandler {
 impl RequestHandler<MGetKVAction> for ActionHandler {
     async fn handle(&self, act: MGetKVAction) -> common_exception::Result<MGetKVActionReply> {
         let result = self.meta_node.mget_kv(&act.keys).await?;
-        Ok(MGetKVActionReply { result })
+        Ok(result)
     }
 }
 

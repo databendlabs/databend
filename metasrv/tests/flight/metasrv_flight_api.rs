@@ -81,7 +81,7 @@ async fn test_restart() -> anyhow::Result<()> {
                 meta: None,
                 data: b"bar".to_vec(),
             }),
-            res.result,
+            res,
             "get kv"
         );
     }
@@ -120,7 +120,7 @@ async fn test_restart() -> anyhow::Result<()> {
                 meta: None,
                 data: b"bar".to_vec()
             }),
-            res.result,
+            res,
             "get kv"
         );
     }
@@ -200,7 +200,7 @@ async fn test_join() -> anyhow::Result<()> {
 
                 tracing::debug!("get kv {} from {}-th node,res: {:?}", k, icli, res);
                 let res = res?;
-                assert_eq!(k.into_bytes(), res.result.unwrap().data);
+                assert_eq!(k.into_bytes(), res.unwrap().data);
             }
         }
     }
