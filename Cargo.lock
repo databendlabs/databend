@@ -1980,6 +1980,7 @@ dependencies = [
  "anyhow",
  "async-raft",
  "async-trait",
+ "backtrace",
  "byteorder",
  "common-arrow",
  "common-base",

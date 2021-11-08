@@ -12,18 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(backtrace)]
+mod any_error_impl;
 
-#[allow(clippy::all)]
-pub mod proto;
+#[cfg(test)]
+mod any_error_test;
 
-#[macro_use]
-pub mod tests;
-
-pub mod api;
-pub mod configs;
-pub mod executor;
-pub mod meta_service;
-pub mod metrics;
-
-mod any_error;
+pub use any_error_impl::AnyError;
