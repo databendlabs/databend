@@ -131,8 +131,7 @@ jobs:
           platforms: linux/amd64
           context: .
           file: ./docker/release/Dockerfile
-          build-args: |
-            VERSION=${{ steps.get_version.outputs.VERSION }}
+          build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
 
       - name: Download binaries for usage
         id: download_binaries
