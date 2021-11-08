@@ -83,8 +83,6 @@ use crate::proto::meta_service_server::MetaServiceServer;
 ///       hard_state
 ///   log
 ///   state_machine
-/// TODO(xp): MetaNode recovers persisted state when restarted.
-/// TODO(xp): move metasrv to a standalone file.
 pub struct MetaRaftStore {
     /// The ID of the Raft node for which this storage instances is configured.
     /// ID is also stored in raft_state. Since `id` never changes, this is a cache for fast access.
@@ -121,28 +119,6 @@ pub struct MetaRaftStore {
     /// The current snapshot.
     pub current_snapshot: RwLock<Option<Snapshot>>,
 }
-
-// TODO(xp): the following is a draft struct when meta storage is migrated to sled based impl.
-//           keep it until the migration is done.
-// /// Impl a raft store.
-// /// Includes:
-// /// - raft state, e.g., node-id, current_term and which node it has voted-for.
-// /// - raft log: distributed logs
-// /// - raft state machine.
-// pub struct C {
-//     /// The Raft log.
-//     pub log: sled::Tree,
-//
-//     /// The Raft state machine.
-//     /// State machine is a relatively standalone component in raft.
-//     /// In our impl a state machine has its own sled db.
-//     pub state_machine: RwLock<StateMachine>,
-//
-//     /// The current snapshot of the state machine.
-//     /// Currently snapshot data is a complete backup of the state machine and is not persisted on disk.
-//     /// When server restarts, a new snapshot is created on demand.
-//     pub current_snapshot: RwLock<Option<Snapshot>>,
-// }
 
 impl MetaRaftStore {
     /// If the instance is opened(true) from an existent state(e.g. load from disk) or created(false).
