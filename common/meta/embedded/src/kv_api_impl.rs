@@ -34,9 +34,9 @@ impl KVApi for MetaEmbedded {
         &self,
         key: &str,
         seq: MatchSeq,
-        value: Option<Vec<u8>>,
+        value: Operation<Vec<u8>>,
         value_meta: Option<KVMeta>,
-    ) -> Result<UpsertKVActionReply> {
+    ) -> common_exception::Result<UpsertKVActionReply> {
         let cmd = Cmd::UpsertKV {
             key: key.to_string(),
             seq,

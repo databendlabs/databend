@@ -25,6 +25,7 @@ use common_meta_types::AddResult;
 use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
 use common_meta_types::NodeInfo;
+use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVActionReply;
 
@@ -136,7 +137,7 @@ impl NamespaceApi for NamespaceMgr {
         // Only when there are no record, i.e. seq=0
         let seq = MatchSeq::Exact(0);
         let meta = Some(self.new_lift_time());
-        let value = Some(serde_json::to_vec(&node)?);
+        let value = Operation::Update(serde_json::to_vec(&node)?);
         let node_key = format!(
             "{}/{}",
             self.namespace_prefix,
@@ -176,7 +177,9 @@ impl NamespaceApi for NamespaceMgr {
             self.namespace_prefix,
             Self::escape_for_key(&node_id)?
         );
-        let upsert_node = self.kv_api.upsert_kv(&node_key, seq.into(), None, None);
+        let upsert_node = self
+            .kv_api
+            .upsert_kv(&node_key, seq.into(), Operation::Delete, None);
 
         match upsert_node.await? {
             UpsertKVActionReply {

@@ -27,6 +27,7 @@ use common_meta_types::MGetKVActionReply;
 use common_meta_types::MatchSeq;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::Operation;
 use common_meta_types::PrefixListReply;
 use common_meta_types::TableInfo;
 use common_meta_types::UpsertKVActionReply;
@@ -165,7 +166,7 @@ action_declare!(
 pub struct UpsertKVAction {
     pub key: String,
     pub seq: MatchSeq,
-    pub value: Option<Vec<u8>>,
+    pub value: Operation<Vec<u8>>,
     pub value_meta: Option<KVMeta>,
 }
 

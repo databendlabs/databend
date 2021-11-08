@@ -20,6 +20,7 @@ use common_meta_types::GetKVActionReply;
 use common_meta_types::KVMeta;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MatchSeq;
+use common_meta_types::Operation;
 use common_meta_types::PrefixListReply;
 use common_meta_types::UpsertKVActionReply;
 
@@ -29,7 +30,7 @@ pub trait KVApi: Send + Sync {
         &self,
         key: &str,
         seq: MatchSeq,
-        value: Option<Vec<u8>>,
+        value: Operation<Vec<u8>>,
         value_meta: Option<KVMeta>,
     ) -> common_exception::Result<UpsertKVActionReply>;
 
@@ -54,7 +55,7 @@ impl KVApi for Arc<dyn KVApi> {
         &self,
         key: &str,
         seq: MatchSeq,
-        value: Option<Vec<u8>>,
+        value: Operation<Vec<u8>>,
         value_meta: Option<KVMeta>,
     ) -> common_exception::Result<UpsertKVActionReply> {
         self.as_ref().upsert_kv(key, seq, value, value_meta).await

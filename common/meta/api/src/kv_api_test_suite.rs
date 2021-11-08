@@ -18,6 +18,7 @@ use std::time::UNIX_EPOCH;
 use common_base::tokio;
 use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
+use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_tracing::tracing;
 
@@ -29,7 +30,12 @@ impl KVApiTestSuite {
         {
             // write
             let res = kv
-                .upsert_kv("foo", MatchSeq::Any, Some(b"bar".to_vec()), None)
+                .upsert_kv(
+                    "foo",
+                    MatchSeq::Any,
+                    Operation::Update(b"bar".to_vec()),
+                    None,
+                )
                 .await?;
             assert_eq!(None, res.prev);
             assert_eq!(Some(SeqV::with_meta(1, None, b"bar".to_vec())), res.result);
@@ -38,7 +44,12 @@ impl KVApiTestSuite {
         {
             // write fails with unmatched seq
             let res = kv
-                .upsert_kv("foo", MatchSeq::Exact(2), Some(b"bar".to_vec()), None)
+                .upsert_kv(
+                    "foo",
+                    MatchSeq::Exact(2),
+                    Operation::Update(b"bar".to_vec()),
+                    None,
+                )
                 .await?;
             assert_eq!(
                 (
@@ -53,7 +64,12 @@ impl KVApiTestSuite {
         {
             // write done with matching seq
             let res = kv
-                .upsert_kv("foo", MatchSeq::Exact(1), Some(b"wow".to_vec()), None)
+                .upsert_kv(
+                    "foo",
+                    MatchSeq::Exact(1),
+                    Operation::Update(b"wow".to_vec()),
+                    None,
+                )
                 .await?;
             assert_eq!(
                 Some(SeqV::with_meta(1, None, b"bar".to_vec())),
@@ -73,7 +89,12 @@ impl KVApiTestSuite {
     pub async fn kv_delete<KV: KVApi>(&self, client: &KV) -> anyhow::Result<()> {
         let test_key = "test_key";
         client
-            .upsert_kv(test_key, MatchSeq::Any, Some(b"v1".to_vec()), None)
+            .upsert_kv(
+                test_key,
+                MatchSeq::Any,
+                Operation::Update(b"v1".to_vec()),
+                None,
+            )
             .await?;
 
         let current = client.get_kv(test_key).await?;
@@ -81,14 +102,14 @@ impl KVApiTestSuite {
             // seq mismatch
             let wrong_seq = Some(seq + 1);
             let res = client
-                .upsert_kv(test_key, wrong_seq.into(), None, None)
+                .upsert_kv(test_key, wrong_seq.into(), Operation::Delete, None)
                 .await?;
 
             assert_eq!(res.prev, res.result);
 
             // seq match
             let res = client
-                .upsert_kv(test_key, MatchSeq::Exact(seq), None, None)
+                .upsert_kv(test_key, MatchSeq::Exact(seq), Operation::Delete, None)
                 .await?;
             assert!(res.result.is_none());
 
@@ -101,18 +122,23 @@ impl KVApiTestSuite {
 
         // key not exist
         let res = client
-            .upsert_kv("not exists", MatchSeq::Any, None, None)
+            .upsert_kv("not exists", MatchSeq::Any, Operation::Delete, None)
             .await?;
         assert_eq!(None, res.prev);
         assert_eq!(None, res.result);
 
         // do not care seq
         client
-            .upsert_kv(test_key, MatchSeq::Any, Some(b"v2".to_vec()), None)
+            .upsert_kv(
+                test_key,
+                MatchSeq::Any,
+                Operation::Update(b"v2".to_vec()),
+                None,
+            )
             .await?;
 
         let res = client
-            .upsert_kv(test_key, MatchSeq::Any, None, None)
+            .upsert_kv(test_key, MatchSeq::Any, Operation::Delete, None)
             .await?;
         assert_eq!(
             (Some(SeqV::with_meta(2, None, b"v2".to_vec())), None),
@@ -126,12 +152,22 @@ impl KVApiTestSuite {
         let test_key = "test_key_for_update";
 
         let r = client
-            .upsert_kv(test_key, MatchSeq::GE(1), Some(b"v1".to_vec()), None)
+            .upsert_kv(
+                test_key,
+                MatchSeq::GE(1),
+                Operation::Update(b"v1".to_vec()),
+                None,
+            )
             .await?;
         assert_eq!((None, None), (r.prev, r.result), "not changed");
 
         let r = client
-            .upsert_kv(test_key, MatchSeq::Any, Some(b"v1".to_vec()), None)
+            .upsert_kv(
+                test_key,
+                MatchSeq::Any,
+                Operation::Update(b"v1".to_vec()),
+                None,
+            )
             .await?;
         assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.result);
         let seq = r.result.unwrap().seq;
@@ -141,7 +177,7 @@ impl KVApiTestSuite {
             .upsert_kv(
                 test_key,
                 MatchSeq::Exact(seq + 1),
-                Some(b"v2".to_vec()),
+                Operation::Update(b"v2".to_vec()),
                 None,
             )
             .await?;
@@ -150,14 +186,24 @@ impl KVApiTestSuite {
 
         // matched seq
         let r = client
-            .upsert_kv(test_key, MatchSeq::Exact(seq), Some(b"v2".to_vec()), None)
+            .upsert_kv(
+                test_key,
+                MatchSeq::Exact(seq),
+                Operation::Update(b"v2".to_vec()),
+                None,
+            )
             .await?;
         assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.prev);
         assert_eq!(Some(SeqV::with_meta(2, None, b"v2".to_vec())), r.result);
 
         // blind update
         let r = client
-            .upsert_kv(test_key, MatchSeq::GE(1), Some(b"v3".to_vec()), None)
+            .upsert_kv(
+                test_key,
+                MatchSeq::GE(1),
+                Operation::Update(b"v3".to_vec()),
+                None,
+            )
             .await?;
         assert_eq!(Some(SeqV::with_meta(2, None, b"v2".to_vec())), r.prev);
         assert_eq!(Some(SeqV::with_meta(3, None, b"v3".to_vec())), r.result);
@@ -185,7 +231,7 @@ impl KVApiTestSuite {
             .upsert_kv(
                 "k1",
                 MatchSeq::Any,
-                Some(b"v1".to_vec()),
+                Operation::Update(b"v1".to_vec()),
                 Some(KVMeta {
                     expire_at: Some(now + 1),
                 }),
@@ -217,7 +263,7 @@ impl KVApiTestSuite {
                 .upsert_kv(
                     "k1",
                     MatchSeq::Exact(0),
-                    Some(b"v1".to_vec()),
+                    Operation::Update(b"v1".to_vec()),
                     Some(KVMeta {
                         expire_at: Some(now - 1),
                     }),
@@ -227,7 +273,7 @@ impl KVApiTestSuite {
                 .upsert_kv(
                     "k2",
                     MatchSeq::Exact(0),
-                    Some(b"v2".to_vec()),
+                    Operation::Update(b"v2".to_vec()),
                     Some(KVMeta {
                         expire_at: Some(now + 2),
                     }),
@@ -264,7 +310,7 @@ impl KVApiTestSuite {
                 .upsert_kv(
                     "k2",
                     MatchSeq::Exact(3),
-                    Some(b"v2".to_vec()),
+                    Operation::Update(b"v2".to_vec()),
                     Some(KVMeta {
                         expire_at: Some(now - 1),
                     }),
@@ -287,7 +333,12 @@ impl KVApiTestSuite {
             .as_secs();
 
         let r = client
-            .upsert_kv(test_key, MatchSeq::Any, Some(b"v1".to_vec()), None)
+            .upsert_kv(
+                test_key,
+                MatchSeq::Any,
+                Operation::Update(b"v1".to_vec()),
+                None,
+            )
             .await?;
         assert_eq!(Some(SeqV::with_meta(1, None, b"v1".to_vec())), r.result);
         let seq = r.result.unwrap().seq;
@@ -350,7 +401,12 @@ impl KVApiTestSuite {
         let mut values = vec![];
         {
             client
-                .upsert_kv("t", MatchSeq::Any, Some("".as_bytes().to_vec()), None)
+                .upsert_kv(
+                    "t",
+                    MatchSeq::Any,
+                    Operation::Update("".as_bytes().to_vec()),
+                    None,
+                )
                 .await?;
 
             for i in 0..9 {
@@ -358,11 +414,16 @@ impl KVApiTestSuite {
                 let val = format!("val_{}", i);
                 values.push(val.clone());
                 client
-                    .upsert_kv(&key, MatchSeq::Any, Some(val.as_bytes().to_vec()), None)
+                    .upsert_kv(
+                        &key,
+                        MatchSeq::Any,
+                        Operation::Update(val.as_bytes().to_vec()),
+                        None,
+                    )
                     .await?;
             }
             client
-                .upsert_kv("v", MatchSeq::Any, Some(b"".to_vec()), None)
+                .upsert_kv("v", MatchSeq::Any, Operation::Update(b"".to_vec()), None)
                 .await?;
         }
 
@@ -381,10 +442,10 @@ impl KVApiTestSuite {
 
     pub async fn kv_mget<KV: KVApi>(&self, client: &KV) -> anyhow::Result<()> {
         client
-            .upsert_kv("k1", MatchSeq::Any, Some(b"v1".to_vec()), None)
+            .upsert_kv("k1", MatchSeq::Any, Operation::Update(b"v1".to_vec()), None)
             .await?;
         client
-            .upsert_kv("k2", MatchSeq::Any, Some(b"v2".to_vec()), None)
+            .upsert_kv("k2", MatchSeq::Any, Operation::Update(b"v2".to_vec()), None)
             .await?;
 
         let res = client
