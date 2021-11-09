@@ -23,19 +23,23 @@ use crate::types::SqlType;
 use crate::types::Value;
 use crate::types::ValueRef;
 
-pub(crate) type ArcColumnData = Arc<dyn ColumnData + Send + Sync>;
+pub type ArcColumnData = Arc<dyn ColumnData + Send + Sync>;
 
-pub(crate) type BoxColumnData = Box<dyn ColumnData + Send + Sync>;
+pub type BoxColumnData = Box<dyn ColumnData + Send + Sync>;
 
 pub trait ColumnData {
     fn sql_type(&self) -> SqlType;
     fn save(&self, encoder: &mut Encoder, start: usize, end: usize);
     fn len(&self) -> usize;
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
     fn push(&mut self, value: Value);
     fn at(&self, index: usize) -> ValueRef;
 
     fn clone_instance(&self) -> BoxColumnData;
 
+    #[allow(clippy::missing_safety_doc)]
     unsafe fn get_internal(&self, _pointers: &[*mut *const u8], _level: u8) -> Result<()> {
         Err(Error::FromSql(FromSqlError::UnsupportedOperation))
     }
@@ -45,7 +49,7 @@ pub trait ColumnData {
     }
 }
 
-pub(crate) trait ColumnDataExt {
+pub trait ColumnDataExt {
     fn append<T: convert::Into<Value>>(&mut self, value: T);
 }
 

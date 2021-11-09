@@ -12,12 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use self::encoder::Encoder;
-pub use self::parser::Parser;
-pub use self::read_ex::ReadEx;
-pub use self::uvarint::put_uvarint;
+use chrono::prelude::*;
+use chrono_tz::Tz;
+use common_clickhouse_srv::types::column::datetime64::*;
 
-mod encoder;
-mod parser;
-mod read_ex;
-mod uvarint;
+#[test]
+fn test_to_datetime() {
+    let expected = DateTime::parse_from_rfc3339("2019-01-01T00:00:00-00:00").unwrap();
+    let actual = to_datetime(1_546_300_800_000, 3, Tz::UTC);
+    assert_eq!(actual, expected)
+}
+
+#[test]
+fn test_from_datetime() {
+    let origin = DateTime::parse_from_rfc3339("2019-01-01T00:00:00-00:00").unwrap();
+    let actual = from_datetime(origin, 3);
+    assert_eq!(actual, 1_546_300_800_000)
+}
