@@ -27,6 +27,7 @@ use common_meta_types::MGetKVActionReply;
 use common_meta_types::MatchSeq;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::Operation;
 use common_meta_types::PrefixListReply;
 use common_meta_types::TableInfo;
 use common_meta_types::UpsertKVActionReply;
@@ -76,7 +77,6 @@ pub enum MetaFlightAction {
 
     // general purpose kv
     UpsertKV(UpsertKVAction),
-    UpdateKVMeta(KVMetaAction),
     GetKV(GetKVAction),
     MGetKV(MGetKVAction),
     PrefixListKV(PrefixListReq),
@@ -165,7 +165,7 @@ action_declare!(
 pub struct UpsertKVAction {
     pub key: String,
     pub seq: MatchSeq,
-    pub value: Option<Vec<u8>>,
+    pub value: Operation<Vec<u8>>,
     pub value_meta: Option<KVMeta>,
 }
 
@@ -173,19 +173,6 @@ action_declare!(
     UpsertKVAction,
     UpsertKVActionReply,
     MetaFlightAction::UpsertKV
-);
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct KVMetaAction {
-    pub key: String,
-    pub seq: MatchSeq,
-    pub value_meta: Option<KVMeta>,
-}
-
-action_declare!(
-    KVMetaAction,
-    UpsertKVActionReply,
-    MetaFlightAction::UpdateKVMeta
 );
 
 // == database actions ==

@@ -15,9 +15,7 @@
 use async_trait::async_trait;
 use common_exception::Result;
 use common_meta_api::KVApi;
-use common_meta_raft_store::state_machine::AppliedState;
 pub use common_meta_sled_store::init_temp_sled_db;
-use common_meta_types::Cmd;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::KVMeta;
 use common_meta_types::MGetKVActionReply;
@@ -34,66 +32,25 @@ impl KVApi for MetaEmbedded {
         &self,
         key: &str,
         seq: MatchSeq,
-        value: Option<Vec<u8>>,
+        value: Operation<Vec<u8>>,
         value_meta: Option<KVMeta>,
-    ) -> Result<UpsertKVActionReply> {
-        let cmd = Cmd::UpsertKV {
-            key: key.to_string(),
-            seq,
-            value: value.into(),
-            value_meta,
-        };
-
-        let mut sm = self.inner.lock().await;
-        let res = sm.apply_cmd(&cmd).await?;
-
-        match res {
-            AppliedState::KV(x) => Ok(x),
-            _ => {
-                panic!("expect AppliedState::KV");
-            }
-        }
-    }
-
-    async fn update_kv_meta(
-        &self,
-        key: &str,
-        seq: MatchSeq,
-        value_meta: Option<KVMeta>,
-    ) -> Result<UpsertKVActionReply> {
-        let cmd = Cmd::UpsertKV {
-            key: key.to_string(),
-            seq,
-            value: Operation::AsIs,
-            value_meta,
-        };
-
-        let mut sm = self.inner.lock().await;
-        let res = sm.apply_cmd(&cmd).await?;
-
-        match res {
-            AppliedState::KV(x) => Ok(x),
-            _ => {
-                panic!("expect AppliedState::KV");
-            }
-        }
+    ) -> common_exception::Result<UpsertKVActionReply> {
+        let sm = self.inner.lock().await;
+        sm.upsert_kv(key, seq, value, value_meta).await
     }
 
     async fn get_kv(&self, key: &str) -> Result<GetKVActionReply> {
         let sm = self.inner.lock().await;
-        let res = sm.get_kv(key)?;
-        Ok(GetKVActionReply { result: res })
+        sm.get_kv(key).await
     }
 
     async fn mget_kv(&self, key: &[String]) -> Result<MGetKVActionReply> {
         let sm = self.inner.lock().await;
-        let res = sm.mget_kv(key)?;
-        Ok(MGetKVActionReply { result: res })
+        sm.mget_kv(key).await
     }
 
     async fn prefix_list_kv(&self, prefix: &str) -> Result<PrefixListReply> {
         let sm = self.inner.lock().await;
-        let res = sm.prefix_list_kv(prefix)?;
-        Ok(res)
+        sm.prefix_list_kv(prefix).await
     }
 }

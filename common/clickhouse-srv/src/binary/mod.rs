@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(crate) use self::encoder::Encoder;
-pub(crate) use self::parser::Parser;
-pub(crate) use self::read_ex::ReadEx;
-pub(crate) use self::uvarint::put_uvarint;
+pub use self::encoder::Encoder;
+pub use self::parser::Parser;
+pub use self::read_ex::ReadEx;
+pub use self::uvarint::put_uvarint;
 
 mod encoder;
 mod parser;

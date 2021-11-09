@@ -28,6 +28,7 @@ use common_base::tokio::sync::RwLockReadGuard;
 use common_base::tokio::task::JoinHandle;
 use common_exception::prelude::ErrorCode;
 use common_exception::prelude::ToErrorCode;
+use common_meta_api::KVApi;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_raft_store::state_machine::StateMachine;
@@ -534,17 +535,17 @@ impl MetaNode {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
-        sm.get_kv(key)
+        sm.get_kv(key).await
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn mget_kv(
         &self,
-        keys: &[impl AsRef<str> + std::fmt::Debug],
+        keys: &[String],
     ) -> common_exception::Result<Vec<Option<SeqV<Vec<u8>>>>> {
         // inconsistent get: from local state machine
         let sm = self.sto.state_machine.read().await;
-        sm.mget_kv(keys)
+        sm.mget_kv(keys).await
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
@@ -554,7 +555,7 @@ impl MetaNode {
     ) -> common_exception::Result<Vec<(String, SeqV<Vec<u8>>)>> {
         // inconsistent get: from local state machine
         let sm = self.sto.state_machine.read().await;
-        sm.prefix_list_kv(prefix)
+        sm.prefix_list_kv(prefix).await
     }
 
     /// Submit a write request to the known leader. Returns the response after applying the request.

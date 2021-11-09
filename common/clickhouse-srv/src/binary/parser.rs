@@ -27,7 +27,7 @@ use crate::protocols::{self};
 use crate::types::Block;
 
 /// The internal clickhouse client request parser.
-pub(crate) struct Parser<T> {
+pub struct Parser<T> {
     reader: T,
 
     tz: Tz,
