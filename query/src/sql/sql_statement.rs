@@ -114,7 +114,7 @@ pub struct DfCreateUser {
     pub if_not_exists: bool,
     /// User name
     pub name: String,
-    pub host_name: String,
+    pub hostname: String,
     pub auth_type: AuthType,
     pub password: String,
 }
@@ -127,6 +127,8 @@ pub struct DfCopy {
     pub location: String,
     pub format: String,
 }
+#[derive(Debug, Clone, PartialEq)]
+pub struct DfShowUsers;
 
 /// Tokens parsed by `DFParser` are converted into these values.
 #[derive(Debug, Clone, PartialEq)]
@@ -165,7 +167,9 @@ pub enum DfStatement {
     KillQuery(DfKillStatement),
     KillConn(DfKillStatement),
 
+    // User
     CreateUser(DfCreateUser),
+    ShowUsers(DfShowUsers),
 }
 
 /// Comment hints from SQL.

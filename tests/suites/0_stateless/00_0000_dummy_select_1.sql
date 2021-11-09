@@ -14,3 +14,4 @@ SELECT a.number FROM numbers(3) AS a ORDER BY b.number; -- {ErrorCode 25}
 SELECT b.number FROM (SELECT * FROM numbers(3) AS b ORDER BY a.number) AS a; -- {ErrorCode 25}
 SELECT b.number FROM (SELECT * FROM numbers(3) AS b) AS a ORDER BY b.number; -- {ErrorCode 25}
 SELECT number, 'number', "number" FROM numbers(3) AS a order by a.number;
+SELECT 'That\'s good.';

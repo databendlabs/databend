@@ -188,12 +188,12 @@ mod get {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_user_seq_match() -> common_exception::Result<()> {
         let test_user_name = "test";
-        let test_host_name = "localhost";
+        let test_hostname = "localhost";
         let test_key = format!("__fd_users/tenant1/{}", test_user_name);
 
         let user_info = UserInfo::new(
             test_user_name.to_string(),
-            test_host_name.to_string(),
+            test_hostname.to_string(),
             Vec::from("pass"),
             AuthType::Sha256,
         );
@@ -220,12 +220,12 @@ mod get {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_user_do_not_care_seq() -> common_exception::Result<()> {
         let test_user_name = "test";
-        let test_host_name = "localhost";
+        let test_hostname = "localhost";
         let test_key = format!("__fd_users/tenant1/{}", test_user_name);
 
         let user_info = UserInfo::new(
             test_user_name.to_string(),
-            test_host_name.to_string(),
+            test_hostname.to_string(),
             Vec::from("pass"),
             AuthType::Sha256,
         );
@@ -327,18 +327,18 @@ mod get_users {
 
     fn prepare() -> common_exception::Result<(FakeKeys, UserInfos)> {
         let mut names = vec![];
-        let mut host_names = vec![];
+        let mut hostnames = vec![];
         let mut keys = vec![];
         let mut res = vec![];
         let mut user_infos = vec![];
         for i in 0..9 {
             let name = format!("test_user_{}", i);
             names.push(name.clone());
-            let host_name = format!("test_host_name_{}", i);
-            host_names.push(host_name.clone());
+            let hostname = format!("test_hostname_{}", i);
+            hostnames.push(hostname.clone());
             let key = format!("{}/{}", "tenant1", name);
             keys.push(key);
-            let user_info = UserInfo::new(name, host_name, Vec::from("pass"), AuthType::Sha256);
+            let user_info = UserInfo::new(name, hostname, Vec::from("pass"), AuthType::Sha256);
             res.push((
                 "fake_key".to_string(),
                 SeqV::new(i, serde_json::to_vec(&user_info)?),
@@ -458,7 +458,7 @@ mod update {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_update_user_normal_partial_update() -> common_exception::Result<()> {
         let test_user_name = "name";
-        let test_host_name = "localhost";
+        let test_hostname = "localhost";
         let test_key = format!("__fd_users/tenant1/{}", test_user_name);
         let test_seq = None;
 
@@ -467,7 +467,7 @@ mod update {
 
         let user_info = UserInfo::new(
             test_user_name.to_string(),
-            test_host_name.to_string(),
+            test_hostname.to_string(),
             Vec::from(old_pass),
             old_auth_type,
         );
@@ -492,7 +492,7 @@ mod update {
         let new_pass = "new pass";
         let new_user_info = UserInfo::new(
             test_user_name.to_string(),
-            test_host_name.to_string(),
+            test_hostname.to_string(),
             Vec::from(new_pass),
             AuthType::DoubleSha1,
         );
@@ -515,7 +515,7 @@ mod update {
 
         let res = user_mgr.update_user(
             test_user_name.to_string(),
-            Some(new_user_info.host_name),
+            Some(new_user_info.hostname),
             Some(new_user_info.password),
             None,
             test_seq,
@@ -528,7 +528,7 @@ mod update {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_update_user_normal_full_update() -> common_exception::Result<()> {
         let test_user_name = "name";
-        let test_host_name = "localhost";
+        let test_hostname = "localhost";
         let test_key = format!("__fd_users/tenant1/{}", test_user_name);
         let test_seq = None;
 
@@ -540,7 +540,7 @@ mod update {
 
         let new_user_info = UserInfo::new(
             test_user_name.to_string(),
-            test_host_name.to_string(),
+            test_hostname.to_string(),
             Vec::from(new_pass),
             new_auth_type.clone(),
         );
@@ -564,7 +564,7 @@ mod update {
 
         let res = user_mgr.update_user(
             test_user_name.to_string(),
-            Some(test_host_name.to_string()),
+            Some(test_hostname.to_string()),
             Some(new_user_info.password),
             Some(new_auth_type),
             test_seq,

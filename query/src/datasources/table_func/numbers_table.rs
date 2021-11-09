@@ -141,12 +141,30 @@ impl Table for NumbersTable {
             .get_user_data()?
             .expect("DatabendQueryContext should not be None");
 
+        // If we have order-by and limit push-downs, try the best to only generate top n rows.
         if let Some(extras) = &plan.push_downs {
             if extras.limit.is_some() {
-                let sort_descriptions =
-                    get_sort_descriptions(&self.table_info.schema(), &extras.order_by)?;
-                let stream =
-                    NumbersStream::try_create(ctx, self.schema(), sort_descriptions, extras.limit)?;
+                let sort_descriptions_result =
+                    get_sort_descriptions(&self.table_info.schema(), &extras.order_by);
+
+                // It is allowed to have an error when we can't get sort columns from the expression. For
+                // example 'select number from numbers(10) order by number+4 limit 10', the column 'number+4'
+                // doesn't exist in the numbers table.
+                // For case like that, we ignore the error and don't apply any optimization.
+                if sort_descriptions_result.is_err() {
+                    return Ok(Box::pin(NumbersStream::try_create(
+                        ctx,
+                        self.schema(),
+                        vec![],
+                        None,
+                    )?));
+                }
+                let stream = NumbersStream::try_create(
+                    ctx,
+                    self.schema(),
+                    sort_descriptions_result.unwrap(),
+                    extras.limit,
+                )?;
                 return Ok(Box::pin(stream));
             }
         }

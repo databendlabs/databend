@@ -1491,6 +1491,7 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "derive_more",
+ "enumflags2",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -1980,6 +1981,7 @@ dependencies = [
  "anyhow",
  "async-raft",
  "async-trait",
+ "backtrace",
  "byteorder",
  "common-arrow",
  "common-base",
@@ -1998,6 +2000,7 @@ dependencies = [
  "common-meta-types",
  "common-planners",
  "common-tracing",
+ "derive_more",
  "env_logger 0.9.0",
  "flaky_test",
  "futures",
@@ -2373,6 +2376,27 @@ name = "enum-iterator-derive"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c134c37760b27a871ba422106eedbb8247da973a09e82558bf26d619c882b159"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "enumflags2"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8672257d642ffdd235f6e9c723c2326ac1253c8f3c022e7cfd2e57da55b1131"
+dependencies = [
+ "enumflags2_derive",
+ "serde",
+]
+
+[[package]]
+name = "enumflags2_derive"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33526f770a27828ce7c2792fdb7cb240220237e0ff12933ed6c23957fc5dd7cf"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6103,7 +6127,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.11.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=cdd2ce1#cdd2ce1fed83be78eb5c8e19ca17364794fead95"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=eca5b86#eca5b866518e2efe1eada3f14a96245dc8859c52"
 dependencies = [
  "log",
 ]

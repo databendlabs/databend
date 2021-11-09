@@ -153,6 +153,7 @@ nav:
           - SHOW TABLES: sqlstatement/show-commands/show-tables.md
           - SHOW SETTINGS: sqlstatement/show-commands/show-settings.md
           - SHOW METRICS: sqlstatement/show-commands/show-metrics.md
+          - SHOW USERS: sqlstatement/show-commands/show-users.md
       - Kill Commands:
           - KILL QUERY: sqlstatement/kill-commands/kill-query.md
       - Aggregate Functions:
@@ -214,6 +215,8 @@ nav:
           - ToTypeName: sqlstatement/other-functions/totypename.md
           - runningDifference: sqlstatement/other-functions/running-difference.md
       - System Tables: system/system-tables.md
+      - User Management:
+          - CREATE USER: sqlstatement/user-management/user-management-create-user.md
     - API:
         - Config: api/config.md
   - CLI: cli/cli.md
@@ -234,6 +237,7 @@ nav:
         - DatabendCLI Design: rfcs/cli/0001-cli-design.md
   - Performance: overview/performance.md
   - Whitepapers: overview/architecture.md
+  - Weekly: https://datafuselabs.github.io/weekly/
 
 # Google Analytics
 google_analytics:

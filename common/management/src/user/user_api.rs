@@ -19,27 +19,37 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthType;
 use common_meta_types::SeqV;
+use common_meta_types::UserPrivilege;
+use common_meta_types::UserQuota;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct UserInfo {
     pub name: String,
-    pub host_name: String,
+    pub hostname: String,
     pub password: Vec<u8>,
     pub auth_type: AuthType,
+    pub privileges: UserPrivilege,
+    pub quota: UserQuota,
 }
 
 impl UserInfo {
     pub(crate) fn new(
         name: String,
-        host_name: String,
+        hostname: String,
         password: Vec<u8>,
         auth_type: AuthType,
     ) -> Self {
+        // Default is no privileges.
+        let privileges = UserPrivilege::empty();
+        let quota = UserQuota::no_limit();
+
         UserInfo {
             name,
-            host_name,
+            hostname,
             password,
             auth_type,
+            privileges,
+            quota,
         }
     }
 }
@@ -55,7 +65,7 @@ pub trait UserMgrApi: Sync + Send {
     async fn update_user(
         &self,
         username: String,
-        new_host_name: Option<String>,
+        new_hostname: Option<String>,
         new_password: Option<Vec<u8>>,
         new_auth: Option<AuthType>,
         seq: Option<u64>,

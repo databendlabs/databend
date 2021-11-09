@@ -16,15 +16,16 @@
 
 use common_base::tokio;
 use common_meta_api::KVApi;
-use common_meta_api::KVApiTestSuite;
-use common_meta_api::MetaApiTestSuite;
 use common_meta_flight::MetaFlightClient;
 use common_meta_types::MatchSeq;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVActionReply;
 use common_tracing::tracing;
 use databend_meta::init_meta_ut;
+use databend_meta::tests::service::new_test_context;
+use databend_meta::tests::start_metasrv_with_context;
 use pretty_assertions::assert_eq;
+use tokio::time::Duration;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_restart() -> anyhow::Result<()> {
@@ -90,14 +91,14 @@ async fn test_restart() -> anyhow::Result<()> {
 
         drop(client);
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // restart by opening existent meta db
         tc.config.raft_config.boot = false;
         databend_meta::tests::start_metasrv_with_context(&mut tc).await?;
     }
 
-    tokio::time::sleep(tokio::time::Duration::from_millis(10_000)).await;
+    tokio::time::sleep(Duration::from_millis(10_000)).await;
 
     // try to reconnect the restarted server.
     let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
@@ -122,294 +123,81 @@ async fn test_restart() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_generic_kv_mget() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
-
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    KVApiTestSuite {}.kv_mget(&client).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_generic_kv_list() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
-
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    KVApiTestSuite {}.kv_list(&client).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_generic_kv_delete() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
-
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    KVApiTestSuite {}.kv_delete(&client).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_generic_kv_update() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
-
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    KVApiTestSuite {}.kv_update(&client).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_generic_kv_update_meta() -> anyhow::Result<()> {
-    // Only update meta, do not touch the value part.
+async fn test_join() -> anyhow::Result<()> {
+    // - Start 2 metasrv.
+    // - Join node-1 to node-0
+    // - Test metasrv api
 
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
+    let mut tc0 = new_test_context();
+    let mut tc1 = new_test_context();
 
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
+    tc0.config.raft_config.id = 0;
 
-    KVApiTestSuite {}.kv_meta(&client).await
-}
+    tc1.config.raft_config.id = 1;
+    tc1.config.raft_config.single = false;
+    tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr()];
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_generic_kv_timeout() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
+    start_metasrv_with_context(&mut tc0).await?;
+    start_metasrv_with_context(&mut tc1).await?;
 
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
+    let addr0 = tc0.config.flight_api_address.clone();
+    let addr1 = tc0.config.flight_api_address.clone();
 
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client0 = MetaFlightClient::try_create(addr0.as_str(), "root", "xxx").await?;
+    let client1 = MetaFlightClient::try_create(addr1.as_str(), "root", "xxx").await?;
 
-    KVApiTestSuite {}.kv_timeout(&client).await
-}
+    let clients = vec![client0, client1];
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_generic_kv() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
+    tracing::info!("--- upsert kv to every nodes");
+    {
+        for (i, cli) in clients.iter().enumerate() {
+            let k = format!("join-{}", i);
 
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
+            let res = cli
+                .upsert_kv(
+                    k.as_str(),
+                    MatchSeq::Any,
+                    Some(k.clone().into_bytes()),
+                    None,
+                )
+                .await;
 
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
+            tracing::debug!("set kv res: {:?}", res);
+            let res = res?;
+            assert_eq!(
+                UpsertKVActionReply::new(
+                    None,
+                    Some(SeqV {
+                        seq: 1 + i as u64,
+                        meta: None,
+                        data: k.into_bytes(),
+                    })
+                ),
+                res,
+                "upsert kv to node {}",
+                i
+            );
+        }
+    }
 
-    KVApiTestSuite {}.kv_write_read(&client).await
-}
+    tokio::time::sleep(Duration::from_millis(1000)).await;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_database_create_get_drop() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
+    tracing::info!("--- get every kv from every node");
+    {
+        for (icli, cli) in clients.iter().enumerate() {
+            for i in 0..2 {
+                let k = format!("join-{}", i);
+                let res = cli.get_kv(k.as_str()).await;
 
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
-
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    MetaApiTestSuite {}.database_create_get_drop(&client).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_database_list() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
-
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    MetaApiTestSuite {}.database_list(&client).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_table_create_get_drop() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
-
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    MetaApiTestSuite {}.table_create_get_drop(&client).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_table_list() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
-
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    MetaApiTestSuite {}.table_list(&client).await
-}
-
-// TODO(xp): uncomment following tests when the function is ready
-// ------------------------------------------------------------
-
-/*
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    let test_db = "db1";
-    let plan = CreateDatabasePlan {
-        if_not_exists: false,
-        db: test_db.to_string(),
-        engine: "Local".to_string(),
-        options: Default::default(),
-    };
-    client.create_database(plan).await?;
-
-    // After `create db`, meta_ver will be increased to 1
-
-    let schema = Arc::new(DataSchema::new(vec![DataField::new(
-        "number",
-        DataType::UInt64,
-        false,
-    )]));
-
-    // create-tbl operation will increases meta_version
-    let plan = CreateTablePlan {
-        if_not_exists: true,
-        db: test_db.to_string(),
-        table: "tbl1".to_string(),
-        schema: schema.clone(),
-        options: Default::default(),
-        engine: "JSON".to_string(),
-    };
-
-    client.create_table(plan.clone()).await?;
-
-    let res = client.get_database_meta(None).await?;
-    assert!(res.is_some());
-    let snapshot = res.unwrap();
-    assert_eq!(2, snapshot.meta_ver);
-    assert_eq!(1, snapshot.db_metas.len());
-    assert_eq!(1, snapshot.tbl_metas.len());
-
-    // if lower_bound < current meta version, returns database meta
-    let res = client.get_database_meta(Some(0)).await?;
-    assert!(res.is_some());
-    let snapshot = res.unwrap();
-    assert_eq!(2, snapshot.meta_ver);
-    assert_eq!(1, snapshot.db_metas.len());
-
-    // if lower_bound equals current meta version, returns None
-    let res = client.get_database_meta(Some(2)).await?;
-    assert!(res.is_none());
-
-    // failed ddl do not effect meta version
-    //  recall: plan.if_not_exist == true
-    let _r = client.create_table(plan).await?;
-    let res = client.get_database_meta(Some(2)).await?;
-    assert!(res.is_none());
-
-    // drop-table will increase meta version
-    let plan = DropTablePlan {
-        if_exists: true,
-        db: test_db.to_string(),
-        table: "tbl1".to_string(),
-    };
-
-    client.drop_table(plan).await?;
-    let res = client.get_database_meta(Some(2)).await?;
-    assert!(res.is_some());
-    let snapshot = res.unwrap();
-    assert_eq!(3, snapshot.meta_ver);
-    assert_eq!(1, snapshot.db_metas.len());
-    assert_eq!(0, snapshot.tbl_metas.len());
+                tracing::debug!("get kv {} from {}-th node,res: {:?}", k, icli, res);
+                let res = res?;
+                assert_eq!(k.into_bytes(), res.result.unwrap().data);
+            }
+        }
+    }
 
     Ok(())
 }
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_get_database_meta_empty_db() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    // Empty Database
-    let res = client.get_database_meta(None).await?;
-    assert!(res.is_none());
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
-    let (_log_guards, ut_span) = init_meta_ut!();
-    let _ent = ut_span.enter();
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
-
-    // create-db operation will increases meta_version
-    let plan = CreateDatabasePlan {
-        if_not_exists: false,
-        db: "db1".to_string(),
-        engine: "Local".to_string(),
-        options: Default::default(),
-    };
-    client.create_database(plan).await?;
-
-    let res = client.get_database_meta(None).await?;
-    assert!(res.is_some());
-    let snapshot = res.unwrap();
-    assert_eq!(1, snapshot.meta_ver);
-    assert_eq!(1, snapshot.db_metas.len());
-
-    // if lower_bound < current meta version, returns database meta
-    let res = client.get_database_meta(Some(0)).await?;
-    assert!(res.is_some());
-    let snapshot = res.unwrap();
-    assert_eq!(1, snapshot.meta_ver);
-    assert_eq!(1, snapshot.db_metas.len());
-
-    // if lower_bound equals current meta version, returns None
-    let res = client.get_database_meta(Some(1)).await?;
-    assert!(res.is_none());
-
-    // failed ddl do not effect meta version
-    let plan = CreateDatabasePlan {
-        if_not_exists: true, // <<--
-        db: "db1".to_string(),
-        engine: "Local".to_string(),
-        options: Default::default(),
-    };
-
-    client.create_database(plan).await?;
-    let res = client.get_database_meta(Some(1)).await?;
-    assert!(res.is_none());
-
-    // drop-db will increase meta version
-    let plan = DropDatabasePlan {
-        if_exists: true,
-        db: "db1".to_string(),
-    };
-
-    client.drop_database(plan).await?;
-    let res = client.get_database_meta(Some(1)).await?;
-    assert!(res.is_some());
-    let snapshot = res.unwrap();
-
-    assert_eq!(2, snapshot.meta_ver);
-    assert_eq!(0, snapshot.db_metas.len());
-
-    Ok(())
-}
-*/

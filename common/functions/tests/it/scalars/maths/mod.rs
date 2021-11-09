@@ -15,5 +15,6 @@
 mod abs;
 mod angle;
 mod crc32;
+mod log;
 mod pi;
 mod trigonometric;

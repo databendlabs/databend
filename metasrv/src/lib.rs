@@ -12,16 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(backtrace)]
+
 #[allow(clippy::all)]
-pub mod protobuf {
-    include!(concat!(env!("OUT_DIR"), concat!("/meta.rs")));
-}
+pub mod proto;
 
 #[macro_use]
 pub mod tests;
 
+mod any_error;
 pub mod api;
 pub mod configs;
+pub mod errors;
 pub mod executor;
 pub mod meta_service;
 pub mod metrics;
+mod store;

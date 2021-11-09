@@ -121,12 +121,15 @@ pub(super) fn block_stats(data_block: &DataBlock) -> Result<BlockStats> {
                         0
                     }
                 }
-            };
+            } as u64;
+
+            let in_memory_size = col.get_array_memory_size() as u64;
 
             let col_stats = ColStats {
                 min,
                 max,
                 null_count,
+                in_memory_size,
             };
 
             Ok((idx, col_stats))
@@ -165,6 +168,7 @@ pub fn column_stats_reduce_with_schema(
             let mut min_stats = Vec::with_capacity(stats.len());
             let mut max_stats = Vec::with_capacity(stats.len());
             let mut null_count = 0;
+            let mut in_memory_size = 0;
 
             for col_stats in stats {
                 // to be optimized, with DataType and the value of data, we may
@@ -173,6 +177,7 @@ pub fn column_stats_reduce_with_schema(
                 max_stats.push(col_stats.max.clone());
 
                 null_count += col_stats.null_count;
+                in_memory_size += col_stats.in_memory_size;
             }
 
             // TODO panic
@@ -193,6 +198,7 @@ pub fn column_stats_reduce_with_schema(
                 min,
                 max,
                 null_count,
+                in_memory_size,
             });
             Ok(acc)
         })

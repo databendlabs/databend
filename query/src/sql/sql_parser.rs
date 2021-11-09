@@ -55,6 +55,7 @@ use crate::sql::DfShowMetrics;
 use crate::sql::DfShowProcessList;
 use crate::sql::DfShowSettings;
 use crate::sql::DfShowTables;
+use crate::sql::DfShowUsers;
 use crate::sql::DfStatement;
 use crate::sql::DfTruncateTable;
 use crate::sql::DfUseDatabase;
@@ -202,6 +203,8 @@ impl<'a> DfParser<'a> {
                             Ok(DfStatement::ShowProcessList(DfShowProcessList))
                         } else if self.consume_token("METRICS") {
                             Ok(DfStatement::ShowMetrics(DfShowMetrics))
+                        } else if self.consume_token("USERS") {
+                            Ok(DfStatement::ShowUsers(DfShowUsers))
                         } else {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
@@ -491,7 +494,7 @@ impl<'a> DfParser<'a> {
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let name = self.parser.parse_literal_string()?;
-        let host_name = if self.consume_token("@") {
+        let hostname = if self.consume_token("@") {
             self.parser.parse_literal_string()?
         } else {
             String::from("%")
@@ -532,7 +535,7 @@ impl<'a> DfParser<'a> {
         let create = DfCreateUser {
             if_not_exists,
             name,
-            host_name,
+            hostname,
             auth_type,
             password,
         };
