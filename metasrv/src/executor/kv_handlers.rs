@@ -29,9 +29,7 @@ use crate::executor::ActionHandler;
 #[async_trait::async_trait]
 impl RequestHandler<UpsertKVAction> for ActionHandler {
     async fn handle(&self, act: UpsertKVAction) -> common_exception::Result<UpsertKVActionReply> {
-        self.meta_node
-            .upsert_kv(&act.key, act.seq, act.value, act.value_meta)
-            .await
+        self.meta_node.upsert_kv(act).await
     }
 }
 

@@ -15,10 +15,7 @@
 use common_exception::Result;
 use common_meta_api::KVApi;
 use common_meta_types::GetKVActionReply;
-use common_meta_types::KVMeta;
 use common_meta_types::MGetKVActionReply;
-use common_meta_types::MatchSeq;
-use common_meta_types::Operation;
 use common_meta_types::PrefixListReply;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
@@ -31,21 +28,12 @@ use crate::PrefixListReq;
 
 #[async_trait::async_trait]
 impl KVApi for MetaFlightClient {
-    #[tracing::instrument(level = "debug", skip(self, value))]
+    #[tracing::instrument(level = "debug", skip(self, act))]
     async fn upsert_kv(
         &self,
-        key: &str,
-        seq: MatchSeq,
-        value: Operation<Vec<u8>>,
-        value_meta: Option<KVMeta>,
+        act: UpsertKVAction,
     ) -> common_exception::Result<UpsertKVActionReply> {
-        self.do_action(UpsertKVAction {
-            key: key.to_string(),
-            seq,
-            value,
-            value_meta,
-        })
-        .await
+        self.do_action(act).await
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
@@ -59,7 +47,6 @@ impl KVApi for MetaFlightClient {
     #[tracing::instrument(level = "debug", skip(self, keys))]
     async fn mget_kv(&self, keys: &[String]) -> common_exception::Result<MGetKVActionReply> {
         let keys = keys.to_vec();
-        //keys.iter().map(|k| k.to_string()).collect();
         self.do_action(MGetKVAction { keys }).await
     }
 
