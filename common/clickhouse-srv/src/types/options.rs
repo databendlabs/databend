@@ -165,66 +165,66 @@ impl convert::From<Certificate> for native_tls::Certificate {
 #[derive(Clone, PartialEq)]
 pub struct Options {
     /// Address of clickhouse server (defaults to `127.0.0.1:9000`).
-    pub(crate) addr: Url,
+    pub addr: Url,
 
     /// Database name. (defaults to `default`).
-    pub(crate) database: String,
+    pub database: String,
     /// User name (defaults to `default`).
-    pub(crate) username: String,
+    pub username: String,
     /// Access password (defaults to `""`).
-    pub(crate) password: String,
+    pub password: String,
 
     /// Enable compression (defaults to `false`).
-    pub(crate) compression: bool,
+    pub compression: bool,
 
     /// Lower bound of opened connections for `Pool` (defaults to 10).
-    pub(crate) pool_min: usize,
+    pub pool_min: usize,
     /// Upper bound of opened connections for `Pool` (defaults to 20).
-    pub(crate) pool_max: usize,
+    pub pool_max: usize,
 
     /// Whether to enable `TCP_NODELAY` (defaults to `true`).
-    pub(crate) nodelay: bool,
+    pub nodelay: bool,
     /// TCP keep alive timeout in milliseconds (defaults to `None`).
-    pub(crate) keepalive: Option<Duration>,
+    pub keepalive: Option<Duration>,
 
     /// Ping server every time before execute any query. (defaults to `true`)
-    pub(crate) ping_before_query: bool,
+    pub ping_before_query: bool,
     /// Count of retry to send request to server. (defaults to `3`)
-    pub(crate) send_retries: usize,
+    pub send_retries: usize,
     /// Amount of time to wait before next retry. (defaults to `5 sec`)
-    pub(crate) retry_timeout: Duration,
+    pub retry_timeout: Duration,
     /// Timeout for ping (defaults to `500 ms`)
-    pub(crate) ping_timeout: Duration,
+    pub ping_timeout: Duration,
 
     /// Timeout for connection (defaults to `500 ms`)
-    pub(crate) connection_timeout: Duration,
+    pub connection_timeout: Duration,
 
     /// Timeout for queries (defaults to `180 sec`)
-    pub(crate) query_timeout: Duration,
+    pub query_timeout: Duration,
 
     /// Timeout for inserts (defaults to `180 sec`)
-    pub(crate) insert_timeout: Option<Duration>,
+    pub insert_timeout: Option<Duration>,
 
     /// Timeout for execute (defaults to `180 sec`)
-    pub(crate) execute_timeout: Option<Duration>,
+    pub execute_timeout: Option<Duration>,
 
     /// Enable TLS encryption (defaults to `false`)
     #[cfg(feature = "tls")]
-    pub(crate) secure: bool,
+    pub secure: bool,
 
     /// Skip certificate verification (default is `false`).
     #[cfg(feature = "tls")]
-    pub(crate) skip_verify: bool,
+    pub skip_verify: bool,
 
     /// An X509 certificate.
     #[cfg(feature = "tls")]
-    pub(crate) certificate: Option<Certificate>,
+    pub certificate: Option<Certificate>,
 
     /// Restricts permissions for read data, write data and change settings queries.
-    pub(crate) readonly: Option<u8>,
+    pub readonly: Option<u8>,
 
     /// Comma separated list of single address host for load-balancing.
-    pub(crate) alt_hosts: Vec<Url>,
+    pub alt_hosts: Vec<Url>,
 }
 
 impl fmt::Debug for Options {
@@ -430,7 +430,7 @@ impl FromStr for Options {
     }
 }
 
-fn from_url(url_str: &str) -> Result<Options> {
+pub fn from_url(url_str: &str) -> Result<Options> {
     let url = Url::parse(url_str)?;
 
     if url.scheme() != "tcp" {
@@ -526,7 +526,7 @@ where
     }
 }
 
-fn get_username_from_url(url: &Url) -> Option<&str> {
+pub fn get_username_from_url(url: &Url) -> Option<&str> {
     let user = url.username();
     if user.is_empty() {
         return None;
@@ -534,11 +534,11 @@ fn get_username_from_url(url: &Url) -> Option<&str> {
     Some(user)
 }
 
-fn get_password_from_url(url: &Url) -> Option<&str> {
+pub fn get_password_from_url(url: &Url) -> Option<&str> {
     url.password()
 }
 
-fn get_database_from_url(url: &Url) -> Result<Option<&str>> {
+pub fn get_database_from_url(url: &Url) -> Result<Option<&str>> {
     match url.path_segments() {
         None => Ok(None),
         Some(mut segments) => {
@@ -556,7 +556,7 @@ fn get_database_from_url(url: &Url) -> Result<Option<&str>> {
     }
 }
 
-fn parse_duration(source: &str) -> std::result::Result<Duration, ()> {
+pub fn parse_duration(source: &str) -> std::result::Result<Duration, ()> {
     let digits_count = source.chars().take_while(|c| c.is_digit(10)).count();
 
     let left: String = source.chars().take(digits_count).collect();
@@ -574,7 +574,7 @@ fn parse_duration(source: &str) -> std::result::Result<Duration, ()> {
     }
 }
 
-fn parse_opt_duration(source: &str) -> std::result::Result<Option<Duration>, ()> {
+pub fn parse_opt_duration(source: &str) -> std::result::Result<Option<Duration>, ()> {
     if source == "none" {
         return Ok(None);
     }
@@ -583,7 +583,7 @@ fn parse_opt_duration(source: &str) -> std::result::Result<Option<Duration>, ()>
     Ok(Some(duration))
 }
 
-fn parse_opt_u8(source: &str) -> std::result::Result<Option<u8>, ()> {
+pub fn parse_opt_u8(source: &str) -> std::result::Result<Option<u8>, ()> {
     if source == "none" {
         return Ok(None);
     }
@@ -596,7 +596,7 @@ fn parse_opt_u8(source: &str) -> std::result::Result<Option<u8>, ()> {
     Ok(Some(duration))
 }
 
-fn parse_compression(source: &str) -> std::result::Result<bool, ()> {
+pub fn parse_compression(source: &str) -> std::result::Result<bool, ()> {
     match source {
         "none" => Ok(false),
         "lz4" => Ok(true),
@@ -604,7 +604,7 @@ fn parse_compression(source: &str) -> std::result::Result<bool, ()> {
     }
 }
 
-fn parse_hosts(source: &str) -> std::result::Result<Vec<Url>, ()> {
+pub fn parse_hosts(source: &str) -> std::result::Result<Vec<Url>, ()> {
     let mut result = Vec::new();
     for host in source.split(',') {
         match Url::from_str(&format!("tcp://{}", host)) {
@@ -613,116 +613,4 @@ fn parse_hosts(source: &str) -> std::result::Result<Vec<Url>, ()> {
         }
     }
     Ok(result)
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_parse_hosts() {
-        let source = "host2:9000,host3:9000";
-        let expected = vec![
-            Url::from_str("tcp://host2:9000").unwrap(),
-            Url::from_str("tcp://host3:9000").unwrap(),
-        ];
-        let actual = parse_hosts(source).unwrap();
-        assert_eq!(actual, expected)
-    }
-
-    #[test]
-    fn test_parse_default() {
-        let url = "tcp://host1";
-        let options = from_url(url).unwrap();
-        assert_eq!(options.database, "default");
-        assert_eq!(options.username, "default");
-        assert_eq!(options.password, "");
-    }
-
-    #[test]
-    #[cfg(feature = "tls")]
-    fn test_parse_secure_options() {
-        let url = "tcp://username:password@host1:9001/database?ping_timeout=42ms&keepalive=99s&compression=lz4&connection_timeout=10s&secure=true&skip_verify=true";
-        assert_eq!(
-            Options {
-                username: "username".into(),
-                password: "password".into(),
-                addr: Url::parse("tcp://username:password@host1:9001").unwrap(),
-                database: "database".into(),
-                keepalive: Some(Duration::from_secs(99)),
-                ping_timeout: Duration::from_millis(42),
-                connection_timeout: Duration::from_secs(10),
-                compression: true,
-                secure: true,
-                skip_verify: true,
-                ..Options::default()
-            },
-            from_url(url).unwrap(),
-        );
-    }
-
-    #[test]
-    fn test_parse_options() {
-        let url = "tcp://username:password@host1:9001/database?ping_timeout=42ms&keepalive=99s&compression=lz4&connection_timeout=10s";
-        assert_eq!(
-            Options {
-                username: "username".into(),
-                password: "password".into(),
-                addr: Url::parse("tcp://username:password@host1:9001").unwrap(),
-                database: "database".into(),
-                keepalive: Some(Duration::from_secs(99)),
-                ping_timeout: Duration::from_millis(42),
-                connection_timeout: Duration::from_secs(10),
-                compression: true,
-                ..Options::default()
-            },
-            from_url(url).unwrap(),
-        );
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_parse_invalid_url() {
-        let url = "ʘ_ʘ";
-        from_url(url).unwrap();
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_parse_with_unknown_url() {
-        let url = "tcp://localhost:9000/foo?bar=baz";
-        from_url(url).unwrap();
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_parse_with_multi_databases() {
-        let url = "tcp://localhost:9000/foo/bar";
-        from_url(url).unwrap();
-    }
-
-    #[test]
-    fn test_parse_duration() {
-        assert_eq!(parse_duration("3s").unwrap(), Duration::from_secs(3));
-        assert_eq!(parse_duration("123ms").unwrap(), Duration::from_millis(123));
-
-        parse_duration("ms").unwrap_err();
-        parse_duration("1ss").unwrap_err();
-    }
-
-    #[test]
-    fn test_parse_opt_duration() {
-        assert_eq!(
-            parse_opt_duration("3s").unwrap(),
-            Some(Duration::from_secs(3))
-        );
-        assert_eq!(parse_opt_duration("none").unwrap(), None::<Duration>);
-    }
-
-    #[test]
-    fn test_parse_compression() {
-        assert!(!parse_compression("none").unwrap());
-        assert!(parse_compression("lz4").unwrap());
-        parse_compression("?").unwrap_err();
-    }
 }

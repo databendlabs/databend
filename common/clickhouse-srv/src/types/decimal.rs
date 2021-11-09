@@ -140,7 +140,7 @@ impl PartialEq for Decimal {
     }
 }
 
-fn decimal2str(decimal: &Decimal) -> String {
+pub fn decimal2str(decimal: &Decimal) -> String {
     let mut r = format!("{}", decimal.underlying);
     while r.len() < decimal.scale() {
         r.insert(0, '0');
@@ -245,7 +245,7 @@ impl Decimal {
         self.scale as usize
     }
 
-    pub(crate) fn set_scale(self, scale: u8) -> Self {
+    pub fn set_scale(self, scale: u8) -> Self {
         let underlying = match scale.cmp(&self.scale) {
             Ordering::Less => {
                 let delta = self.scale() - scale as usize;
@@ -264,90 +264,5 @@ impl Decimal {
             scale,
             nobits: self.nobits,
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_new() {
-        assert_eq!(Decimal::new(2, 1), Decimal::of(0.2_f64, 1));
-        assert_eq!(Decimal::new(2, 5), Decimal::of(0.00002_f64, 5));
-    }
-
-    #[test]
-    fn test_display() {
-        assert_eq!(format!("{}", Decimal::of(2.1_f32, 4)), "2.1000");
-        assert_eq!(format!("{}", Decimal::of(0.2_f64, 4)), "0.2000");
-        assert_eq!(format!("{}", Decimal::of(2, 4)), "2.0000");
-        assert_eq!(format!("{:?}", Decimal::of(2, 4)), "2.0000");
-    }
-
-    #[test]
-    fn test_eq() {
-        assert_eq!(Decimal::of(2.0_f64, 4), Decimal::of(2.0_f64, 4));
-        assert_ne!(Decimal::of(3.0_f64, 4), Decimal::of(2.0_f64, 4));
-
-        assert_eq!(Decimal::of(2.0_f64, 4), Decimal::of(2.0_f64, 2));
-        assert_ne!(Decimal::of(2.0_f64, 4), Decimal::of(3.0_f64, 2));
-
-        assert_eq!(Decimal::of(2.0_f64, 2), Decimal::of(2.0_f64, 4));
-        assert_ne!(Decimal::of(3.0_f64, 2), Decimal::of(2.0_f64, 4));
-    }
-
-    #[test]
-    fn test_internal32() {
-        let internal: i32 = Decimal::of(2, 4).internal();
-        assert_eq!(internal, 20000_i32);
-    }
-
-    #[test]
-    fn test_internal64() {
-        let internal: i64 = Decimal::of(2, 4).internal();
-        assert_eq!(internal, 20000_i64);
-    }
-
-    #[test]
-    fn test_scale() {
-        assert_eq!(Decimal::of(2, 4).scale(), 4);
-    }
-
-    #[test]
-    fn test_from_f32() {
-        let value: f32 = Decimal::of(2, 4).into();
-        assert!((value - 2.0_f32).abs() <= std::f32::EPSILON);
-    }
-
-    #[test]
-    fn test_from_f64() {
-        let value: f64 = Decimal::of(2, 4).into();
-        assert!((value - 2.0_f64).abs() < std::f64::EPSILON);
-    }
-
-    #[test]
-    fn set_scale1() {
-        let a = Decimal::of(12, 3);
-        let b = a.set_scale(2);
-
-        assert_eq!(2, b.scale);
-        assert_eq!(1200, b.underlying);
-    }
-
-    #[test]
-    fn set_scale2() {
-        let a = Decimal::of(12, 3);
-        let b = a.set_scale(4);
-
-        assert_eq!(4, b.scale);
-        assert_eq!(120_000, b.underlying);
-    }
-
-    #[test]
-    fn test_decimal2str() {
-        let d = Decimal::of(0.00001, 5);
-        let actual = decimal2str(&d);
-        assert_eq!(actual, "0.00001".to_string());
     }
 }

@@ -25,7 +25,7 @@ use self::chunk::ChunkColumnData;
 pub(crate) use self::column_data::ColumnData;
 pub use self::concat::ConcatColumnData;
 pub use self::numeric::VectorColumnData;
-pub(crate) use self::string_pool::StringPool;
+pub use self::string_pool::StringPool;
 use crate::binary::Encoder;
 use crate::binary::ReadEx;
 use crate::errors::Error;

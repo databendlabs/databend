@@ -12,12 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use self::encoder::Encoder;
-pub use self::parser::Parser;
-pub use self::read_ex::ReadEx;
-pub use self::uvarint::put_uvarint;
+use common_clickhouse_srv::errors::*;
 
-mod encoder;
-mod parser;
-mod read_ex;
-mod uvarint;
+#[test]
+fn to_std_error_without_recursion() {
+    let src_err: Error = From::from("Somth went wrong.");
+    let dst_err: Box<dyn std::error::Error> = src_err.into();
+    assert_eq!(dst_err.to_string(), "Other error: `Somth went wrong.`");
+}
+
+#[test]
+fn to_io_error_without_recursion() {
+    let src_err: Error = From::from("Somth went wrong.");
+    let dst_err: std::io::Error = src_err.into();
+    assert_eq!(dst_err.to_string(), "Other error: `Somth went wrong.`");
+}

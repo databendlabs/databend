@@ -12,12 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use self::encoder::Encoder;
-pub use self::parser::Parser;
-pub use self::read_ex::ReadEx;
-pub use self::uvarint::put_uvarint;
+use common_clickhouse_srv::binary::put_uvarint;
+use common_clickhouse_srv::binary::ReadEx;
 
-mod encoder;
-mod parser;
-mod read_ex;
-mod uvarint;
+#[test]
+fn test_read_uvarint() {
+    use std::io::Cursor;
+
+    let bytes = [194_u8, 10];
+    let mut cursor = Cursor::new(bytes);
+
+    let actual = cursor.read_uvarint().unwrap();
+
+    assert_eq!(actual, 1346)
+}
+
+#[test]
+fn test_put_uvarint() {
+    let expected = [148u8, 145, 6, 0, 0, 0, 0, 0, 0, 0];
+    let mut buffer = [0u8; 10];
+
+    let actual = put_uvarint(&mut buffer[..], 100_500);
+
+    assert_eq!(actual, 3);
+    assert_eq!(buffer, expected);
+}

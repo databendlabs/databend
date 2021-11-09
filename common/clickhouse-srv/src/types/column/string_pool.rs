@@ -25,7 +25,7 @@ struct StringPtr {
 }
 
 #[derive(Clone)]
-pub(crate) struct StringPool {
+pub struct StringPool {
     chunks: Vec<Vec<u8>>,
     pointers: Vec<StringPtr>,
     position: usize,
