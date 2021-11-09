@@ -70,6 +70,7 @@ cli-build:
 
 cli-build-debug:
 	bash ./scripts/build/build-cli.sh build-cli-debug
+
 cli-install:
 	bash ./scripts/build/build-cli.sh install-cli
 
