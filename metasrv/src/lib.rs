@@ -15,7 +15,9 @@
 #![feature(backtrace)]
 
 #[allow(clippy::all)]
-pub mod proto;
+pub mod proto {
+    include!(concat!(env!("OUT_DIR"), concat!("/meta.rs")));
+}
 
 #[macro_use]
 pub mod tests;
