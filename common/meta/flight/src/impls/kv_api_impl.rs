@@ -20,6 +20,7 @@ use common_meta_types::MGetKVActionReply;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::PrefixListReply;
+use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 use common_tracing::tracing;
 
@@ -27,7 +28,6 @@ use crate::GetKVAction;
 use crate::MGetKVAction;
 use crate::MetaFlightClient;
 use crate::PrefixListReq;
-use crate::UpsertKVAction;
 
 #[async_trait::async_trait]
 impl KVApi for MetaFlightClient {

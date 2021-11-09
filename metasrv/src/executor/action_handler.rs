@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
+use common_meta_api::KVApi;
 use common_meta_flight::MetaFlightAction;
 use common_meta_flight::RequestFor;
 use serde::Serialize;

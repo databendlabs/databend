@@ -17,10 +17,10 @@ use common_meta_api::KVApi;
 use common_meta_flight::GetKVAction;
 use common_meta_flight::MGetKVAction;
 use common_meta_flight::PrefixListReq;
-use common_meta_flight::UpsertKVAction;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::PrefixListReply;
+use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 
 use crate::executor::action_handler::RequestHandler;

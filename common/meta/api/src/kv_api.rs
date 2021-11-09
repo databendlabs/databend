@@ -22,6 +22,7 @@ use common_meta_types::MGetKVActionReply;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::PrefixListReply;
+use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 
 #[async_trait]
