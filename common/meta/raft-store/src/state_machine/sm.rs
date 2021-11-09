@@ -293,7 +293,7 @@ impl StateMachine {
     /// This is the only entry to modify state machine.
     /// The `cmd` is always committed by raft before applying.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn apply_cmd(&mut self, cmd: &Cmd) -> common_exception::Result<AppliedState> {
+    pub async fn apply_cmd(&self, cmd: &Cmd) -> common_exception::Result<AppliedState> {
         match cmd {
             Cmd::IncrSeq { ref key } => Ok(self.incr_seq(key).await?.into()),
 
@@ -748,59 +748,14 @@ impl StateMachine {
         Ok(tbls)
     }
 
-    pub fn get_kv(&self, key: &str) -> common_exception::Result<Option<SeqV<Vec<u8>>>> {
-        // TODO(xp) refine get(): a &str is enough for key
-        let sv = self.kvs().get(&key.to_string())?;
-        tracing::debug!("get_kv sv:{:?}", sv);
-        let sv = match sv {
-            None => return Ok(None),
-            Some(sv) => sv,
-        };
-
-        Ok(Self::unexpired(sv))
-    }
-
-    pub fn mget_kv(
-        &self,
-        keys: &[impl AsRef<str>],
-    ) -> common_exception::Result<Vec<Option<SeqV<Vec<u8>>>>> {
-        let kvs = self.kvs();
-        let mut res = vec![];
-        for x in keys.iter() {
-            let v = kvs.get(&x.as_ref().to_string())?;
-            let v = Self::unexpired_opt(v);
-            res.push(v)
-        }
-
-        Ok(res)
-    }
-
-    pub fn prefix_list_kv(
-        &self,
-        prefix: &str,
-    ) -> common_exception::Result<Vec<(String, SeqV<Vec<u8>>)>> {
-        let kvs = self.kvs();
-        let kv_pairs = kvs.scan_prefix(&prefix.to_string())?;
-
-        let x = kv_pairs.into_iter();
-
-        // Convert expired to None
-        let x = x.map(|(k, v)| (k, Self::unexpired(v)));
-        // Remove None
-        let x = x.filter(|(_k, v)| v.is_some());
-        // Extract from an Option
-        let x = x.map(|(k, v)| (k, v.unwrap()));
-
-        Ok(x.collect())
-    }
-
-    fn unexpired_opt<V: Debug>(seq_value: Option<SeqV<V>>) -> Option<SeqV<V>> {
+    pub fn unexpired_opt<V: Debug>(seq_value: Option<SeqV<V>>) -> Option<SeqV<V>> {
         match seq_value {
             None => None,
             Some(sv) => Self::unexpired(sv),
         }
     }
-    fn unexpired<V: Debug>(seq_value: SeqV<V>) -> Option<SeqV<V>> {
+
+    pub fn unexpired<V: Debug>(seq_value: SeqV<V>) -> Option<SeqV<V>> {
         // TODO(xp): log must be assigned with a ts.
 
         // TODO(xp): background task to clean expired

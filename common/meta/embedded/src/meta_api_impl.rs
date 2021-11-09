@@ -49,7 +49,7 @@ impl MetaApi for MetaEmbedded {
             name: plan.db.clone(),
         };
 
-        let mut sm = self.inner.lock().await;
+        let sm = self.inner.lock().await;
         let res = sm.apply_cmd(&cmd).await?;
 
         let ch: Change<u64> = res.try_into().unwrap();
@@ -74,7 +74,7 @@ impl MetaApi for MetaEmbedded {
             name: plan.db.clone(),
         };
 
-        let mut sm = self.inner.lock().await;
+        let sm = self.inner.lock().await;
         let res = sm.apply_cmd(&cmd).await?;
 
         assert!(res.result().is_none());
@@ -131,7 +131,7 @@ impl MetaApi for MetaEmbedded {
             table_meta,
         };
 
-        let mut sm = self.inner.lock().await;
+        let sm = self.inner.lock().await;
         let res = sm.apply_cmd(&cr).await?;
         let (prev, result) = match res {
             AppliedState::TableIdent { prev, result } => (prev, result),
@@ -164,7 +164,7 @@ impl MetaApi for MetaEmbedded {
             table_name: table_name.clone(),
         };
 
-        let mut sm = self.inner.lock().await;
+        let sm = self.inner.lock().await;
         let res = sm.apply_cmd(&cr).await?;
 
         assert!(res.result().is_none());
@@ -242,7 +242,7 @@ impl MetaApi for MetaEmbedded {
         option_key: String,
         option_value: String,
     ) -> Result<UpsertTableOptionReply> {
-        let mut sm = self.inner.lock().await;
+        let sm = self.inner.lock().await;
 
         let cmd = Cmd::UpsertTableOptions {
             table_id,
