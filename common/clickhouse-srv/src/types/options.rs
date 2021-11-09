@@ -556,6 +556,7 @@ pub fn get_database_from_url(url: &Url) -> Result<Option<&str>> {
     }
 }
 
+#[allow(clippy::result_unit_err)]
 pub fn parse_duration(source: &str) -> std::result::Result<Duration, ()> {
     let digits_count = source.chars().take_while(|c| c.is_digit(10)).count();
 
@@ -574,6 +575,7 @@ pub fn parse_duration(source: &str) -> std::result::Result<Duration, ()> {
     }
 }
 
+#[allow(clippy::result_unit_err)]
 pub fn parse_opt_duration(source: &str) -> std::result::Result<Option<Duration>, ()> {
     if source == "none" {
         return Ok(None);
@@ -583,6 +585,7 @@ pub fn parse_opt_duration(source: &str) -> std::result::Result<Option<Duration>,
     Ok(Some(duration))
 }
 
+#[allow(clippy::result_unit_err)]
 pub fn parse_opt_u8(source: &str) -> std::result::Result<Option<u8>, ()> {
     if source == "none" {
         return Ok(None);
@@ -596,6 +599,7 @@ pub fn parse_opt_u8(source: &str) -> std::result::Result<Option<u8>, ()> {
     Ok(Some(duration))
 }
 
+#[allow(clippy::result_unit_err)]
 pub fn parse_compression(source: &str) -> std::result::Result<bool, ()> {
     match source {
         "none" => Ok(false),
@@ -604,6 +608,7 @@ pub fn parse_compression(source: &str) -> std::result::Result<bool, ()> {
     }
 }
 
+#[allow(clippy::result_unit_err)]
 pub fn parse_hosts(source: &str) -> std::result::Result<Vec<Url>, ()> {
     let mut result = Vec::new();
     for host in source.split(',') {

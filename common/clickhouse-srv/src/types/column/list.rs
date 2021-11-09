@@ -35,6 +35,10 @@ where T: StatBuffer + Unmarshal<T> + Marshal + Copy + Sync + 'static
         self.data.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn at(&self, index: usize) -> T {
         self.data[index]
     }
@@ -63,6 +67,14 @@ where T: StatBuffer + Unmarshal<T> + Marshal + Copy + Sync + 'static
 
     pub(super) unsafe fn as_ptr(&self) -> *const T {
         self.data.as_ptr()
+    }
+}
+
+impl<T> Default for List<T>
+where T: StatBuffer + Unmarshal<T> + Marshal + Copy + Sync + 'static
+{
+    fn default() -> Self {
+        Self::new()
     }
 }
 
