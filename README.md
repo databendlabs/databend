@@ -1,4 +1,4 @@
-qq<div align="center">
+<div align="center">
 <h1>Databend</h1>
 <p align="center">The Open Source Serverless Data Warehouse for Everyone</p>
  
