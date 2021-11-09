@@ -36,13 +36,14 @@ impl FuseTable {
         if let Some(loc) = location {
             let da = io_ctx.get_data_accessor()?;
             let schema = self.table_info.schema();
+            let push_downs_c = push_downs.clone();
             let block_metas = async {
                 let snapshot = read_obj(da.clone(), loc).await?;
-                index::range_filter(&snapshot, schema, push_downs, da).await
+                index::range_filter(&snapshot, schema, push_downs_c, da).await
             }
             .wait_in(&io_ctx.get_runtime(), None)??;
 
-            let (statistics, parts) = self.to_partitions(&block_metas);
+            let (statistics, parts) = Self::to_partitions(&block_metas, push_downs);
             Ok((statistics, parts))
         } else {
             Ok((Statistics::default(), vec![]))

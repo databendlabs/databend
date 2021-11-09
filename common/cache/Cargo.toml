@@ -6,6 +6,10 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lib]
+doctest = false
+test = false
+
 [features]
 heapsize = ["heapsize_"]
 amortized = ["ritelinked/ahash-amortized", "ritelinked/inline-more-amortized"]

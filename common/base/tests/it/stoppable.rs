@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::*;
 use common_exception::Result;
 use common_tracing::tracing;
 use tokio::sync::broadcast;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
 use tokio::time::Duration;
-
-use crate::stop_handle::StopHandle;
-use crate::Stoppable;
 
 /// A task that takes 100 years to gracefully stop.
 #[derive(Default)]

@@ -15,11 +15,13 @@
 
 use common_management::UserInfo;
 use common_meta_types::AuthType;
+use common_meta_types::UserPrivilege;
+use common_meta_types::UserQuota;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct User {
     name: String,
-    host_name: String,
+    hostname: String,
     password: String,
     auth_type: AuthType,
 }
@@ -27,13 +29,13 @@ pub struct User {
 impl User {
     pub fn new(
         name: impl Into<String>,
-        host_name: impl Into<String>,
+        hostname: impl Into<String>,
         password: impl Into<String>,
         auth_type: AuthType,
     ) -> Self {
         User {
             name: name.into(),
-            host_name: host_name.into(),
+            hostname: hostname.into(),
             password: password.into(),
             auth_type,
         }
@@ -42,11 +44,16 @@ impl User {
 
 impl From<&User> for UserInfo {
     fn from(user: &User) -> Self {
+        let privileges = UserPrivilege::empty();
+        let quota = UserQuota::no_limit();
+
         UserInfo {
             name: user.name.clone(),
-            host_name: user.host_name.clone(),
+            hostname: user.hostname.clone(),
             password: Vec::from(user.password.clone()),
             auth_type: user.auth_type.clone(),
+            privileges,
+            quota,
         }
     }
 }

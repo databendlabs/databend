@@ -27,6 +27,7 @@ pub use system_database::SystemDatabase;
 pub use tables_table::TablesTable;
 pub use tracing_table::TracingTable;
 pub use tracing_table_stream::TracingTableStream;
+pub use users_table::UsersTable;
 
 #[cfg(test)]
 mod clusters_table_test;
@@ -50,6 +51,8 @@ mod settings_table_test;
 mod tables_table_test;
 #[cfg(test)]
 mod tracing_table_test;
+#[cfg(test)]
+mod users_table_test;
 
 mod clusters_table;
 mod columns_table;
@@ -66,5 +69,6 @@ mod system_database;
 mod tables_table;
 mod tracing_table;
 mod tracing_table_stream;
+mod users_table;
 
 // TODO introduce A "base" type VTable, to de-duplicate codes of system tables

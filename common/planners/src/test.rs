@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
@@ -24,7 +22,6 @@ use crate::Part;
 use crate::Partitions;
 use crate::PlanNode;
 use crate::ReadDataSourcePlan;
-use crate::ScanPlan;
 use crate::Statistics;
 
 pub struct Test {}
@@ -53,7 +50,6 @@ impl Test {
                 "(Read from system.numbers_mt table, Exactly Read Rows:{}, Read Bytes:{})",
                 statistics.read_rows, statistics.read_bytes
             ),
-            scan_plan: Arc::new(ScanPlan::empty()),
             tbl_args: None,
             push_downs: None,
         }))

@@ -18,9 +18,6 @@ extern crate log;
 #[cfg(not(target_os = "macos"))]
 extern crate heapsize_;
 
-#[cfg(test)]
-mod disk_cache_test;
-
 mod cache;
 #[allow(dead_code)]
 mod disk_cache;

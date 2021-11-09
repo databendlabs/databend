@@ -38,7 +38,6 @@ use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
-use crate::ScanPlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateTablePlan;
@@ -60,13 +59,13 @@ use crate::UseDatabasePlan;
 /// struct MyVisitor {}
 ///
 /// impl<'plan> PlanVisitor<'plan> for MyVisitor {
-///     fn visit_scan(&mut self, plan: &'plan ScanPlan) {
+///     fn visit_read_data_source(&mut self, plan: &'plan ReadDataSourcePlan) {
 ///         println!("{}", plan.schema_name)
 ///     }
 /// }
 ///
 /// let visitor = MyVisitor {};
-/// let plan = PlanNode::Scan(ScanPlan {
+/// let plan = PlanNode::ReadDataSource(ReadDataSourcePlan {
 ///     schema_name: "table",
 ///     ...
 /// });
@@ -99,7 +98,6 @@ pub trait PlanVisitor {
             PlanNode::Sort(plan) => self.visit_sort(plan),
             PlanNode::Limit(plan) => self.visit_limit(plan),
             PlanNode::LimitBy(plan) => self.visit_limit_by(plan),
-            PlanNode::Scan(plan) => self.visit_scan(plan),
             PlanNode::ReadSource(plan) => self.visit_read_data_source(plan),
             PlanNode::Select(plan) => self.visit_select(plan),
             PlanNode::Explain(plan) => self.visit_explain(plan),
@@ -214,10 +212,6 @@ pub trait PlanVisitor {
 
     fn visit_limit_by(&mut self, plan: &LimitByPlan) -> Result<()> {
         self.visit_plan_node(plan.input.as_ref())
-    }
-
-    fn visit_scan(&mut self, _: &ScanPlan) -> Result<()> {
-        Ok(())
     }
 
     fn visit_read_data_source(&mut self, _: &ReadDataSourcePlan) -> Result<()> {

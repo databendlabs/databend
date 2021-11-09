@@ -95,7 +95,6 @@ impl Table for MemoryTable {
         &self,
         io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
-        _partition_num_hint: Option<usize>,
     ) -> Result<(Statistics, Partitions)> {
         let blocks = self.blocks.read();
 

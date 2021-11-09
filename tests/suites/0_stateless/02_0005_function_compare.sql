@@ -8,10 +8,13 @@ select number from numbers_mt(10) where number   between 4 + 0.1  and 8 - 0.1  o
 -- like
 select * from system.databases where name like '%sys%';
 select * from system.databases where name like '_ef_ul_';
+select '%' like '\%';
+select '%' like '\\%';
 
 -- not like
 select * from system.databases where name not like '%sys%' order by name;
 select * from system.databases where name not like '_ef_ul_' order by name;
+select '\%' not like '\%';
 
 select * from numbers(10) where null = true;
 select * from numbers(10) where null and true;
@@ -19,7 +22,7 @@ select * from numbers(10) where null and true;
 
 select '==compare_number_string==';
 -- todo: partial parse case
--- select '123 ab' = 123;
+select '123 ab' = 123;
 select '123' = 123;
 select '7.4' = 7.4;
 select '7.4' > 7;

@@ -14,15 +14,6 @@
 
 #![feature(thread_local)]
 
-#[cfg(test)]
-mod runtime_test;
-
-#[cfg(test)]
-mod progress_test;
-
-#[cfg(test)]
-mod stoppable_test;
-
 mod profiling;
 mod progress;
 mod runtime;

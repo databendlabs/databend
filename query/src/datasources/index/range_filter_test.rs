@@ -36,16 +36,19 @@ fn test_range_filter() -> Result<()> {
         min: DataValue::Int64(Some(1)),
         max: DataValue::Int64(Some(20)),
         null_count: 1,
+        in_memory_size: 0,
     });
     stats.insert(1u32, ColStats {
         min: DataValue::Int32(Some(3)),
         max: DataValue::Int32(Some(10)),
         null_count: 0,
+        in_memory_size: 0,
     });
     stats.insert(2u32, ColStats {
         min: DataValue::String(Some("abc".as_bytes().to_vec())),
         max: DataValue::String(Some("bcd".as_bytes().to_vec())),
         null_count: 0,
+        in_memory_size: 0,
     });
 
     #[allow(dead_code)]
@@ -223,10 +226,10 @@ fn test_build_verifiable_function() -> Result<()> {
             expect: "((min_c != sys\\s) or (max_c != sys\\s))",
         },
         Test {
-            name: "c not like 'sys%%'",
+            name: "c not like 'sys%'",
             expr: Expression::create_binary_expression("not like", vec![
                 col("c"),
-                lit("sys%%".as_bytes()),
+                lit("sys%".as_bytes()),
             ]),
             expect: "((min_c < sys) or (max_c >= syt))",
         },

@@ -22,7 +22,6 @@ use common_meta_types::TableInfo;
 use crate::Expression;
 use crate::Extras;
 use crate::Partitions;
-use crate::ScanPlan;
 use crate::Statistics;
 
 // TODO: Delete the scan plan field, but it depends on plan_parser:L394
@@ -41,7 +40,6 @@ pub struct ReadDataSourcePlan {
     pub parts: Partitions,
     pub statistics: Statistics,
     pub description: String,
-    pub scan_plan: Arc<ScanPlan>,
 
     pub tbl_args: Option<Vec<Expression>>,
     pub push_downs: Option<Extras>,
