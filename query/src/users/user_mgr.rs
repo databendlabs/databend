@@ -50,7 +50,7 @@ impl UserManager {
     }
 
     // Get one user from by tenant.
-    pub async fn get_user(&self, user: &str) -> Result<UserInfo> {
+    pub async fn get_user(&self, user: &str, hostname: &str) -> Result<UserInfo> {
         match user {
             // TODO(BohuTANG): Mock, need removed.
             "default" | "" | "root" => {
@@ -58,16 +58,16 @@ impl UserManager {
                 Ok(user.into())
             }
             _ => {
-                let get_user = self.api_provider.get_user(user.to_string(), None);
+                let get_user =
+                    self.api_provider
+                        .get_user(user.to_string(), hostname.to_string(), None);
                 Ok(get_user.await?.data)
             }
         }
     }
 
     // Auth the user and password for different Auth type.
-    pub async fn auth_user(&self, info: CertifiedInfo) -> Result<bool> {
-        let user = self.get_user(&info.user_name).await?;
-
+    pub async fn auth_user(&self, user: UserInfo, info: CertifiedInfo) -> Result<bool> {
         match user.auth_type {
             AuthType::None => Ok(true),
             AuthType::PlainText => Ok(user.password == info.user_password),
@@ -90,9 +90,26 @@ impl UserManager {
         }
     }
 
+    // Get the tenant users list by name.
+    pub async fn get_users(&self, username: &str) -> Result<Vec<UserInfo>> {
+        let get_users = self.api_provider.get_users(Some(username.to_string()));
+
+        let mut res = vec![];
+        match get_users.await {
+            Err(failure) => Err(failure.add_message_back("(while get users).")),
+            Ok(seq_users_info) => {
+                for seq_user_info in seq_users_info {
+                    res.push(seq_user_info.data);
+                }
+
+                Ok(res)
+            }
+        }
+    }
+
     // Get the tenant all users list.
-    pub async fn get_users(&self) -> Result<Vec<UserInfo>> {
-        let get_users = self.api_provider.get_users();
+    pub async fn get_all_users(&self) -> Result<Vec<UserInfo>> {
+        let get_users = self.api_provider.get_users(None);
 
         let mut res = vec![];
         match get_users.await {
@@ -117,8 +134,10 @@ impl UserManager {
     }
 
     // Drop a user by name.
-    pub async fn drop_user(&self, user: &str) -> Result<()> {
-        let drop_user = self.api_provider.drop_user(user.to_string(), None);
+    pub async fn drop_user(&self, username: &str, hostname: &str) -> Result<()> {
+        let drop_user =
+            self.api_provider
+                .drop_user(username.to_string(), hostname.to_string(), None);
         match drop_user.await {
             Ok(res) => Ok(res),
             Err(failure) => Err(failure.add_message_back("(while drop user).")),

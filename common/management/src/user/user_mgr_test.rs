@@ -32,6 +32,7 @@ use mockall::*;
 
 use crate::user::user_api::UserInfo;
 use crate::user::user_api::UserMgrApi;
+use crate::user::user_mgr::format_user_key;
 use crate::UserMgr;
 
 // and mock!
@@ -73,9 +74,13 @@ mod add {
             Vec::from(test_password),
             auth_type.clone(),
         );
+        let v = serde_json::to_vec(&user_info)?;
         let value = Operation::Update(serde_json::to_vec(&user_info)?);
 
-        let test_key = format!("__fd_users/tenant1/{}", test_user_name);
+        let test_key = format!(
+            "__fd_users/tenant1/{}",
+            format_user_key(test_user_name, test_hostname)
+        );
         let test_seq = MatchSeq::Exact(0);
 
         // normal
@@ -90,15 +95,12 @@ mod add {
                     None,
                 )))
                 .times(1)
-                .return_once(|_u| Ok(UpsertKVActionReply::new(None, None)));
+                .return_once(|_u| Ok(UpsertKVActionReply::new(None, Some(SeqV::new(1, v)))));
             let api = Arc::new(api);
             let user_mgr = UserMgr::new(api, "tenant1");
             let res = user_mgr.add_user(user_info);
 
-            assert_eq!(
-                res.await.unwrap_err().code(),
-                ErrorCode::UnknownException("").code()
-            );
+            assert!(res.await.is_ok());
         }
 
         // already exists
@@ -181,7 +183,10 @@ mod get {
     async fn test_get_user_seq_match() -> common_exception::Result<()> {
         let test_user_name = "test";
         let test_hostname = "localhost";
-        let test_key = format!("__fd_users/tenant1/{}", test_user_name);
+        let test_key = format!(
+            "__fd_users/tenant1/{}",
+            format_user_key(test_user_name, test_hostname)
+        );
 
         let user_info = UserInfo::new(
             test_user_name.to_string(),
@@ -199,7 +204,11 @@ mod get {
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
-        let res = user_mgr.get_user(test_user_name.to_string(), Some(1));
+        let res = user_mgr.get_user(
+            test_user_name.to_string(),
+            test_hostname.to_string(),
+            Some(1),
+        );
         assert!(res.await.is_ok());
 
         Ok(())
@@ -209,7 +218,10 @@ mod get {
     async fn test_get_user_do_not_care_seq() -> common_exception::Result<()> {
         let test_user_name = "test";
         let test_hostname = "localhost";
-        let test_key = format!("__fd_users/tenant1/{}", test_user_name);
+        let test_key = format!(
+            "__fd_users/tenant1/{}",
+            format_user_key(test_user_name, test_hostname)
+        );
 
         let user_info = UserInfo::new(
             test_user_name.to_string(),
@@ -227,7 +239,7 @@ mod get {
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
-        let res = user_mgr.get_user(test_user_name.to_string(), None);
+        let res = user_mgr.get_user(test_user_name.to_string(), test_hostname.to_string(), None);
         assert!(res.await.is_ok());
         Ok(())
     }
@@ -235,7 +247,11 @@ mod get {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_user_not_exist() -> common_exception::Result<()> {
         let test_user_name = "test";
-        let test_key = format!("__fd_users/tenant1/{}", test_user_name);
+        let test_hostname = "localhost";
+        let test_key = format!(
+            "__fd_users/tenant1/{}",
+            format_user_key(test_user_name, test_hostname)
+        );
 
         let mut kv = MockKV::new();
         kv.expect_get_kv()
@@ -245,7 +261,9 @@ mod get {
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
-        let res = user_mgr.get_user(test_user_name.to_string(), None).await;
+        let res = user_mgr
+            .get_user(test_user_name.to_string(), test_hostname.to_string(), None)
+            .await;
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
         Ok(())
@@ -254,7 +272,11 @@ mod get {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_user_not_exist_seq_mismatch() -> common_exception::Result<()> {
         let test_user_name = "test";
-        let test_key = format!("__fd_users/tenant1/{}", test_user_name);
+        let test_hostname = "localhost";
+        let test_key = format!(
+            "__fd_users/tenant1/{}",
+            format_user_key(test_user_name, test_hostname)
+        );
 
         let mut kv = MockKV::new();
         kv.expect_get_kv()
@@ -264,7 +286,13 @@ mod get {
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
-        let res = user_mgr.get_user(test_user_name.to_string(), Some(2)).await;
+        let res = user_mgr
+            .get_user(
+                test_user_name.to_string(),
+                test_hostname.to_string(),
+                Some(2),
+            )
+            .await;
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code(), ErrorCode::UnknownUser("").code());
         Ok(())
@@ -273,7 +301,11 @@ mod get {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_user_invalid_user_info_encoding() -> common_exception::Result<()> {
         let test_user_name = "test";
-        let test_key = format!("__fd_users/tenant1/{}", test_user_name);
+        let test_hostname = "localhost";
+        let test_key = format!(
+            "__fd_users/tenant1/{}",
+            format_user_key(test_user_name, test_hostname)
+        );
 
         let mut kv = MockKV::new();
         kv.expect_get_kv()
@@ -283,7 +315,7 @@ mod get {
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
-        let res = user_mgr.get_user(test_user_name.to_string(), None);
+        let res = user_mgr.get_user(test_user_name.to_string(), test_hostname.to_string(), None);
         assert_eq!(
             res.await.unwrap_err().code(),
             ErrorCode::IllegalUserInfoFormat("").code()
@@ -312,7 +344,8 @@ mod get_users {
             names.push(name.clone());
             let hostname = format!("test_hostname_{}", i);
             hostnames.push(hostname.clone());
-            let key = format!("{}/{}", "tenant1", name);
+
+            let key = format!("tenant1/{}", format_user_key(&name, &hostname));
             keys.push(key);
             let user_info = UserInfo::new(name, hostname, Vec::from("pass"), AuthType::Sha256);
             res.push((
@@ -338,8 +371,28 @@ mod get_users {
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
-        let res = user_mgr.get_users();
+        let res = user_mgr.get_users(None);
         assert_eq!(res.await?, user_infos);
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_get_users_with_username() -> common_exception::Result<()> {
+        let (res, user_infos) = prepare()?;
+        let mut kv = MockKV::new();
+        {
+            let k = "__fd_users/tenant1/'test_user_0'@";
+            kv.expect_prefix_list_kv()
+                .with(predicate::eq(k))
+                .times(1)
+                .return_once(move |_p| Ok(res[..1].to_vec()));
+        }
+
+        let kv = Arc::new(kv);
+        let user_mgr = UserMgr::new(kv, "tenant1");
+        let res = user_mgr.get_users(Some("test_user_0".to_string()));
+        assert_eq!(res.await?, user_infos[..1].to_vec());
 
         Ok(())
     }
@@ -366,7 +419,7 @@ mod get_users {
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
-        let res = user_mgr.get_users();
+        let res = user_mgr.get_users(None);
         assert_eq!(
             res.await.unwrap_err().code(),
             ErrorCode::IllegalUserInfoFormat("").code()
@@ -382,10 +435,15 @@ mod drop {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_drop_user_normal_case() -> common_exception::Result<()> {
         let mut kv = MockKV::new();
-        let test_key = "__fd_users/tenant1/test";
+        let test_user = "test";
+        let test_hostname = "localhost";
+        let test_key = format!(
+            "__fd_users/tenant1/{}",
+            format_user_key(test_user, test_hostname)
+        );
         kv.expect_upsert_kv()
             .with(predicate::eq(UpsertKVAction::new(
-                test_key,
+                &test_key,
                 MatchSeq::Any,
                 Operation::Delete,
                 None,
@@ -394,7 +452,7 @@ mod drop {
             .returning(|_k| Ok(UpsertKVActionReply::new(Some(SeqV::new(1, vec![])), None)));
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
-        let res = user_mgr.drop_user("test".to_string(), None);
+        let res = user_mgr.drop_user(test_user.to_string(), test_hostname.to_string(), None);
         assert!(res.await.is_ok());
 
         Ok(())
@@ -403,10 +461,15 @@ mod drop {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_drop_user_unknown() -> common_exception::Result<()> {
         let mut kv = MockKV::new();
-        let test_key = "__fd_users/tenant1/test";
+        let test_user = "test";
+        let test_hostname = "localhost";
+        let test_key = format!(
+            "__fd_users/tenant1/{}",
+            format_user_key(test_user, test_hostname)
+        );
         kv.expect_upsert_kv()
             .with(predicate::eq(UpsertKVAction::new(
-                test_key,
+                &test_key,
                 MatchSeq::Any,
                 Operation::Delete,
                 None,
@@ -415,7 +478,7 @@ mod drop {
             .returning(|_k| Ok(UpsertKVActionReply::new(None, None)));
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
-        let res = user_mgr.drop_user("test".to_string(), None);
+        let res = user_mgr.drop_user(test_user.to_string(), test_hostname.to_string(), None);
         assert_eq!(
             res.await.unwrap_err().code(),
             ErrorCode::UnknownUser("").code()
@@ -433,7 +496,10 @@ mod update {
     async fn test_update_user_normal_partial_update() -> common_exception::Result<()> {
         let test_user_name = "name";
         let test_hostname = "localhost";
-        let test_key = format!("__fd_users/tenant1/{}", test_user_name);
+        let test_key = format!(
+            "__fd_users/tenant1/{}",
+            format_user_key(test_user_name, test_hostname)
+        );
         let test_seq = None;
 
         let old_pass = "old_key";
@@ -483,7 +549,7 @@ mod update {
 
         let res = user_mgr.update_user(
             test_user_name.to_string(),
-            Some(new_user_info.hostname),
+            test_hostname.to_string(),
             Some(new_user_info.password),
             None,
             test_seq,
@@ -497,7 +563,10 @@ mod update {
     async fn test_update_user_normal_full_update() -> common_exception::Result<()> {
         let test_user_name = "name";
         let test_hostname = "localhost";
-        let test_key = format!("__fd_users/tenant1/{}", test_user_name);
+        let test_key = format!(
+            "__fd_users/tenant1/{}",
+            format_user_key(test_user_name, test_hostname)
+        );
         let test_seq = None;
 
         // - get_kv should NOT be called
@@ -530,7 +599,7 @@ mod update {
 
         let res = user_mgr.update_user(
             test_user_name.to_string(),
-            Some(test_hostname.to_string()),
+            test_hostname.to_string(),
             Some(new_user_info.password),
             Some(new_auth_type),
             test_seq,
@@ -543,13 +612,20 @@ mod update {
     async fn test_update_user_none_update() -> common_exception::Result<()> {
         // mock kv expects nothing
         let test_name = "name";
+        let test_hostname = "localhost";
         let kv = MockKV::new();
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
 
         let new_password: Option<Vec<u8>> = None;
-        let res = user_mgr.update_user(test_name.to_string(), None, new_password, None, None);
+        let res = user_mgr.update_user(
+            test_name.to_string(),
+            test_hostname.to_string(),
+            new_password,
+            None,
+            None,
+        );
         assert!(res.await.is_ok());
         Ok(())
     }
@@ -557,7 +633,11 @@ mod update {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_update_user_partial_unknown() -> common_exception::Result<()> {
         let test_user_name = "name";
-        let test_key = format!("__fd_users/tenant1/{}", test_user_name);
+        let test_hostname = "localhost";
+        let test_key = format!(
+            "__fd_users/tenant1/{}",
+            format_user_key(test_user_name, test_hostname)
+        );
         let test_seq = None;
 
         // if partial update, and get_kv returns None
@@ -573,7 +653,7 @@ mod update {
 
         let res = user_mgr.update_user(
             test_user_name.to_string(),
-            None,
+            test_hostname.to_string(),
             Some(Vec::from("new_pass".as_bytes())),
             None,
             test_seq,
@@ -588,7 +668,11 @@ mod update {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_update_user_full_unknown() -> common_exception::Result<()> {
         let test_user_name = "name";
-        let test_key = format!("__fd_users/tenant1/{}", test_user_name);
+        let test_hostname = "localhost";
+        let test_key = format!(
+            "__fd_users/tenant1/{}",
+            format_user_key(test_user_name, test_hostname)
+        );
         let test_seq = None;
 
         // get_kv should not be called
@@ -607,7 +691,7 @@ mod update {
 
         let res = user_mgr.update_user(
             test_user_name.to_string(),
-            Some(String::from("localhost")),
+            test_hostname.to_string(),
             Some(Vec::from("new_pass".as_bytes())),
             Some(AuthType::Sha256),
             test_seq,

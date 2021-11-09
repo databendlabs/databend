@@ -51,7 +51,8 @@ impl UserMgr {
 impl UserMgrApi for UserMgr {
     async fn add_user(&self, user_info: UserInfo) -> common_exception::Result<u64> {
         let match_seq = MatchSeq::Exact(0);
-        let key = format!("{}/{}", self.user_prefix, user_info.name);
+        let user_key = format_user_key(&user_info.name, &user_info.hostname);
+        let key = format!("{}/{}", self.user_prefix, user_key);
         let value = serde_json::to_vec(&user_info)?;
 
         let kv_api = self.kv_api.clone();
@@ -71,8 +72,14 @@ impl UserMgrApi for UserMgr {
         }
     }
 
-    async fn get_user(&self, username: String, seq: Option<u64>) -> Result<SeqV<UserInfo>> {
-        let key = format!("{}/{}", self.user_prefix, username);
+    async fn get_user(
+        &self,
+        username: String,
+        hostname: String,
+        seq: Option<u64>,
+    ) -> Result<SeqV<UserInfo>> {
+        let user_key = format_user_key(&username, &hostname);
+        let key = format!("{}/{}", self.user_prefix, user_key);
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
@@ -86,10 +93,18 @@ impl UserMgrApi for UserMgr {
         }
     }
 
-    async fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>> {
-        let user_prefix = self.user_prefix.clone();
+    async fn get_users(&self, username: Option<String>) -> Result<Vec<SeqV<UserInfo>>> {
+        let key = if username.is_some() {
+            format!(
+                "{}/{}",
+                self.user_prefix,
+                format!("'{}'@", username.unwrap())
+            )
+        } else {
+            self.user_prefix.clone()
+        };
         let kv_api = self.kv_api.clone();
-        let prefix_list_kv = async move { kv_api.prefix_list_kv(user_prefix.as_str()).await };
+        let prefix_list_kv = async move { kv_api.prefix_list_kv(&key).await };
         let values = prefix_list_kv.await?;
 
         let mut r = vec![];
@@ -106,34 +121,36 @@ impl UserMgrApi for UserMgr {
     async fn update_user(
         &self,
         username: String,
-        new_hostname: Option<String>,
+        hostname: String,
         new_password: Option<Vec<u8>>,
         new_auth: Option<AuthType>,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
-        if new_password.is_none() && new_auth.is_none() && new_hostname.is_none() {
+        if new_password.is_none() && new_auth.is_none() {
             return Ok(seq);
         }
-        let full_update = new_auth.is_some() && new_password.is_some() && new_hostname.is_some();
-        let user_info = if full_update {
+        let partial_update = new_auth.is_none() || new_password.is_none();
+        let user_info = if partial_update {
+            let user_val_seq = self.get_user(username.clone(), hostname.clone(), seq);
+            let user_info = user_val_seq.await?.data;
+
             UserInfo::new(
                 username.clone(),
-                new_hostname.unwrap(),
+                hostname.clone(),
+                new_password.map_or(user_info.password.clone(), |v| v.to_vec()),
+                new_auth.unwrap_or(user_info.auth_type),
+            )
+        } else {
+            UserInfo::new(
+                username.clone(),
+                hostname.clone(),
                 new_password.unwrap(),
                 new_auth.unwrap(),
             )
-        } else {
-            let user_val_seq = self.get_user(username.clone(), seq);
-            let user_info = user_val_seq.await?.data;
-            UserInfo::new(
-                username.clone(),
-                new_hostname.unwrap_or(user_info.hostname),
-                new_password.map_or(user_info.password, |v| v.to_vec()),
-                new_auth.unwrap_or(user_info.auth_type),
-            )
         };
 
-        let key = format!("{}/{}", self.user_prefix, user_info.name);
+        let user_key = format_user_key(&user_info.name, &user_info.hostname);
+        let key = format!("{}/{}", self.user_prefix, user_key);
         let value = serde_json::to_vec(&user_info)?;
 
         let match_seq = match seq {
@@ -162,8 +179,9 @@ impl UserMgrApi for UserMgr {
         }
     }
 
-    async fn drop_user(&self, username: String, seq: Option<u64>) -> Result<()> {
-        let key = format!("{}/{}", self.user_prefix, username);
+    async fn drop_user(&self, username: String, hostname: String, seq: Option<u64>) -> Result<()> {
+        let user_key = format_user_key(&username, &hostname);
+        let key = format!("{}/{}", self.user_prefix, user_key);
         let kv_api = self.kv_api.clone();
         let upsert_kv = async move {
             kv_api
@@ -182,4 +200,8 @@ impl UserMgrApi for UserMgr {
             Err(ErrorCode::UnknownUser(format!("unknown user {}", username)))
         }
     }
+}
+
+pub fn format_user_key(username: &str, hostname: &str) -> String {
+    format!("'{}'@'{}'", username, hostname)
 }
