@@ -28,7 +28,7 @@ async fn test_create_database_interpreter() -> Result<()> {
 
     let ctx = crate::tests::try_create_context()?;
 
-    if let PlanNode::CreateDatabase(plan) = parse_query_with_context("create database db1")? {
+    if let PlanNode::CreateDatabase(plan) = parse_query("create database db1", &ctx)? {
         let executor = CreateDatabaseInterpreter::try_create(ctx, plan.clone())?;
         assert_eq!(executor.name(), "CreateDatabaseInterpreter");
         let mut stream = executor.execute().await?;

@@ -229,7 +229,7 @@ impl<'a> DfParser<'a> {
 
     fn parse_set(&mut self) -> Result<DfStatement, ParserError> {
         self.parser.next_token();
-        match self.parser.parse_set() {
+        match self.parser.parse_set()? {
             Statement::SetVariable { local, hivevar, variable, value, } => {
                 Ok(DfStatement::SetVariable(
                     DfSetVariable { local, hivevar, variable, value }
@@ -241,7 +241,7 @@ impl<'a> DfParser<'a> {
 
     fn parse_insert(&mut self) -> Result<DfStatement, ParserError> {
         self.parser.next_token();
-        match self.parser.parse_insert() {
+        match self.parser.parse_insert()? {
             Statement::Insert {
                 or, table_name, columns, overwrite,
                 source, partitioned, format, after_columns,
@@ -281,7 +281,7 @@ impl<'a> DfParser<'a> {
             _ => ExplainType::Syntax,
         };
 
-        let statement = self.parse_query()?;
+        let statement = Box::new(self.parse_query()?);
         Ok(DfStatement::Explain(DfExplain { typ, statement }))
     }
 

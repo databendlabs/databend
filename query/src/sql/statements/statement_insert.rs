@@ -9,6 +9,7 @@ use std::sync::Arc;
 use common_infallible::Mutex;
 use common_streams::{ValueSource, Source};
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct DfInsertStatement {
     or: Option<SqliteOnConflict>,
     /// TABLE
@@ -67,7 +68,6 @@ impl AnalyzableStatement for DfInsertStatement {
             }
         }
 
-        let input_stream = Arc::new(Mutex::new(Some(Box::pin(input_stream))));
         Ok(AnalyzedResult::SimpleQuery(
             PlanNode::InsertInto(
                 InsertIntoPlan {
@@ -75,7 +75,7 @@ impl AnalyzableStatement for DfInsertStatement {
                     tbl_name: table,
                     tbl_id: table_meta_id,
                     schema,
-                    input_stream,
+                    input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
                 }
             )
         ))

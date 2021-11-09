@@ -26,7 +26,7 @@ use crate::sql::*;
 async fn test_drop_database_interpreter() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
-    if let PlanNode::DropDatabase(plan) = parse_query_with_context("drop database default")? {
+    if let PlanNode::DropDatabase(plan) = parse_query("drop database default", &ctx)? {
         let executor = DropDatabaseInterpreter::try_create(ctx, plan.clone())?;
         assert_eq!(executor.name(), "DropDatabaseInterpreter");
         let stream = executor.execute().await?;

@@ -4,6 +4,7 @@ use crate::sessions::DatabendQueryContextRef;
 use common_exception::{Result, ErrorCode};
 use common_planners::{VarValue, PlanNode, SettingPlan};
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct DfSetVariable {
     local: bool,
     hivevar: bool,

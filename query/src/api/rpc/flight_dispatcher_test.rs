@@ -26,6 +26,7 @@ use crate::api::FlightAction;
 use crate::api::ShuffleAction;
 use crate::tests::parse_query;
 use crate::tests::SessionManagerBuilder;
+use crate::tests::try_create_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_stream_with_non_exists_stream() -> Result<()> {
@@ -48,6 +49,7 @@ async fn test_get_stream_with_non_exists_stream() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
     if let (Some(query_id), Some(stage_id), Some(stream_id)) = generate_uuids(3) {
+        let ctx = try_create_context()?;
         let flight_dispatcher = DatabendQueryFlightDispatcher::create();
 
         let sessions = SessionManagerBuilder::create().build()?;
@@ -59,7 +61,7 @@ async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
                 FlightAction::PrepareShuffleAction(ShuffleAction {
                     query_id: query_id.clone(),
                     stage_id: stage_id.clone(),
-                    plan: parse_query_with_context("SELECT number FROM numbers(5)")?,
+                    plan: parse_query("SELECT number FROM numbers(5)", &ctx)?,
                     sinks: vec![stream_id.clone()],
                     scatters_expression: Expression::create_literal(DataValue::UInt64(Some(1))),
                 }),
@@ -92,6 +94,7 @@ async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_run_shuffle_action_with_scatter() -> Result<()> {
     if let (Some(query_id), Some(stage_id), None) = generate_uuids(2) {
+        let ctx = try_create_context()?;
         let flight_dispatcher = DatabendQueryFlightDispatcher::create();
 
         let sessions = SessionManagerBuilder::create().build()?;
@@ -103,7 +106,7 @@ async fn test_run_shuffle_action_with_scatter() -> Result<()> {
                 FlightAction::PrepareShuffleAction(ShuffleAction {
                     query_id: query_id.clone(),
                     stage_id: stage_id.clone(),
-                    plan: parse_query_with_context("SELECT number FROM numbers(5)")?,
+                    plan: parse_query("SELECT number FROM numbers(5)", &ctx)?,
                     sinks: vec!["stream_1".to_string(), "stream_2".to_string()],
                     scatters_expression: Expression::Column("number".to_string()),
                 }),

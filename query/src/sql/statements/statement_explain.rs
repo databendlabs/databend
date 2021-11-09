@@ -14,7 +14,7 @@ pub struct DfExplain {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfExplain {
     async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
-        match &self.statement {
+        match self.statement.as_ref() {
             DfStatement::Query(v) => Self::analyze_explain(ctx, v).await,
             _ => Err(ErrorCode::SyntaxException("Only support EXPLAIN SELECT"))
         }

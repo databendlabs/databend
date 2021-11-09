@@ -14,8 +14,9 @@ use crate::catalogs::ToReadDataSourcePlan;
 use crate::sessions::{DatabendQueryContext, DatabendQueryContextRef};
 use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
 use crate::sql::statements::analyzer_expr::{ExpressionAnalyzer, TableSchema};
-use crate::sql::statements::analyzer_schema::AnalyzedSchema;
+use crate::sql::statements::analyzer_schema::{AnalyzedSchema, AnalyzedColumnDesc};
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct DfQueryStatement {
     pub from: Vec<TableWithJoins>,
     pub projection: Vec<SelectItem>,
@@ -46,7 +47,9 @@ pub struct AnalyzeData {
     pub projection_expressions: Vec<Expression>,
 
     tables_schema: Vec<TableSchema>,
-    from_schema: AnalyzedSchema,
+    from_schema: Arc<AnalyzedSchema>,
+    before_aggr_schema: Arc<AnalyzedSchema>,
+    after_aggr_schema: Arc<AnalyzedSchema>,
     finalize_schema: DataSchemaRef,
     projection_aliases: HashMap<String, Expression>,
 }
@@ -106,7 +109,7 @@ impl DfQueryStatement {
     pub async fn analyze_filter(&self, data: &mut AnalyzeData) -> Result<()> {
         if let Some(predicate) = &self.selection {
             // TODO: collect pushdown predicates
-            let expr_analyzer = data.get_expr_analyze::<false>();
+            let expr_analyzer = data.create_analyzer(data.from_schema.clone(), false);
             data.filter_predicate = Some(expr_analyzer.analyze(predicate).await?);
         }
 
@@ -115,17 +118,36 @@ impl DfQueryStatement {
 
     /// Expand wildcard and create columns alias map(alias -> expression) for named projection item
     pub async fn analyze_projection(&self, data: &mut AnalyzeData) -> Result<()> {
-        let items = &self.projection;
-        let projection_expressions = Self::projection_exprs(items, data).await?;
+        let projection_expressions = self.projection_exprs(data).await?;
         // TODO: expand_wildcard
+        data.before_aggr_schema = data.from_schema.clone_schema();
         data.projection_aliases = extract_aliases(&projection_expressions);
+
+        let from_schema = data.from_schema.to_data_schema();
+        for projection_expression in &projection_expressions {
+            if !data.add_aggregate_function(projection_expression)? {
+                if !data.before_group_by_expressions.contains(projection_expression) {
+                    data.before_group_by_expressions.push(projection_expression.clone());
+                }
+
+                if let Expression::Alias(alias, expr) = projection_expression {
+                    let field = expr.to_data_field(&from_schema)?;
+
+                    let nullable = field.is_nullable();
+                    let data_type = field.data_type().clone();
+                    let column_desc = AnalyzedColumnDesc::create(alias, data_type, nullable);
+                    data.before_aggr_schema.add_projection(column_desc, true);
+                }
+            }
+        }
+
         data.projection_expressions = projection_expressions;
         Ok(())
     }
 
     /// Push group by exprs and aggregate function inputs into before_group_by_expressions
     pub async fn analyze_group_by(&self, data: &mut AnalyzeData) -> Result<()> {
-        let expr_analyzer = data.get_expr_analyze::<false>();
+        let expr_analyzer = data.create_analyzer(data.before_aggr_schema.clone(), false);
         let projection_aliases = &data.projection_aliases;
 
         for group_by_expr in &self.group_by {
@@ -134,14 +156,16 @@ impl DfQueryStatement {
 
             if !data.group_by_expressions.contains(&analyzed_expr) {
                 // The expr completed in before_group_by_expressions.
-                let group_by_expression = expr_as_column_expr(&analyzed_expr)?;
-                data.group_by_expressions.push(group_by_expression);
+                // let group_by_expression = expr_as_column_expr(&analyzed_expr)?;
+                data.group_by_expressions.push(analyzed_expr);
             }
 
             if !data.before_group_by_expressions.contains(&analyzed_expr) {
-                data.before_group_by_expressions.push(analyzed_expr);
+                data.before_group_by_expressions.push(analyzed_expr.clone());
             }
         }
+
+        // TODO: 创建aggregated schema
 
         Ok(())
     }
@@ -181,11 +205,12 @@ impl DfQueryStatement {
     fn after_group_by_expr(expr: &Expression, data: &mut AnalyzeData) -> Result<Expression> {
         let aggr_exprs = &data.aggregate_expressions;
         let rebased_expr = rebase_expr(&expr, aggr_exprs)?;
-        rebase_expr(&rebased_expr, &data.before_group_by_expressions)
+        rebase_expr(&rebased_expr, &data.before_having_expressions)
     }
 
     async fn analyze_expr_with_alias(expr: &Expr, data: &mut AnalyzeData) -> Result<Expression> {
-        let analyzed_expr = data.get_expr_analyze::<true>().analyze(expr).await?;
+        let expr_analyzer = data.create_analyzer(data.after_aggr_schema.clone(), true);
+        let analyzed_expr = expr_analyzer.analyze(expr).await?;
         let projection_aliases = &data.projection_aliases;
         resolve_aliases_to_exprs(&analyzed_expr, projection_aliases)
     }
@@ -220,17 +245,17 @@ impl DfQueryStatement {
         }
     }
 
-    async fn projection_exprs(items: &[SelectItem], data: &mut AnalyzeData) -> Result<Vec<Expression>> {
+    async fn projection_exprs(&self, data: &mut AnalyzeData) -> Result<Vec<Expression>> {
         // XXX: We do not allow projection to be used in projection, such as:
         // SELECT column_a + 1 AS alias_b, alias_b + 1 AS alias_c FROM table_name_1;
         // This is also not supported in MySQL, but maybe we should to support it?
 
+        let source = data.from_schema.clone();
         let query_context = data.ctx.clone();
-        let tables_schema = data.tables_schema.clone();
-        let expr_analyzer = ExpressionAnalyzer::with_tables(query_context, tables_schema);
+        let expr_analyzer = ExpressionAnalyzer::with_source(query_context, source, true);
 
         let mut output_columns = Vec::with_capacity(items.len());
-        for item in items {
+        for item in &self.projection {
             match item {
                 SelectItem::Wildcard => output_columns.push(Expression::Wildcard),
                 SelectItem::UnnamedExpr(expr) => {
@@ -254,15 +279,30 @@ impl AnalyzeData {
         AnalyzeData { ctx, ..Default::default() }
     }
 
-    pub fn get_expr_analyze<const allow_aggr: bool>(&self) -> ExpressionAnalyzer<allow_aggr> {
+    pub fn get_expr_analyze<const allow_aggr: bool>(&self) -> ExpressionAnalyzer {
         let query_context = self.ctx.clone();
         let query_tables_schema = self.tables_schema.clone();
-        ExpressionAnalyzer::<allow_aggr>::with_tables(query_context, query_tables_schema)
+        ExpressionAnalyzer::with_tables(query_context, query_tables_schema)
     }
 
-    pub fn add_aggregate_function(&mut self, expr: &Expression) -> Result<()> {
+    pub fn create_analyzer(&self, schema: Arc<AnalyzedSchema>, aggr: bool) -> ExpressionAnalyzer {
+        let query_context = self.ctx.clone();
+        ExpressionAnalyzer::with_source(query_context, schema, aggr)
+    }
+
+    pub fn add_aggregate_function(&mut self, expr: &Expression) -> Result<bool> {
         let aggregate_exprs = find_aggregate_exprs_in_expr(&expr);
         let aggregate_exprs_require_expression = expand_aggregate_arg_exprs(&aggregate_exprs);
+
+        let mut expr = expr.clone();
+        if let Expression::Alias(_, inner) = &expr {
+            expr = inner.as_ref().clone();
+        }
+
+        if !aggregate_exprs.is_empty() && !self.before_having_expressions.contains(&expr) {
+            self.before_having_expressions.push(expr);
+        }
+
 
         for require_expression in aggregate_exprs_require_expression {
             if !self.before_group_by_expressions.contains(&require_expression) {
@@ -276,7 +316,7 @@ impl AnalyzeData {
             }
         }
 
-        Ok(())
+        Ok(!aggregate_exprs.is_empty())
     }
 
     pub async fn dummy_source(&mut self) -> Result<()> {

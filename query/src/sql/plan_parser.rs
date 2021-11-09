@@ -136,7 +136,7 @@ impl PlanParser {
     }
 
     fn build_from_plan(data: &AnalyzeData) -> Result<PlanNode> {
-        match &data.relation {
+        match data.relation.map(AsRef::as_ref) {
             None => Err(ErrorCode::LogicalError("Not from in select query")),
             Some(QueryRelation::Nested(data)) => Self::build_query_plan(data),
             Some(QueryRelation::FromTable(plan)) => Ok(PlanNode::ReadSource(plan.clone()))

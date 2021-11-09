@@ -21,20 +21,21 @@ pub enum TableSchema {
 
 pub type TablesSchema = Vec<TableSchema>;
 
-pub struct ExpressionAnalyzer<const allow_aggr: bool> {
-    tables: TablesSchema,
+pub struct ExpressionAnalyzer {
     schema: Arc<AnalyzedSchema>,
     context: DatabendQueryContextRef,
 }
 
-impl<const allow_aggr: bool> ExpressionAnalyzer<allow_aggr> {
-    pub fn create(ctx: DatabendQueryContextRef) -> ExpressionAnalyzer<allow_aggr> {
-        ExpressionAnalyzer::<allow_aggr> { context: ctx, ..Default::default() }
+impl ExpressionAnalyzer {
+    pub fn create(ctx: DatabendQueryContextRef, allow_aggr: bool) -> ExpressionAnalyzer {
+        ExpressionAnalyzer { context: ctx, ..Default::default() }
     }
 
-    pub fn with_tables(ctx: DatabendQueryContextRef, tables: TablesSchema) -> ExpressionAnalyzer<allow_aggr> {
-        ExpressionAnalyzer::<allow_aggr> { context: ctx, tables }
+    pub fn with_tables(ctx: DatabendQueryContextRef, tables: TablesSchema) -> ExpressionAnalyzer {
+        ExpressionAnalyzer { context: ctx, ..Default::default() }
     }
+
+    pub fn with_source(ctx: DatabendQueryContextRef, source: Arc<AnalyzedSchema>, allow_aggr: bool) -> ExpressionAnalyzer {}
 
     pub async fn analyze(&self, expr: &Expr) -> Result<Expression> {
         match expr {
@@ -153,7 +154,18 @@ impl<const allow_aggr: bool> ExpressionAnalyzer<allow_aggr> {
         }
     }
 
-    fn analyze_identifiers(&self, idents: &[Ident]) -> Result<Expression> {}
+    fn analyze_identifiers(&self, idents: &[Ident]) -> Result<Expression> {
+        let mut names = Vec::with_capacity(idents.len());
+        for ident in idents {
+            names.push(ident.clone().value);
+        }
+
+        let schema = &self.schema;
+        match schema.get_column_by_fullname(&names) {
+            None => Err(ErrorCode::UnknownColumn(format!("Unknown column names {:?}", names))),
+            Some(desc) => Ok(Expression::Column(desc.column_name()))
+        }
+    }
 
     async fn analyze_exists(&self, subquery: &Query) -> Result<Expression> {
         Ok(Expression::ScalarFunction {
