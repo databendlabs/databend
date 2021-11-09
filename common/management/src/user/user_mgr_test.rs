@@ -23,6 +23,7 @@ use common_meta_types::GetKVActionReply;
 use common_meta_types::KVMeta;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MatchSeq;
+use common_meta_types::Operation;
 use common_meta_types::PrefixListReply;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVActionReply;
@@ -42,14 +43,7 @@ mock! {
             &self,
             key: &str,
             seq: MatchSeq,
-            value: Option<Vec<u8>>,
-            value_meta: Option<KVMeta>
-        ) -> common_exception::Result<UpsertKVActionReply>;
-
-        async fn update_kv_meta(
-            &self,
-            key: &str,
-            seq: MatchSeq,
+            value: Operation<Vec<u8>>,
             value_meta: Option<KVMeta>
         ) -> common_exception::Result<UpsertKVActionReply>;
 
@@ -66,6 +60,7 @@ mock! {
 
 mod add {
     use common_meta_types::AuthType;
+    use common_meta_types::Operation;
 
     use super::*;
 
@@ -81,7 +76,7 @@ mod add {
             Vec::from(test_password),
             auth_type.clone(),
         );
-        let value = Some(serde_json::to_vec(&user_info)?);
+        let value = Operation::Update(serde_json::to_vec(&user_info)?);
 
         let test_key = format!("__fd_users/tenant1/{}", test_user_name);
         let test_seq = MatchSeq::Exact(0);
@@ -411,7 +406,7 @@ mod drop {
             .with(
                 predicate::function(move |v| v == test_key),
                 predicate::eq(MatchSeq::Any),
-                predicate::eq(None),
+                predicate::eq(Operation::Delete),
                 predicate::eq(None),
             )
             .times(1)
@@ -434,7 +429,7 @@ mod drop {
             .with(
                 predicate::function(move |v| v == test_key),
                 predicate::eq(MatchSeq::Any),
-                predicate::eq(None),
+                predicate::eq(Operation::Delete),
                 predicate::eq(None),
             )
             .times(1)
@@ -502,7 +497,7 @@ mod update {
             .with(
                 predicate::function(move |v| v == test_key.as_str()),
                 predicate::eq(MatchSeq::GE(1)),
-                predicate::eq(Some(new_value_with_old_salt)),
+                predicate::eq(Operation::Update(new_value_with_old_salt)),
                 predicate::eq(None),
             )
             .times(1)
@@ -551,7 +546,7 @@ mod update {
             .with(
                 predicate::function(move |v| v == test_key.as_str()),
                 predicate::eq(MatchSeq::GE(1)),
-                predicate::eq(Some(new_value)),
+                predicate::eq(Operation::Update(new_value)),
                 predicate::eq(None),
             )
             .times(1)
