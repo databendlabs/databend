@@ -225,28 +225,3 @@ where T: StatBuffer
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod test {
-    use chrono::TimeZone;
-    use chrono_tz::Tz;
-
-    use super::*;
-    use crate::types::column::ArcColumnWrapper;
-
-    #[test]
-    fn test_create_date() {
-        let tz = Tz::Zulu;
-        let column = Vec::column_from::<ArcColumnWrapper>(vec![tz.ymd(2016, 10, 22)]);
-        assert_eq!("2016-10-22UTC", format!("{:#}", column.at(0)));
-        assert_eq!(SqlType::Date, column.sql_type());
-    }
-
-    #[test]
-    fn test_create_date_time() {
-        let tz = Tz::Zulu;
-        let column =
-            Vec::column_from::<ArcColumnWrapper>(vec![tz.ymd(2016, 10, 22).and_hms(12, 0, 0)]);
-        assert_eq!(format!("{}", column.at(0)), "2016-10-22 12:00:00");
-    }
-}

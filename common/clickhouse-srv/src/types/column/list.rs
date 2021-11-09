@@ -43,7 +43,6 @@ where T: StatBuffer + Unmarshal<T> + Marshal + Copy + Sync + 'static
         self.data.push(value);
     }
 
-    #[cfg(test)]
     pub fn new() -> List<T> {
         List { data: Vec::new() }
     }
@@ -92,42 +91,5 @@ where T: StatBuffer + Unmarshal<T> + Marshal + Copy + Sync + 'static
         let ptr = self.data.as_mut_ptr() as *mut u8;
         let size = self.len() * mem::size_of::<T>();
         unsafe { slice::from_raw_parts_mut(ptr, size) }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use std::f64::EPSILON;
-
-    use rand::random;
-
-    use super::*;
-
-    #[test]
-    fn test_push_and_len() {
-        let mut list = List::with_capacity(100_500);
-
-        for i in 0..100_500 {
-            assert_eq!(list.len(), i as usize);
-            list.push(i);
-        }
-    }
-
-    #[test]
-    fn test_push_and_get() {
-        let mut list = List::<f64>::new();
-        let mut vs = vec![0.0_f64; 100];
-
-        for (count, _) in (0..100).enumerate() {
-            assert_eq!(list.len(), count);
-
-            for (i, v) in vs.iter().take(count).enumerate() {
-                assert!((list.at(i) - *v).abs() < EPSILON);
-            }
-
-            let k = random();
-            list.push(k);
-            vs[count] = k;
-        }
     }
 }

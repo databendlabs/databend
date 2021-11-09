@@ -141,28 +141,3 @@ impl ColumnData for ArrayColumnData {
         None
     }
 }
-
-#[cfg(test)]
-mod test {
-    use std::io::Cursor;
-
-    use super::*;
-    use crate::types::Simple;
-    use crate::Block;
-
-    #[test]
-    fn test_write_and_read() {
-        let block =
-            Block::<Simple>::new().column("vals", vec![vec![7_u32, 8], vec![9, 1, 2], vec![
-                3, 4, 5, 6,
-            ]]);
-
-        let mut encoder = Encoder::new();
-        block.write(&mut encoder, false);
-
-        let mut reader = Cursor::new(encoder.get_buffer_ref());
-        let rblock = Block::load(&mut reader, Tz::Zulu, false).unwrap();
-
-        assert_eq!(block, rblock);
-    }
-}

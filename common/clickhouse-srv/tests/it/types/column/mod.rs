@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block;
-mod column;
-mod decimal;
-mod from_sql;
-mod opions;
-mod value;
-mod value_ref;
+mod array;
+mod concat;
+mod date;
+mod datetime64;
+mod factory;
+mod iter;
+mod list;
+mod string_pool;

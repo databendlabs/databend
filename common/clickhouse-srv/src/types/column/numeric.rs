@@ -167,7 +167,7 @@ where T: StatBuffer
         + HasSqlType
         + 'static
 {
-    pub(crate) fn with_capacity(capacity: usize) -> VectorColumnData<T> {
+    pub fn with_capacity(capacity: usize) -> VectorColumnData<T> {
         VectorColumnData {
             data: List::with_capacity(capacity),
         }

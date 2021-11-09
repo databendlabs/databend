@@ -40,6 +40,7 @@ pub use self::column::StringPool;
 pub use self::date_converter::DateConverter;
 pub use self::decimal::decimal2str;
 pub use self::decimal::Decimal;
+pub use self::decimal::NoBits;
 pub use self::enums::Enum16;
 pub use self::enums::Enum8;
 pub use self::from_sql::FromSql;
@@ -53,14 +54,14 @@ use crate::binary::Encoder;
 use crate::protocols::DBMS_MIN_REVISION_WITH_CLIENT_WRITE_INFO;
 use crate::protocols::SERVER_PROGRESS;
 
-pub(crate) mod column;
+pub mod column;
 mod stat_buffer;
 
 mod from_sql;
 mod value;
 mod value_ref;
 
-pub(crate) mod block;
+pub mod block;
 
 mod date_converter;
 mod query;

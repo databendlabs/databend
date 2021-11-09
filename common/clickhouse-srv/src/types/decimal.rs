@@ -46,7 +46,7 @@ pub trait InternalResult {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub(crate) enum NoBits {
+pub enum NoBits {
     N32,
     N64,
 }
