@@ -13,15 +13,12 @@
 // limitations under the License.
 //
 
-use common_exception::ErrorCode;
+use common_meta_api::KVApi;
 use common_meta_flight::GetKVAction;
 use common_meta_flight::MGetKVAction;
 use common_meta_flight::PrefixListReq;
 use common_meta_flight::UpsertKVAction;
-use common_meta_raft_store::state_machine::AppliedState;
-use common_meta_types::Cmd;
 use common_meta_types::GetKVActionReply;
-use common_meta_types::LogEntry;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::PrefixListReply;
 use common_meta_types::UpsertKVActionReply;
@@ -32,48 +29,29 @@ use crate::executor::ActionHandler;
 #[async_trait::async_trait]
 impl RequestHandler<UpsertKVAction> for ActionHandler {
     async fn handle(&self, act: UpsertKVAction) -> common_exception::Result<UpsertKVActionReply> {
-        let cr = LogEntry {
-            txid: None,
-            cmd: Cmd::UpsertKV {
-                key: act.key,
-                seq: act.seq,
-                value: act.value,
-                value_meta: act.value_meta,
-            },
-        };
-        let rst = self
-            .meta_node
-            .write(cr)
+        self.meta_node
+            .upsert_kv(&act.key, act.seq, act.value, act.value_meta)
             .await
-            .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
-
-        match rst {
-            AppliedState::KV(x) => Ok(x),
-            _ => Err(ErrorCode::MetaNodeInternalError("not a KV result")),
-        }
     }
 }
 
 #[async_trait::async_trait]
 impl RequestHandler<GetKVAction> for ActionHandler {
     async fn handle(&self, act: GetKVAction) -> common_exception::Result<GetKVActionReply> {
-        let result = self.meta_node.get_kv(&act.key).await?;
-        Ok(result)
+        self.meta_node.get_kv(&act.key).await
     }
 }
 
 #[async_trait::async_trait]
 impl RequestHandler<MGetKVAction> for ActionHandler {
     async fn handle(&self, act: MGetKVAction) -> common_exception::Result<MGetKVActionReply> {
-        let result = self.meta_node.mget_kv(&act.keys).await?;
-        Ok(result)
+        self.meta_node.mget_kv(&act.keys).await
     }
 }
 
 #[async_trait::async_trait]
 impl RequestHandler<PrefixListReq> for ActionHandler {
     async fn handle(&self, act: PrefixListReq) -> common_exception::Result<PrefixListReply> {
-        let result = self.meta_node.prefix_list_kv(&(act.0)).await?;
-        Ok(result)
+        self.meta_node.prefix_list_kv(&(act.0)).await
     }
 }

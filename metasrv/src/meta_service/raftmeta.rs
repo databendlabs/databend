@@ -28,7 +28,6 @@ use common_base::tokio::sync::RwLockReadGuard;
 use common_base::tokio::task::JoinHandle;
 use common_exception::prelude::ErrorCode;
 use common_exception::prelude::ToErrorCode;
-use common_meta_api::KVApi;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_raft_store::state_machine::StateMachine;
@@ -528,34 +527,6 @@ impl MetaNode {
 
         let sm = self.sto.state_machine.read().await;
         sm.get_table_by_id(tid)
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_kv(&self, key: &str) -> common_exception::Result<Option<SeqV<Vec<u8>>>> {
-        // inconsistent get: from local state machine
-
-        let sm = self.sto.state_machine.read().await;
-        sm.get_kv(key).await
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn mget_kv(
-        &self,
-        keys: &[String],
-    ) -> common_exception::Result<Vec<Option<SeqV<Vec<u8>>>>> {
-        // inconsistent get: from local state machine
-        let sm = self.sto.state_machine.read().await;
-        sm.mget_kv(keys).await
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn prefix_list_kv(
-        &self,
-        prefix: &str,
-    ) -> common_exception::Result<Vec<(String, SeqV<Vec<u8>>)>> {
-        // inconsistent get: from local state machine
-        let sm = self.sto.state_machine.read().await;
-        sm.prefix_list_kv(prefix).await
     }
 
     /// Submit a write request to the known leader. Returns the response after applying the request.
