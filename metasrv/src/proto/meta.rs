@@ -70,7 +70,12 @@ pub struct GetReply {
     pub value: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct RaftMes {
+pub struct RaftRequest {
+    #[prost(string, tag = "1")]
+    pub data: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RaftReply {
     #[prost(string, tag = "1")]
     pub data: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
@@ -138,8 +143,8 @@ pub mod meta_service_client {
         }
         pub async fn write(
             &mut self,
-            request: impl tonic::IntoRequest<super::RaftMes>,
-        ) -> Result<tonic::Response<super::RaftMes>, tonic::Status> {
+            request: impl tonic::IntoRequest<super::RaftRequest>,
+        ) -> Result<tonic::Response<super::RaftReply>, tonic::Status> {
             self.inner.ready().await.map_err(|e| {
                 tonic::Status::new(
                     tonic::Code::Unknown,
@@ -167,8 +172,8 @@ pub mod meta_service_client {
         #[doc = "/ Forward a request to other"]
         pub async fn forward(
             &mut self,
-            request: impl tonic::IntoRequest<super::RaftMes>,
-        ) -> Result<tonic::Response<super::RaftMes>, tonic::Status> {
+            request: impl tonic::IntoRequest<super::RaftRequest>,
+        ) -> Result<tonic::Response<super::RaftReply>, tonic::Status> {
             self.inner.ready().await.map_err(|e| {
                 tonic::Status::new(
                     tonic::Code::Unknown,
@@ -181,8 +186,8 @@ pub mod meta_service_client {
         }
         pub async fn append_entries(
             &mut self,
-            request: impl tonic::IntoRequest<super::RaftMes>,
-        ) -> Result<tonic::Response<super::RaftMes>, tonic::Status> {
+            request: impl tonic::IntoRequest<super::RaftRequest>,
+        ) -> Result<tonic::Response<super::RaftReply>, tonic::Status> {
             self.inner.ready().await.map_err(|e| {
                 tonic::Status::new(
                     tonic::Code::Unknown,
@@ -195,8 +200,8 @@ pub mod meta_service_client {
         }
         pub async fn install_snapshot(
             &mut self,
-            request: impl tonic::IntoRequest<super::RaftMes>,
-        ) -> Result<tonic::Response<super::RaftMes>, tonic::Status> {
+            request: impl tonic::IntoRequest<super::RaftRequest>,
+        ) -> Result<tonic::Response<super::RaftReply>, tonic::Status> {
             self.inner.ready().await.map_err(|e| {
                 tonic::Status::new(
                     tonic::Code::Unknown,
@@ -209,8 +214,8 @@ pub mod meta_service_client {
         }
         pub async fn vote(
             &mut self,
-            request: impl tonic::IntoRequest<super::RaftMes>,
-        ) -> Result<tonic::Response<super::RaftMes>, tonic::Status> {
+            request: impl tonic::IntoRequest<super::RaftRequest>,
+        ) -> Result<tonic::Response<super::RaftReply>, tonic::Status> {
             self.inner.ready().await.map_err(|e| {
                 tonic::Status::new(
                     tonic::Code::Unknown,
@@ -232,8 +237,8 @@ pub mod meta_service_server {
     pub trait MetaService: Send + Sync + 'static {
         async fn write(
             &self,
-            request: tonic::Request<super::RaftMes>,
-        ) -> Result<tonic::Response<super::RaftMes>, tonic::Status>;
+            request: tonic::Request<super::RaftRequest>,
+        ) -> Result<tonic::Response<super::RaftReply>, tonic::Status>;
         async fn get(
             &self,
             request: tonic::Request<super::GetReq>,
@@ -241,20 +246,20 @@ pub mod meta_service_server {
         #[doc = "/ Forward a request to other"]
         async fn forward(
             &self,
-            request: tonic::Request<super::RaftMes>,
-        ) -> Result<tonic::Response<super::RaftMes>, tonic::Status>;
+            request: tonic::Request<super::RaftRequest>,
+        ) -> Result<tonic::Response<super::RaftReply>, tonic::Status>;
         async fn append_entries(
             &self,
-            request: tonic::Request<super::RaftMes>,
-        ) -> Result<tonic::Response<super::RaftMes>, tonic::Status>;
+            request: tonic::Request<super::RaftRequest>,
+        ) -> Result<tonic::Response<super::RaftReply>, tonic::Status>;
         async fn install_snapshot(
             &self,
-            request: tonic::Request<super::RaftMes>,
-        ) -> Result<tonic::Response<super::RaftMes>, tonic::Status>;
+            request: tonic::Request<super::RaftRequest>,
+        ) -> Result<tonic::Response<super::RaftReply>, tonic::Status>;
         async fn vote(
             &self,
-            request: tonic::Request<super::RaftMes>,
-        ) -> Result<tonic::Response<super::RaftMes>, tonic::Status>;
+            request: tonic::Request<super::RaftRequest>,
+        ) -> Result<tonic::Response<super::RaftReply>, tonic::Status>;
     }
     #[derive(Debug)]
     pub struct MetaServiceServer<T: MetaService> {
@@ -296,12 +301,12 @@ pub mod meta_service_server {
                 "/meta.MetaService/Write" => {
                     #[allow(non_camel_case_types)]
                     struct WriteSvc<T: MetaService>(pub Arc<T>);
-                    impl<T: MetaService> tonic::server::UnaryService<super::RaftMes> for WriteSvc<T> {
-                        type Response = super::RaftMes;
+                    impl<T: MetaService> tonic::server::UnaryService<super::RaftRequest> for WriteSvc<T> {
+                        type Response = super::RaftReply;
                         type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::RaftMes>,
+                            request: tonic::Request<super::RaftRequest>,
                         ) -> Self::Future {
                             let inner = self.0.clone();
                             let fut = async move { (*inner).write(request).await };
@@ -355,12 +360,12 @@ pub mod meta_service_server {
                 "/meta.MetaService/Forward" => {
                     #[allow(non_camel_case_types)]
                     struct ForwardSvc<T: MetaService>(pub Arc<T>);
-                    impl<T: MetaService> tonic::server::UnaryService<super::RaftMes> for ForwardSvc<T> {
-                        type Response = super::RaftMes;
+                    impl<T: MetaService> tonic::server::UnaryService<super::RaftRequest> for ForwardSvc<T> {
+                        type Response = super::RaftReply;
                         type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::RaftMes>,
+                            request: tonic::Request<super::RaftRequest>,
                         ) -> Self::Future {
                             let inner = self.0.clone();
                             let fut = async move { (*inner).forward(request).await };
@@ -386,12 +391,12 @@ pub mod meta_service_server {
                 "/meta.MetaService/AppendEntries" => {
                     #[allow(non_camel_case_types)]
                     struct AppendEntriesSvc<T: MetaService>(pub Arc<T>);
-                    impl<T: MetaService> tonic::server::UnaryService<super::RaftMes> for AppendEntriesSvc<T> {
-                        type Response = super::RaftMes;
+                    impl<T: MetaService> tonic::server::UnaryService<super::RaftRequest> for AppendEntriesSvc<T> {
+                        type Response = super::RaftReply;
                         type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::RaftMes>,
+                            request: tonic::Request<super::RaftRequest>,
                         ) -> Self::Future {
                             let inner = self.0.clone();
                             let fut = async move { (*inner).append_entries(request).await };
@@ -417,12 +422,12 @@ pub mod meta_service_server {
                 "/meta.MetaService/InstallSnapshot" => {
                     #[allow(non_camel_case_types)]
                     struct InstallSnapshotSvc<T: MetaService>(pub Arc<T>);
-                    impl<T: MetaService> tonic::server::UnaryService<super::RaftMes> for InstallSnapshotSvc<T> {
-                        type Response = super::RaftMes;
+                    impl<T: MetaService> tonic::server::UnaryService<super::RaftRequest> for InstallSnapshotSvc<T> {
+                        type Response = super::RaftReply;
                         type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::RaftMes>,
+                            request: tonic::Request<super::RaftRequest>,
                         ) -> Self::Future {
                             let inner = self.0.clone();
                             let fut = async move { (*inner).install_snapshot(request).await };
@@ -448,12 +453,12 @@ pub mod meta_service_server {
                 "/meta.MetaService/vote" => {
                     #[allow(non_camel_case_types)]
                     struct voteSvc<T: MetaService>(pub Arc<T>);
-                    impl<T: MetaService> tonic::server::UnaryService<super::RaftMes> for voteSvc<T> {
-                        type Response = super::RaftMes;
+                    impl<T: MetaService> tonic::server::UnaryService<super::RaftRequest> for voteSvc<T> {
+                        type Response = super::RaftReply;
                         type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::RaftMes>,
+                            request: tonic::Request<super::RaftRequest>,
                         ) -> Self::Future {
                             let inner = self.0.clone();
                             let fut = async move { (*inner).vote(request).await };
