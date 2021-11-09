@@ -57,13 +57,9 @@ build-tool:
 
 cross-compile-debug:
 	cross build --target aarch64-unknown-linux-gnu
-	cross build --target arm-unknown-linux-gnueabi
-	cross build --target armv7-unknown-linux-gnueabihf
 
 cross-compile-release:
 	cross build --target aarch64-unknown-linux-gnu --release
-	cross build --target arm-unknown-linux-gnueabi --release
-	cross build --target armv7-unknown-linux-gnueabihf --release
 
 cli-build:
 	bash ./scripts/build/build-cli.sh build-cli
