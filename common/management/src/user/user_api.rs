@@ -65,7 +65,7 @@ pub trait UserMgrApi: Sync + Send {
         seq: Option<u64>,
     ) -> Result<SeqV<UserInfo>>;
 
-    async fn get_users(&self, username: Option<String>) -> Result<Vec<SeqV<UserInfo>>>;
+    async fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>>;
 
     async fn update_user(
         &self,

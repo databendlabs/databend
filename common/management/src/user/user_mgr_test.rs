@@ -371,28 +371,8 @@ mod get_users {
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
-        let res = user_mgr.get_users(None);
+        let res = user_mgr.get_users();
         assert_eq!(res.await?, user_infos);
-
-        Ok(())
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_get_users_with_username() -> common_exception::Result<()> {
-        let (res, user_infos) = prepare()?;
-        let mut kv = MockKV::new();
-        {
-            let k = "__fd_users/tenant1/'test_user_0'@";
-            kv.expect_prefix_list_kv()
-                .with(predicate::eq(k))
-                .times(1)
-                .return_once(move |_p| Ok(res[..1].to_vec()));
-        }
-
-        let kv = Arc::new(kv);
-        let user_mgr = UserMgr::new(kv, "tenant1");
-        let res = user_mgr.get_users(Some("test_user_0".to_string()));
-        assert_eq!(res.await?, user_infos[..1].to_vec());
 
         Ok(())
     }
@@ -419,7 +399,7 @@ mod get_users {
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
-        let res = user_mgr.get_users(None);
+        let res = user_mgr.get_users();
         assert_eq!(
             res.await.unwrap_err().code(),
             ErrorCode::IllegalUserInfoFormat("").code()

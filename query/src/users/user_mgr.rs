@@ -90,26 +90,9 @@ impl UserManager {
         }
     }
 
-    // Get the tenant users list by name.
-    pub async fn get_users(&self, username: &str) -> Result<Vec<UserInfo>> {
-        let get_users = self.api_provider.get_users(Some(username.to_string()));
-
-        let mut res = vec![];
-        match get_users.await {
-            Err(failure) => Err(failure.add_message_back("(while get users).")),
-            Ok(seq_users_info) => {
-                for seq_user_info in seq_users_info {
-                    res.push(seq_user_info.data);
-                }
-
-                Ok(res)
-            }
-        }
-    }
-
     // Get the tenant all users list.
-    pub async fn get_all_users(&self) -> Result<Vec<UserInfo>> {
-        let get_users = self.api_provider.get_users(None);
+    pub async fn get_users(&self) -> Result<Vec<UserInfo>> {
+        let get_users = self.api_provider.get_users();
 
         let mut res = vec![];
         match get_users.await {

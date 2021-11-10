@@ -46,7 +46,7 @@ async fn test_user_manager() -> Result<()> {
 
     // get all users.
     {
-        let users = user_mgr.get_all_users().await?;
+        let users = user_mgr.get_users().await?;
         assert_eq!(2, users.len());
         assert_eq!(pwd.as_bytes(), users[0].password);
     }
@@ -68,7 +68,7 @@ async fn test_user_manager() -> Result<()> {
     // drop.
     {
         user_mgr.drop_user(user, hostname).await?;
-        let users = user_mgr.get_all_users().await?;
+        let users = user_mgr.get_users().await?;
         assert_eq!(1, users.len());
     }
 

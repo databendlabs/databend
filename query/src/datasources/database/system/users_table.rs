@@ -79,7 +79,7 @@ impl Table for UsersTable {
         let users = ctx
             .get_sessions_manager()
             .get_user_manager()
-            .get_all_users()
+            .get_users()
             .await?;
 
         let names: Vec<&str> = users.iter().map(|x| x.name.as_str()).collect();
