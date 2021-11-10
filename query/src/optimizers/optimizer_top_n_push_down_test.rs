@@ -106,3 +106,47 @@ fn test_aggregate() -> Result<()> {
     assert_eq!(expect, actual);
     Ok(())
 }
+
+#[test]
+fn test_monotonic_function() -> Result<()> {
+    #[allow(dead_code)]
+    struct Test {
+        name: &'static str,
+        query: &'static str,
+        expect: &'static str,
+    }
+
+    let tests: Vec<Test> = vec![
+        Test {
+            name: "plus-only-function-(number+1)",
+            query: "select number*number from numbers_mt(100) order by number+(number+ 3)",
+            expect: "\
+            Projection: (number * number):UInt64\
+            \n  Sort: (number + (number + 3)):UInt64\
+            \n    Expression: (number * number):UInt64, (number + (number + 3)):UInt64 (Before OrderBy)\
+            \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800]",
+        },
+        Test {
+            name: "plus-only-function-(number+number+3)",
+            query: "select number*number from numbers_mt(100) order by number+number+3 limit 10",
+            expect: "\
+            Limit: 10\
+            \n  Projection: (number * number):UInt64\
+            \n    Sort: ((number + number) + 3):UInt64\
+            \n      Expression: (number * number):UInt64, ((number + number) + 3):UInt64 (Before OrderBy)\
+            \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800], push_downs: [limit: 10, order_by: [number]]",
+        },
+        //TODO: add more function tests
+    ];
+
+    for test in tests {
+        let plan = crate::tests::parse_query(test.query)?;
+        let ctx = crate::tests::try_create_context()?;
+        let mut optimizer = Optimizers::without_scatters(ctx);
+
+        let optimized_plan = optimizer.optimize(&plan)?;
+        let actual = format!("{:?}", optimized_plan);
+        assert_eq!(test.expect, actual, "{:#?}", test.name);
+    }
+    Ok(())
+}

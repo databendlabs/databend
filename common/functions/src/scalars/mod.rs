@@ -36,6 +36,8 @@ pub use conditionals::*;
 pub use dates::*;
 pub use expressions::*;
 pub use function::Function;
+pub use function::Monotonicity;
+pub use function::MonotonicityNode;
 pub use function_alias::AliasFunction;
 pub use function_column::ColumnFunction;
 pub use function_factory::FunctionFactory;

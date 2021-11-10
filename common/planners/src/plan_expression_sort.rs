@@ -20,5 +20,6 @@ pub fn sort(name: &str, asc: bool, nulls_first: bool) -> Expression {
         expr: Box::new(col(name)),
         asc,
         nulls_first,
+        origin_expr: Box::new(col(name)),
     }
 }

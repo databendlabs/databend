@@ -19,6 +19,8 @@ use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticFunction;
 use crate::scalars::Function;
+use crate::scalars::Monotonicity;
+use crate::scalars::MonotonicityNode;
 
 pub struct ArithmeticMulFunction;
 
@@ -30,5 +32,10 @@ impl ArithmeticMulFunction {
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create_func))
             .features(FunctionFeatures::default().deterministic())
+    }
+
+    pub fn get_monotonicity(_args: &[MonotonicityNode]) -> Result<MonotonicityNode> {
+        //TODO: implement
+        Ok(MonotonicityNode::Function(Monotonicity::default()))
     }
 }

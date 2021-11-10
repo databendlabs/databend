@@ -16,7 +16,9 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::*;
+use common_tracing::tracing;
 
+use super::MonotonicityCheckVisitor;
 use crate::optimizers::Optimizer;
 use crate::sessions::DatabendQueryContextRef;
 
@@ -100,17 +102,18 @@ impl PlanRewriter for TopNPushDownImpl {
                     } else {
                         n
                     };
+
                     Some(Extras {
                         projection: extras.projection.clone(),
                         filters: extras.filters.clone(),
                         limit: Some(new_limit),
-                        order_by: self.order_by.clone(),
+                        order_by: self.get_sort_columns(),
                     })
                 }
                 None => {
                     let mut extras = Extras::default();
                     extras.limit = Some(n);
-                    extras.order_by = self.order_by.clone();
+                    extras.order_by = self.get_sort_columns();
                     Some(extras)
                 }
             };
@@ -141,6 +144,28 @@ impl TopNPushDownImpl {
             limit: None,
             order_by: vec![],
         }
+    }
+
+    // For every order by columns, try the best to extract the native columns.
+    // For example 'order by age+3, number+5', will return expression of two columns,
+    // 'age' and 'number', since f(age)=age+3 and f(number)=number+5 are both monotonic functions.
+    fn get_sort_columns(&self) -> Vec<Expression> {
+        self.order_by
+            .iter()
+            .map(
+                |expr| match MonotonicityCheckVisitor::extract_sort_column(expr) {
+                    Ok(new_expr) => new_expr,
+                    Err(error) => {
+                        tracing::error!(
+                            "Failed to extract column from sort expression {:?}, {}",
+                            expr,
+                            error
+                        );
+                        expr.clone()
+                    }
+                },
+            )
+            .collect::<Vec<Expression>>()
     }
 }
 
