@@ -3,10 +3,10 @@ name: Pull Request Security Audit
 on:
   push:
     paths:
-      - '**/**/Cargo.toml'
+      - '**/Cargo.lock'
   pull_request:
     paths:
-      - '**/**/Cargo.toml'
+      - '**/Cargo.lock'
 
 jobs:
   security-audit:

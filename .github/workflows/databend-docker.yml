@@ -2,6 +2,9 @@ name: Push to Dockerhub
 on:
   push:
     branches: main
+    paths-ignore:
+      - 'website/'
+      - '*.md'
 
 jobs:
   build:
