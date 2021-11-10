@@ -27,32 +27,45 @@ use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
 #[derive(Clone)]
-pub struct LogFunction {
-    _display_name: String,
+pub struct GenericLogFunction {
+    display_name: String,
     default_base: f64,
+    unary: bool,
 }
 
-impl LogFunction {
-    pub fn try_create(_display_name: &str) -> Result<Box<dyn Function>> {
+impl GenericLogFunction {
+    pub fn try_create(
+        display_name: &str,
+        default_base: f64,
+        unary: bool,
+    ) -> Result<Box<dyn Function>> {
         Ok(Box::new(Self {
-            _display_name: _display_name.to_string(),
-            default_base: E,
+            display_name: display_name.to_string(),
+            default_base,
+            unary,
         }))
     }
-
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
-    }
 }
 
-impl Function for LogFunction {
+impl Function for GenericLogFunction {
     fn name(&self) -> &str {
-        &*self._display_name
+        &*self.display_name
+    }
+
+    fn num_arguments(&self) -> usize {
+        if self.unary {
+            1
+        } else {
+            0
+        }
     }
 
     fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((1, 2))
+        if self.unary {
+            None
+        } else {
+            Some((1, 2))
+        }
     }
 
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
@@ -113,8 +126,34 @@ impl Function for LogFunction {
     }
 }
 
-impl fmt::Display for LogFunction {
+impl fmt::Display for GenericLogFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "LOG")
+    }
+}
+
+pub struct LogFunction {}
+
+impl LogFunction {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+        GenericLogFunction::try_create(display_name, E, false)
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default().deterministic())
+    }
+}
+
+pub struct LnFunction {}
+
+impl LnFunction {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+        GenericLogFunction::try_create(display_name, E, true)
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default().deterministic())
     }
 }
