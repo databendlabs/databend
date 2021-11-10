@@ -13,6 +13,7 @@
 //  limitations under the License.
 //
 
+use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
@@ -137,15 +138,15 @@ pub(super) fn block_stats(data_block: &DataBlock) -> Result<BlockStats> {
         .collect()
 }
 
-pub fn column_stats_reduce_with_schema(
-    stats: &[HashMap<ColumnId, ColStats>],
+pub fn column_stats_reduce_with_schema<T: Borrow<HashMap<ColumnId, ColStats>>>(
+    stats: &[T],
     schema: &DataSchema,
 ) -> Result<HashMap<ColumnId, ColStats>> {
     let len = stats.len();
 
     // transpose Vec<HashMap<_,(_,_)>> to HashMap<_, (_, Vec<_>)>
     let col_stat_list = stats.iter().fold(HashMap::new(), |acc, item| {
-        item.iter().fold(
+        item.borrow().iter().fold(
             acc,
             |mut acc: HashMap<ColumnId, Vec<&ColStats>>, (col_id, stats)| {
                 let entry = acc.entry(*col_id);
@@ -185,7 +186,7 @@ pub fn column_stats_reduce_with_schema(
 
             // TODO
             // for some data types, we shall balance the accuracy and the length
-            // e.g. for a string col, which max value is "xxxxxxxxxxxx....", we record the max as something like "y"
+            // e.g. for a string col, which max value is "abcdef....", we record the max as something like "b"
             let min =
                 common_datavalues::DataValue::try_into_data_array(min_stats.as_slice(), data_type)?
                     .min()?;
@@ -210,10 +211,7 @@ pub fn merge_stats(schema: &DataSchema, l: &Stats, r: &Stats) -> Result<Stats> {
         block_count: l.block_count + r.block_count,
         uncompressed_byte_size: l.uncompressed_byte_size + r.uncompressed_byte_size,
         compressed_byte_size: l.compressed_byte_size + r.compressed_byte_size,
-        col_stats: util::column_stats_reduce_with_schema(
-            &[l.col_stats.clone(), r.col_stats.clone()],
-            schema,
-        )?,
+        col_stats: util::column_stats_reduce_with_schema(&[&l.col_stats, &r.col_stats], schema)?,
     };
     Ok(s)
 }

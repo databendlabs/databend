@@ -13,16 +13,20 @@
 //  limitations under the License.
 //
 
+use std::collections::HashSet;
+
 use common_base::BlockingWait;
 use common_context::IOContext;
 use common_context::TableIOContext;
 use common_dal::read_obj;
 use common_exception::Result;
 use common_planners::Extras;
+use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::Statistics;
 
 use super::index;
+use crate::datasources::table::fuse::BlockMeta;
 use crate::datasources::table::fuse::FuseTable;
 
 impl FuseTable {
@@ -43,10 +47,43 @@ impl FuseTable {
             }
             .wait_in(&io_ctx.get_runtime(), None)??;
 
-            let (statistics, parts) = Self::to_partitions(&block_metas, push_downs);
+            let (statistics, parts) = to_partitions(&block_metas, push_downs);
             Ok((statistics, parts))
         } else {
             Ok((Statistics::default(), vec![]))
         }
     }
+}
+
+pub(crate) fn to_partitions(
+    blocks_metas: &[BlockMeta],
+    push_downs: Option<Extras>,
+) -> (Statistics, Partitions) {
+    let proj_cols =
+        push_downs.and_then(|extras| extras.projection.map(HashSet::<usize>::from_iter));
+    blocks_metas.iter().fold(
+        (Statistics::default(), Partitions::default()),
+        |(mut stats, mut parts), block_meta| {
+            parts.push(Part {
+                name: block_meta.location.location.clone(),
+                version: 0,
+            });
+
+            stats.read_rows += block_meta.row_count as usize;
+
+            match &proj_cols {
+                Some(proj) => {
+                    stats.read_bytes += block_meta
+                        .col_stats
+                        .iter()
+                        .filter(|(cid, _)| proj.contains(&(**cid as usize)))
+                        .map(|(_, col_stats)| col_stats.in_memory_size)
+                        .sum::<u64>() as usize
+                }
+                None => stats.read_bytes += block_meta.block_size as usize,
+            }
+
+            (stats, parts)
+        },
+    )
 }
