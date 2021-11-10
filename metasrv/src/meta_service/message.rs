@@ -35,6 +35,7 @@ pub struct JoinRequest {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, derive_more::TryInto)]
 pub enum AdminRequestInner {
     Join(JoinRequest),
+    Write(LogEntry),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -52,8 +53,10 @@ impl AdminRequest {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, derive_more::TryInto)]
+#[allow(clippy::large_enum_variant)]
 pub enum AdminResponse {
     Join(()),
+    AppliedState(AppliedState),
 }
 
 impl tonic::IntoRequest<RaftRequest> for AdminRequest {

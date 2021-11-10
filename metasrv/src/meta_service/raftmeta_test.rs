@@ -32,8 +32,10 @@ use maplit::btreeset;
 use pretty_assertions::assert_eq;
 
 use crate::configs;
-use crate::errors::RetryableError;
+use crate::errors::ForwardToLeader;
+use crate::errors::MetaError;
 use crate::meta_service::message::AdminRequest;
+use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::AdminRequestInner;
 use crate::meta_service::JoinRequest;
 use crate::meta_service::MetaNode;
@@ -136,8 +138,9 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
         let key = "t-non-leader-write";
         for id in 0u64..4 {
             let mn = &all[id as usize];
-            let rst = mn
-                .write_to_local_leader(LogEntry {
+            let maybe_leader = MetaLeader::new(mn);
+            let rst = maybe_leader
+                .write(LogEntry {
                     txid: None,
                     cmd: Cmd::UpsertKV {
                         key: key.to_string(),
@@ -148,16 +151,17 @@ async fn test_meta_node_write_to_local_leader() -> anyhow::Result<()> {
                 })
                 .await;
 
-            let rst = rst?;
-
             if id == leader_id {
                 assert!(rst.is_ok());
             } else {
                 assert!(rst.is_err());
                 let e = rst.unwrap_err();
                 match e {
-                    RetryableError::ForwardToLeader { leader } => {
-                        assert_eq!(leader_id, leader);
+                    MetaError::ForwardToLeader(ForwardToLeader { leader }) => {
+                        assert_eq!(Some(leader_id), leader);
+                    }
+                    _ => {
+                        panic!("expect ForwardToLeader")
                     }
                 }
             }
@@ -559,7 +563,9 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
         let leader = tc.meta_nodes.pop().unwrap();
 
         leader
-            .write_to_local_leader(LogEntry {
+            .as_leader()
+            .await?
+            .write(LogEntry {
                 txid: None,
                 cmd: Cmd::UpsertKV {
                     key: "foo".to_string(),
@@ -568,7 +574,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
                     value_meta: None,
                 },
             })
-            .await??;
+            .await?;
         log_cnt += 1;
 
         want_hs = leader.sto.raft_state.read_hard_state()?;
@@ -752,7 +758,9 @@ async fn assert_upsert_kv_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> a
     tracing::info!("leader: last_applied={}", last_applied);
     {
         leader
-            .write_to_local_leader(LogEntry {
+            .as_leader()
+            .await?
+            .write(LogEntry {
                 txid: None,
                 cmd: Cmd::UpsertKV {
                     key: key.to_string(),
@@ -761,7 +769,7 @@ async fn assert_upsert_kv_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> a
                     value_meta: None,
                 },
             })
-            .await??;
+            .await?;
     }
 
     assert_applied_index(meta_nodes.clone(), last_applied + 1).await?;
