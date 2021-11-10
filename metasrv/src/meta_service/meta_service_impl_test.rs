@@ -25,6 +25,8 @@ use common_tracing::tracing;
 use log::info;
 use pretty_assertions::assert_eq;
 
+use crate::errors::ForwardToLeader;
+use crate::errors::MetaError;
 use crate::errors::RetryableError;
 use crate::meta_service::MetaNode;
 use crate::proto::meta_service_client::MetaServiceClient;
@@ -165,12 +167,17 @@ async fn test_meta_cluster_write_on_non_leader() -> anyhow::Result<()> {
     };
     let raft_mes = client.write(req).await?.into_inner();
 
-    let rst: Result<AppliedState, RetryableError> = raft_mes.into();
+    let rst: Result<AppliedState, MetaError> = raft_mes.into();
+    println!("{:?}", rst);
+
     assert!(rst.is_err());
     let err = rst.unwrap_err();
     match err {
-        RetryableError::ForwardToLeader { leader } => {
-            assert_eq!(leader, 0);
+        MetaError::ForwardToLeader(ForwardToLeader { leader }) => {
+            assert_eq!(leader, Some(0));
+        }
+        _ => {
+            panic!("expect ForwardToLeader")
         }
     }
 

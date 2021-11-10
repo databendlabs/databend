@@ -21,6 +21,7 @@ use std::sync::Arc;
 use common_meta_types::LogEntry;
 use common_tracing::tracing;
 
+use crate::errors::MetaError;
 use crate::meta_service::message::AdminRequest;
 use crate::meta_service::MetaNode;
 use crate::proto::meta_service_server::MetaService;
@@ -53,14 +54,21 @@ impl MetaService for MetaServiceImpl {
         let mes = request.into_inner();
         let req: LogEntry = mes.try_into()?;
 
-        let rst = self
-            .meta_node
-            .write_to_local_leader(req)
-            .await
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+        let leader = self.meta_node.as_leader().await;
 
-        let raft_mes = rst.into();
-        Ok(tonic::Response::new(raft_mes))
+        let leader = match leader {
+            Ok(x) => x,
+            Err(err) => {
+                let err: MetaError = err.into();
+                let raft_reply = Err::<(), _>(err).into();
+                return Ok(tonic::Response::new(raft_reply));
+            }
+        };
+
+        let rst = leader.write(req).await;
+
+        let raft_reply = rst.into();
+        Ok(tonic::Response::new(raft_reply))
     }
 
     #[tracing::instrument(level = "info", skip(self))]

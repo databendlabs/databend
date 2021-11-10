@@ -15,7 +15,10 @@
 use std::collections::BTreeSet;
 
 use async_raft::error::ResponseError;
+use async_raft::raft::ClientWriteRequest;
 use async_raft::ChangeConfigError;
+use async_raft::ClientWriteError;
+use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::Node;
@@ -25,7 +28,6 @@ use common_tracing::tracing;
 use crate::errors::ForwardToLeader;
 use crate::errors::InvalidMembership;
 use crate::errors::MetaError;
-use crate::errors::RetryableError;
 use crate::meta_service::message::AdminRequest;
 use crate::meta_service::message::AdminResponse;
 use crate::meta_service::AdminRequestInner;
@@ -51,6 +53,10 @@ impl<'a> MetaLeader<'a> {
             AdminRequestInner::Join(join_req) => {
                 self.join(join_req).await?;
                 Ok(AdminResponse::Join(()))
+            }
+            AdminRequestInner::Write(entry) => {
+                let res = self.write(entry).await?;
+                Ok(AdminResponse::AppliedState(res))
             }
         }
     }
@@ -85,23 +91,7 @@ impl<'a> MetaLeader<'a> {
             },
         };
 
-        let res = self
-            .meta_node
-            .write_to_local_leader(ent.clone())
-            .await
-            .map_err(|e| MetaError::UnknownError(e.to_string()))?;
-        match res {
-            Ok(_applied_state) => {}
-            Err(retryable_error) => {
-                // TODO(xp): remove retryable error.
-                let leader_id = match retryable_error {
-                    RetryableError::ForwardToLeader { leader } => leader,
-                };
-                return Err(MetaError::ForwardToLeader(ForwardToLeader {
-                    leader: Some(leader_id),
-                }));
-            }
-        }
+        self.write(ent.clone()).await?;
 
         self.change_membership(membership).await
     }
@@ -136,6 +126,36 @@ impl<'a> MetaLeader<'a> {
             // TODO(xp): enable MetaNode::RaftError when RaftError impl Serialized
             ResponseError::Raft(raft_error) => Err(MetaError::UnknownError(raft_error.to_string())),
             _ => Err(MetaError::UnknownError("uncovered error".to_string())),
+        }
+    }
+
+    /// Write a log through local raft node and return the states before and after applying the log.
+    ///
+    /// If the raft node is not a leader, it returns MetaError::ForwardToLeader.
+    /// If the leadership is lost during writing the log, it returns an UnknownError.
+    /// TODO(xp): elaborate the UnknownError, e.g. LeaderLostError
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn write(&self, entry: LogEntry) -> Result<AppliedState, MetaError> {
+        let write_rst = self
+            .meta_node
+            .raft
+            .client_write(ClientWriteRequest::new(entry))
+            .await;
+
+        tracing::debug!("raft.client_write rst: {:?}", write_rst);
+
+        match write_rst {
+            Ok(resp) => Ok(resp.data),
+            Err(cli_write_err) => match cli_write_err {
+                // fatal error
+                ClientWriteError::RaftError(raft_err) => {
+                    Err(MetaError::UnknownError(raft_err.to_string()))
+                }
+                // retryable error
+                ClientWriteError::ForwardToLeader(_, leader) => {
+                    Err(MetaError::ForwardToLeader(ForwardToLeader { leader }))
+                }
+            },
         }
     }
 }
