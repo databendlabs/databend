@@ -157,3 +157,29 @@ impl LnFunction {
             .features(FunctionFeatures::default().deterministic())
     }
 }
+
+pub struct Log10Function {}
+
+impl Log10Function {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+        GenericLogFunction::try_create(display_name, 10_f64, true)
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default().deterministic())
+    }
+}
+
+pub struct Log2Function {}
+
+impl Log2Function {
+    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
+        GenericLogFunction::try_create(display_name, 2_f64, true)
+    }
+
+    pub fn desc() -> FunctionDescription {
+        FunctionDescription::creator(Box::new(Self::try_create))
+            .features(FunctionFeatures::default().deterministic())
+    }
+}

@@ -25,6 +25,8 @@ pub use angle::DegressFunction;
 pub use angle::RadiansFunction;
 pub use crc32::CRC32Function;
 pub use log::LnFunction;
+pub use log::Log10Function;
+pub use log::Log2Function;
 pub use log::LogFunction;
 pub use math::MathsFunction;
 pub use pi::PiFunction;

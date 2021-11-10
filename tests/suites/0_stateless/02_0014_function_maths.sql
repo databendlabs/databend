@@ -18,5 +18,8 @@ SELECT log(NULL, 1); -- {ErrorCode 10}
 SELECT log('10', 100);
 SELECT ln(NULL);
 SELECT ln(1, 2); -- {ErrorCode 28}
+SELECT log10(NULL);
+SELECT log10(100);
+SELECT log2(2);
 
 DROP TABLE math_sample_numbers;
