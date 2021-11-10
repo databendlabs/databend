@@ -68,7 +68,9 @@ async fn test_clickhouse_insert_data() -> Result<()> {
     Ok(())
 }
 
+// (todo winter)
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[ignore]
 async fn test_clickhouse_insert_to_fuse_table() -> Result<()> {
     let tmp_dir = TempDir::new()?;
     let data_path = tmp_dir.path().to_str().unwrap().to_string();
