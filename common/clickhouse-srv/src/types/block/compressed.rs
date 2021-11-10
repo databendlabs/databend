@@ -73,7 +73,7 @@ where R: Read + ReadEx
     }
 }
 
-fn decompress_buffer<R>(reader: &mut R, mut buffer: Vec<u8>) -> Result<Vec<u8>>
+pub fn decompress_buffer<R>(reader: &mut R, mut buffer: Vec<u8>) -> Result<Vec<u8>>
 where R: ReadEx {
     let h = UInt128 {
         lo: reader.read_scalar()?,
@@ -125,28 +125,4 @@ where R: ReadEx {
 
 fn raise_error(message: String) -> Error {
     message.into()
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_decompress() {
-        let expected = vec![
-            1u8, 0, 2, 255, 255, 255, 255, 0, 1, 1, 1, 115, 6, 83, 116, 114, 105, 110, 103, 3, 97,
-            98, 99,
-        ];
-
-        let source = vec![
-            245_u8, 5, 222, 235, 225, 158, 59, 108, 225, 31, 65, 215, 66, 66, 36, 92, 130, 34, 0,
-            0, 0, 23, 0, 0, 0, 240, 8, 1, 0, 2, 255, 255, 255, 255, 0, 1, 1, 1, 115, 6, 83, 116,
-            114, 105, 110, 103, 3, 97, 98, 99,
-        ];
-
-        let mut cursor = io::Cursor::new(&source[..]);
-        let actual = decompress_buffer(&mut cursor, Vec::new()).unwrap();
-
-        assert_eq!(actual, expected);
-    }
 }

@@ -103,14 +103,14 @@ impl ColumnData for DateTime64ColumnData {
     }
 }
 
-pub(crate) fn from_datetime<T: chrono::offset::TimeZone>(time: DateTime<T>, precision: u32) -> i64 {
+pub fn from_datetime<T: chrono::offset::TimeZone>(time: DateTime<T>, precision: u32) -> i64 {
     let base10: i64 = 10;
     let timestamp = time.timestamp_nanos();
     timestamp / base10.pow(9 - precision)
 }
 
 #[inline(always)]
-pub(crate) fn to_datetime(value: i64, precision: u32, tz: Tz) -> DateTime<Tz> {
+pub fn to_datetime(value: i64, precision: u32, tz: Tz) -> DateTime<Tz> {
     let base10: i64 = 10;
 
     let nano = if precision < 19 {
@@ -123,23 +123,4 @@ pub(crate) fn to_datetime(value: i64, precision: u32, tz: Tz) -> DateTime<Tz> {
     let nsec = nano - sec * 1_000_000_000;
 
     tz.timestamp(sec, nsec as u32)
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_to_datetime() {
-        let expected = DateTime::parse_from_rfc3339("2019-01-01T00:00:00-00:00").unwrap();
-        let actual = to_datetime(1_546_300_800_000, 3, Tz::UTC);
-        assert_eq!(actual, expected)
-    }
-
-    #[test]
-    fn test_from_datetime() {
-        let origin = DateTime::parse_from_rfc3339("2019-01-01T00:00:00-00:00").unwrap();
-        let actual = from_datetime(origin, 3);
-        assert_eq!(actual, 1_546_300_800_000)
-    }
 }

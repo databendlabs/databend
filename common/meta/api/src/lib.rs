@@ -13,6 +13,8 @@
 //  limitations under the License.
 //
 
+extern crate common_meta_types;
+
 mod kv_api;
 mod kv_api_test_suite;
 mod meta_api;

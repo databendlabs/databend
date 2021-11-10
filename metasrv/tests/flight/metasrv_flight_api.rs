@@ -18,6 +18,7 @@ use common_base::tokio;
 use common_meta_api::KVApi;
 use common_meta_flight::MetaFlightClient;
 use common_meta_types::MatchSeq;
+use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVActionReply;
 use common_tracing::tracing;
@@ -45,7 +46,12 @@ async fn test_restart() -> anyhow::Result<()> {
     tracing::info!("--- upsert kv");
     {
         let res = client
-            .upsert_kv("foo", MatchSeq::Any, Some(b"bar".to_vec()), None)
+            .upsert_kv(
+                "foo",
+                MatchSeq::Any,
+                Operation::Update(b"bar".to_vec()),
+                None,
+            )
             .await;
 
         tracing::debug!("set kv res: {:?}", res);
@@ -75,7 +81,7 @@ async fn test_restart() -> anyhow::Result<()> {
                 meta: None,
                 data: b"bar".to_vec(),
             }),
-            res.result,
+            res,
             "get kv"
         );
     }
@@ -114,7 +120,7 @@ async fn test_restart() -> anyhow::Result<()> {
                 meta: None,
                 data: b"bar".to_vec()
             }),
-            res.result,
+            res,
             "get kv"
         );
     }
@@ -160,7 +166,7 @@ async fn test_join() -> anyhow::Result<()> {
                 .upsert_kv(
                     k.as_str(),
                     MatchSeq::Any,
-                    Some(k.clone().into_bytes()),
+                    Operation::Update(k.clone().into_bytes()),
                     None,
                 )
                 .await;
@@ -194,7 +200,7 @@ async fn test_join() -> anyhow::Result<()> {
 
                 tracing::debug!("get kv {} from {}-th node,res: {:?}", k, icli, res);
                 let res = res?;
-                assert_eq!(k.into_bytes(), res.result.unwrap().data);
+                assert_eq!(k.into_bytes(), res.unwrap().data);
             }
         }
     }

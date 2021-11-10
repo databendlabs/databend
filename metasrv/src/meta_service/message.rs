@@ -23,7 +23,8 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::errors::RetryableError;
-use crate::proto::RaftMes;
+use crate::proto::RaftReply;
+use crate::proto::RaftRequest;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct JoinRequest {
@@ -55,102 +56,97 @@ pub enum AdminResponse {
     Join(()),
 }
 
-impl tonic::IntoRequest<RaftMes> for AdminRequest {
-    fn into_request(self) -> tonic::Request<RaftMes> {
-        let mes = RaftMes {
+impl tonic::IntoRequest<RaftRequest> for AdminRequest {
+    fn into_request(self) -> tonic::Request<RaftRequest> {
+        let mes = RaftRequest {
             data: serde_json::to_string(&self).expect("fail to serialize"),
-            error: "".to_string(),
         };
         tonic::Request::new(mes)
     }
 }
 
-impl TryFrom<RaftMes> for AdminRequest {
+impl TryFrom<RaftRequest> for AdminRequest {
     type Error = tonic::Status;
 
-    fn try_from(mes: RaftMes) -> Result<Self, Self::Error> {
+    fn try_from(mes: RaftRequest) -> Result<Self, Self::Error> {
         let req = serde_json::from_str(&mes.data)
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
         Ok(req)
     }
 }
 
-impl tonic::IntoRequest<RaftMes> for LogEntry {
-    fn into_request(self) -> tonic::Request<RaftMes> {
-        let mes = RaftMes {
+impl tonic::IntoRequest<RaftRequest> for LogEntry {
+    fn into_request(self) -> tonic::Request<RaftRequest> {
+        let mes = RaftRequest {
             data: serde_json::to_string(&self).expect("fail to serialize"),
-            error: "".to_string(),
         };
         tonic::Request::new(mes)
     }
 }
 
-impl TryFrom<RaftMes> for LogEntry {
+impl TryFrom<RaftRequest> for LogEntry {
     type Error = tonic::Status;
 
-    fn try_from(mes: RaftMes) -> Result<Self, Self::Error> {
+    fn try_from(mes: RaftRequest) -> Result<Self, Self::Error> {
         let req: LogEntry = serde_json::from_str(&mes.data)
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
         Ok(req)
     }
 }
 
-impl tonic::IntoRequest<RaftMes> for AppendEntriesRequest<LogEntry> {
-    fn into_request(self) -> tonic::Request<RaftMes> {
-        let mes = RaftMes {
+impl tonic::IntoRequest<RaftRequest> for AppendEntriesRequest<LogEntry> {
+    fn into_request(self) -> tonic::Request<RaftRequest> {
+        let mes = RaftRequest {
             data: serde_json::to_string(&self).expect("fail to serialize"),
-            error: "".to_string(),
         };
         tonic::Request::new(mes)
     }
 }
 
-impl tonic::IntoRequest<RaftMes> for InstallSnapshotRequest {
-    fn into_request(self) -> tonic::Request<RaftMes> {
-        let mes = RaftMes {
+impl tonic::IntoRequest<RaftRequest> for InstallSnapshotRequest {
+    fn into_request(self) -> tonic::Request<RaftRequest> {
+        let mes = RaftRequest {
             data: serde_json::to_string(&self).expect("fail to serialize"),
-            error: "".to_string(),
         };
         tonic::Request::new(mes)
     }
 }
 
-impl tonic::IntoRequest<RaftMes> for VoteRequest {
-    fn into_request(self) -> tonic::Request<RaftMes> {
-        let mes = RaftMes {
+impl tonic::IntoRequest<RaftRequest> for VoteRequest {
+    fn into_request(self) -> tonic::Request<RaftRequest> {
+        let mes = RaftRequest {
             data: serde_json::to_string(&self).expect("fail to serialize"),
-            error: "".to_string(),
         };
         tonic::Request::new(mes)
     }
 }
 
-impl From<RetryableError> for RaftMes {
+impl From<RetryableError> for RaftReply {
     fn from(err: RetryableError) -> Self {
         let error = serde_json::to_string(&err).expect("fail to serialize");
-        RaftMes {
+        RaftReply {
             data: "".to_string(),
             error,
         }
     }
 }
 
-impl From<AppliedState> for RaftMes {
+impl From<AppliedState> for RaftReply {
     fn from(msg: AppliedState) -> Self {
         let data = serde_json::to_string(&msg).expect("fail to serialize");
-        RaftMes {
+        RaftReply {
             data,
             error: "".to_string(),
         }
     }
 }
 
-impl<T, E> From<RaftMes> for Result<T, E>
+impl<T, E> From<RaftReply> for Result<T, E>
 where
     T: DeserializeOwned,
     E: DeserializeOwned,
 {
-    fn from(msg: RaftMes) -> Self {
+    fn from(msg: RaftReply) -> Self {
         if !msg.data.is_empty() {
             let resp: T = serde_json::from_str(&msg.data).expect("fail to deserialize");
             Ok(resp)
@@ -161,7 +157,7 @@ where
     }
 }
 
-impl<T, E> From<Result<T, E>> for RaftMes
+impl<T, E> From<Result<T, E>> for RaftReply
 where
     T: Serialize,
     E: Serialize,
@@ -170,14 +166,14 @@ where
         match r {
             Ok(x) => {
                 let data = serde_json::to_string(&x).expect("fail to serialize");
-                RaftMes {
+                RaftReply {
                     data,
                     error: Default::default(),
                 }
             }
             Err(e) => {
                 let error = serde_json::to_string(&e).expect("fail to serialize");
-                RaftMes {
+                RaftReply {
                     data: Default::default(),
                     error,
                 }

@@ -16,15 +16,6 @@ use crate::Change;
 use crate::SeqV;
 
 pub type UpsertKVActionReply = Change<Vec<u8>>;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct GetKVActionReply {
-    pub result: Option<SeqV<Vec<u8>>>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct MGetKVActionReply {
-    pub result: Vec<Option<SeqV<Vec<u8>>>>,
-}
-
+pub type GetKVActionReply = Option<SeqV<Vec<u8>>>;
+pub type MGetKVActionReply = Vec<Option<SeqV<Vec<u8>>>>;
 pub type PrefixListReply = Vec<(String, SeqV<Vec<u8>>)>;

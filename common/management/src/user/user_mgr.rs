@@ -24,6 +24,7 @@ use common_meta_types::AuthType;
 use common_meta_types::IntoSeqV;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
+use common_meta_types::Operation;
 use common_meta_types::SeqV;
 
 use crate::user::user_api::UserInfo;
@@ -53,7 +54,7 @@ impl UserMgrApi for UserMgr {
         let value = serde_json::to_vec(&user_info)?;
 
         let kv_api = self.kv_api.clone();
-        let upsert_kv = kv_api.upsert_kv(&key, match_seq, Some(value), None);
+        let upsert_kv = kv_api.upsert_kv(&key, match_seq, Operation::Update(value), None);
         let res = upsert_kv.await?.into_add_result()?;
         match res {
             AddResult::Ok(v) => Ok(v.seq),
@@ -69,9 +70,8 @@ impl UserMgrApi for UserMgr {
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
-        let seq_value = res
-            .result
-            .ok_or_else(|| ErrorCode::UnknownUser(format!("unknown user {}", username)))?;
+        let seq_value =
+            res.ok_or_else(|| ErrorCode::UnknownUser(format!("unknown user {}", username)))?;
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
             // Ok(_) => Ok(SeqV::new(seq_value.seq, seq_value.data.try_into()?)),
@@ -136,7 +136,11 @@ impl UserMgrApi for UserMgr {
         };
 
         let kv_api = self.kv_api.clone();
-        let upsert_kv = async move { kv_api.upsert_kv(&key, match_seq, Some(value), None).await };
+        let upsert_kv = async move {
+            kv_api
+                .upsert_kv(&key, match_seq, Operation::Update(value), None)
+                .await
+        };
         let res = upsert_kv.await?;
         match res.result {
             Some(SeqV { seq: s, .. }) => Ok(Some(s)),
@@ -150,7 +154,11 @@ impl UserMgrApi for UserMgr {
     async fn drop_user(&self, username: String, seq: Option<u64>) -> Result<()> {
         let key = format!("{}/{}", self.user_prefix, username);
         let kv_api = self.kv_api.clone();
-        let upsert_kv = async move { kv_api.upsert_kv(&key, seq.into(), None, None).await };
+        let upsert_kv = async move {
+            kv_api
+                .upsert_kv(&key, seq.into(), Operation::Delete, None)
+                .await
+        };
         let res = upsert_kv.await?;
         if res.prev.is_some() && res.result.is_none() {
             Ok(())

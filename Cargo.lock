@@ -1113,6 +1113,7 @@ dependencies = [
  "common-tracing",
  "ctrlc",
  "futures",
+ "poem",
  "pprof",
  "pretty_assertions",
  "serde",
@@ -1450,6 +1451,7 @@ dependencies = [
  "common-base",
  "common-exception",
  "common-io",
+ "common-meta-api",
  "common-meta-sled-store",
  "common-meta-types",
  "common-tracing",
@@ -1998,6 +2000,7 @@ dependencies = [
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",
+ "common-metrics",
  "common-planners",
  "common-tracing",
  "derive_more",
@@ -3093,19 +3096,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "hmac-sha256"
-version = "0.1.7"
+name = "hmac-sha1-compact"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bcdc571e566521512579aab40bf807c5066e1765fb36857f16ed7595c13567c6"
+checksum = "2a04215d10e8ff7b88bb7ce82916aee08f8aea49d821fc75aa504cab3e818657"
+
+[[package]]
+name = "hmac-sha256"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6334e3f219f0b55a298ef4030bb39c52faa3f91921d5deb6b4c23af5eae54214"
 dependencies = [
  "digest 0.9.0",
 ]
 
 [[package]]
 name = "hmac-sha512"
-version = "0.1.9"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77e806677ce663d0a199541030c816847b36e8dc095f70dae4a4f4ad63da5383"
+checksum = "187fd559ab2ecdfba750a8740953f70bcea7d96a4fabaf3e532f76401eae50f5"
 dependencies = [
  "digest 0.9.0",
 ]
@@ -3448,14 +3457,15 @@ dependencies = [
 
 [[package]]
 name = "jwt-simple"
-version = "0.10.6"
+version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fb385d1fd9c591d7888b5e6e8f5d20ff04fc26362de2f26476662ff4aa1ae7d"
+checksum = "226e04c4fe02806153a9b54b0d19c03dbf10180d86f787a7128c7258f15b433d"
 dependencies = [
  "anyhow",
  "coarsetime",
  "ct-codecs",
  "ed25519-compact",
+ "hmac-sha1-compact",
  "hmac-sha256",
  "hmac-sha512",
  "k256",
@@ -4601,9 +4611,9 @@ dependencies = [
 
 [[package]]
 name = "paste"
-version = "1.0.5"
+version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "acbf547ad0c65e31259204bd90935776d1c693cec2f4ff7abb7a1bbbd40dfe58"
+checksum = "0744126afe1a6dd7f394cb50a716dbe086cb06e255e53d8d0185d82828358fb5"
 
 [[package]]
 name = "peeking_take_while"
@@ -5852,9 +5862,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.68"
+version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f690853975602e1bfe1ccbf50504d67174e3bcf340f23b5ea9992e0587a52d8"
+checksum = "e466864e431129c7e0d3476b92f20458e5879919a0596c6472738d9fa2d342f8"
 dependencies = [
  "indexmap",
  "itoa",
