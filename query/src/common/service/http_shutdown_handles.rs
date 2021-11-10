@@ -21,9 +21,10 @@ use common_exception::Result;
 use futures::FutureExt;
 use poem::listener::Acceptor;
 use poem::listener::AcceptorExt;
+use poem::listener::IntoTlsConfigStream;
 use poem::listener::Listener;
+use poem::listener::RustlsConfig;
 use poem::listener::TcpListener;
-use poem::listener::TlsConfig;
 use poem::Endpoint;
 
 pub struct HttpShutdownHandler {
@@ -44,7 +45,7 @@ impl HttpShutdownHandler {
     pub async fn start_service(
         &mut self,
         listening: SocketAddr,
-        tls_config: Option<TlsConfig>,
+        tls_config: Option<RustlsConfig>,
         ep: impl Endpoint + 'static,
     ) -> Result<SocketAddr> {
         assert!(self.join_handle.is_none());
@@ -64,13 +65,12 @@ impl HttpShutdownHandler {
 
         if let Some(tls_config) = tls_config {
             acceptor = acceptor
-                .tls(tls_config)
-                .map_err(|err| {
+                .rustls(tls_config.into_stream().map_err(|err| {
                     ErrorCode::TLSConfigurationFailure(format!(
                         "Cannot build TLS config for http service, cause {}",
                         err
                     ))
-                })?
+                })?)
                 .boxed();
         }
 
