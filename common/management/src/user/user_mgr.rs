@@ -26,6 +26,7 @@ use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
+use common_meta_types::UpsertKVAction;
 
 use crate::user::user_api::UserInfo;
 use crate::user::user_api::UserMgrApi;
@@ -54,7 +55,12 @@ impl UserMgrApi for UserMgr {
         let value = serde_json::to_vec(&user_info)?;
 
         let kv_api = self.kv_api.clone();
-        let upsert_kv = kv_api.upsert_kv(&key, match_seq, Operation::Update(value), None);
+        let upsert_kv = kv_api.upsert_kv(UpsertKVAction::new(
+            &key,
+            match_seq,
+            Operation::Update(value),
+            None,
+        ));
         let res = upsert_kv.await?.into_add_result()?;
         match res {
             AddResult::Ok(v) => Ok(v.seq),
@@ -138,7 +144,12 @@ impl UserMgrApi for UserMgr {
         let kv_api = self.kv_api.clone();
         let upsert_kv = async move {
             kv_api
-                .upsert_kv(&key, match_seq, Operation::Update(value), None)
+                .upsert_kv(UpsertKVAction::new(
+                    &key,
+                    match_seq,
+                    Operation::Update(value),
+                    None,
+                ))
                 .await
         };
         let res = upsert_kv.await?;
@@ -156,7 +167,12 @@ impl UserMgrApi for UserMgr {
         let kv_api = self.kv_api.clone();
         let upsert_kv = async move {
             kv_api
-                .upsert_kv(&key, seq.into(), Operation::Delete, None)
+                .upsert_kv(UpsertKVAction::new(
+                    &key,
+                    seq.into(),
+                    Operation::Delete,
+                    None,
+                ))
                 .await
         };
         let res = upsert_kv.await?;

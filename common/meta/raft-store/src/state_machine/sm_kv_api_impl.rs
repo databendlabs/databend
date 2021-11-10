@@ -15,11 +15,9 @@
 use common_meta_api::KVApi;
 use common_meta_types::Cmd;
 use common_meta_types::GetKVActionReply;
-use common_meta_types::KVMeta;
 use common_meta_types::MGetKVActionReply;
-use common_meta_types::MatchSeq;
-use common_meta_types::Operation;
 use common_meta_types::SeqV;
+use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 use common_tracing::tracing;
 
@@ -30,16 +28,13 @@ use crate::state_machine::StateMachine;
 impl KVApi for StateMachine {
     async fn upsert_kv(
         &self,
-        key: &str,
-        seq: MatchSeq,
-        value: Operation<Vec<u8>>,
-        value_meta: Option<KVMeta>,
+        act: UpsertKVAction,
     ) -> common_exception::Result<UpsertKVActionReply> {
         let cmd = Cmd::UpsertKV {
-            key: key.to_string(),
-            seq,
-            value,
-            value_meta,
+            key: act.key,
+            seq: act.seq,
+            value: act.value,
+            value_meta: act.value_meta,
         };
 
         let res = self.apply_cmd(&cmd).await?;

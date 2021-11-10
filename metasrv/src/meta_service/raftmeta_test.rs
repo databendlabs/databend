@@ -19,6 +19,7 @@ use async_raft::RaftMetrics;
 use async_raft::State;
 use common_base::tokio;
 use common_base::tokio::time::Duration;
+use common_meta_api::KVApi;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;

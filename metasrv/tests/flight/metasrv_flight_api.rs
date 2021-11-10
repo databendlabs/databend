@@ -20,6 +20,7 @@ use common_meta_flight::MetaFlightClient;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
+use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 use common_tracing::tracing;
 use databend_meta::init_meta_ut;
@@ -46,12 +47,12 @@ async fn test_restart() -> anyhow::Result<()> {
     tracing::info!("--- upsert kv");
     {
         let res = client
-            .upsert_kv(
+            .upsert_kv(UpsertKVAction::new(
                 "foo",
                 MatchSeq::Any,
                 Operation::Update(b"bar".to_vec()),
                 None,
-            )
+            ))
             .await;
 
         tracing::debug!("set kv res: {:?}", res);
@@ -163,12 +164,12 @@ async fn test_join() -> anyhow::Result<()> {
             let k = format!("join-{}", i);
 
             let res = cli
-                .upsert_kv(
+                .upsert_kv(UpsertKVAction::new(
                     k.as_str(),
                     MatchSeq::Any,
                     Operation::Update(k.clone().into_bytes()),
                     None,
-                )
+                ))
                 .await;
 
             tracing::debug!("set kv res: {:?}", res);

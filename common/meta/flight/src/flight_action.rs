@@ -22,14 +22,12 @@ use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::GetKVActionReply;
-use common_meta_types::KVMeta;
 use common_meta_types::MGetKVActionReply;
-use common_meta_types::MatchSeq;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
-use common_meta_types::Operation;
 use common_meta_types::PrefixListReply;
 use common_meta_types::TableInfo;
+use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
@@ -159,15 +157,6 @@ action_declare!(
     PrefixListReply,
     MetaFlightAction::PrefixListKV
 );
-
-// === general-kv: upsert ===
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct UpsertKVAction {
-    pub key: String,
-    pub seq: MatchSeq,
-    pub value: Operation<Vec<u8>>,
-    pub value_meta: Option<KVMeta>,
-}
 
 action_declare!(
     UpsertKVAction,

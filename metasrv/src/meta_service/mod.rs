@@ -21,6 +21,7 @@ pub use raftmeta::MetaNode;
 
 mod message;
 mod meta_leader;
+mod meta_node_kv_api_impl;
 pub mod meta_service_impl;
 pub mod network;
 pub mod raftmeta;

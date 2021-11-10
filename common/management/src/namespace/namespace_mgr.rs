@@ -27,6 +27,7 @@ use common_meta_types::MatchSeq;
 use common_meta_types::NodeInfo;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
+use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 
 use crate::namespace::NamespaceApi;
@@ -143,7 +144,9 @@ impl NamespaceApi for NamespaceMgr {
             self.namespace_prefix,
             Self::escape_for_key(&node.id)?
         );
-        let upsert_node = self.kv_api.upsert_kv(&node_key, seq, value, meta);
+        let upsert_node = self
+            .kv_api
+            .upsert_kv(UpsertKVAction::new(&node_key, seq, value, meta));
 
         let res = upsert_node.await?.into_add_result()?;
 
@@ -177,9 +180,12 @@ impl NamespaceApi for NamespaceMgr {
             self.namespace_prefix,
             Self::escape_for_key(&node_id)?
         );
-        let upsert_node = self
-            .kv_api
-            .upsert_kv(&node_key, seq.into(), Operation::Delete, None);
+        let upsert_node = self.kv_api.upsert_kv(UpsertKVAction::new(
+            &node_key,
+            seq.into(),
+            Operation::Delete,
+            None,
+        ));
 
         match upsert_node.await? {
             UpsertKVActionReply {
@@ -205,7 +211,9 @@ impl NamespaceApi for NamespaceMgr {
             Some(exact) => MatchSeq::Exact(exact),
         };
 
-        let upsert_meta = self.kv_api.upsert_kv(&node_key, seq, Operation::AsIs, meta);
+        let upsert_meta =
+            self.kv_api
+                .upsert_kv(UpsertKVAction::new(&node_key, seq, Operation::AsIs, meta));
 
         match upsert_meta.await? {
             UpsertKVActionReply {
