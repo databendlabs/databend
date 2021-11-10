@@ -128,7 +128,7 @@ impl Function for GenericLogFunction {
 
 impl fmt::Display for GenericLogFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "LOG")
+        write!(f, "{}", self.display_name.to_uppercase())
     }
 }
 

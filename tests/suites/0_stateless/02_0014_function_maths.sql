@@ -16,5 +16,7 @@ SELECT log(NULL, NULL); -- {ErrorCode 10}
 SELECT log(1, NULL);
 SELECT log(NULL, 1); -- {ErrorCode 10}
 SELECT log('10', 100);
+SELECT ln(NULL);
+SELECT ln(1, 2); -- {ErrorCode 28}
 
 DROP TABLE math_sample_numbers;

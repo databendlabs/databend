@@ -96,6 +96,30 @@ fn test_log_function() -> Result<()> {
             expect: Series::new([None, None, Some(1_f64)]).into(),
             error: "",
         },
+        Test {
+            name: "ln on series",
+            display: "LN",
+            args: vec![DataColumnWithField::new(
+                Series::new([Some(E), None]).into(),
+                DataField::new("num", DataType::Int32, false),
+            )],
+            input_rows: 1,
+            func: LnFunction::try_create("ln")?,
+            expect: Series::new([Some(1_f64), None]).into(),
+            error: "",
+        },
+        Test {
+            name: "ln on literal",
+            display: "LN",
+            args: vec![DataColumnWithField::new(
+                Series::new([E]).into(),
+                DataField::new("num", DataType::Int32, false),
+            )],
+            input_rows: 1,
+            func: LnFunction::try_create("ln")?,
+            expect: DataColumn::Constant(1_f64.into(), 1),
+            error: "",
+        },
     ];
     for t in tests {
         let func = t.func;
