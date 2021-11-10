@@ -21,7 +21,6 @@ use common_base::tokio;
 use common_exception::Result;
 use common_meta_api::KVApi;
 use common_meta_embedded::MetaEmbedded;
-use common_meta_types::GetKVActionReply;
 use common_meta_types::NodeInfo;
 use common_meta_types::SeqV;
 
@@ -40,18 +39,15 @@ async fn test_successfully_add_node() -> Result<()> {
         .await?;
 
     match value {
-        GetKVActionReply {
-            result:
-                Some(SeqV {
-                    seq: 1,
-                    meta,
-                    data: value,
-                }),
-        } => {
+        Some(SeqV {
+            seq: 1,
+            meta,
+            data: value,
+        }) => {
             assert!(meta.unwrap().expire_at.unwrap() - current_time >= 60);
             assert_eq!(value, serde_json::to_vec(&node_info)?);
         }
-        catch @ GetKVActionReply { .. } => panic!("GetKVActionReply{:?}", catch),
+        catch => panic!("GetKVActionReply{:?}", catch),
     }
 
     Ok(())
@@ -131,7 +127,7 @@ async fn test_successfully_heartbeat_node() -> Result<()> {
         .get_kv("__fd_namespaces///databend_query/test_node")
         .await?;
 
-    assert!(value.result.unwrap().meta.unwrap().expire_at.unwrap() - current_time >= 60);
+    assert!(value.unwrap().meta.unwrap().expire_at.unwrap() - current_time >= 60);
 
     let current_time = current_seconds_time();
     namespace_api.heartbeat(node_info.id.clone(), None).await?;
@@ -140,7 +136,7 @@ async fn test_successfully_heartbeat_node() -> Result<()> {
         .get_kv("__fd_namespaces///databend_query/test_node")
         .await?;
 
-    assert!(value.result.unwrap().meta.unwrap().expire_at.unwrap() - current_time >= 60);
+    assert!(value.unwrap().meta.unwrap().expire_at.unwrap() - current_time >= 60);
     Ok(())
 }
 

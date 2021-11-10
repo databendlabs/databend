@@ -23,7 +23,7 @@ use crate::errors::Result;
 use crate::types::column::StringPool;
 use crate::types::StatBuffer;
 
-pub(crate) trait ReadEx {
+pub trait ReadEx {
     fn read_bytes(&mut self, rv: &mut [u8]) -> Result<()>;
     fn read_scalar<V>(&mut self) -> Result<V>
     where V: Copy + Unmarshal<V> + StatBuffer;
@@ -126,18 +126,4 @@ where T: io::Read
         self.read_bytes(buffer)?;
         Ok(())
     }
-}
-
-#[test]
-fn test_read_uvarint() {
-    use std::io::Cursor;
-
-    use super::ReadEx;
-
-    let bytes = [194_u8, 10];
-    let mut cursor = Cursor::new(bytes);
-
-    let actual = cursor.read_uvarint().unwrap();
-
-    assert_eq!(actual, 1346)
 }

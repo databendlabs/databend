@@ -24,6 +24,7 @@ use async_raft::raft::MembershipConfig;
 use async_raft::LogId;
 use common_base::tokio;
 use common_exception::ErrorCode;
+use common_meta_api::KVApi;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::KVMeta;
@@ -52,7 +53,7 @@ async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let tc = new_raft_test_context();
-    let mut sm = StateMachine::open(&tc.raft_config, 1).await?;
+    let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
     for i in 0..3 {
         // incr "foo"
@@ -111,7 +112,7 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let tc = new_raft_test_context();
-    let mut m = StateMachine::open(&tc.raft_config, 1).await?;
+    let m = StateMachine::open(&tc.raft_config, 1).await?;
 
     struct T {
         name: &'static str,
@@ -174,7 +175,7 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let tc = new_raft_test_context();
-    let mut m = StateMachine::open(&tc.raft_config, 1).await?;
+    let m = StateMachine::open(&tc.raft_config, 1).await?;
 
     tracing::info!("--- prepare a table");
     m.apply_cmd(&Cmd::CreateDatabase {
@@ -336,7 +337,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
     let _ent = ut_span.enter();
 
     let tc = new_raft_test_context();
-    let mut sm = StateMachine::open(&tc.raft_config, 1).await?;
+    let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
     struct T {
         // input:
@@ -461,7 +462,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
             }
         };
 
-        let got = sm.get_kv(&c.key)?;
+        let got = sm.get_kv(&c.key).await?;
         assert_eq!(want, got, "get: {}", mes,);
     }
 
@@ -477,7 +478,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
     let _ent = ut_span.enter();
 
     let tc = new_raft_test_context();
-    let mut sm = StateMachine::open(&tc.raft_config, 1).await?;
+    let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -533,7 +534,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
 
     tracing::info!("--- read the original value and updated meta");
 
-    let got = sm.get_kv(&key)?;
+    let got = sm.get_kv(&key).await?;
     let got = got.unwrap();
 
     assert_eq!(
@@ -593,7 +594,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
         let mes = format!("{}-th: {}({})", i, c.key, c.seq);
 
         let tc = new_raft_test_context();
-        let mut sm = StateMachine::open(&tc.raft_config, 1).await?;
+        let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
         // prepare an record
         sm.apply_cmd(&Cmd::UpsertKV {
@@ -622,7 +623,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<
 
         // read it to ensure the modified state.
         let want = &c.result;
-        let got = sm.get_kv(&c.key)?;
+        let got = sm.get_kv(&c.key).await?;
         assert_eq!(want, &got, "get: {}", mes,);
     }
 

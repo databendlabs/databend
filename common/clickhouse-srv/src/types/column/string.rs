@@ -36,7 +36,7 @@ use crate::types::SqlType;
 use crate::types::Value;
 use crate::types::ValueRef;
 
-pub(crate) struct StringColumnData {
+pub struct StringColumnData {
     pool: StringPool,
 }
 
@@ -45,13 +45,13 @@ pub(crate) struct StringAdapter<K: ColumnType> {
 }
 
 impl StringColumnData {
-    pub(crate) fn with_capacity(capacity: usize) -> Self {
+    pub fn with_capacity(capacity: usize) -> Self {
         Self {
             pool: StringPool::with_capacity(capacity),
         }
     }
 
-    pub(crate) fn load<T: ReadEx>(reader: &mut T, size: usize) -> Result<Self> {
+    pub fn load<T: ReadEx>(reader: &mut T, size: usize) -> Result<Self> {
         let mut data = Self::with_capacity(size);
 
         for _ in 0..size {

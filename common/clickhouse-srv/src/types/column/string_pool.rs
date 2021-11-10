@@ -25,7 +25,7 @@ struct StringPtr {
 }
 
 #[derive(Clone)]
-pub(crate) struct StringPool {
+pub struct StringPool {
     chunks: Vec<Vec<u8>>,
     pointers: Vec<StringPtr>,
     position: usize,
@@ -65,7 +65,7 @@ where T: AsRef<[u8]>
 }
 
 impl StringPool {
-    pub(crate) fn with_capacity(capacity: usize) -> StringPool {
+    pub fn with_capacity(capacity: usize) -> StringPool {
         StringPool {
             pointers: Vec::with_capacity(capacity),
             chunks: Vec::new(),
@@ -74,7 +74,7 @@ impl StringPool {
         }
     }
 
-    pub(crate) fn allocate(&mut self, size: usize) -> &mut [u8] {
+    pub fn allocate(&mut self, size: usize) -> &mut [u8] {
         if self.free_space() < size || self.chunks.is_empty() {
             self.reserve(size);
             return self.allocate(size);
@@ -118,7 +118,7 @@ impl StringPool {
     }
 
     #[inline(always)]
-    pub(crate) fn get(&self, index: usize) -> &[u8] {
+    pub fn get(&self, index: usize) -> &[u8] {
         let pointer = &self.pointers[index];
         unsafe { self.get_by_pointer(pointer) }
     }
@@ -146,42 +146,6 @@ impl StringPool {
         StringIter {
             pool: self,
             index: 0,
-        }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use std::io::Write;
-
-    use super::*;
-
-    #[test]
-    fn test_allocate() {
-        let mut pool = StringPool::with_capacity(10);
-        for i in 1..1000 {
-            let buffer = pool.allocate(i);
-            assert_eq!(buffer.len(), i);
-            assert_eq!(buffer[0], 0);
-            buffer[0] = 1
-        }
-    }
-
-    #[test]
-    fn test_get() {
-        let mut pool = StringPool::with_capacity(10);
-
-        for i in 0..1000 {
-            let s = format!("text-{}", i);
-            let mut buffer = pool.allocate(s.len());
-
-            assert_eq!(buffer.len(), s.len());
-            buffer.write_all(s.as_bytes()).unwrap();
-        }
-
-        for i in 0..1000 {
-            let s = String::from_utf8(Vec::from(pool.get(i))).unwrap();
-            assert_eq!(s, format!("text-{}", i));
         }
     }
 }

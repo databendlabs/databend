@@ -27,7 +27,7 @@ use crate::protocols::HelloRequest;
 use crate::types::Block;
 use crate::types::Progress;
 
-mod binary;
+pub mod binary;
 pub mod cmd;
 pub mod connection;
 pub mod error_codes;

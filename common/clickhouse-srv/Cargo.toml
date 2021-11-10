@@ -7,6 +7,10 @@ license = "Apache-2.0"
 description = "Bindings for emulating a ClickHouse server."
 readme = "README.md"
 
+[lib]
+doctest = false
+test = false
+
 [features]
 default = ["tokio_io"]
 tls = ["tokio-native-tls"]
