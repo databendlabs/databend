@@ -17,7 +17,7 @@ use common_base::HttpShutdownHandler;
 use common_base::Stoppable;
 use common_exception::Result;
 use poem::get;
-use poem::listener::TlsConfig;
+use poem::listener::RustlsConfig;
 use poem::Endpoint;
 use poem::EndpointExt;
 use poem::Route;
@@ -52,12 +52,12 @@ impl HttpService {
             .data(self.cfg.clone())
     }
 
-    fn build_tls(config: &Config) -> Result<TlsConfig> {
+    fn build_tls(config: &Config) -> Result<RustlsConfig> {
         let conf = config.clone();
         let tls_cert = conf.admin_tls_server_cert;
         let tls_key = conf.admin_tls_server_key;
 
-        let cfg = TlsConfig::new()
+        let cfg = RustlsConfig::new()
             .cert(std::fs::read(tls_cert.as_str())?)
             .key(std::fs::read(tls_key.as_str())?);
         Ok(cfg)
