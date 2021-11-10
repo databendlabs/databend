@@ -33,6 +33,7 @@ common-meta-sled-store = { path = "../common/meta/sled-store" }
 common-meta-types = { path = "../common/meta/types" }
 common-tracing = { path = "../common/tracing" }
 common-macros = { path = "../common/macros" }
+common-metrics = { path = "../common/metrics" }
 
 # Github dependencies
 
