@@ -58,20 +58,25 @@ impl UserInfo {
 pub trait UserMgrApi: Sync + Send {
     async fn add_user(&self, user_info: UserInfo) -> Result<u64>;
 
-    async fn get_user(&self, username: String, seq: Option<u64>) -> Result<SeqV<UserInfo>>;
+    async fn get_user(
+        &self,
+        username: String,
+        hostname: String,
+        seq: Option<u64>,
+    ) -> Result<SeqV<UserInfo>>;
 
     async fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>>;
 
     async fn update_user(
         &self,
         username: String,
-        new_hostname: Option<String>,
+        hostname: String,
         new_password: Option<Vec<u8>>,
         new_auth: Option<AuthType>,
         seq: Option<u64>,
     ) -> Result<Option<u64>>;
 
-    async fn drop_user(&self, username: String, seq: Option<u64>) -> Result<()>;
+    async fn drop_user(&self, username: String, hostname: String, seq: Option<u64>) -> Result<()>;
 }
 
 impl TryFrom<Vec<u8>> for UserInfo {

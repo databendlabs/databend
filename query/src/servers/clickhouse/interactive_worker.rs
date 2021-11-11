@@ -103,7 +103,12 @@ impl ClickHouseSession for InteractiveWorker {
         let user_manager = self.session.get_user_manager();
         // TODO: push async up to clickhouse server lib
         futures::executor::block_on(async move {
-            match user_manager.auth_user(info).await {
+            // TODO: use get_users and check client address
+            let res = match user_manager.get_user(user, "%").await {
+                Ok(user_info) => user_manager.auth_user(user_info, info).await,
+                Err(err) => Err(err),
+            };
+            match res {
                 Ok(res) => res,
                 Err(failure) => {
                     log::error!(
