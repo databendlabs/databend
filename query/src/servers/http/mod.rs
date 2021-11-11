@@ -14,7 +14,4 @@
 
 mod http_services;
 pub mod v1;
-
 pub use http_services::HttpHandler;
-pub use v1::query::http_query_manager::HttpQueryManager;
-pub use v1::query::http_query_manager::HttpQueryManagerRef;

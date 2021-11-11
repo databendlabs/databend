@@ -32,8 +32,8 @@ use crate::catalogs::impls::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
 use crate::clusters::ClusterDiscoveryRef;
 use crate::configs::Config;
-use crate::servers::http::HttpQueryManager;
-use crate::servers::http::HttpQueryManagerRef;
+use crate::servers::http::v1::query::HttpQueryManager;
+use crate::servers::http::v1::query::HttpQueryManagerRef;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 use crate::users::UserManager;
@@ -87,6 +87,7 @@ impl SessionManager {
     pub fn get_http_query_manager(self: &Arc<Self>) -> HttpQueryManagerRef {
         self.http_query_manager.clone()
     }
+
     // Get the user api provider.
     pub fn get_user_manager(self: &Arc<Self>) -> UserManagerRef {
         self.user.clone()

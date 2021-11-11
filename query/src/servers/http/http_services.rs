@@ -21,8 +21,8 @@ use poem::EndpointExt;
 use poem::Route;
 
 use crate::common::service::HttpShutdownHandler;
-use crate::servers::http::v1::http_query_handlers::query_route;
-use crate::servers::http::v1::statement::statement_router;
+use crate::servers::http::v1::query_route;
+use crate::servers::http::v1::statement_router;
 use crate::servers::Server;
 use crate::sessions::SessionManagerRef;
 
