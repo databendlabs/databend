@@ -99,7 +99,7 @@ impl FlightServer {
         let raft_config = &self.conf.raft_config;
 
         let mn = if raft_config.boot {
-            MetaNode::boot(0, raft_config).await?
+            MetaNode::boot(raft_config).await?
         } else if raft_config.single {
             let (mn, _is_open) =
                 MetaNode::open_create_boot(raft_config, Some(()), Some(()), Some(())).await?;

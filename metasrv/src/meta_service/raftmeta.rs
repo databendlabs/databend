@@ -118,7 +118,7 @@ impl MetaNodeBuilder {
         } else {
             sto.get_node_addr(&node_id).await?
         };
-        tracing::info!("about to start grpc on {}", addr);
+        tracing::info!("about to start raft grpc on {}", addr);
 
         MetaNode::start_grpc(mn.clone(), &addr).await?;
 
@@ -345,16 +345,12 @@ impl MetaNode {
     /// For every cluster this func should be called exactly once.
     /// When a node is initialized with boot or boot_non_voter, start it with databend_meta::new().
     #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
-    pub async fn boot(
-        node_id: NodeId,
-        config: &RaftConfig,
-    ) -> common_exception::Result<Arc<MetaNode>> {
+    pub async fn boot(config: &RaftConfig) -> common_exception::Result<Arc<MetaNode>> {
         // 1. Bring a node up as non voter, start the grpc service for raft communication.
         // 2. Initialize itself as leader, because it is the only one in the new cluster.
         // 3. Add itself to the cluster storage by committing an `add-node` log so that the cluster members(only this node) is persisted.
 
-        let mut config = config.clone();
-        config.id = node_id;
+        let config = config.clone();
 
         let (mn, _is_open) = Self::open_create_boot(&config, None, Some(()), None).await?;
 

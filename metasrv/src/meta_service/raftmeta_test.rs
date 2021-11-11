@@ -55,7 +55,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     let tc = new_test_context();
     let addr = tc.config.raft_config.raft_api_addr();
 
-    let mn = MetaNode::boot(0, &tc.config.raft_config).await?;
+    let mn = MetaNode::boot(&tc.config.raft_config).await?;
 
     let got = mn.get_node(&0).await?;
     assert_eq!(addr, got.unwrap().address);
@@ -278,7 +278,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     tc.config.raft_config.install_snapshot_timeout = 10_1000; // milli seconds. In a CI multi-threads test delays async task badly.
     let addr = tc.config.raft_config.raft_api_addr();
 
-    let mn = MetaNode::boot(0, &tc.config.raft_config).await?;
+    let mn = MetaNode::boot(&tc.config.raft_config).await?;
 
     assert_meta_connection(&addr).await?;
 
@@ -693,7 +693,7 @@ async fn setup_leader() -> anyhow::Result<(NodeId, KVSrvTestContext)> {
     let addr = tc.config.raft_config.raft_api_addr();
 
     // boot up a single-node cluster
-    let mn = MetaNode::boot(nid, &tc.config.raft_config).await?;
+    let mn = MetaNode::boot(&tc.config.raft_config).await?;
     tc.meta_nodes.push(mn.clone());
 
     {

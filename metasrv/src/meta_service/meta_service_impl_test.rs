@@ -41,7 +41,7 @@ async fn test_meta_server_upsert_kv() -> anyhow::Result<()> {
     let tc = new_test_context();
     let addr = tc.config.raft_config.raft_api_addr();
 
-    let _mn = MetaNode::boot(0, &tc.config.raft_config).await?;
+    let _mn = MetaNode::boot(&tc.config.raft_config).await?;
     assert_meta_connection(&addr).await?;
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
@@ -86,7 +86,7 @@ async fn test_meta_server_incr_seq() -> anyhow::Result<()> {
     let tc = new_test_context();
     let addr = tc.config.raft_config.raft_api_addr();
 
-    let _mn = MetaNode::boot(0, &tc.config.raft_config).await?;
+    let _mn = MetaNode::boot(&tc.config.raft_config).await?;
     assert_meta_connection(&addr).await?;
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
@@ -129,7 +129,7 @@ async fn test_meta_cluster_write_on_non_leader() -> anyhow::Result<()> {
     let addr0 = tc0.config.raft_config.raft_api_addr();
     let addr1 = tc1.config.raft_config.raft_api_addr();
 
-    let mn0 = MetaNode::boot(0, &tc0.config.raft_config).await?;
+    let mn0 = MetaNode::boot(&tc0.config.raft_config).await?;
     assert_meta_connection(&addr0).await?;
 
     {
