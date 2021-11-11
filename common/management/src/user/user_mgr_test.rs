@@ -20,12 +20,12 @@ use common_base::tokio;
 use common_exception::ErrorCode;
 use common_meta_api::KVApi;
 use common_meta_types::GetKVActionReply;
-use common_meta_types::KVMeta;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::PrefixListReply;
 use common_meta_types::SeqV;
+use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 use mockall::predicate::*;
 use mockall::*;
@@ -41,10 +41,7 @@ mock! {
     impl KVApi for KV {
         async fn upsert_kv(
             &self,
-            key: &str,
-            seq: MatchSeq,
-            value: Operation<Vec<u8>>,
-            value_meta: Option<KVMeta>
+            act: UpsertKVAction,
         ) -> common_exception::Result<UpsertKVActionReply>;
 
         async fn get_kv(&self, key: &str) -> common_exception::Result<GetKVActionReply>;
@@ -86,14 +83,14 @@ mod add {
             let test_key = test_key.clone();
             let mut api = MockKV::new();
             api.expect_upsert_kv()
-                .with(
-                    predicate::function(move |v| v == test_key.as_str()),
-                    predicate::eq(test_seq),
-                    predicate::eq(value.clone()),
-                    predicate::eq(None),
-                )
+                .with(predicate::eq(UpsertKVAction::new(
+                    &test_key,
+                    test_seq,
+                    value.clone(),
+                    None,
+                )))
                 .times(1)
-                .return_once(|_u, _s, _salt, _meta| Ok(UpsertKVActionReply::new(None, None)));
+                .return_once(|_u| Ok(UpsertKVActionReply::new(None, None)));
             let api = Arc::new(api);
             let user_mgr = UserMgr::new(api, "tenant1");
             let res = user_mgr.add_user(user_info);
@@ -109,14 +106,14 @@ mod add {
             let test_key = test_key.clone();
             let mut api = MockKV::new();
             api.expect_upsert_kv()
-                .with(
-                    predicate::function(move |v| v == test_key.as_str()),
-                    predicate::eq(test_seq),
-                    predicate::eq(value.clone()),
-                    predicate::eq(None),
-                )
+                .with(predicate::eq(UpsertKVAction::new(
+                    &test_key,
+                    test_seq,
+                    value.clone(),
+                    None,
+                )))
                 .times(1)
-                .returning(|_u, _s, _salt, _meta| {
+                .returning(|_u| {
                     Ok(UpsertKVActionReply::new(
                         Some(SeqV::new(1, vec![])),
                         Some(SeqV::new(1, vec![])),
@@ -145,14 +142,14 @@ mod add {
         {
             let mut api = MockKV::new();
             api.expect_upsert_kv()
-                .with(
-                    predicate::function(move |v| v == test_key.as_str()),
-                    predicate::eq(test_seq),
-                    predicate::eq(value),
-                    predicate::eq(None),
-                )
+                .with(predicate::eq(UpsertKVAction::new(
+                    &test_key,
+                    test_seq,
+                    value.clone(),
+                    None,
+                )))
                 .times(1)
-                .returning(|_u, _s, _salt, _meta| Ok(UpsertKVActionReply::new(None, None)));
+                .returning(|_u| Ok(UpsertKVActionReply::new(None, None)));
 
             let kv = Arc::new(api);
 
@@ -387,16 +384,14 @@ mod drop {
         let mut kv = MockKV::new();
         let test_key = "__fd_users/tenant1/test";
         kv.expect_upsert_kv()
-            .with(
-                predicate::function(move |v| v == test_key),
-                predicate::eq(MatchSeq::Any),
-                predicate::eq(Operation::Delete),
-                predicate::eq(None),
-            )
+            .with(predicate::eq(UpsertKVAction::new(
+                test_key,
+                MatchSeq::Any,
+                Operation::Delete,
+                None,
+            )))
             .times(1)
-            .returning(|_k, _seq, _none, _meta| {
-                Ok(UpsertKVActionReply::new(Some(SeqV::new(1, vec![])), None))
-            });
+            .returning(|_k| Ok(UpsertKVActionReply::new(Some(SeqV::new(1, vec![])), None)));
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
         let res = user_mgr.drop_user("test".to_string(), None);
@@ -410,14 +405,14 @@ mod drop {
         let mut kv = MockKV::new();
         let test_key = "__fd_users/tenant1/test";
         kv.expect_upsert_kv()
-            .with(
-                predicate::function(move |v| v == test_key),
-                predicate::eq(MatchSeq::Any),
-                predicate::eq(Operation::Delete),
-                predicate::eq(None),
-            )
+            .with(predicate::eq(UpsertKVAction::new(
+                test_key,
+                MatchSeq::Any,
+                Operation::Delete,
+                None,
+            )))
             .times(1)
-            .returning(|_k, _seq, _none, _meta| Ok(UpsertKVActionReply::new(None, None)));
+            .returning(|_k| Ok(UpsertKVActionReply::new(None, None)));
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
         let res = user_mgr.drop_user("test".to_string(), None);
@@ -474,16 +469,14 @@ mod update {
         let new_value_with_old_salt = serde_json::to_vec(&new_user_info)?;
 
         kv.expect_upsert_kv()
-            .with(
-                predicate::function(move |v| v == test_key.as_str()),
-                predicate::eq(MatchSeq::GE(1)),
-                predicate::eq(Operation::Update(new_value_with_old_salt)),
-                predicate::eq(None),
-            )
+            .with(predicate::eq(UpsertKVAction::new(
+                &test_key,
+                MatchSeq::GE(1),
+                Operation::Update(new_value_with_old_salt.clone()),
+                None,
+            )))
             .times(1)
-            .return_once(|_, _, _, _meta| {
-                Ok(UpsertKVActionReply::new(None, Some(SeqV::new(0, vec![]))))
-            });
+            .return_once(|_| Ok(UpsertKVActionReply::new(None, Some(SeqV::new(0, vec![])))));
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
@@ -523,16 +516,14 @@ mod update {
 
         let mut kv = MockKV::new();
         kv.expect_upsert_kv()
-            .with(
-                predicate::function(move |v| v == test_key.as_str()),
-                predicate::eq(MatchSeq::GE(1)),
-                predicate::eq(Operation::Update(new_value)),
-                predicate::eq(None),
-            )
+            .with(predicate::eq(UpsertKVAction::new(
+                &test_key,
+                MatchSeq::GE(1),
+                Operation::Update(new_value),
+                None,
+            )))
             .times(1)
-            .return_once(|_, _, _, _meta| {
-                Ok(UpsertKVActionReply::new(None, Some(SeqV::new(0, vec![]))))
-            });
+            .return_once(|_| Ok(UpsertKVActionReply::new(None, Some(SeqV::new(0, vec![])))));
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");
@@ -605,14 +596,11 @@ mod update {
 
         // upsert should be called
         kv.expect_upsert_kv()
-            .with(
-                predicate::function(move |v| v == test_key.as_str()),
-                predicate::eq(MatchSeq::GE(1)),
-                predicate::always(), // a little bit relax here, as we've covered it before
-                predicate::eq(None),
-            )
+            .with(predicate::function(move |act: &UpsertKVAction| {
+                act.key == test_key.as_str() && act.seq == MatchSeq::GE(1)
+            }))
             .times(1)
-            .returning(|_u, _s, _salt, _meta| Ok(UpsertKVActionReply::new(None, None)));
+            .returning(|_| Ok(UpsertKVActionReply::new(None, None)));
 
         let kv = Arc::new(kv);
         let user_mgr = UserMgr::new(kv, "tenant1");

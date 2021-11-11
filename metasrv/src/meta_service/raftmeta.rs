@@ -16,8 +16,6 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use async_raft::config::Config;
-use async_raft::raft::ClientWriteRequest;
-use async_raft::ClientWriteError;
 use async_raft::Raft;
 use async_raft::RaftMetrics;
 use async_raft::SnapshotPolicy;
@@ -28,7 +26,6 @@ use common_base::tokio::sync::RwLockReadGuard;
 use common_base::tokio::task::JoinHandle;
 use common_exception::prelude::ErrorCode;
 use common_exception::prelude::ToErrorCode;
-use common_meta_api::KVApi;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_raft_store::state_machine::StateMachine;
@@ -47,10 +44,10 @@ use common_tracing::tracing::Instrument;
 use crate::errors::ConnectionError;
 use crate::errors::ForwardToLeader;
 use crate::errors::MetaError;
-use crate::errors::RetryableError;
 use crate::meta_service::message::AdminRequest;
 use crate::meta_service::message::AdminResponse;
 use crate::meta_service::meta_leader::MetaLeader;
+use crate::meta_service::AdminRequestInner;
 use crate::meta_service::MetaServiceImpl;
 use crate::meta_service::Network;
 use crate::proto::meta_service_client::MetaServiceClient;
@@ -530,62 +527,19 @@ impl MetaNode {
         sm.get_table_by_id(tid)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_kv(&self, key: &str) -> common_exception::Result<Option<SeqV<Vec<u8>>>> {
-        // inconsistent get: from local state machine
-
-        let sm = self.sto.state_machine.read().await;
-        sm.get_kv(key).await
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn mget_kv(
-        &self,
-        keys: &[String],
-    ) -> common_exception::Result<Vec<Option<SeqV<Vec<u8>>>>> {
-        // inconsistent get: from local state machine
-        let sm = self.sto.state_machine.read().await;
-        sm.mget_kv(keys).await
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn prefix_list_kv(
-        &self,
-        prefix: &str,
-    ) -> common_exception::Result<Vec<(String, SeqV<Vec<u8>>)>> {
-        // inconsistent get: from local state machine
-        let sm = self.sto.state_machine.read().await;
-        sm.prefix_list_kv(prefix).await
-    }
-
     /// Submit a write request to the known leader. Returns the response after applying the request.
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn write(&self, req: LogEntry) -> common_exception::Result<AppliedState> {
-        let mut curr_leader = self.get_leader().await;
-        loop {
-            let rst = if curr_leader == self.sto.id {
-                self.write_to_local_leader(req.clone()).await?
-            } else {
-                // forward to leader
+        let res = self
+            .handle_admin_req(AdminRequest {
+                forward_to_leader: true,
+                req: AdminRequestInner::Write(req.clone()),
+            })
+            .await?;
 
-                let addr = self.sto.get_node_addr(&curr_leader).await?;
+        let res: AppliedState = res.try_into().expect("expect AppliedState");
 
-                // TODO: retry
-                let mut client = MetaServiceClient::connect(format!("http://{}", addr))
-                    .await
-                    .map_err(|e| ErrorCode::CannotConnectNode(e.to_string()))?;
-                let resp = client.write(req.clone()).await?;
-                let rst: Result<AppliedState, RetryableError> = resp.into_inner().into();
-                rst
-            };
-
-            match rst {
-                Ok(resp) => return Ok(resp),
-                Err(write_err) => match write_err {
-                    RetryableError::ForwardToLeader { leader } => curr_leader = leader,
-                },
-            }
-        }
+        Ok(res)
     }
 
     /// Try to get the leader from the latest metrics of the local raft node.
@@ -644,35 +598,5 @@ impl MetaNode {
 
         let res: Result<AdminResponse, MetaError> = raft_mes.into();
         res
-    }
-
-    /// Write a meta log through local raft node.
-    /// It works only when this node is the leader,
-    /// otherwise it returns ClientWriteError::ForwardToLeader error indicating the latest leader.
-    #[tracing::instrument(level = "info", skip(self))]
-    pub async fn write_to_local_leader(
-        &self,
-        req: LogEntry,
-    ) -> common_exception::Result<Result<AppliedState, RetryableError>> {
-        let write_rst = self.raft.client_write(ClientWriteRequest::new(req)).await;
-
-        tracing::debug!("raft.client_write rst: {:?}", write_rst);
-
-        match write_rst {
-            Ok(resp) => Ok(Ok(resp.data)),
-            Err(cli_write_err) => match cli_write_err {
-                // fatal error
-                ClientWriteError::RaftError(raft_err) => {
-                    Err(ErrorCode::MetaServiceError(raft_err.to_string()))
-                }
-                // retryable error
-                ClientWriteError::ForwardToLeader(_, leader) => match leader {
-                    Some(id) => Ok(Err(RetryableError::ForwardToLeader { leader: id })),
-                    None => Err(ErrorCode::MetaServiceUnavailable(
-                        "no leader to write".to_string(),
-                    )),
-                },
-            },
-        }
     }
 }

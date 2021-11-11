@@ -24,6 +24,7 @@ fn main() {
 fn build_proto() {
     let manifest_dir =
         env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR env variable unset");
+
     // Changing OUT_DIR fails docker build because src/proto is read-only.
     // env::set_var("OUT_DIR", "src/proto");
 

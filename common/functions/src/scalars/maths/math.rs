@@ -16,6 +16,9 @@ use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::AbsFunction;
 use crate::scalars::CRC32Function;
 use crate::scalars::DegressFunction;
+use crate::scalars::LnFunction;
+use crate::scalars::Log10Function;
+use crate::scalars::Log2Function;
 use crate::scalars::LogFunction;
 use crate::scalars::PiFunction;
 use crate::scalars::RadiansFunction;
@@ -38,5 +41,8 @@ impl MathsFunction {
         factory.register("degrees", DegressFunction::desc());
         factory.register("radians", RadiansFunction::desc());
         factory.register("log", LogFunction::desc());
+        factory.register("log10", Log10Function::desc());
+        factory.register("log2", Log2Function::desc());
+        factory.register("ln", LnFunction::desc());
     }
 }
