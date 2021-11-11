@@ -18,8 +18,8 @@ use structopt_toml::StructOptToml;
 use crate::configs::Config;
 
 // Query env.
-pub const QUERY_TENANT: &str = "QUERY_TENANT";
-pub const QUERY_NAMESPACE: &str = "QUERY_NAMESPACE";
+pub const QUERY_TENANT_ID: &str = "QUERY_TENANT_ID";
+pub const QUERY_CLUSTER_ID: &str = "QUERY_CLUSTER_ID";
 pub const QUERY_NUM_CPUS: &str = "QUERY_NUM_CPUS";
 pub const QUERY_MYSQL_HANDLER_HOST: &str = "QUERY_MYSQL_HANDLER_HOST";
 pub const QUERY_MYSQL_HANDLER_PORT: &str = "QUERY_MYSQL_HANDLER_PORT";
@@ -46,13 +46,13 @@ const QUERY_RPC_TLS_SERVICE_DOMAIN_NAME: &str = "QUERY_RPC_TLS_SERVICE_DOMAIN_NA
     Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
 )]
 pub struct QueryConfig {
-    #[structopt(long, env = QUERY_TENANT, default_value = "", help = "Tenant id for get the information from the MetaStore")]
+    #[structopt(long, env = QUERY_TENANT_ID, default_value = "", help = "Tenant id for get the information from the MetaStore")]
     #[serde(default)]
-    pub tenant: String,
+    pub tenant_id: String,
 
-    #[structopt(long, env = QUERY_NAMESPACE, default_value = "", help = "Namespace for construct the cluster")]
+    #[structopt(long, env = QUERY_CLUSTER_ID, default_value = "", help = "ID for construct the cluster")]
     #[serde(default)]
-    pub namespace: String,
+    pub cluster_id: String,
 
     #[structopt(long, env = QUERY_NUM_CPUS, default_value = "0")]
     #[serde(default)]
@@ -184,8 +184,8 @@ pub struct QueryConfig {
 impl QueryConfig {
     pub fn default() -> Self {
         QueryConfig {
-            tenant: "".to_string(),
-            namespace: "".to_string(),
+            tenant_id: "".to_string(),
+            cluster_id: "".to_string(),
             num_cpus: 8,
             mysql_handler_host: "127.0.0.1".to_string(),
             mysql_handler_port: 3307,
@@ -208,8 +208,8 @@ impl QueryConfig {
     }
 
     pub fn load_from_env(mut_config: &mut Config) {
-        env_helper!(mut_config, query, tenant, String, QUERY_TENANT);
-        env_helper!(mut_config, query, namespace, String, QUERY_NAMESPACE);
+        env_helper!(mut_config, query, tenant_id, String, QUERY_TENANT_ID);
+        env_helper!(mut_config, query, cluster_id, String, QUERY_CLUSTER_ID);
         env_helper!(mut_config, query, num_cpus, u64, QUERY_NUM_CPUS);
         env_helper!(
             mut_config,

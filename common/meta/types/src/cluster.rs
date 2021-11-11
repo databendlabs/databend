@@ -65,7 +65,7 @@ impl TryFrom<Vec<u8>> for NodeInfo {
         match serde_json::from_slice(&value) {
             Ok(user_info) => Ok(user_info),
             Err(serialize_error) => Err(ErrorCode::IllegalUserInfoFormat(format!(
-                "Cannot deserialize namespace from bytes. cause {}",
+                "Cannot deserialize cluster id from bytes. cause {}",
                 serialize_error
             ))),
         }

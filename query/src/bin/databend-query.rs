@@ -140,12 +140,15 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         info!("RPC API server listening on {}", listening);
     }
 
-    // Namespace
+    // Cluster register.
     {
         let cluster_discovery = session_manager.get_cluster_discovery();
         let register_to_metastore = cluster_discovery.register_to_metastore(&conf);
         register_to_metastore.await?;
-        info!("Databend query has been registered to metastore.");
+        info!(
+            "Databend query has been registered:{:?} to metasrv:[{:?}].",
+            conf.query.cluster_id, conf.meta.meta_address
+        );
     }
 
     log::info!("Ready for connections.");

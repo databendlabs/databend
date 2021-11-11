@@ -14,10 +14,10 @@
 //
 
 #[cfg(test)]
-mod namespace_mgr_test;
+mod cluster_mgr_test;
 
-mod namespace_api;
-mod namespace_mgr;
+mod cluster_api;
+mod cluster_mgr;
 
-pub use namespace_api::NamespaceApi;
-pub use namespace_mgr::NamespaceMgr;
+pub use cluster_api::ClusterApi;
+pub use cluster_mgr::ClusterMgr;

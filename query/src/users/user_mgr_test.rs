@@ -24,7 +24,7 @@ use crate::users::UserManager;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_manager() -> Result<()> {
     let mut config = Config::default();
-    config.query.tenant = "tenant1".to_string();
+    config.query.tenant_id = "tenant1".to_string();
 
     let user = "test-user1";
     let hostname = "localhost";
