@@ -12,14 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod data_block_concat;
-mod data_block_filter;
-mod data_block_group_by;
-mod data_block_group_by_hash;
-mod data_block_scatter;
-mod data_block_slice;
-mod data_block_sort;
-mod data_block_take;
-
-pub use data_block_group_by_hash::*;
-pub use data_block_sort::SortColumnDescription;
+mod data_block;
+mod kernels;
