@@ -31,8 +31,8 @@ use common_base::SignalType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_flight_rpc::ConnectionFactory;
-use common_management::NamespaceApi;
-use common_management::NamespaceMgr;
+use common_management::ClusterApi;
+use common_management::ClusterMgr;
 use common_meta_api::KVApi;
 use common_meta_types::NodeInfo;
 use futures::future::select;
@@ -52,7 +52,7 @@ pub type ClusterDiscoveryRef = Arc<ClusterDiscovery>;
 pub struct ClusterDiscovery {
     local_id: String,
     heartbeat: Mutex<ClusterHeartbeat>,
-    api_provider: Arc<dyn NamespaceApi>,
+    api_provider: Arc<dyn ClusterApi>,
 }
 
 impl ClusterDiscovery {
@@ -60,7 +60,7 @@ impl ClusterDiscovery {
         let meta_api_provider = MetaClientProvider::new(cfg);
         match meta_api_provider.try_get_kv_client().await {
             Ok(client) => Ok(client),
-            Err(cause) => Err(cause.add_message_back("(while create namespace api).")),
+            Err(cause) => Err(cause.add_message_back("(while create cluster api).")),
         }
     }
 
@@ -79,19 +79,19 @@ impl ClusterDiscovery {
     fn create_provider(
         cfg: &Config,
         api: Arc<dyn KVApi>,
-    ) -> Result<(Duration, Arc<dyn NamespaceApi>)> {
-        // TODO: generate if tenant or namespace is empty
-        let tenant = &cfg.query.tenant;
-        let namespace = &cfg.query.namespace;
+    ) -> Result<(Duration, Arc<dyn ClusterApi>)> {
+        // TODO: generate if tenant or cluster id is empty
+        let tenant_id = &cfg.query.tenant_id;
+        let cluster_id = &cfg.query.cluster_id;
         let lift_time = Duration::from_secs(60);
-        let namespace_manager = NamespaceMgr::new(api, tenant, namespace, lift_time)?;
+        let cluster_manager = ClusterMgr::new(api, tenant_id, cluster_id, lift_time)?;
 
-        Ok((lift_time, Arc::new(namespace_manager)))
+        Ok((lift_time, Arc::new(cluster_manager)))
     }
 
     pub async fn discover(&self) -> Result<ClusterRef> {
         match self.api_provider.get_nodes().await {
-            Err(cause) => Err(cause.add_message_back("(while namespace api get_nodes).")),
+            Err(cause) => Err(cause.add_message_back("(while cluster api get_nodes).")),
             Ok(cluster_nodes) => {
                 let mut res = Vec::with_capacity(cluster_nodes.len());
 
@@ -131,7 +131,7 @@ impl ClusterDiscovery {
 
         if let Err(shutdown_failure) = heartbeat.shutdown().await {
             log::warn!(
-                "Cannot shutdown namespace heartbeat, cause {:?}",
+                "Cannot shutdown cluster heartbeat, cause {:?}",
                 shutdown_failure
             );
         }
@@ -143,7 +143,7 @@ impl ClusterDiscovery {
             Either::Left((drop_node_result, _)) => {
                 if let Err(drop_node_failure) = drop_node_result {
                     log::warn!(
-                        "Cannot drop namespace node(while shutdown), cause {:?}",
+                        "Cannot drop cluster node(while shutdown), cause {:?}",
                         drop_node_failure
                     );
                 }
@@ -166,7 +166,7 @@ impl ClusterDiscovery {
         self.drop_invalid_nodes(&node_info).await?;
         match self.api_provider.add_node(node_info).await {
             Ok(_) => self.start_heartbeat().await,
-            Err(cause) => Err(cause.add_message_back("(while namespace api add_node).")),
+            Err(cause) => Err(cause.add_message_back("(while cluster api add_node).")),
         }
     }
 
@@ -243,15 +243,15 @@ struct ClusterHeartbeat {
     timeout: Duration,
     shutdown: Arc<AtomicBool>,
     shutdown_notify: Arc<Notify>,
-    namespace_api: Arc<dyn NamespaceApi>,
+    cluster_api: Arc<dyn ClusterApi>,
     shutdown_handler: Option<JoinHandle<()>>,
 }
 
 impl ClusterHeartbeat {
-    pub fn create(timeout: Duration, namespace_api: Arc<dyn NamespaceApi>) -> ClusterHeartbeat {
+    pub fn create(timeout: Duration, cluster_api: Arc<dyn ClusterApi>) -> ClusterHeartbeat {
         ClusterHeartbeat {
             timeout,
-            namespace_api,
+            cluster_api,
             shutdown: Arc::new(AtomicBool::new(false)),
             shutdown_notify: Arc::new(Notify::new()),
             shutdown_handler: None,
@@ -261,7 +261,7 @@ impl ClusterHeartbeat {
     fn heartbeat_loop(&self, local_id: String) -> impl Future<Output = ()> + 'static {
         let shutdown = self.shutdown.clone();
         let shutdown_notify = self.shutdown_notify.clone();
-        let namespace_api = self.namespace_api.clone();
+        let cluster_api = self.cluster_api.clone();
         let sleep_range = self.heartbeat_interval(self.timeout);
 
         async move {
@@ -281,9 +281,9 @@ impl ClusterHeartbeat {
                     }
                     Either::Right((_, new_shutdown_notified)) => {
                         shutdown_notified = new_shutdown_notified;
-                        let heartbeat = namespace_api.heartbeat(local_id.clone(), None);
+                        let heartbeat = cluster_api.heartbeat(local_id.clone(), None);
                         if let Err(failure) = heartbeat.await {
-                            log::error!("Cluster namespace api heartbeat failure: {:?}", failure);
+                            log::error!("Cluster cluster api heartbeat failure: {:?}", failure);
                         }
                     }
                 }
@@ -305,7 +305,7 @@ impl ClusterHeartbeat {
             self.shutdown_notify.notify_waiters();
             if let Err(shutdown_failure) = shutdown_handler.await {
                 return Err(ErrorCode::TokioError(format!(
-                    "Cannot shutdown namespace heartbeat, cause {:?}",
+                    "Cannot shutdown cluster heartbeat, cause {:?}",
                     shutdown_failure
                 )));
             }

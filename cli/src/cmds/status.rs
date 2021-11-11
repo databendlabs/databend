@@ -441,12 +441,12 @@ impl LocalRuntime for LocalQueryConfig {
                 conf.log.log_dir,
             )
             .env(
-                databend_query::configs::config_query::QUERY_NAMESPACE,
-                conf.query.namespace,
+                databend_query::configs::config_query::QUERY_CLUSTER_ID,
+                conf.query.cluster_id,
             )
             .env(
-                databend_query::configs::config_query::QUERY_TENANT,
-                conf.query.tenant,
+                databend_query::configs::config_query::QUERY_TENANT_ID,
+                conf.query.tenant_id,
             )
             .env(
                 databend_query::configs::config_query::QUERY_NUM_CPUS,

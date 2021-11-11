@@ -41,11 +41,11 @@ impl UserManager {
     }
 
     pub async fn create_global(cfg: Config) -> Result<UserManagerRef> {
-        let tenant = &cfg.query.tenant;
+        let tenant_id = &cfg.query.tenant_id;
         let kv_client = UserManager::create_kv_client(&cfg).await?;
 
         Ok(Arc::new(UserManager {
-            api_provider: Arc::new(UserMgr::new(kv_client, tenant)),
+            api_provider: Arc::new(UserMgr::new(kv_client, tenant_id)),
         }))
     }
 

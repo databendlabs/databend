@@ -37,8 +37,8 @@ fn test_default_config() -> Result<()> {
     let tom_expect = "config_file = \"\"
 
 [query]
-tenant = \"\"
-namespace = \"\"
+tenant_id = \"\"
+cluster_id = \"\"
 num_cpus = 8
 mysql_handler_host = \"127.0.0.1\"
 mysql_handler_port = 3307
@@ -99,8 +99,8 @@ container = \"\"
 #[test]
 fn test_env_config() -> Result<()> {
     std::env::set_var("LOG_LEVEL", "DEBUG");
-    std::env::set_var("QUERY_TENANT", "tenant-1");
-    std::env::set_var("QUERY_NAMESPACE", "cluster-1");
+    std::env::set_var("QUERY_TENANT_ID", "tenant-1");
+    std::env::set_var("QUERY_CLUSTER_ID", "cluster-1");
     std::env::set_var("QUERY_MYSQL_HANDLER_HOST", "0.0.0.0");
     std::env::set_var("QUERY_MYSQL_HANDLER_PORT", "3306");
     std::env::set_var("QUERY_MAX_ACTIVE_SESSIONS", "255");
@@ -122,8 +122,8 @@ fn test_env_config() -> Result<()> {
     let configured = Config::load_from_env(&default)?;
     assert_eq!("DEBUG", configured.log.log_level);
 
-    assert_eq!("tenant-1", configured.query.tenant);
-    assert_eq!("cluster-1", configured.query.namespace);
+    assert_eq!("tenant-1", configured.query.tenant_id);
+    assert_eq!("cluster-1", configured.query.cluster_id);
     assert_eq!("0.0.0.0", configured.query.mysql_handler_host);
     assert_eq!(3306, configured.query.mysql_handler_port);
     assert_eq!(255, configured.query.max_active_sessions);
@@ -146,8 +146,8 @@ fn test_env_config() -> Result<()> {
 
     // clean up
     std::env::remove_var("LOG_LEVEL");
-    std::env::remove_var("QUERY_TENANT");
-    std::env::remove_var("QUERY_NAMESPACE");
+    std::env::remove_var("QUERY_TENANT_ID");
+    std::env::remove_var("QUERY_CLUSTER_ID");
     std::env::remove_var("QUERY_MYSQL_HANDLER_HOST");
     std::env::remove_var("QUERY_MYSQL_HANDLER_PORT");
     std::env::remove_var("QUERY_MAX_ACTIVE_SESSIONS");

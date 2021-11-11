@@ -17,16 +17,16 @@ use common_exception::Result;
 use common_meta_types::NodeInfo;
 
 #[async_trait::async_trait]
-pub trait NamespaceApi: Sync + Send {
-    // Add a new node info to /tenant/namespace/node-name.
+pub trait ClusterApi: Sync + Send {
+    // Add a new node info to /tenant/cluster_id/node-name.
     async fn add_node(&self, node: NodeInfo) -> Result<u64>;
 
-    // Get the tenant's namespace all nodes.
+    // Get the tenant's cluster all nodes.
     async fn get_nodes(&self) -> Result<Vec<NodeInfo>>;
 
-    // Drop the tenant's namespace one node by node.id.
+    // Drop the tenant's cluster one node by node.id.
     async fn drop_node(&self, node_id: String, seq: Option<u64>) -> Result<()>;
 
-    // Keep the tenant's namespace node alive.
+    // Keep the tenant's cluster node alive.
     async fn heartbeat(&self, node_id: String, seq: Option<u64>) -> Result<u64>;
 }
