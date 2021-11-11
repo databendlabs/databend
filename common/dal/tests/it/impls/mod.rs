@@ -12,9 +12,5 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-mod metrics;
-mod s3;
-mod s3_input_stream;
-
-pub use s3::S3;
-pub use s3_input_stream::S3InputStream;
+mod aws_s3;
+mod azure_blob;

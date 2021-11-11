@@ -14,4 +14,3 @@ async fn get(&self, path: &str) -> Result<Bytes>;
 
 async fn put(&self, path: &str, content: Vec<u8>) -> common_exception::Result<()>;
 ```
-
