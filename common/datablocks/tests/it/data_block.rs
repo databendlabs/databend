@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use pretty_assertions::assert_eq;
-
-use crate::DataBlock;
 
 #[test]
 fn test_data_block() -> Result<()> {

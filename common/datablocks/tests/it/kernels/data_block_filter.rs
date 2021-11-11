@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datablocks::DataBlock;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::SeriesFrom;
 use common_datavalues::series::Series;
@@ -20,8 +21,6 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::Result;
-
-use crate::DataBlock;
 
 #[test]
 fn test_filter_non_const_data_block() -> Result<()> {
@@ -38,7 +37,7 @@ fn test_filter_non_const_data_block() -> Result<()> {
     let predicate = Series::new(vec![true, false, true, true, false, false]);
     let block = DataBlock::filter_block(&block, predicate)?;
 
-    crate::assert_blocks_eq(
+    common_datablocks::assert_blocks_eq(
         vec![
             "+---+----+",
             "| a | b  |",
@@ -69,9 +68,10 @@ fn test_filter_all_false_data_block() -> Result<()> {
     let predicate = Series::new(vec![false, false, false, false, false, false]);
     let block = DataBlock::filter_block(&block, predicate)?;
 
-    crate::assert_blocks_eq(vec!["+---+---+", "| a | b |", "+---+---+", "+---+---+"], &[
-        block,
-    ]);
+    common_datablocks::assert_blocks_eq(
+        vec!["+---+---+", "| a | b |", "+---+---+", "+---+---+"],
+        &[block],
+    );
 
     Ok(())
 }
@@ -91,7 +91,7 @@ fn test_filter_const_data_block() -> Result<()> {
     let predicate = Series::new(vec![true, false, true, true, false, false]);
     let block = DataBlock::filter_block(&block, predicate)?;
 
-    crate::assert_blocks_eq(
+    common_datablocks::assert_blocks_eq(
         vec![
             "+---+----+",
             "| a | b  |",
@@ -122,7 +122,7 @@ fn test_filter_all_const_data_block() -> Result<()> {
     let predicate = Series::new(vec![true, false, true, true, false, false]);
     let block = DataBlock::filter_block(&block, predicate)?;
 
-    crate::assert_blocks_eq(
+    common_datablocks::assert_blocks_eq(
         vec![
             "+---+----+",
             "| a | b  |",

@@ -14,9 +14,6 @@
 
 #![feature(hash_raw_entry)]
 
-#[cfg(test)]
-mod data_block_test;
-
 mod data_block;
 mod data_block_debug;
 mod kernels;
