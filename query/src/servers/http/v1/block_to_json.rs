@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_datablocks::DataBlock;
 use common_datavalues::arrays::DFPrimitiveArray;
 use common_datavalues::chrono::TimeZone;
@@ -25,6 +27,9 @@ use serde_json::Value as JsonValue;
 
 const DATE_FMT: &str = "%Y-%m-%d";
 const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
+
+pub(crate) type JsonBlock = Vec<Vec<JsonValue>>;
+pub(crate) type JsonBlockRef = Arc<JsonBlock>;
 
 fn to_json_value<T>(v: T) -> JsonValue
 where T: Serialize {
@@ -91,7 +96,7 @@ fn bad_type(data_type: &DataType) -> ErrorCode {
     ErrorCode::BadDataValueType(format!("Unsupported column type:{:?}", data_type))
 }
 
-pub(crate) fn block_to_json(block: DataBlock) -> Result<Vec<Vec<JsonValue>>> {
+pub(crate) fn block_to_json(block: &DataBlock) -> Result<Vec<Vec<JsonValue>>> {
     let mut col_table = Vec::new();
     let columns_size = block.columns().len();
     for col_index in 0..columns_size {
@@ -122,7 +127,8 @@ pub(crate) fn block_to_json(block: DataBlock) -> Result<Vec<Vec<JsonValue>>> {
                 DataType::Boolean => series.bool()?.into_iter().map(to_json_value).collect(),
                 DataType::Date16 => date_array_to_string_array(series.u16()?, DATE_FMT),
                 DataType::Date32 => date_array_to_string_array(series.i32()?, DATE_FMT),
-                DataType::DateTime32(_) => date_array_to_string_array(series.i32()?, TIME_FMT), // TODO(youngsofun): add time zone?
+                // TODO(youngsofun): add time zone?
+                DataType::DateTime32(_) => date_array_to_string_array(series.i32()?, TIME_FMT),
                 // TODO(youngsofun): support other DataType
                 _ => return Err(bad_type(data_type)),
             },

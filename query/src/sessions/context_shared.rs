@@ -33,6 +33,7 @@ use crate::catalogs::Catalog;
 use crate::catalogs::Table;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
+use crate::servers::http::v1::query::HttpQueryHandle;
 use crate::sessions::Session;
 use crate::sessions::Settings;
 
@@ -58,6 +59,7 @@ pub struct DatabendQueryContextShared {
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) subquery_index: Arc<AtomicUsize>,
     pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
+    pub(in crate::sessions) http_query: Arc<RwLock<Option<HttpQueryHandle>>>,
     pub(in crate::sessions) running_plan: Arc<RwLock<Option<PlanNode>>>,
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
 }
@@ -79,6 +81,7 @@ impl DatabendQueryContextShared {
             ref_count: Arc::new(AtomicUsize::new(0)),
             subquery_index: Arc::new(AtomicUsize::new(1)),
             running_query: Arc::new(RwLock::new(None)),
+            http_query: Arc::new(RwLock::new(None)),
             running_plan: Arc::new(RwLock::new(None)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
         })
@@ -89,6 +92,11 @@ impl DatabendQueryContextShared {
 
         while let Some(source_abort_handle) = sources_abort_handle.pop() {
             source_abort_handle.abort();
+        }
+
+        let http_query = self.http_query.read();
+        if let Some(handle) = &*http_query {
+            handle.abort();
         }
 
         // TODO: Wait for the query to be processed (write out the last error)
@@ -153,6 +161,10 @@ impl DatabendQueryContextShared {
         }
     }
 
+    pub fn attach_http_query(&self, handle: HttpQueryHandle) {
+        let mut http_query = self.http_query.write();
+        *http_query = Some(handle);
+    }
     pub fn attach_query_str(&self, query: &str) {
         let mut running_query = self.running_query.write();
         *running_query = Some(query.to_string());

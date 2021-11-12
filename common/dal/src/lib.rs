@@ -31,6 +31,3 @@ mod data_accessor;
 mod impls;
 mod in_memory_data;
 mod schemes;
-
-#[cfg(test)]
-mod schemes_test;

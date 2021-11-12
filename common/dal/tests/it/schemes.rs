@@ -11,16 +11,14 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::str::FromStr;
 
+use common_dal::StorageScheme;
+use common_dal::StorageScheme::AzureStorageBlob;
+use common_dal::StorageScheme::LocalFs;
+use common_dal::StorageScheme::S3;
 use common_exception::ErrorCode;
-
-use crate::schemes::StorageScheme::AzureStorageBlob;
-use crate::schemes::StorageScheme::LocalFs;
-use crate::schemes::StorageScheme::S3;
-use crate::StorageScheme;
 
 #[test]
 fn test_scheme_from_str() {

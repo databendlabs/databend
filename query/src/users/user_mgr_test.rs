@@ -24,36 +24,52 @@ use crate::users::UserManager;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_manager() -> Result<()> {
     let mut config = Config::default();
-    config.query.tenant = "tenant1".to_string();
+    config.query.tenant_id = "tenant1".to_string();
 
     let user = "test-user1";
     let hostname = "localhost";
+    let hostname2 = "%";
     let pwd = "test-pwd";
     let user_mgr = UserManager::create_global(config).await?;
 
-    // add.
+    // add user hostname.
     {
         let user_info = User::new(user, hostname, pwd, AuthType::PlainText);
+        user_mgr.add_user(user_info.into()).await?;
+    }
+
+    // add user hostname2.
+    {
+        let user_info = User::new(user, hostname2, pwd, AuthType::PlainText);
         user_mgr.add_user(user_info.into()).await?;
     }
 
     // get all users.
     {
         let users = user_mgr.get_users().await?;
+        assert_eq!(2, users.len());
         assert_eq!(pwd.as_bytes(), users[0].password);
     }
 
-    // get.
+    // get user hostname.
     {
-        let user = user_mgr.get_user(user).await?;
+        let user = user_mgr.get_user(user, hostname).await?;
+        assert_eq!(hostname, user.hostname);
+        assert_eq!(pwd.as_bytes(), user.password);
+    }
+
+    // get user hostname2.
+    {
+        let user = user_mgr.get_user(user, hostname2).await?;
+        assert_eq!(hostname2, user.hostname);
         assert_eq!(pwd.as_bytes(), user.password);
     }
 
     // drop.
     {
-        user_mgr.drop_user(user).await?;
+        user_mgr.drop_user(user, hostname).await?;
         let users = user_mgr.get_users().await?;
-        assert_eq!(0, users.len());
+        assert_eq!(1, users.len());
     }
 
     Ok(())

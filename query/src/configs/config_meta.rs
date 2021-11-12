@@ -14,6 +14,9 @@
 
 use std::fmt;
 
+use common_flight_rpc::FlightClientConf;
+use common_flight_rpc::FlightClientTlsConfig;
+use common_meta_flight::MetaFlightClientConf;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 
@@ -105,6 +108,39 @@ impl MetaConfig {
             String,
             META_RPC_TLS_SERVICE_DOMAIN_NAME
         );
+    }
+
+    pub fn is_tls_enabled(&self) -> bool {
+        !self.rpc_tls_meta_server_root_ca_cert.is_empty()
+            && !self.rpc_tls_meta_service_domain_name.is_empty()
+    }
+
+    pub fn to_flight_tls_config(&self) -> Option<FlightClientTlsConfig> {
+        if !self.is_tls_enabled() {
+            return None;
+        }
+
+        Some(FlightClientTlsConfig {
+            rpc_tls_server_root_ca_cert: self.rpc_tls_meta_server_root_ca_cert.clone(),
+            domain_name: self.rpc_tls_meta_service_domain_name.clone(),
+        })
+    }
+
+    pub fn to_flight_client_config(&self) -> MetaFlightClientConf {
+        let meta_config = FlightClientConf {
+            address: self.meta_address.clone(),
+            username: self.meta_username.clone(),
+            password: self.meta_password.clone(),
+            tls_conf: self.to_flight_tls_config(),
+        };
+
+        MetaFlightClientConf {
+            // kv service is configured by conf.meta
+            kv_service_config: meta_config.clone(),
+            // copy meta config from query config
+            meta_service_config: meta_config,
+            client_timeout_in_second: self.meta_client_timeout_in_second,
+        }
     }
 }
 

@@ -19,8 +19,6 @@ use common_base::tokio;
 use common_base::tokio::sync::oneshot;
 use common_base::GlobalSequence;
 use common_tracing::tracing;
-use tempfile::tempdir;
-use tempfile::TempDir;
 
 use crate::api::FlightServer;
 use crate::configs;
@@ -30,8 +28,8 @@ use crate::proto::GetReq;
 
 // Start one random service and get the session manager.
 #[tracing::instrument(level = "info")]
-pub async fn start_metasrv() -> Result<(KVSrvTestContext, String)> {
-    let mut tc = new_test_context();
+pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
+    let mut tc = new_test_context(0);
 
     start_metasrv_with_context(&mut tc).await?;
 
@@ -40,8 +38,9 @@ pub async fn start_metasrv() -> Result<(KVSrvTestContext, String)> {
     Ok((tc, addr))
 }
 
-pub async fn start_metasrv_with_context(tc: &mut KVSrvTestContext) -> Result<()> {
-    let srv = FlightServer::create(tc.config.clone());
+pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<()> {
+    let mn = MetaNode::start(&tc.config.raft_config).await?;
+    let srv = FlightServer::create(tc.config.clone(), mn);
     let (stop_tx, fin_rx) = srv.start().await?;
 
     tc.channels = Some((stop_tx, fin_rx));
@@ -56,10 +55,7 @@ pub fn next_port() -> u32 {
     29000u32 + (GlobalSequence::next() as u32)
 }
 
-pub struct KVSrvTestContext {
-    #[allow(dead_code)]
-    temp_raft_dir: TempDir,
-
+pub struct MetaSrvTestContext {
     // /// To hold a per-case logging guard
     // #[allow(dead_code)]
     // logging_guard: (WorkerGuard, DefaultGuard),
@@ -67,12 +63,12 @@ pub struct KVSrvTestContext {
 
     pub meta_nodes: Vec<Arc<MetaNode>>,
 
-    /// channel to send to stop kvsrv, and channel for waiting for shutdown to finish.
+    /// channel to send to stop metasrv, and channel for waiting for shutdown to finish.
     pub channels: Option<(oneshot::Sender<()>, oneshot::Receiver<()>)>,
 }
 
 /// Create a new Config for test, with unique port assigned
-pub fn new_test_context() -> KVSrvTestContext {
+pub fn new_test_context(id: u64) -> MetaSrvTestContext {
     let config_id = next_port();
 
     let mut config = configs::Config::empty();
@@ -82,6 +78,8 @@ pub fn new_test_context() -> KVSrvTestContext {
         tracing::warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
         config.raft_config.no_sync = true;
     }
+
+    config.raft_config.id = id;
 
     config.raft_config.config_id = format!("{}", config_id);
 
@@ -110,15 +108,9 @@ pub fn new_test_context() -> KVSrvTestContext {
         config.metric_api_address = format!("{}:{}", host, metric_port);
     }
 
-    let temp_raft_dir = tempdir().expect("create temp dir to store meta");
-    config.raft_config.raft_dir = temp_raft_dir.path().to_str().unwrap().to_string();
-
     tracing::info!("new test context config: {:?}", config);
 
-    KVSrvTestContext {
-        // The TempDir type creates a directory on the file system that is deleted once it goes out of scope
-        // So hold the tmp_meta_dir and tmp_local_fs_dir until being dropped.
-        temp_raft_dir,
+    MetaSrvTestContext {
         config,
         meta_nodes: vec![],
 

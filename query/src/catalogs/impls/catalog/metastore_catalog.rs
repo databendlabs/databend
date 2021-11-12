@@ -92,7 +92,8 @@ impl MetaStoreCatalog {
         } else {
             tracing::info!("use remote meta");
 
-            let meta_client_provider = Arc::new(MetaClientProvider::new(&conf));
+            let meta_client_provider =
+                Arc::new(MetaClientProvider::new(conf.meta.to_flight_client_config()));
             let meta_remote = MetaRemote::create(meta_client_provider);
             Arc::new(meta_remote)
         };

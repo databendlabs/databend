@@ -11,18 +11,16 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::io::SeekFrom;
 use std::str;
 
 use common_base::tokio;
+use common_dal::AzureBlobAccessor;
+use common_dal::DataAccessor;
 use common_exception::Result;
 use futures::AsyncReadExt;
 use futures::AsyncSeekExt;
-
-use crate::AzureBlobAccessor;
-use crate::DataAccessor;
 
 fn generate_test_data() -> String {
     let mut s = "0123456789".to_string();

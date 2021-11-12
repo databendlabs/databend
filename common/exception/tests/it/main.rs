@@ -11,13 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
-#[cfg(test)]
-mod namespace_mgr_test;
-
-mod namespace_api;
-mod namespace_mgr;
-
-pub use namespace_api::NamespaceApi;
-pub use namespace_mgr::NamespaceMgr;
+mod exception;
+mod prelude;

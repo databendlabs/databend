@@ -227,7 +227,7 @@ build_exceptions! {
 
     // KVSrv server error
 
-    KVSrvError(2501),
+    MetaSrvError(2501),
 
     // FS error
 
@@ -257,10 +257,9 @@ build_exceptions! {
     TruncateTableFailedError(4008),
     CommitTableError(4009),
 
-    // namespace error.
-    NamespaceUnknownNode(4058),
-    NamespaceNodeAlreadyExists(4059),
-    NamespaceIllegalNodeFormat(4050),
+    // cluster error.
+    ClusterUnknownNode(4058),
+    ClusterNodeAlreadyExists(4059),
 
     // storage-api error codes
     ReadFileError(5001),

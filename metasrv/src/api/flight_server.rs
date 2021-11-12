@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightServiceServer;
 use common_base::tokio;
 use common_base::tokio::sync::oneshot;
@@ -28,19 +30,16 @@ use transport::ServerTlsConfig;
 
 use crate::api::rpc::MetaFlightImpl;
 use crate::configs::Config;
-use crate::meta_service::AdminRequest;
-use crate::meta_service::AdminRequestInner;
-use crate::meta_service::JoinRequest;
 use crate::meta_service::MetaNode;
-use crate::proto::meta_service_client::MetaServiceClient;
 
 pub struct FlightServer {
     conf: Config,
+    meta_node: Arc<MetaNode>,
 }
 
 impl FlightServer {
-    pub fn create(conf: Config) -> Self {
-        Self { conf }
+    pub fn create(conf: Config, meta_node: Arc<MetaNode>) -> Self {
+        Self { conf, meta_node }
     }
 
     /// Start metasrv and returns two channel to send shutdown signal and receive signal when shutdown finished.
@@ -86,57 +85,7 @@ impl FlightServer {
 
         tracing::info!("flight addr: {}", addr);
 
-        // - boot mode: create the first node in a new cluster.
-        // - TODO(xp): join mode: create a new node to join a cluster.
-        // - open mode: open an existent node.
-        tracing::info!(
-            "Starting MetaNode boot:{} single: {} with config: {:?}",
-            self.conf.raft_config.boot,
-            self.conf.raft_config.single,
-            self.conf
-        );
-
-        let raft_config = &self.conf.raft_config;
-
-        let mn = if raft_config.boot {
-            MetaNode::boot(0, raft_config).await?
-        } else if raft_config.single {
-            let (mn, _is_open) =
-                MetaNode::open_create_boot(raft_config, Some(()), Some(()), Some(())).await?;
-            mn
-        } else if !raft_config.join.is_empty() {
-            // Bring up a new node, join an cluster
-            let (mn, _is_open) =
-                MetaNode::open_create_boot(raft_config, Some(()), Some(()), None).await?;
-
-            let addrs = &raft_config.join;
-            for addr in addrs {
-                // TODO: retry
-                let mut client = MetaServiceClient::connect(format!("http://{}", addr))
-                    .await
-                    .map_err(|e| ErrorCode::CannotConnectNode(e.to_string()))?;
-
-                let admin_req = AdminRequest {
-                    forward_to_leader: true,
-                    req: AdminRequestInner::Join(JoinRequest {
-                        node_id: raft_config.id,
-                        address: raft_config.raft_api_addr(),
-                    }),
-                };
-
-                client.forward(admin_req.clone()).await?;
-            }
-
-            mn
-        } else {
-            // open mode
-            let (mn, _is_open) =
-                MetaNode::open_create_boot(raft_config, Some(()), None, None).await?;
-            mn
-        };
-        tracing::info!("Done starting MetaNode: {:?}", self.conf);
-
-        let flight_impl = MetaFlightImpl::create(self.conf.clone(), mn.clone());
+        let flight_impl = MetaFlightImpl::create(self.conf.clone(), self.meta_node.clone());
         let flight_srv = FlightServiceServer::new(flight_impl);
 
         let builder = Server::builder();
@@ -162,7 +111,7 @@ impl FlightServer {
             })
             .await;
 
-        let _ = mn.stop().await;
+        let _ = self.meta_node.stop().await;
         let s = fin_tx.send(());
         tracing::info!(
             "metasrv sending signal of finishing shutdown {}: res: {:?}",
@@ -172,7 +121,7 @@ impl FlightServer {
 
         tracing::info!("metasrv returning");
 
-        res.map_err_to_code(ErrorCode::KVSrvError, || "metasrv error")
+        res.map_err_to_code(ErrorCode::MetaSrvError, || "metasrv error")
     }
 
     async fn tls_config(conf: &Config) -> anyhow::Result<Option<ServerTlsConfig>> {

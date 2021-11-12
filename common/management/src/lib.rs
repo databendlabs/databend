@@ -13,11 +13,11 @@
 // limitations under the License.
 //
 
-mod namespace;
+mod cluster;
 mod user;
 
-pub use namespace::NamespaceApi;
-pub use namespace::NamespaceMgr;
+pub use cluster::ClusterApi;
+pub use cluster::ClusterMgr;
 pub use user::user_api::UserInfo;
 pub use user::user_api::UserMgrApi;
 pub use user::user_mgr::UserMgr;

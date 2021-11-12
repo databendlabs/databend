@@ -32,9 +32,9 @@ perf.*
 *.error
 *.swp
 _local_fs/*
-_meta/*
+_meta*/*
 stateless_test_data/*
-**/_logs/*
+**/_logs*/*
 
 # for tests in mac
 *.stderr-e
