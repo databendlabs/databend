@@ -30,8 +30,8 @@ use crate::proto::GetReq;
 
 // Start one random service and get the session manager.
 #[tracing::instrument(level = "info")]
-pub async fn start_metasrv() -> Result<(KVSrvTestContext, String)> {
-    let mut tc = new_test_context();
+pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
+    let mut tc = new_test_context(0);
 
     start_metasrv_with_context(&mut tc).await?;
 
@@ -40,7 +40,7 @@ pub async fn start_metasrv() -> Result<(KVSrvTestContext, String)> {
     Ok((tc, addr))
 }
 
-pub async fn start_metasrv_with_context(tc: &mut KVSrvTestContext) -> Result<()> {
+pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<()> {
     let srv = FlightServer::create(tc.config.clone());
     let (stop_tx, fin_rx) = srv.start().await?;
 
@@ -56,7 +56,7 @@ pub fn next_port() -> u32 {
     29000u32 + (GlobalSequence::next() as u32)
 }
 
-pub struct KVSrvTestContext {
+pub struct MetaSrvTestContext {
     #[allow(dead_code)]
     temp_raft_dir: TempDir,
 
@@ -72,7 +72,7 @@ pub struct KVSrvTestContext {
 }
 
 /// Create a new Config for test, with unique port assigned
-pub fn new_test_context() -> KVSrvTestContext {
+pub fn new_test_context(id: u64) -> MetaSrvTestContext {
     let config_id = next_port();
 
     let mut config = configs::Config::empty();
@@ -82,6 +82,8 @@ pub fn new_test_context() -> KVSrvTestContext {
         tracing::warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
         config.raft_config.no_sync = true;
     }
+
+    config.raft_config.id = id;
 
     config.raft_config.config_id = format!("{}", config_id);
 
@@ -115,7 +117,7 @@ pub fn new_test_context() -> KVSrvTestContext {
 
     tracing::info!("new test context config: {:?}", config);
 
-    KVSrvTestContext {
+    MetaSrvTestContext {
         // The TempDir type creates a directory on the file system that is deleted once it goes out of scope
         // So hold the tmp_meta_dir and tmp_local_fs_dir until being dropped.
         temp_raft_dir,

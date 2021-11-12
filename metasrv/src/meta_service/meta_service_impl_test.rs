@@ -38,7 +38,7 @@ async fn test_meta_server_upsert_kv() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let tc = new_test_context();
+    let tc = new_test_context(0);
     let addr = tc.config.raft_config.raft_api_addr();
 
     let _mn = MetaNode::boot(&tc.config.raft_config).await?;
@@ -83,7 +83,7 @@ async fn test_meta_server_incr_seq() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let tc = new_test_context();
+    let tc = new_test_context(0);
     let addr = tc.config.raft_config.raft_api_addr();
 
     let _mn = MetaNode::boot(&tc.config.raft_config).await?;
@@ -123,8 +123,8 @@ async fn test_meta_cluster_write_on_non_leader() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let tc0 = new_test_context();
-    let tc1 = new_test_context();
+    let tc0 = new_test_context(0);
+    let tc1 = new_test_context(1);
 
     let addr0 = tc0.config.raft_config.raft_api_addr();
     let addr1 = tc1.config.raft_config.raft_api_addr();
@@ -135,8 +135,7 @@ async fn test_meta_cluster_write_on_non_leader() -> anyhow::Result<()> {
     {
         tracing::info!("--- add node 1 as non-voter");
 
-        let mut config = tc1.config.raft_config.clone();
-        config.id = 1;
+        let config = tc1.config.raft_config.clone();
         let (mn1, _is_open) = MetaNode::open_create_boot(&config, None, Some(()), None).await?;
 
         assert_meta_connection(&addr0).await?;
