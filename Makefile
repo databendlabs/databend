@@ -4,6 +4,8 @@ PLATFORM ?= linux/amd64,linux/arm64
 VERSION ?= latest
 ADD_NODES ?= 0
 NUM_CPUS ?= 2
+TENANT ?= "tenant"
+CLUSTER_NAME ?= "test"
 # Setup dev toolchain
 setup:
 	bash ./scripts/setup/dev_setup.sh
@@ -23,7 +25,7 @@ cluster: build-debug cli-build-debug
 	mkdir -p ./.databend/local/bin/test/ && make cluster_stop || echo "stop"
 	cp ./target/debug/databend-query ./.databend/local/bin/test/databend-query
 	cp ./target/debug/databend-meta ./.databend/local/bin/test/databend-meta
-	./target/release/bendctl cluster create --databend_dir ./.databend --group local --version test --num-cpus ${NUM_CPUS} --force
+	./target/release/bendctl cluster create --databend_dir ./.databend --group local --version test --num-cpus ${NUM_CPUS} --query-tenant ${TENANT} --query-namespace ${CLUSTER_NAME} --force
 	for i in `seq 1 ${ADD_NODES}`; do make cluster_add; done;
 	make cluster_view
 cluster_add:

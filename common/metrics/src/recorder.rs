@@ -20,10 +20,16 @@ use common_tracing::tracing;
 use lazy_static::lazy_static;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use metrics_exporter_prometheus::PrometheusHandle;
+use metrics::counter;
 
 lazy_static! {
     static ref PROMETHEUS_HANDLE: Arc<RwLock<Option<PrometheusHandle>>> =
         Arc::new(RwLock::new(None));
+}
+
+pub fn label_counter(name: &'static str, tenant: &String, cluster_name: &String) {
+    let labels = [("tenant", format!("{}", tenant)), ("cluster_name", format!("{}", cluster_name))];
+    counter!(name, 1, &labels);
 }
 
 pub fn init_default_metrics_recorder() {
