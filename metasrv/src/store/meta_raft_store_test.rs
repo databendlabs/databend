@@ -31,6 +31,7 @@ use maplit::btreeset;
 
 use crate::store::MetaRaftStore;
 use crate::tests::service::new_test_context;
+use crate::Opened;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_metasrv_restart() -> anyhow::Result<()> {
@@ -52,7 +53,7 @@ async fn test_metasrv_restart() -> anyhow::Result<()> {
     {
         let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
         assert_eq!(id, ms.id);
-        assert!(!ms.is_open());
+        assert!(!ms.is_opened());
         assert_eq!(None, ms.read_hard_state().await?);
 
         tracing::info!("--- update metasrv");
@@ -68,7 +69,7 @@ async fn test_metasrv_restart() -> anyhow::Result<()> {
     {
         let ms = MetaRaftStore::open_create(&tc.config.raft_config, Some(()), None).await?;
         assert_eq!(id, ms.id);
-        assert!(ms.is_open());
+        assert!(ms.is_opened());
         assert_eq!(
             Some(HardState {
                 current_term: 10,

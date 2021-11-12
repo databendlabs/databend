@@ -43,6 +43,7 @@ use crate::proto::meta_service_client::MetaServiceClient;
 use crate::tests::assert_meta_connection;
 use crate::tests::service::new_test_context;
 use crate::tests::service::MetaSrvTestContext;
+use crate::Opened;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_boot() -> anyhow::Result<()> {
@@ -403,8 +404,8 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     let raft_config = tc2.config.raft_config.clone();
     let addr2 = raft_config.raft_api_addr();
 
-    let (mn2, is_open) = MetaNode::open_create_boot(&raft_config, None, Some(()), None).await?;
-    assert!(!is_open);
+    let mn2 = MetaNode::open_create_boot(&raft_config, None, Some(()), None).await?;
+    assert!(!mn2.is_opened());
 
     tracing::info!("--- join non-voter 2 to cluster by leader");
 
@@ -435,8 +436,8 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     let raft_config = tc3.config.raft_config.clone();
     let addr3 = raft_config.raft_api_addr();
 
-    let (mn3, is_open) = MetaNode::open_create_boot(&raft_config, None, Some(()), None).await?;
-    assert!(!is_open);
+    let mn3 = MetaNode::open_create_boot(&raft_config, None, Some(()), None).await?;
+    assert!(!mn3.is_opened());
 
     tracing::info!("--- join node-3 by sending rpc `join`");
 
@@ -582,8 +583,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
 
     tracing::info!("--- reopen MetaNode");
 
-    let (leader, _is_open) =
-        MetaNode::open_create_boot(&tc.config.raft_config, Some(()), None, None).await?;
+    let leader = MetaNode::open_create_boot(&tc.config.raft_config, Some(()), None, None).await?;
 
     log_cnt += 1;
 
@@ -719,8 +719,8 @@ async fn setup_non_voter(
     let mut raft_config = tc.config.raft_config.clone();
     raft_config.id = id;
 
-    let (mn, is_open) = MetaNode::open_create_boot(&raft_config, None, Some(()), None).await?;
-    assert!(!is_open);
+    let mn = MetaNode::open_create_boot(&raft_config, None, Some(()), None).await?;
+    assert!(!mn.is_opened());
 
     tc.meta_nodes.push(mn.clone());
 
