@@ -13,8 +13,8 @@ use common_planners::{expand_aggregate_arg_exprs, expr_as_column_expr, Expressio
 use crate::catalogs::ToReadDataSourcePlan;
 use crate::sessions::{DatabendQueryContext, DatabendQueryContextRef};
 use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
-use crate::sql::statements::analyzer_expr::{ExpressionAnalyzer, TableSchema};
-use crate::sql::statements::analyzer_schema::{AnalyzedSchema, AnalyzedColumnDesc};
+use crate::sql::statements::analyzer_expr::{ExpressionAnalyzer};
+use crate::sql::statements::analyzer_schema::{AnalyzeQuerySchema, AnalyzeQueryColumnDesc};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfQueryStatement {
@@ -30,10 +30,10 @@ pub struct DfQueryStatement {
 
 pub enum QueryRelation {
     FromTable(ReadDataSourcePlan),
-    Nested(Box<AnalyzeData>),
+    Nested(Box<AnalyzeQueryState>),
 }
 
-pub struct AnalyzeData {
+pub struct AnalyzeQueryState {
     ctx: DatabendQueryContextRef,
 
     pub relation: Option<Box<QueryRelation>>,
@@ -46,10 +46,9 @@ pub struct AnalyzeData {
     pub order_by_expressions: Vec<Expression>,
     pub projection_expressions: Vec<Expression>,
 
-    tables_schema: Vec<TableSchema>,
-    from_schema: Arc<AnalyzedSchema>,
-    before_aggr_schema: Arc<AnalyzedSchema>,
-    after_aggr_schema: Arc<AnalyzedSchema>,
+    from_schema: AnalyzeQuerySchema,
+    before_aggr_schema: AnalyzeQuerySchema,
+    after_aggr_schema: AnalyzeQuerySchema,
     finalize_schema: DataSchemaRef,
     projection_aliases: HashMap<String, Expression>,
 }
@@ -57,7 +56,7 @@ pub struct AnalyzeData {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfQueryStatement {
     async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
-        let mut data = AnalyzeData::create(ctx);
+        let mut data = AnalyzeQueryState::create(ctx);
 
         if let Err(cause) = self.analyze_from(&mut data).await {
             return Err(cause.add_message_back("(while in analyze select from)."));
@@ -97,7 +96,7 @@ impl AnalyzableStatement for DfQueryStatement {
 }
 
 impl DfQueryStatement {
-    pub async fn analyze_from(&self, data: &mut AnalyzeData) -> Result<()> {
+    pub async fn analyze_from(&self, data: &mut AnalyzeQueryState) -> Result<()> {
         match self.from.len() {
             0 => data.dummy_source().await,
             1 => Self::analyze_join(&self.from[0], data).await,
@@ -106,10 +105,11 @@ impl DfQueryStatement {
         }
     }
 
-    pub async fn analyze_filter(&self, data: &mut AnalyzeData) -> Result<()> {
+    pub async fn analyze_filter(&self, data: &mut AnalyzeQueryState) -> Result<()> {
         if let Some(predicate) = &self.selection {
             // TODO: collect pushdown predicates
-            let expr_analyzer = data.create_analyzer(data.from_schema.clone(), false);
+            let analyze_schema = data.from_schema.clone();
+            let expr_analyzer = data.create_analyzer(analyze_schema, false);
             data.filter_predicate = Some(expr_analyzer.analyze(predicate).await?);
         }
 
@@ -117,10 +117,10 @@ impl DfQueryStatement {
     }
 
     /// Expand wildcard and create columns alias map(alias -> expression) for named projection item
-    pub async fn analyze_projection(&self, data: &mut AnalyzeData) -> Result<()> {
+    pub async fn analyze_projection(&self, data: &mut AnalyzeQueryState) -> Result<()> {
         let projection_expressions = self.projection_exprs(data).await?;
         // TODO: expand_wildcard
-        data.before_aggr_schema = data.from_schema.clone_schema();
+        data.before_aggr_schema = data.from_schema.clone();
         data.projection_aliases = extract_aliases(&projection_expressions);
 
         let from_schema = data.from_schema.to_data_schema();
@@ -135,7 +135,7 @@ impl DfQueryStatement {
 
                     let nullable = field.is_nullable();
                     let data_type = field.data_type().clone();
-                    let column_desc = AnalyzedColumnDesc::create(alias, data_type, nullable);
+                    let column_desc = AnalyzeQueryColumnDesc::create(alias, data_type, nullable);
                     data.before_aggr_schema.add_projection(column_desc, true);
                 }
             }
@@ -146,8 +146,9 @@ impl DfQueryStatement {
     }
 
     /// Push group by exprs and aggregate function inputs into before_group_by_expressions
-    pub async fn analyze_group_by(&self, data: &mut AnalyzeData) -> Result<()> {
-        let expr_analyzer = data.create_analyzer(data.before_aggr_schema.clone(), false);
+    pub async fn analyze_group_by(&self, data: &mut AnalyzeQueryState) -> Result<()> {
+        let analyze_schema = data.before_aggr_schema.clone();
+        let expr_analyzer = data.create_analyzer(analyze_schema, false);
         let projection_aliases = &data.projection_aliases;
 
         for group_by_expr in &self.group_by {
@@ -157,7 +158,7 @@ impl DfQueryStatement {
             if !data.group_by_expressions.contains(&analyzed_expr) {
                 // The expr completed in before_group_by_expressions.
                 // let group_by_expression = expr_as_column_expr(&analyzed_expr)?;
-                data.group_by_expressions.push(analyzed_expr);
+                data.group_by_expressions.push(analyzed_expr.clone());
             }
 
             if !data.before_group_by_expressions.contains(&analyzed_expr) {
@@ -165,12 +166,10 @@ impl DfQueryStatement {
             }
         }
 
-        // TODO: 创建aggregated schema
-
         Ok(())
     }
 
-    pub async fn analyze_having(&self, data: &mut AnalyzeData) -> Result<()> {
+    pub async fn analyze_having(&self, data: &mut AnalyzeQueryState) -> Result<()> {
         if let Some(predicate) = &self.having {
             let expr = Self::analyze_expr_with_alias(predicate, data).await?;
 
@@ -180,15 +179,17 @@ impl DfQueryStatement {
         Ok(())
     }
 
-    pub async fn analyze_order_by(&self, data: &mut AnalyzeData) -> Result<()> {
+    pub async fn analyze_order_by(&self, data: &mut AnalyzeQueryState) -> Result<()> {
         for order_by_expr in &self.order_by {
             let expr = Self::analyze_expr_with_alias(&order_by_expr.expr, data).await?;
 
             data.add_aggregate_function(&expr)?;
             let after_group_by_expr = Self::after_group_by_expr(&expr, data)?;
+            let order_by_column_expr = expr_as_column_expr(&after_group_by_expr)?;
+
             data.before_having_expressions.push(after_group_by_expr);
             data.order_by_expressions.push(Expression::Sort {
-                expr: Box::new(expr_as_column_expr(&after_group_by_expr)?),
+                expr: Box::new(order_by_column_expr),
                 asc: order_by_expr.asc.unwrap_or(true),
                 nulls_first: order_by_expr.asc.unwrap_or(true),
             });
@@ -197,34 +198,35 @@ impl DfQueryStatement {
         Ok(())
     }
 
-    pub async fn analyze_limit(&self, data: &mut AnalyzeData) -> Result<()> {
+    pub async fn analyze_limit(&self, data: &mut AnalyzeQueryState) -> Result<()> {
         // TODO: analyze limit
         Ok(())
     }
 
-    fn after_group_by_expr(expr: &Expression, data: &mut AnalyzeData) -> Result<Expression> {
+    fn after_group_by_expr(expr: &Expression, data: &mut AnalyzeQueryState) -> Result<Expression> {
         let aggr_exprs = &data.aggregate_expressions;
         let rebased_expr = rebase_expr(&expr, aggr_exprs)?;
         rebase_expr(&rebased_expr, &data.before_having_expressions)
     }
 
-    async fn analyze_expr_with_alias(expr: &Expr, data: &mut AnalyzeData) -> Result<Expression> {
-        let expr_analyzer = data.create_analyzer(data.after_aggr_schema.clone(), true);
+    async fn analyze_expr_with_alias(expr: &Expr, data: &mut AnalyzeQueryState) -> Result<Expression> {
+        let analyze_schema = data.after_aggr_schema.clone();
+        let expr_analyzer = data.create_analyzer(analyze_schema, true);
         let analyzed_expr = expr_analyzer.analyze(expr).await?;
         let projection_aliases = &data.projection_aliases;
         resolve_aliases_to_exprs(&analyzed_expr, projection_aliases)
     }
 
-    async fn analyze_join(table: &TableWithJoins, data: &mut AnalyzeData) -> Result<()> {
+    async fn analyze_join(table: &TableWithJoins, data: &mut AnalyzeQueryState) -> Result<()> {
         let TableWithJoins { relation, joins } = table;
 
         match joins.is_empty() {
             true => Err(ErrorCode::UnImplement("Cannot SELECT join.")),
-            false => Self::analyze_table_factor(relation, data).await
+            false => Self::analyze_table_factor(relation, data).await,
         }
     }
 
-    async fn analyze_table_factor(relation: &TableFactor, data: &mut AnalyzeData) -> Result<()> {
+    async fn analyze_table_factor(relation: &TableFactor, data: &mut AnalyzeQueryState) -> Result<()> {
         match relation {
             TableFactor::Table { name, args, alias, .. } => {
                 match args.is_empty() {
@@ -240,12 +242,12 @@ impl DfQueryStatement {
 
                 data.subquery(subquery, alias).await
             },
-            TableFactor::NestedJoin(nested) => Self::analyze_join(nested, data).await,
+            TableFactor::NestedJoin(nested) => Self::analyze_join(&nested, data).await,
             TableFactor::TableFunction { .. } => Err(ErrorCode::UnImplement("Unsupported table function")),
         }
     }
 
-    async fn projection_exprs(&self, data: &mut AnalyzeData) -> Result<Vec<Expression>> {
+    async fn projection_exprs(&self, data: &mut AnalyzeQueryState) -> Result<Vec<Expression>> {
         // XXX: We do not allow projection to be used in projection, such as:
         // SELECT column_a + 1 AS alias_b, alias_b + 1 AS alias_c FROM table_name_1;
         // This is also not supported in MySQL, but maybe we should to support it?
@@ -254,7 +256,7 @@ impl DfQueryStatement {
         let query_context = data.ctx.clone();
         let expr_analyzer = ExpressionAnalyzer::with_source(query_context, source, true);
 
-        let mut output_columns = Vec::with_capacity(items.len());
+        let mut output_columns = Vec::with_capacity(self.projection.len());
         for item in &self.projection {
             match item {
                 SelectItem::Wildcard => output_columns.push(Expression::Wildcard),
@@ -274,18 +276,14 @@ impl DfQueryStatement {
     }
 }
 
-impl AnalyzeData {
-    pub fn create(ctx: DatabendQueryContextRef) -> AnalyzeData {
-        AnalyzeData { ctx, ..Default::default() }
+enum AnalyzeTableWithJoins {}
+
+impl AnalyzeQueryState {
+    pub fn create(ctx: DatabendQueryContextRef) -> AnalyzeQueryState {
+        AnalyzeQueryState { ctx, ..Default::default() }
     }
 
-    pub fn get_expr_analyze<const allow_aggr: bool>(&self) -> ExpressionAnalyzer {
-        let query_context = self.ctx.clone();
-        let query_tables_schema = self.tables_schema.clone();
-        ExpressionAnalyzer::with_tables(query_context, query_tables_schema)
-    }
-
-    pub fn create_analyzer(&self, schema: Arc<AnalyzedSchema>, aggr: bool) -> ExpressionAnalyzer {
+    pub fn create_analyzer(&self, schema: AnalyzeQuerySchema, aggr: bool) -> ExpressionAnalyzer {
         let query_context = self.ctx.clone();
         ExpressionAnalyzer::with_source(query_context, schema, aggr)
     }
@@ -293,16 +291,6 @@ impl AnalyzeData {
     pub fn add_aggregate_function(&mut self, expr: &Expression) -> Result<bool> {
         let aggregate_exprs = find_aggregate_exprs_in_expr(&expr);
         let aggregate_exprs_require_expression = expand_aggregate_arg_exprs(&aggregate_exprs);
-
-        let mut expr = expr.clone();
-        if let Expression::Alias(_, inner) = &expr {
-            expr = inner.as_ref().clone();
-        }
-
-        if !aggregate_exprs.is_empty() && !self.before_having_expressions.contains(&expr) {
-            self.before_having_expressions.push(expr);
-        }
-
 
         for require_expression in aggregate_exprs_require_expression {
             if !self.before_group_by_expressions.contains(&require_expression) {
@@ -316,6 +304,15 @@ impl AnalyzeData {
             }
         }
 
+        let mut expr = expr.clone();
+        if let Expression::Alias(_, inner) = &expr {
+            expr = inner.as_ref().clone();
+        }
+
+        if !aggregate_exprs.is_empty() && !self.before_having_expressions.contains(&expr) {
+            self.before_having_expressions.push(expr);
+        }
+
         Ok(!aggregate_exprs.is_empty())
     }
 
@@ -323,7 +320,7 @@ impl AnalyzeData {
         // We cannot reference field by name, such as `SELECT system.one.dummy`
         let context = self.ctx.as_ref();
         let dummy_table = context.get_table("system", "one")?;
-        self.tables_schema.push(TableSchema::UnNamed(dummy_table.schema()));
+        // self.tables_schema.push(TableSchema::UnNamed(dummy_table.schema()));
         Ok(())
     }
 
@@ -345,7 +342,7 @@ impl AnalyzeData {
 
         let context = &self.ctx;
         let table_function = context.get_table_function(&table_name, Some(table_args))?;
-        self.tables_schema.push(TableSchema::UnNamed(table_function.schema()));
+        // self.tables_schema.push(TableSchema::UnNamed(table_function.schema()));
         Ok(())
     }
 
@@ -359,13 +356,13 @@ impl AnalyzeData {
             None => {
                 let schema = read_table.schema();
                 // let analyzed_schema = AnalyzedSchema::unnamed_table(database, table, schema);
-                let table_schema = TableSchema::Default { database, table, schema };
+                // let table_schema = TableSchema::Default { database, table, schema };
                 self.tables_schema.push(table_schema);
             }
             Some(table_alias) => {
                 let alias = table_alias.name.value.clone();
                 // let analyzed_schema = AnalyzedSchema::named_table(alias, schema);
-                self.tables_schema.push(TableSchema::Named(alias, read_table.schema()));
+                // self.tables_schema.push(TableSchema::Named(alias, read_table.schema()));
             }
         }
 
@@ -382,13 +379,13 @@ impl AnalyzeData {
             AnalyzedResult::SelectQuery(analyzed_subquery) => match alias {
                 None => {
                     let subquery_finalize_schema = analyzed_subquery.finalize_schema.clone();
-                    self.tables_schema.push(TableSchema::UnNamed(subquery_finalize_schema));
+                    // self.tables_schema.push(TableSchema::UnNamed(subquery_finalize_schema));
                     Ok(())
                 }
                 Some(TableAlias { name, .. }) => {
                     let subquery_alias = name.value.clone();
                     let subquery_finalize_schema = analyzed_subquery.finalize_schema.clone();
-                    let named_schema = TableSchema::Named(subquery_alias, subquery_finalize_schema);
+                    // let named_schema = TableSchema::Named(subquery_alias, subquery_finalize_schema);
                     self.tables_schema.push(named_schema);
                     Ok(())
                 }
@@ -432,15 +429,15 @@ impl TryFrom<Query> for DfQueryStatement {
             return Err(ErrorCode::UnImplement("TOP is not yet implement"));
         }
 
-        if body.cluster_by.is_some() {
+        if !body.cluster_by.is_empty() {
             return Err(ErrorCode::SyntaxException("Cluster by is unsupport"));
         }
 
-        if body.sort_by.is_some() {
+        if !body.sort_by.is_empty() {
             return Err(ErrorCode::SyntaxException("Sort by is unsupport"));
         }
 
-        if body.distribute_by.is_some() {
+        if !body.distribute_by.is_empty() {
             return Err(ErrorCode::SyntaxException("Distribute by is unsupport"));
         }
 

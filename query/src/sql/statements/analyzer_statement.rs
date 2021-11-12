@@ -2,12 +2,12 @@ use common_planners::PlanNode;
 use crate::sql::DfStatement;
 use common_exception::Result;
 use crate::sessions::DatabendQueryContextRef;
-use crate::sql::statements::AnalyzeData;
+use crate::sql::statements::AnalyzeQueryState;
 
 pub enum AnalyzedResult {
     SimpleQuery(PlanNode),
-    SelectQuery(AnalyzeData),
-    ExplainQuery(AnalyzeData),
+    SelectQuery(AnalyzeQueryState),
+    ExplainQuery(AnalyzeQueryState),
 }
 
 #[async_trait::async_trait]

@@ -9,18 +9,18 @@ use std::collections::hash_map::Entry;
 use common_planners::Expression;
 
 #[derive(Clone)]
-pub struct AnalyzedSchema {
+pub struct AnalyzeQuerySchema {
     // Can be referenced by column name without ambiguity.
-    short_name_columns: HashMap<String, AnalyzedColumnDesc>,
+    short_name_columns: HashMap<String, AnalyzeQueryColumnDesc>,
     // Reference by full name, short name may be ambiguous.
-    tables_long_name_columns: Vec<AnalyzedTableDesc>,
+    tables_long_name_columns: Vec<AnalyzeQueryTableDesc>,
 }
 
-impl AnalyzedSchema {
-    pub async fn from_dummy_table(ctx: DatabendQueryContextRef) -> Result<Arc<AnalyzedSchema>> {
+impl AnalyzeQuerySchema {
+    pub async fn from_dummy_table(ctx: DatabendQueryContextRef) -> Result<AnalyzeQuerySchema> {
         // We cannot reference field by name, such as `SELECT system.one.dummy`
         let dummy_table = ctx.get_table("system", "one")?;
-        let dummy_table_dsc = AnalyzedTableDesc::from_schema(dummy_table.schema(), vec![]);
+        let dummy_table_dsc = AnalyzeQueryTableDesc::from_schema(dummy_table.schema(), vec![]);
         let mut short_name_columns = HashMap::new();
 
         for column_desc in &dummy_table_dsc.columns_desc {
@@ -34,15 +34,13 @@ impl AnalyzedSchema {
             };
         }
 
-        Ok(Arc::new(
-            AnalyzedSchema {
-                short_name_columns,
-                tables_long_name_columns: vec![dummy_table_dsc],
-            }
-        ))
+        Ok(AnalyzeQuerySchema {
+            short_name_columns,
+            tables_long_name_columns: vec![dummy_table_dsc],
+        })
     }
 
-    pub async fn from_table(ctx: DatabendQueryContextRef, name: &ObjectName, alias: &Option<TableAlias>) -> Result<Arc<AnalyzedSchema>> {
+    pub async fn from_table(ctx: DatabendQueryContextRef, name: &ObjectName, alias: &Option<TableAlias>) -> Result<AnalyzeQuerySchema> {
         let (database, table) = Self::resolve_table(name, &ctx)?;
 
         let resolved_table = ctx.get_table(&database, &table)?;
@@ -62,15 +60,11 @@ impl AnalyzedSchema {
         unimplemented!("")
     }
 
-    pub fn clone_schema(&self) -> Arc<AnalyzedSchema> {
-        Arc::new(self.clone())
-    }
-
     pub fn contains_column(&self, column_name: &str) -> bool {
         self.short_name_columns.contains_key(column_name)
     }
 
-    pub fn get_column_by_fullname(&self, fullname: &[String]) -> Option<&AnalyzedColumnDesc> {
+    pub fn get_column_by_fullname(&self, fullname: &[String]) -> Option<&AnalyzeQueryColumnDesc> {
         for table_desc in &self.tables_long_name_columns {
             if table_desc.name_parts.len() > fullname.len()
                 && table_desc.name_parts[..] == fullname[0..fullname.len() - 1] {
@@ -87,7 +81,7 @@ impl AnalyzedSchema {
         None
     }
 
-    pub fn add_projection(&mut self, desc: AnalyzedColumnDesc, replace: bool) -> Result<()> {
+    pub fn add_projection(&mut self, desc: AnalyzeQueryColumnDesc, replace: bool) -> Result<()> {
         let short_name = desc.short_name.clone();
 
         if replace || !self.short_name_columns.contains_key(&short_name) {
@@ -121,12 +115,12 @@ impl AnalyzedSchema {
         Arc::new(DataSchema::new(fields))
     }
 
-    pub fn join(&self, _joined_schema: &AnalyzedSchema) -> Result<Arc<AnalyzedSchema>> {
+    pub fn join(&self, _joined_schema: &AnalyzeQuerySchema) -> Result<Arc<AnalyzeQuerySchema>> {
         unimplemented!("")
     }
 }
 
-impl AnalyzedSchema {
+impl AnalyzeQuerySchema {
     fn resolve_table(name: &ObjectName, ctx: &DatabendQueryContext) -> Result<(String, String)> {
         match name.0.len() {
             0 => Err(ErrorCode::SyntaxException("Table name is empty")),
@@ -137,27 +131,27 @@ impl AnalyzedSchema {
     }
 }
 
-impl Debug for AnalyzedSchema {
+impl Debug for AnalyzeQuerySchema {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         todo!()
     }
 }
 
 #[derive(Clone)]
-struct AnalyzedTableDesc {
+struct AnalyzeQueryTableDesc {
     name_parts: Vec<String>,
-    columns_desc: Vec<AnalyzedColumnDesc>,
+    columns_desc: Vec<AnalyzeQueryColumnDesc>,
 }
 
-impl AnalyzedTableDesc {
-    pub fn from_schema(schema: DataSchemaRef, prefix: Vec<String>) -> AnalyzedTableDesc {
+impl AnalyzeQueryTableDesc {
+    pub fn from_schema(schema: DataSchemaRef, prefix: Vec<String>) -> AnalyzeQueryTableDesc {
         let mut columns_desc = Vec::with_capacity(schema.fields().len());
 
         for data_field in schema.fields() {
-            columns_desc.push(AnalyzedColumnDesc::from_field(data_field, false));
+            columns_desc.push(AnalyzeQueryColumnDesc::from_field(data_field, false));
         }
 
-        AnalyzedTableDesc {
+        AnalyzeQueryTableDesc {
             name_parts: prefix,
             columns_desc,
         }
@@ -165,16 +159,16 @@ impl AnalyzedTableDesc {
 }
 
 #[derive(Clone)]
-pub struct AnalyzedColumnDesc {
+pub struct AnalyzeQueryColumnDesc {
     short_name: String,
     data_type: DataType,
     nullable: bool,
     is_ambiguity: bool,
 }
 
-impl AnalyzedColumnDesc {
-    pub fn from_field(field: &DataField, is_ambiguity: bool) -> AnalyzedColumnDesc {
-        AnalyzedColumnDesc {
+impl AnalyzeQueryColumnDesc {
+    pub fn from_field(field: &DataField, is_ambiguity: bool) -> AnalyzeQueryColumnDesc {
+        AnalyzeQueryColumnDesc {
             short_name: field.name().clone(),
             data_type: field.data_type().clone(),
             nullable: field.is_nullable(),
@@ -182,8 +176,8 @@ impl AnalyzedColumnDesc {
         }
     }
 
-    pub fn create(alias: &str, data_type: DataType, nullable: bool) -> AnalyzedColumnDesc {
-        AnalyzedColumnDesc {
+    pub fn create(alias: &str, data_type: DataType, nullable: bool) -> AnalyzeQueryColumnDesc {
+        AnalyzeQueryColumnDesc {
             short_name: alias.to_string(),
             data_type,
             nullable,
@@ -198,7 +192,7 @@ impl AnalyzedColumnDesc {
         // (SELECT column_a FROM table_b),
         // (SELECT 'failure' AS `table_b.column_a` FROM table_c)
         match self.is_ambiguity {
-            true => format!("{}.{}", self.name_prefix.join("."), self.short_name),
+            true => unimplemented!(),
             false => self.short_name.clone()
         }
     }

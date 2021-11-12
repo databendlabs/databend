@@ -67,7 +67,7 @@ use sqlparser::ast::UnaryOperator;
 use crate::catalogs::ToReadDataSourcePlan;
 use crate::functions::ContextFunction;
 use crate::sessions::DatabendQueryContextRef;
-use crate::sql::statements::{DfCreateTable, AnalyzeData, QueryRelation};
+use crate::sql::statements::{DfCreateTable, AnalyzeQueryState, QueryRelation};
 use crate::sql::statements::DfDropDatabase;
 use crate::sql::statements::DfUseDatabase;
 use crate::sql::statements::DfCreateDatabase;
@@ -118,7 +118,7 @@ impl PlanParser {
         }
     }
 
-    pub fn build_query_plan(data: &AnalyzeData) -> Result<PlanNode> {
+    pub fn build_query_plan(data: &AnalyzeQueryState) -> Result<PlanNode> {
         let from = Self::build_from_plan(data)?;
         let filter = Self::build_filter_plan(from, data)?;
         let group_by = Self::build_group_by_plan(filter, data)?;
@@ -129,22 +129,22 @@ impl PlanParser {
         Self::build_limit_plan(projection, data)
     }
 
-    fn build_explain_plan(data: &AnalyzeData, ctx: &DatabendQueryContextRef) -> Result<PlanNode> {
+    fn build_explain_plan(data: &AnalyzeQueryState, ctx: &DatabendQueryContextRef) -> Result<PlanNode> {
         let query_plan = Self::build_query_plan(data)?;
         // Ok(PlanNode::Explain(ExplainPlan {}))
         unimplemented!("")
     }
 
-    fn build_from_plan(data: &AnalyzeData) -> Result<PlanNode> {
+    fn build_from_plan(data: &AnalyzeQueryState) -> Result<PlanNode> {
         match data.relation.map(AsRef::as_ref) {
             None => Err(ErrorCode::LogicalError("Not from in select query")),
-            Some(QueryRelation::Nested(data)) => Self::build_query_plan(data),
+            Some(QueryRelation::Nested(data)) => Self::build_query_plan(&data),
             Some(QueryRelation::FromTable(plan)) => Ok(PlanNode::ReadSource(plan.clone()))
         }
     }
 
     /// Apply a filter to the plan
-    fn build_filter_plan(plan: PlanNode, data: &AnalyzeData) -> Result<PlanNode> {
+    fn build_filter_plan(plan: PlanNode, data: &AnalyzeQueryState) -> Result<PlanNode> {
         match &data.filter_predicate {
             None => Ok(plan),
             Some(predicate) => {
@@ -155,7 +155,7 @@ impl PlanParser {
         }
     }
 
-    fn build_group_by_plan(plan: PlanNode, data: &AnalyzeData) -> Result<PlanNode> {
+    fn build_group_by_plan(plan: PlanNode, data: &AnalyzeQueryState) -> Result<PlanNode> {
         // S0: Apply a partial aggregator plan.
         // S1: Apply a fragment plan for distributed planners split.
         // S2: Apply a final aggregator plan.
@@ -174,7 +174,7 @@ impl PlanParser {
         builder.build()
     }
 
-    fn build_having_plan(plan: PlanNode, data: &AnalyzeData) -> Result<PlanNode> {
+    fn build_having_plan(plan: PlanNode, data: &AnalyzeQueryState) -> Result<PlanNode> {
         let mut builder = PlanBuilder::from(&plan);
 
         if !data.before_having_expressions.is_empty() {
@@ -196,7 +196,7 @@ impl PlanParser {
         builder.build()
     }
 
-    fn build_order_by_plan(plan: PlanNode, data: &AnalyzeData) -> Result<PlanNode> {
+    fn build_order_by_plan(plan: PlanNode, data: &AnalyzeQueryState) -> Result<PlanNode> {
         match data.order_by_expressions.is_empty() {
             true => Ok(plan),
             false => PlanBuilder::from(&plan)
@@ -205,13 +205,13 @@ impl PlanParser {
         }
     }
 
-    fn build_projection_plan(plan: PlanNode, data: &AnalyzeData) -> Result<PlanNode> {
+    fn build_projection_plan(plan: PlanNode, data: &AnalyzeQueryState) -> Result<PlanNode> {
         PlanBuilder::from(&plan)
             .project(&data.projection_expressions)?
             .build()
     }
 
-    fn build_limit_plan(input: PlanNode, data: &AnalyzeData) -> Result<PlanNode> {
+    fn build_limit_plan(input: PlanNode, data: &AnalyzeQueryState) -> Result<PlanNode> {
         unimplemented!("")
     }
 }

@@ -98,11 +98,11 @@ impl DfInsertStatement {
             return Err(ErrorCode::SyntaxException("Unsupport insert overwrite statement."));
         }
 
-        if self.partitioned {
+        if self.partitioned.is_some() {
             return Err(ErrorCode::SyntaxException("Unsupport insert ... partition statement."));
         }
 
-        if self.after_columns {
+        if !self.after_columns.is_empty() {
             return Err(ErrorCode::SyntaxException("Unsupport specify columns after partitions."));
         }
 
