@@ -39,7 +39,8 @@ pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
 }
 
 pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<()> {
-    let srv = FlightServer::create(tc.config.clone());
+    let mn = MetaNode::start(&tc.config.raft_config).await?;
+    let srv = FlightServer::create(tc.config.clone(), mn);
     let (stop_tx, fin_rx) = srv.start().await?;
 
     tc.channels = Some((stop_tx, fin_rx));
@@ -62,7 +63,7 @@ pub struct MetaSrvTestContext {
 
     pub meta_nodes: Vec<Arc<MetaNode>>,
 
-    /// channel to send to stop kvsrv, and channel for waiting for shutdown to finish.
+    /// channel to send to stop metasrv, and channel for waiting for shutdown to finish.
     pub channels: Option<(oneshot::Sender<()>, oneshot::Receiver<()>)>,
 }
 

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightServiceServer;
 use common_base::tokio;
 use common_base::tokio::sync::oneshot;
@@ -32,11 +34,12 @@ use crate::meta_service::MetaNode;
 
 pub struct FlightServer {
     conf: Config,
+    meta_node: Arc<MetaNode>,
 }
 
 impl FlightServer {
-    pub fn create(conf: Config) -> Self {
-        Self { conf }
+    pub fn create(conf: Config, meta_node: Arc<MetaNode>) -> Self {
+        Self { conf, meta_node }
     }
 
     /// Start metasrv and returns two channel to send shutdown signal and receive signal when shutdown finished.
@@ -82,16 +85,7 @@ impl FlightServer {
 
         tracing::info!("flight addr: {}", addr);
 
-        tracing::info!(
-            "Starting MetaNode boot:{} single: {} with config: {:?}",
-            self.conf.raft_config.boot,
-            self.conf.raft_config.single,
-            self.conf
-        );
-
-        let mn = MetaNode::start(&self.conf.raft_config).await?;
-
-        let flight_impl = MetaFlightImpl::create(self.conf.clone(), mn.clone());
+        let flight_impl = MetaFlightImpl::create(self.conf.clone(), self.meta_node.clone());
         let flight_srv = FlightServiceServer::new(flight_impl);
 
         let builder = Server::builder();
@@ -117,7 +111,7 @@ impl FlightServer {
             })
             .await;
 
-        let _ = mn.stop().await;
+        let _ = self.meta_node.stop().await;
         let s = fin_tx.send(());
         tracing::info!(
             "metasrv sending signal of finishing shutdown {}: res: {:?}",
@@ -127,7 +121,7 @@ impl FlightServer {
 
         tracing::info!("metasrv returning");
 
-        res.map_err_to_code(ErrorCode::KVSrvError, || "metasrv error")
+        res.map_err_to_code(ErrorCode::MetaSrvError, || "metasrv error")
     }
 
     async fn tls_config(conf: &Config) -> anyhow::Result<Option<ServerTlsConfig>> {
