@@ -227,7 +227,7 @@ build_exceptions! {
 
     // KVSrv server error
 
-    KVSrvError(2501),
+    MetaSrvError(2501),
 
     // FS error
 
