@@ -19,8 +19,6 @@ use common_base::tokio;
 use common_base::tokio::sync::oneshot;
 use common_base::GlobalSequence;
 use common_tracing::tracing;
-use tempfile::tempdir;
-use tempfile::TempDir;
 
 use crate::api::FlightServer;
 use crate::configs;
@@ -57,9 +55,6 @@ pub fn next_port() -> u32 {
 }
 
 pub struct MetaSrvTestContext {
-    #[allow(dead_code)]
-    temp_raft_dir: TempDir,
-
     // /// To hold a per-case logging guard
     // #[allow(dead_code)]
     // logging_guard: (WorkerGuard, DefaultGuard),
@@ -112,15 +107,9 @@ pub fn new_test_context(id: u64) -> MetaSrvTestContext {
         config.metric_api_address = format!("{}:{}", host, metric_port);
     }
 
-    let temp_raft_dir = tempdir().expect("create temp dir to store meta");
-    config.raft_config.raft_dir = temp_raft_dir.path().to_str().unwrap().to_string();
-
     tracing::info!("new test context config: {:?}", config);
 
     MetaSrvTestContext {
-        // The TempDir type creates a directory on the file system that is deleted once it goes out of scope
-        // So hold the tmp_meta_dir and tmp_local_fs_dir until being dropped.
-        temp_raft_dir,
         config,
         meta_nodes: vec![],
 
