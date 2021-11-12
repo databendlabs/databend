@@ -136,7 +136,7 @@ async fn test_meta_cluster_write_on_non_leader() -> anyhow::Result<()> {
         tracing::info!("--- add node 1 as non-voter");
 
         let config = tc1.config.raft_config.clone();
-        let (mn1, _is_open) = MetaNode::open_create_boot(&config, None, Some(()), None).await?;
+        let mn1 = MetaNode::open_create_boot(&config, None, Some(()), None).await?;
 
         assert_meta_connection(&addr0).await?;
 
