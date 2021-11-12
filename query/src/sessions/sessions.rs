@@ -24,9 +24,9 @@ use common_base::SignalStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_metrics::label_counter;
 use futures::future::Either;
 use futures::StreamExt;
-use common_metrics::label_counter;
 
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
@@ -88,7 +88,11 @@ impl SessionManager {
     }
 
     pub fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {
-        label_counter(super::metrics::METRIC_SESSION_CONNECT_NUMBERS, &self.conf.query.tenant, &self.conf.query.namespace);
+        label_counter(
+            super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
+            &self.conf.query.tenant,
+            &self.conf.query.namespace,
+        );
 
         let mut sessions = self.active_sessions.write();
         match sessions.len() == self.max_sessions {
@@ -110,7 +114,11 @@ impl SessionManager {
     }
 
     pub fn create_rpc_session(self: &Arc<Self>, id: String, aborted: bool) -> Result<SessionRef> {
-        label_counter(super::metrics::METRIC_SESSION_CONNECT_NUMBERS, &self.conf.query.tenant, &self.conf.query.namespace);
+        label_counter(
+            super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
+            &self.conf.query.tenant,
+            &self.conf.query.namespace,
+        );
 
         let mut sessions = self.active_sessions.write();
 
@@ -142,7 +150,11 @@ impl SessionManager {
 
     #[allow(clippy::ptr_arg)]
     pub fn destroy_session(self: &Arc<Self>, session_id: &String) {
-        label_counter(super::metrics::METRIC_SESSION_CLOSE_NUMBERS, &self.conf.query.tenant, &self.conf.query.namespace);
+        label_counter(
+            super::metrics::METRIC_SESSION_CLOSE_NUMBERS,
+            &self.conf.query.tenant,
+            &self.conf.query.namespace,
+        );
 
         self.active_sessions.write().remove(session_id);
     }

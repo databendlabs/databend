@@ -24,5 +24,5 @@ pub use dump::MetricValue;
 pub use dump::SummaryCount;
 pub use metrics_exporter_prometheus::PrometheusHandle;
 pub use recorder::init_default_metrics_recorder;
-pub use recorder::try_handle;
 pub use recorder::label_counter;
+pub use recorder::try_handle;
