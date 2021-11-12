@@ -42,7 +42,7 @@ use crate::meta_service::MetaNode;
 use crate::proto::meta_service_client::MetaServiceClient;
 use crate::tests::assert_meta_connection;
 use crate::tests::service::new_test_context;
-use crate::tests::service::KVSrvTestContext;
+use crate::tests::service::MetaSrvTestContext;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_boot() -> anyhow::Result<()> {
@@ -52,10 +52,10 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let tc = new_test_context();
+    let tc = new_test_context(0);
     let addr = tc.config.raft_config.raft_api_addr();
 
-    let mn = MetaNode::boot(0, &tc.config.raft_config).await?;
+    let mn = MetaNode::boot(&tc.config.raft_config).await?;
 
     let got = mn.get_node(&0).await?;
     assert_eq!(addr, got.unwrap().address);
@@ -273,12 +273,12 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     // Create a snapshot every 10 logs
     let snap_logs = 10;
 
-    let mut tc = new_test_context();
+    let mut tc = new_test_context(0);
     tc.config.raft_config.snapshot_logs_since_last = snap_logs;
     tc.config.raft_config.install_snapshot_timeout = 10_1000; // milli seconds. In a CI multi-threads test delays async task badly.
     let addr = tc.config.raft_config.raft_api_addr();
 
-    let mn = MetaNode::boot(0, &tc.config.raft_config).await?;
+    let mn = MetaNode::boot(&tc.config.raft_config).await?;
 
     assert_meta_connection(&addr).await?;
 
@@ -399,9 +399,8 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     tracing::info!("--- bring up non-voter 2");
 
     let node_id = 2;
-    let tc2 = new_test_context();
-    let mut raft_config = tc2.config.raft_config.clone();
-    raft_config.id = node_id;
+    let tc2 = new_test_context(node_id);
+    let raft_config = tc2.config.raft_config.clone();
     let addr2 = raft_config.raft_api_addr();
 
     let (mn2, is_open) = MetaNode::open_create_boot(&raft_config, None, Some(()), None).await?;
@@ -432,9 +431,8 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     tracing::info!("--- bring up non-voter 3");
 
     let node_id = 3;
-    let tc3 = new_test_context();
-    let mut raft_config = tc3.config.raft_config.clone();
-    raft_config.id = node_id;
+    let tc3 = new_test_context(node_id);
+    let raft_config = tc3.config.raft_config.clone();
     let addr3 = raft_config.raft_api_addr();
 
     let (mn3, is_open) = MetaNode::open_create_boot(&raft_config, None, Some(()), None).await?;
@@ -619,7 +617,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
 async fn setup_cluster(
     voters: BTreeSet<NodeId>,
     non_voters: BTreeSet<NodeId>,
-) -> anyhow::Result<(u64, Vec<KVSrvTestContext>)> {
+) -> anyhow::Result<(u64, Vec<MetaSrvTestContext>)> {
     // TODO(xp): use setup_cluster if possible in tests. Get rid of boilerplate snippets.
     // leader is always node-0
     assert!(voters.contains(&0));
@@ -684,16 +682,16 @@ async fn setup_cluster(
     Ok((nlog, rst))
 }
 
-async fn setup_leader() -> anyhow::Result<(NodeId, KVSrvTestContext)> {
+async fn setup_leader() -> anyhow::Result<(NodeId, MetaSrvTestContext)> {
     // Setup a cluster in which there is a leader and a non-voter.
     // asserts states are consistent
 
     let nid = 0;
-    let mut tc = new_test_context();
+    let mut tc = new_test_context(nid);
     let addr = tc.config.raft_config.raft_api_addr();
 
     // boot up a single-node cluster
-    let mn = MetaNode::boot(nid, &tc.config.raft_config).await?;
+    let mn = MetaNode::boot(&tc.config.raft_config).await?;
     tc.meta_nodes.push(mn.clone());
 
     {
@@ -714,8 +712,8 @@ async fn setup_leader() -> anyhow::Result<(NodeId, KVSrvTestContext)> {
 async fn setup_non_voter(
     leader: Arc<MetaNode>,
     id: NodeId,
-) -> anyhow::Result<(NodeId, KVSrvTestContext)> {
-    let mut tc = new_test_context();
+) -> anyhow::Result<(NodeId, MetaSrvTestContext)> {
+    let mut tc = new_test_context(0);
     let addr = tc.config.raft_config.raft_api_addr();
 
     let mut raft_config = tc.config.raft_config.clone();
@@ -881,7 +879,7 @@ fn timeout() -> Option<Duration> {
     Some(Duration::from_millis(10000))
 }
 
-fn test_context_nodes(tcs: &[KVSrvTestContext]) -> Vec<Arc<MetaNode>> {
+fn test_context_nodes(tcs: &[MetaSrvTestContext]) -> Vec<Arc<MetaNode>> {
     tcs.iter()
         .map(|tc| tc.meta_nodes[0].clone())
         .collect::<Vec<_>>()
