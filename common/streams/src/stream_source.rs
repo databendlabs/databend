@@ -12,33 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::task::Context;
-use std::task::Poll;
-
-use common_datablocks::DataBlock;
+use async_stream::stream;
 use common_exception::Result;
-use pin_project_lite::pin_project;
 
+use crate::SendableDataBlockStream;
 use crate::Source;
 
-pin_project! {
-    pub struct SourceStream {
-        source: Box<dyn Source>,
-    }
+pub struct SourceStream {
+    source: Box<dyn Source>,
 }
 
 impl SourceStream {
-    pub fn create(source: Box<dyn Source>) -> Self {
+    pub fn new(source: Box<dyn Source>) -> Self {
         SourceStream { source }
     }
-}
 
-impl futures::Stream for SourceStream {
-    type Item = Result<DataBlock>;
-
-    fn poll_next(self: std::pin::Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let this = self.project();
-        let block = this.source.read()?;
-        Poll::Ready(block.map(Ok))
+    pub async fn execute(self) -> Result<SendableDataBlockStream> {
+        let mut source = self.source;
+        let s = stream! {
+            loop {
+                let block =  source.read().await;
+                match block {
+                    Ok(None) => break,
+                    Ok(Some(b)) =>  yield(Ok(b)),
+                    Err(e) => yield(Err(e)),
+                }
+            }
+        };
+        Ok(Box::pin(s))
     }
 }

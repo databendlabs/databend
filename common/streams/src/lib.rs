@@ -39,7 +39,7 @@ mod stream_sub_queries;
 mod stream_take;
 
 pub use sources::*;
-pub use stream::SendableDataBlockStream;
+pub use stream::*;
 pub use stream_abort::AbortStream;
 pub use stream_correct_with_schema::CorrectWithSchemaStream;
 pub use stream_datablock::DataBlockStream;

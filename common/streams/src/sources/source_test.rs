@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::tokio;
 use common_datablocks::assert_blocks_eq;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
@@ -21,8 +22,8 @@ use crate::CsvSource;
 use crate::Source;
 use crate::ValueSource;
 
-#[test]
-fn test_parse_values() {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_parse_values() {
     let buffer =
         "(1,  'str',   1) , (-1, ' str ' ,  1.1) , ( 2,  'aa aa', 2.2),  (3, \"33'33\", 3.3)   ";
 
@@ -32,7 +33,7 @@ fn test_parse_values() {
         DataField::new("c", DataType::Float64, false),
     ]);
     let mut values_source = ValueSource::new(buffer.as_bytes(), schema, 10);
-    let block = values_source.read().unwrap().unwrap();
+    let block = values_source.read().await.unwrap().unwrap();
     assert_blocks_eq(
         vec![
             "+----+-------+-----+",
@@ -47,12 +48,12 @@ fn test_parse_values() {
         &[block],
     );
 
-    let block = values_source.read().unwrap();
+    let block = values_source.read().await.unwrap();
     assert!(block.is_none());
 }
 
-#[test]
-fn test_parse_csvs() {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_parse_csvs() {
     let buffer = "1,\"1\",1.11\n2,\"2\",2\n3,\"3-'3'-3\",3\n";
 
     let schema = DataSchemaRefExt::create(vec![
@@ -61,7 +62,7 @@ fn test_parse_csvs() {
         DataField::new("c", DataType::Float64, false),
     ]);
     let mut values_source = CsvSource::new(buffer.as_bytes(), schema, 10);
-    let block = values_source.read().unwrap().unwrap();
+    let block = values_source.read().await.unwrap().unwrap();
     assert_blocks_eq(
         vec![
             "+---+---------+------+",
@@ -75,6 +76,6 @@ fn test_parse_csvs() {
         &[block],
     );
 
-    let block = values_source.read().unwrap();
+    let block = values_source.read().await.unwrap();
     assert!(block.is_none());
 }

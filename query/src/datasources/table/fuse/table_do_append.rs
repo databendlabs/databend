@@ -18,11 +18,11 @@ use std::sync::Arc;
 use common_context::IOContext;
 use common_context::TableIOContext;
 use common_datavalues::DataSchema;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_planners::InsertIntoPlan;
+use common_streams::SendableDataBlockStream;
 use uuid::Uuid;
 
 use crate::datasources::table::fuse::util;
@@ -39,25 +39,15 @@ impl FuseTable {
         &self,
         io_ctx: Arc<TableIOContext>,
         insert_plan: InsertIntoPlan,
+        stream: SendableDataBlockStream,
     ) -> Result<()> {
-        // 1. take out input stream from plan
-        //    Assumes that, insert_interpreter has properly batched data blocks
-        let block_stream = {
-            match insert_plan.input_stream.lock().take() {
-                Some(s) => s,
-                None => return Err(ErrorCode::EmptyData("input stream consumed")),
-            }
-        };
-
+        // 1. get da
         let da = io_ctx.get_data_accessor()?;
 
         // 2. Append blocks to storage
-        let segment_info = BlockAppender::append_blocks(
-            da.clone(),
-            block_stream,
-            self.table_info.schema().as_ref(),
-        )
-        .await?;
+        let segment_info =
+            BlockAppender::append_blocks(da.clone(), stream, self.table_info.schema().as_ref())
+                .await?;
 
         // 3. save segment info
         let seg_loc = util::gen_segment_info_location();

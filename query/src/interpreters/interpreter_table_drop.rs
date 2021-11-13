@@ -41,7 +41,10 @@ impl Interpreter for DropTableInterpreter {
         "DropTableInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute(
+        &self,
+        _input_stream: Option<SendableDataBlockStream>,
+    ) -> Result<SendableDataBlockStream> {
         let catalog = self.ctx.get_catalog();
         catalog.drop_table(self.plan.clone()).await?;
 

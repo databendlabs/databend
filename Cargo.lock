@@ -1524,6 +1524,7 @@ dependencies = [
  "common-functions",
  "common-infallible",
  "common-meta-types",
+ "common-streams",
  "futures",
  "lazy_static",
  "pretty_assertions",
@@ -1534,6 +1535,8 @@ dependencies = [
 name = "common-streams"
 version = "0.1.0"
 dependencies = [
+ "async-stream",
+ "async-trait",
  "common-arrow",
  "common-base",
  "common-datablocks",
@@ -1544,6 +1547,7 @@ dependencies = [
  "futures",
  "pin-project-lite",
  "pretty_assertions",
+ "tokio-stream",
 ]
 
 [[package]]

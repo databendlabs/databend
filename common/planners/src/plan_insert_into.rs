@@ -12,15 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
-use common_infallible::Mutex;
 use common_meta_types::MetaId;
-
-type BlockStream =
-    std::pin::Pin<Box<dyn futures::stream::Stream<Item = DataBlock> + Sync + Send + 'static>>;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct InsertIntoPlan {
@@ -29,8 +23,7 @@ pub struct InsertIntoPlan {
     pub tbl_id: MetaId,
     pub schema: DataSchemaRef,
 
-    #[serde(skip, default = "InsertIntoPlan::empty_stream")]
-    pub input_stream: Arc<Mutex<Option<BlockStream>>>,
+    pub values_opt: Option<String>,
 }
 
 impl PartialEq for InsertIntoPlan {
@@ -42,14 +35,7 @@ impl PartialEq for InsertIntoPlan {
 }
 
 impl InsertIntoPlan {
-    pub fn empty_stream() -> Arc<Mutex<Option<BlockStream>>> {
-        Arc::new(Mutex::new(None))
-    }
     pub fn schema(&self) -> DataSchemaRef {
         self.schema.clone()
-    }
-    pub fn set_input_stream(&self, input_stream: BlockStream) {
-        let mut writer = self.input_stream.lock();
-        *writer = Some(input_stream);
     }
 }

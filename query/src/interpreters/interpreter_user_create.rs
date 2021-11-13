@@ -48,8 +48,11 @@ impl Interpreter for CreatUserInterpreter {
         "CreateUserInterpreter"
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    #[tracing::instrument(level = "info", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
+    async fn execute(
+        &self,
+        _input_stream: Option<SendableDataBlockStream>,
+    ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
         let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
         let user_info = UserInfo {

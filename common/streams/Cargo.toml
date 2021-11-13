@@ -21,6 +21,10 @@ common-io = {path = "../io"}
 crossbeam = "0.8"
 futures = "0.3"
 pin-project-lite = "^0.2"
+async-trait = "0.1"
+async-stream = "0.3.2"
+tokio-stream = { version = "0.1", features = ["net"] }
+
 
 [dev-dependencies]
 pretty_assertions = "1.0"

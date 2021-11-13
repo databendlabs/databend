@@ -178,6 +178,7 @@ pub trait Table: Sync + Send {
         &self,
         _ctx: DatabendQueryContextRef,
         _insert_plan: InsertIntoPlan,
+        _stream: SendableDataBlockStream,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
             "append data for local table {} is not implemented",

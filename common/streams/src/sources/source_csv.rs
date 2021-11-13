@@ -14,6 +14,7 @@
 
 use std::io;
 
+use async_trait::async_trait;
 use common_arrow::arrow::io::csv::read::ByteRecord;
 use common_arrow::arrow::io::csv::read::Reader;
 use common_arrow::arrow::io::csv::read::ReaderBuilder;
@@ -47,10 +48,11 @@ where R: io::Read + Sync + Send
     }
 }
 
+#[async_trait]
 impl<R> Source for CsvSource<R>
 where R: io::Read + Sync + Send
 {
-    fn read(&mut self) -> Result<Option<DataBlock>> {
+    async fn read(&mut self) -> Result<Option<DataBlock>> {
         let mut record = ByteRecord::new();
         let mut desers = self
             .schema

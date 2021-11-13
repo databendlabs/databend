@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 
+#[async_trait]
 pub trait Source: Sync + Send {
-    fn read(&mut self) -> Result<Option<DataBlock>>;
+    async fn read(&mut self) -> Result<Option<DataBlock>>;
 }
 
 #[allow(dead_code)]
