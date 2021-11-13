@@ -388,6 +388,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     // - Bring up a cluster
     // - Join a new node by sending a Join request to leader.
     // - Join a new node by sending a Join request to a non-voter.
+    // - Restart all nodes and check if states are restored.
 
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
@@ -395,30 +396,24 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     let span = tracing::span!(tracing::Level::INFO, "test_meta_node_join");
     let _ent = span.enter();
 
-    let (mut _nlog, tcs) = setup_cluster(btreeset![0], btreeset![1]).await?;
+    let (mut _nlog, mut tcs) = setup_cluster(btreeset![0], btreeset![1]).await?;
     let mut all = test_context_nodes(&tcs);
+    let tc0 = tcs.remove(0);
+    let tc1 = tcs.remove(0);
 
     tracing::info!("--- bring up non-voter 2");
 
     let node_id = 2;
     let tc2 = new_test_context(node_id);
-
     let mn2 = MetaNode::open_create_boot(&tc2.config.raft_config, None, Some(()), None).await?;
-    assert!(!mn2.is_opened());
 
     tracing::info!("--- join non-voter 2 to cluster by leader");
 
     let leader_id = all[0].get_leader().await;
     let leader = all[leader_id as usize].clone();
-    leader
-        .handle_admin_req(AdminRequest {
-            forward_to_leader: false,
-            req: AdminRequestInner::Join(JoinRequest {
-                node_id,
-                address: tc2.config.raft_config.raft_api_addr(),
-            }),
-        })
-        .await?;
+
+    let admin_req = join_req(node_id, tc2.config.raft_config.raft_api_addr(), false);
+    leader.handle_admin_req(admin_req).await?;
 
     all.push(mn2.clone());
 
@@ -436,22 +431,14 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
 
     let node_id = 3;
     let tc3 = new_test_context(node_id);
-
     let mn3 = MetaNode::open_create_boot(&tc3.config.raft_config, None, Some(()), None).await?;
-    assert!(!mn3.is_opened());
 
-    tracing::info!("--- join node-3 by sending rpc `join`");
+    tracing::info!("--- join node-3 by sending rpc `join` to a non-leader");
     {
-        let to_addr = tcs[1].config.raft_config.raft_api_addr();
+        let to_addr = tc1.config.raft_config.raft_api_addr();
 
         let mut client = MetaServiceClient::connect(format!("http://{}", to_addr)).await?;
-        let admin_req = AdminRequest {
-            forward_to_leader: true,
-            req: AdminRequestInner::Join(JoinRequest {
-                node_id,
-                address: tc3.config.raft_config.raft_api_addr(),
-            }),
-        };
+        let admin_req = join_req(node_id, tc3.config.raft_config.raft_api_addr(), true);
         client.forward(admin_req).await?;
     }
 
@@ -463,6 +450,105 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
             .wait(timeout())
             .members(
                 btreeset! {0,2,3},
+                format!("node-3 is joined: {}", mn.sto.id),
+            )
+            .await?;
+    }
+
+    tracing::info!("--- stop all meta node");
+
+    for mn in all.drain(..) {
+        mn.stop().await?;
+    }
+
+    tracing::info!("--- re-open all meta node");
+
+    let mn0 = MetaNode::open_create_boot(&tc0.config.raft_config, Some(()), None, None).await?;
+    let mn1 = MetaNode::open_create_boot(&tc1.config.raft_config, Some(()), None, None).await?;
+    let mn2 = MetaNode::open_create_boot(&tc2.config.raft_config, Some(()), None, None).await?;
+    let mn3 = MetaNode::open_create_boot(&tc3.config.raft_config, Some(()), None, None).await?;
+
+    let all = vec![mn0, mn1, mn2, mn3];
+
+    tracing::info!("--- check reopened memberships");
+
+    for mn in all.iter() {
+        mn.raft
+            .wait(timeout())
+            .members(btreeset! {0,2,3}, format!("node-{} membership", mn.sto.id))
+            .await?;
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
+async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
+    // - Bring up a cluster
+    // - Join a new node.
+    // - Join another new node twice.
+
+    let (_log_guards, ut_span) = init_meta_ut!();
+    let _ent = ut_span.enter();
+
+    let span = tracing::span!(tracing::Level::INFO, "test_meta_node_join_rejoin");
+    let _ent = span.enter();
+
+    let (mut _nlog, mut tcs) = setup_cluster(btreeset![0], btreeset![]).await?;
+    let mut all = test_context_nodes(&tcs);
+    let _tc0 = tcs.remove(0);
+
+    tracing::info!("--- bring up non-voter 1");
+
+    let node_id = 1;
+    let tc1 = new_test_context(node_id);
+    let mn1 = MetaNode::open_create_boot(&tc1.config.raft_config, None, Some(()), None).await?;
+
+    tracing::info!("--- join non-voter 1 to cluster");
+
+    let leader_id = all[0].get_leader().await;
+    let leader = all[leader_id as usize].clone();
+    let req = join_req(node_id, tc1.config.raft_config.raft_api_addr(), false);
+    leader.handle_admin_req(req).await?;
+
+    all.push(mn1.clone());
+
+    tracing::info!("--- check all nodes has node-1 joined");
+    {
+        for mn in all.iter() {
+            mn.raft
+                .wait(timeout())
+                .members(btreeset! {0,1}, format!("node-1 is joined: {}", mn.sto.id))
+                .await?;
+        }
+    }
+
+    tracing::info!("--- bring up non-voter 3");
+
+    let node_id = 2;
+    let tc2 = new_test_context(node_id);
+    let mn2 = MetaNode::open_create_boot(&tc2.config.raft_config, None, Some(()), None).await?;
+
+    tracing::info!("--- join node-2 by sending rpc `join` to a non-leader");
+    {
+        let req = join_req(node_id, tc2.config.raft_config.raft_api_addr(), true);
+        leader.handle_admin_req(req).await?;
+    }
+    tracing::info!("--- join node-2 again");
+    {
+        let req = join_req(node_id, tc2.config.raft_config.raft_api_addr(), true);
+        mn1.handle_admin_req(req).await?;
+    }
+
+    all.push(mn2.clone());
+
+    tracing::info!("--- check all nodes has node-3 joined");
+
+    for mn in all.iter() {
+        mn.raft
+            .wait(timeout())
+            .members(
+                btreeset! {0,1,2},
                 format!("node-2 is joined: {}", mn.sto.id),
             )
             .await?;
@@ -625,11 +711,11 @@ async fn setup_cluster(
     assert!(voters.contains(&0));
     assert!(!non_voters.contains(&0));
 
-    let mut rst = vec![];
+    let mut res = vec![];
 
     let (_id, tc0) = setup_leader().await?;
     let leader = tc0.meta_nodes[0].clone();
-    rst.push(tc0);
+    res.push(tc0);
 
     // blank log and add node
     let mut nlog = 2;
@@ -646,7 +732,7 @@ async fn setup_cluster(
         nlog += 1;
         wait_for_log(&tc.meta_nodes[0], nlog).await?;
 
-        rst.push(tc);
+        res.push(tc);
     }
 
     for id in non_voters.iter() {
@@ -656,7 +742,7 @@ async fn setup_cluster(
         nlog += 1;
         wait_for_log(&tc.meta_nodes[0], nlog).await?;
 
-        rst.push(tc);
+        res.push(tc);
     }
 
     leader.raft.change_membership(voters.clone()).await?;
@@ -666,22 +752,22 @@ async fn setup_cluster(
     {
         wait_for_state(&leader, State::Leader).await?;
 
-        for item in rst.iter().take(voters.len()).skip(1) {
+        for item in res.iter().take(voters.len()).skip(1) {
             wait_for_state(&item.meta_nodes[0], State::Follower).await?;
         }
-        for item in rst.iter().skip(voters.len()).take(non_voters.len()) {
+        for item in res.iter().skip(voters.len()).take(non_voters.len()) {
             wait_for_state(&item.meta_nodes[0], State::NonVoter).await?;
         }
     }
 
     tracing::info!("--- check node logs");
     {
-        for item in &rst {
-            wait_for_log(&item.meta_nodes[0], nlog).await?;
+        for tc in &res {
+            wait_for_log(&tc.meta_nodes[0], nlog).await?;
         }
     }
 
-    Ok((nlog, rst))
+    Ok((nlog, res))
 }
 
 async fn setup_leader() -> anyhow::Result<(NodeId, MetaSrvTestContext)> {
@@ -715,11 +801,10 @@ async fn setup_non_voter(
     leader: Arc<MetaNode>,
     id: NodeId,
 ) -> anyhow::Result<(NodeId, MetaSrvTestContext)> {
-    let mut tc = new_test_context(0);
+    let mut tc = new_test_context(id);
     let addr = tc.config.raft_config.raft_api_addr();
 
-    let mut raft_config = tc.config.raft_config.clone();
-    raft_config.id = id;
+    let raft_config = tc.config.raft_config.clone();
 
     let mn = MetaNode::open_create_boot(&raft_config, None, Some(()), None).await?;
     assert!(!mn.is_opened());
@@ -746,6 +831,13 @@ async fn setup_non_voter(
     }
 
     Ok((id, tc))
+}
+
+fn join_req(node_id: NodeId, address: String, forward: bool) -> AdminRequest {
+    AdminRequest {
+        forward_to_leader: forward,
+        req: AdminRequestInner::Join(JoinRequest { node_id, address }),
+    }
 }
 
 /// Write one log on leader, check all nodes replicated the log.

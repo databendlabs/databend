@@ -10,13 +10,34 @@ killall databend-meta
 sleep 1
 
 echo 'Start Meta service HA cluster(3 nodes)...'
-nohup ./target/debug/databend-meta --single true --id 1 &
+nohup ./target/debug/databend-meta \
+    --single true \
+    --id     1    \
+    &
 python scripts/ci/wait_tcp.py --timeout 5 --port 9191
 
-nohup ./target/debug/databend-meta --id 2 --raft-dir "./_meta2" --metric-api-address 0.0.0.0:29000 --admin-api-address 0.0.0.0:29002 --flight-api-address 0.0.0.0:29003 --log-dir ./_logs2 --raft-api-port 29009 --join 127.0.0.1:28004 &
+nohup ./target/debug/databend-meta \
+    --id                 2               \
+    --raft-dir           "./_meta2"      \
+    --metric-api-address 0.0.0.0:29000   \
+    --admin-api-address  0.0.0.0:29002   \
+    --flight-api-address 0.0.0.0:29003   \
+    --log-dir            ./_logs2        \
+    --raft-api-port      29009           \
+    --join               127.0.0.1:28004 \
+    &
 python scripts/ci/wait_tcp.py --timeout 5 --port 29000
 
-nohup ./target/debug/databend-meta --id 3 --raft-dir "./_meta3" --metric-api-address 0.0.0.0:30000 --admin-api-address 0.0.0.0:30002 --flight-api-address 0.0.0.0:30003 --log-dir ./_logs3 --raft-api-port 30009 --join 127.0.0.1:28004 127.0.0.1:30009 &
+nohup ./target/debug/databend-meta  \
+    --id                 3               \
+    --raft-dir           "./_meta3"      \
+    --metric-api-address 0.0.0.0:30000   \
+    --admin-api-address  0.0.0.0:30002   \
+    --flight-api-address 0.0.0.0:30003   \
+    --log-dir            ./_logs3        \
+    --raft-api-port      30009           \
+    --join               127.0.0.1:28004 127.0.0.1:30009 \
+    &
 python scripts/ci/wait_tcp.py --timeout 5 --port 30000
 
 # not work configure(for now) (error config)
@@ -52,3 +73,5 @@ echo "Waiting on node-3..."
 python scripts/ci/wait_tcp.py --timeout 5 --port 9093
 
 echo "All done..."
+
+
