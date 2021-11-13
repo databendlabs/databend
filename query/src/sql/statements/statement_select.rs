@@ -87,8 +87,7 @@ impl AnalyzableStatement for DfQueryStatement {
         }
 
         // TODO: check and finalize
-
-        unimplemented!()
+        Ok(AnalyzedResult::SelectQuery(data))
     }
 }
 
@@ -124,7 +123,7 @@ impl DfQueryStatement {
                     let nullable = field.is_nullable();
                     let data_type = field.data_type().clone();
                     let column_desc = AnalyzeQueryColumnDesc::create(alias, data_type, nullable);
-                    data.before_aggr_schema.add_projection(column_desc, true);
+                    data.before_aggr_schema.add_projection(column_desc, true)?;
                 }
             }
         }

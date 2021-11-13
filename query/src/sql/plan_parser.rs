@@ -86,15 +86,9 @@ use crate::sql::SQLCommon;
 use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
 use std::borrow::Borrow;
 
-pub struct PlanParser {
-    ctx: DatabendQueryContextRef,
-}
+pub struct PlanParser;
 
 impl PlanParser {
-    pub fn create(ctx: DatabendQueryContextRef) -> Self {
-        Self { ctx }
-    }
-
     pub async fn parse(query: &str, ctx: DatabendQueryContextRef) -> Result<PlanNode> {
         let (statements, _) = DfParser::parse_sql(query)?;
         PlanParser::build_plan(statements, ctx).await

@@ -105,17 +105,6 @@ impl AnalyzeQuerySchema {
     }
 }
 
-impl AnalyzeQuerySchema {
-    fn resolve_table(name: &ObjectName, ctx: &DatabendQueryContext) -> Result<(String, String)> {
-        match name.0.len() {
-            0 => Err(ErrorCode::SyntaxException("Table name is empty")),
-            1 => Ok((ctx.get_current_database(), name.0[0].value.clone())),
-            2 => Ok((name.0[0].value.clone(), name.0[1].value.clone())),
-            _ => Err(ErrorCode::SyntaxException("Table name must be [`db`].`table`"))
-        }
-    }
-}
-
 impl Debug for AnalyzeQuerySchema {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         todo!()

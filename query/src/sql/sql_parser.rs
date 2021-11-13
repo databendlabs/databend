@@ -497,11 +497,11 @@ impl<'a> DfParser<'a> {
     }
 
     // Parse 'KILL statement'.
-    fn parse_kill<const kill_query: bool>(&mut self) -> Result<DfStatement, ParserError> {
+    fn parse_kill<const KILL_QUERY: bool>(&mut self) -> Result<DfStatement, ParserError> {
         Ok(DfStatement::KillStatement(
             DfKillStatement {
                 object_id: self.parser.parse_identifier()?,
-                kill_query,
+                kill_query: KILL_QUERY,
             }
         ))
     }

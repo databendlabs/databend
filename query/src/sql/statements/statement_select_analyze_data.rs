@@ -6,8 +6,9 @@ use common_planners::Expression;
 use std::collections::HashMap;
 use crate::sql::statements::analyzer_schema::AnalyzeQuerySchema;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
-use crate::sql::statements::{DfQueryStatement, AnalyzableStatement, QueryRelation};
+use crate::sql::statements::{DfQueryStatement, AnalyzableStatement, QueryRelation, AnalyzedResult};
 use std::convert::TryFrom;
+use common_datavalues::DataSchemaRef;
 
 pub struct AnalyzeQueryState {
     pub ctx: DatabendQueryContextRef,
@@ -25,7 +26,7 @@ pub struct AnalyzeQueryState {
     pub from_schema: AnalyzeQuerySchema,
     pub before_aggr_schema: AnalyzeQuerySchema,
     pub after_aggr_schema: AnalyzeQuerySchema,
-    // finalize_schema: DataSchemaRef,
+    pub finalize_schema: DataSchemaRef,
     pub projection_aliases: HashMap<String, Expression>,
 }
 
@@ -47,14 +48,32 @@ impl AnalyzeQueryState {
                     analyzed_tables.push(schema.await?);
                 }
                 RelationRPNItem::Derived(v) => {
-                    let subquery = &(*v.subquery);
-                    let subquery = DfQueryStatement::try_from(subquery.clone())?;
-                    let res = subquery.analyze(ctx.clone()).await?;
+                    let schema = AnalyzeQueryState::analyze_subquery(ctx.clone(), v);
+                    analyzed_tables.push(schema.await?);
                 }
             }
         }
 
         unimplemented!()
+    }
+
+    async fn analyze_subquery(ctx: DatabendQueryContextRef, v: &DerivedRPNItem) -> Result<AnalyzeQuerySchema> {
+        let subquery = &(*v.subquery);
+        let subquery = DfQueryStatement::try_from(subquery.clone())?;
+        match subquery.analyze(ctx.clone()).await? {
+            AnalyzedResult::SelectQuery(state) => match &v.alias {
+                None => {
+                    let schema = state.finalize_schema.clone();
+                    AnalyzeQuerySchema::from_schema(schema, Vec::new())
+                }
+                Some(alias) => {
+                    let schema = state.finalize_schema.clone();
+                    let name_prefix = vec![alias.name.value.clone()];
+                    AnalyzeQuerySchema::from_schema(schema, name_prefix)
+                }
+            }
+            _ => Err(ErrorCode::LogicalError("Logical error, subquery analyzed data must be SelectQuery, it's a bug.")),
+        }
     }
 
     async fn analyze_table(ctx: DatabendQueryContextRef, item: &TableRPNItem) -> Result<AnalyzeQuerySchema> {
