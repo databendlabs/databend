@@ -12,16 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::utils::convert_byte_size;
-use crate::utils::convert_number_size;
-
-#[test]
-fn convert_test() {
-    assert_eq!(convert_byte_size(1_f64), "1 B");
-    assert_eq!(convert_byte_size(1022_f64), "1.02 KB");
-    assert_eq!(convert_byte_size(1022_f64 * 10000000f64), "10.22 GB");
-
-    assert_eq!(convert_number_size(1_f64), "1");
-    assert_eq!(convert_number_size(1022_f64), "1.02 thousand");
-    assert_eq!(convert_number_size(10222_f64), "10.22 thousand");
-}
+mod binary_read;
+mod binary_write;
+mod buf_read;
+mod marshal;
+mod utils;

@@ -14,13 +14,10 @@
 
 use std::fmt;
 
+use common_io::prelude::*;
 use rand::distributions::Distribution;
 use rand::distributions::Standard;
 use rand::random;
-
-use crate::marshal::Marshal;
-use crate::stat_buffer::StatBuffer;
-use crate::unmarshal::Unmarshal;
 
 fn test_some<T>()
 where
