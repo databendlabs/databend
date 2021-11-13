@@ -64,8 +64,7 @@ impl HttpQuery {
         //TODO(youngsofun): support config/set channel size
         let (block_tx, block_rx) = mpsc::channel(10);
 
-        let state = ExecuteState::try_create(&request, session_manager, block_tx).await?;
-        let schema = state.read().await.get_schema();
+        let (state, schema) = ExecuteState::try_create(&request, session_manager, block_tx).await?;
         let data = Arc::new(TokioMutex::new(ResultDataManager::new(schema, block_rx)));
         let query = HttpQuery {
             id,

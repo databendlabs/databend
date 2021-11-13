@@ -93,7 +93,11 @@ impl ResultDataManager {
         } else if page_no == next_no - 1 {
             // later, there may be other ways to ack and drop the last page except collect_new_page.
             // but for now, last_page always exists in this branch, since page_no is unsigned.
-            Ok(self.last_page.as_ref().unwrap().clone())
+            Ok(self
+                .last_page
+                .as_ref()
+                .ok_or_else(|| ErrorCode::UnexpectedError("last_page is None"))?
+                .clone())
         } else {
             Err(ErrorCode::LogicalError("page no too large"))
         }
