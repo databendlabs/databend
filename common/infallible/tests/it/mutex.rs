@@ -12,18 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod exit_guard;
-mod mutex;
-mod rwlock;
+#[test]
+fn test_mutex() {
+    use std::sync::Arc;
+    use std::thread;
 
-pub use exit_guard::ExitGuard;
-pub use mutex::Mutex;
-pub use rwlock::RwLock;
+    use common_infallible::Mutex;
+    let a = 7u8;
+    let mutex = Arc::new(Mutex::new(a));
+    let mutex2 = mutex.clone();
+    let mutex3 = mutex.clone();
 
-#[macro_export]
-macro_rules! exit_scope {
-    ($x:block) => {
-        use common_infallible::ExitGuard;
-        let _exit_guard = ExitGuard::create(move || $x);
-    };
+    let thread1 = thread::spawn(move || {
+        let mut b = mutex2.lock();
+        *b = 8;
+    });
+    let thread2 = thread::spawn(move || {
+        let mut b = mutex3.lock();
+        *b = 9;
+    });
+
+    let _ = thread1.join();
+    let _ = thread2.join();
+
+    let _locked = mutex.lock();
 }
