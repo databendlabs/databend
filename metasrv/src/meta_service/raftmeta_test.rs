@@ -401,10 +401,8 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
 
     let node_id = 2;
     let tc2 = new_test_context(node_id);
-    let raft_config = tc2.config.raft_config.clone();
-    let addr2 = raft_config.raft_api_addr();
 
-    let mn2 = MetaNode::open_create_boot(&raft_config, None, Some(()), None).await?;
+    let mn2 = MetaNode::open_create_boot(&tc2.config.raft_config, None, Some(()), None).await?;
     assert!(!mn2.is_opened());
 
     tracing::info!("--- join non-voter 2 to cluster by leader");
@@ -416,42 +414,45 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
             forward_to_leader: false,
             req: AdminRequestInner::Join(JoinRequest {
                 node_id,
-                address: addr2,
+                address: tc2.config.raft_config.raft_api_addr(),
             }),
         })
         .await?;
 
     all.push(mn2.clone());
-    for mn in all.iter() {
-        mn.raft
-            .wait(timeout())
-            .members(btreeset! {0,2}, format!("node-2 is joined: {}", mn.sto.id))
-            .await?;
+
+    tracing::info!("--- check all nodes has node-3 joined");
+    {
+        for mn in all.iter() {
+            mn.raft
+                .wait(timeout())
+                .members(btreeset! {0,2}, format!("node-2 is joined: {}", mn.sto.id))
+                .await?;
+        }
     }
 
     tracing::info!("--- bring up non-voter 3");
 
     let node_id = 3;
     let tc3 = new_test_context(node_id);
-    let raft_config = tc3.config.raft_config.clone();
-    let addr3 = raft_config.raft_api_addr();
 
-    let mn3 = MetaNode::open_create_boot(&raft_config, None, Some(()), None).await?;
+    let mn3 = MetaNode::open_create_boot(&tc3.config.raft_config, None, Some(()), None).await?;
     assert!(!mn3.is_opened());
 
     tracing::info!("--- join node-3 by sending rpc `join`");
+    {
+        let to_addr = tcs[1].config.raft_config.raft_api_addr();
 
-    let to_addr = tcs[1].config.raft_config.raft_api_addr();
-
-    let mut client = MetaServiceClient::connect(format!("http://{}", to_addr)).await?;
-    let admin_req = AdminRequest {
-        forward_to_leader: true,
-        req: AdminRequestInner::Join(JoinRequest {
-            node_id,
-            address: addr3,
-        }),
-    };
-    client.forward(admin_req).await?;
+        let mut client = MetaServiceClient::connect(format!("http://{}", to_addr)).await?;
+        let admin_req = AdminRequest {
+            forward_to_leader: true,
+            req: AdminRequestInner::Join(JoinRequest {
+                node_id,
+                address: tc3.config.raft_config.raft_api_addr(),
+            }),
+        };
+        client.forward(admin_req).await?;
+    }
 
     tracing::info!("--- check all nodes has node-3 joined");
 

@@ -90,7 +90,7 @@ async fn test_restart() -> anyhow::Result<()> {
 
     tracing::info!("--- stop metasrv");
     {
-        let mut srv = tc.fligh_srv.take().unwrap();
+        let mut srv = tc.flight_srv.take().unwrap();
         srv.stop(None).await?;
 
         drop(client);

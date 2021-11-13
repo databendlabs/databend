@@ -216,13 +216,6 @@ impl MetaNode {
         Ok(())
     }
 
-    /// Start a metasrv node from initialized store.
-    #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
-    pub async fn open(config: &RaftConfig) -> common_exception::Result<Arc<MetaNode>> {
-        let mn = Self::open_create_boot(config, Some(()), None, None).await?;
-        Ok(mn)
-    }
-
     /// Open or create a metasrv node.
     /// Optionally boot a single node cluster.
     /// 1. If `open` is `Some`, try to open an existent one.

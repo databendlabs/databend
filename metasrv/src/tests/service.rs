@@ -47,7 +47,7 @@ pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<(
     //           Find out why and using some kind of waiting routine to ensure service is on.
     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
 
-    tc.fligh_srv = Some(Box::new(srv));
+    tc.flight_srv = Some(Box::new(srv));
     Ok(())
 }
 
@@ -63,7 +63,7 @@ pub struct MetaSrvTestContext {
 
     pub meta_nodes: Vec<Arc<MetaNode>>,
 
-    pub fligh_srv: Option<Box<FlightServer>>,
+    pub flight_srv: Option<Box<FlightServer>>,
 }
 
 /// Create a new Config for test, with unique port assigned
@@ -112,7 +112,7 @@ pub fn new_test_context(id: u64) -> MetaSrvTestContext {
     MetaSrvTestContext {
         config,
         meta_nodes: vec![],
-        fligh_srv: None,
+        flight_srv: None,
     }
 }
 
