@@ -25,17 +25,17 @@ use common_meta_types::NodeInfo;
 use common_meta_types::SeqV;
 
 use super::*;
-use crate::namespace::namespace_mgr::NamespaceMgr;
+use crate::cluster::cluster_mgr::ClusterMgr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_successfully_add_node() -> Result<()> {
     let current_time = current_seconds_time();
-    let (kv_api, namespace_api) = new_namespace_api().await?;
+    let (kv_api, cluster_api) = new_cluster_api().await?;
 
     let node_info = create_test_node_info();
-    namespace_api.add_node(node_info.clone()).await?;
+    cluster_api.add_node(node_info.clone()).await?;
     let value = kv_api
-        .get_kv("__fd_namespaces///databend_query/test_node")
+        .get_kv("__fd_clusters///databend_query/test_node")
         .await?;
 
     match value {
@@ -55,12 +55,12 @@ async fn test_successfully_add_node() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_already_exists_add_node() -> Result<()> {
-    let (_, namespace_api) = new_namespace_api().await?;
+    let (_, cluster_api) = new_cluster_api().await?;
 
     let node_info = create_test_node_info();
-    namespace_api.add_node(node_info.clone()).await?;
+    cluster_api.add_node(node_info.clone()).await?;
 
-    match namespace_api.add_node(node_info.clone()).await {
+    match cluster_api.add_node(node_info.clone()).await {
         Ok(_) => panic!("Already exists add node must be return Err."),
         Err(cause) => assert_eq!(cause.code(), 4059),
     }
@@ -70,41 +70,41 @@ async fn test_already_exists_add_node() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_successfully_get_nodes() -> Result<()> {
-    let (_, namespace_api) = new_namespace_api().await?;
+    let (_, cluster_api) = new_cluster_api().await?;
 
-    let nodes = namespace_api.get_nodes().await?;
+    let nodes = cluster_api.get_nodes().await?;
     assert_eq!(nodes, vec![]);
 
     let node_info = create_test_node_info();
-    namespace_api.add_node(node_info.clone()).await?;
+    cluster_api.add_node(node_info.clone()).await?;
 
-    let nodes = namespace_api.get_nodes().await?;
+    let nodes = cluster_api.get_nodes().await?;
     assert_eq!(nodes, vec![node_info]);
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_successfully_drop_node() -> Result<()> {
-    let (_, namespace_api) = new_namespace_api().await?;
+    let (_, cluster_api) = new_cluster_api().await?;
 
     let node_info = create_test_node_info();
-    namespace_api.add_node(node_info.clone()).await?;
+    cluster_api.add_node(node_info.clone()).await?;
 
-    let nodes = namespace_api.get_nodes().await?;
+    let nodes = cluster_api.get_nodes().await?;
     assert_eq!(nodes, vec![node_info.clone()]);
 
-    namespace_api.drop_node(node_info.id, None).await?;
+    cluster_api.drop_node(node_info.id, None).await?;
 
-    let nodes = namespace_api.get_nodes().await?;
+    let nodes = cluster_api.get_nodes().await?;
     assert_eq!(nodes, vec![]);
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_unknown_node_drop_node() -> Result<()> {
-    let (_, namespace_api) = new_namespace_api().await?;
+    let (_, cluster_api) = new_cluster_api().await?;
 
-    match namespace_api
+    match cluster_api
         .drop_node(String::from("UNKNOWN_ID"), None)
         .await
     {
@@ -118,22 +118,22 @@ async fn test_unknown_node_drop_node() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_successfully_heartbeat_node() -> Result<()> {
     let current_time = current_seconds_time();
-    let (kv_api, namespace_api) = new_namespace_api().await?;
+    let (kv_api, cluster_api) = new_cluster_api().await?;
 
     let node_info = create_test_node_info();
-    namespace_api.add_node(node_info.clone()).await?;
+    cluster_api.add_node(node_info.clone()).await?;
 
     let value = kv_api
-        .get_kv("__fd_namespaces///databend_query/test_node")
+        .get_kv("__fd_clusters///databend_query/test_node")
         .await?;
 
     assert!(value.unwrap().meta.unwrap().expire_at.unwrap() - current_time >= 60);
 
     let current_time = current_seconds_time();
-    namespace_api.heartbeat(node_info.id.clone(), None).await?;
+    cluster_api.heartbeat(node_info.id.clone(), None).await?;
 
     let value = kv_api
-        .get_kv("__fd_namespaces///databend_query/test_node")
+        .get_kv("__fd_clusters///databend_query/test_node")
         .await?;
 
     assert!(value.unwrap().meta.unwrap().expire_at.unwrap() - current_time >= 60);
@@ -156,8 +156,8 @@ fn create_test_node_info() -> NodeInfo {
     }
 }
 
-async fn new_namespace_api() -> Result<(Arc<MetaEmbedded>, NamespaceMgr)> {
+async fn new_cluster_api() -> Result<(Arc<MetaEmbedded>, ClusterMgr)> {
     let test_api = Arc::new(MetaEmbedded::new_temp().await?);
-    let namespace_manager = NamespaceMgr::new(test_api.clone(), "", "", Duration::from_secs(60))?;
-    Ok((test_api, namespace_manager))
+    let cluster_manager = ClusterMgr::new(test_api.clone(), "", "", Duration::from_secs(60))?;
+    Ok((test_api, cluster_manager))
 }

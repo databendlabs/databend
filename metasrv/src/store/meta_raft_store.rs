@@ -43,6 +43,7 @@ use common_meta_types::NodeId;
 use common_tracing::tracing;
 
 use crate::errors::ShutdownError;
+use crate::Opened;
 
 /// An storage implementing the `async_raft::RaftStorage` trait.
 ///
@@ -61,7 +62,7 @@ pub struct MetaRaftStore {
     config: RaftConfig,
 
     /// If the instance is opened from an existent state(e.g. load from disk) or created.
-    is_open: bool,
+    is_opened: bool,
 
     /// The sled db for log and raft_state.
     /// state machine is stored in another sled db since it contains user data and needs to be export/import as a whole.
@@ -90,11 +91,10 @@ pub struct MetaRaftStore {
     pub current_snapshot: RwLock<Option<Snapshot>>,
 }
 
-impl MetaRaftStore {
+impl Opened for MetaRaftStore {
     /// If the instance is opened(true) from an existent state(e.g. load from disk) or created(false).
-    /// TODO(xp): introduce a trait to define this behavior?
-    pub fn is_open(&self) -> bool {
-        self.is_open
+    fn is_opened(&self) -> bool {
+        self.is_opened
     }
 }
 
@@ -132,7 +132,7 @@ impl MetaRaftStore {
         Ok(Self {
             id: raft_state.id,
             config: config.clone(),
-            is_open,
+            is_opened: is_open,
             _db: db,
             raft_state,
             log,

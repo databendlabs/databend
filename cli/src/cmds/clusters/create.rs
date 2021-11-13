@@ -249,15 +249,16 @@ pub fn generate_local_query_config(
     config.meta.meta_username = "root".to_string();
     config.meta.meta_password = "root".to_string();
     // tenant
-    if args.value_of("query_namespace").is_some()
-        && !args.value_of("query_namespace").unwrap().is_empty()
+    if args.value_of("query_cluster_id").is_some()
+        && !args.value_of("query_cluster_id").unwrap().is_empty()
     {
-        config.query.namespace = args.value_of("query_namespace").unwrap().to_string();
+        config.query.cluster_id = args.value_of("query_cluster_id").unwrap().to_string();
     }
 
-    if args.value_of("query_tenant").is_some() && !args.value_of("query_tenant").unwrap().is_empty()
+    if args.value_of("query_tenant_id").is_some()
+        && !args.value_of("query_tenant_id").unwrap().is_empty()
     {
-        config.query.tenant = args.value_of("query_tenant").unwrap().to_string();
+        config.query.tenant_id = args.value_of("query_tenant_id").unwrap().to_string();
     }
 
     if args.value_of("num_cpus").is_some() && !args.value_of("num_cpus").unwrap().is_empty() {
@@ -763,19 +764,19 @@ impl Command for CreateCommand {
                     .default_value(""),
             )
             .arg(
-                Arg::new("query_namespace")
-                    .long("query-namespace")
-                    .env(databend_query::configs::config_query::QUERY_NAMESPACE)
+                Arg::new("query_cluster_id")
+                    .long("query-cluster-id")
+                    .env(databend_query::configs::config_query::QUERY_CLUSTER_ID)
                     .takes_value(true)
-                    .about("Set the namespace for query to work on")
+                    .about("Set the cluster for query to work on")
                     .default_value("test_cluster"),
             )
             .arg(
-                Arg::new("query_tenant")
-                    .long("query-tenant")
-                    .env(databend_query::configs::config_query::QUERY_TENANT)
+                Arg::new("query_tenant_id")
+                    .long("query-tenant-id")
+                    .env(databend_query::configs::config_query::QUERY_TENANT_ID)
                     .takes_value(true)
-                    .about("Set the tenant for query to work on")
+                    .about("Set the tenant id for query to work on")
                     .default_value("test"),
             )
             .arg(

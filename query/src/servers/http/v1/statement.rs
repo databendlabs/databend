@@ -150,7 +150,7 @@ impl HttpQueryState {
     async fn collect_all(&mut self) -> Result<Vec<Vec<JsonValue>>> {
         let mut results: Vec<Vec<Vec<JsonValue>>> = Vec::new();
         while let Some(block) = self.data_stream.next().await {
-            results.push(block_to_json(block.unwrap())?);
+            results.push(block_to_json(&block.unwrap())?);
         }
         Ok(results.concat())
     }

@@ -184,9 +184,12 @@ fn test_generate_local_query_config() -> Result<()> {
                 .mysql_handler_port,
             3307
         );
-        assert_eq!(query_config.as_ref().unwrap().config.query.tenant, "test");
         assert_eq!(
-            query_config.as_ref().unwrap().config.query.namespace,
+            query_config.as_ref().unwrap().config.query.tenant_id,
+            "test"
+        );
+        assert_eq!(
+            query_config.as_ref().unwrap().config.query.cluster_id,
             "test_cluster"
         );
         assert_eq!(
@@ -218,9 +221,9 @@ fn test_generate_local_query_config() -> Result<()> {
             "v0.4.111-nightly",
             "--num-cpus",
             "2",
-            "--query-namespace",
+            "--query-cluster-id",
             "customized_test",
-            "--query-tenant",
+            "--query-tenant-id",
             "customized_tenant",
             "--mysql-handler-port",
             "3309",
@@ -286,11 +289,11 @@ fn test_generate_local_query_config() -> Result<()> {
             3309
         );
         assert_eq!(
-            query_config.as_ref().unwrap().config.query.tenant,
+            query_config.as_ref().unwrap().config.query.tenant_id,
             "customized_tenant"
         );
         assert_eq!(
-            query_config.as_ref().unwrap().config.query.namespace,
+            query_config.as_ref().unwrap().config.query.cluster_id,
             "customized_test"
         );
         assert_eq!(

@@ -30,33 +30,33 @@ use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 
-use crate::namespace::NamespaceApi;
+use crate::cluster::ClusterApi;
 
 #[allow(dead_code)]
-pub static NAMESPACE_API_KEY_PREFIX: &str = "__fd_namespaces";
+pub static CLUSTER_API_KEY_PREFIX: &str = "__fd_clusters";
 
 #[allow(dead_code)]
-pub struct NamespaceMgr {
+pub struct ClusterMgr {
     kv_api: Arc<dyn KVApi>,
     lift_time: Duration,
-    namespace_prefix: String,
+    cluster_prefix: String,
 }
 
-impl NamespaceMgr {
+impl ClusterMgr {
     pub fn new(
         kv_api: Arc<dyn KVApi>,
-        tenant: &str,
-        namespace: &str,
+        tenant_id: &str,
+        cluster_id: &str,
         lift_time: Duration,
     ) -> Result<Self> {
-        Ok(NamespaceMgr {
+        Ok(ClusterMgr {
             kv_api,
             lift_time,
-            namespace_prefix: format!(
+            cluster_prefix: format!(
                 "{}/{}/{}/databend_query",
-                NAMESPACE_API_KEY_PREFIX,
-                Self::escape_for_key(tenant)?,
-                Self::escape_for_key(namespace)?
+                CLUSTER_API_KEY_PREFIX,
+                Self::escape_for_key(tenant_id)?,
+                Self::escape_for_key(cluster_id)?
             ),
         })
     }
@@ -133,7 +133,7 @@ impl NamespaceMgr {
 }
 
 #[async_trait::async_trait]
-impl NamespaceApi for NamespaceMgr {
+impl ClusterApi for ClusterMgr {
     async fn add_node(&self, node: NodeInfo) -> Result<u64> {
         // Only when there are no record, i.e. seq=0
         let seq = MatchSeq::Exact(0);
@@ -141,7 +141,7 @@ impl NamespaceApi for NamespaceMgr {
         let value = Operation::Update(serde_json::to_vec(&node)?);
         let node_key = format!(
             "{}/{}",
-            self.namespace_prefix,
+            self.cluster_prefix,
             Self::escape_for_key(&node.id)?
         );
         let upsert_node = self
@@ -152,22 +152,22 @@ impl NamespaceApi for NamespaceMgr {
 
         match res {
             AddResult::Ok(v) => Ok(v.seq),
-            AddResult::Exists(v) => Err(ErrorCode::NamespaceNodeAlreadyExists(format!(
-                "Namespace already exists, seq [{}]",
+            AddResult::Exists(v) => Err(ErrorCode::ClusterNodeAlreadyExists(format!(
+                "Cluster ID already exists, seq [{}]",
                 v.seq
             ))),
         }
     }
 
     async fn get_nodes(&self) -> Result<Vec<NodeInfo>> {
-        let values = self.kv_api.prefix_list_kv(&self.namespace_prefix).await?;
+        let values = self.kv_api.prefix_list_kv(&self.cluster_prefix).await?;
 
         let mut nodes_info = Vec::with_capacity(values.len());
         for (node_key, value) in values {
             let mut node_info = serde_json::from_slice::<NodeInfo>(&value.data)?;
 
             let node_key = Self::unescape_for_key(&node_key)?;
-            node_info.id = node_key[self.namespace_prefix.len() + 1..].to_string();
+            node_info.id = node_key[self.cluster_prefix.len() + 1..].to_string();
             nodes_info.push(node_info);
         }
 
@@ -177,7 +177,7 @@ impl NamespaceApi for NamespaceMgr {
     async fn drop_node(&self, node_id: String, seq: Option<u64>) -> Result<()> {
         let node_key = format!(
             "{}/{}",
-            self.namespace_prefix,
+            self.cluster_prefix,
             Self::escape_for_key(&node_id)?
         );
         let upsert_node = self.kv_api.upsert_kv(UpsertKVAction::new(
@@ -192,7 +192,7 @@ impl NamespaceApi for NamespaceMgr {
                 prev: Some(_),
                 result: None,
             } => Ok(()),
-            UpsertKVActionReply { .. } => Err(ErrorCode::NamespaceUnknownNode(format!(
+            UpsertKVActionReply { .. } => Err(ErrorCode::ClusterUnknownNode(format!(
                 "unknown node {:?}",
                 node_id
             ))),
@@ -203,7 +203,7 @@ impl NamespaceApi for NamespaceMgr {
         let meta = Some(self.new_lift_time());
         let node_key = format!(
             "{}/{}",
-            self.namespace_prefix,
+            self.cluster_prefix,
             Self::escape_for_key(&node_id)?
         );
         let seq = match seq {
@@ -220,7 +220,7 @@ impl NamespaceApi for NamespaceMgr {
                 prev: Some(_),
                 result: Some(SeqV { seq: s, .. }),
             } => Ok(s),
-            UpsertKVActionReply { .. } => Err(ErrorCode::NamespaceUnknownNode(format!(
+            UpsertKVActionReply { .. } => Err(ErrorCode::ClusterUnknownNode(format!(
                 "unknown node {:?}",
                 node_id
             ))),

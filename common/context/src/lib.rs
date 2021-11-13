@@ -20,6 +20,3 @@ pub use table_io_context::TableDataContext;
 pub use table_io_context::TableIOContext;
 
 mod table_io_context;
-
-#[cfg(test)]
-mod table_io_context_test;

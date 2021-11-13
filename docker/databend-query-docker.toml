@@ -23,7 +23,7 @@ mysql_handler_port = 3307
 clickhouse_handler_host = "0.0.0.0"
 clickhouse_handler_port = 9001
 
-namespace = "test_cluster"
+cluster_id = "test_cluster"
 
 # Log
 [log]

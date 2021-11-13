@@ -23,9 +23,11 @@ use common_macros::databend_main;
 use common_meta_sled_store::init_sled_db;
 use common_metrics::init_default_metrics_recorder;
 use common_tracing::init_tracing_with_file;
+use common_tracing::tracing;
 use databend_meta::api::FlightServer;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
+use databend_meta::meta_service::MetaNode;
 use databend_meta::metrics::MetricService;
 use log::info;
 use structopt::StructOpt;
@@ -53,6 +55,15 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     init_sled_db(conf.raft_config.raft_dir.clone());
     init_default_metrics_recorder();
 
+    tracing::info!(
+        "Starting MetaNode boot:{} single: {} with config: {:?}",
+        conf.raft_config.boot,
+        conf.raft_config.single,
+        conf
+    );
+
+    let meta_node = MetaNode::start(&conf.raft_config).await?;
+
     let mut stop_handler = StopHandle::create();
     let stop_tx = StopHandle::install_termination_handle();
 
@@ -74,7 +85,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     // Flight API service.
     {
-        let srv = FlightServer::create(conf.clone());
+        let srv = FlightServer::create(conf.clone(), meta_node);
         info!(
             "Databend-meta API server listening on {}",
             conf.flight_api_address

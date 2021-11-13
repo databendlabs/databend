@@ -30,3 +30,9 @@ pub mod executor;
 pub mod meta_service;
 pub mod metrics;
 mod store;
+
+pub trait Opened {
+    /// Return true if it is opened from a previous persistent state.
+    /// Otherwise it is just created.
+    fn is_opened(&self) -> bool;
+}

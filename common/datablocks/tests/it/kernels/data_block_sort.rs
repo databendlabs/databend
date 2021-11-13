@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datablocks::*;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-
-use crate::*;
 
 #[test]
 fn test_data_block_sort() -> Result<()> {
@@ -47,7 +46,7 @@ fn test_data_block_sort() -> Result<()> {
             "| 3 | b3 |",
             "+---+----+",
         ];
-        crate::assert_blocks_eq(expected, &[results]);
+        common_datablocks::assert_blocks_eq(expected, &[results]);
     }
 
     {
@@ -68,7 +67,7 @@ fn test_data_block_sort() -> Result<()> {
             "| 4 | b2 |",
             "+---+----+",
         ];
-        crate::assert_blocks_eq(expected, &[results]);
+        common_datablocks::assert_blocks_eq(expected, &[results]);
     }
     Ok(())
 }
@@ -112,7 +111,7 @@ fn test_data_block_merge_sort() -> Result<()> {
             "| 7 | b3 |",
             "+---+----+",
         ];
-        crate::assert_blocks_eq(expected, &[results]);
+        common_datablocks::assert_blocks_eq(expected, &[results]);
     }
 
     Ok(())

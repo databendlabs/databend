@@ -31,7 +31,7 @@ async fn test_tls_server() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let mut tc = new_test_context();
+    let mut tc = new_test_context(0);
 
     tc.config.flight_tls_server_key = TEST_SERVER_KEY.to_owned();
     tc.config.flight_tls_server_cert = TEST_SERVER_CERT.to_owned();
@@ -60,7 +60,7 @@ async fn test_tls_server_config_failure() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let mut tc = new_test_context();
+    let mut tc = new_test_context(0);
 
     tc.config.flight_tls_server_key = "../tests/data/certs/not_exist.key".to_owned();
     tc.config.flight_tls_server_cert = "../tests/data/certs/not_exist.pem".to_owned();

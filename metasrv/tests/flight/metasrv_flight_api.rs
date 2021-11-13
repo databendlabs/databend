@@ -138,12 +138,9 @@ async fn test_join() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let mut tc0 = new_test_context();
-    let mut tc1 = new_test_context();
+    let mut tc0 = new_test_context(0);
+    let mut tc1 = new_test_context(1);
 
-    tc0.config.raft_config.id = 0;
-
-    tc1.config.raft_config.id = 1;
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr()];
 

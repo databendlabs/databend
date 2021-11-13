@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datablocks::*;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-
-use crate::*;
 
 #[test]
 fn test_data_block_scatter() -> Result<()> {
@@ -46,7 +45,7 @@ fn test_data_block_scatter() -> Result<()> {
         "| 2 | 2 |",
         "+---+---+",
     ];
-    crate::assert_blocks_eq(expected, &scattered);
+    common_datablocks::assert_blocks_eq(expected, &scattered);
 
     Ok(())
 }

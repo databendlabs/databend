@@ -51,6 +51,7 @@ async fn test_configs_table() -> Result<()> {
         "| api_tls_server_root_ca_cert       |                  | query |             |",
         "| clickhouse_handler_host           | 127.0.0.1        | query |             |",
         "| clickhouse_handler_port           | 9000             | query |             |",
+        "| cluster_id                        |                  | query |             |",
         "| flight_api_address                | 127.0.0.1:9090   | query |             |",
         "| http_api_address                  | 127.0.0.1:8080   | query |             |",
         "| http_handler_host                 | 127.0.0.1        | query |             |",
@@ -66,7 +67,6 @@ async fn test_configs_table() -> Result<()> {
         "| metric_api_address                | 127.0.0.1:7070   | query |             |",
         "| mysql_handler_host                | 127.0.0.1        | query |             |",
         "| mysql_handler_port                | 3307             | query |             |",
-        "| namespace                         |                  | query |             |",
         "| num_cpus                          | 8                | query |             |",
         "| rpc_tls_meta_server_root_ca_cert  |                  | meta  |             |",
         "| rpc_tls_meta_service_domain_name  | localhost        | meta  |             |",
@@ -74,7 +74,7 @@ async fn test_configs_table() -> Result<()> {
         "| rpc_tls_query_service_domain_name | localhost        | query |             |",
         "| rpc_tls_server_cert               |                  | query |             |",
         "| rpc_tls_server_key                |                  | query |             |",
-        "| tenant                            |                  | query |             |",
+        "| tenant_id                         |                  | query |             |",
         "+-----------------------------------+------------------+-------+-------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

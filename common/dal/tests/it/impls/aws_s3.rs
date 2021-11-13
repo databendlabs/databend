@@ -11,11 +11,12 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
 use std::io::SeekFrom;
 
 use common_base::tokio;
+use common_dal::DataAccessor;
+use common_dal::S3;
 use common_exception::ErrorCode;
 use futures::AsyncReadExt;
 use futures::AsyncSeekExt;
@@ -24,9 +25,6 @@ use rusoto_core::Region;
 use rusoto_s3::PutObjectRequest;
 use rusoto_s3::S3Client;
 use rusoto_s3::S3 as RusotoS3;
-
-use crate::DataAccessor;
-use crate::S3;
 
 struct TestFixture {
     region_name: String,

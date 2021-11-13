@@ -21,7 +21,8 @@ use poem::EndpointExt;
 use poem::Route;
 
 use crate::common::service::HttpShutdownHandler;
-use crate::servers::http::v1::statement::statement_router;
+use crate::servers::http::v1::query_route;
+use crate::servers::http::v1::statement_router;
 use crate::servers::Server;
 use crate::sessions::SessionManagerRef;
 
@@ -44,7 +45,9 @@ impl HttpHandler {
                 get(poem::endpoint::make_sync(|_| "This is http handler.")),
             )
             .nest("/v1/statement", statement_router())
+            .nest("/v1/query", query_route())
             .data(self.session_manager.clone())
+            .boxed()
     }
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
         let addr = self

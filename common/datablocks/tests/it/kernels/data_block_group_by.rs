@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datablocks::*;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-
-use crate::*;
 
 #[test]
 fn test_data_block_group_by() -> Result<()> {
@@ -41,7 +40,7 @@ fn test_data_block_group_by() -> Result<()> {
                     "| 3 | x3 |",
                     "+---+----+",
                 ];
-                crate::assert_blocks_sorted_eq(expected, &[block]);
+                common_datablocks::assert_blocks_sorted_eq(expected, &[block]);
             }
             2 => {
                 let expected = vec![
@@ -52,7 +51,7 @@ fn test_data_block_group_by() -> Result<()> {
                     "| 2 | x2 |",
                     "+---+----+",
                 ];
-                crate::assert_blocks_sorted_eq(expected, &[block]);
+                common_datablocks::assert_blocks_sorted_eq(expected, &[block]);
             }
             3 => {
                 let expected = vec![
@@ -64,7 +63,7 @@ fn test_data_block_group_by() -> Result<()> {
                     "| 1 | x1 |",
                     "+---+----+",
                 ];
-                crate::assert_blocks_sorted_eq(expected, &[block]);
+                common_datablocks::assert_blocks_sorted_eq(expected, &[block]);
             }
             _ => unreachable!(),
         }
