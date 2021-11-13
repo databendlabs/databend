@@ -15,6 +15,7 @@
 //! Test arrow-flight API of metasrv
 
 use common_base::tokio;
+use common_base::Stoppable;
 use common_meta_api::KVApi;
 use common_meta_flight::MetaFlightClient;
 use common_meta_types::MatchSeq;
@@ -89,12 +90,8 @@ async fn test_restart() -> anyhow::Result<()> {
 
     tracing::info!("--- stop metasrv");
     {
-        let (stop_tx, fin_rx) = tc.channels.take().unwrap();
-        stop_tx
-            .send(())
-            .map_err(|_| anyhow::anyhow!("fail to send"))?;
-
-        fin_rx.await?;
+        let mut srv = tc.fligh_srv.take().unwrap();
+        srv.stop(None).await?;
 
         drop(client);
 

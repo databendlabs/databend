@@ -17,8 +17,6 @@ use std::sync::Arc;
 use common_base::RuntimeTracker;
 use common_base::StopHandle;
 use common_base::Stoppable;
-use common_exception::ErrorCode;
-use common_exception::ToErrorCode;
 use common_macros::databend_main;
 use common_meta_sled_store::init_sled_db;
 use common_metrics::init_default_metrics_recorder;
@@ -85,15 +83,13 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     // Flight API service.
     {
-        let srv = FlightServer::create(conf.clone(), meta_node);
+        let mut srv = FlightServer::create(conf.clone(), meta_node);
         info!(
             "Databend-meta API server listening on {}",
             conf.flight_api_address
         );
-        let (_stop_tx, fin_rx) = srv.start().await.expect("Databend-meta service error");
-        fin_rx.await.map_err_to_code(ErrorCode::TokioError, || {
-            "Cannot receive data from Flight API service fin_rx"
-        })?;
+        srv.start().await.expect("Databend-meta service error");
+        stop_handler.push(Box::new(srv));
     }
     stop_handler.wait_to_terminate(stop_tx).await;
 
