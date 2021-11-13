@@ -11,12 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
 use common_base::tokio;
 use common_exception::Result;
-
-use crate::DNSResolver;
+use common_flight_rpc::DNSResolver;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_resolver_github() -> Result<()> {
