@@ -38,6 +38,7 @@ use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::Whitespace;
 
+use crate::sql::DfAlterUser;
 use crate::sql::DfCreateDatabase;
 use crate::sql::DfCreateTable;
 use crate::sql::DfCreateUser;
@@ -152,6 +153,10 @@ impl<'a> DfParser<'a> {
                     Keyword::CREATE => {
                         self.parser.next_token();
                         self.parse_create()
+                    }
+                    Keyword::ALTER => {
+                        self.parser.next_token();
+                        self.parse_alter()
                     }
                     Keyword::DESC => {
                         self.parser.next_token();
@@ -396,6 +401,16 @@ impl<'a> DfParser<'a> {
         }
     }
 
+    fn parse_alter(&mut self) -> Result<DfStatement, ParserError> {
+        match self.parser.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::USER => self.parse_alter_user(),
+                _ => self.expected("alter statement", Token::Word(w)),
+            },
+            unexpected => self.expected("alter statement", unexpected),
+        }
+    }
+
     fn parse_create_database(&mut self) -> Result<DfStatement, ParserError> {
         let if_not_exists =
             self.parser
@@ -494,12 +509,58 @@ impl<'a> DfParser<'a> {
             String::from("%")
         };
 
+        let (auth_type, password) = self.get_auth_option()?;
+
+        let create = DfCreateUser {
+            if_not_exists,
+            name,
+            hostname,
+            auth_type,
+            password,
+        };
+
+        Ok(DfStatement::CreateUser(create))
+    }
+
+    fn parse_alter_user(&mut self) -> Result<DfStatement, ParserError> {
+        let if_current_user = self.consume_token("USER")
+            && self.parser.expect_token(&Token::LParen).is_ok()
+            && self.parser.expect_token(&Token::RParen).is_ok();
+        let name = if !if_current_user {
+            self.parser.parse_literal_string()?
+        } else {
+            String::from("")
+        };
+        let hostname = if !if_current_user {
+            if self.consume_token("@") {
+                self.parser.parse_literal_string()?
+            } else {
+                String::from("%")
+            }
+        } else {
+            String::from("")
+        };
+
+        let (auth_type, password) = self.get_auth_option()?;
+
+        let alter = DfAlterUser {
+            if_current_user,
+            name,
+            hostname,
+            new_auth_type: auth_type,
+            new_password: password,
+        };
+
+        Ok(DfStatement::AlterUser(alter))
+    }
+
+    fn get_auth_option(&mut self) -> Result<(AuthType, String), ParserError> {
         let exist_not_identified = self.parser.parse_keyword(Keyword::NOT);
         let exist_identified = self.consume_token("IDENTIFIED");
         let exist_with = self.consume_token("WITH");
 
-        let (auth_type, password) = if exist_not_identified || !exist_identified {
-            (AuthType::None, String::from(""))
+        if exist_not_identified || !exist_identified {
+            Ok((AuthType::None, String::from("")))
         } else {
             let auth_type = if exist_with {
                 match self.parser.parse_literal_string()?.as_str() {
@@ -514,27 +575,17 @@ impl<'a> DfParser<'a> {
             };
 
             if AuthType::None == auth_type {
-                (AuthType::None, String::from(""))
+                Ok((AuthType::None, String::from("")))
             } else if self.parser.parse_keyword(Keyword::BY) {
                 let password = self.parser.parse_literal_string()?;
                 if password.is_empty() {
                     return parser_err!("Missing password");
                 }
-                (auth_type, password)
+                Ok((auth_type, password))
             } else {
                 return parser_err!("Expected keyword BY");
             }
-        };
-
-        let create = DfCreateUser {
-            if_not_exists,
-            name,
-            hostname,
-            auth_type,
-            password,
-        };
-
-        Ok(DfStatement::CreateUser(create))
+        }
     }
 
     fn parse_create_table(&mut self) -> Result<DfStatement, ParserError> {

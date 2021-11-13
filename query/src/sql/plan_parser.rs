@@ -33,6 +33,7 @@ use common_planners::rebase_expr_from_input;
 use common_planners::resolve_aliases_to_exprs;
 use common_planners::sort_to_inner_expr;
 use common_planners::unwrap_alias_exprs;
+use common_planners::AlterUserPlan;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::CreateUserPlan;
@@ -72,6 +73,7 @@ use crate::sessions::DatabendQueryContextRef;
 use crate::sql::sql_statement::DfCreateTable;
 use crate::sql::sql_statement::DfDropDatabase;
 use crate::sql::sql_statement::DfUseDatabase;
+use crate::sql::DfAlterUser;
 use crate::sql::DfCreateDatabase;
 use crate::sql::DfCreateUser;
 use crate::sql::DfDescribeTable;
@@ -178,6 +180,7 @@ impl PlanParser {
             DfStatement::ShowUsers(_) => {
                 self.build_from_sql("SELECT * FROM system.users ORDER BY name")
             }
+            DfStatement::AlterUser(v) => self.sql_alter_user_to_plan(v),
         }
     }
 
@@ -344,6 +347,17 @@ impl PlanParser {
             password: Vec::from(create.password.clone()),
             hostname: create.hostname.clone(),
             auth_type: create.auth_type.clone(),
+        }))
+    }
+
+    #[tracing::instrument(level = "info", skip(self, alter), fields(ctx.id = self.ctx.get_id().as_str()))]
+    pub fn sql_alter_user_to_plan(&self, alter: &DfAlterUser) -> Result<PlanNode> {
+        Ok(PlanNode::AlterUser(AlterUserPlan {
+            if_current_user: alter.if_current_user,
+            name: alter.name.clone(),
+            new_password: Vec::from(alter.new_password.clone()),
+            hostname: alter.hostname.clone(),
+            new_auth_type: alter.new_auth_type.clone(),
         }))
     }
 

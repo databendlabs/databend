@@ -25,6 +25,7 @@ use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
+use crate::AlterUserPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
 use crate::CreateUserPlan;
@@ -106,6 +107,7 @@ pub trait PlanRewriter {
             PlanNode::TruncateTable(plan) => self.rewrite_truncate_table(plan),
             PlanNode::Kill(plan) => self.rewrite_kill(plan),
             PlanNode::CreateUser(plan) => self.create_user(plan),
+            PlanNode::AlterUser(plan) => self.alter_user(plan),
         }
     }
 
@@ -339,6 +341,10 @@ pub trait PlanRewriter {
 
     fn create_user(&mut self, plan: &CreateUserPlan) -> Result<PlanNode> {
         Ok(PlanNode::CreateUser(plan.clone()))
+    }
+
+    fn alter_user(&mut self, plan: &AlterUserPlan) -> Result<PlanNode> {
+        Ok(PlanNode::AlterUser(plan.clone()))
     }
 }
 

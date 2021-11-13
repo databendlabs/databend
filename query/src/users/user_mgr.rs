@@ -119,7 +119,7 @@ impl UserManager {
         }
     }
 
-    // Drop a user by name.
+    // Drop a user by name and hostname.
     pub async fn drop_user(&self, username: &str, hostname: &str) -> Result<()> {
         let drop_user =
             self.api_provider
@@ -127,6 +127,27 @@ impl UserManager {
         match drop_user.await {
             Ok(res) => Ok(res),
             Err(failure) => Err(failure.add_message_back("(while drop user).")),
+        }
+    }
+
+    // Update a user by name and hostname.
+    pub async fn update_user(
+        &self,
+        username: &str,
+        hostname: &str,
+        new_auth_type: Option<AuthType>,
+        new_password: Option<Vec<u8>>,
+    ) -> Result<Option<u64>> {
+        let update_user = self.api_provider.update_user(
+            username.to_string(),
+            hostname.to_string(),
+            new_password,
+            new_auth_type,
+            None,
+        );
+        match update_user.await {
+            Ok(res) => Ok(res),
+            Err(failure) => Err(failure.add_message_back("(while alter user).")),
         }
     }
 }

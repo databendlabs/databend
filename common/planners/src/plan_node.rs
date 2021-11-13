@@ -22,6 +22,7 @@ use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
+use crate::AlterUserPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
 use crate::CreateUserPlan;
@@ -80,6 +81,7 @@ pub enum PlanNode {
     SubQueryExpression(SubQueriesSetPlan),
     Kill(KillPlan),
     CreateUser(CreateUserPlan),
+    AlterUser(AlterUserPlan),
 }
 
 impl PlanNode {
@@ -115,6 +117,7 @@ impl PlanNode {
             PlanNode::SubQueryExpression(v) => v.schema(),
             PlanNode::Kill(v) => v.schema(),
             PlanNode::CreateUser(v) => v.schema(),
+            PlanNode::AlterUser(v) => v.schema(),
         }
     }
 
@@ -149,6 +152,7 @@ impl PlanNode {
             PlanNode::SubQueryExpression(_) => "CreateSubQueriesSets",
             PlanNode::Kill(_) => "KillQuery",
             PlanNode::CreateUser(_) => "CreateUser",
+            PlanNode::AlterUser(_) => "AlterUser",
         }
     }
 

@@ -505,3 +505,126 @@ fn create_user_test() -> Result<()> {
     )?;
     Ok(())
 }
+
+#[test]
+fn alter_user_test() -> Result<()> {
+    expect_parse_ok(
+        "ALTER USER 'test'@'localhost' IDENTIFIED BY 'password'",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            new_auth_type: AuthType::Sha256,
+            new_password: String::from("password"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "ALTER USER USER() IDENTIFIED BY 'password'",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: true,
+            name: String::from(""),
+            hostname: String::from(""),
+            new_auth_type: AuthType::Sha256,
+            new_password: String::from("password"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "ALTER USER 'test'@'localhost' IDENTIFIED WITH plaintext_password BY 'password'",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            new_auth_type: AuthType::PlainText,
+            new_password: String::from("password"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "ALTER USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY 'password'",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            new_auth_type: AuthType::Sha256,
+            new_password: String::from("password"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "ALTER USER 'test'@'localhost' IDENTIFIED WITH double_sha1_password BY 'password'",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            new_auth_type: AuthType::DoubleSha1,
+            new_password: String::from("password"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "ALTER USER 'test'@'localhost' IDENTIFIED WITH no_password",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            new_auth_type: AuthType::None,
+            new_password: String::from(""),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "ALTER USER 'test@localhost' IDENTIFIED WITH sha256_password BY 'password'",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            name: String::from("test@localhost"),
+            hostname: String::from("%"),
+            new_auth_type: AuthType::Sha256,
+            new_password: String::from("password"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "ALTER USER 'test'@'localhost' NOT IDENTIFIED",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            new_auth_type: AuthType::None,
+            new_password: String::from(""),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "ALTER USER 'test'@'localhost'",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            new_auth_type: AuthType::None,
+            new_password: String::from(""),
+        }),
+    )?;
+
+    expect_parse_err(
+        "ALTER USER 'test'@'localhost' IDENTIFIED WITH no_password BY 'password'",
+        String::from("sql parser error: Expected end of statement, found: BY"),
+    )?;
+
+    expect_parse_err(
+        "ALTER USER 'test'@'localhost' IDENTIFIED WITH sha256_password",
+        String::from("sql parser error: Expected keyword BY"),
+    )?;
+
+    expect_parse_err(
+        "ALTER USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY",
+        String::from("sql parser error: Expected literal string, found: EOF"),
+    )?;
+
+    expect_parse_err(
+        "ALTER USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY ''",
+        String::from("sql parser error: Missing password"),
+    )?;
+    Ok(())
+}
