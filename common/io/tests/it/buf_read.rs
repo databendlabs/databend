@@ -14,7 +14,7 @@
 
 use std::io::BufReader;
 
-use crate::buf_read::BufReadExt;
+use common_io::prelude::*;
 
 #[test]
 fn test_buf_read() {

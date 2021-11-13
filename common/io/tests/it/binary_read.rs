@@ -15,8 +15,7 @@
 use std::io::Cursor;
 
 use common_exception::Result;
-
-use crate::prelude::*;
+use common_io::prelude::*;
 
 #[test]
 fn test_write_and_read() -> Result<()> {
