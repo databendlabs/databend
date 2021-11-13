@@ -18,12 +18,21 @@ use std::sync::Once;
 use common_infallible::RwLock;
 use common_tracing::tracing;
 use lazy_static::lazy_static;
+use metrics::counter;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use metrics_exporter_prometheus::PrometheusHandle;
 
 lazy_static! {
     static ref PROMETHEUS_HANDLE: Arc<RwLock<Option<PrometheusHandle>>> =
         Arc::new(RwLock::new(None));
+}
+
+pub fn label_counter(name: &'static str, tenant: &str, cluster_name: &str) {
+    let labels = [
+        ("tenant", tenant.to_string()),
+        ("cluster_name", cluster_name.to_string()),
+    ];
+    counter!(name, 1, &labels);
 }
 
 pub fn init_default_metrics_recorder() {
