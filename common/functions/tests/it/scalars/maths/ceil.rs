@@ -55,26 +55,31 @@ fn test_ceil_function() -> Result<()> {
             expect: Ok(Series::new(vec![-1_f64]).into()),
         },
         Test {
-            name: "ceil(true)",
-            func: CeilFunction::try_create("ceil")?,
-            arg: DataColumnWithField::new(
-                Series::new([true]).into(),
-                DataField::new("arg1", DataType::Boolean, true),
-            ),
-            expect: Err(ErrorCode::IllegalDataType(
-                "Expected numeric types, but got Boolean",
-            )),
-        },
-        Test {
             name: "ceil('123')",
             func: CeilFunction::try_create("ceil")?,
             arg: DataColumnWithField::new(
                 Series::new(["123"]).into(),
                 DataField::new("arg1", DataType::String, true),
             ),
-            expect: Err(ErrorCode::IllegalDataType(
-                "Expected numeric types, but got String",
-            )),
+            expect: Ok(Series::new(vec![123_f64]).into()),
+        },
+        Test {
+            name: "ceil('+123.2a1')",
+            func: CeilFunction::try_create("ceil")?,
+            arg: DataColumnWithField::new(
+                Series::new(["+123.2a1"]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(Series::new(vec![124_f64]).into()),
+        },
+        Test {
+            name: "ceil('-123.2a1')",
+            func: CeilFunction::try_create("ceil")?,
+            arg: DataColumnWithField::new(
+                Series::new(["-123.2a1"]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(Series::new(vec![-123_f64]).into()),
         },
         Test {
             name: "ceil('a')",
@@ -83,8 +88,26 @@ fn test_ceil_function() -> Result<()> {
                 Series::new(["a"]).into(),
                 DataField::new("arg1", DataType::String, true),
             ),
+            expect: Ok(Series::new(vec![0_f64]).into()),
+        },
+        Test {
+            name: "ceil('a123')",
+            func: CeilFunction::try_create("ceil")?,
+            arg: DataColumnWithField::new(
+                Series::new(["a123"]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(Series::new(vec![0_f64]).into()),
+        },
+        Test {
+            name: "ceil(true)",
+            func: CeilFunction::try_create("ceil")?,
+            arg: DataColumnWithField::new(
+                Series::new([true]).into(),
+                DataField::new("arg1", DataType::Boolean, true),
+            ),
             expect: Err(ErrorCode::IllegalDataType(
-                "Expected numeric types, but got String",
+                "Expected numeric types, but got Boolean",
             )),
         },
     ];

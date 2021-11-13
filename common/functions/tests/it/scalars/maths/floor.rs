@@ -55,26 +55,31 @@ fn test_floor_function() -> Result<()> {
             expect: Ok(Series::new(vec![-3_f64]).into()),
         },
         Test {
-            name: "floor(true)",
-            func: FloorFunction::try_create("floor")?,
-            arg: DataColumnWithField::new(
-                Series::new([true]).into(),
-                DataField::new("arg1", DataType::Boolean, true),
-            ),
-            expect: Err(ErrorCode::IllegalDataType(
-                "Expected numeric types, but got Boolean",
-            )),
-        },
-        Test {
             name: "floor('123')",
             func: FloorFunction::try_create("floor")?,
             arg: DataColumnWithField::new(
                 Series::new(["123"]).into(),
                 DataField::new("arg1", DataType::String, true),
             ),
-            expect: Err(ErrorCode::IllegalDataType(
-                "Expected numeric types, but got String",
-            )),
+            expect: Ok(Series::new(vec![123_f64]).into()),
+        },
+        Test {
+            name: "floor('+123.8a1')",
+            func: FloorFunction::try_create("floor")?,
+            arg: DataColumnWithField::new(
+                Series::new(["+123.8a1"]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(Series::new(vec![123_f64]).into()),
+        },
+        Test {
+            name: "floor('-123.2a1')",
+            func: FloorFunction::try_create("floor")?,
+            arg: DataColumnWithField::new(
+                Series::new(["-123.2a1"]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(Series::new(vec![-124_f64]).into()),
         },
         Test {
             name: "floor('a')",
@@ -83,8 +88,26 @@ fn test_floor_function() -> Result<()> {
                 Series::new(["a"]).into(),
                 DataField::new("arg1", DataType::String, true),
             ),
+            expect: Ok(Series::new(vec![0_f64]).into()),
+        },
+        Test {
+            name: "floor('a123')",
+            func: FloorFunction::try_create("floor")?,
+            arg: DataColumnWithField::new(
+                Series::new(["a123"]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(Series::new(vec![0_f64]).into()),
+        },
+        Test {
+            name: "floor(true)",
+            func: FloorFunction::try_create("floor")?,
+            arg: DataColumnWithField::new(
+                Series::new([true]).into(),
+                DataField::new("arg1", DataType::Boolean, true),
+            ),
             expect: Err(ErrorCode::IllegalDataType(
-                "Expected numeric types, but got String",
+                "Expected numeric types, but got Boolean",
             )),
         },
     ];

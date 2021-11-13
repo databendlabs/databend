@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt;
+use std::str;
 
 use common_datavalues::prelude::ArrayApply;
 use common_datavalues::prelude::DataColumn;
@@ -21,6 +22,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use regex::Regex;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
@@ -81,6 +83,22 @@ impl Function for FloorFunction {
                     .apply_cast_numeric(|v| v.floor());
                 let column: DataColumn = result.into();
                 Ok(column)
+            }
+            DataType::String => {
+                let re = Regex::new(r"^((\-)?|(\+)?)(\d+)(\.\d+)?").unwrap();
+                let result = columns[0]
+                    .column()
+                    .to_minimal_array()?
+                    .cast_with_type(&DataType::String)?
+                    .string()?
+                    .apply_cast_numeric(|f| {
+                        if let Some(caps) = re.captures(str::from_utf8(f).unwrap()) {
+                            caps[0].parse::<f64>().unwrap().floor()
+                        } else {
+                            0_f64
+                        }
+                    });
+                Ok(result.into())
             }
             _ => Err(ErrorCode::IllegalDataType(format!(
                 "Expected numeric types, but got {}",
