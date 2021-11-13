@@ -18,14 +18,6 @@ use nom::character::complete::digit1;
 use nom::character::complete::multispace0;
 use nom::character::complete::multispace1;
 use nom::IResult;
-use sqlparser::ast::ColumnDef;
-use sqlparser::ast::Expr;
-use sqlparser::ast::Ident;
-use sqlparser::ast::ObjectName;
-use sqlparser::ast::SqlOption;
-use sqlparser::ast::Statement as SQLStatement;
-
-use common_planners::ExplainType;
 
 use crate::sql::statements::{DfCreateDatabase, DfInsertStatement, DfQueryStatement, DfSetVariable};
 use crate::sql::statements::DfCreateTable;

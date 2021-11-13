@@ -54,7 +54,6 @@ use crate::sql::statements::DfShowTables;
 use crate::sql::DfStatement;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
-use crate::sql::DfStatement::Query;
 use std::convert::TryFrom;
 
 // Use `Parser::expected` instead, if possible
@@ -223,7 +222,7 @@ impl<'a> DfParser<'a> {
     }
 
     fn parse_query(&mut self) -> Result<DfStatement, ParserError> {
-        self.parser.prev_token();
+        // self.parser.prev_token();
         let native_query = self.parser.parse_query()?;
         Ok(DfStatement::Query(DfQueryStatement::try_from(native_query)?))
     }

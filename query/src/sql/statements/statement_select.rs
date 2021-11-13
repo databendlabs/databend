@@ -1,17 +1,9 @@
-use std::collections::HashMap;
-use std::convert::TryFrom;
-use std::sync::Arc;
+use sqlparser::ast::{Expr, Offset, OrderByExpr, SelectItem, TableWithJoins};
 
-use sqlparser::ast::{Expr, FunctionArg, ObjectName, Offset, OrderByExpr, Query, Select, SelectItem, SetExpr, TableAlias, TableFactor, TableWithJoins};
-use sqlparser::parser::ParserError;
-
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::future::Future;
-use common_datavalues::{DataSchema, DataSchemaRef};
 use common_exception::{ErrorCode, Result};
-use common_planners::{expand_aggregate_arg_exprs, expr_as_column_expr, Expression, Expressions, extract_aliases, find_aggregate_exprs, find_aggregate_exprs_in_expr, PlanNode, ReadDataSourcePlan, rebase_expr, resolve_aliases_to_exprs};
+use common_planners::{expand_aggregate_arg_exprs, expr_as_column_expr, Expression, extract_aliases, find_aggregate_exprs_in_expr, ReadDataSourcePlan, rebase_expr, resolve_aliases_to_exprs};
 
-use crate::catalogs::ToReadDataSourcePlan;
-use crate::sessions::{DatabendQueryContext, DatabendQueryContextRef};
+use crate::sessions::{DatabendQueryContextRef};
 use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
 use crate::sql::statements::analyzer_expr::{ExpressionAnalyzer};
 use crate::sql::statements::analyzer_schema::{AnalyzeQuerySchema, AnalyzeQueryColumnDesc};
@@ -34,56 +26,36 @@ pub enum QueryRelation {
     Nested(Box<AnalyzeQueryState>),
 }
 
-// pub struct AnalyzeQueryState {
-//     ctx: DatabendQueryContextRef,
-//
-//     pub relation: Option<Box<QueryRelation>>,
-//     pub filter_predicate: Option<Expression>,
-//     pub before_group_by_expressions: Vec<Expression>,
-//     pub group_by_expressions: Vec<Expression>,
-//     pub aggregate_expressions: Vec<Expression>,
-//     pub before_having_expressions: Vec<Expression>,
-//     pub having_predicate: Option<Expression>,
-//     pub order_by_expressions: Vec<Expression>,
-//     pub projection_expressions: Vec<Expression>,
-//
-//     from_schema: AnalyzeQuerySchema,
-//     before_aggr_schema: AnalyzeQuerySchema,
-//     after_aggr_schema: AnalyzeQuerySchema,
-//     finalize_schema: DataSchemaRef,
-//     projection_aliases: HashMap<String, Expression>,
-// }
-
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfQueryStatement {
     async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let mut data = AnalyzeQueryState::create(ctx, &self.from).await?;
 
         if let Err(cause) = self.analyze_filter(&mut data).await {
-            return Err(cause.add_message_back("(while in analyze select filter)."));
+            return Err(cause.add_message_back(" (while in analyze select filter)."));
         }
 
         // We will analyze the projection before GROUP BY, HAVING, and ORDER BY,
         // because they may access the columns in the projection. Such as:
         // SELECT a + 1 AS b, SUM(c) FROM table_a GROUP BY b;
         if let Err(cause) = self.analyze_projection(&mut data).await {
-            return Err(cause.add_message_back("(while in analyze select projection)."));
+            return Err(cause.add_message_back(" (while in analyze select projection)."));
         }
 
         if let Err(cause) = self.analyze_group_by(&mut data).await {
-            return Err(cause.add_message_back("(while in analyze select group by)."));
+            return Err(cause.add_message_back(" (while in analyze select group by)."));
         }
 
         if let Err(cause) = self.analyze_having(&mut data).await {
-            return Err(cause.add_message_back("(while in analyze select having)."));
+            return Err(cause.add_message_back(" (while in analyze select having)."));
         }
 
         if let Err(cause) = self.analyze_order_by(&mut data).await {
-            return Err(cause.add_message_back("(while in analyze select order by)."));
+            return Err(cause.add_message_back(" (while in analyze select order by)."));
         }
 
         if let Err(cause) = self.analyze_limit(&mut data).await {
-            return Err(cause.add_message_back("(while in analyze select limit)."));
+            return Err(cause.add_message_back(" (while in analyze select limit)."));
         }
 
         // TODO: check and finalize
@@ -95,7 +67,7 @@ impl DfQueryStatement {
     pub async fn analyze_filter(&self, data: &mut AnalyzeQueryState) -> Result<()> {
         if let Some(predicate) = &self.selection {
             // TODO: collect pushdown predicates
-            let analyze_schema = data.from_schema.clone();
+            let analyze_schema = data.joined_schema.clone();
             let expr_analyzer = data.create_analyzer(analyze_schema, false);
             data.filter_predicate = Some(expr_analyzer.analyze(predicate).await?);
         }
@@ -107,10 +79,10 @@ impl DfQueryStatement {
     pub async fn analyze_projection(&self, data: &mut AnalyzeQueryState) -> Result<()> {
         let projection_expressions = self.projection_exprs(data).await?;
         // TODO: expand_wildcard
-        data.before_aggr_schema = data.from_schema.clone();
+        data.before_aggr_schema = data.joined_schema.clone();
         data.projection_aliases = extract_aliases(&projection_expressions);
 
-        let from_schema = data.from_schema.to_data_schema();
+        let from_schema = data.joined_schema.to_data_schema();
         for projection_expression in &projection_expressions {
             if !data.add_aggregate_function(projection_expression)? {
                 if !data.before_group_by_expressions.contains(projection_expression) {
@@ -209,7 +181,7 @@ impl DfQueryStatement {
         // SELECT column_a + 1 AS alias_b, alias_b + 1 AS alias_c FROM table_name_1;
         // This is also not supported in MySQL, but maybe we should to support it?
 
-        let source = data.from_schema.clone();
+        let source = data.joined_schema.clone();
         let query_context = data.ctx.clone();
         let expr_analyzer = ExpressionAnalyzer::with_source(query_context, source, true);
 

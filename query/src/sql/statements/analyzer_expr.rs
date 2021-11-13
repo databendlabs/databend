@@ -1,17 +1,14 @@
 use std::convert::TryFrom;
 use std::sync::Arc;
 
-use sqlparser::ast::{BinaryOperator, DataType, DateTimeField, Expr, Function, FunctionArg, Ident, Query, Select, UnaryOperator, Value};
+use sqlparser::ast::{BinaryOperator, DataType, Expr, Function, FunctionArg, Ident, Query, Value};
 
-use common_datavalues::{DataSchema, DataSchemaRef, DataValue, IntervalUnit};
 use common_exception::{ErrorCode, Result};
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::scalars::FunctionFactory;
 use common_planners::Expression;
 
-use crate::functions::ContextFunction;
 use crate::sessions::{DatabendQueryContext, DatabendQueryContextRef};
-use crate::sql::{DfStatement, PlanParser, SQLCommon};
+use crate::sql::{PlanParser, SQLCommon};
 use crate::sql::statements::{AnalyzableStatement, AnalyzedResult, DfQueryStatement};
 use crate::sql::statements::analyzer_value_expr::ValueExprAnalyzer;
 use crate::sql::statements::analyzer_schema::AnalyzeQuerySchema;
@@ -67,6 +64,8 @@ impl ExpressionAnalyzer {
             false => {
                 let op = info.name.clone();
                 let args = arguments.to_owned();
+
+                arguments.clear();
                 arguments.push(Expression::ScalarFunction { op, args });
                 Ok(())
             }

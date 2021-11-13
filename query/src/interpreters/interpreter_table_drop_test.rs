@@ -19,7 +19,6 @@ use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 use crate::interpreters::*;
-use crate::sql::*;
 use crate::tests::parse_query;
 
 #[tokio::test]

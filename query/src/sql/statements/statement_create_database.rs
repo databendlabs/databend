@@ -15,7 +15,7 @@ pub struct DfCreateDatabase {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfCreateDatabase {
-    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, _ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let db = self.database_name()?;
         let options = self.database_options();
         let if_not_exists = self.if_not_exists;

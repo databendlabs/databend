@@ -23,7 +23,6 @@ use pretty_assertions::assert_eq;
 
 use crate::optimizers::optimizer_test::*;
 use crate::optimizers::*;
-use crate::sql::*;
 use crate::tests::parse_query;
 
 #[test]

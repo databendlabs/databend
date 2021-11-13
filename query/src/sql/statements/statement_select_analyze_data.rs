@@ -8,7 +8,8 @@ use crate::sql::statements::analyzer_schema::AnalyzeQuerySchema;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::{DfQueryStatement, AnalyzableStatement, QueryRelation, AnalyzedResult};
 use std::convert::TryFrom;
-use common_datavalues::DataSchemaRef;
+use common_datavalues::{DataSchemaRef, DataSchema};
+use std::sync::Arc;
 
 pub struct AnalyzeQueryState {
     pub ctx: DatabendQueryContextRef,
@@ -23,7 +24,7 @@ pub struct AnalyzeQueryState {
     pub order_by_expressions: Vec<Expression>,
     pub projection_expressions: Vec<Expression>,
 
-    pub from_schema: AnalyzeQuerySchema,
+    pub joined_schema: AnalyzeQuerySchema,
     pub before_aggr_schema: AnalyzeQuerySchema,
     pub after_aggr_schema: AnalyzeQuerySchema,
     pub finalize_schema: DataSchemaRef,
@@ -38,7 +39,9 @@ impl AnalyzeQueryState {
         let rpn = RelationRPNBuilder::build(tables)?;
         for rpn_item in &rpn {
             match rpn_item {
-                RelationRPNItem::Join(_) => {}
+                RelationRPNItem::Join(_) => {
+                    return Err(ErrorCode::UnImplement("Unimplemented SELECT JOIN yet."))
+                }
                 RelationRPNItem::Table(v) => {
                     let schema = Self::analyze_table(ctx.clone(), v);
                     analyzed_tables.push(schema.await?);
@@ -54,7 +57,27 @@ impl AnalyzeQueryState {
             }
         }
 
-        unimplemented!()
+        if analyzed_tables.len() != 1 {
+            return Err(ErrorCode::LogicalError("Logical error: this is relation rpn bug."))
+        }
+
+        Ok(AnalyzeQueryState {
+            ctx,
+            joined_schema: analyzed_tables.remove(0),
+            before_aggr_schema: AnalyzeQuerySchema::none(),
+            after_aggr_schema: AnalyzeQuerySchema::none(),
+            finalize_schema: Arc::new(DataSchema::empty()),
+            relation: None,
+            filter_predicate: None,
+            before_group_by_expressions: vec![],
+            group_by_expressions: vec![],
+            aggregate_expressions: vec![],
+            before_having_expressions: vec![],
+            having_predicate: None,
+            order_by_expressions: vec![],
+            projection_expressions: vec![],
+            projection_aliases: HashMap::new(),
+        })
     }
 
     async fn analyze_subquery(ctx: DatabendQueryContextRef, v: &DerivedRPNItem) -> Result<AnalyzeQuerySchema> {

@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod statement_select_test;
+
 mod statement_show_tables;
 mod statement_show_databases;
 mod statement_show_settings;

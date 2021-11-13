@@ -20,7 +20,6 @@ use pretty_assertions::assert_eq;
 
 use crate::interpreters::*;
 use crate::tests::parse_query;
-use crate::sql::*;
 
 #[tokio::test]
 async fn interpreter_show_create_table_test() -> Result<()> {

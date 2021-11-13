@@ -12,79 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-use std::sync::Arc;
-
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::aggregates::AggregateFunctionFactory;
-use common_infallible::Mutex;
-use common_meta_types::TableMeta;
-use common_planners::expand_aggregate_arg_exprs;
-use common_planners::expand_wildcard;
-use common_planners::expr_as_column_expr;
-use common_planners::extract_aliases;
-use common_planners::find_aggregate_exprs;
-use common_planners::find_columns_not_satisfy_exprs;
-use common_planners::rebase_expr;
-use common_planners::rebase_expr_from_input;
-use common_planners::resolve_aliases_to_exprs;
-use common_planners::sort_to_inner_expr;
-use common_planners::unwrap_alias_exprs;
-use common_planners::CreateDatabasePlan;
-use common_planners::CreateTablePlan;
-use common_planners::DescribeTablePlan;
-use common_planners::DropDatabasePlan;
-use common_planners::DropTablePlan;
-use common_planners::ExplainPlan;
-use common_planners::Expression;
-use common_planners::InsertIntoPlan;
-use common_planners::KillPlan;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
-use common_planners::SelectPlan;
-use common_planners::SettingPlan;
-use common_planners::ShowCreateTablePlan;
-use common_planners::TableScanInfo;
-use common_planners::TruncateTablePlan;
-use common_planners::UseDatabasePlan;
-use common_planners::VarValue;
-use common_streams::Source;
-use common_streams::ValueSource;
-use common_tracing::tracing;
-use nom::FindSubstring;
-use sqlparser::ast::FunctionArg;
-use sqlparser::ast::Ident;
-use sqlparser::ast::ObjectName;
-use sqlparser::ast::OrderByExpr;
-use sqlparser::ast::Query;
-use sqlparser::ast::Statement;
-use sqlparser::ast::TableFactor;
-use sqlparser::ast::UnaryOperator;
 
-use crate::catalogs::ToReadDataSourcePlan;
-use crate::functions::ContextFunction;
 use crate::sessions::DatabendQueryContextRef;
-use crate::sql::statements::{DfCreateTable, AnalyzeQueryState, QueryRelation};
-use crate::sql::statements::DfDropDatabase;
-use crate::sql::statements::DfUseDatabase;
-use crate::sql::statements::DfCreateDatabase;
-use crate::sql::statements::DfDescribeTable;
-use crate::sql::statements::DfDropTable;
-use crate::sql::statements::DfExplain;
+use crate::sql::statements::{AnalyzeQueryState, QueryRelation};
 use crate::sql::DfHint;
-use crate::sql::statements::DfKillStatement;
 use crate::sql::DfParser;
-use crate::sql::statements::DfShowCreateTable;
-use crate::sql::statements::DfShowDatabases;
-use crate::sql::statements::DfShowTables;
 use crate::sql::DfStatement;
-use crate::sql::statements::DfTruncateTable;
-use crate::sql::SQLCommon;
 use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
-use std::borrow::Borrow;
 
 pub struct PlanParser;
 

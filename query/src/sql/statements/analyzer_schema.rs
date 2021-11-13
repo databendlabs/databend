@@ -1,12 +1,9 @@
 use common_datavalues::{DataSchemaRef, DataField, DataType, DataSchema};
 use std::fmt::{Debug, Formatter};
-use sqlparser::ast::{ObjectName, TableAlias};
 use std::sync::Arc;
-use crate::sessions::{DatabendQueryContextRef, DatabendQueryContext};
 use common_exception::{Result, ErrorCode};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use common_planners::Expression;
 
 #[derive(Clone)]
 pub struct AnalyzeQuerySchema {
@@ -51,7 +48,7 @@ impl AnalyzeQuerySchema {
 
     pub fn get_column_by_fullname(&self, fullname: &[String]) -> Option<&AnalyzeQueryColumnDesc> {
         for table_desc in &self.tables_long_name_columns {
-            if table_desc.name_parts.len() > fullname.len()
+            if table_desc.name_parts.len() < fullname.len()
                 && table_desc.name_parts[..] == fullname[0..fullname.len() - 1] {
                 for column_desc in &table_desc.columns_desc {
                     if column_desc.short_name == fullname[fullname.len() - 1] {
@@ -107,7 +104,14 @@ impl AnalyzeQuerySchema {
 
 impl Debug for AnalyzeQuerySchema {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!()
+        let mut columns_name = Vec::with_capacity(self.short_name_columns.len());
+        for table_desc in &self.tables_long_name_columns {
+            for column_desc in &table_desc.columns_desc {
+                columns_name.push(column_desc.column_name());
+            }
+        }
+
+        write!(f, "{:?}", columns_name)
     }
 }
 

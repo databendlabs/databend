@@ -1,4 +1,4 @@
-use sqlparser::ast::{ObjectName, Ident};
+use sqlparser::ast::{ObjectName};
 use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
 use crate::sessions::DatabendQueryContextRef;
 use common_exception::{Result, ErrorCode};

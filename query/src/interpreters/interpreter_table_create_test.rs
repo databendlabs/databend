@@ -20,7 +20,6 @@ use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
 
 use crate::interpreters::*;
-use crate::sql::*;
 use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

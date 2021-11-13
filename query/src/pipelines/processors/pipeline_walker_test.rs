@@ -17,7 +17,6 @@ use common_exception::Result;
 use pretty_assertions::assert_eq;
 
 use crate::pipelines::processors::*;
-use crate::sql::*;
 use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -31,7 +30,7 @@ async fn test_pipeline_walker() -> Result<()> {
         LIMIT 1\
     ";
 
-    let paln = parse_query(TEST_SELECT_QUERY, &ctx)?;
+    let plan = parse_query(TEST_SELECT_QUERY, &ctx)?;
     let pipeline_builder = PipelineBuilder::create(ctx);
     let pipeline = pipeline_builder.build(&plan)?;
 

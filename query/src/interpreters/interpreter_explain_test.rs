@@ -20,7 +20,6 @@ use pretty_assertions::assert_eq;
 
 use crate::interpreters::*;
 use crate::tests::parse_query;
-use crate::sql::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_explain_interpreter() -> Result<()> {

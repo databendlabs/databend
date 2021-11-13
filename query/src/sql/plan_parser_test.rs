@@ -15,7 +15,6 @@
 use common_exception::Result;
 use pretty_assertions::assert_eq;
 
-use crate::sql::PlanParser;
 use crate::tests::parse_query;
 
 #[test]

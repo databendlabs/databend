@@ -20,7 +20,6 @@ use pretty_assertions::assert_eq;
 use crate::tests::parse_query;
 
 use crate::interpreters::*;
-use crate::sql::*;
 
 #[tokio::test]
 async fn test_drop_database_interpreter() -> Result<()> {

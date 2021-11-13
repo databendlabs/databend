@@ -19,7 +19,6 @@ use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 use crate::interpreters::*;
-use crate::sql::*;
 use crate::tests::parse_query;
 
 #[tokio::test]
@@ -88,7 +87,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
     // select.
     {
         static TEST_SELECT_QUERY: &str = "SELECT * FROM default.a";
-        if let PlanNode::Select(plan) = parse_query(TEST_SELECT_QUERY)? {
+        if let PlanNode::Select(plan) = parse_query(TEST_SELECT_QUERY, &ctx)? {
             let executor = SelectInterpreter::try_create(ctx.clone(), plan.clone())?;
             let stream = executor.execute().await?;
             let result = stream.try_collect::<Vec<_>>().await?;

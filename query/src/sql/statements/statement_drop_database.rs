@@ -12,7 +12,7 @@ pub struct DfDropDatabase {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfDropDatabase {
-    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, _ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let db = self.database_name()?;
         let if_exists = self.if_exists;
 
