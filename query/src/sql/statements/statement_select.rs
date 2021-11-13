@@ -15,6 +15,7 @@ use crate::sessions::{DatabendQueryContext, DatabendQueryContextRef};
 use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
 use crate::sql::statements::analyzer_expr::{ExpressionAnalyzer};
 use crate::sql::statements::analyzer_schema::{AnalyzeQuerySchema, AnalyzeQueryColumnDesc};
+use crate::sql::statements::statement_select_analyze_data::AnalyzeQueryState;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfQueryStatement {
@@ -33,34 +34,30 @@ pub enum QueryRelation {
     Nested(Box<AnalyzeQueryState>),
 }
 
-pub struct AnalyzeQueryState {
-    ctx: DatabendQueryContextRef,
-
-    pub relation: Option<Box<QueryRelation>>,
-    pub filter_predicate: Option<Expression>,
-    pub before_group_by_expressions: Vec<Expression>,
-    pub group_by_expressions: Vec<Expression>,
-    pub aggregate_expressions: Vec<Expression>,
-    pub before_having_expressions: Vec<Expression>,
-    pub having_predicate: Option<Expression>,
-    pub order_by_expressions: Vec<Expression>,
-    pub projection_expressions: Vec<Expression>,
-
-    from_schema: AnalyzeQuerySchema,
-    before_aggr_schema: AnalyzeQuerySchema,
-    after_aggr_schema: AnalyzeQuerySchema,
-    finalize_schema: DataSchemaRef,
-    projection_aliases: HashMap<String, Expression>,
-}
+// pub struct AnalyzeQueryState {
+//     ctx: DatabendQueryContextRef,
+//
+//     pub relation: Option<Box<QueryRelation>>,
+//     pub filter_predicate: Option<Expression>,
+//     pub before_group_by_expressions: Vec<Expression>,
+//     pub group_by_expressions: Vec<Expression>,
+//     pub aggregate_expressions: Vec<Expression>,
+//     pub before_having_expressions: Vec<Expression>,
+//     pub having_predicate: Option<Expression>,
+//     pub order_by_expressions: Vec<Expression>,
+//     pub projection_expressions: Vec<Expression>,
+//
+//     from_schema: AnalyzeQuerySchema,
+//     before_aggr_schema: AnalyzeQuerySchema,
+//     after_aggr_schema: AnalyzeQuerySchema,
+//     finalize_schema: DataSchemaRef,
+//     projection_aliases: HashMap<String, Expression>,
+// }
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfQueryStatement {
     async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
-        let mut data = AnalyzeQueryState::create(ctx);
-
-        if let Err(cause) = self.analyze_from(&mut data).await {
-            return Err(cause.add_message_back("(while in analyze select from)."));
-        }
+        let mut data = AnalyzeQueryState::create(ctx, &self.from).await?;
 
         if let Err(cause) = self.analyze_filter(&mut data).await {
             return Err(cause.add_message_back("(while in analyze select filter)."));
@@ -96,15 +93,6 @@ impl AnalyzableStatement for DfQueryStatement {
 }
 
 impl DfQueryStatement {
-    pub async fn analyze_from(&self, data: &mut AnalyzeQueryState) -> Result<()> {
-        match self.from.len() {
-            0 => data.dummy_source().await,
-            1 => Self::analyze_join(&self.from[0], data).await,
-            // It's not `JOIN` clause. Such as SELECT * FROM t1, t2;
-            _ => Result::Err(ErrorCode::SyntaxException("Cannot SELECT multiple tables")),
-        }
-    }
-
     pub async fn analyze_filter(&self, data: &mut AnalyzeQueryState) -> Result<()> {
         if let Some(predicate) = &self.selection {
             // TODO: collect pushdown predicates
@@ -217,36 +205,6 @@ impl DfQueryStatement {
         resolve_aliases_to_exprs(&analyzed_expr, projection_aliases)
     }
 
-    async fn analyze_join(table: &TableWithJoins, data: &mut AnalyzeQueryState) -> Result<()> {
-        let TableWithJoins { relation, joins } = table;
-
-        match joins.is_empty() {
-            true => Err(ErrorCode::UnImplement("Cannot SELECT join.")),
-            false => Self::analyze_table_factor(relation, data).await,
-        }
-    }
-
-    async fn analyze_table_factor(relation: &TableFactor, data: &mut AnalyzeQueryState) -> Result<()> {
-        match relation {
-            TableFactor::Table { name, args, alias, .. } => {
-                match args.is_empty() {
-                    true => data.named_table(name, alias).await,
-                    false if alias.is_none() => data.table_function(name, args).await,
-                    false => Err(ErrorCode::SyntaxException("Table function cannot named.")),
-                }
-            },
-            TableFactor::Derived { lateral, subquery, alias } => {
-                if *lateral {
-                    return Err(ErrorCode::UnImplement("Cannot SELECT LATERAL subquery."));
-                }
-
-                data.subquery(subquery, alias).await
-            },
-            TableFactor::NestedJoin(nested) => Self::analyze_join(&nested, data).await,
-            TableFactor::TableFunction { .. } => Err(ErrorCode::UnImplement("Unsupported table function")),
-        }
-    }
-
     async fn projection_exprs(&self, data: &mut AnalyzeQueryState) -> Result<Vec<Expression>> {
         // XXX: We do not allow projection to be used in projection, such as:
         // SELECT column_a + 1 AS alias_b, alias_b + 1 AS alias_c FROM table_name_1;
@@ -276,13 +234,8 @@ impl DfQueryStatement {
     }
 }
 
-enum AnalyzeTableWithJoins {}
 
 impl AnalyzeQueryState {
-    pub fn create(ctx: DatabendQueryContextRef) -> AnalyzeQueryState {
-        AnalyzeQueryState { ctx, ..Default::default() }
-    }
-
     pub fn create_analyzer(&self, schema: AnalyzeQuerySchema, aggr: bool) -> ExpressionAnalyzer {
         let query_context = self.ctx.clone();
         ExpressionAnalyzer::with_source(query_context, schema, aggr)
@@ -292,165 +245,38 @@ impl AnalyzeQueryState {
         let aggregate_exprs = find_aggregate_exprs_in_expr(&expr);
         let aggregate_exprs_require_expression = expand_aggregate_arg_exprs(&aggregate_exprs);
 
-        for require_expression in aggregate_exprs_require_expression {
-            if !self.before_group_by_expressions.contains(&require_expression) {
-                self.before_group_by_expressions.push(require_expression)
+        if !aggregate_exprs.is_empty() {
+            self.add_before_having_exprs(expr);
+        }
+
+        for require_expression in &aggregate_exprs_require_expression {
+            if !self.before_group_by_expressions.contains(require_expression) {
+                self.before_group_by_expressions.push(require_expression.clone())
             }
         }
 
-        for aggregate_expr in aggregate_exprs {
-            if !self.aggregate_expressions.contains(&aggregate_expr) {
-                self.aggregate_expressions.push(aggregate_expr);
+        for aggregate_expr in &aggregate_exprs {
+            if !self.aggregate_expressions.contains(aggregate_expr) {
+                self.aggregate_expressions.push(aggregate_expr.clone());
             }
-        }
-
-        let mut expr = expr.clone();
-        if let Expression::Alias(_, inner) = &expr {
-            expr = inner.as_ref().clone();
-        }
-
-        if !aggregate_exprs.is_empty() && !self.before_having_expressions.contains(&expr) {
-            self.before_having_expressions.push(expr);
         }
 
         Ok(!aggregate_exprs.is_empty())
     }
 
-    pub async fn dummy_source(&mut self) -> Result<()> {
-        // We cannot reference field by name, such as `SELECT system.one.dummy`
-        let context = self.ctx.as_ref();
-        let dummy_table = context.get_table("system", "one")?;
-        // self.tables_schema.push(TableSchema::UnNamed(dummy_table.schema()));
-        Ok(())
-    }
-
-    pub async fn table_function(&mut self, name: &ObjectName, args: &[FunctionArg]) -> Result<()> {
-        if name.0.len() >= 2 {
-            return Result::Err(ErrorCode::BadArguments(
-                "Currently table can't have arguments",
-            ));
-        }
-
-        let mut table_args = Vec::with_capacity(args.len());
-
-        for table_arg in args {
-            table_args.push(match table_arg {
-                FunctionArg::Named { arg, .. } => arg,
-                FunctionArg::Unnamed(arg) => arg,
-            });
-        }
-
-        let context = &self.ctx;
-        let table_function = context.get_table_function(&table_name, Some(table_args))?;
-        // self.tables_schema.push(TableSchema::UnNamed(table_function.schema()));
-        Ok(())
-    }
-
-    // TODO(Winter): await query_context.get_table
-    pub async fn named_table(&mut self, name: &ObjectName, alias: &Option<TableAlias>) -> Result<()> {
-        let query_context = &self.ctx;
-        let (database, table) = self.resolve_table(name)?;
-        let read_table = query_context.get_table(&database, &table)?;
-
-        match alias {
-            None => {
-                let schema = read_table.schema();
-                // let analyzed_schema = AnalyzedSchema::unnamed_table(database, table, schema);
-                // let table_schema = TableSchema::Default { database, table, schema };
-                self.tables_schema.push(table_schema);
-            }
-            Some(table_alias) => {
-                let alias = table_alias.name.value.clone();
-                // let analyzed_schema = AnalyzedSchema::named_table(alias, schema);
-                // self.tables_schema.push(TableSchema::Named(alias, read_table.schema()));
-            }
-        }
-
-        Ok(())
-    }
-
-    pub async fn subquery(&mut self, subquery: &Query, alias: &Option<TableAlias>) -> Result<()> {
-        // TODO: remove clone.
-        let subquery = subquery.clone();
-        let query_statement = DfQueryStatement::try_from(subquery)?;
-        let analyzed_subquery = query_statement.analyze(self.ctx.clone()).await?;
-
-        match analyzed_subquery {
-            AnalyzedResult::SelectQuery(analyzed_subquery) => match alias {
-                None => {
-                    let subquery_finalize_schema = analyzed_subquery.finalize_schema.clone();
-                    // self.tables_schema.push(TableSchema::UnNamed(subquery_finalize_schema));
-                    Ok(())
-                }
-                Some(TableAlias { name, .. }) => {
-                    let subquery_alias = name.value.clone();
-                    let subquery_finalize_schema = analyzed_subquery.finalize_schema.clone();
-                    // let named_schema = TableSchema::Named(subquery_alias, subquery_finalize_schema);
-                    self.tables_schema.push(named_schema);
-                    Ok(())
+    fn add_before_having_exprs(&mut self, expr: &Expression) {
+        match expr {
+            Expression::Alias(_, inner) => {
+                if !self.before_having_expressions.contains(&inner) {
+                    self.before_having_expressions.push(inner.as_ref().clone());
                 }
             }
-            _ => unreachable!()
-        }
-    }
-
-    fn resolve_table(&self, name: &ObjectName) -> Result<(String, String)> {
-        let query_context = &self.ctx;
-
-        match name.0.len() {
-            0 => Err(ErrorCode::SyntaxException("Table name is empty")),
-            1 => Ok((query_context.get_current_database(), name.0[0].value.clone())),
-            2 => Ok((name.0[0].value.clone(), name.0[1].value.clone())),
-            _ => Err(ErrorCode::SyntaxException("Table name must be [`db`].`table`"))
-        }
-    }
-}
-
-impl TryFrom<Query> for DfQueryStatement {
-    type Error = ParserError;
-
-    fn try_from(query: Query) -> Result<Self> {
-        if query.with.is_some() {
-            return Err(ErrorCode::UnImplement("CTE is not yet implement"));
-        }
-
-        if query.fetch.is_some() {
-            return Err(ErrorCode::UnImplement("FETCH is not yet implement"));
-        }
-
-        let body = match &query.body {
-            SetExpr::Select(query) => query,
-            other => {
-                return Err(ErrorCode::UnImplement(format!("Query {} is not yet implemented", other)));
+            expr => {
+                if !self.before_having_expressions.contains(&expr) {
+                    self.before_having_expressions.push(expr.clone());
+                }
             }
-        };
-
-        if body.top.is_some() {
-            return Err(ErrorCode::UnImplement("TOP is not yet implement"));
         }
-
-        if !body.cluster_by.is_empty() {
-            return Err(ErrorCode::SyntaxException("Cluster by is unsupport"));
-        }
-
-        if !body.sort_by.is_empty() {
-            return Err(ErrorCode::SyntaxException("Sort by is unsupport"));
-        }
-
-        if !body.distribute_by.is_empty() {
-            return Err(ErrorCode::SyntaxException("Distribute by is unsupport"));
-        }
-
-        Ok(DfQueryStatement {
-            from: body.from.clone(),
-            projection: body.projection.clone(),
-            selection: body.selection.clone(),
-            group_by: body.group_by.clone(),
-            having: body.having.clone(),
-            order_by: query.order_by.clone(),
-            limit: query.limit.clone(),
-            offset: query.offset.clone(),
-        })
     }
 }
 

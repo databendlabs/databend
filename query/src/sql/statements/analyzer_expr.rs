@@ -26,7 +26,12 @@ impl ExpressionAnalyzer {
         ctx: DatabendQueryContextRef,
         source: AnalyzeQuerySchema,
         allow_aggr: bool,
-    ) -> ExpressionAnalyzer {}
+    ) -> ExpressionAnalyzer {
+        ExpressionAnalyzer {
+            schema: source,
+            context: ctx.clone(),
+        }
+    }
 
     pub async fn analyze(&self, expr: &Expr) -> Result<Expression> {
         let mut arguments = Vec::new();

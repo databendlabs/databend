@@ -6,10 +6,10 @@ use common_planners::{VarValue, PlanNode, SettingPlan};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfSetVariable {
-    local: bool,
-    hivevar: bool,
-    variable: Ident,
-    value: Vec<SetVariableValue>,
+    pub local: bool,
+    pub hivevar: bool,
+    pub variable: Ident,
+    pub value: Vec<SetVariableValue>,
 }
 
 #[async_trait::async_trait]
@@ -36,7 +36,7 @@ impl DfSetVariable {
         }
     }
 
-    fn mapping_set_vars(self) -> Vec<VarValue> {
+    fn mapping_set_vars(&self) -> Vec<VarValue> {
         let variable = self.variable.value.clone();
         self.value.iter()
             .map(|value| DfSetVariable::mapping_set_var(variable.clone(), value))

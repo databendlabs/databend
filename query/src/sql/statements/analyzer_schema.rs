@@ -17,18 +17,23 @@ pub struct AnalyzeQuerySchema {
 }
 
 impl AnalyzeQuerySchema {
-    pub async fn from_dummy_table(ctx: DatabendQueryContextRef) -> Result<AnalyzeQuerySchema> {
-        // We cannot reference field by name, such as `SELECT system.one.dummy`
-        let dummy_table = ctx.get_table("system", "one")?;
-        let dummy_table_dsc = AnalyzeQueryTableDesc::from_schema(dummy_table.schema(), vec![]);
+    pub fn none() -> AnalyzeQuerySchema {
+        AnalyzeQuerySchema {
+            short_name_columns: HashMap::new(),
+            tables_long_name_columns: Vec::new(),
+        }
+    }
+
+    pub fn from_schema(schema: DataSchemaRef, prefix: Vec<String>) -> Result<AnalyzeQuerySchema> {
+        let table_desc = AnalyzeQueryTableDesc::from_schema(schema, prefix);
         let mut short_name_columns = HashMap::new();
 
-        for column_desc in &dummy_table_dsc.columns_desc {
+        for column_desc in &table_desc.columns_desc {
             match short_name_columns.entry(column_desc.short_name.clone()) {
                 Entry::Vacant(v) => { v.insert(column_desc.clone()); },
                 Entry::Occupied(v) => {
                     return Err(ErrorCode::LogicalError(
-                        "Logical error: same columns in `system`.`one` table, this is a bug."
+                        format!("Logical error: same columns in {:?}, this is a bug.", table_desc.name_parts)
                     ));
                 }
             };
@@ -36,28 +41,8 @@ impl AnalyzeQuerySchema {
 
         Ok(AnalyzeQuerySchema {
             short_name_columns,
-            tables_long_name_columns: vec![dummy_table_dsc],
+            tables_long_name_columns: vec![table_desc],
         })
-    }
-
-    pub async fn from_table(ctx: DatabendQueryContextRef, name: &ObjectName, alias: &Option<TableAlias>) -> Result<AnalyzeQuerySchema> {
-        let (database, table) = Self::resolve_table(name, &ctx)?;
-
-        let resolved_table = ctx.get_table(&database, &table)?;
-        // match alias {
-        //     None => {
-        //         let schema = read_table.schema();
-        //         // let analyzed_schema = AnalyzedSchema::unnamed_table(database, table, schema);
-        //         let table_schema = TableSchema::Default { database, table: resolved_table, schema };
-        //         self.tables_schema.push(table_schema);
-        //     }
-        //     Some(table_alias) => {
-        //         let alias = table_alias.name.value.clone();
-        //         // let analyzed_schema = AnalyzedSchema::named_table(alias, schema);
-        //         self.tables_schema.push(TableSchema::Named(alias, read_table.schema()));
-        //     }
-        // }
-        unimplemented!("")
     }
 
     pub fn contains_column(&self, column_name: &str) -> bool {

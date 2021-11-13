@@ -20,6 +20,8 @@ mod analyzer_statement;
 mod statement_explain;
 mod analyzer_schema;
 mod analyzer_value_expr;
+mod statement_select_convert;
+mod statement_select_analyze_data;
 
 pub use analyzer_statement::AnalyzedResult;
 pub use analyzer_statement::AnalyzableStatement;
@@ -31,7 +33,7 @@ pub use statement_drop_table::DfDropTable;
 pub use statement_insert::DfInsertStatement;
 pub use statement_select::DfQueryStatement;
 pub use statement_kill::DfKillStatement;
-pub use statement_select::AnalyzeQueryState;
+pub use statement_select_analyze_data::AnalyzeQueryState;
 pub use statement_select::QueryRelation;
 pub use statement_set_variable::DfSetVariable;
 pub use statement_show_create_table::DfShowCreateTable;

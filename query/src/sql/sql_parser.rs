@@ -217,7 +217,8 @@ impl<'a> DfParser<'a> {
                     _ => self.expected("an SQL statement", Token::Word(w)),
                 }
             }
-            Token::LParen => self.parse_query()
+            Token::LParen => self.parse_query(),
+            unexpected => self.expected("an SQL statement", unexpected),
         }
     }
 

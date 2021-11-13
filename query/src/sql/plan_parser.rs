@@ -84,6 +84,7 @@ use crate::sql::DfStatement;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::SQLCommon;
 use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
+use std::borrow::Borrow;
 
 pub struct PlanParser {
     ctx: DatabendQueryContextRef,
@@ -136,10 +137,12 @@ impl PlanParser {
     }
 
     fn build_from_plan(data: &AnalyzeQueryState) -> Result<PlanNode> {
-        match data.relation.map(AsRef::as_ref) {
+        match &data.relation {
             None => Err(ErrorCode::LogicalError("Not from in select query")),
-            Some(QueryRelation::Nested(data)) => Self::build_query_plan(&data),
-            Some(QueryRelation::FromTable(plan)) => Ok(PlanNode::ReadSource(plan.clone()))
+            Some(relation) => match relation.as_ref() {
+                QueryRelation::Nested(data) => Self::build_query_plan(&data),
+                QueryRelation::FromTable(plan) => Ok(PlanNode::ReadSource(plan.clone())),
+            }
         }
     }
 

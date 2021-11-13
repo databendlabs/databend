@@ -29,7 +29,7 @@ impl AnalyzableStatement for DfCreateDatabase {
 }
 
 impl DfCreateDatabase {
-    fn database_name(self) -> Result<String> {
+    fn database_name(&self) -> Result<String> {
         if self.name.0.is_empty() {
             return Result::Err(ErrorCode::SyntaxException("Create database name is empty"));
         }
@@ -37,7 +37,7 @@ impl DfCreateDatabase {
         Ok(self.name.0[0].value.clone())
     }
 
-    fn database_options(self) -> HashMap<String, String> {
+    fn database_options(&self) -> HashMap<String, String> {
         self.options.iter()
             .map(|option| (option.name.value.to_lowercase(), option.value.to_string()))
             .collect()
