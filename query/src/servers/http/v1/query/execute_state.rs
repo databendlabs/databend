@@ -67,12 +67,16 @@ impl ExecuteStateWrapper {
             Stopped(_) => STATE_STOPPED,
         }
     }
-    pub(crate) fn get_schema(&self) -> DataSchemaRef {
+
+    pub(crate) fn get_schema(&self) -> Result<DataSchemaRef> {
         match &self.state {
-            Running(r) => r.plan.schema(),
-            Stopped(_) => unreachable!(),
+            Running(r) => Ok(r.plan.schema()),
+            Stopped(_) => Err(ErrorCode::LogicalError(
+                "Query is in Stopped state, can't call get_schema",
+            )),
         }
     }
+
     pub(crate) fn get_progress(&self) -> Option<ProgressValues> {
         match &self.state {
             Running(r) => Some(r.context.get_progress_value()),
@@ -117,7 +121,7 @@ impl ExecuteState {
 
         let interpreter = InterpreterFactory::get(context.clone(), plan.clone())?;
         let data_stream = interpreter.execute().await?;
-        let mut data_stream = context.try_create_abortable(data_stream).unwrap();
+        let mut data_stream = context.try_create_abortable(data_stream)?;
 
         let (abort_tx, mut abort_rx) = mpsc::channel(2);
         context.attach_http_query(HttpQueryHandle {
@@ -157,8 +161,7 @@ impl ExecuteState {
                     }
                 }
                 log::debug!("drop block sender!");
-            })
-            .unwrap();
+            })?;
         Ok(state_clone)
     }
 

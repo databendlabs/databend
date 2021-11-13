@@ -77,7 +77,7 @@ impl ResultDataManager {
     pub async fn get_a_page(&mut self, page_no: usize, tp: &Wait) -> Result<Page> {
         let next_no = self.total_pages;
         if page_no == next_no && !self.end {
-            let (block, end) = self.collect_new_page(tp).await;
+            let (block, end) = self.collect_new_page(tp).await?;
             let num_row = block.len();
             self.total_rows += num_row;
             let page = Page {
@@ -93,7 +93,11 @@ impl ResultDataManager {
         } else if page_no == next_no - 1 {
             // later, there may be other ways to ack and drop the last page except collect_new_page.
             // but for now, last_page always exists in this branch, since page_no is unsigned.
-            Ok(self.last_page.as_ref().unwrap().clone())
+            Ok(self
+                .last_page
+                .as_ref()
+                .ok_or_else(|| ErrorCode::UnknownException("last_page is None"))?
+                .clone())
         } else {
             Err(ErrorCode::LogicalError("page no too large"))
         }
@@ -126,14 +130,14 @@ impl ResultDataManager {
         }
     }
 
-    pub async fn collect_new_page(&mut self, tp: &Wait) -> (JsonBlock, bool) {
+    pub async fn collect_new_page(&mut self, tp: &Wait) -> Result<(JsonBlock, bool)> {
         let mut results: Vec<JsonBlock> = Vec::new();
         let block_rx = &mut self.block_rx;
 
         let mut end = false;
         loop {
             match ResultDataManager::receive(block_rx, tp).await {
-                Ok(block) => results.push(block_to_json(&block).unwrap()),
+                Ok(block) => results.push(block_to_json(&block)?),
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     log::debug!("no more data");
@@ -142,6 +146,6 @@ impl ResultDataManager {
                 }
             }
         }
-        (results.concat(), end)
+        Ok((results.concat(), end))
     }
 }
