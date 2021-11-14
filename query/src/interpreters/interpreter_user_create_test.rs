@@ -32,7 +32,7 @@ async fn test_create_user_interpreter() -> Result<()> {
     {
         let executor = CreatUserInterpreter::try_create(ctx, plan.clone())?;
         assert_eq!(executor.name(), "CreateUserInterpreter");
-        let mut stream = executor.execute().await?;
+        let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
     } else {
         panic!()

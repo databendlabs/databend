@@ -12,32 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io;
-
 use async_trait::async_trait;
-use common_arrow::arrow::io::csv::read::ByteRecord;
-use common_arrow::arrow::io::csv::read::Reader;
-use common_arrow::arrow::io::csv::read::ReaderBuilder;
+use common_base::tokio;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use csv_async::AsyncReader;
+use csv_async::AsyncReaderBuilder;
+use tokio_stream::StreamExt;
 
 use crate::Source;
 
 pub struct CsvSource<R> {
-    reader: Reader<R>,
+    reader: AsyncReader<R>,
     schema: DataSchemaRef,
     block_size: usize,
     rows: usize,
 }
 
 impl<R> CsvSource<R>
-where R: io::Read + Sync + Send
+where R: tokio::io::AsyncRead + Unpin + Send + Sync
 {
-    pub fn new(reader: R, schema: DataSchemaRef, block_size: usize) -> Self {
-        let reader = ReaderBuilder::new().has_headers(false).from_reader(reader);
+    pub fn new(reader: R, schema: DataSchemaRef, header: bool, block_size: usize) -> Self {
+        let reader = AsyncReaderBuilder::new()
+            .has_headers(header)
+            .create_reader(reader);
 
         Self {
             reader,
@@ -50,10 +51,9 @@ where R: io::Read + Sync + Send
 
 #[async_trait]
 impl<R> Source for CsvSource<R>
-where R: io::Read + Sync + Send
+where R: tokio::io::AsyncRead + Unpin + Send + Sync
 {
     async fn read(&mut self) -> Result<Option<DataBlock>> {
-        let mut record = ByteRecord::new();
         let mut desers = self
             .schema
             .fields()
@@ -61,29 +61,36 @@ where R: io::Read + Sync + Send
             .map(|f| f.data_type().create_serializer(self.block_size))
             .collect::<Result<Vec<_>>>()?;
 
-        for row in 0..self.block_size {
-            let v = self
-                .reader
-                .read_byte_record(&mut record)
-                .map_err_to_code(ErrorCode::BadBytes, || {
+        let mut rows = 0;
+        let mut records = self.reader.byte_records();
+        loop {
+            if let Some(record) = records.next().await {
+                let record = record.map_err_to_code(ErrorCode::BadBytes, || {
                     format!("Parse csv error at line {}", self.rows)
                 })?;
 
-            if !v {
-                if row == 0 {
-                    return Ok(None);
+                if record.is_empty() {
+                    break;
                 }
+                for (col, deser) in desers.iter_mut().enumerate() {
+                    match record.get(col) {
+                        Some(bytes) => deser.de_text(bytes).unwrap(),
+                        None => deser.de_null(),
+                    }
+                }
+                rows += 1;
+                self.rows += 1;
+
+                if rows >= self.block_size {
+                    break;
+                }
+            } else {
                 break;
             }
-            desers
-                .iter_mut()
-                .enumerate()
-                .for_each(|(col, deser)| match record.get(col) {
-                    Some(bytes) => deser.de_text(bytes).unwrap(),
-                    None => deser.de_null(),
-                });
+        }
 
-            self.rows += 1;
+        if rows == 0 {
+            return Ok(None);
         }
 
         let series = desers

@@ -25,7 +25,6 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
-use common_infallible::Mutex;
 use common_meta_types::TableMeta;
 use common_planners::col;
 use common_planners::lit;
@@ -74,10 +73,10 @@ async fn test_min_max_index() -> Result<()> {
     let blocks = (0..num)
         .into_iter()
         .map(|idx| {
-            DataBlock::create_by_array(test_schema.clone(), vec![
+            Ok(DataBlock::create_by_array(test_schema.clone(), vec![
                 Series::new(vec![idx + 1, idx + 2, idx + 3]),
                 Series::new(vec![idx * num + 1, idx * num + 2, idx * num + 3]),
-            ])
+            ]))
         })
         .collect::<Vec<_>>();
 
@@ -86,11 +85,14 @@ async fn test_min_max_index() -> Result<()> {
         tbl_name: test_tbl_name.to_string(),
         tbl_id: table.get_id(),
         schema: test_schema.clone(),
-        input_stream: Arc::new(Mutex::new(Some(Box::pin(futures::stream::iter(blocks))))),
+        values_opt: None,
     };
     let io_ctx = Arc::new(ctx.get_cluster_table_io_context()?);
     let da = io_ctx.get_data_accessor()?;
-    table.append_data(io_ctx.clone(), insert_into_plan).await?;
+    let stream = Box::pin(futures::stream::iter(blocks));
+    table
+        .append_data(io_ctx.clone(), insert_into_plan, stream)
+        .await?;
 
     // get the latest tbl
     let table = catalog

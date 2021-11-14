@@ -21,7 +21,6 @@ use common_datablocks::assert_blocks_sorted_eq;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_infallible::Mutex;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_planners::*;
@@ -64,18 +63,18 @@ async fn test_memorytable() -> Result<()> {
             Series::new(vec![4u64, 3]),
             Series::new(vec![33u64, 33]),
         ]);
-        let blocks = vec![block, block2];
+        let blocks = vec![Ok(block), Ok(block2)];
 
-        let input_stream = futures::stream::iter::<Vec<DataBlock>>(blocks.clone());
+        let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks.clone());
         let insert_plan = InsertIntoPlan {
             db_name: "default".to_string(),
             tbl_name: "a".to_string(),
             tbl_id: 0,
             schema,
-            input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
+            values_opt: None,
         };
         table
-            .append_data(io_ctx.clone(), insert_plan)
+            .append_data(io_ctx.clone(), insert_plan, Box::pin(input_stream))
             .await
             .unwrap();
     }

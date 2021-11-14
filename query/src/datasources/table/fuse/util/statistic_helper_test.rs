@@ -43,7 +43,7 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
     let col_stats = blocks
         .iter()
-        .map(statistic_helper::block_stats)
+        .map(|b| statistic_helper::block_stats(&b.clone().unwrap()))
         .collect::<common_exception::Result<Vec<_>>>()?;
     let r = statistic_helper::column_stats_reduce_with_schema(&col_stats, &schema);
     assert!(r.is_ok());
@@ -61,7 +61,8 @@ fn test_ft_stats_accumulator() -> common_exception::Result<()> {
     let mut stats_acc = statistic_helper::StatisticsAccumulator::new();
     let mut meta_acc = statistic_helper::BlockMetaAccumulator::new();
     blocks.iter().try_for_each(|item| {
-        stats_acc.acc(item)?;
+        let item = item.clone().unwrap();
+        stats_acc.acc(&item)?;
         meta_acc.acc(1, "".to_owned(), &mut stats_acc);
         Ok::<_, ErrorCode>(())
     })?;

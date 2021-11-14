@@ -13,7 +13,6 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::Series;
@@ -22,7 +21,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
-use common_infallible::Mutex;
+use common_exception::Result;
 use common_meta_types::TableMeta;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
@@ -97,25 +96,25 @@ impl TestFixture {
         }
     }
 
-    pub fn insert_plan_of_table(&self, table: &dyn Table, block_num: u32) -> InsertIntoPlan {
+    pub fn insert_plan_of_table(&self, table: &dyn Table) -> InsertIntoPlan {
         InsertIntoPlan {
             db_name: self.default_db(),
             tbl_name: self.default_table(),
             tbl_id: table.get_id(),
             schema: TestFixture::default_schema(),
-            input_stream: Arc::new(Mutex::new(Some(Box::pin(futures::stream::iter(
-                TestFixture::gen_block_stream(block_num),
-            ))))),
+            values_opt: None,
         }
     }
 
-    pub fn gen_block_stream(num: u32) -> Vec<DataBlock> {
+    pub fn gen_block_stream(num: u32) -> Vec<Result<DataBlock>> {
         (0..num)
             .into_iter()
             .map(|_v| {
                 let schema =
                     DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
-                DataBlock::create_by_array(schema, vec![Series::new(vec![1, 2, 3])])
+                Ok(DataBlock::create_by_array(schema, vec![Series::new(vec![
+                    1, 2, 3,
+                ])]))
             })
             .collect()
     }

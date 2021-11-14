@@ -30,7 +30,7 @@ async fn test_drop_database_interpreter() -> Result<()> {
     {
         let executor = DropDatabaseInterpreter::try_create(ctx, plan.clone())?;
         assert_eq!(executor.name(), "DropDatabaseInterpreter");
-        let stream = executor.execute().await?;
+        let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec!["++", "++"];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

@@ -31,7 +31,7 @@ async fn test_drop_table_interpreter() -> Result<()> {
             .build_from_sql("create table default.a(a bigint, b int, c varchar(255), d smallint, e Date ) Engine = Null")?
         {
             let executor = CreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let _ = executor.execute().await?;
+            let _ = executor.execute(None).await?;
         }
     }
 
@@ -42,7 +42,7 @@ async fn test_drop_table_interpreter() -> Result<()> {
         {
             let executor = DropTableInterpreter::try_create(ctx.clone(), plan.clone())?;
             assert_eq!(executor.name(), "DropTableInterpreter");
-            let stream = executor.execute().await?;
+            let stream = executor.execute(None).await?;
             let result = stream.try_collect::<Vec<_>>().await?;
             let expected = vec!["++", "++"];
             common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

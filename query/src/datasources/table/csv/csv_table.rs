@@ -17,6 +17,8 @@ use std::any::Any;
 use std::fs::File;
 use std::sync::Arc;
 
+use async_stream::stream;
+use common_base::tokio;
 use common_context::DataContext;
 use common_context::IOContext;
 use common_context::TableIOContext;
@@ -24,19 +26,21 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
+use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
+use common_streams::CsvSource;
 use common_streams::SendableDataBlockStream;
+use common_streams::Source;
 
 use crate::catalogs::Table;
 use crate::datasources::common::count_lines;
-use crate::datasources::common::generate_parts;
-use crate::datasources::table::csv::csv_table_stream::CsvTableStream;
 use crate::sessions::DatabendQueryContext;
 
 pub struct CsvTable {
     table_info: TableInfo,
+    // TODO: support s3 protocol && support gob matcher files
     file: String,
     has_header: bool,
 }
@@ -80,32 +84,56 @@ impl Table for CsvTable {
         io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        let start_line: usize = if self.has_header { 1 } else { 0 };
         let file = &self.file;
         let lines_count = count_lines(File::open(file.clone())?)?;
         let bytes = File::open(file.clone())?.metadata()?.len() as usize;
 
-        let parts = generate_parts(
-            start_line as u64,
-            io_ctx.get_max_threads() as u64,
-            lines_count as u64,
-        );
+        let parts = vec![Part {
+            name: file.clone(),
+            version: 0,
+        }];
         Ok((Statistics::new_estimated(lines_count, bytes), parts))
     }
 
     async fn read(
         &self,
         io_ctx: Arc<TableIOContext>,
-        _plan: &ReadDataSourcePlan,
+        plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let ctx: Arc<DatabendQueryContext> = io_ctx
             .get_user_data()?
             .expect("DatabendQueryContext should not be None");
+        let ctx_clone = ctx.clone();
+        let schema = plan.schema();
+        let block_size = ctx.get_settings().get_max_block_size()? as usize;
+        let has_header = self.has_header;
 
-        Ok(Box::pin(CsvTableStream::try_create(
-            ctx,
-            self.table_info.schema(),
-            self.file.clone(),
-        )?))
+        let s = stream! {
+            loop {
+                let partitions = ctx_clone.try_get_partitions(1);
+                match partitions {
+                    Ok(partitions) => {
+                        if partitions.is_empty() {
+                            break;
+                        }
+                        let part = partitions.get(0).unwrap();
+                        let file = part.name.clone();
+                        let reader = tokio::fs::File::open(file.clone()).await?;
+                        let mut source = CsvSource::new(reader, schema.clone(), has_header, block_size);
+
+                        loop {
+                            let block = source.read().await;
+                            match block {
+                                Ok(None) => break,
+                                Ok(Some(b)) =>  yield(Ok(b)),
+                                Err(e) => yield(Err(e)),
+                            }
+                        }
+                    }
+                    Err(e) =>  yield(Err(e))
+                }
+            }
+        };
+        Ok(Box::pin(s))
     }
 }

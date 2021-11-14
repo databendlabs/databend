@@ -38,7 +38,7 @@ async fn test_create_table_interpreter() -> Result<()> {
         assert_eq!(plan.schema().field_with_name("d")?.data_type(), &DataType::Int16);
         assert_eq!(plan.schema().field_with_name("e")?.data_type(), &DataType::Date16);
 
-        let mut stream = executor.execute().await?;
+        let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
     } else {
         panic!()

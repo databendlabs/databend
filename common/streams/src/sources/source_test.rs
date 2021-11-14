@@ -61,8 +61,8 @@ async fn test_parse_csvs() {
         DataField::new("b", DataType::String, false),
         DataField::new("c", DataType::Float64, false),
     ]);
-    let mut values_source = CsvSource::new(buffer.as_bytes(), schema, 10);
-    let block = values_source.read().await.unwrap().unwrap();
+    let mut csv_source = CsvSource::new(buffer.as_bytes(), schema, false, 10);
+    let block = csv_source.read().await.unwrap().unwrap();
     assert_blocks_eq(
         vec![
             "+---+---------+------+",
@@ -76,6 +76,6 @@ async fn test_parse_csvs() {
         &[block],
     );
 
-    let block = values_source.read().await.unwrap();
+    let block = csv_source.read().await.unwrap();
     assert!(block.is_none());
 }
