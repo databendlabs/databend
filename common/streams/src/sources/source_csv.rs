@@ -63,28 +63,25 @@ where R: tokio::io::AsyncRead + Unpin + Send + Sync
 
         let mut rows = 0;
         let mut records = self.reader.byte_records();
-        loop {
-            if let Some(record) = records.next().await {
-                let record = record.map_err_to_code(ErrorCode::BadBytes, || {
-                    format!("Parse csv error at line {}", self.rows)
-                })?;
 
-                if record.is_empty() {
-                    break;
-                }
-                for (col, deser) in desers.iter_mut().enumerate() {
-                    match record.get(col) {
-                        Some(bytes) => deser.de_text(bytes).unwrap(),
-                        None => deser.de_null(),
-                    }
-                }
-                rows += 1;
-                self.rows += 1;
+        while let Some(record) = records.next().await {
+            let record = record.map_err_to_code(ErrorCode::BadBytes, || {
+                format!("Parse csv error at line {}", self.rows)
+            })?;
 
-                if rows >= self.block_size {
-                    break;
+            if record.is_empty() {
+                break;
+            }
+            for (col, deser) in desers.iter_mut().enumerate() {
+                match record.get(col) {
+                    Some(bytes) => deser.de_text(bytes).unwrap(),
+                    None => deser.de_null(),
                 }
-            } else {
+            }
+            rows += 1;
+            self.rows += 1;
+
+            if rows >= self.block_size {
                 break;
             }
         }

@@ -81,7 +81,7 @@ impl Table for CsvTable {
 
     fn read_partitions(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        _io_ctx: Arc<TableIOContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let file = &self.file;
