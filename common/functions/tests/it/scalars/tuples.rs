@@ -37,7 +37,7 @@ fn test_tuple_function() -> Result<()> {
 
     let mut args = vec![];
     let mut fields = vec![];
-    for name in vec!["a", "b", "c"] {
+    for name in &["a", "b", "c"] {
         args.push(schema.field_with_name(name)?.data_type().clone());
         fields.push(schema.field_with_name(name)?.clone());
     }
@@ -55,11 +55,11 @@ fn test_tuple_function() -> Result<()> {
 
     // Nullable check.
     let actual_null = func.nullable(&schema)?;
-    assert_eq!(false, actual_null);
+    assert!(!actual_null);
 
-    let expect_type = func.return_type(&args)?.clone();
+    let expect_type = func.return_type(&args)?;
     let v = &(func.eval(&input, rows)?);
-    let actual_type = v.data_type().clone();
+    let actual_type = v.data_type();
     assert_eq!(expect_type, actual_type);
 
     let expect_values = "[[1, 4, 7.1], [2, 5, 8.2], [3, 6, 9.3]]".to_string();
