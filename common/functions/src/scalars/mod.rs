@@ -28,6 +28,7 @@ mod maths;
 mod nullables;
 mod others;
 mod strings;
+mod tuples;
 mod udfs;
 
 pub use arithmetics::*;
@@ -46,4 +47,5 @@ pub use maths::*;
 pub use nullables::*;
 pub use others::*;
 pub use strings::*;
+pub use tuples::*;
 pub use udfs::*;

@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,16 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod arithmetics;
-mod comparisons;
-mod conditionals;
-mod dates;
-mod expressions;
-mod function_column;
-mod hashes;
-mod logics;
-mod maths;
-mod nullables;
-mod others;
-mod tuples;
-mod udfs;
+mod tuple;
+mod tuple_class;
+
+pub use tuple::TupleFunction;
+pub use tuple_class::TupleClassFunction;
