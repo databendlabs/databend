@@ -12,13 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::Range;
 use common_planners::*;
 use common_tracing::tracing;
 
 use super::MonotonicityCheckVisitor;
+use super::RequireColumnsVisitor;
 use crate::optimizers::Optimizer;
 use crate::sessions::DatabendQueryContextRef;
 
@@ -31,6 +35,7 @@ struct TopNPushDownImpl {
     before_group_by_schema: Option<DataSchemaRef>,
     limit: Option<usize>,
     order_by: Vec<Expression>,
+    variables_range: HashMap<String, Range>,
 }
 
 impl PlanRewriter for TopNPushDownImpl {
@@ -107,13 +112,13 @@ impl PlanRewriter for TopNPushDownImpl {
                         projection: extras.projection.clone(),
                         filters: extras.filters.clone(),
                         limit: Some(new_limit),
-                        order_by: self.get_sort_columns(),
+                        order_by: self.get_sort_columns()?,
                     })
                 }
                 None => {
                     let mut extras = Extras::default();
                     extras.limit = Some(n);
-                    extras.order_by = self.get_sort_columns();
+                    extras.order_by = self.get_sort_columns()?;
                     Some(extras)
                 }
             };
@@ -143,29 +148,43 @@ impl TopNPushDownImpl {
             before_group_by_schema: None,
             limit: None,
             order_by: vec![],
+            variables_range: HashMap::new(),
         }
     }
 
     // For every order by columns, try the best to extract the native columns.
     // For example 'order by age+3, number+5', will return expression of two columns,
     // 'age' and 'number', since f(age)=age+3 and f(number)=number+5 are both monotonic functions.
-    fn get_sort_columns(&self) -> Vec<Expression> {
+    fn get_sort_columns(&self) -> Result<Vec<Expression>> {
         self.order_by
             .iter()
-            .map(
-                |expr| match MonotonicityCheckVisitor::extract_sort_column(expr) {
-                    Ok(new_expr) => new_expr,
+            .map(|expr| {
+                let columns = RequireColumnsVisitor::collect_columns_from_expr(expr)?;
+                if columns.len() != 1 {
+                    // if 0 or >1 columns found, skip the monotonicity optimization.
+                    return Ok(expr.clone());
+                }
+
+                let column_name = columns.iter().next().unwrap();
+
+                let monotonic_checker = match self.variables_range.get(column_name) {
+                    None => MonotonicityCheckVisitor::new(None),
+                    Some(range) => MonotonicityCheckVisitor::new(Some(range.clone())),
+                };
+
+                match monotonic_checker.extract_sort_column(expr) {
+                    Ok(new_expr) => Ok(new_expr),
                     Err(error) => {
                         tracing::error!(
                             "Failed to extract column from sort expression {:?}, {}",
                             expr,
                             error
                         );
-                        expr.clone()
+                        Ok(expr.clone())
                     }
-                },
-            )
-            .collect::<Vec<Expression>>()
+                }
+            })
+            .collect::<Result<Vec<_>>>()
     }
 }
 

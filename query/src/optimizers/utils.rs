@@ -18,11 +18,13 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::MonotonicityNode;
+use common_functions::scalars::Range;
 use common_planners::col;
 use common_planners::Expression;
 use common_planners::ExpressionVisitor;
 use common_planners::Recursion;
 
+// This visitor is for recursively visiting expression tree and collects all columns.
 pub struct RequireColumnsVisitor {
     pub required_columns: HashSet<String>,
 }
@@ -32,6 +34,12 @@ impl RequireColumnsVisitor {
         Self {
             required_columns: HashSet::new(),
         }
+    }
+
+    pub fn collect_columns_from_expr(expr: &Expression) -> Result<HashSet<String>> {
+        let mut visitor = Self::default();
+        visitor = expr.accept(visitor)?;
+        Ok(visitor.required_columns)
     }
 }
 
@@ -48,42 +56,54 @@ impl ExpressionVisitor for RequireColumnsVisitor {
     }
 }
 
+#[derive(Clone)]
 pub struct MonotonicityCheckVisitor {
-    // represents the monotonicity of an expression
+    // represents the monotonicity node of an expression
     pub node: Option<MonotonicityNode>,
 
     pub columns: HashSet<String>,
+
+    // the variable range, we assume only one variable.
+    pub variable_range: Option<Range>,
 }
 
 impl MonotonicityCheckVisitor {
-    pub fn new(root: MonotonicityNode, mut columns: HashSet<String>) -> Self {
-        if let MonotonicityNode::Variable(name) = root.clone() {
-            columns.insert(name);
-        }
-
+    pub fn create_from_node(
+        root: MonotonicityNode,
+        columns: HashSet<String>,
+        variable_range: Option<Range>,
+    ) -> Self {
         MonotonicityCheckVisitor {
             node: Some(root),
             columns,
+            variable_range,
         }
     }
 
-    pub fn default() -> Self {
+    // Create an instance of MonotonicityCheckVisitor for checking functions with ONLY ONE variable.
+    // Specify the variable range if you know it. Otherwise just pass in None.
+    pub fn new(variable_range: Option<Range>) -> Self {
         MonotonicityCheckVisitor {
             node: None,
             columns: HashSet::new(),
+            variable_range,
         }
     }
 
-    fn visit_func_args(op: &str, children: &[Expression]) -> Result<MonotonicityCheckVisitor> {
+    fn visit_func_args(
+        self,
+        op: &str,
+        children: &[Expression],
+    ) -> Result<MonotonicityCheckVisitor> {
         let mut columns: HashSet<String> = HashSet::new();
         let mut nodes = vec![];
         for child_expr in children.iter() {
-            let visitor = MonotonicityCheckVisitor::default();
+            let visitor = MonotonicityCheckVisitor::new(self.variable_range.clone());
             let visitor = child_expr.accept(visitor)?;
 
             // one of the children node is None, no need to check any more.
             if visitor.node.is_none() {
-                return Ok(MonotonicityCheckVisitor::default());
+                return Ok(MonotonicityCheckVisitor::new(self.variable_range));
             }
             nodes.push(visitor.node.unwrap());
             columns.extend(visitor.columns);
@@ -91,14 +111,15 @@ impl MonotonicityCheckVisitor {
 
         let func = FunctionFactory::instance().get(op)?;
         let root_node = func.get_monotonicity(nodes.as_ref())?;
-        let visitor = MonotonicityCheckVisitor::new(root_node, columns);
+        let visitor =
+            MonotonicityCheckVisitor::create_from_node(root_node, columns, self.variable_range);
         Ok(visitor)
     }
 
     // Extract sort column from sort expression. It checks the monotonicity information
     // of the sort expression (like f(x) = x+2 is a monotonic function), and extract the
     // column information, returns as Expression::Column.
-    pub fn extract_sort_column(sort_expr: &Expression) -> Result<Expression> {
+    pub fn extract_sort_column(&self, sort_expr: &Expression) -> Result<Expression> {
         if let Expression::Sort {
             expr: _,
             asc,
@@ -106,7 +127,7 @@ impl MonotonicityCheckVisitor {
             origin_expr,
         } = sort_expr
         {
-            let visitor = Self::default();
+            let visitor = Self::new(self.variable_range.clone());
             let visitor = origin_expr.accept(visitor)?;
 
             // One of the expression has more than one column, we don't know the monotonicity.
@@ -119,7 +140,7 @@ impl MonotonicityCheckVisitor {
 
             match visitor.node {
                 None => return Ok(sort_expr.clone()),
-                Some(MonotonicityNode::Function(mono)) => {
+                Some(MonotonicityNode::Function(mono, _)) => {
                     // the current function is not monotonic, we skip the optimization
                     if !mono.is_monotonic {
                         return Ok(sort_expr.clone());
@@ -134,7 +155,7 @@ impl MonotonicityCheckVisitor {
                         origin_expr: origin_expr.clone(),
                     });
                 }
-                Some(MonotonicityNode::Variable(column_name)) => {
+                Some(MonotonicityNode::Variable(column_name, _)) => {
                     return Ok(Expression::Sort {
                         expr: Box::new(col(&column_name)),
                         asc: *asc,
@@ -159,26 +180,31 @@ impl ExpressionVisitor for MonotonicityCheckVisitor {
 
     fn visit(self, expr: &Expression) -> Result<Self> {
         match expr {
-            Expression::ScalarFunction { op, args } => {
-                MonotonicityCheckVisitor::visit_func_args(op, args)
-            }
+            Expression::ScalarFunction { op, args } => self.visit_func_args(op, args),
             Expression::BinaryExpression { op, left, right } => {
-                MonotonicityCheckVisitor::visit_func_args(op, &[*left.clone(), *right.clone()])
+                self.visit_func_args(op, &[*left.clone(), *right.clone()])
             }
-            Expression::UnaryExpression { op, expr } => {
-                MonotonicityCheckVisitor::visit_func_args(op, &[*expr.clone()])
-            }
+            Expression::UnaryExpression { op, expr } => self.visit_func_args(op, &[*expr.clone()]),
             Expression::Column(col) => {
-                let columns: HashSet<String> = HashSet::new();
-                let node = MonotonicityNode::Variable(col.clone());
-                Ok(MonotonicityCheckVisitor::new(node, columns))
+                let mut columns = HashSet::new();
+                columns.insert(col.clone());
+                let node = MonotonicityNode::Variable(col.clone(), None);
+                Ok(MonotonicityCheckVisitor::create_from_node(
+                    node,
+                    columns,
+                    self.variable_range,
+                ))
             }
             Expression::Literal { value, .. } => {
-                let columns: HashSet<String> = HashSet::new();
+                let columns = HashSet::new();
                 let node = MonotonicityNode::Constant(value.clone());
-                Ok(MonotonicityCheckVisitor::new(node, columns))
+                Ok(MonotonicityCheckVisitor::create_from_node(
+                    node,
+                    columns,
+                    self.variable_range,
+                ))
             }
-            _ => Ok(MonotonicityCheckVisitor::default()),
+            _ => Ok(MonotonicityCheckVisitor::new(self.variable_range)),
         }
     }
 }

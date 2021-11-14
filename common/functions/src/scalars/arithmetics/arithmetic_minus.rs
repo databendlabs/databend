@@ -36,6 +36,6 @@ impl ArithmeticMinusFunction {
 
     pub fn get_monotonicity(_args: &[MonotonicityNode]) -> Result<MonotonicityNode> {
         //TODO: implement
-        Ok(MonotonicityNode::Function(Monotonicity::default()))
+        Ok(MonotonicityNode::Function(Monotonicity::default(), None))
     }
 }

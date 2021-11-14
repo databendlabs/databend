@@ -47,60 +47,71 @@ impl ArithmeticPlusFunction {
             return Ok(args[0].clone());
         }
 
+        // TODO: handle input with data range
         match (&args[0], &args[1]) {
             // a constant value plus a function, like 12 + f(x), the monotonicity should be the same as f
-            (MonotonicityNode::Function(mono), MonotonicityNode::Constant(_))
-            | (MonotonicityNode::Constant(_), MonotonicityNode::Function(mono)) => {
-                Ok(MonotonicityNode::Function(mono.clone()))
+            (MonotonicityNode::Function(mono, None), MonotonicityNode::Constant(_))
+            | (MonotonicityNode::Constant(_), MonotonicityNode::Function(mono, None)) => {
+                Ok(MonotonicityNode::Function(mono.clone(), None))
             }
 
             // a constant value plus a variable, like x + 12 should be monotonically increasing
-            (MonotonicityNode::Constant(_), MonotonicityNode::Variable(_))
-            | (MonotonicityNode::Variable(_), MonotonicityNode::Constant(_)) => {
-                Ok(MonotonicityNode::Function(Monotonicity {
-                    is_monotonic: true,
-                    is_positive: true,
-                    is_always_monotonic: true,
-                }))
+            (MonotonicityNode::Constant(_), MonotonicityNode::Variable(_, None))
+            | (MonotonicityNode::Variable(_, None), MonotonicityNode::Constant(_)) => {
+                Ok(MonotonicityNode::Function(
+                    Monotonicity {
+                        is_monotonic: true,
+                        is_positive: true,
+                        is_always_monotonic: true,
+                    },
+                    None,
+                ))
             }
 
             // two function plus, f(x) + g(x) , if they have same monotonicity, then should return that monotonicity
-            (MonotonicityNode::Function(mono1), MonotonicityNode::Function(mono2)) => {
+            (MonotonicityNode::Function(mono1, None), MonotonicityNode::Function(mono2, None)) => {
                 if mono1.is_monotonic
                     && mono2.is_monotonic
                     && mono1.is_positive == mono2.is_positive
                 {
-                    return Ok(MonotonicityNode::Function(Monotonicity {
-                        is_monotonic: true,
-                        is_positive: mono1.is_positive,
-                        is_always_monotonic: mono1.is_always_monotonic && mono2.is_always_monotonic,
-                    }));
+                    return Ok(MonotonicityNode::Function(
+                        Monotonicity {
+                            is_monotonic: true,
+                            is_positive: mono1.is_positive,
+                            is_always_monotonic: mono1.is_always_monotonic
+                                && mono2.is_always_monotonic,
+                        },
+                        None,
+                    ));
                 }
-                Ok(MonotonicityNode::Function(Monotonicity::default()))
+                Ok(MonotonicityNode::Function(Monotonicity::default(), None))
             }
 
             // two variable plus(we assume only one variable exists), like x+x, should be monotonically increasing
-            (MonotonicityNode::Variable(var1), MonotonicityNode::Variable(var2)) => {
+            (MonotonicityNode::Variable(var1, None), MonotonicityNode::Variable(var2, None)) => {
                 if var1 == var2 {
-                    return Ok(MonotonicityNode::Function(Monotonicity {
-                        is_monotonic: true,
-                        is_positive: true,
-                        is_always_monotonic: true,
-                    }));
+                    return Ok(MonotonicityNode::Function(
+                        Monotonicity {
+                            is_monotonic: true,
+                            is_positive: true,
+                            is_always_monotonic: true,
+                        },
+                        None,
+                    ));
                 }
-                Ok(MonotonicityNode::Function(Monotonicity::default()))
+                Ok(MonotonicityNode::Function(Monotonicity::default(), None))
             }
 
             // a function plus the variable, like f(x) + x, if f(x) is monotonically increasing, return it.
-            (MonotonicityNode::Function(mono), MonotonicityNode::Variable(_))
-            | (MonotonicityNode::Variable(_), MonotonicityNode::Function(mono)) => {
+            (MonotonicityNode::Function(mono, None), MonotonicityNode::Variable(_, None))
+            | (MonotonicityNode::Variable(_, None), MonotonicityNode::Function(mono, None)) => {
                 if mono.is_monotonic && mono.is_positive {
-                    return Ok(MonotonicityNode::Function(mono.clone()));
+                    return Ok(MonotonicityNode::Function(mono.clone(), None));
                 }
-                Ok(MonotonicityNode::Function(Monotonicity::default()))
+                Ok(MonotonicityNode::Function(Monotonicity::default(), None))
             }
 
-            _ => Ok(MonotonicityNode::Function(Monotonicity::default())),
+            _ => Ok(MonotonicityNode::Function(Monotonicity::default(), None)),
         }
     }
 }
