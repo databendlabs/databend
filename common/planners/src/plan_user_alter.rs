@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod prelude;
+use std::sync::Arc;
 
-mod binary_de;
-mod binary_read;
-mod binary_ser;
-mod binary_write;
-mod buf_read;
-mod marshal;
-mod stat_buffer;
-mod unmarshal;
-mod utils;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
+use common_meta_types::AuthType;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct AlterUserPlan {
+    pub if_current_user: bool,
+    pub name: String,
+    pub hostname: String,
+    pub new_password: Vec<u8>,
+    pub new_auth_type: AuthType,
+}
+
+impl AlterUserPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}

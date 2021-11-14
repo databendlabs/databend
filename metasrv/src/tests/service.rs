@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use common_base::tokio;
-use common_base::tokio::sync::oneshot;
 use common_base::GlobalSequence;
+use common_base::Stoppable;
 use common_tracing::tracing;
 
 use crate::api::FlightServer;
@@ -40,14 +40,14 @@ pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
 
 pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<()> {
     let mn = MetaNode::start(&tc.config.raft_config).await?;
-    let srv = FlightServer::create(tc.config.clone(), mn);
-    let (stop_tx, fin_rx) = srv.start().await?;
-
-    tc.channels = Some((stop_tx, fin_rx));
+    let mut srv = FlightServer::create(tc.config.clone(), mn);
+    srv.start().await?;
 
     // TODO(xp): some times the MetaNode takes more than 200 ms to startup, with disk-backed store.
     //           Find out why and using some kind of waiting routine to ensure service is on.
     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+
+    tc.flight_srv = Some(Box::new(srv));
     Ok(())
 }
 
@@ -63,8 +63,7 @@ pub struct MetaSrvTestContext {
 
     pub meta_nodes: Vec<Arc<MetaNode>>,
 
-    /// channel to send to stop metasrv, and channel for waiting for shutdown to finish.
-    pub channels: Option<(oneshot::Sender<()>, oneshot::Receiver<()>)>,
+    pub flight_srv: Option<Box<FlightServer>>,
 }
 
 /// Create a new Config for test, with unique port assigned
@@ -113,8 +112,7 @@ pub fn new_test_context(id: u64) -> MetaSrvTestContext {
     MetaSrvTestContext {
         config,
         meta_nodes: vec![],
-
-        channels: None,
+        flight_srv: None,
     }
 }
 

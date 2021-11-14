@@ -72,5 +72,52 @@ async fn test_user_manager() -> Result<()> {
         assert_eq!(1, users.len());
     }
 
+    // alter.
+    {
+        let user = "test";
+        let hostname = "localhost";
+        let pwd = "test";
+        let user_info = User::new(user, hostname, pwd, AuthType::PlainText);
+        user_mgr.add_user(user_info.into()).await?;
+
+        let old_user = user_mgr.get_user(user, hostname).await?;
+        assert_eq!(old_user.password, Vec::from(pwd));
+
+        let new_pwd = "test1";
+        user_mgr
+            .update_user(
+                user,
+                hostname,
+                Some(AuthType::Sha256),
+                Some(Vec::from(new_pwd)),
+            )
+            .await?;
+        let new_user = user_mgr.get_user(user, hostname).await?;
+        assert_eq!(new_user.password, Vec::from(new_pwd));
+        assert_eq!(new_user.auth_type, AuthType::Sha256);
+
+        let new_new_pwd = "test2";
+        user_mgr
+            .update_user(
+                user,
+                hostname,
+                Some(AuthType::Sha256),
+                Some(Vec::from(new_new_pwd)),
+            )
+            .await?;
+        let new_new_user = user_mgr.get_user(user, hostname).await?;
+        assert_eq!(new_new_user.password, Vec::from(new_new_pwd));
+
+        let not_exist = user_mgr
+            .update_user(
+                "user",
+                hostname,
+                Some(AuthType::Sha256),
+                Some(Vec::from(new_new_pwd)),
+            )
+            .await;
+        // ErrorCode::UnknownUser
+        assert_eq!(not_exist.err().unwrap().code(), 3000)
+    }
     Ok(())
 }

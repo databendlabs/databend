@@ -12,14 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod prelude;
-
-mod binary_de;
-mod binary_read;
-mod binary_ser;
-mod binary_write;
-mod buf_read;
-mod marshal;
-mod stat_buffer;
-mod unmarshal;
-mod utils;
+mod dns_resolver;

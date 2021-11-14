@@ -12,29 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[test]
-fn test_rwlock() {
-    use std::sync::Arc;
-    use std::thread;
+use common_base::tokio;
+use common_exception::Result;
+use common_flight_rpc::DNSResolver;
 
-    use crate::RwLock;
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_resolver_github() -> Result<()> {
+    let addrs = DNSResolver::instance()?.resolve("github.com").await?;
+    assert_ne!(addrs.len(), 0);
 
-    let a = 7u8;
-    let rwlock = Arc::new(RwLock::new(a));
-    let rwlock2 = rwlock.clone();
-    let rwlock3 = rwlock.clone();
-
-    let thread1 = thread::spawn(move || {
-        let mut b = rwlock2.write();
-        *b = 8;
-    });
-    let thread2 = thread::spawn(move || {
-        let mut b = rwlock3.write();
-        *b = 9;
-    });
-
-    let _ = thread1.join();
-    let _ = thread2.join();
-
-    let _read = rwlock.read();
+    Ok(())
 }

@@ -4,6 +4,8 @@ PLATFORM ?= linux/amd64,linux/arm64
 VERSION ?= latest
 ADD_NODES ?= 0
 NUM_CPUS ?= 2
+TENANT_ID ?= "tenant"
+CLUSTER_ID ?= "test"
 # Setup dev toolchain
 setup:
 	bash ./scripts/setup/dev_setup.sh
@@ -19,19 +21,6 @@ miri:
 	cargo miri setup
 	MIRIFLAGS="-Zmiri-disable-isolation" cargo miri test
 
-cluster: build-debug cli-build-debug
-	mkdir -p ./.databend/local/bin/test/ && make cluster_stop || echo "stop"
-	cp ./target/debug/databend-query ./.databend/local/bin/test/databend-query
-	cp ./target/debug/databend-meta ./.databend/local/bin/test/databend-meta
-	./target/release/bendctl cluster create --databend_dir ./.databend --group local --version test --num-cpus ${NUM_CPUS} --force
-	for i in `seq 1 ${ADD_NODES}`; do make cluster_add; done;
-	make cluster_view
-cluster_add:
-	./target/release/bendctl cluster add --databend_dir ./.databend --group local --num-cpus ${NUM_CPUS}
-cluster_view:
-	./target/release/bendctl cluster view --databend_dir ./.databend --group local
-cluster_stop:
-	@if find ./.databend/local/configs/local/ -maxdepth 0 -empty | read v ; then echo there is no cluster exists; else ./target/release/bendctl cluster stop --databend_dir ./.databend --group local; fi
 run: build
 	bash ./scripts/deploy/databend-query-standalone.sh release
 
@@ -75,6 +64,21 @@ cli-test:
 
 unit-test:
 	ulimit -n 10000; bash ./scripts/ci/ci-run-unit-tests.sh
+
+# Bendctl with cluster for stateful test.
+cluster: build-release cli-build-release
+	mkdir -p ./.databend/local/bin/test/ && make cluster_stop || echo "stop"
+	cp ./target/release/databend-query ./.databend/local/bin/test/databend-query
+	cp ./target/release/databend-meta ./.databend/local/bin/test/databend-meta
+	./target/release/bendctl cluster create --databend_dir ./.databend --group local --version test --num-cpus ${NUM_CPUS} --query-tenant-id ${TENANT_ID} --query-cluster-id ${CLUSTER_ID} --force
+	for i in `seq 1 ${ADD_NODES}`; do make cluster_add; done;
+	make cluster_view
+cluster_add:
+	./target/release/bendctl cluster add --databend_dir ./.databend --group local --num-cpus ${NUM_CPUS}
+cluster_view:
+	./target/release/bendctl cluster view --databend_dir ./.databend --group local
+cluster_stop:
+	@if find ./.databend/local/configs/local/ -maxdepth 0 -empty | read v ; then echo there is no cluster exists; else ./target/release/bendctl cluster stop --databend_dir ./.databend --group local; fi
 
 embedded-meta-test: build-debug
 	rm -rf ./_meta_embedded

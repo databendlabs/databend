@@ -216,13 +216,6 @@ impl MetaNode {
         Ok(())
     }
 
-    /// Start a metasrv node from initialized store.
-    #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
-    pub async fn open(config: &RaftConfig) -> common_exception::Result<Arc<MetaNode>> {
-        let mn = Self::open_create_boot(config, Some(()), None, None).await?;
-        Ok(mn)
-    }
-
     /// Open or create a metasrv node.
     /// Optionally boot a single node cluster.
     /// 1. If `open` is `Some`, try to open an existent one.
@@ -237,11 +230,22 @@ impl MetaNode {
         create: Option<()>,
         init_cluster: Option<Vec<String>>,
     ) -> common_exception::Result<Arc<MetaNode>> {
-        let sto = MetaRaftStore::open_create(config, open, create).await?;
+        let mut config = config.clone();
+
+        // Always disable fsync on mac.
+        // Because there are some integration tests running on mac VM.
+        //
+        // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
+        if cfg!(target_os = "macos") {
+            tracing::warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
+            config.no_sync = true;
+        }
+
+        let sto = MetaRaftStore::open_create(&config, open, create).await?;
         let is_open = sto.is_opened();
         let sto = Arc::new(sto);
 
-        let mut builder = MetaNode::builder(config).sto(sto.clone());
+        let mut builder = MetaNode::builder(&config).sto(sto.clone());
 
         if is_open {
             // read id from sto, read listening addr from sto

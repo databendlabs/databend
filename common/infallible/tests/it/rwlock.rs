@@ -13,27 +13,28 @@
 // limitations under the License.
 
 #[test]
-fn test_mutex() {
+fn test_rwlock() {
     use std::sync::Arc;
     use std::thread;
 
-    use crate::Mutex;
+    use common_infallible::RwLock;
+
     let a = 7u8;
-    let mutex = Arc::new(Mutex::new(a));
-    let mutex2 = mutex.clone();
-    let mutex3 = mutex.clone();
+    let rwlock = Arc::new(RwLock::new(a));
+    let rwlock2 = rwlock.clone();
+    let rwlock3 = rwlock.clone();
 
     let thread1 = thread::spawn(move || {
-        let mut b = mutex2.lock();
+        let mut b = rwlock2.write();
         *b = 8;
     });
     let thread2 = thread::spawn(move || {
-        let mut b = mutex3.lock();
+        let mut b = rwlock3.write();
         *b = 9;
     });
 
     let _ = thread1.join();
     let _ = thread2.join();
 
-    let _locked = mutex.lock();
+    let _read = rwlock.read();
 }

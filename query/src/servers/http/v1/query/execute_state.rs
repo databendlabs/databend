@@ -23,7 +23,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::PlanNode;
 use futures::StreamExt;
 use serde::Deserialize;
 
@@ -67,12 +66,6 @@ impl ExecuteStateWrapper {
             Stopped(_) => STATE_STOPPED,
         }
     }
-    pub(crate) fn get_schema(&self) -> DataSchemaRef {
-        match &self.state {
-            Running(r) => r.plan.schema(),
-            Stopped(_) => unreachable!(),
-        }
-    }
     pub(crate) fn get_progress(&self) -> Option<ProgressValues> {
         match &self.state {
             Running(r) => Some(r.context.get_progress_value()),
@@ -99,7 +92,6 @@ pub(crate) struct ExecuteRunning {
     session: SessionRef,
     // mainly used to get progress for now
     context: DatabendQueryContextRef,
-    plan: PlanNode,
 }
 
 impl ExecuteState {
@@ -107,17 +99,18 @@ impl ExecuteState {
         request: &HttpQueryRequest,
         session_manager: &SessionManagerRef,
         block_tx: mpsc::Sender<DataBlock>,
-    ) -> Result<ExecuteStateRef> {
+    ) -> Result<(ExecuteStateRef, DataSchemaRef)> {
         let sql = &request.sql;
         let session = session_manager.create_session("http-statement")?;
         let context = session.create_context().await?;
         context.attach_query_str(sql);
 
         let plan = PlanParser::create(context.clone()).build_from_sql(sql)?;
+        let schema = plan.schema();
 
         let interpreter = InterpreterFactory::get(context.clone(), plan.clone())?;
         let data_stream = interpreter.execute(None).await?;
-        let mut data_stream = context.try_create_abortable(data_stream).unwrap();
+        let mut data_stream = context.try_create_abortable(data_stream)?;
 
         let (abort_tx, mut abort_rx) = mpsc::channel(2);
         context.attach_http_query(HttpQueryHandle {
@@ -127,7 +120,6 @@ impl ExecuteState {
         let running_state = ExecuteRunning {
             session,
             context: context.clone(),
-            plan,
         };
         let state = Arc::new(RwLock::new(ExecuteStateWrapper {
             state: Running(running_state),
@@ -157,9 +149,8 @@ impl ExecuteState {
                     }
                 }
                 log::debug!("drop block sender!");
-            })
-            .unwrap();
-        Ok(state_clone)
+            })?;
+        Ok((state_clone, schema))
     }
 
     pub(crate) async fn stop(this: &ExecuteStateRef, reason: Result<()>) {

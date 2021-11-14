@@ -120,6 +120,16 @@ pub struct DfCreateUser {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct DfAlterUser {
+    pub if_current_user: bool,
+    /// User name
+    pub name: String,
+    pub hostname: String,
+    pub new_auth_type: AuthType,
+    pub new_password: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct DfShowUsers;
 
 /// Tokens parsed by `DFParser` are converted into these values.
@@ -158,6 +168,7 @@ pub enum DfStatement {
 
     // User
     CreateUser(DfCreateUser),
+    AlterUser(DfAlterUser),
     ShowUsers(DfShowUsers),
 }
 

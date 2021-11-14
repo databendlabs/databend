@@ -12,14 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod prelude;
+#[test]
+fn test_mutex() {
+    use std::sync::Arc;
+    use std::thread;
 
-mod binary_de;
-mod binary_read;
-mod binary_ser;
-mod binary_write;
-mod buf_read;
-mod marshal;
-mod stat_buffer;
-mod unmarshal;
-mod utils;
+    use common_infallible::Mutex;
+    let a = 7u8;
+    let mutex = Arc::new(Mutex::new(a));
+    let mutex2 = mutex.clone();
+    let mutex3 = mutex.clone();
+
+    let thread1 = thread::spawn(move || {
+        let mut b = mutex2.lock();
+        *b = 8;
+    });
+    let thread2 = thread::spawn(move || {
+        let mut b = mutex3.lock();
+        *b = 9;
+    });
+
+    let _ = thread1.join();
+    let _ = thread2.join();
+
+    let _locked = mutex.lock();
+}

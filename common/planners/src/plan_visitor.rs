@@ -18,6 +18,7 @@ use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
+use crate::AlterUserPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
 use crate::CreateUserPlan;
@@ -119,6 +120,7 @@ pub trait PlanVisitor {
             PlanNode::SubQueryExpression(plan) => self.visit_sub_queries_sets(plan),
             PlanNode::Kill(plan) => self.visit_kill_query(plan),
             PlanNode::CreateUser(plan) => self.visit_create_user(plan),
+            PlanNode::AlterUser(plan) => self.visit_alter_user(plan),
         }
     }
 
@@ -239,6 +241,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_create_user(&mut self, _: &CreateUserPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_alter_user(&mut self, _: &AlterUserPlan) -> Result<()> {
         Ok(())
     }
 

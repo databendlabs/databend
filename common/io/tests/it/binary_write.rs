@@ -14,8 +14,7 @@
 
 use bytes::BufMut;
 use bytes::BytesMut;
-
-use crate::binary_write::put_uvarint;
+use common_io::prelude::put_uvarint;
 
 #[test]
 fn test_put_uvarint() {

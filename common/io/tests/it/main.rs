@@ -11,17 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
-use common_base::tokio;
-use common_exception::Result;
-
-use crate::DNSResolver;
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_resolver_github() -> Result<()> {
-    let addrs = DNSResolver::instance()?.resolve("github.com").await?;
-    assert_ne!(addrs.len(), 0);
-
-    Ok(())
-}
+mod binary_read;
+mod binary_write;
+mod buf_read;
+mod marshal;
+mod utils;

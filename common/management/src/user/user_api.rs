@@ -33,12 +33,7 @@ pub struct UserInfo {
 }
 
 impl UserInfo {
-    pub(crate) fn new(
-        name: String,
-        hostname: String,
-        password: Vec<u8>,
-        auth_type: AuthType,
-    ) -> Self {
+    pub fn new(name: String, hostname: String, password: Vec<u8>, auth_type: AuthType) -> Self {
         // Default is no privileges.
         let privileges = UserPrivilege::empty();
         let quota = UserQuota::no_limit();
