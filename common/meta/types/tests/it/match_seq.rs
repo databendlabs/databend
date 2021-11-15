@@ -14,10 +14,10 @@
 
 use std::result::Result;
 
-use crate::ConflictSeq;
-use crate::MatchSeq;
-use crate::MatchSeqExt;
-use crate::SeqV;
+use common_meta_types::ConflictSeq;
+use common_meta_types::MatchSeq;
+use common_meta_types::MatchSeqExt;
+use common_meta_types::SeqV;
 
 #[test]
 fn test_match_seq_match_seq_value() -> Result<(), ()> {

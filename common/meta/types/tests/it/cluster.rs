@@ -13,8 +13,7 @@
 // limitations under the License.
 
 use common_exception::exception::Result;
-
-use crate::NodeInfo;
+use common_meta_types::NodeInfo;
 
 #[test]
 fn test_node_info_ip_port() -> Result<()> {
