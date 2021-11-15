@@ -19,13 +19,11 @@ use std::time::UNIX_EPOCH;
 
 use common_base::tokio;
 use common_exception::Result;
+use common_management::*;
 use common_meta_api::KVApi;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_types::NodeInfo;
 use common_meta_types::SeqV;
-
-use super::*;
-use crate::cluster::cluster_mgr::ClusterMgr;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_successfully_add_node() -> Result<()> {
