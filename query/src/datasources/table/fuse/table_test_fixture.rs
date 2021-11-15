@@ -47,6 +47,7 @@ impl TestFixture {
         config.storage.storage_type = "Disk".to_string();
         // use `TempDir` as root path (auto clean)
         config.storage.disk.data_path = tmp_dir.path().to_str().unwrap().to_string();
+        config.storage.disk.temp_data_path = tmp_dir.path().to_str().unwrap().to_string();
         let ctx = crate::tests::try_create_context_with_config(config).unwrap();
 
         let random_prefix: String = Uuid::new_v4().to_simple().to_string();

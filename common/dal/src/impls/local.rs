@@ -54,7 +54,10 @@ impl Local {
             // TODO customize error code
             Err(ErrorCode::from(Error::new(
                 ErrorKind::Other,
-                format!("please dont play with me, malicious path {:?}", path),
+                format!(
+                    "please dont play with me, malicious path {:?}, root path {:?}",
+                    path, self.root
+                ),
             )))
         }
     }

@@ -25,7 +25,6 @@ use common_dal::DataAccessor;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::DataColumn;
 use common_datavalues::series::IntoSeries;
-use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -37,7 +36,9 @@ use crate::Source;
 pub struct ParquetSource {
     data_accessor: Arc<dyn DataAccessor>,
     path: String,
-    schema: ArrowSchema,
+
+    block_schema: DataSchemaRef,
+    arrow_table_schema: ArrowSchema,
     projection: Vec<usize>,
     row_group: usize,
     row_groups: usize,
@@ -48,13 +49,15 @@ impl ParquetSource {
     pub fn new(
         data_accessor: Arc<dyn DataAccessor>,
         path: String,
-        schema: DataSchemaRef,
+        table_schema: DataSchemaRef,
         projection: Vec<usize>,
     ) -> Self {
+        let block_schema = Arc::new(table_schema.project(projection.clone()));
         Self {
             data_accessor,
             path,
-            schema: schema.to_arrow(),
+            block_schema,
+            arrow_table_schema: table_schema.to_arrow(),
             projection,
             row_group: 0,
             row_groups: 0,
@@ -85,7 +88,6 @@ impl Source for ParquetSource {
         if self.row_group >= self.row_groups {
             return Ok(None);
         }
-
         let col_num = self.projection.len();
         let row_group = self.row_group;
         let cols = self
@@ -94,7 +96,7 @@ impl Source for ParquetSource {
             .into_iter()
             .map(|idx| (metadata.row_groups[row_group].column(idx).clone(), idx));
 
-        let fields = self.schema.fields();
+        let fields = self.arrow_table_schema.fields();
 
         let stream = futures::stream::iter(cols).map(|(col_meta, idx)| {
             let column_chunk_meta = (metadata.row_groups[row_group].columns()[idx]).clone();
@@ -124,7 +126,7 @@ impl Source for ParquetSource {
         let data_cols = stream.buffered(n).try_collect().await?;
 
         self.row_group += 1;
-        let block = DataBlock::create(Arc::new(DataSchema::from(self.schema.clone())), data_cols);
+        let block = DataBlock::create(self.block_schema.clone(), data_cols);
         Ok(Some(block))
     }
 }

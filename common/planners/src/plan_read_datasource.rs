@@ -52,7 +52,7 @@ impl ReadDataSourcePlan {
             .clone()
             .map(|x| {
                 let fields: Vec<_> = x.iter().map(|(_, f)| f.clone()).collect();
-                Arc::new(self.table_info.schema().project(fields))
+                Arc::new(self.table_info.schema().project_by_fields(fields))
             })
             .unwrap_or_else(|| self.table_info.schema())
     }

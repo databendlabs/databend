@@ -16,7 +16,6 @@ create table test_parquet (
     double_col double,
     date_string_col varchar(255),
     string_col varchar(255),
-    timestamp_col Timestamp
 ) Engine = Parquet location = 'tests/data/alltypes_plain.parquet';
 
 select * from system.tables;

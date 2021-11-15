@@ -72,6 +72,10 @@ impl Table for ParquetTable {
         &self.table_info
     }
 
+    fn benefit_column_prune(&self) -> bool {
+        true
+    }
+
     fn read_partitions(
         &self,
         _io_ctx: Arc<TableIOContext>,
@@ -93,7 +97,7 @@ impl Table for ParquetTable {
             .get_user_data()?
             .expect("DatabendQueryContext should not be None");
         let ctx_clone = ctx.clone();
-        let schema = plan.schema();
+        let table_schema = self.get_table_info().schema();
         let projection = plan.projections();
         let conf = ctx.get_config().storage;
         let dal = Arc::new(Local::new(conf.disk.temp_data_path.as_str()));
@@ -108,7 +112,7 @@ impl Table for ParquetTable {
                         }
                         let part = partitions.get(0).unwrap();
 
-                        let mut source = ParquetSource::new(dal.clone(), part.name.clone(), schema.clone(), projection.clone());
+                        let mut source = ParquetSource::new(dal.clone(), part.name.clone(), table_schema.clone(), projection.clone());
 
                         loop {
                             let block = source.read().await;
