@@ -5,5 +5,5 @@ rules:
   line-length:
     max: 80
     level: warning
-  braces: disable   
+  braces: disable
   brackets: disable

@@ -8,7 +8,7 @@ TENANT_ID ?= "tenant"
 CLUSTER_ID ?= "test"
 
 # yamllint vars
-YAML_FILES ?= $(shell find ./.github -type f -name '*.yaml' -or -name '*.yml')
+YAML_FILES ?= $(shell find . -path ./target -prune -type f -name '*.yaml' -or -name '*.yml')
 YAML_DOCKER_ARGS ?= run --rm --user "$$(id -u)" -v "$${PWD}:/component" --workdir /component
 YAMLLINT_ARGS ?= --no-warnings
 YAMLLINT_CONFIG ?= .yamllint.yml

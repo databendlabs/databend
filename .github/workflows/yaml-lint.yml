@@ -2,8 +2,10 @@ name: Yaml Lint
 on:
   pull_request:
     paths:
-      - '.github/**.yaml'
-      - '.github/**.yml'
+      - '**.yaml'
+      - '**.yml'
+    paths-ignore:
+      - 'target/**.yml'
 jobs:
   lintAllTheThings:
     runs-on: ubuntu-latest
@@ -12,5 +14,5 @@ jobs:
       - name: yaml-lint
         uses: ibiqlik/action-yamllint@v3
         with:
-          file_or_dir: ./.github/workflows
+          file_or_dir: ./
           config_file: .yamllint.yml
