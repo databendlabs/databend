@@ -115,7 +115,7 @@ impl HttpQuery {
         ctx.attach_query_str(&self.sql);
         let plan = PlanParser::create(ctx.clone()).build_from_sql(&self.sql)?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let data_stream = interpreter.execute().await?;
+        let data_stream = interpreter.execute(None).await?;
         let state = HttpQueryState {
             session,
             data_stream,

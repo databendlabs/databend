@@ -66,7 +66,6 @@ pub async fn do_read(
     let col_num = projection.len();
     // TODO pass in parquet file len
     let mut reader = data_accessor.get_input_stream(loc, None)?;
-
     // TODO cache parquet meta
     let metadata = read_metadata_async(&mut reader)
         .await

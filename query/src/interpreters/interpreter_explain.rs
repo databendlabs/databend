@@ -40,7 +40,10 @@ impl Interpreter for ExplainInterpreter {
         "ExplainInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute(
+        &self,
+        _input_stream: Option<SendableDataBlockStream>,
+    ) -> Result<SendableDataBlockStream> {
         let schema = self.schema();
 
         let block = match self.explain.typ {

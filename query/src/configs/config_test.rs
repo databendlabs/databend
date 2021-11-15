@@ -76,6 +76,7 @@ storage_type = \"disk\"
 
 [storage.disk]
 data_path = \"\"
+temp_data_path = \"\"
 
 [storage.s3]
 region = \"\"

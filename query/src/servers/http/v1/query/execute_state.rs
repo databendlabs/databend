@@ -109,7 +109,7 @@ impl ExecuteState {
         let schema = plan.schema();
 
         let interpreter = InterpreterFactory::get(context.clone(), plan.clone())?;
-        let data_stream = interpreter.execute().await?;
+        let data_stream = interpreter.execute(None).await?;
         let mut data_stream = context.try_create_abortable(data_stream)?;
 
         let (abort_tx, mut abort_rx) = mpsc::channel(2);

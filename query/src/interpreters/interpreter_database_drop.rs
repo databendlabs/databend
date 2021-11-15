@@ -44,7 +44,10 @@ impl Interpreter for DropDatabaseInterpreter {
         "DropDatabaseInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute(
+        &self,
+        _input_stream: Option<SendableDataBlockStream>,
+    ) -> Result<SendableDataBlockStream> {
         let datasource = self.ctx.get_catalog();
         datasource.drop_database(self.plan.clone()).await?;
 

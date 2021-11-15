@@ -53,7 +53,7 @@ async fn test_alter_user_interpreter() -> Result<()> {
     )? {
         let executor = AlterUserInterpreter::try_create(ctx, plan.clone())?;
         assert_eq!(executor.name(), "AlterUserInterpreter");
-        let mut stream = executor.execute().await?;
+        let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
         let new_user = user_mgr.get_user(name, hostname).await?;
         assert_eq!(new_user.password, Vec::from(new_password))

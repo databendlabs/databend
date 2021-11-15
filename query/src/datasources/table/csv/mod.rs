@@ -13,6 +13,5 @@
 //  limitations under the License.
 //
 pub mod csv_table;
-pub mod csv_table_stream;
 #[cfg(test)]
 mod csv_table_test;

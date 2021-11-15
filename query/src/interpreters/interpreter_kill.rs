@@ -42,7 +42,10 @@ impl Interpreter for KillInterpreter {
         "KillInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute(
+        &self,
+        _input_stream: Option<SendableDataBlockStream>,
+    ) -> Result<SendableDataBlockStream> {
         let id = &self.plan.id;
         match self.ctx.get_sessions_manager().get_session(id) {
             None => Err(ErrorCode::UnknownSession(format!(

@@ -31,7 +31,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
             .build_from_sql("create table default.a(a String, b String) Engine = Memory")?
         {
             let executor = CreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let _ = executor.execute().await?;
+            let _ = executor.execute(None).await?;
         }
     }
 
@@ -41,7 +41,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
             .build_from_sql("insert into default.a values('1,1', '2,2')")?
         {
             let executor = InsertIntoInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let _ = executor.execute().await?;
+            let _ = executor.execute(None).await?;
         }
     }
 
@@ -51,7 +51,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
             PlanParser::create(ctx.clone()).build_from_sql("select * from default.a")?
         {
             let executor = SelectInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let stream = executor.execute().await?;
+            let stream = executor.execute(None).await?;
             let result = stream.try_collect::<Vec<_>>().await?;
             let expected = vec![
                 "+-----+-----+",
@@ -74,7 +74,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
             let executor = TruncateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
             assert_eq!(executor.name(), "TruncateTableInterpreter");
 
-            let stream = executor.execute().await?;
+            let stream = executor.execute(None).await?;
             let result = stream.try_collect::<Vec<_>>().await?;
             let expected = vec!["++", "++"];
             common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
@@ -89,7 +89,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
             PlanParser::create(ctx.clone()).build_from_sql("select * from default.a")?
         {
             let executor = SelectInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let stream = executor.execute().await?;
+            let stream = executor.execute(None).await?;
             let result = stream.try_collect::<Vec<_>>().await?;
             let expected = vec!["++", "++"];
             common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

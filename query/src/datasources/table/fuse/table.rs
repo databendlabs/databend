@@ -89,8 +89,9 @@ impl Table for FuseTable {
         &self,
         io_ctx: Arc<TableIOContext>,
         insert_plan: InsertIntoPlan,
+        stream: SendableDataBlockStream,
     ) -> Result<()> {
-        self.do_append(io_ctx, insert_plan).await
+        self.do_append(io_ctx, insert_plan, stream).await
     }
 
     async fn truncate(

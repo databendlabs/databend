@@ -14,6 +14,7 @@ common-datablocks = {path = "../datablocks"}
 common-datavalues = {path = "../datavalues"}
 common-exception = {path = "../exception"}
 common-io = {path = "../io"}
+common-dal = {path = "../dal"}
 
 # Github dependencies
 
@@ -21,6 +22,10 @@ common-io = {path = "../io"}
 crossbeam = "0.8"
 futures = "0.3"
 pin-project-lite = "^0.2"
+async-trait = "0.1"
+async-stream = "0.3.2"
+csv-async =  {version = "1.1", features = ["tokio"] }
+tokio-stream = { version = "0.1", features = ["net"] }
 
 [dev-dependencies]
 pretty_assertions = "1.0"

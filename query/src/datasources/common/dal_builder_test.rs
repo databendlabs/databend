@@ -13,6 +13,8 @@
 //  limitations under the License.
 //
 
+use std::env;
+
 use common_dal::DataAccessorBuilder;
 
 use crate::configs::AzureStorageBlobConfig;
@@ -27,6 +29,8 @@ fn test_dal_builder() -> common_exception::Result<()> {
         storage_type: "disk".to_string(),
         disk: DiskStorageConfig {
             data_path: "/tmp".to_string(),
+            /// temporary directory for testing, default to current directory
+            temp_data_path: env::current_dir()?.display().to_string(),
         },
         s3: S3StorageConfig {
             region: "".to_string(),

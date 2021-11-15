@@ -14,6 +14,7 @@
 
 mod source;
 mod source_csv;
+mod source_parquet;
 mod source_values;
 
 #[cfg(test)]
@@ -22,4 +23,5 @@ mod source_test;
 pub use source::FormatSettings;
 pub use source::Source;
 pub use source_csv::CsvSource;
+pub use source_parquet::ParquetSource;
 pub use source_values::ValueSource;

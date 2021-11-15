@@ -51,7 +51,10 @@ impl Interpreter for ShowCreateTableInterpreter {
         "ShowCreateTableInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute(
+        &self,
+        _input_stream: Option<SendableDataBlockStream>,
+    ) -> Result<SendableDataBlockStream> {
         let catalog = self.ctx.get_catalog();
 
         let table = catalog.get_table(&self.plan.db, &self.plan.table).await?;

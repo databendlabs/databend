@@ -31,7 +31,7 @@ async fn test_use_interpreter() -> Result<()> {
         let executor = UseDatabaseInterpreter::try_create(ctx, plan)?;
         assert_eq!(executor.name(), "UseDatabaseInterpreter");
 
-        let mut stream = executor.execute().await?;
+        let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
     } else {
         panic!()
@@ -47,7 +47,7 @@ async fn test_use_database_interpreter_error() -> Result<()> {
     if let PlanNode::UseDatabase(plan) = PlanParser::create(ctx.clone()).build_from_sql("use xx")? {
         let executor = UseDatabaseInterpreter::try_create(ctx, plan)?;
 
-        if let Err(e) = executor.execute().await {
+        if let Err(e) = executor.execute(None).await {
             let expect = "Code: 3, displayText = Cannot USE 'xx', because the 'xx' doesn't exist.";
             assert_eq!(expect, format!("{}", e));
         } else {
