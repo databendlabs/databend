@@ -19,6 +19,8 @@ use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_meta_types::AuthType;
+use common_meta_types::UserPrivilege;
+use common_meta_types::UserPrivilegeType;
 use common_planners::ExplainType;
 use metrics::histogram;
 use sqlparser::ast::BinaryOperator;
@@ -46,6 +48,7 @@ use crate::sql::DfDescribeTable;
 use crate::sql::DfDropDatabase;
 use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
+use crate::sql::DfGrantStatement;
 use crate::sql::DfHint;
 use crate::sql::DfKillStatement;
 use crate::sql::DfShowCreateTable;
@@ -215,6 +218,10 @@ impl<'a> DfParser<'a> {
                     Keyword::TRUNCATE => {
                         self.parser.next_token();
                         self.parse_truncate()
+                    }
+                    Keyword::GRANT => {
+                        self.parser.next_token();
+                        self.parse_grant()
                     }
                     Keyword::NoKeyword => match w.value.to_uppercase().as_str() {
                         // Use database
@@ -657,6 +664,62 @@ impl<'a> DfParser<'a> {
             },
             unexpected => self.expected("truncate statement", unexpected),
         }
+    }
+
+    fn parse_privileges(&mut self) -> Result<UserPrivilege, ParserError> {
+        let mut privileges = UserPrivilege::empty();
+        loop {
+            match self.parser.next_token() {
+                Token::Word(w) => match w.keyword {
+                    // Keyword::USAGE => privileges.set_privilege(UserPrivilegeType::Usage),
+                    Keyword::CREATE => privileges.set_privilege(UserPrivilegeType::Create),
+                    Keyword::SELECT => privileges.set_privilege(UserPrivilegeType::Select),
+                    Keyword::INSERT => privileges.set_privilege(UserPrivilegeType::Insert),
+                    Keyword::SET => privileges.set_privilege(UserPrivilegeType::Set),
+                    Keyword::ALL => {
+                        privileges.set_all_privileges();
+                        // GRANT ALL [PRIVILEGES]
+                        self.consume_token("PRIVILEGES");
+                        break;
+                    }
+                    _ => return self.expected("privilege type", Token::Word(w)),
+                },
+                unexpected => return self.expected("privilege type", unexpected),
+            };
+            if !self.parser.consume_token(&Token::Comma) {
+                break;
+            }
+        }
+        Ok(privileges)
+    }
+
+    fn parse_grant(&mut self) -> Result<DfStatement, ParserError> {
+        let privileges = self.parse_privileges()?;
+        if !self.parser.parse_keyword(Keyword::ON) {
+            return self.expected("keyword ON", self.parser.peek_token());
+        }
+        // TODO: Support `db_name.tbl_name` privilege level.
+        if !self.parser.consume_token(&Token::Mul) {
+            return self.expected("*", self.parser.peek_token());
+        }
+        if self.parser.consume_token(&Token::Period) && !self.parser.consume_token(&Token::Mul) {
+            return self.expected("*.*", self.parser.peek_token());
+        }
+        if !self.parser.parse_keyword(Keyword::TO) {
+            return self.expected("keyword TO", self.parser.peek_token());
+        }
+        let name = self.parser.parse_literal_string()?;
+        let hostname = if self.consume_token("@") {
+            self.parser.parse_literal_string()?
+        } else {
+            String::from("%")
+        };
+        let grant = DfGrantStatement {
+            name,
+            hostname,
+            priv_types: privileges,
+        };
+        Ok(DfStatement::GrantPrivilege(grant))
     }
 
     fn consume_token(&mut self, expected: &str) -> bool {

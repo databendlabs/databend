@@ -38,6 +38,7 @@ use crate::Expression;
 use crate::ExpressionPlan;
 use crate::Expressions;
 use crate::FilterPlan;
+use crate::GrantPrivilegePlan;
 use crate::HavingPlan;
 use crate::InsertIntoPlan;
 use crate::KillPlan;
@@ -108,6 +109,7 @@ pub trait PlanRewriter {
             PlanNode::Kill(plan) => self.rewrite_kill(plan),
             PlanNode::CreateUser(plan) => self.create_user(plan),
             PlanNode::AlterUser(plan) => self.alter_user(plan),
+            PlanNode::GrantPrivilege(plan) => self.grant_privilege(plan),
         }
     }
 
@@ -345,6 +347,10 @@ pub trait PlanRewriter {
 
     fn alter_user(&mut self, plan: &AlterUserPlan) -> Result<PlanNode> {
         Ok(PlanNode::AlterUser(plan.clone()))
+    }
+
+    fn grant_privilege(&mut self, plan: &GrantPrivilegePlan) -> Result<PlanNode> {
+        Ok(PlanNode::GrantPrivilege(plan.clone()))
     }
 }
 

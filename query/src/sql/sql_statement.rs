@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_meta_types::AuthType;
+use common_meta_types::UserPrivilege;
 use common_planners::ExplainType;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take_till1;
@@ -132,6 +133,13 @@ pub struct DfAlterUser {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfShowUsers;
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct DfGrantStatement {
+    pub name: String,
+    pub hostname: String,
+    pub priv_types: UserPrivilege,
+}
+
 /// Tokens parsed by `DFParser` are converted into these values.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DfStatement {
@@ -170,6 +178,9 @@ pub enum DfStatement {
     CreateUser(DfCreateUser),
     AlterUser(DfAlterUser),
     ShowUsers(DfShowUsers),
+
+    // Grant
+    GrantPrivilege(DfGrantStatement),
 }
 
 /// Comment hints from SQL.

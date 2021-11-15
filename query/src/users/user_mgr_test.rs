@@ -15,6 +15,8 @@
 use common_base::tokio;
 use common_exception::Result;
 use common_meta_types::AuthType;
+use common_meta_types::UserPrivilege;
+use common_meta_types::UserPrivilegeType;
 use pretty_assertions::assert_eq;
 
 use crate::configs::Config;
@@ -70,6 +72,24 @@ async fn test_user_manager() -> Result<()> {
         user_mgr.drop_user(user, hostname).await?;
         let users = user_mgr.get_users().await?;
         assert_eq!(1, users.len());
+    }
+
+    // grant privileges
+    {
+        let user_info = User::new(user, hostname, pwd, AuthType::PlainText);
+        user_mgr.add_user(user_info.into()).await?;
+        let old_user = user_mgr.get_user(user, hostname).await?;
+        assert_eq!(old_user.privileges, UserPrivilege::empty());
+
+        let mut add_priv = UserPrivilege::empty();
+        add_priv.set_privilege(UserPrivilegeType::Set);
+
+        user_mgr
+            .set_user_privileges(user, hostname, add_priv)
+            .await?;
+        let new_user = user_mgr.get_user(user, hostname).await?;
+        assert!(new_user.privileges.has_privilege(UserPrivilegeType::Set));
+        assert!(!new_user.privileges.has_privilege(UserPrivilegeType::Create));
     }
 
     // alter.
