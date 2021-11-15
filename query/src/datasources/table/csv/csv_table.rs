@@ -22,6 +22,7 @@ use common_base::tokio;
 use common_context::DataContext;
 use common_context::IOContext;
 use common_context::TableIOContext;
+use common_dal::Local;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
@@ -103,6 +104,10 @@ impl Table for CsvTable {
         let ctx: Arc<DatabendQueryContext> = io_ctx
             .get_user_data()?
             .expect("DatabendQueryContext should not be None");
+
+        let conf = ctx.get_config().storage.disk;
+        let local = Local::new(conf.temp_data_path.as_str());
+
         let ctx_clone = ctx.clone();
         let schema = plan.schema();
         let block_size = ctx.get_settings().get_max_block_size()? as usize;
@@ -116,9 +121,15 @@ impl Table for CsvTable {
                         if partitions.is_empty() {
                             break;
                         }
+
+                        /// TODO use dal, but inputstream is not send which is need for csv-async reader
                         let part = partitions.get(0).unwrap();
                         let file = part.name.clone();
-                        let reader = tokio::fs::File::open(file.clone()).await?;
+
+                        let path = local.prefix_with_root(&file)?;
+                        let std_file = std::fs::File::open(path)?;
+                        let reader = tokio::fs::File::from_std(std_file);
+
                         let mut source = CsvSource::new(reader, schema.clone(), has_header, block_size);
 
                         loop {

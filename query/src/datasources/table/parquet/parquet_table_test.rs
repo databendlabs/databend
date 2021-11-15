@@ -58,6 +58,7 @@ async fn test_parquet_table() -> Result<()> {
     let io_ctx = ctx.get_cluster_table_io_context()?;
     let io_ctx = Arc::new(io_ctx);
     let source_plan = table.read_plan(io_ctx.clone(), None)?;
+    ctx.try_set_partitions(source_plan.parts.clone())?;
 
     let stream = table.read(io_ctx, &source_plan).await?;
     let blocks = stream.try_collect::<Vec<_>>().await?;

@@ -1540,6 +1540,7 @@ dependencies = [
  "async-trait",
  "common-arrow",
  "common-base",
+ "common-dal",
  "common-datablocks",
  "common-datavalues",
  "common-exception",

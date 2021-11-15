@@ -17,7 +17,7 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 
 #[async_trait]
-pub trait Source: Sync + Send {
+pub trait Source: Send {
     async fn read(&mut self) -> Result<Option<DataBlock>>;
 }
 

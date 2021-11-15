@@ -505,6 +505,10 @@ impl LocalRuntime for LocalQueryConfig {
                 conf.storage.disk.data_path,
             )
             .env(
+                databend_query::configs::config_storage::DISK_STORAGE_TEMP_DATA_PATH,
+                conf.storage.disk.temp_data_path,
+            )
+            .env(
                 databend_query::configs::config_query::QUERY_HTTP_HANDLER_HOST,
                 conf.query.http_handler_host,
             )

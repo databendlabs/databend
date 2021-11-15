@@ -63,4 +63,22 @@ impl ReadDataSourcePlan {
             .clone()
             .unwrap_or_else(|| self.table_info.schema().fields_map())
     }
+
+    pub fn projections(&self) -> Vec<usize> {
+        let default_proj = || {
+            (0..self.table_info.schema().fields().len())
+                .into_iter()
+                .collect::<Vec<usize>>()
+        };
+
+        if let Some(Extras {
+            projection: Some(prj),
+            ..
+        }) = &self.push_downs
+        {
+            prj.clone()
+        } else {
+            default_proj()
+        }
+    }
 }
