@@ -4,8 +4,6 @@ on:
     paths:
       - '**.yaml'
       - '**.yml'
-    paths-ignore:
-      - 'target/**.yml'
 jobs:
   lintAllTheThings:
     runs-on: ubuntu-latest
