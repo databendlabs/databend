@@ -98,12 +98,6 @@ impl SessionManager {
     }
 
     pub fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {
-        label_counter(
-            super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
-            &self.conf.query.tenant_id,
-            &self.conf.query.cluster_id,
-        );
-
         let mut sessions = self.active_sessions.write();
         match sessions.len() == self.max_sessions {
             true => Err(ErrorCode::TooManyUserConnections(
@@ -117,6 +111,12 @@ impl SessionManager {
                     self.clone(),
                 )?;
 
+                label_counter(
+                    super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
+                    &self.conf.query.tenant_id,
+                    &self.conf.query.cluster_id,
+                );
+
                 sessions.insert(session.get_id(), session.clone());
                 Ok(SessionRef::create(session))
             }
@@ -124,12 +124,6 @@ impl SessionManager {
     }
 
     pub fn create_rpc_session(self: &Arc<Self>, id: String, aborted: bool) -> Result<SessionRef> {
-        label_counter(
-            super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
-            &self.conf.query.tenant_id,
-            &self.conf.query.cluster_id,
-        );
-
         let mut sessions = self.active_sessions.write();
 
         let session = match sessions.entry(id) {
@@ -142,6 +136,12 @@ impl SessionManager {
                     String::from("RPCSession"),
                     self.clone(),
                 )?;
+
+                label_counter(
+                    super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
+                    &self.conf.query.tenant_id,
+                    &self.conf.query.cluster_id,
+                );
 
                 entry.insert(session).clone()
             }
