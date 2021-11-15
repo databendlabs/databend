@@ -6,6 +6,15 @@ ADD_NODES ?= 0
 NUM_CPUS ?= 2
 TENANT_ID ?= "tenant"
 CLUSTER_ID ?= "test"
+
+# yamllint vars
+YAML_FILES ?= $(shell find . -path ./target -prune -type f -name '*.yaml' -or -name '*.yml')
+YAML_DOCKER_ARGS ?= run --rm --user "$$(id -u)" -v "$${PWD}:/component" --workdir /component
+YAMLLINT_ARGS ?= --no-warnings
+YAMLLINT_CONFIG ?= .yamllint.yml
+YAMLLINT_IMAGE ?= docker.io/cytopia/yamllint:latest
+YAMLLINT_DOCKER ?= docker $(YAML_DOCKER_ARGS) $(YAMLLINT_IMAGE)
+
 # Setup dev toolchain
 setup:
 	bash ./scripts/setup/dev_setup.sh
@@ -16,6 +25,9 @@ fmt:
 lint:
 	cargo fmt
 	cargo clippy --tests -- -D warnings
+
+lint-yaml: $(YAML_FILES)
+	$(YAMLLINT_DOCKER) -f parsable -c $(YAMLLINT_CONFIG) $(YAMLLINT_ARGS) -- $?
 
 miri:
 	cargo miri setup
