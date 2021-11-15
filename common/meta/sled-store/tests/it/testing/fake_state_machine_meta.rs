@@ -11,16 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 use std::fmt;
 
 use async_raft::raft::MembershipConfig;
 use async_raft::LogId;
 use common_exception::ErrorCode;
+use common_meta_sled_store::SledOrderedSerde;
 use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
-
-use crate::SledOrderedSerde;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum StateMachineMetaKey {
