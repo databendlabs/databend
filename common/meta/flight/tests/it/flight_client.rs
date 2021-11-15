@@ -16,9 +16,9 @@ use std::time::Duration;
 
 use common_base::tokio;
 use common_meta_api::MetaApi;
+use common_meta_flight::MetaFlightClient;
 
-use crate::tests::start_flight_server;
-use crate::MetaFlightClient;
+use crate::start_flight_server;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_flight_client_action_timeout() {
