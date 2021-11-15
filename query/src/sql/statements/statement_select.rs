@@ -58,6 +58,7 @@ impl AnalyzableStatement for DfQueryStatement {
             return Err(cause.add_message_back(" (while in analyze select limit)."));
         }
 
+
         // TODO: check and finalize
         Ok(AnalyzedResult::SelectQuery(data))
     }
@@ -85,17 +86,24 @@ impl DfQueryStatement {
         let from_schema = data.joined_schema.to_data_schema();
         for projection_expression in &projection_expressions {
             if !data.add_aggregate_function(projection_expression)? {
-                if !data.before_group_by_expressions.contains(projection_expression) {
-                    data.before_group_by_expressions.push(projection_expression.clone());
-                }
+                match projection_expression {
+                    Expression::Alias(alias, expr) => {
+                        if !data.before_group_by_expressions.contains(&expr) {
+                            data.before_group_by_expressions.push(expr.as_ref().clone());
+                        }
 
-                if let Expression::Alias(alias, expr) = projection_expression {
-                    let field = expr.to_data_field(&from_schema)?;
+                        let field = expr.to_data_field(&from_schema)?;
 
-                    let nullable = field.is_nullable();
-                    let data_type = field.data_type().clone();
-                    let column_desc = AnalyzeQueryColumnDesc::create(alias, data_type, nullable);
-                    data.before_aggr_schema.add_projection(column_desc, true)?;
+                        let nullable = field.is_nullable();
+                        let data_type = field.data_type().clone();
+                        let column_desc = AnalyzeQueryColumnDesc::create(alias, data_type, nullable);
+                        data.before_aggr_schema.add_projection(column_desc, true)?;
+                    }
+                    _ => {
+                        if !data.before_group_by_expressions.contains(&projection_expression) {
+                            data.before_group_by_expressions.push(projection_expression.clone());
+                        }
+                    }
                 }
             }
         }
@@ -116,7 +124,6 @@ impl DfQueryStatement {
 
             if !data.group_by_expressions.contains(&analyzed_expr) {
                 // The expr completed in before_group_by_expressions.
-                // let group_by_expression = expr_as_column_expr(&analyzed_expr)?;
                 data.group_by_expressions.push(analyzed_expr.clone());
             }
 
@@ -165,7 +172,7 @@ impl DfQueryStatement {
     fn after_group_by_expr(expr: &Expression, data: &mut AnalyzeQueryState) -> Result<Expression> {
         let aggr_exprs = &data.aggregate_expressions;
         let rebased_expr = rebase_expr(&expr, aggr_exprs)?;
-        rebase_expr(&rebased_expr, &data.before_having_expressions)
+        rebase_expr(&rebased_expr, &data.group_by_expressions)
     }
 
     async fn analyze_expr_with_alias(expr: &Expr, data: &mut AnalyzeQueryState) -> Result<Expression> {
@@ -217,7 +224,7 @@ impl AnalyzeQueryState {
         let aggregate_exprs_require_expression = expand_aggregate_arg_exprs(&aggregate_exprs);
 
         if !aggregate_exprs.is_empty() {
-            self.add_before_having_exprs(expr);
+            self.add_before_having_exprs(expr, &aggregate_exprs)?;
         }
 
         for require_expression in &aggregate_exprs_require_expression {
@@ -235,19 +242,23 @@ impl AnalyzeQueryState {
         Ok(!aggregate_exprs.is_empty())
     }
 
-    fn add_before_having_exprs(&mut self, expr: &Expression) {
+    fn add_before_having_exprs(&mut self, expr: &Expression, aggr: &[Expression]) -> Result<()> {
         match expr {
             Expression::Alias(_, inner) => {
                 if !self.before_having_expressions.contains(&inner) {
-                    self.before_having_expressions.push(inner.as_ref().clone());
+                    let rebased_expr = rebase_expr(&inner, aggr)?;
+                    self.before_having_expressions.push(rebased_expr);
                 }
             }
             expr => {
                 if !self.before_having_expressions.contains(&expr) {
-                    self.before_having_expressions.push(expr.clone());
+                    let rebased_expr = rebase_expr(&expr, aggr)?;
+                    self.before_having_expressions.push(rebased_expr);
                 }
             }
-        }
+        };
+
+        Ok(())
     }
 }
 

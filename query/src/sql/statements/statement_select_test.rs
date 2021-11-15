@@ -85,6 +85,18 @@ async fn test_select_with_group() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn test_before_group_by_exprs() -> Result<()> {
+    let analyzed_query = analyze_query("SELECT 1").await?;
+    println!("{:?}", analyzed_query.before_group_by_expressions);
+    // assert!(!analyzed_query.before_group_by_expressions.is_empty());
+
+    let analyzed_query = analyze_query("SELECT COUNT() FROM system.databases").await?;
+    assert!(analyzed_query.before_group_by_expressions.is_empty());
+
+    Ok(())
+}
+
 fn assert_columns(schema: &AnalyzeQuerySchema, columns_name: Vec<&str>) {
     for column_name in &columns_name {
         assert!(schema.contains_column(column_name));
