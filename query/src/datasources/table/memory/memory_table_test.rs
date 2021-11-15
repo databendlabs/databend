@@ -71,6 +71,7 @@ async fn test_memorytable() -> Result<()> {
             tbl_name: "a".to_string(),
             tbl_id: 0,
             schema,
+            select_plan: None,
             values_opt: None,
         };
         table

@@ -72,6 +72,7 @@ async fn test_null_table() -> Result<()> {
             tbl_name: "a".to_string(),
             tbl_id: 0,
             schema: schema.clone(),
+            select_plan: None,
             values_opt: None,
         };
         table

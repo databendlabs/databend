@@ -52,7 +52,25 @@ impl InterpreterFactory {
             PlanNode::TruncateTable(v) => TruncateTableInterpreter::try_create(ctx, v),
             PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx, v),
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx, v),
-            PlanNode::InsertInto(v) => InsertIntoInterpreter::try_create(ctx, v),
+            PlanNode::InsertInto(v) => {
+                let select = match v.select_plan.clone().take() {
+                    Some(select_plan) => {
+                        if let PlanNode::Select(select_plan_node) = *select_plan {
+                            Ok(Some(SelectInterpreter::try_create(
+                                ctx.clone(),
+                                select_plan_node,
+                            )?))
+                        } else {
+                            Result::Err(ErrorCode::UnknownTypeOfQuery(format!(
+                                "unsupported select query plan for insert_into interpreter:{}",
+                                select_plan.name()
+                            )))
+                        }
+                    }
+                    None => Ok(None),
+                }?;
+                InsertIntoInterpreter::try_create(ctx, v, select)
+            }
             PlanNode::ShowCreateTable(v) => ShowCreateTableInterpreter::try_create(ctx, v),
             PlanNode::Kill(v) => KillInterpreter::try_create(ctx, v),
             PlanNode::CreateUser(v) => CreatUserInterpreter::try_create(ctx, v),

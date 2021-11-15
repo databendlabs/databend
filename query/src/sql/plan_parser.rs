@@ -492,12 +492,15 @@ impl PlanParser {
         }
 
         let mut values_opt = None;
+        let mut select_plan = None;
         if let Some(source) = source {
             if let sqlparser::ast::SetExpr::Values(_vs) = &source.body {
                 tracing::debug!("{:?}", format_sql);
                 let index = format_sql.find_substring(" VALUES ").unwrap();
                 let values = &format_sql[index + " VALUES ".len()..];
                 values_opt = Some(values.to_owned());
+            } else if let sqlparser::ast::SetExpr::Select(_) = &source.body {
+                select_plan = Some(Box::new(self.query_to_plan(source)?));
             }
         }
 
@@ -506,6 +509,7 @@ impl PlanParser {
             tbl_name,
             tbl_id,
             schema,
+            select_plan,
             values_opt,
         };
         Ok(PlanNode::InsertInto(plan_node))
