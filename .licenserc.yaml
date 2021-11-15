@@ -30,5 +30,6 @@ header:
     - "**/*.proto"
     - ".cargo"
     - "metasrv/src/proto/meta.rs"
+    - ".yamllint.yml"
 
   comment: on-failure

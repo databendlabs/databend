@@ -1,6 +1,9 @@
----
 name: Yaml Lint
-on: [push]
+on:
+  pull_request:
+    paths:
+      - '.github/**.yaml'
+      - '.github/**.yml'
 jobs:
   lintAllTheThings:
     runs-on: ubuntu-latest
