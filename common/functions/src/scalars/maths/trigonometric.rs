@@ -17,6 +17,7 @@ use std::fmt;
 use common_datavalues::prelude::*;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
@@ -63,8 +64,22 @@ impl Function for TrigonometricFunction {
         1
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
-        Ok(DataType::Float64)
+    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+        if is_numeric(&args[0]) || args[0] == DataType::String {
+            Ok(match &args[0] {
+                DataType::Int8 => DataType::UInt8,
+                DataType::Int16 => DataType::UInt16,
+                DataType::Int32 => DataType::UInt32,
+                DataType::Int64 => DataType::UInt64,
+                DataType::String => DataType::Float64,
+                dt => dt.clone(),
+            })
+        } else {
+            Err(ErrorCode::IllegalDataType(format!(
+                "Expected numeric, but got {}",
+                args[0]
+            )))
+        }
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
