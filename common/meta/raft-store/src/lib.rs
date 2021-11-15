@@ -17,10 +17,3 @@ pub mod log;
 pub mod sled_key_spaces;
 pub mod state;
 pub mod state_machine;
-
-#[macro_use]
-#[cfg(test)]
-mod testing;
-
-#[cfg(test)]
-mod raft_types_test;

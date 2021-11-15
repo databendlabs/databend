@@ -25,6 +25,12 @@ use async_raft::LogId;
 use common_base::tokio;
 use common_exception::ErrorCode;
 use common_meta_api::KVApi;
+use common_meta_raft_store::state_machine::testing::pretty_snapshot;
+use common_meta_raft_store::state_machine::testing::pretty_snapshot_iter;
+use common_meta_raft_store::state_machine::testing::snapshot_logs;
+use common_meta_raft_store::state_machine::AppliedState;
+use common_meta_raft_store::state_machine::SerializableSnapshot;
+use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::KVMeta;
@@ -39,13 +45,9 @@ use maplit::hashmap;
 use pretty_assertions::assert_eq;
 
 use crate::init_raft_store_ut;
-use crate::state_machine::testing::pretty_snapshot;
-use crate::state_machine::testing::pretty_snapshot_iter;
-use crate::state_machine::testing::snapshot_logs;
-use crate::state_machine::AppliedState;
-use crate::state_machine::SerializableSnapshot;
-use crate::state_machine::StateMachine;
 use crate::testing::new_raft_test_context;
+
+mod placement;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_state_machine_apply_non_dup_incr_seq() -> anyhow::Result<()> {
@@ -86,7 +88,7 @@ async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let mut sm = StateMachine::open(&tc.raft_config, 1).await?;
 
-    let cases = crate::state_machine::testing::cases_incr_seq();
+    let cases = common_meta_raft_store::state_machine::testing::cases_incr_seq();
 
     for (name, txid, k, want) in cases.iter() {
         let resp = sm

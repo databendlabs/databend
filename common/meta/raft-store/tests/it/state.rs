@@ -13,9 +13,9 @@
 // limitations under the License.
 use async_raft::storage::HardState;
 use common_base::tokio;
+use common_meta_raft_store::state::RaftState;
 
 use crate::init_raft_store_ut;
-use crate::state::RaftState;
 use crate::testing::new_raft_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

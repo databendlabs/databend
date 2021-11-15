@@ -16,9 +16,6 @@
 mod raft_state;
 mod raft_state_kv;
 
-#[cfg(test)]
-mod raft_state_test;
-
 pub use raft_state::RaftState;
 pub use raft_state_kv::RaftStateKey;
 pub use raft_state_kv::RaftStateValue;
