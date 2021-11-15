@@ -14,8 +14,7 @@
 
 use common_base::tokio;
 use common_meta_api::KVApiTestSuite;
-
-use crate::meta_embedded::MetaEmbedded;
+use common_meta_embedded::MetaEmbedded;
 
 #[tokio::test]
 async fn test_kv_write_read() -> anyhow::Result<()> {

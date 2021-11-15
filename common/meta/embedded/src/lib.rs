@@ -24,9 +24,4 @@ mod kv_api_impl;
 mod meta_api_impl;
 mod meta_embedded;
 
-#[cfg(test)]
-mod kv_api_impl_test;
-#[cfg(test)]
-mod meta_api_impl_test;
-
 pub use meta_embedded::MetaEmbedded;
