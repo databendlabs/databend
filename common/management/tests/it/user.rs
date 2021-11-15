@@ -18,6 +18,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common_base::tokio;
 use common_exception::ErrorCode;
+use common_management::*;
 use common_meta_api::KVApi;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::MGetKVActionReply;
@@ -29,11 +30,6 @@ use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 use mockall::predicate::*;
 use mockall::*;
-
-use crate::user::user_api::UserInfo;
-use crate::user::user_api::UserMgrApi;
-use crate::user::user_mgr::format_user_key;
-use crate::UserMgr;
 
 // and mock!
 mock! {
