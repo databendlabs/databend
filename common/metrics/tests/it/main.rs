@@ -15,10 +15,10 @@
 use std::collections::HashMap;
 
 use common_exception::ErrorCode;
-
-use crate::dump_metric_samples;
-use crate::init_default_metrics_recorder;
-use crate::MetricValue;
+use common_metrics::dump_metric_samples;
+use common_metrics::init_default_metrics_recorder;
+use common_metrics::try_handle;
+use common_metrics::MetricValue;
 
 #[test]
 fn test_dump_metric_samples() -> common_exception::Result<()> {
