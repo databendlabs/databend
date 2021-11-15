@@ -114,7 +114,9 @@ fn test_ceil_function() -> Result<()> {
 
     for t in tests {
         let func = t.func;
-        let got = func.eval(&[t.arg.clone()], 1);
+        let got = func.return_type(&[t.arg.data_type().clone()]);
+        let got = got.and_then(|_| func.eval(&[t.arg], 1));
+
         match t.expect {
             Ok(expected) => {
                 assert_eq!(&got.unwrap(), &expected, "case: {}", t.name);

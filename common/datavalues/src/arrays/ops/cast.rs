@@ -57,7 +57,26 @@ where T: DFPrimitiveType
 
 impl ArrayCast for DFStringArray {
     fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
-        cast_ca(&self.array, data_type)
+        // special case for string to float
+        if data_type == &DataType::Float32 {
+            let c = self.apply_cast_numeric(|v| {
+                lexical_core::parse_partial::<f32>(v)
+                    .unwrap_or((0.0f32, 0))
+                    .0
+            });
+
+            Ok(c.into_series())
+        } else if data_type == &DataType::Float64 {
+            let c = self.apply_cast_numeric(|v| {
+                lexical_core::parse_partial::<f64>(v)
+                    .unwrap_or((0.0f64, 0))
+                    .0
+            });
+
+            Ok(c.into_series())
+        } else {
+            cast_ca(&self.array, data_type)
+        }
     }
 }
 

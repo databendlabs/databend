@@ -19,6 +19,8 @@ SELECT CAST('33' as unsigned) = 33;
 SELECT CAST('-33aa' as signed) = 33;
 SELECT CAST('33 aa' as unsigned) = 33;
 SELECT CAST('-33' as unsigned) = 0;
+SELECT CAST('aa' as unsigned) = 0;
+SELECT CAST('aa' as Float64) = 0;
 
 SELECT '===DATE/DATETIME===';
 SELECT  toDateTime('2021-03-05 01:01:01') + 1 = toDateTime('2021-03-05 01:01:02');
