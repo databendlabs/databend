@@ -66,7 +66,7 @@ unit-test:
 	ulimit -n 10000; bash ./scripts/ci/ci-run-unit-tests.sh
 
 # Bendctl with cluster for stateful test.
-cluster: build-release cli-build-release
+cluster: build cli-build
 	mkdir -p ./.databend/local/bin/test/ && make cluster_stop || echo "stop"
 	cp ./target/release/databend-query ./.databend/local/bin/test/databend-query
 	cp ./target/release/databend-meta ./.databend/local/bin/test/databend-meta
