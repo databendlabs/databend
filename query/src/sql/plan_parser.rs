@@ -999,6 +999,20 @@ impl PlanParser {
             }),
             sqlparser::ast::Expr::Subquery(q) => Ok(self.scalar_subquery_to_rex(q)?),
             sqlparser::ast::Expr::Nested(e) => self.sql_to_rex(e, schema, select),
+            sqlparser::ast::Expr::Tuple(exprs) => {
+                if exprs.len() == 1 {
+                    return self.sql_to_rex(&exprs[0], schema, select);
+                }
+
+                let mut args = vec![];
+                for expr in exprs {
+                    args.push(self.sql_to_rex(expr, schema, select)?);
+                }
+                Ok(Expression::ScalarFunction {
+                    op: "tuple".to_owned(),
+                    args,
+                })
+            }
             sqlparser::ast::Expr::CompoundIdentifier(ids) => {
                 self.process_compound_ident(ids.as_slice(), select)
             }

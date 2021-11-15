@@ -30,9 +30,9 @@ pub struct IsNotNullFunction {
 }
 
 impl IsNotNullFunction {
-    pub fn try_create_func(display_name: &str) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(IsNotNullFunction {
-            _display_name: display_name.to_string(),
+            _display_name: "isNotNull".to_string(),
         }))
     }
 
