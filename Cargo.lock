@@ -4871,9 +4871,9 @@ dependencies = [
 
 [[package]]
 name = "poem"
-version = "1.0.23"
+version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab3fde11180e1e5c1585b90776c410b200dd9a157300c9e7dd16b25a6b1ea1dd"
+checksum = "8884b87284395c7893f364d481ae77b8155d923d5c091729b13d59e36ef9cb05"
 dependencies = [
  "async-trait",
  "base64 0.13.0",
@@ -5909,9 +5909,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.69"
+version = "1.0.70"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e466864e431129c7e0d3476b92f20458e5879919a0596c6472738d9fa2d342f8"
+checksum = "e277c495ac6cd1a01a58d0a0c574568b4d1ddf14f59965c6a58b8d96400b54f3"
 dependencies = [
  "indexmap",
  "itoa",
