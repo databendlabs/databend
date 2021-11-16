@@ -7,6 +7,10 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lib]
+doctest = false
+test = false
+
 [[bin]]
 name = "databend-meta"
 path = "src/bin/metasrv.rs"

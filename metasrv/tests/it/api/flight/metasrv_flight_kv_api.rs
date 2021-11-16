@@ -15,14 +15,15 @@
 use common_base::tokio;
 use common_meta_api::KVApiTestSuite;
 use common_meta_flight::MetaFlightClient;
-use databend_meta::init_meta_ut;
+
+use crate::init_meta_ut;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_kv_api_mget() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
+    let (_tc, addr) = crate::tests::start_metasrv().await?;
 
     let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -34,7 +35,7 @@ async fn test_kv_api_list() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
+    let (_tc, addr) = crate::tests::start_metasrv().await?;
 
     let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -46,7 +47,7 @@ async fn test_kv_api_delete() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
+    let (_tc, addr) = crate::tests::start_metasrv().await?;
 
     let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -58,7 +59,7 @@ async fn test_kv_api_update() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
+    let (_tc, addr) = crate::tests::start_metasrv().await?;
 
     let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -72,7 +73,7 @@ async fn test_kv_api_update_meta() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
+    let (_tc, addr) = crate::tests::start_metasrv().await?;
 
     let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -84,7 +85,7 @@ async fn test_kv_api_timeout() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
+    let (_tc, addr) = crate::tests::start_metasrv().await?;
 
     let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -96,7 +97,7 @@ async fn test_kv_api_write_read() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let (_tc, addr) = databend_meta::tests::start_metasrv().await?;
+    let (_tc, addr) = crate::tests::start_metasrv().await?;
 
     let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 

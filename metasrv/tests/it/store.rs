@@ -27,11 +27,12 @@ use common_meta_raft_store::state_machine::SerializableSnapshot;
 use common_meta_raft_store::state_machine::StateMachineMetaKey::LastMembership;
 use common_meta_raft_store::state_machine::StateMachineMetaValue;
 use common_tracing::tracing;
+use databend_meta::store::MetaRaftStore;
+use databend_meta::Opened;
 use maplit::btreeset;
 
-use crate::store::MetaRaftStore;
+use crate::init_meta_ut;
 use crate::tests::service::new_test_context;
-use crate::Opened;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_metasrv_restart() -> anyhow::Result<()> {

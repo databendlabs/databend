@@ -12,6 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod any_error_impl;
+use databend_meta::configs::Config;
 
-pub use any_error_impl::AnyError;
+#[test]
+fn test_fuse_commit_version() -> anyhow::Result<()> {
+    let v = &databend_meta::configs::DATABEND_COMMIT_VERSION;
+    assert!(v.len() > 0);
+    Ok(())
+}
+
+#[test]
+fn test_tls_rpc_enabled() -> anyhow::Result<()> {
+    let mut conf = Config::empty();
+    assert!(!conf.tls_rpc_server_enabled());
+    conf.flight_tls_server_key = "test".to_owned();
+    assert!(!conf.tls_rpc_server_enabled());
+    conf.flight_tls_server_cert = "test".to_owned();
+    assert!(conf.tls_rpc_server_enabled());
+    Ok(())
+}

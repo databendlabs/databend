@@ -12,22 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::configs::Config;
+pub mod service;
+pub mod tls_constants;
 
-#[test]
-fn test_fuse_commit_version() -> anyhow::Result<()> {
-    let v = &crate::configs::config::DATABEND_COMMIT_VERSION;
-    assert!(v.len() > 0);
-    Ok(())
-}
-
-#[test]
-fn test_tls_rpc_enabled() -> anyhow::Result<()> {
-    let mut conf = Config::empty();
-    assert!(!conf.tls_rpc_server_enabled());
-    conf.flight_tls_server_key = "test".to_owned();
-    assert!(!conf.tls_rpc_server_enabled());
-    conf.flight_tls_server_cert = "test".to_owned();
-    assert!(conf.tls_rpc_server_enabled());
-    Ok(())
-}
+pub use service::assert_meta_connection;
+pub use service::next_port;
+pub use service::start_metasrv;
+pub use service::start_metasrv_with_context;

@@ -14,7 +14,5 @@
 
 pub mod config;
 
-#[cfg(test)]
-mod config_test;
-
 pub use config::Config;
+pub use config::DATABEND_COMMIT_VERSION;

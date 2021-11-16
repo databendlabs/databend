@@ -24,11 +24,12 @@ use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 use common_tracing::tracing;
-use databend_meta::init_meta_ut;
-use databend_meta::tests::service::new_test_context;
-use databend_meta::tests::start_metasrv_with_context;
 use pretty_assertions::assert_eq;
 use tokio::time::Duration;
+
+use crate::init_meta_ut;
+use crate::tests::service::new_test_context;
+use crate::tests::start_metasrv_with_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_restart() -> anyhow::Result<()> {
@@ -41,7 +42,7 @@ async fn test_restart() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let (mut tc, addr) = databend_meta::tests::start_metasrv().await?;
+    let (mut tc, addr) = crate::tests::start_metasrv().await?;
 
     let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -99,7 +100,7 @@ async fn test_restart() -> anyhow::Result<()> {
 
         // restart by opening existent meta db
         tc.config.raft_config.boot = false;
-        databend_meta::tests::start_metasrv_with_context(&mut tc).await?;
+        crate::tests::start_metasrv_with_context(&mut tc).await?;
     }
 
     tokio::time::sleep(Duration::from_millis(10_000)).await;
