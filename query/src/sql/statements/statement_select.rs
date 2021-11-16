@@ -1,7 +1,8 @@
 use sqlparser::ast::{Expr, Offset, OrderByExpr, SelectItem, TableWithJoins};
 
 use common_exception::{ErrorCode, Result};
-use common_planners::{expand_aggregate_arg_exprs, expr_as_column_expr, Expression, extract_aliases, find_aggregate_exprs_in_expr, ReadDataSourcePlan, rebase_expr, resolve_aliases_to_exprs};
+use common_planners::{expand_aggregate_arg_exprs, expand_wildcard, expr_as_column_expr, Expression, extract_aliases, find_aggregate_exprs_in_expr, ReadDataSourcePlan, rebase_expr, resolve_aliases_to_exprs};
+use common_planners::PlanNode::Expression;
 
 use crate::sessions::{DatabendQueryContextRef};
 use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
@@ -79,7 +80,6 @@ impl DfQueryStatement {
     /// Expand wildcard and create columns alias map(alias -> expression) for named projection item
     pub async fn analyze_projection(&self, data: &mut AnalyzeQueryState) -> Result<()> {
         let projection_expressions = self.projection_exprs(data).await?;
-        // TODO: expand_wildcard
         data.before_aggr_schema = data.joined_schema.clone();
         data.projection_aliases = extract_aliases(&projection_expressions);
 
@@ -137,7 +137,12 @@ impl DfQueryStatement {
 
     pub async fn analyze_having(&self, data: &mut AnalyzeQueryState) -> Result<()> {
         if let Some(predicate) = &self.having {
-            let expr = Self::analyze_expr_with_alias(predicate, data).await?;
+            let schema = data.before_aggr_schema.clone();
+            let analyzer = ExpressionAnalyzer::with_source(data.ctx.clone(), schema, true);
+            let expression = analyzer.analyze(predicate).await?;
+            let projection_aliases = &data.projection_aliases;
+            let expr = resolve_aliases_to_exprs(&expression, projection_aliases)?;
+            let expr = Self::after_group_by_expr(&expr, data)?;
 
             data.add_aggregate_function(&expr)?;
             data.having_predicate = Some(Self::after_group_by_expr(&expr, data)?);
@@ -195,10 +200,12 @@ impl DfQueryStatement {
         let mut output_columns = Vec::with_capacity(self.projection.len());
         for item in &self.projection {
             match item {
-                SelectItem::Wildcard => output_columns.push(Expression::Wildcard),
+                SelectItem::Wildcard => {
+                    output_columns.extend(self.extend_wildcard_exprs(&source)?);
+                }
                 SelectItem::UnnamedExpr(expr) => {
                     output_columns.push(expr_analyzer.analyze(expr).await?);
-                },
+                }
                 SelectItem::ExprWithAlias { expr, alias } => {
                     let expr_alias = alias.value.clone();
                     let expr = Box::new(expr_analyzer.analyze(expr).await?);
@@ -209,6 +216,18 @@ impl DfQueryStatement {
         }
 
         Ok(output_columns)
+    }
+
+    fn extend_wildcard_exprs(&self, schema: &AnalyzeQuerySchema) -> Result<Vec<Expression>> {
+        let data_schema = schema.to_data_schema();
+
+        let columns_field = data_schema.fields();
+        let mut expressions = Vec::with_capacity(columns_field.len());
+        for column_field in columns_field {
+            expressions.push(Expression::Column(column_field.name().clone()));
+        }
+
+        Ok(expressions)
     }
 }
 

@@ -28,7 +28,7 @@ impl AnalyzeQuerySchema {
         for column_desc in &table_desc.columns_desc {
             match short_name_columns.entry(column_desc.short_name.clone()) {
                 Entry::Vacant(v) => { v.insert(column_desc.clone()); },
-                Entry::Occupied(v) => {
+                Entry::Occupied(_) => {
                     return Err(ErrorCode::LogicalError(
                         format!("Logical error: same columns in {:?}, this is a bug.", table_desc.name_parts)
                     ));
