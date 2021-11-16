@@ -17,10 +17,9 @@ use common_datablocks::assert_blocks_eq;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
-
-use crate::CsvSource;
-use crate::Source;
-use crate::ValueSource;
+use common_streams::CsvSource;
+use common_streams::Source;
+use common_streams::ValueSource;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_parse_values() {

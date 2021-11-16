@@ -19,9 +19,8 @@ use common_base::*;
 use common_datablocks::*;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_streams::*;
 use futures::TryStreamExt;
-
-use crate::*;
 
 #[tokio::test]
 async fn test_progress_stream() -> Result<()> {
