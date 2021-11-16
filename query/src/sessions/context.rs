@@ -200,8 +200,12 @@ impl DatabendQueryContext {
         let cata = self.get_catalog();
         let db_name = new_database_name.clone();
 
-        let res = (async move { cata.get_database(&db_name).await })
-            .wait_in(&rt, Some(Duration::from_millis(5000)))?;
+        let res = (async move { cata.get_database(&db_name).await }).wait_in(
+            &rt,
+            Some(Duration::from_millis(
+                self.get_config().query.wait_timeout_mills,
+            )),
+        )?;
 
         match res {
             Ok(_) => self.shared.set_current_database(new_database_name),

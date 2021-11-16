@@ -57,6 +57,7 @@ rpc_tls_server_cert = \"\"
 rpc_tls_server_key = \"\"
 rpc_tls_query_server_root_ca_cert = \"\"
 rpc_tls_query_service_domain_name = \"localhost\"
+wait_timeout_mills = 5000
 
 [log]
 log_level = \"INFO\"

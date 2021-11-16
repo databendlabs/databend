@@ -40,7 +40,7 @@ async fn test_configs_table() -> Result<()> {
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 4);
-    assert_eq!(block.num_rows(), 29);
+    assert_eq!(block.num_rows(), 30);
 
     let expected = vec![
         "+-----------------------------------+------------------+-------+-------------+",
@@ -75,6 +75,7 @@ async fn test_configs_table() -> Result<()> {
         "| rpc_tls_server_cert               |                  | query |             |",
         "| rpc_tls_server_key                |                  | query |             |",
         "| tenant_id                         |                  | query |             |",
+        "| wait_timeout_mills                | 5000             | query |             |",
         "+-----------------------------------+------------------+-------+-------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

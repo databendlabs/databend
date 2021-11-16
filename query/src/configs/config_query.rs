@@ -31,6 +31,7 @@ pub const QUERY_HTTP_HANDLER_PORT: &str = "QUERY_HTTP_HANDLER_PORT";
 pub const QUERY_FLIGHT_API_ADDRESS: &str = "QUERY_FLIGHT_API_ADDRESS";
 pub const QUERY_HTTP_API_ADDRESS: &str = "QUERY_HTTP_API_ADDRESS";
 pub const QUERY_METRICS_API_ADDRESS: &str = "QUERY_METRIC_API_ADDRESS";
+pub const QUERY_WAIT_TIMEOUT_MILLS: &str = "QUERY_WAIT_TIMEOUT_MILLS";
 const QUERY_API_TLS_SERVER_CERT: &str = "QUERY_API_TLS_SERVER_CERT";
 const QUERY_API_TLS_SERVER_KEY: &str = "QUERY_API_TLS_SERVER_KEY";
 const QUERY_API_TLS_SERVER_ROOT_CA_CERT: &str = "QUERY_API_TLS_SERVER_ROOT_CA_CERT";
@@ -179,6 +180,14 @@ pub struct QueryConfig {
     )]
     #[serde(default)]
     pub rpc_tls_query_service_domain_name: String,
+
+    #[structopt(
+        long,
+        env = QUERY_WAIT_TIMEOUT_MILLS,
+        default_value = "5000"
+        )]
+    #[serde(default)]
+    pub wait_timeout_mills: u64,
 }
 
 impl QueryConfig {
@@ -204,6 +213,7 @@ impl QueryConfig {
             rpc_tls_server_key: "".to_string(),
             rpc_tls_query_server_root_ca_cert: "".to_string(),
             rpc_tls_query_service_domain_name: "localhost".to_string(),
+            wait_timeout_mills: 5000,
         }
     }
 
@@ -316,6 +326,14 @@ impl QueryConfig {
             rpc_tls_query_service_domain_name,
             String,
             QUERY_RPC_TLS_SERVICE_DOMAIN_NAME
+        );
+
+        env_helper!(
+            mut_config,
+            query,
+            wait_timeout_mills,
+            u64,
+            QUERY_WAIT_TIMEOUT_MILLS
         );
     }
 }
