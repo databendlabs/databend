@@ -16,9 +16,8 @@ use common_base::tokio;
 use common_datablocks::*;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_streams::*;
 use futures::stream::StreamExt;
-
-use crate::*;
 
 #[tokio::test]
 async fn test_limitby_stream() -> Result<()> {
