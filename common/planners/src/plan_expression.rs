@@ -99,6 +99,10 @@ pub enum Expression {
         asc: bool,
         /// Whether to put Nulls before all other data values
         nulls_first: bool,
+        /// The original expression from parser. Because sort 'expr' field maybe overwritten by a Column expression, like
+        /// from BinaryExpression { +, number, number} to Column(number+number), the orig_expr is for keeping the original
+        /// one that is before overwritten. This field is mostly for function monotonicity optimization purpose.
+        origin_expr: Box<Expression>,
     },
 
     /// All fields(*) in a schema.

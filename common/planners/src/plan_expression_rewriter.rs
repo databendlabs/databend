@@ -117,12 +117,14 @@ impl Expression {
                 expr,
                 asc,
                 nulls_first,
+                origin_expr,
             } => {
                 let expr = expr.rewrite(rewriter)?;
                 Expression::Sort {
                     expr: Box::new(expr),
                     asc,
                     nulls_first,
+                    origin_expr,
                 }
             }
             _ => self,

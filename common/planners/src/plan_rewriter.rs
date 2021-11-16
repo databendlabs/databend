@@ -150,10 +150,12 @@ pub trait PlanRewriter {
                 expr,
                 asc,
                 nulls_first,
+                origin_expr,
             } => Ok(Expression::Sort {
                 expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
                 asc: *asc,
                 nulls_first: *nulls_first,
+                origin_expr: origin_expr.clone(),
             }),
             Expression::Cast { expr, data_type } => Ok(Expression::Cast {
                 expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),

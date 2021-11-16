@@ -301,12 +301,13 @@ where F: Fn(&Expression) -> Result<Option<Expression>> {
                 expr: nested_expr,
                 asc,
                 nulls_first,
+                origin_expr,
             } => Ok(Expression::Sort {
                 expr: Box::new(clone_with_replacement(&**nested_expr, replacement_fn)?),
                 asc: *asc,
                 nulls_first: *nulls_first,
+                origin_expr: origin_expr.clone(),
             }),
-
             Expression::Cast {
                 expr: nested_expr,
                 data_type,

@@ -577,13 +577,14 @@ impl PlanParser {
         let order_by_exprs = order_by
             .iter()
             .map(|e| -> Result<Expression> {
+                let new_expr = self
+                    .sql_to_rex(&e.expr, &plan.schema(), Some(select))
+                    .and_then(|expr| resolve_aliases_to_exprs(&expr, &aliases))?;
                 Ok(Expression::Sort {
-                    expr: Box::new(
-                        self.sql_to_rex(&e.expr, &plan.schema(), Some(select))
-                            .and_then(|expr| resolve_aliases_to_exprs(&expr, &aliases))?,
-                    ),
+                    expr: Box::new(new_expr.clone()),
                     asc: e.asc.unwrap_or(true),
                     nulls_first: e.nulls_first.unwrap_or(true),
+                    origin_expr: Box::new(new_expr),
                 })
             })
             .collect::<Result<Vec<Expression>>>()?;

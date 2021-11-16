@@ -13,7 +13,6 @@
 // limitations under the License.
 //
 
-use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
@@ -221,12 +220,6 @@ impl StatColumn {
 
 pub(crate) type StatColumns = Vec<StatColumn>;
 
-fn collect_columns_from_expr(expr: &Expression) -> Result<HashSet<String>> {
-    let mut visitor = RequireColumnsVisitor::default();
-    visitor = expr.accept(visitor)?;
-    Ok(visitor.required_columns)
-}
-
 struct VerifiableExprBuilder<'a> {
     args: Expressions,
     op: &'a str,
@@ -246,7 +239,7 @@ impl<'a> VerifiableExprBuilder<'a> {
     ) -> Result<Self> {
         let (args, cols, op) = match exprs.len() {
             1 => {
-                let cols = collect_columns_from_expr(&exprs[0])?;
+                let cols = RequireColumnsVisitor::collect_columns_from_expr(&exprs[0])?;
                 match cols.len() {
                     1 => (exprs, cols, op),
                     _ => {
@@ -257,8 +250,8 @@ impl<'a> VerifiableExprBuilder<'a> {
                 }
             }
             2 => {
-                let lhs_cols = collect_columns_from_expr(&exprs[0])?;
-                let rhs_cols = collect_columns_from_expr(&exprs[1])?;
+                let lhs_cols = RequireColumnsVisitor::collect_columns_from_expr(&exprs[0])?;
+                let rhs_cols = RequireColumnsVisitor::collect_columns_from_expr(&exprs[1])?;
                 match (lhs_cols.len(), rhs_cols.len()) {
                     (1, 0) => (vec![exprs[0].clone(), exprs[1].clone()], lhs_cols, op),
                     (0, 1) => {
