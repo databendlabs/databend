@@ -62,7 +62,7 @@ impl InterpreterFactory {
                             )?))
                         } else {
                             Result::Err(ErrorCode::UnknownTypeOfQuery(format!(
-                                "unsupported select query plan for insert_into interpreter:{}",
+                                "Unsupported select query plan for insert_into interpreter:{}",
                                 select_plan.name()
                             )))
                         }

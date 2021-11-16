@@ -76,7 +76,7 @@ impl Interpreter for InsertIntoInterpreter {
             let output_schema = self.plan.schema();
             let select_schema = select_executor.schema();
             if select_schema.fields().len() < output_schema.fields().len() {
-                return Err(ErrorCode::BadArguments("DataBlock schema mismatch"));
+                return Err(ErrorCode::BadArguments("Fields in select statement is less than expected"));
             }
 
             let select_input_stream = select_executor.execute(None).await?;
