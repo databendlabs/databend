@@ -17,33 +17,12 @@ use common_exception::Result;
 use common_io::prelude::*;
 
 use crate::prelude::*;
-use crate::TypeSerializer;
 
-pub struct BooleanSerializer {
+pub struct BooleanDeserializer {
     pub builder: BooleanArrayBuilder,
 }
 
-impl TypeSerializer for BooleanSerializer {
-    fn serialize_strings(&self, column: &DataColumn) -> Result<Vec<String>> {
-        let array = column.to_array()?;
-        let array: &DFBooleanArray = array.static_cast();
-
-        let result: Vec<String> = array
-            .into_iter()
-            .map(|x| {
-                x.map(|v| {
-                    if v {
-                        "true".to_owned()
-                    } else {
-                        "false".to_owned()
-                    }
-                })
-                .unwrap_or_else(|| "NULL".to_owned())
-            })
-            .collect();
-        Ok(result)
-    }
-
+impl TypeDeserializer for BooleanDeserializer {
     fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: bool = reader.read_scalar()?;
         self.builder.append_value(value);
@@ -80,5 +59,32 @@ impl TypeSerializer for BooleanSerializer {
 
     fn finish_to_series(&mut self) -> Series {
         self.builder.finish().into_series()
+    }
+}
+
+pub struct BooleanSerializer {}
+
+impl TypeSerializer for BooleanSerializer {
+    fn serialize_value(&self, value: &DataValue) -> Result<String> {
+        if let DataValue::Boolean(x) = value {
+            Ok(x.map(|v| if v { "1".to_owned() } else { "0".to_owned() })
+                .unwrap_or_else(|| "NULL".to_owned()))
+        } else {
+            Err(ErrorCode::BadBytes("Incorrect boolean value"))
+        }
+    }
+
+    fn serialize_column(&self, column: &DataColumn) -> Result<Vec<String>> {
+        let array = column.to_array()?;
+        let array: &DFBooleanArray = array.static_cast();
+
+        let result: Vec<String> = array
+            .into_iter()
+            .map(|x| {
+                x.map(|v| if v { "1".to_owned() } else { "0".to_owned() })
+                    .unwrap_or_else(|| "NULL".to_owned())
+            })
+            .collect();
+        Ok(result)
     }
 }

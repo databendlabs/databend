@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::marker::PhantomData;
 use std::ops::AddAssign;
 
 use chrono::Duration;
@@ -25,37 +26,18 @@ use num::cast::AsPrimitive;
 
 use crate::prelude::*;
 
-pub struct DateTimeSerializer<T: DFPrimitiveType> {
+pub struct DateTimeDeserializer<T: DFPrimitiveType> {
     pub builder: PrimitiveArrayBuilder<T>,
     pub tz: Tz,
 }
 
-impl<T> TypeSerializer for DateTimeSerializer<T>
+impl<T> TypeDeserializer for DateTimeDeserializer<T>
 where
     i64: AsPrimitive<T>,
     T: DFPrimitiveType,
     T: Unmarshal<T> + StatBuffer + FromLexical,
     DFPrimitiveArray<T>: IntoSeries,
 {
-    fn serialize_strings(&self, column: &DataColumn) -> Result<Vec<String>> {
-        let array = column.to_array()?;
-        let array: &DFPrimitiveArray<T> = array.static_cast();
-
-        let result: Vec<String> = array
-            .iter()
-            .map(|x| {
-                x.map(|v| {
-                    let mut dt = NaiveDateTime::from_timestamp(0, 0);
-                    let d = Duration::seconds(v.to_i64().unwrap());
-                    dt.add_assign(d);
-                    dt.format("%Y-%m-%d %H:%M:%S").to_string()
-                })
-                .unwrap_or_else(|| "NULL".to_owned())
-            })
-            .collect();
-        Ok(result)
-    }
-
     fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
         let value: T = reader.read_scalar()?;
         self.builder.append_value(value);
@@ -103,5 +85,49 @@ where
 
     fn finish_to_series(&mut self) -> Series {
         self.builder.finish().into_series()
+    }
+}
+
+pub struct DateTimeSerializer<T: DFPrimitiveType> {
+    t: PhantomData<T>,
+}
+
+impl<T: DFPrimitiveType> Default for DateTimeSerializer<T> {
+    fn default() -> Self {
+        Self {
+            t: Default::default(),
+        }
+    }
+}
+
+impl<T: DFPrimitiveType> TypeSerializer for DateTimeSerializer<T> {
+    fn serialize_value(&self, value: &DataValue) -> Result<String> {
+        if value.is_null() {
+            return Ok("NULL".to_owned());
+        }
+
+        let mut dt = NaiveDateTime::from_timestamp(0, 0);
+        let d = Duration::seconds(value.as_i64()?);
+        dt.add_assign(d);
+        Ok(dt.format("%Y-%m-%d %H:%M:%S").to_string())
+    }
+
+    fn serialize_column(&self, column: &DataColumn) -> Result<Vec<String>> {
+        let array = column.to_array()?;
+        let array: &DFPrimitiveArray<T> = array.static_cast();
+
+        let result: Vec<String> = array
+            .iter()
+            .map(|x| {
+                x.map(|v| {
+                    let mut dt = NaiveDateTime::from_timestamp(0, 0);
+                    let d = Duration::seconds(v.to_i64().unwrap());
+                    dt.add_assign(d);
+                    dt.format("%Y-%m-%d %H:%M:%S").to_string()
+                })
+                .unwrap_or_else(|| "NULL".to_owned())
+            })
+            .collect();
+        Ok(result)
     }
 }

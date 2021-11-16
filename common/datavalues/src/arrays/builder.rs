@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-
-use crate::prelude::*;
-
 pub trait ArrayBuilder<N, Array> {
     fn append_value(&mut self, val: N);
     fn append_null(&mut self);
@@ -26,15 +22,6 @@ pub trait ArrayBuilder<N, Array> {
         }
     }
     fn finish(&mut self) -> Array;
-}
-
-pub trait ArrayDeserializer {
-    fn de(&mut self, reader: &mut &[u8]) -> Result<()>;
-    fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()>;
-    /// If error occurrs, append a null by default
-    fn de_text(&mut self, reader: &[u8]);
-    fn de_null(&mut self);
-    fn finish_to_series(&mut self) -> Series;
 }
 
 pub trait NewDataArray<N> {
