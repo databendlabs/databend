@@ -6,6 +6,10 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lib]
+doctest = false
+test = false
+
 [dependencies]
 vergen = "5.1.17"
 run_script = "^0.9.0"
