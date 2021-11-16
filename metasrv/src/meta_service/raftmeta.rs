@@ -385,7 +385,6 @@ impl MetaNode {
 
             let addrs = &conf.join;
             for addr in addrs {
-                // TODO: retry
                 let mut client = MetaServiceClient::connect(format!("http://{}", addr))
                     .await
                     .map_err(|e| ErrorCode::CannotConnectNode(e.to_string()))?;
@@ -398,7 +397,9 @@ impl MetaNode {
                     }),
                 };
 
-                client.forward(admin_req.clone()).await?;
+                let _res = client.forward(admin_req.clone()).await?;
+                // TODO: retry
+                // break;
             }
 
             return Ok(mn);
