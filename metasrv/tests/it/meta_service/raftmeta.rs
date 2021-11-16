@@ -28,22 +28,23 @@ use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_tracing::tracing;
+use databend_meta::configs;
+use databend_meta::errors::ForwardToLeader;
+use databend_meta::errors::MetaError;
+use databend_meta::meta_service::meta_leader::MetaLeader;
+use databend_meta::meta_service::AdminRequest;
+use databend_meta::meta_service::AdminRequestInner;
+use databend_meta::meta_service::JoinRequest;
+use databend_meta::meta_service::MetaNode;
+use databend_meta::proto::meta_service_client::MetaServiceClient;
+use databend_meta::Opened;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
 
-use crate::configs;
-use crate::errors::ForwardToLeader;
-use crate::errors::MetaError;
-use crate::meta_service::message::AdminRequest;
-use crate::meta_service::meta_leader::MetaLeader;
-use crate::meta_service::AdminRequestInner;
-use crate::meta_service::JoinRequest;
-use crate::meta_service::MetaNode;
-use crate::proto::meta_service_client::MetaServiceClient;
+use crate::init_meta_ut;
 use crate::tests::assert_meta_connection;
 use crate::tests::service::new_test_context;
 use crate::tests::service::MetaSrvTestContext;
-use crate::Opened;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
 async fn test_meta_node_boot() -> anyhow::Result<()> {

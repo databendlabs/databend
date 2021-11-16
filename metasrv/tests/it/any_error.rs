@@ -16,8 +16,7 @@ use std::error::Error;
 use std::fmt;
 
 use anyhow::Context;
-
-use crate::any_error::AnyError;
+use databend_meta::any_error::AnyError;
 
 #[test]
 fn test_any_error() -> anyhow::Result<()> {

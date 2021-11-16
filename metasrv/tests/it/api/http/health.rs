@@ -15,6 +15,7 @@
  *
  */
 use common_base::tokio;
+use databend_meta::api::http::v1::health::health_handler;
 use poem::get;
 use poem::http::Method;
 use poem::http::StatusCode;
@@ -23,8 +24,6 @@ use poem::Endpoint;
 use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
-
-use crate::api::http::v1::health::health_handler;
 
 #[tokio::test]
 async fn test_health() -> common_exception::Result<()> {

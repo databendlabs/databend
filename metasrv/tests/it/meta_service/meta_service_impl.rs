@@ -21,15 +21,16 @@ use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_tracing::tracing;
+use databend_meta::errors::ForwardToLeader;
+use databend_meta::errors::MetaError;
+use databend_meta::errors::RetryableError;
+use databend_meta::meta_service::MetaNode;
+use databend_meta::proto::meta_service_client::MetaServiceClient;
 #[allow(unused_imports)]
 use log::info;
 use pretty_assertions::assert_eq;
 
-use crate::errors::ForwardToLeader;
-use crate::errors::MetaError;
-use crate::errors::RetryableError;
-use crate::meta_service::MetaNode;
-use crate::proto::meta_service_client::MetaServiceClient;
+use crate::init_meta_ut;
 use crate::tests::assert_meta_connection;
 use crate::tests::service::new_test_context;
 

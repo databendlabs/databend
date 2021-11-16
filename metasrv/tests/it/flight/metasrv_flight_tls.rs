@@ -17,14 +17,15 @@ use common_exception::ErrorCode;
 use common_flight_rpc::FlightClientTlsConfig;
 use common_meta_api::MetaApi;
 use common_meta_flight::MetaFlightClient;
-use databend_meta::init_meta_ut;
-use databend_meta::tests::service::new_test_context;
-use databend_meta::tests::start_metasrv_with_context;
-use databend_meta::tests::tls_constants::TEST_CA_CERT;
-use databend_meta::tests::tls_constants::TEST_CN_NAME;
-use databend_meta::tests::tls_constants::TEST_SERVER_CERT;
-use databend_meta::tests::tls_constants::TEST_SERVER_KEY;
 use pretty_assertions::assert_eq;
+
+use crate::init_meta_ut;
+use crate::tests::service::new_test_context;
+use crate::tests::start_metasrv_with_context;
+use crate::tests::tls_constants::TEST_CA_CERT;
+use crate::tests::tls_constants::TEST_CN_NAME;
+use crate::tests::tls_constants::TEST_SERVER_CERT;
+use crate::tests::tls_constants::TEST_SERVER_KEY;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tls_server() -> anyhow::Result<()> {

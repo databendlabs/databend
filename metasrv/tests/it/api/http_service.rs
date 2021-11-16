@@ -18,9 +18,9 @@ use std::io::Read;
 use common_base::tokio;
 use common_base::Stoppable;
 use common_exception::Result;
+use databend_meta::api::HttpService;
+use databend_meta::configs::Config;
 
-use crate::api::HttpService;
-use crate::configs::Config;
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;

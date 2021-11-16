@@ -15,6 +15,8 @@
  *
  */
 use common_base::tokio;
+use databend_meta::api::http::v1::config::config_handler;
+use databend_meta::configs::Config;
 use poem::get;
 use poem::http::Method;
 use poem::http::StatusCode;
@@ -24,9 +26,6 @@ use poem::EndpointExt;
 use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
-
-use crate::api::http::v1::config::config_handler;
-use crate::configs::Config;
 
 #[tokio::test]
 async fn test_config() -> common_exception::Result<()> {

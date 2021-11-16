@@ -19,12 +19,11 @@ use common_base::tokio;
 use common_base::GlobalSequence;
 use common_base::Stoppable;
 use common_tracing::tracing;
-
-use crate::api::FlightServer;
-use crate::configs;
-use crate::meta_service::MetaNode;
-use crate::proto::meta_service_client::MetaServiceClient;
-use crate::proto::GetReq;
+use databend_meta::api::FlightServer;
+use databend_meta::configs;
+use databend_meta::meta_service::MetaNode;
+use databend_meta::proto::meta_service_client::MetaServiceClient;
+use databend_meta::proto::GetReq;
 
 // Start one random service and get the session manager.
 #[tracing::instrument(level = "info")]

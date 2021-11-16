@@ -20,13 +20,8 @@ pub use network::Network;
 pub use raftmeta::MetaNode;
 
 mod message;
-mod meta_leader;
+pub mod meta_leader;
 mod meta_node_kv_api_impl;
 pub mod meta_service_impl;
 pub mod network;
 pub mod raftmeta;
-
-#[cfg(test)]
-mod meta_service_impl_test;
-#[cfg(test)]
-pub mod raftmeta_test;
