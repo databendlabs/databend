@@ -41,6 +41,7 @@ use common_planners::DropTablePlan;
 use common_planners::ExplainPlan;
 use common_planners::Expression;
 use common_planners::Extras;
+use common_planners::GrantPrivilegePlan;
 use common_planners::InsertIntoPlan;
 use common_planners::KillPlan;
 use common_planners::PlanBuilder;
@@ -75,6 +76,7 @@ use crate::sql::DfCreateUser;
 use crate::sql::DfDescribeTable;
 use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
+use crate::sql::DfGrantStatement;
 use crate::sql::DfHint;
 use crate::sql::DfKillStatement;
 use crate::sql::DfParser;
@@ -177,6 +179,7 @@ impl PlanParser {
                 self.build_from_sql("SELECT * FROM system.users ORDER BY name")
             }
             DfStatement::AlterUser(v) => self.sql_alter_user_to_plan(v),
+            DfStatement::GrantPrivilege(v) => self.sql_grant_privilege_to_plan(v),
         }
     }
 
@@ -354,6 +357,15 @@ impl PlanParser {
             new_password: Vec::from(alter.new_password.clone()),
             hostname: alter.hostname.clone(),
             new_auth_type: alter.new_auth_type.clone(),
+        }))
+    }
+
+    #[tracing::instrument(level = "info", skip(self, grant), fields(ctx.id = self.ctx.get_id().as_str()))]
+    pub fn sql_grant_privilege_to_plan(&self, grant: &DfGrantStatement) -> Result<PlanNode> {
+        Ok(PlanNode::GrantPrivilege(GrantPrivilegePlan {
+            name: grant.name.clone(),
+            hostname: grant.hostname.clone(),
+            priv_types: grant.priv_types,
         }))
     }
 

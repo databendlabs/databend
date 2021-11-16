@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops;
+
 use enumflags2::bitflags;
 use enumflags2::make_bitflags;
 use enumflags2::BitFlags;
@@ -55,11 +57,28 @@ impl UserPrivilege {
         self.privileges |= privilege;
     }
 
-    pub fn has_privilege(&mut self, privilege: UserPrivilegeType) -> bool {
+    pub fn has_privilege(&self, privilege: UserPrivilegeType) -> bool {
         self.privileges.contains(privilege)
     }
 
     pub fn set_all_privileges(&mut self) {
         self.privileges |= ALL_PRIVILEGES;
+    }
+}
+
+impl ops::BitOr for UserPrivilege {
+    type Output = Self;
+    #[inline(always)]
+    fn bitor(self, other: Self) -> Self {
+        Self {
+            privileges: self.privileges | other.privileges,
+        }
+    }
+}
+
+impl ops::BitOrAssign for UserPrivilege {
+    #[inline(always)]
+    fn bitor_assign(&mut self, other: Self) {
+        self.privileges |= other.privileges
     }
 }

@@ -47,6 +47,10 @@ impl UserInfo {
             quota,
         }
     }
+
+    pub fn set_privileges(&mut self, privileges: UserPrivilege) {
+        self.privileges |= privileges;
+    }
 }
 
 #[async_trait::async_trait]
@@ -68,6 +72,14 @@ pub trait UserMgrApi: Sync + Send {
         hostname: String,
         new_password: Option<Vec<u8>>,
         new_auth: Option<AuthType>,
+        seq: Option<u64>,
+    ) -> Result<Option<u64>>;
+
+    async fn set_user_privileges(
+        &self,
+        username: String,
+        hostname: String,
+        privileges: UserPrivilege,
         seq: Option<u64>,
     ) -> Result<Option<u64>>;
 

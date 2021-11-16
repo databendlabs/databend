@@ -20,6 +20,7 @@ use common_management::UserMgr;
 use common_management::UserMgrApi;
 use common_meta_api::KVApi;
 use common_meta_types::AuthType;
+use common_meta_types::UserPrivilege;
 use sha2::Digest;
 
 use crate::common::MetaClientProvider;
@@ -116,6 +117,24 @@ impl UserManager {
         match add_user.await {
             Ok(res) => Ok(res),
             Err(failure) => Err(failure.add_message_back("(while add user).")),
+        }
+    }
+
+    pub async fn set_user_privileges(
+        &self,
+        username: &str,
+        hostname: &str,
+        privileges: UserPrivilege,
+    ) -> Result<Option<u64>> {
+        let set_user_privileges = self.api_provider.set_user_privileges(
+            username.to_string(),
+            hostname.to_string(),
+            privileges,
+            None,
+        );
+        match set_user_privileges.await {
+            Ok(res) => Ok(res),
+            Err(failure) => Err(failure.add_message_back("(while set user privileges)")),
         }
     }
 

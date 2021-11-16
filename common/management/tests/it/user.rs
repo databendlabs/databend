@@ -545,7 +545,26 @@ mod update {
         );
         let test_seq = None;
 
-        // - get_kv should NOT be called
+        let old_pass = "old_key";
+        let old_auth_type = AuthType::DoubleSha1;
+
+        let user_info = UserInfo::new(
+            test_user_name.to_string(),
+            test_hostname.to_string(),
+            Vec::from(old_pass),
+            old_auth_type,
+        );
+        let prev_value = serde_json::to_vec(&user_info)?;
+
+        // - get_kv should be called
+        let mut kv = MockKV::new();
+        {
+            let test_key = test_key.clone();
+            kv.expect_get_kv()
+                .with(predicate::function(move |v| v == test_key.as_str()))
+                .times(1)
+                .return_once(move |_k| Ok(Some(SeqV::new(0, prev_value))));
+        }
         // - update_kv should be called
 
         let new_pass = "new_pass";
@@ -559,7 +578,6 @@ mod update {
         );
         let new_value = serde_json::to_vec(&new_user_info)?;
 
-        let mut kv = MockKV::new();
         kv.expect_upsert_kv()
             .with(predicate::eq(UpsertKVAction::new(
                 &test_key,
@@ -651,8 +669,26 @@ mod update {
         );
         let test_seq = None;
 
-        // get_kv should not be called
+        let old_pass = "old_key";
+        let old_auth_type = AuthType::DoubleSha1;
+
+        let user_info = UserInfo::new(
+            test_user_name.to_string(),
+            test_hostname.to_string(),
+            Vec::from(old_pass),
+            old_auth_type,
+        );
+        let prev_value = serde_json::to_vec(&user_info)?;
+
+        // - get_kv should be called
         let mut kv = MockKV::new();
+        {
+            let test_key = test_key.clone();
+            kv.expect_get_kv()
+                .with(predicate::function(move |v| v == test_key.as_str()))
+                .times(1)
+                .return_once(move |_k| Ok(Some(SeqV::new(0, prev_value))));
+        }
 
         // upsert should be called
         kv.expect_upsert_kv()
@@ -676,6 +712,70 @@ mod update {
             res.await.unwrap_err().code(),
             ErrorCode::UnknownUser("").code()
         );
+        Ok(())
+    }
+}
+
+mod set_user_privileges {
+    use common_meta_types::AuthType;
+    use common_meta_types::UserPrivilege;
+    use common_meta_types::UserPrivilegeType;
+
+    use super::*;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_set_user_privileges() -> common_exception::Result<()> {
+        let test_user_name = "name";
+        let test_hostname = "localhost";
+        let test_key = format!(
+            "__fd_users/tenant1/{}",
+            format_user_key(test_user_name, test_hostname)
+        );
+        let test_seq = None;
+
+        let mut user_info = UserInfo::new(
+            test_user_name.to_string(),
+            test_hostname.to_string(),
+            Vec::from("pass"),
+            AuthType::DoubleSha1,
+        );
+        let prev_value = serde_json::to_vec(&user_info)?;
+
+        // - get_kv should be called
+        let mut kv = MockKV::new();
+        {
+            let test_key = test_key.clone();
+            kv.expect_get_kv()
+                .with(predicate::function(move |v| v == test_key.as_str()))
+                .times(1)
+                .return_once(move |_k| Ok(Some(SeqV::new(0, prev_value))));
+        }
+        // - update_kv should be called
+        let mut privileges = UserPrivilege::empty();
+        privileges.set_privilege(UserPrivilegeType::Select);
+        user_info.set_privileges(privileges);
+        let new_value = serde_json::to_vec(&user_info)?;
+
+        kv.expect_upsert_kv()
+            .with(predicate::eq(UpsertKVAction::new(
+                &test_key,
+                MatchSeq::GE(1),
+                Operation::Update(new_value),
+                None,
+            )))
+            .times(1)
+            .return_once(|_| Ok(UpsertKVActionReply::new(None, Some(SeqV::new(0, vec![])))));
+
+        let kv = Arc::new(kv);
+        let user_mgr = UserMgr::new(kv, "tenant1");
+
+        let res = user_mgr.set_user_privileges(
+            test_user_name.to_string(),
+            test_hostname.to_string(),
+            privileges,
+            test_seq,
+        );
+        assert!(res.await.is_ok());
         Ok(())
     }
 }

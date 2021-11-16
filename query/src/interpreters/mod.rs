@@ -21,6 +21,8 @@ mod interpreter_describe_table_test;
 #[cfg(test)]
 mod interpreter_explain_test;
 #[cfg(test)]
+mod interpreter_grant_privilege_test;
+#[cfg(test)]
 mod interpreter_select_test;
 #[cfg(test)]
 mod interpreter_setting_test;
@@ -47,6 +49,7 @@ mod interpreter_database_drop;
 mod interpreter_describe_table;
 mod interpreter_explain;
 mod interpreter_factory;
+mod interpreter_grant_privilege;
 mod interpreter_insert_into;
 mod interpreter_kill;
 mod interpreter_select;
@@ -71,6 +74,7 @@ pub use interpreter_database_drop::DropDatabaseInterpreter;
 pub use interpreter_describe_table::DescribeTableInterpreter;
 pub use interpreter_explain::ExplainInterpreter;
 pub use interpreter_factory::InterpreterFactory;
+pub use interpreter_grant_privilege::GrantPrivilegeInterpreter;
 pub use interpreter_insert_into::InsertIntoInterpreter;
 pub use interpreter_select::SelectInterpreter;
 pub use interpreter_setting::SettingInterpreter;
