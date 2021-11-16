@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_planners::*;
 
 use crate::test::Test;
-use crate::*;
 
 #[test]
 fn test_plan_builds() -> Result<()> {

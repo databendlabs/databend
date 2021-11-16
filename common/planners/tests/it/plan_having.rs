@@ -13,23 +13,23 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_planners::*;
 
 use crate::test::Test;
-use crate::*;
 
 #[test]
-fn test_filter_plan() -> Result<()> {
+fn test_having_plan() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     let source = Test::create().generate_source_plan_for_test(10000)?;
     let plan = PlanBuilder::from(&source)
-        .filter(col("number").eq(lit(1i64)))?
+        .having(col("number").eq(lit(1i64)))?
         .project(&[col("number")])?
         .build()?;
 
-    let expect ="\
+    let expect = "\
     Projection: number:UInt64\
-    \n  Filter: (number = 1)\
+    \n  Having: (number = 1)\
     \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
     let actual = format!("{:?}", plan);
 

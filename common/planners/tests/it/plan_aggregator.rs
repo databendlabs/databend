@@ -14,38 +14,30 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataType;
 use common_exception::Result;
+use common_planners::*;
 use pretty_assertions::assert_eq;
 
 use crate::test::Test;
-use crate::*;
 
 #[test]
-fn test_explain_plan() -> Result<()> {
+fn test_aggregator_plan() -> Result<()> {
     let source = Test::create().generate_source_plan_for_test(10000)?;
     let plan = PlanBuilder::from(&source)
-        .project(&[col("number").alias("c1"), col("number").alias("c2")])?
-        .filter(add(col("number"), lit(1)).eq(lit(4)))?
-        .having(add(col("number"), lit(1)).eq(lit(4)))?
+        .aggregate_partial(&[sum(col("number")).alias("sumx")], &[])?
+        .aggregate_final(source.schema(), &[sum(col("number")).alias("sumx")], &[])?
+        .project(&[col("sumx")])?
         .build()?;
     let explain = PlanNode::Explain(ExplainPlan {
         typ: ExplainType::Syntax,
         input: Arc::new(plan),
     });
-    let expect ="\
-    Having: ((number + 1) = 4)\
-    \n  Filter: ((number + 1) = 4)\
-    \n    Projection: number as c1:UInt64, number as c2:UInt64\
-    \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
+    let expect = "\
+        Projection: sumx:UInt64\
+        \n  AggregatorFinal: groupBy=[[]], aggr=[[sum(number) as sumx]]\
+        \n    AggregatorPartial: groupBy=[[]], aggr=[[sum(number) as sumx]]\
+        \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
     let actual = format!("{:?}", explain);
     assert_eq!(expect, actual);
-    assert_eq!(explain.schema().fields().clone(), vec![DataField::new(
-        "explain",
-        DataType::String,
-        false
-    )]);
-
     Ok(())
 }

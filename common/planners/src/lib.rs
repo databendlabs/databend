@@ -12,35 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod plan_aggregator_test;
-#[cfg(test)]
-mod plan_builder_test;
-#[cfg(test)]
-mod plan_describe_table_test;
-#[cfg(test)]
-mod plan_display_test;
-#[cfg(test)]
-mod plan_explain_test;
-#[cfg(test)]
-mod plan_expression_test;
-#[cfg(test)]
-mod plan_extras_test;
-#[cfg(test)]
-mod plan_filter_test;
-#[cfg(test)]
-mod plan_having_test;
-#[cfg(test)]
-mod plan_limit_test;
-#[cfg(test)]
-mod plan_projection_test;
-#[cfg(test)]
-mod plan_rewriter_test;
-#[cfg(test)]
-mod plan_select_test;
-#[cfg(test)]
-mod test;
-
 mod plan_aggregator_final;
 mod plan_aggregator_partial;
 mod plan_broadcast;

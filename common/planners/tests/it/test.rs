@@ -17,12 +17,11 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
 use common_meta_types::TableInfo;
-
-use crate::Part;
-use crate::Partitions;
-use crate::PlanNode;
-use crate::ReadDataSourcePlan;
-use crate::Statistics;
+use common_planners::Part;
+use common_planners::Partitions;
+use common_planners::PlanNode;
+use common_planners::ReadDataSourcePlan;
+use common_planners::Statistics;
 
 pub struct Test {}
 

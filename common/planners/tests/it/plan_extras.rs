@@ -13,9 +13,8 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_planners::*;
 use pretty_assertions::assert_eq;
-
-use crate::*;
 
 #[test]
 fn test_plan_extras() -> Result<()> {

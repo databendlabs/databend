@@ -12,27 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+use std::sync::Arc;
 
-use crate::test::Test;
-use crate::*;
+use common_datavalues::prelude::*;
+use common_exception::Result;
+use common_planners::*;
 
 #[test]
-fn test_having_plan() -> Result<()> {
+fn test_select_wildcard_plan() -> Result<()> {
     use pretty_assertions::assert_eq;
 
-    let source = Test::create().generate_source_plan_for_test(10000)?;
-    let plan = PlanBuilder::from(&source)
-        .having(col("number").eq(lit(1i64)))?
-        .project(&[col("number")])?
-        .build()?;
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::String, false)]);
+    let plan = PlanBuilder::create(schema).project(&[col("a")])?.build()?;
+    let select = PlanNode::Select(SelectPlan {
+        input: Arc::new(plan),
+    });
+    let expect = "Projection: a:String";
 
-    let expect = "\
-    Projection: number:UInt64\
-    \n  Having: (number = 1)\
-    \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
-    let actual = format!("{:?}", plan);
-
+    let actual = format!("{:?}", select);
     assert_eq!(expect, actual);
     Ok(())
 }
