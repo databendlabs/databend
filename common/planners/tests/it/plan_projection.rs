@@ -16,8 +16,7 @@ use std::sync::Arc;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-
-use crate::*;
+use common_planners::*;
 
 #[test]
 fn test_projection_plan() -> Result<()> {

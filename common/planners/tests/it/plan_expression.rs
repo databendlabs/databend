@@ -17,9 +17,9 @@ use std::sync::Arc;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::*;
 
 use crate::test::Test;
-use crate::*;
 
 #[test]
 fn test_expression_plan_format() -> Result<()> {

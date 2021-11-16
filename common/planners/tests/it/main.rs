@@ -12,25 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_datavalues::prelude::*;
-use common_exception::Result;
-
-use crate::*;
-
-#[test]
-fn test_select_wildcard_plan() -> Result<()> {
-    use pretty_assertions::assert_eq;
-
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::String, false)]);
-    let plan = PlanBuilder::create(schema).project(&[col("a")])?.build()?;
-    let select = PlanNode::Select(SelectPlan {
-        input: Arc::new(plan),
-    });
-    let expect = "Projection: a:String";
-
-    let actual = format!("{:?}", select);
-    assert_eq!(expect, actual);
-    Ok(())
-}
+mod plan_aggregator;
+mod plan_builder;
+mod plan_describe_table;
+mod plan_display;
+mod plan_explain;
+mod plan_expression;
+mod plan_extras;
+mod plan_filter;
+mod plan_having;
+mod plan_limit;
+mod plan_projection;
+mod plan_rewriter;
+mod plan_select;
+mod test;

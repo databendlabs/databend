@@ -19,8 +19,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
 use common_meta_types::TableMeta;
-
-use crate::*;
+use common_planners::*;
 
 #[test]
 fn test_plan_display_indent() -> Result<()> {

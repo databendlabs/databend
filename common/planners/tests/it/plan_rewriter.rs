@@ -16,9 +16,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_planners::*;
 
 use crate::test::Test;
-use crate::*;
 
 #[test]
 fn test_rewrite_projection_alias_plan() -> Result<()> {
@@ -209,9 +209,8 @@ impl PlanRewriter for DefaultRewriter {
 
 #[test]
 fn test_plan_rewriter_1() -> Result<()> {
+    use common_planners::*;
     use pretty_assertions::assert_eq;
-
-    use crate::*;
 
     let source = Test::create().generate_source_plan_for_test(10000)?;
     let plan = PlanBuilder::from(&source)

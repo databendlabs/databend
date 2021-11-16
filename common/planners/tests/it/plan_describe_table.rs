@@ -16,9 +16,8 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
+use common_planners::*;
 use pretty_assertions::assert_eq;
-
-use crate::*;
 
 #[test]
 fn test_describe_table_plan() -> Result<()> {

@@ -12,23 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_exception::Result;
+use common_planners::*;
 
-use crate::*;
+use crate::test::Test;
 
 #[test]
-fn test_limit_plan() -> Result<()> {
+fn test_filter_plan() -> Result<()> {
     use pretty_assertions::assert_eq;
 
-    let limit = PlanNode::Limit(LimitPlan {
-        n: Some(33),
-        offset: 0,
-        input: Arc::from(PlanBuilder::empty().build()?),
-    });
-    let expect = "Limit: 33";
-    let actual = format!("{:?}", limit);
+    let source = Test::create().generate_source_plan_for_test(10000)?;
+    let plan = PlanBuilder::from(&source)
+        .filter(col("number").eq(lit(1i64)))?
+        .project(&[col("number")])?
+        .build()?;
+
+    let expect ="\
+    Projection: number:UInt64\
+    \n  Filter: (number = 1)\
+    \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10000, read_bytes: 80000]";
+    let actual = format!("{:?}", plan);
+
     assert_eq!(expect, actual);
     Ok(())
 }
