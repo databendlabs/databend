@@ -25,10 +25,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::Stream;
 use futures::StreamExt;
-use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 
-use crate::Bytes;
 use crate::DataAccessor;
 use crate::InputStream;
 
@@ -70,14 +68,6 @@ impl DataAccessor for Local {
         let std_file = std::fs::File::open(path)?;
         let tokio_file = tokio::fs::File::from_std(std_file);
         Ok(Box::new(tokio_file.compat()))
-    }
-
-    async fn get(&self, path: &str) -> Result<Bytes> {
-        let path = self.prefix_with_root(path)?;
-        let mut file = tokio::fs::File::open(path).await?;
-        let mut contents = vec![];
-        let _ = file.read_to_end(&mut contents).await?;
-        Ok(contents)
     }
 
     // not "atomic", for test purpose only

@@ -17,22 +17,32 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use common_dal::AzureBlobAccessor;
+use common_dal::DalWithMetric;
 use common_dal::DataAccessor;
 use common_dal::DataAccessorBuilder;
 use common_dal::Local;
 use common_dal::StorageScheme;
 use common_dal::S3;
+use common_metrics::TenantLabel;
 
 use crate::configs::config_storage::AzureStorageBlobConfig;
 use crate::configs::StorageConfig;
 
 pub struct ContextDalBuilder {
+    tenant_label: TenantLabel,
     storage_conf: StorageConfig,
 }
 
 impl ContextDalBuilder {
-    pub fn new(storage_conf: StorageConfig) -> Self {
-        Self { storage_conf }
+    pub fn new(
+        tenant_id: impl Into<String>,
+        cluster_id: impl Into<String>,
+        storage_conf: StorageConfig,
+    ) -> Self {
+        Self {
+            tenant_label: TenantLabel::new(tenant_id, cluster_id),
+            storage_conf,
+        }
     }
 }
 
@@ -41,26 +51,28 @@ impl DataAccessorBuilder for ContextDalBuilder {
         let conf = &self.storage_conf;
         let scheme_name = &conf.storage_type;
         let scheme = StorageScheme::from_str(scheme_name)?;
-        match scheme {
+        let da: Arc<dyn DataAccessor> = match scheme {
             StorageScheme::S3 => {
                 let conf = &conf.s3;
-                Ok(Arc::new(S3::try_create(
+                Arc::new(S3::try_create(
                     &conf.region,
                     &conf.endpoint_url,
                     &conf.bucket,
                     &conf.access_key_id,
                     &conf.secret_access_key,
-                )?))
+                )?)
             }
             StorageScheme::AzureStorageBlob => {
                 let conf: &AzureStorageBlobConfig = &conf.azure_storage_blob;
-                Ok(Arc::new(AzureBlobAccessor::with_credentials(
+                Arc::new(AzureBlobAccessor::with_credentials(
                     &conf.account,
                     &conf.container,
                     &conf.master_key,
-                )))
+                ))
             }
-            StorageScheme::LocalFs => Ok(Arc::new(Local::new(conf.disk.data_path.as_str()))),
-        }
+            StorageScheme::LocalFs => Arc::new(Local::new(conf.disk.data_path.as_str())),
+        };
+
+        Ok(Arc::new(DalWithMetric::new(self.tenant_label.clone(), da)))
     }
 }

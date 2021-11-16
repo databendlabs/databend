@@ -1203,6 +1203,7 @@ dependencies = [
  "common-datablocks",
  "common-exception",
  "common-infallible",
+ "common-metrics",
  "futures",
  "metrics",
  "pretty_assertions",
@@ -1212,6 +1213,7 @@ dependencies = [
  "rusoto_s3",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -2128,8 +2130,6 @@ dependencies = [
  "quantiles",
  "rand 0.8.4",
  "reqwest",
- "rusoto_core",
- "rusoto_s3",
  "serde",
  "serde_json",
  "sha1",

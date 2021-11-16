@@ -257,9 +257,15 @@ impl DatabendQueryContext {
         let settings = self.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
 
+        let tenant_id = self.shared.conf.query.tenant_id.clone();
+        let cluster_id = self.shared.conf.query.cluster_id.clone();
         Ok(TableIOContext::new(
             self.get_shared_runtime()?,
-            Arc::new(ContextDalBuilder::new(self.get_config().storage)),
+            Arc::new(ContextDalBuilder::new(
+                tenant_id,
+                cluster_id,
+                self.get_config().storage,
+            )),
             max_threads,
             nodes,
             Some(self.clone()),
