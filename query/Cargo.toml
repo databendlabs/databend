@@ -57,7 +57,7 @@ ahash = "0.7.6"
 async-compat = "0.2.1"
 async-trait = "0.1"
 async-stream = "0.3.2"
-poem = { version = "1.0.23", features = ["rustls"] }
+poem = { version = "1.0.27", features = ["rustls"] }
 bumpalo = "3.8.0"
 byteorder = "1"
 bytes = "1"
