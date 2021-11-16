@@ -6,6 +6,10 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lib]
+doctest = false
+test = false
+
 [dependencies] # In alphabetical order
 lazy_static = "1.4.0"
 opentelemetry = { version = "0.16", default-features = false, features = ["trace", "rt-tokio"] }
