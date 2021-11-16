@@ -12,20 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod allocators;
+mod derive;
 mod malloc_size;
-// mod sizeof;
-
-pub use allocators::new_malloc_size_ops;
-pub use allocators::Allocator;
-pub use allocators::MallocSizeOfExt;
-pub use malloc_size::MallocShallowSizeOf;
-pub use malloc_size::MallocSizeOf;
-pub use malloc_size::MallocSizeOfOps;
-
-/// Heap size of structure.
-///
-/// Structure can be anything that implements MallocSizeOf.
-pub fn malloc_size<T: MallocSizeOf + ?Sized>(t: &T) -> usize {
-    MallocSizeOf::size_of(t, &mut allocators::new_malloc_size_ops())
-}
