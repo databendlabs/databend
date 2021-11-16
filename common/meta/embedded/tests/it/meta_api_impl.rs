@@ -14,8 +14,7 @@
 
 use common_base::tokio;
 use common_meta_api::MetaApiTestSuite;
-
-use crate::MetaEmbedded;
+use common_meta_embedded::MetaEmbedded;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_embedded_database_create_get_drop() -> anyhow::Result<()> {

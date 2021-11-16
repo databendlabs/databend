@@ -13,15 +13,22 @@
 // limitations under the License.
 
 use common_exception::exception::Result;
-
-use crate::UserQuota;
+use common_meta_types::UserPrivilege;
+use common_meta_types::UserPrivilegeType;
 
 #[test]
-fn test_user_quota() -> Result<()> {
-    let quota = UserQuota::no_limit();
-    assert_eq!(quota.max_cpu, 0);
-    assert_eq!(quota.max_memory_in_bytes, 0);
-    assert_eq!(quota.max_storage_in_bytes, 0);
+fn test_user_privilege() -> Result<()> {
+    let mut privileges = UserPrivilege::empty();
+    let r = privileges.has_privilege(UserPrivilegeType::Set);
+    assert!(!r);
+
+    privileges.set_privilege(UserPrivilegeType::Set);
+    let r = privileges.has_privilege(UserPrivilegeType::Set);
+    assert!(r);
+
+    privileges.set_all_privileges();
+    let r = privileges.has_privilege(UserPrivilegeType::Create);
+    assert!(r);
 
     Ok(())
 }

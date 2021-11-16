@@ -17,11 +17,11 @@ use async_raft::raft::EntryNormal;
 use async_raft::raft::EntryPayload;
 use async_raft::LogId;
 use common_base::tokio;
+use common_meta_raft_store::log::RaftLog;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 
 use crate::init_raft_store_ut;
-use crate::log::RaftLog;
 use crate::testing::new_raft_test_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

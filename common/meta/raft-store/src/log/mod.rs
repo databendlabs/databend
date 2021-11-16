@@ -14,7 +14,4 @@
 
 mod raft_log;
 
-#[cfg(test)]
-mod raft_log_test;
-
 pub use raft_log::RaftLog;

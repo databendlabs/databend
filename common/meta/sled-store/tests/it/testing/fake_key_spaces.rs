@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use async_raft::raft::Entry;
+use common_meta_sled_store::SledKeySpace;
 use common_meta_types::LogEntry;
 use common_meta_types::LogIndex;
 use common_meta_types::Node;
@@ -21,10 +22,10 @@ use common_meta_types::SeqV;
 
 use crate::testing::fake_state_machine_meta::StateMachineMetaKey;
 use crate::testing::fake_state_machine_meta::StateMachineMetaValue;
-use crate::SledKeySpace;
 
 /// Types for raft log in SledTree
 pub struct Logs {}
+
 impl SledKeySpace for Logs {
     const PREFIX: u8 = 1;
     const NAME: &'static str = "log";

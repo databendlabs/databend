@@ -17,13 +17,14 @@ use async_raft::raft::EntryNormal;
 use async_raft::raft::EntryPayload;
 use common_base::tokio;
 use common_base::GlobalSequence;
+use common_meta_sled_store::get_sled_db;
+use common_meta_sled_store::SledTree;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
 use common_meta_types::LogIndex;
 use common_meta_types::SeqV;
 
-use crate::get_sled_db;
 use crate::testing::fake_key_spaces::Files;
 use crate::testing::fake_key_spaces::GenericKV;
 use crate::testing::fake_key_spaces::Logs;
@@ -32,7 +33,6 @@ use crate::testing::fake_key_spaces::StateMachineMeta;
 use crate::testing::fake_state_machine_meta::StateMachineMetaKey::Initialized;
 use crate::testing::fake_state_machine_meta::StateMachineMetaKey::LastApplied;
 use crate::testing::fake_state_machine_meta::StateMachineMetaValue;
-use crate::SledTree;
 
 /// 1. Open a temp sled::Db for all tests.
 /// 2. Initialize a global tracing.
@@ -41,8 +41,8 @@ use crate::SledTree;
 macro_rules! init_sled_ut {
     () => {{
         let t = tempfile::tempdir().expect("create temp dir to sled db");
-        $crate::init_temp_sled_db(t);
 
+        common_meta_sled_store::init_temp_sled_db(t);
         common_tracing::init_default_ut_tracing();
 
         let name = common_tracing::func_name!();

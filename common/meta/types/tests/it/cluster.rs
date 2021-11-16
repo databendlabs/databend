@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod flight_server;
+use common_exception::exception::Result;
+use common_meta_types::NodeInfo;
 
-pub use flight_server::start_flight_server;
+#[test]
+fn test_node_info_ip_port() -> Result<()> {
+    let n = NodeInfo {
+        id: "".to_string(),
+        cpu_nums: 1,
+        version: 1,
+        flight_address: "1.2.3.4:123".to_string(),
+    };
+
+    let (ip, port) = n.ip_port()?;
+    assert_eq!("1.2.3.4".to_string(), ip);
+    assert_eq!(123, port);
+
+    Ok(())
+}
