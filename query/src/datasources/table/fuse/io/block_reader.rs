@@ -81,7 +81,6 @@ pub async fn do_read(
 
     use futures::TryStreamExt;
     let stream = futures::stream::iter(cols).map(|(col_meta, idx)| {
-        let column_chunk_meta = (metadata.row_groups[0].columns()[idx]).clone();
         let data_accessor = data_accessor.clone();
         async move {
             let mut reader = data_accessor.get_input_stream(loc, None)?;
@@ -92,8 +91,7 @@ pub async fn do_read(
             let pages = col_pages.map(|compressed_page| decompress(compressed_page?, &mut vec![]));
             // QUOTE(from arrow2): deserialize the pages. This is CPU bounded and SHOULD be done in a dedicated thread pool (e.g. Rayon)
             let array =
-                page_stream_to_array(pages, &column_chunk_meta, fields[idx].data_type.clone())
-                    .await?;
+                page_stream_to_array(pages, &col_meta, fields[idx].data_type.clone()).await?;
             let array: Arc<dyn common_arrow::arrow::array::Array> = array.into();
             Ok::<_, ErrorCode>(DataColumn::Array(array.into_series()))
         }
