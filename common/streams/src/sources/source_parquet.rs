@@ -99,7 +99,6 @@ impl Source for ParquetSource {
         let fields = self.arrow_table_schema.fields();
 
         let stream = futures::stream::iter(cols).map(|(col_meta, idx)| {
-            let column_chunk_meta = (metadata.row_groups[row_group].columns()[idx]).clone();
             let data_accessor = self.data_accessor.clone();
             let path = self.path.clone();
 
@@ -113,8 +112,7 @@ impl Source for ParquetSource {
                 let pages =
                     col_pages.map(|compressed_page| decompress(compressed_page?, &mut vec![]));
                 let array =
-                    page_stream_to_array(pages, &column_chunk_meta, fields[idx].data_type.clone())
-                        .await?;
+                    page_stream_to_array(pages, &col_meta, fields[idx].data_type.clone()).await?;
                 let array: Arc<dyn common_arrow::arrow::array::Array> = array.into();
                 Ok::<_, ErrorCode>(DataColumn::Array(array.into_series()))
             }
