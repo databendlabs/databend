@@ -45,7 +45,7 @@ default-features = false
 features = [ "std" ]
 
 [dependencies.tokio]
-version = "1.13"
+version = "1.14"
 default-features = false
 features = ["io-util", "net", "sync", "rt-multi-thread", "macros"]
 optional = true
