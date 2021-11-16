@@ -15,19 +15,15 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
-use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::Function;
-use common_functions::scalars::FunctionFactory;
+use common_functions::scalars::CastFunction;
 use common_planners::InsertIntoPlan;
-use common_streams::CorrectWithSchemaStream;
+use common_streams::CastStream;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_streams::SourceStream;
 use common_streams::ValueSource;
-use tokio_stream::StreamExt;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -76,34 +72,22 @@ impl Interpreter for InsertIntoInterpreter {
             let output_schema = self.plan.schema();
             let select_schema = select_executor.schema();
             if select_schema.fields().len() < output_schema.fields().len() {
-                return Err(ErrorCode::BadArguments("Fields in select statement is less than expected"));
+                return Err(ErrorCode::BadArguments(
+                    "Fields in select statement is less than expected",
+                ));
             }
 
-            let select_input_stream = select_executor.execute(None).await?;
-            let cast_input_stream = select_input_stream.map(move |data_block| match data_block {
-                Err(fail) => Err(fail),
-                Ok(data_block) => {
-                    let rows = data_block.num_rows();
-                    let iter = output_schema.fields().iter().zip(select_schema.fields());
-                    let mut colunm_vec = vec![];
-                    for (i, (output_field, input_field)) in iter.enumerate() {
-                        let func = cast_function(output_field.data_type())?;
-                        let column = DataColumnWithField::new(
-                            data_block.column(i).clone(),
-                            input_field.clone(),
-                        );
-                        let column = func.eval(&[column], rows)?;
-                        colunm_vec.push(column);
-                    }
-
-                    Ok(DataBlock::create(output_schema.clone(), colunm_vec))
-                }
-            });
-
-            let stream: SendableDataBlockStream = Box::pin(CorrectWithSchemaStream::new(
-                Box::pin(cast_input_stream),
-                self.plan.schema.clone(),
-            ));
+            let mut functions = Vec::with_capacity(output_schema.fields().len());
+            for field in output_schema.fields() {
+                let cast_function =
+                    CastFunction::create("cast".to_string(), field.data_type().clone())?;
+                functions.push(cast_function);
+            }
+            let stream: SendableDataBlockStream = Box::pin(CastStream::try_create(
+                select_executor.execute(None).await?,
+                output_schema,
+                functions,
+            )?);
             Ok(stream)
         } else {
             input_stream
@@ -119,31 +103,5 @@ impl Interpreter for InsertIntoInterpreter {
             None,
             vec![],
         )))
-    }
-}
-
-fn cast_function(output_type: &DataType) -> Result<Box<dyn Function>> {
-    let function_factory = FunctionFactory::instance();
-    match output_type {
-        DataType::Null => function_factory.get("toNull"),
-        DataType::Boolean => function_factory.get("toBoolean"),
-        DataType::UInt8 => function_factory.get("toUInt8"),
-        DataType::UInt16 => function_factory.get("toUInt16"),
-        DataType::UInt32 => function_factory.get("toUInt32"),
-        DataType::UInt64 => function_factory.get("toUInt64"),
-        DataType::Int8 => function_factory.get("toInt8"),
-        DataType::Int16 => function_factory.get("toInt16"),
-        DataType::Int32 => function_factory.get("toInt32"),
-        DataType::Int64 => function_factory.get("toInt64"),
-        DataType::Float32 => function_factory.get("toFloat32"),
-        DataType::Float64 => function_factory.get("toFloat64"),
-        DataType::Date16 => function_factory.get("toDate16"),
-        DataType::Date32 => function_factory.get("toDate32"),
-        DataType::String => function_factory.get("toString"),
-        DataType::DateTime32(_) => function_factory.get("toDateTime"),
-        _ => Err(ErrorCode::BadDataValueType(format!(
-            "Unsupported cast operation {:?} for insert into select statment",
-            output_type
-        ))),
     }
 }
