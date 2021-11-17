@@ -21,5 +21,8 @@ SELECT ln(1, 2); -- {ErrorCode 28}
 SELECT log10(NULL);
 SELECT log10(100);
 SELECT log2(2);
+SELECT mod(234, 10);
+SELECT mod(29, 9);
+SELECT mod(34.5, 3);
 
 DROP TABLE math_sample_numbers;
