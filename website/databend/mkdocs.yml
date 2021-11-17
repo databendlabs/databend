@@ -228,6 +228,7 @@ nav:
       - Roadmap: development/roadmap.md
       - Databend release channels: development/release-channels.md
       - How to write aggregate functions: development/how-to-write-aggregate-functions.md
+      - How to get server logs: development/how-to-get-server-logs.md
       - RFCs:
           - DatabendQuery Join: rfcs/query/0001-join-framework-design.md
           - DatabendQuery Expression: rfcs/query/0002-plan-expression.md
