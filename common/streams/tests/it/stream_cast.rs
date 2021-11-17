@@ -98,7 +98,7 @@ async fn test_cast_stream() {
     while let Some(res) = cast_stream.next().await {
         assert!(res.is_ok());
         let data_block = res.unwrap();
-        assert_eq!(data_block.schema().fields(), output_schema.fields());
+        assert_eq!(data_block.schema().clone(), output_schema);
         match index {
             0 | 1 => assert_blocks_eq(expected[index].clone(), &[data_block]),
             _ => panic!(),
