@@ -516,17 +516,13 @@ fn test_inet_ntoa_function() -> Result<()> {
                 1,
             )),
         },
-        // TODO block on DataValue::Null can't assert_eq! bug
-        // temporary ignore this test case because it return NULL can't assert_eq!
-        #[cfg(FALSE)]
         Test {
             name: "integer_input_i32_negative",
-            func: InetNtoaFunction::try_create("inet_ntoa('-1')")?,
             arg: DataColumnWithField::new(
                 Series::new(["-1"]).into(),
                 DataField::new("arg1", DataType::String, true),
             ),
-            expect: Ok(DataColumn::Constant(DataValue::Null, 1)),
+            expect: Ok(DataColumn::Constant(DataValue::String(None), 1)),
         },
         Test {
             name: "integer_input_u8",

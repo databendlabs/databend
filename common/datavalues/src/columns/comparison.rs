@@ -47,10 +47,9 @@ impl DataColumn {
 
 impl PartialEq for &DataColumn {
     fn eq(&self, other: &Self) -> bool {
-        let result = self.compare(DataValueComparisonOperator::Eq, other);
-        match result {
-            Ok(v) => v.to_array().unwrap().bool().unwrap().all_true(),
-            Err(_) => false,
+        match (self.get_array_ref(), other.get_array_ref()) {
+            (Ok(lhs), Ok(rhs)) => lhs == rhs,
+            _ => false,
         }
     }
 }
