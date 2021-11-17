@@ -630,7 +630,7 @@ impl<'a> DfParser<'a> {
     fn parse_table_engine(&mut self) -> Result<String, ParserError> {
         // TODO make ENGINE as a keyword
         if !self.consume_token("ENGINE") {
-            return Ok("NULL".to_string());
+            return Ok("FUSE".to_string());
         }
 
         self.parser.expect_token(&Token::Eq)?;
