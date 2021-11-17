@@ -97,6 +97,27 @@ impl AzureBlobAccessor {
 
         AzureBlobInputStream::create(blob_client)
     }
+
+    /// Get blob as Bytes from Azure blob
+    ///
+    /// * `blob` - the blob name is corresponding to the BlobName in the example url 'https://myaccount.blob.core.windows.net/mycontainer/BlobName'
+    pub async fn get(&self, blob: &str) -> common_exception::Result<Bytes> {
+        let blob = self
+            .client
+            .as_container_client(&self.container)
+            .as_blob_client(blob);
+
+        let retrieved_blob_opt = blob.get().execute().await;
+        match retrieved_blob_opt {
+            Err(e) => {
+                return Err(ErrorCode::DALTransportError(format!(
+                    "Failed on azure blob get operation,, {}",
+                    e.to_string()
+                )));
+            }
+            Ok(blob_data) => Ok(blob_data.data),
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -113,27 +134,6 @@ impl DataAccessor for AzureBlobAccessor {
             .as_blob_client(path);
 
         Ok(Box::new(AzureBlobInputStream::create(blob_client)))
-    }
-
-    /// Get blob as Bytes from Azure blob
-    ///
-    /// * `blob` - the blob name is corresponding to the BlobName in the example url 'https://myaccount.blob.core.windows.net/mycontainer/BlobName'
-    async fn get(&self, blob: &str) -> common_exception::Result<Bytes> {
-        let blob = self
-            .client
-            .as_container_client(&self.container)
-            .as_blob_client(blob);
-
-        let retrieved_blob_opt = blob.get().execute().await;
-        match retrieved_blob_opt {
-            Err(e) => {
-                return Err(ErrorCode::DALTransportError(format!(
-                    "Failed on azure blob get operation,, {}",
-                    e.to_string()
-                )));
-            }
-            Ok(blob_data) => Ok(blob_data.data),
-        }
     }
 
     async fn put(&self, path: &str, content: Vec<u8>) -> common_exception::Result<()> {

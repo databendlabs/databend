@@ -25,7 +25,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
-use rusoto_core::ByteStream;
 
 use crate::datasources::table::fuse::util;
 use crate::datasources::table::fuse::SegmentInfo;
@@ -115,9 +114,9 @@ impl BlockAppender {
 
         let parquet = writer.into_inner();
         let stream_len = parquet.len();
-        let stream = ByteStream::from(parquet);
+        let stream = futures::stream::once(async move { Ok(bytes::Bytes::from(parquet)) });
         data_accessor
-            .put_stream(location, Box::new(stream), stream_len)
+            .put_stream(location, Box::new(Box::pin(stream)), stream_len)
             .await?;
 
         Ok(len)

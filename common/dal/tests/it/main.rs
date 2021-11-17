@@ -13,4 +13,5 @@
 // limitations under the License.
 
 mod impls;
+mod metrics;
 mod schemes;

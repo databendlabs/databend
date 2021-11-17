@@ -16,6 +16,7 @@
 use std::env;
 
 use common_dal::DataAccessorBuilder;
+use tempfile::TempDir;
 
 use crate::configs::AzureStorageBlobConfig;
 use crate::configs::DiskStorageConfig;
@@ -25,32 +26,24 @@ use crate::datasources::common::ContextDalBuilder;
 
 #[test]
 fn test_dal_builder() -> common_exception::Result<()> {
+    let tmp_data = TempDir::new().unwrap();
+    let tmp_path = tmp_data.path().to_str().unwrap().to_string();
     let mut storage_config = StorageConfig {
         storage_type: "disk".to_string(),
         disk: DiskStorageConfig {
-            data_path: "/tmp".to_string(),
+            data_path: tmp_path,
             /// temporary directory for testing, default to current directory
             temp_data_path: env::current_dir()?.display().to_string(),
         },
-        s3: S3StorageConfig {
-            region: "".to_string(),
-            endpoint_url: "".to_string(),
-            access_key_id: "".to_string(),
-            secret_access_key: "".to_string(),
-            bucket: "".to_string(),
-        },
-        azure_storage_blob: AzureStorageBlobConfig {
-            account: "".to_string(),
-            master_key: "".to_string(),
-            container: "".to_string(),
-        },
+        s3: S3StorageConfig::default(),
+        azure_storage_blob: AzureStorageBlobConfig::default(),
     };
 
-    let dal = ContextDalBuilder::new(storage_config.clone()).build();
+    let dal = ContextDalBuilder::new("test_tenant", "test_cluster", storage_config.clone()).build();
     assert!(dal.is_ok());
 
     storage_config.storage_type = "not exists".to_string();
-    let dal = ContextDalBuilder::new(storage_config).build();
+    let dal = ContextDalBuilder::new("test_tenant", "test_cluster", storage_config).build();
     assert!(dal.is_err());
 
     Ok(())
