@@ -1,13 +1,36 @@
-use common_planners::PlanNode;
+use common_planners::{Expression, PlanNode};
 use crate::sql::DfStatement;
 use common_exception::Result;
 use crate::sessions::DatabendQueryContextRef;
-use crate::sql::statements::AnalyzeQueryState;
+use crate::sql::statements::QueryNormalizerData;
 
 pub enum AnalyzedResult {
     SimpleQuery(PlanNode),
-    SelectQuery(AnalyzeQueryState),
-    ExplainQuery(AnalyzeQueryState),
+    SelectQuery(QueryAnalyzeState),
+    ExplainQuery(QueryNormalizerData),
+}
+
+pub struct QueryAnalyzeState {
+    pub filter: Option<Expression>,
+    pub having: Option<Expression>,
+    pub order_by_expression: Vec<Expression>,
+    // before order or before projection expression plan
+    pub expressions: Vec<Expression>,
+
+}
+
+impl Default for QueryAnalyzeState {
+    fn default() -> Self {
+        todo!()
+    }
+}
+
+impl QueryAnalyzeState {
+    pub fn add_expression(&mut self, expr: &Expression) {
+        if !self.expressions.contains(expr) {
+            self.expressions.push(expr.clone());
+        }
+    }
 }
 
 #[async_trait::async_trait]

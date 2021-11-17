@@ -24,7 +24,7 @@ impl AnalyzableStatement for DfExplain {
 impl DfExplain {
     async fn analyze_explain(ctx: DatabendQueryContextRef, v: &DfQueryStatement) -> Result<AnalyzedResult> {
         match v.analyze(ctx).await? {
-            AnalyzedResult::SelectQuery(v) => Ok(AnalyzedResult::ExplainQuery(v)),
+            // AnalyzedResult::SelectQuery(v) => Ok(AnalyzedResult::ExplainQuery(v)),
             _ => Err(ErrorCode::LogicalError("Logical error: analyze select must be return select query analyze result."))
         }
     }

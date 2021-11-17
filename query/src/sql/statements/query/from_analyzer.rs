@@ -1,108 +1,77 @@
-use sqlparser::ast::{ObjectName, FunctionArg, Query, TableAlias, JoinOperator, TableWithJoins, TableFactor, Ident};
-use common_exception::ErrorCode;
-use common_exception::Result;
-use crate::sessions::{DatabendQueryContextRef, DatabendQueryContext};
-use common_planners::Expression;
-use std::collections::HashMap;
-use crate::sql::statements::analyzer_schema::AnalyzeQuerySchema;
+use sqlparser::ast::{FunctionArg, Ident, JoinOperator, ObjectName, Query, TableAlias, TableFactor, TableWithJoins};
+use crate::sessions::DatabendQueryContextRef;
+use common_exception::{ErrorCode, Result};
+use crate::sql::statements::query::query_schema::AnalyzeQuerySchema;
+use crate::sql::statements::{AnalyzableStatement, AnalyzedResult, DfQueryStatement};
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
-use crate::sql::statements::{DfQueryStatement, AnalyzableStatement, QueryRelation, AnalyzedResult};
-use std::convert::TryFrom;
-use common_datavalues::{DataSchemaRef, DataSchema};
-use std::sync::Arc;
 
-pub struct AnalyzeQueryState {
-    pub ctx: DatabendQueryContextRef,
-
-    pub relation: Option<Box<QueryRelation>>,
-    pub filter_predicate: Option<Expression>,
-    pub before_group_by_expressions: Vec<Expression>,
-    pub group_by_expressions: Vec<Expression>,
-    pub aggregate_expressions: Vec<Expression>,
-    pub before_having_expressions: Vec<Expression>,
-    pub having_predicate: Option<Expression>,
-    pub order_by_expressions: Vec<Expression>,
-    pub projection_expressions: Vec<Expression>,
-
-    pub joined_schema: AnalyzeQuerySchema,
-    pub before_aggr_schema: AnalyzeQuerySchema,
-    pub after_aggr_schema: AnalyzeQuerySchema,
-    pub finalize_schema: DataSchemaRef,
-    pub projection_aliases: HashMap<String, Expression>,
+pub struct FromAnalyzer {
+    ctx: DatabendQueryContextRef,
 }
 
-impl AnalyzeQueryState {
-    pub async fn create(ctx: DatabendQueryContextRef, tables: &[TableWithJoins]) -> Result<Self> {
+impl FromAnalyzer {
+    pub fn create(ctx: DatabendQueryContextRef) -> FromAnalyzer {
+        FromAnalyzer { ctx }
+    }
+
+    pub async fn analyze(&self, query: &DfQueryStatement) -> Result<AnalyzeQuerySchema> {
         let mut analyzed_tables = Vec::new();
 
         // Build RPN for tables. because async function unsupported recursion
-        let rpn = RelationRPNBuilder::build(tables)?;
+        let rpn = RelationRPNBuilder::build(&query.from)?;
         for rpn_item in &rpn {
             match rpn_item {
                 RelationRPNItem::Join(_) => {
-                    return Err(ErrorCode::UnImplement("Unimplemented SELECT JOIN yet."))
+                    return Err(ErrorCode::UnImplement("Unimplemented SELECT JOIN yet."));
                 }
                 RelationRPNItem::Table(v) => {
-                    let schema = Self::analyze_table(ctx.clone(), v);
+                    let schema = self.table(v);
                     analyzed_tables.push(schema.await?);
                 }
                 RelationRPNItem::TableFunction(v) => {
-                    let schema = Self::analyze_table_function(ctx.clone(), v);
+                    let schema = self.table_function(v);
                     analyzed_tables.push(schema.await?);
                 }
                 RelationRPNItem::Derived(v) => {
-                    let schema = AnalyzeQueryState::analyze_subquery(ctx.clone(), v);
+                    let schema = self.subquery(v);
                     analyzed_tables.push(schema.await?);
                 }
             }
         }
 
         if analyzed_tables.len() != 1 {
-            return Err(ErrorCode::LogicalError("Logical error: this is relation rpn bug."))
+            return Err(ErrorCode::LogicalError("Logical error: this is relation rpn bug."));
         }
 
-        Ok(AnalyzeQueryState {
-            ctx,
-            joined_schema: analyzed_tables.remove(0),
-            before_aggr_schema: AnalyzeQuerySchema::none(),
-            after_aggr_schema: AnalyzeQuerySchema::none(),
-            finalize_schema: Arc::new(DataSchema::empty()),
-            relation: None,
-            filter_predicate: None,
-            before_group_by_expressions: vec![],
-            group_by_expressions: vec![],
-            aggregate_expressions: vec![],
-            before_having_expressions: vec![],
-            having_predicate: None,
-            order_by_expressions: vec![],
-            projection_expressions: vec![],
-            projection_aliases: HashMap::new(),
-        })
+        Ok(analyzed_tables.remove(0))
     }
 
-    async fn analyze_subquery(ctx: DatabendQueryContextRef, v: &DerivedRPNItem) -> Result<AnalyzeQuerySchema> {
+    async fn subquery(&self, v: &DerivedRPNItem) -> Result<AnalyzeQuerySchema> {
         let subquery = &(*v.subquery);
         let subquery = DfQueryStatement::try_from(subquery.clone())?;
-        match subquery.analyze(ctx.clone()).await? {
-            AnalyzedResult::SelectQuery(state) => match &v.alias {
-                None => {
-                    let schema = state.finalize_schema.clone();
-                    AnalyzeQuerySchema::from_schema(schema, Vec::new())
-                }
-                Some(alias) => {
-                    let schema = state.finalize_schema.clone();
-                    let name_prefix = vec![alias.name.value.clone()];
-                    AnalyzeQuerySchema::from_schema(schema, name_prefix)
-                }
+        match subquery.analyze(self.ctx.clone()).await? {
+            AnalyzedResult::SelectQuery(state) => {
+                unimplemented!("")
+                // match &v.alias {
+                //     None => {
+                //         let schema = state.finalize_schema.clone();
+                //         AnalyzeQuerySchema::from_schema(schema, Vec::new())
+                //     }
+                //     Some(alias) => {
+                //         let schema = state.finalize_schema.clone();
+                //         let name_prefix = vec![alias.name.value.clone()];
+                //         AnalyzeQuerySchema::from_schema(schema, name_prefix)
+                //     }
+                // }
             }
             _ => Err(ErrorCode::LogicalError("Logical error, subquery analyzed data must be SelectQuery, it's a bug.")),
         }
     }
 
-    async fn analyze_table(ctx: DatabendQueryContextRef, item: &TableRPNItem) -> Result<AnalyzeQuerySchema> {
+    async fn table(&self, item: &TableRPNItem) -> Result<AnalyzeQuerySchema> {
         // TODO(Winter): await query_context.get_table
-        let (database, table) = Self::resolve_table(&item.name, &ctx)?;
-        let read_table = ctx.get_table(&database, &table)?;
+        let (database, table) = self.resolve_table(&item.name)?;
+        let read_table = self.ctx.get_table(&database, &table)?;
 
         match &item.alias {
             None => {
@@ -118,7 +87,7 @@ impl AnalyzeQueryState {
         }
     }
 
-    async fn analyze_table_function(ctx: DatabendQueryContextRef, item: &TableFunctionRPNItem) -> Result<AnalyzeQuerySchema> {
+    async fn table_function(&self, item: &TableFunctionRPNItem) -> Result<AnalyzeQuerySchema> {
         if item.name.0.len() >= 2 {
             return Result::Err(ErrorCode::BadArguments(
                 "Currently table can't have arguments",
@@ -127,10 +96,7 @@ impl AnalyzeQueryState {
 
         let table_name = item.name.0[0].value.clone();
         let mut table_args = Vec::with_capacity(item.args.len());
-
-        let analyzer_ctx = ctx.clone();
-        let analyzer_schema = AnalyzeQuerySchema::none();
-        let analyzer = ExpressionAnalyzer::with_source(analyzer_ctx, analyzer_schema, false);
+        let analyzer = ExpressionAnalyzer::create(self.ctx.clone());
 
         for table_arg in &item.args {
             table_args.push(match table_arg {
@@ -139,19 +105,20 @@ impl AnalyzeQueryState {
             });
         }
 
-        let table_function = ctx.get_table_function(&table_name, Some(table_args))?;
+        let table_function = self.ctx.get_table_function(&table_name, Some(table_args))?;
         AnalyzeQuerySchema::from_schema(table_function.schema(), Vec::new())
     }
 
-    fn resolve_table(name: &ObjectName, ctx: &DatabendQueryContext) -> Result<(String, String)> {
+    fn resolve_table(&self, name: &ObjectName) -> Result<(String, String)> {
         match name.0.len() {
             0 => Err(ErrorCode::SyntaxException("Table name is empty")),
-            1 => Ok((ctx.get_current_database(), name.0[0].value.clone())),
+            1 => Ok((self.ctx.get_current_database(), name.0[0].value.clone())),
             2 => Ok((name.0[0].value.clone(), name.0[1].value.clone())),
             _ => Err(ErrorCode::SyntaxException("Table name must be [`db`].`table`"))
         }
     }
 }
+
 
 struct TableRPNItem {
     name: ObjectName,
@@ -261,3 +228,4 @@ impl RelationRPNBuilder {
         Ok(())
     }
 }
+

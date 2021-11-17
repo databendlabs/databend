@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 use std::fmt;
+use std::fmt::write;
 use std::sync::Arc;
 
 use common_datavalues::DataField;
@@ -57,6 +58,8 @@ pub enum Expression {
     Alias(String, Box<Expression>),
     /// Column name.
     Column(String),
+    /// Qualified column name.
+    QualifiedColumn(Vec<String>),
     /// Constant value.
     /// Note: When literal represents a column, its column_name will not be None
     Literal {
@@ -253,6 +256,7 @@ impl Expression {
         match self {
             Expression::Alias(_, expr) => expr.to_data_type(input_schema),
             Expression::Column(s) => Ok(input_schema.field_with_name(s)?.data_type().clone()),
+            Expression::QualifiedColumn(_) => Err(ErrorCode::LogicalError("QualifiedColumn should be resolve in analyze.")),
             Expression::Literal { data_type, .. } => Ok(data_type.clone()),
             Expression::Subquery { query_plan, .. } => Ok(Self::to_subquery_type(query_plan)),
             Expression::ScalarSubquery { query_plan, .. } => {
@@ -358,11 +362,12 @@ impl fmt::Debug for Expression {
         match self {
             Expression::Alias(alias, v) => write!(f, "{:?} as {:#}", v, alias),
             Expression::Column(ref v) => write!(f, "{:#}", v),
+            Expression::QualifiedColumn(v) => write!(f, "{:?}", v.join(".")),
             Expression::Literal { ref value, .. } => write!(f, "{:#}", value),
             Expression::Subquery { name, .. } => write!(f, "subquery({})", name),
             Expression::ScalarSubquery { name, .. } => write!(f, "scalar subquery({})", name),
             Expression::BinaryExpression { op, left, right } => {
-                write!(f, "({:?} {} {:?})", left, op, right,)
+                write!(f, "({:?} {} {:?})", left, op, right, )
             }
 
             Expression::UnaryExpression { op, expr } => {
@@ -376,7 +381,7 @@ impl fmt::Debug for Expression {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{:?}", args[i],)?;
+                    write!(f, "{:?}", args[i], )?;
                 }
                 write!(f, ")")
             }

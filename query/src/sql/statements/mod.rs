@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod statement_select_test;
 
+mod query;
+
 mod statement_show_tables;
 mod statement_show_databases;
 mod statement_show_settings;
@@ -21,10 +23,8 @@ mod statement_select;
 mod analyzer_expr;
 mod analyzer_statement;
 mod statement_explain;
-mod analyzer_schema;
 mod analyzer_value_expr;
 mod statement_select_convert;
-mod statement_select_analyze_data;
 
 pub use analyzer_statement::AnalyzedResult;
 pub use analyzer_statement::AnalyzableStatement;
@@ -36,7 +36,8 @@ pub use statement_drop_table::DfDropTable;
 pub use statement_insert::DfInsertStatement;
 pub use statement_select::DfQueryStatement;
 pub use statement_kill::DfKillStatement;
-pub use statement_select_analyze_data::AnalyzeQueryState;
+pub use query::QueryNormalizerData;
+pub use analyzer_statement::QueryAnalyzeState;
 pub use statement_select::QueryRelation;
 pub use statement_set_variable::DfSetVariable;
 pub use statement_show_create_table::DfShowCreateTable;

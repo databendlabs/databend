@@ -159,6 +159,7 @@ pub trait PlanRewriter {
             }),
             Expression::Wildcard => Ok(Expression::Wildcard),
             Expression::Column(column_name) => Ok(Expression::Column(column_name.clone())),
+            Expression::QualifiedColumn(v) => Ok(Expression::QualifiedColumn(v.clone())),
             Expression::Literal {
                 value,
                 column_name,
@@ -520,6 +521,7 @@ impl RewriteHelper {
                 })
             }
             Expression::Wildcard
+            | Expression::QualifiedColumn(_)
             | Expression::Literal { .. }
             | Expression::Subquery { .. }
             | Expression::ScalarSubquery { .. }
@@ -573,6 +575,7 @@ impl RewriteHelper {
         Ok(match expr {
             Expression::Alias(_, expr) => vec![expr.as_ref().clone()],
             Expression::Column(_) => vec![],
+            Expression::QualifiedColumn(_) => vec![],
             Expression::Literal { .. } => vec![],
             Expression::Subquery { .. } => vec![],
             Expression::ScalarSubquery { .. } => vec![],
@@ -595,6 +598,7 @@ impl RewriteHelper {
         Ok(match expr {
             Expression::Alias(_, expr) => Self::expression_plan_columns(expr)?,
             Expression::Column(_) => vec![expr.clone()],
+            Expression::QualifiedColumn(_) => vec![expr.clone()],
             Expression::Literal { .. } => vec![],
             Expression::Subquery { .. } => vec![],
             Expression::ScalarSubquery { .. } => vec![],

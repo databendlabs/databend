@@ -11,23 +11,15 @@ use crate::sessions::{DatabendQueryContext, DatabendQueryContextRef};
 use crate::sql::{PlanParser, SQLCommon};
 use crate::sql::statements::{AnalyzableStatement, AnalyzedResult, DfQueryStatement};
 use crate::sql::statements::analyzer_value_expr::ValueExprAnalyzer;
-use crate::sql::statements::analyzer_schema::AnalyzeQuerySchema;
+use crate::sql::statements::query::AnalyzeQuerySchema;
 
 pub struct ExpressionAnalyzer {
-    schema: AnalyzeQuerySchema,
     context: DatabendQueryContextRef,
 }
 
 impl ExpressionAnalyzer {
-    pub fn with_source(
-        ctx: DatabendQueryContextRef,
-        source: AnalyzeQuerySchema,
-        allow_aggr: bool,
-    ) -> ExpressionAnalyzer {
-        ExpressionAnalyzer {
-            schema: source,
-            context: ctx.clone(),
-        }
+    pub fn create(ctx: DatabendQueryContextRef) -> ExpressionAnalyzer {
+        ExpressionAnalyzer { context: ctx.clone() }
     }
 
     pub async fn analyze(&self, expr: &Expr) -> Result<Expression> {
@@ -51,6 +43,19 @@ impl ExpressionAnalyzer {
             1 => Ok(arguments.remove(0)),
             _ => Err(ErrorCode::LogicalError("Logical error: this is expr rpn bug.")),
         }
+    }
+
+    pub fn extend_wildcard_exprs(&self) -> Result<Vec<Expression>> {
+        unimplemented!()
+        // let data_schema = self.schema.to_data_schema();
+        //
+        // let columns_field = data_schema.fields();
+        // let mut expressions = Vec::with_capacity(columns_field.len());
+        // for column_field in columns_field {
+        //     expressions.push(Expression::Column(column_field.name().clone()));
+        // }
+        //
+        // Ok(expressions)
     }
 
     fn analyze_value(value: &Value, args: &mut Vec<Expression>) -> Result<()> {
@@ -87,7 +92,7 @@ impl ExpressionAnalyzer {
 
         for parameter in &info.parameters {
             match ValueExprAnalyzer::analyze(parameter)? {
-                Expression::Literal { value, .. } => { parameters.push(value); },
+                Expression::Literal { value, .. } => { parameters.push(value); }
                 expr => {
                     return Err(ErrorCode::SyntaxException(format!(
                         "Unsupported value expression: {:?}, must be datavalue",
@@ -109,11 +114,6 @@ impl ExpressionAnalyzer {
 
     fn analyze_identifier(&self, ident: &Ident, arguments: &mut Vec<Expression>) -> Result<()> {
         let column_name = ident.clone().value;
-
-        if !self.schema.contains_column(&column_name) {
-            return Err(ErrorCode::UnknownColumn(format!("Unknown column {}. columns: {:?}", column_name, self.schema)));
-        }
-
         arguments.push(Expression::Column(column_name));
         Ok(())
     }
@@ -125,14 +125,8 @@ impl ExpressionAnalyzer {
             names.push(ident.clone().value);
         }
 
-        let schema = &self.schema;
-        match schema.get_column_by_fullname(&names) {
-            None => Err(ErrorCode::UnknownColumn(format!("Unknown column names {:?}", names))),
-            Some(desc) => {
-                arguments.push(Expression::Column(desc.column_name()));
-                Ok(())
-            }
-        }
+        arguments.push(Expression::QualifiedColumn(names));
+        Ok(())
     }
 
     async fn analyze_exists(&self, subquery: &Query, args: &mut Vec<Expression>) -> Result<()> {
