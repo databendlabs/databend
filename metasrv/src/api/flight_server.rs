@@ -12,15 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightServiceServer;
 use common_base::tokio;
 use common_base::tokio::sync::oneshot;
 use common_base::tokio::sync::oneshot::Receiver;
 use common_base::tokio::sync::oneshot::Sender;
+use common_base::tokio::task::JoinHandle;
+use common_base::Stoppable;
 use common_exception::ErrorCode;
-use common_exception::ToErrorCode;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
+use futures::future::Either;
 use tonic::transport;
 use tonic::transport::Identity;
 use tonic::transport::Server;
@@ -28,27 +32,40 @@ use transport::ServerTlsConfig;
 
 use crate::api::rpc::MetaFlightImpl;
 use crate::configs::Config;
-use crate::meta_service::AdminRequest;
-use crate::meta_service::AdminRequestInner;
-use crate::meta_service::JoinRequest;
 use crate::meta_service::MetaNode;
-use crate::proto::meta_service_client::MetaServiceClient;
 
 pub struct FlightServer {
     conf: Config,
+    meta_node: Arc<MetaNode>,
+    join_handle: Option<JoinHandle<()>>,
+    stop_tx: Option<Sender<()>>,
+    fin_rx: Option<Receiver<()>>,
 }
 
 impl FlightServer {
-    pub fn create(conf: Config) -> Self {
-        Self { conf }
+    pub fn create(conf: Config, meta_node: Arc<MetaNode>) -> Self {
+        Self {
+            conf,
+            meta_node,
+            join_handle: None,
+            stop_tx: None,
+            fin_rx: None,
+        }
     }
 
     /// Start metasrv and returns two channel to send shutdown signal and receive signal when shutdown finished.
-    pub async fn start(self) -> Result<(oneshot::Sender<()>, oneshot::Receiver<()>), ErrorCode> {
-        // TODO(xp): move component startup from serve() to start().
-        //           block as long as possible to reduce unknown startup time cost.
+    pub async fn do_start(&mut self) -> Result<(), ErrorCode> {
+        let conf = self.conf.clone();
+        let meta_node = self.meta_node.clone();
+
+        // For sending signal when server started.
+        let (started_tx, started_rx) = oneshot::channel::<()>();
+        // For receiving stop signal
         let (stop_tx, stop_rx) = oneshot::channel::<()>();
+        // For sending the signal when server finished shutting down.
         let (fin_tx, fin_rx) = oneshot::channel::<()>();
+
+        let builder = Server::builder();
 
         let tls_conf = Self::tls_config(&self.conf).await.map_err(|e| {
             ErrorCode::TLSConfigurationFailure(format!(
@@ -56,90 +73,6 @@ impl FlightServer {
                 e.to_string()
             ))
         })?;
-
-        let fut = self.serve(stop_rx, fin_tx, tls_conf);
-        tokio::spawn(
-            async move {
-                // TODO(xp): handle errors.
-                // TODO(xp): move server building up actions out of serve(). errors should be caught.
-                let res = fut.await;
-                tracing::info!("metasrv serve res: {:?}", res);
-            }
-            .instrument(tracing::debug_span!("spawn-rpc")),
-        );
-
-        Ok((stop_tx, fin_rx))
-    }
-
-    /// Start serving metasrv. It does not return until metasrv is stopped.
-    #[tracing::instrument(level = "debug", skip(self, stop_rx, fin_tx))]
-    pub async fn serve(
-        self,
-        stop_rx: Receiver<()>,
-        fin_tx: Sender<()>,
-        tls_conf: Option<ServerTlsConfig>,
-    ) -> Result<(), ErrorCode> {
-        let addr = self
-            .conf
-            .flight_api_address
-            .parse::<std::net::SocketAddr>()?;
-
-        tracing::info!("flight addr: {}", addr);
-
-        // - boot mode: create the first node in a new cluster.
-        // - TODO(xp): join mode: create a new node to join a cluster.
-        // - open mode: open an existent node.
-        tracing::info!(
-            "Starting MetaNode boot:{} single: {} with config: {:?}",
-            self.conf.raft_config.boot,
-            self.conf.raft_config.single,
-            self.conf
-        );
-
-        let raft_config = &self.conf.raft_config;
-
-        let mn = if raft_config.boot {
-            MetaNode::boot(raft_config).await?
-        } else if raft_config.single {
-            let (mn, _is_open) =
-                MetaNode::open_create_boot(raft_config, Some(()), Some(()), Some(())).await?;
-            mn
-        } else if !raft_config.join.is_empty() {
-            // Bring up a new node, join an cluster
-            let (mn, _is_open) =
-                MetaNode::open_create_boot(raft_config, Some(()), Some(()), None).await?;
-
-            let addrs = &raft_config.join;
-            for addr in addrs {
-                // TODO: retry
-                let mut client = MetaServiceClient::connect(format!("http://{}", addr))
-                    .await
-                    .map_err(|e| ErrorCode::CannotConnectNode(e.to_string()))?;
-
-                let admin_req = AdminRequest {
-                    forward_to_leader: true,
-                    req: AdminRequestInner::Join(JoinRequest {
-                        node_id: raft_config.id,
-                        address: raft_config.raft_api_addr(),
-                    }),
-                };
-
-                client.forward(admin_req.clone()).await?;
-            }
-
-            mn
-        } else {
-            // open mode
-            let (mn, _is_open) =
-                MetaNode::open_create_boot(raft_config, Some(()), None, None).await?;
-            mn
-        };
-        tracing::info!("Done starting MetaNode: {:?}", self.conf);
-
-        let flight_impl = MetaFlightImpl::create(self.conf.clone(), mn.clone());
-        let flight_srv = FlightServiceServer::new(flight_impl);
-
-        let builder = Server::builder();
 
         let mut builder = if let Some(conf) = tls_conf {
             tracing::info!("TLS RPC enabled");
@@ -153,26 +86,82 @@ impl FlightServer {
             builder
         };
 
-        let res = builder
-            .add_service(flight_srv)
-            .serve_with_shutdown(addr, async move {
-                tracing::info!("metasrv start to wait for stop signal: {}", addr);
-                let _ = stop_rx.await;
-                tracing::info!("metasrv receives stop signal: {}", addr);
-            })
-            .await;
+        let addr = conf.flight_api_address.parse::<std::net::SocketAddr>()?;
+        tracing::info!("flight addr: {}", addr);
 
-        let _ = mn.stop().await;
-        let s = fin_tx.send(());
-        tracing::info!(
-            "metasrv sending signal of finishing shutdown {}: res: {:?}",
-            addr,
-            s
+        let flight_impl = MetaFlightImpl::create(conf, meta_node.clone());
+        let flight_srv = FlightServiceServer::new(flight_impl);
+
+        let j = tokio::spawn(
+            async move {
+                let res = builder
+                    .add_service(flight_srv)
+                    .serve_with_shutdown(addr, async move {
+                        let _ = started_tx.send(());
+                        tracing::info!("metasrv start to wait for stop signal: {}", addr);
+                        let _ = stop_rx.await;
+                        tracing::info!("metasrv receives stop signal: {}", addr);
+                    })
+                    .await;
+
+                // Server quit. Start to shutdown meta node.
+
+                let _ = meta_node.stop().await;
+                let send_fin_res = fin_tx.send(());
+                tracing::info!(
+                    "metasrv sending signal of finishing shutdown {}: res: {:?}",
+                    addr,
+                    send_fin_res
+                );
+
+                tracing::info!("metasrv returned res: {:?}", res);
+            }
+            .instrument(tracing::debug_span!("spawn-rpc")),
         );
 
-        tracing::info!("metasrv returning");
+        // Blocks until server started or the tx is dropped.
+        started_rx
+            .await
+            .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?;
 
-        res.map_err_to_code(ErrorCode::KVSrvError, || "metasrv error")
+        self.join_handle = Some(j);
+        self.stop_tx = Some(stop_tx);
+        self.fin_rx = Some(fin_rx);
+
+        Ok(())
+    }
+
+    pub async fn do_stop(
+        &mut self,
+        force: Option<tokio::sync::broadcast::Receiver<()>>,
+    ) -> Result<(), ErrorCode> {
+        if let Some(tx) = self.stop_tx.take() {
+            let _ = tx.send(());
+        }
+
+        if let Some(j) = self.join_handle.take() {
+            if let Some(mut frc) = force {
+                let f = Box::pin(frc.recv());
+                let j = Box::pin(j);
+
+                match futures::future::select(f, j).await {
+                    Either::Left((_x, j)) => {
+                        // force shutdown signal received.
+                        j.abort();
+                    }
+                    Either::Right((_, _)) => {
+                        // graceful shutdown finished.
+                    }
+                }
+            } else {
+                let _ = j.await;
+            }
+        }
+
+        if let Some(rx) = self.fin_rx.take() {
+            let _ = rx.await;
+        }
+        Ok(())
     }
 
     async fn tls_config(conf: &Config) -> anyhow::Result<Option<ServerTlsConfig>> {
@@ -186,5 +175,19 @@ impl FlightServer {
         } else {
             Ok(None)
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl Stoppable for FlightServer {
+    async fn start(&mut self) -> Result<(), ErrorCode> {
+        self.do_start().await
+    }
+
+    async fn stop(
+        &mut self,
+        force: Option<tokio::sync::broadcast::Receiver<()>>,
+    ) -> Result<(), ErrorCode> {
+        self.do_stop(force).await
     }
 }

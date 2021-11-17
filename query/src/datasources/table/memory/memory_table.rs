@@ -125,19 +125,15 @@ impl Table for MemoryTable {
     async fn append_data(
         &self,
         _io_ctx: Arc<TableIOContext>,
-        _insert_plan: InsertIntoPlan,
+        insert_plan: InsertIntoPlan,
+        mut stream: SendableDataBlockStream,
     ) -> Result<()> {
-        let mut s = {
-            let mut inner = _insert_plan.input_stream.lock();
-            (*inner).take()
-        }
-        .ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
-
-        if _insert_plan.schema().as_ref().fields() != self.table_info.schema().as_ref().fields() {
+        if insert_plan.schema().as_ref().fields() != self.table_info.schema().as_ref().fields() {
             return Err(ErrorCode::BadArguments("DataBlock schema mismatch"));
         }
 
-        while let Some(block) = s.next().await {
+        while let Some(block) = stream.next().await {
+            let block = block?;
             let mut blocks = self.blocks.write();
             blocks.push(block);
         }

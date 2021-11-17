@@ -1,5 +1,5 @@
 <div align="center">
-<p align="center"><img alt="Databend Logo" src="website/databend/docs/images/databend-logo.png" width="15%"/></p>
+<p align="center"><img alt="Databend Logo" src="website/databend/docs/images/databend-logo.png" width="20%"/></p>
 <p align="center">The Open Source Serverless Data Warehouse for Everyone</p>
  
 <h4 align="center">

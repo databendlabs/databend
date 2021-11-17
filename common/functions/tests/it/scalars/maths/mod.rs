@@ -14,7 +14,9 @@
 
 mod abs;
 mod angle;
+mod ceil;
 mod crc32;
+mod floor;
 mod log;
 mod pi;
 mod trigonometric;

@@ -66,7 +66,6 @@ pub async fn do_read(
     let col_num = projection.len();
     // TODO pass in parquet file len
     let mut reader = data_accessor.get_input_stream(loc, None)?;
-
     // TODO cache parquet meta
     let metadata = read_metadata_async(&mut reader)
         .await
@@ -75,6 +74,7 @@ pub async fn do_read(
     // we only put one page in the a parquet file (reference xxx)
     let row_group = 0;
     let cols = projection
+        .clone()
         .into_iter()
         .map(|idx| (metadata.row_groups[row_group].column(idx).clone(), idx));
 
@@ -82,7 +82,6 @@ pub async fn do_read(
 
     use futures::TryStreamExt;
     let stream = futures::stream::iter(cols).map(|(col_meta, idx)| {
-        let column_chunk_meta = (metadata.row_groups[0].columns()[idx]).clone();
         let data_accessor = data_accessor.clone();
         async move {
             let mut reader = data_accessor.get_input_stream(loc, None)?;
@@ -93,8 +92,7 @@ pub async fn do_read(
             let pages = col_pages.map(|compressed_page| decompress(compressed_page?, &mut vec![]));
             // QUOTE(from arrow2): deserialize the pages. This is CPU bounded and SHOULD be done in a dedicated thread pool (e.g. Rayon)
             let array =
-                page_stream_to_array(pages, &column_chunk_meta, fields[idx].data_type.clone())
-                    .await?;
+                page_stream_to_array(pages, &col_meta, fields[idx].data_type.clone()).await?;
             let array: Arc<dyn common_arrow::arrow::array::Array> = array.into();
             Ok::<_, ErrorCode>(DataColumn::Array(array.into_series()))
         }
@@ -105,6 +103,7 @@ pub async fn do_read(
     let n = std::cmp::min(buffer_size, col_num);
     let data_cols = stream.buffered(n).try_collect().await?;
 
-    let block = DataBlock::create(Arc::new(DataSchema::from(arrow_schema)), data_cols);
+    let schema = DataSchema::from(arrow_schema);
+    let block = DataBlock::create(Arc::new(schema.project(projection)), data_cols);
     Ok(block)
 }

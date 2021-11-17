@@ -55,4 +55,3 @@ labels:
     include:
       - '\bOther?\b'
     exclude: []
-    

@@ -20,6 +20,7 @@ use common_management::UserMgr;
 use common_management::UserMgrApi;
 use common_meta_api::KVApi;
 use common_meta_types::AuthType;
+use common_meta_types::UserPrivilege;
 use sha2::Digest;
 
 use crate::common::MetaClientProvider;
@@ -119,7 +120,25 @@ impl UserManager {
         }
     }
 
-    // Drop a user by name.
+    pub async fn set_user_privileges(
+        &self,
+        username: &str,
+        hostname: &str,
+        privileges: UserPrivilege,
+    ) -> Result<Option<u64>> {
+        let set_user_privileges = self.api_provider.set_user_privileges(
+            username.to_string(),
+            hostname.to_string(),
+            privileges,
+            None,
+        );
+        match set_user_privileges.await {
+            Ok(res) => Ok(res),
+            Err(failure) => Err(failure.add_message_back("(while set user privileges)")),
+        }
+    }
+
+    // Drop a user by name and hostname.
     pub async fn drop_user(&self, username: &str, hostname: &str) -> Result<()> {
         let drop_user =
             self.api_provider
@@ -127,6 +146,27 @@ impl UserManager {
         match drop_user.await {
             Ok(res) => Ok(res),
             Err(failure) => Err(failure.add_message_back("(while drop user).")),
+        }
+    }
+
+    // Update a user by name and hostname.
+    pub async fn update_user(
+        &self,
+        username: &str,
+        hostname: &str,
+        new_auth_type: Option<AuthType>,
+        new_password: Option<Vec<u8>>,
+    ) -> Result<Option<u64>> {
+        let update_user = self.api_provider.update_user(
+            username.to_string(),
+            hostname.to_string(),
+            new_password,
+            new_auth_type,
+            None,
+        );
+        match update_user.await {
+            Ok(res) => Ok(res),
+            Err(failure) => Err(failure.add_message_back("(while alter user).")),
         }
     }
 }

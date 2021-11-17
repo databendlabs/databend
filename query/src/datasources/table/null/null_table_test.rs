@@ -20,7 +20,6 @@ use common_context::TableDataContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_infallible::Mutex;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_planners::*;
@@ -64,18 +63,19 @@ async fn test_null_table() -> Result<()> {
             Series::new(vec![1u64, 2]),
             Series::new(vec![11u64, 22]),
         ]);
-        let blocks = vec![block];
 
-        let input_stream = futures::stream::iter::<Vec<DataBlock>>(blocks.clone());
+        let blocks = vec![Ok(block)];
+
+        let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks.clone());
         let insert_plan = InsertIntoPlan {
             db_name: "default".to_string(),
             tbl_name: "a".to_string(),
             tbl_id: 0,
             schema: schema.clone(),
-            input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
+            values_opt: None,
         };
         table
-            .append_data(io_ctx.clone(), insert_plan)
+            .append_data(io_ctx.clone(), insert_plan, Box::pin(input_stream))
             .await
             .unwrap();
     }

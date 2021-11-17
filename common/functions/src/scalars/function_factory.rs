@@ -31,6 +31,7 @@ use crate::scalars::NullableFunction;
 use crate::scalars::OtherFunction;
 use crate::scalars::StringFunction;
 use crate::scalars::ToCastFunction;
+use crate::scalars::TupleClassFunction;
 use crate::scalars::UdfFunction;
 
 pub type FactoryCreator = Box<dyn Fn(&str) -> Result<Box<dyn Function>> + Send + Sync>;
@@ -107,6 +108,7 @@ lazy_static! {
         DateFunction::register(&mut function_factory);
         OtherFunction::register(&mut function_factory);
         MathsFunction::register(&mut function_factory);
+        TupleClassFunction::register(&mut function_factory);
 
         Arc::new(function_factory)
     };

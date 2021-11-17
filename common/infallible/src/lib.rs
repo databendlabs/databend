@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod mutex_test;
-#[cfg(test)]
-mod rwlock_test;
-
 mod exit_guard;
 mod mutex;
 mod rwlock;

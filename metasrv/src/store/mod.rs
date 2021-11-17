@@ -13,7 +13,5 @@
 // limitations under the License.
 
 mod meta_raft_store;
-#[cfg(test)]
-mod meta_raft_store_test;
 
 pub use meta_raft_store::MetaRaftStore;

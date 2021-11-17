@@ -5,7 +5,7 @@ SELECT pi();
 SELECT abs(-1);
 SELECT abs(-10086);
 SELECT abs('-233.0');
-SELECT abs('blah');
+SELECT abs('blah') = 0;
 SELECT abs(TRUE); -- {ErrorCode 7}
 SELECT abs(NULL); -- {ErrorCode 7}
 SELECT abs(value) FROM math_sample_numbers;

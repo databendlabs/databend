@@ -91,6 +91,7 @@ pub trait Table: Sync + Send {
         &self,
         _io_ctx: Arc<TableIOContext>,
         _insert_plan: InsertIntoPlan,
+        _stream: SendableDataBlockStream,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
             "append data for local table {} is not implemented",

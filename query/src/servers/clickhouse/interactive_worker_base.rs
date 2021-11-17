@@ -72,7 +72,7 @@ impl InteractiveWorkerBase {
                 let start = Instant::now();
                 let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
                 let name = interpreter.name().to_string();
-                let async_data_stream = interpreter.execute();
+                let async_data_stream = interpreter.execute(None);
                 let mut data_stream = async_data_stream.await?;
                 histogram!(
                     super::clickhouse_metrics::METRIC_INTERPRETER_USEDTIME,
@@ -123,7 +123,7 @@ impl InteractiveWorkerBase {
             input: stream,
             schema: sc,
         };
-        insert.set_input_stream(Box::pin(stream));
+
         let interpreter = InterpreterFactory::get(ctx.clone(), PlanNode::InsertInto(insert))?;
         let name = interpreter.name().to_string();
 
@@ -134,7 +134,7 @@ impl InteractiveWorkerBase {
         let sent_all_data = ch_ctx.state.sent_all_data.clone();
         let start = Instant::now();
         ctx.try_spawn(async move {
-            interpreter.execute().await.unwrap();
+            interpreter.execute(Some(Box::pin(stream))).await.unwrap();
             sent_all_data.notify_one();
         })?;
         histogram!(
@@ -152,26 +152,14 @@ pub struct FromClickHouseBlockStream {
 }
 
 impl futures::stream::Stream for FromClickHouseBlockStream {
-    type Item = DataBlock;
+    type Item = Result<DataBlock>;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
         self.input.poll_next_unpin(cx).map(|x| match x {
-            Some(v) => {
-                let block = from_clickhouse_block(self.schema.clone(), v);
-                match block {
-                    Ok(block) => Some(block),
-                    Err(e) => {
-                        log::error!(
-                            "failed to convert ClickHouseBlock to block , breaking out, {:?}",
-                            e
-                        );
-                        None
-                    }
-                }
-            }
+            Some(v) => Some(from_clickhouse_block(self.schema.clone(), v)),
             _ => None,
         })
     }

@@ -14,7 +14,9 @@
 
 mod abs;
 mod angle;
+mod ceil;
 mod crc32;
+mod floor;
 mod log;
 mod math;
 mod pi;
@@ -23,7 +25,9 @@ mod trigonometric;
 pub use abs::AbsFunction;
 pub use angle::DegressFunction;
 pub use angle::RadiansFunction;
+pub use ceil::CeilFunction;
 pub use crc32::CRC32Function;
+pub use floor::FloorFunction;
 pub use log::LnFunction;
 pub use log::Log10Function;
 pub use log::Log2Function;

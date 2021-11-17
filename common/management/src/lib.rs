@@ -20,4 +20,5 @@ pub use cluster::ClusterApi;
 pub use cluster::ClusterMgr;
 pub use user::user_api::UserInfo;
 pub use user::user_api::UserMgrApi;
+pub use user::user_mgr::format_user_key;
 pub use user::user_mgr::UserMgr;

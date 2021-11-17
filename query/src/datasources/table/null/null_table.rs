@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_context::DataContext;
 use common_context::TableIOContext;
 use common_datablocks::DataBlock;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::InsertIntoPlan;
@@ -72,14 +71,10 @@ impl Table for NullTable {
         &self,
         _io_ctx: Arc<TableIOContext>,
         _insert_plan: InsertIntoPlan,
+        mut stream: SendableDataBlockStream,
     ) -> Result<()> {
-        let mut s = {
-            let mut inner = _insert_plan.input_stream.lock();
-            (*inner).take()
-        }
-        .ok_or_else(|| ErrorCode::EmptyData("input stream consumed"))?;
-
-        while let Some(block) = s.next().await {
+        while let Some(block) = stream.next().await {
+            let block = block?;
             info!("Ignore one block rows: {}", block.num_rows())
         }
         Ok(())

@@ -13,16 +13,18 @@
 //  limitations under the License.
 //
 
+mod append;
 pub(crate) mod index;
 pub(crate) mod io;
 mod meta;
+mod read;
+mod read_plan;
 mod table;
-mod table_do_append;
-mod table_do_read;
-mod table_do_read_partitions;
-mod table_do_truncate;
+mod truncate;
 pub(crate) mod util;
 
+#[cfg(test)]
+mod read_plan_test;
 #[cfg(test)]
 mod table_test;
 #[cfg(test)]

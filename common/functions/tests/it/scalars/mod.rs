@@ -23,4 +23,5 @@ mod logics;
 mod maths;
 mod nullables;
 mod others;
+mod tuples;
 mod udfs;

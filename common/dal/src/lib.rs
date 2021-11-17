@@ -27,7 +27,13 @@ pub use impls::local::Local;
 pub use in_memory_data::InMemoryData;
 pub use schemes::StorageScheme;
 
+pub use self::metrics::DalWithMetric;
+pub use self::metrics::InputStreamWithMetric;
+pub use self::metrics::METRIC_DAL_READ_BYTES;
+pub use self::metrics::METRIC_DAL_WRITE_BYTES;
+
 mod data_accessor;
 mod impls;
 mod in_memory_data;
+mod metrics;
 mod schemes;

@@ -25,6 +25,7 @@ use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
+use crate::AlterUserPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
 use crate::CreateUserPlan;
@@ -37,6 +38,7 @@ use crate::Expression;
 use crate::ExpressionPlan;
 use crate::Expressions;
 use crate::FilterPlan;
+use crate::GrantPrivilegePlan;
 use crate::HavingPlan;
 use crate::InsertIntoPlan;
 use crate::KillPlan;
@@ -106,6 +108,8 @@ pub trait PlanRewriter {
             PlanNode::TruncateTable(plan) => self.rewrite_truncate_table(plan),
             PlanNode::Kill(plan) => self.rewrite_kill(plan),
             PlanNode::CreateUser(plan) => self.create_user(plan),
+            PlanNode::AlterUser(plan) => self.alter_user(plan),
+            PlanNode::GrantPrivilege(plan) => self.grant_privilege(plan),
         }
     }
 
@@ -148,10 +152,12 @@ pub trait PlanRewriter {
                 expr,
                 asc,
                 nulls_first,
+                origin_expr,
             } => Ok(Expression::Sort {
                 expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
                 asc: *asc,
                 nulls_first: *nulls_first,
+                origin_expr: origin_expr.clone(),
             }),
             Expression::Cast { expr, data_type } => Ok(Expression::Cast {
                 expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
@@ -339,6 +345,14 @@ pub trait PlanRewriter {
 
     fn create_user(&mut self, plan: &CreateUserPlan) -> Result<PlanNode> {
         Ok(PlanNode::CreateUser(plan.clone()))
+    }
+
+    fn alter_user(&mut self, plan: &AlterUserPlan) -> Result<PlanNode> {
+        Ok(PlanNode::AlterUser(plan.clone()))
+    }
+
+    fn grant_privilege(&mut self, plan: &GrantPrivilegePlan) -> Result<PlanNode> {
+        Ok(PlanNode::GrantPrivilege(plan.clone()))
     }
 }
 

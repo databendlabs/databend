@@ -68,14 +68,21 @@ impl Function for AbsFunction {
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        Ok(match &args[0] {
-            DataType::Int8 => DataType::UInt8,
-            DataType::Int16 => DataType::UInt16,
-            DataType::Int32 => DataType::UInt32,
-            DataType::Int64 => DataType::UInt64,
-            DataType::String => DataType::Float64,
-            dt => dt.clone(),
-        })
+        if is_numeric(&args[0]) || args[0] == DataType::String {
+            Ok(match &args[0] {
+                DataType::Int8 => DataType::UInt8,
+                DataType::Int16 => DataType::UInt16,
+                DataType::Int32 => DataType::UInt32,
+                DataType::Int64 => DataType::UInt64,
+                DataType::String => DataType::Float64,
+                dt => dt.clone(),
+            })
+        } else {
+            Err(ErrorCode::IllegalDataType(format!(
+                "Expected numeric types, but got {}",
+                args[0]
+            )))
+        }
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
@@ -94,10 +101,7 @@ impl Function for AbsFunction {
             DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64 => {
                 Ok(columns[0].column().clone())
             }
-            _ => Err(ErrorCode::IllegalDataType(format!(
-                "Expected numeric types, but got {}",
-                columns[0].data_type()
-            ))),
+            _ => unreachable!(),
         }
     }
 }

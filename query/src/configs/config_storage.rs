@@ -24,6 +24,7 @@ pub const STORAGE_TYPE: &str = "STORAGE_TYPE";
 
 // Disk Storage env.
 pub const DISK_STORAGE_DATA_PATH: &str = "DISK_STORAGE_DATA_PATH";
+pub const DISK_STORAGE_TEMP_DATA_PATH: &str = "DISK_STORAGE_TEMP_DATA_PATH";
 
 // S3 Storage env.
 const S3_STORAGE_REGION: &str = "S3_STORAGE_REGION";
@@ -63,15 +64,19 @@ impl FromStr for StorageType {
     Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
 )]
 pub struct DiskStorageConfig {
-    #[structopt(long, env = DISK_STORAGE_DATA_PATH, default_value = "", help = "Disk storage backend address")]
+    #[structopt(long, env = DISK_STORAGE_DATA_PATH, default_value = "", help = "Disk storage backend data path")]
     #[serde(default)]
     pub data_path: String,
+    #[structopt(long, env = DISK_STORAGE_TEMP_DATA_PATH, default_value = "", help = "Disk storage tempory data path for external data")]
+    #[serde(default)]
+    pub temp_data_path: String,
 }
 
 impl DiskStorageConfig {
     pub fn default() -> Self {
         DiskStorageConfig {
             data_path: "".to_string(),
+            temp_data_path: "".to_string(),
         }
     }
 }
@@ -160,7 +165,7 @@ impl fmt::Debug for AzureStorageBlobConfig {
     Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
 )]
 pub struct StorageConfig {
-    #[structopt(long, env = STORAGE_TYPE, default_value = "", help = "Current storage type: disk|s3")]
+    #[structopt(long, env = STORAGE_TYPE, default_value = "disk", help = "Current storage type: disk|s3")]
     #[serde(default)]
     pub storage_type: String,
 
@@ -197,6 +202,14 @@ impl StorageConfig {
             data_path,
             String,
             DISK_STORAGE_DATA_PATH
+        );
+
+        env_helper!(
+            mut_config.storage,
+            disk,
+            temp_data_path,
+            String,
+            DISK_STORAGE_TEMP_DATA_PATH
         );
 
         // S3.

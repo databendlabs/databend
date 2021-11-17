@@ -16,6 +16,7 @@ mod allocators;
 mod malloc_size;
 // mod sizeof;
 
+pub use allocators::new_malloc_size_ops;
 pub use allocators::Allocator;
 pub use allocators::MallocSizeOfExt;
 pub use malloc_size::MallocShallowSizeOf;

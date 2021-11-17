@@ -88,6 +88,7 @@ impl Table for ExampleTable {
         &self,
         _io_ctx: Arc<TableIOContext>,
         _insert_plan: InsertIntoPlan,
+        _stream: SendableDataBlockStream,
     ) -> Result<()> {
         Ok(())
     }

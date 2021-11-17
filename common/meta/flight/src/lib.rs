@@ -12,14 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod flight_client_test;
-
 mod flight_client;
 #[macro_use]
 mod flight_action;
 mod flight_client_conf;
-pub(crate) mod tests;
 
 pub mod impls;
 

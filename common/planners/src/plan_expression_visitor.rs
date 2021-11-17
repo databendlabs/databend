@@ -33,6 +33,41 @@ pub trait ExpressionVisitor: Sized {
     /// Invoked before any children of `expr` are visisted.
     fn pre_visit(self, expr: &Expression) -> Result<Recursion<Self>>;
 
+    fn visit(self, predecessor_expr: &Expression) -> Result<Self> {
+        // recursively visit (and cover all expression types)
+        match predecessor_expr {
+            Expression::Alias(_, expr) => expr.accept(self),
+            Expression::BinaryExpression { left, right, .. } => {
+                let mut visitor = self;
+                visitor = left.accept(visitor)?;
+                visitor = right.accept(visitor)?;
+                Ok(visitor)
+            }
+            Expression::UnaryExpression { expr, .. } => {
+                let mut visitor = self;
+                visitor = expr.accept(visitor)?;
+                Ok(visitor)
+            }
+            Expression::ScalarFunction { args, .. } => {
+                let mut visitor = self;
+                for arg in args {
+                    visitor = arg.accept(visitor)?;
+                }
+                Ok(visitor)
+            }
+            Expression::AggregateFunction { args, .. } => {
+                let mut visitor = self;
+                for arg in args {
+                    visitor = arg.accept(visitor)?;
+                }
+                Ok(visitor)
+            }
+            Expression::Cast { expr, .. } => expr.accept(self),
+            Expression::Sort { expr, .. } => expr.accept(self),
+            _ => Ok(self),
+        }
+    }
+
     /// Invoked after all children of `expr` are visited. Default
     /// implementation does nothing.
     fn post_visit(self, _expr: &Expression) -> Result<Self> {
@@ -76,40 +111,7 @@ impl Expression {
             Recursion::Stop(visitor) => return Ok(visitor),
         };
 
-        // recurse (and cover all expression types)
-        let visitor = match self {
-            Expression::Alias(_, expr) => expr.accept(visitor),
-            Expression::BinaryExpression { left, right, .. } => {
-                let mut visitor = visitor;
-                visitor = left.accept(visitor)?;
-                visitor = right.accept(visitor)?;
-                Ok(visitor)
-            }
-            Expression::UnaryExpression { expr, .. } => {
-                let mut visitor = visitor;
-                visitor = expr.accept(visitor)?;
-                Ok(visitor)
-            }
-            Expression::ScalarFunction { args, .. } => {
-                let mut visitor = visitor;
-                for arg in args {
-                    visitor = arg.accept(visitor)?;
-                }
-                Ok(visitor)
-            }
-            Expression::AggregateFunction { args, .. } => {
-                let mut visitor = visitor;
-                for arg in args {
-                    visitor = arg.accept(visitor)?;
-                }
-                Ok(visitor)
-            }
-            Expression::Cast { expr, .. } => expr.accept(visitor),
-            Expression::Sort { expr, .. } => expr.accept(visitor),
-
-            _ => Ok(visitor),
-        }?;
-
+        let visitor = visitor.visit(self)?;
         visitor.post_visit(self)
     }
 }

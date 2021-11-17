@@ -15,23 +15,19 @@
 
 use std::str::FromStr;
 
-use common_base::tokio::io::AsyncReadExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::Stream;
-use futures::StreamExt;
 use rusoto_core::credential::DefaultCredentialsProvider;
 use rusoto_core::credential::StaticProvider;
 use rusoto_core::ByteStream;
 use rusoto_core::Client;
 use rusoto_core::HttpClient;
 use rusoto_core::Region;
-use rusoto_s3::GetObjectRequest;
 use rusoto_s3::PutObjectRequest;
 use rusoto_s3::S3Client;
 use rusoto_s3::S3 as RusotoS3;
 
-use crate::Bytes;
 use crate::DataAccessor;
 use crate::InputStream;
 use crate::S3InputStream;
@@ -142,27 +138,6 @@ impl DataAccessor for S3 {
         )))
     }
 
-    async fn get(&self, path: &str) -> common_exception::Result<Bytes> {
-        let req = GetObjectRequest {
-            key: path.to_string(),
-            bucket: self.bucket.to_string(),
-            ..Default::default()
-        };
-        let output = self
-            .client
-            .get_object(req)
-            .await
-            .map_err(|e| ErrorCode::DALTransportError(e.to_string()))?;
-        match output.body {
-            Some(stream) => {
-                let mut res = vec![];
-                stream.into_async_read().read_to_end(&mut res).await?;
-                Ok(res)
-            }
-            None => Ok(Vec::new()),
-        }
-    }
-
     async fn put(&self, path: &str, content: Vec<u8>) -> common_exception::Result<()> {
         self.put_byte_stream(path, ByteStream::from(content)).await
     }
@@ -178,8 +153,7 @@ impl DataAccessor for S3 {
         >,
         stream_len: usize,
     ) -> common_exception::Result<()> {
-        let s = input_stream.map(|bytes| bytes.map(|b| bytes::Bytes::copy_from_slice(&b)));
-        self.put_byte_stream(path, ByteStream::new_with_size(s, stream_len))
+        self.put_byte_stream(path, ByteStream::new_with_size(input_stream, stream_len))
             .await
     }
 }

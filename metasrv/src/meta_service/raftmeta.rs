@@ -48,11 +48,13 @@ use crate::meta_service::message::AdminRequest;
 use crate::meta_service::message::AdminResponse;
 use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::AdminRequestInner;
+use crate::meta_service::JoinRequest;
 use crate::meta_service::MetaServiceImpl;
 use crate::meta_service::Network;
 use crate::proto::meta_service_client::MetaServiceClient;
 use crate::proto::meta_service_server::MetaServiceServer;
 use crate::store::MetaRaftStore;
+use crate::Opened;
 
 // MetaRaft is a impl of the generic Raft handling meta data R/W.
 pub type MetaRaft = Raft<LogEntry, AppliedState, Network, MetaRaftStore>;
@@ -66,6 +68,12 @@ pub struct MetaNode {
     pub running_tx: watch::Sender<()>,
     pub running_rx: watch::Receiver<()>,
     pub join_handles: Mutex<Vec<JoinHandle<common_exception::Result<()>>>>,
+}
+
+impl Opened for MetaNode {
+    fn is_opened(&self) -> bool {
+        self.sto.is_opened()
+    }
 }
 
 pub struct MetaNodeBuilder {
@@ -208,47 +216,56 @@ impl MetaNode {
         Ok(())
     }
 
-    /// Start a metasrv node from initialized store.
-    #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
-    pub async fn open(config: &RaftConfig) -> common_exception::Result<Arc<MetaNode>> {
-        let (mn, _is_open) = Self::open_create_boot(config, Some(()), None, None).await?;
-        Ok(mn)
-    }
-
     /// Open or create a metasrv node.
     /// Optionally boot a single node cluster.
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create an one in non-voter mode.
-    /// 3. If `boot` is `Some` and it is just created, try to initialize a single-node cluster.
+    /// 3. If `init_cluster` is `Some` and it is just created, try to initialize a single-node cluster.
+    ///
+    /// TODO(xp): `init_cluster`: pass in a Map<id, address> to initialize the cluster.
     #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
     pub async fn open_create_boot(
         config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
-        boot: Option<()>,
-    ) -> common_exception::Result<(Arc<MetaNode>, bool)> {
-        let sto = MetaRaftStore::open_create(config, open, create).await?;
-        let is_open = sto.is_open();
+        init_cluster: Option<Vec<String>>,
+    ) -> common_exception::Result<Arc<MetaNode>> {
+        let mut config = config.clone();
+
+        // Always disable fsync on mac.
+        // Because there are some integration tests running on mac VM.
+        //
+        // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
+        if cfg!(target_os = "macos") {
+            tracing::warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
+            config.no_sync = true;
+        }
+
+        let sto = MetaRaftStore::open_create(&config, open, create).await?;
+        let is_open = sto.is_opened();
         let sto = Arc::new(sto);
-        let mut b = MetaNode::builder(config).sto(sto.clone());
+
+        let mut builder = MetaNode::builder(&config).sto(sto.clone());
 
         if is_open {
             // read id from sto, read listening addr from sto
-            b = b.node_id(sto.id);
+            builder = builder.node_id(sto.id);
         } else {
             // read id from config, read listening addr from config.
-            b = b.node_id(config.id).addr(config.raft_api_addr());
+            builder = builder.node_id(config.id).addr(config.raft_api_addr());
         }
 
-        let mn = b.build().await?;
+        let mn = builder.build().await?;
 
         tracing::info!("MetaNode started: {:?}", config);
 
-        if !is_open && boot.is_some() {
-            mn.init_cluster(config.raft_api_addr()).await?;
+        if !is_open {
+            if let Some(_addrs) = init_cluster {
+                mn.init_cluster(config.raft_api_addr()).await?;
+            }
         }
 
-        Ok((mn, is_open))
+        Ok(mn)
     }
 
     #[tracing::instrument(level = "info", skip(self))]
@@ -341,20 +358,67 @@ impl MetaNode {
         jh.push(h);
     }
 
+    /// Start MetaNode in either `boot`, `single`, `join` or `open` mode,
+    /// according to config.
+    #[tracing::instrument(level = "info")]
+    pub async fn start(config: &RaftConfig) -> Result<Arc<MetaNode>, ErrorCode> {
+        let mn = Self::do_start(config).await?;
+        tracing::info!("Done starting MetaNode: {:?}", config);
+        Ok(mn)
+    }
+
+    async fn do_start(conf: &RaftConfig) -> Result<Arc<MetaNode>, ErrorCode> {
+        // TODO(xp): remove boot mode
+        if conf.boot {
+            let mn = Self::open_create_boot(conf, None, Some(()), Some(vec![])).await?;
+            return Ok(mn);
+        }
+
+        if conf.single {
+            let mn = MetaNode::open_create_boot(conf, Some(()), Some(()), Some(vec![])).await?;
+            return Ok(mn);
+        }
+
+        if !conf.join.is_empty() {
+            // Bring up a new node, join an cluster
+            let mn = MetaNode::open_create_boot(conf, Some(()), Some(()), None).await?;
+
+            let addrs = &conf.join;
+            for addr in addrs {
+                let mut client = MetaServiceClient::connect(format!("http://{}", addr))
+                    .await
+                    .map_err(|e| ErrorCode::CannotConnectNode(e.to_string()))?;
+
+                let admin_req = AdminRequest {
+                    forward_to_leader: true,
+                    req: AdminRequestInner::Join(JoinRequest {
+                        node_id: conf.id,
+                        address: conf.raft_api_addr(),
+                    }),
+                };
+
+                let _res = client.forward(admin_req.clone()).await?;
+                // TODO: retry
+                // break;
+            }
+
+            return Ok(mn);
+        }
+
+        // open mode
+        let mn = MetaNode::open_create_boot(conf, Some(()), None, None).await?;
+        Ok(mn)
+    }
+
     /// Boot up the first node to create a cluster.
     /// For every cluster this func should be called exactly once.
-    /// When a node is initialized with boot or boot_non_voter, start it with databend_meta::new().
     #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
     pub async fn boot(config: &RaftConfig) -> common_exception::Result<Arc<MetaNode>> {
         // 1. Bring a node up as non voter, start the grpc service for raft communication.
         // 2. Initialize itself as leader, because it is the only one in the new cluster.
         // 3. Add itself to the cluster storage by committing an `add-node` log so that the cluster members(only this node) is persisted.
 
-        let config = config.clone();
-
-        let (mn, _is_open) = Self::open_create_boot(&config, None, Some(()), None).await?;
-
-        mn.init_cluster(config.raft_api_addr()).await?;
+        let mn = Self::open_create_boot(config, None, Some(()), Some(vec![])).await?;
 
         Ok(mn)
     }

@@ -19,14 +19,17 @@ pub mod proto {
     include!(concat!(env!("OUT_DIR"), concat!("/meta.rs")));
 }
 
-#[macro_use]
-pub mod tests;
-
-mod any_error;
+pub mod any_error;
 pub mod api;
 pub mod configs;
 pub mod errors;
 pub mod executor;
 pub mod meta_service;
 pub mod metrics;
-mod store;
+pub mod store;
+
+pub trait Opened {
+    /// Return true if it is opened from a previous persistent state.
+    /// Otherwise it is just created.
+    fn is_opened(&self) -> bool;
+}

@@ -316,7 +316,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let instant = Instant::now();
 
         let interpreter = InterpreterFactory::get(context.clone(), plan?)?;
-        let data_stream = interpreter.execute().await?;
+        let data_stream = interpreter.execute(None).await?;
         histogram!(
             super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
             instant.elapsed()

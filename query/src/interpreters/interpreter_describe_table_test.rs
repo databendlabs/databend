@@ -31,7 +31,7 @@ async fn interpreter_describe_table_test() -> Result<()> {
             .build_from_sql("create table default.a(a bigint, b int, c varchar(255), d smallint, e Date ) Engine = Null")?
         {
             let executor = CreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let _ = executor.execute().await?;
+            let _ = executor.execute(None).await?;
         }
     }
 
@@ -43,7 +43,7 @@ async fn interpreter_describe_table_test() -> Result<()> {
             let executor = DescribeTableInterpreter::try_create(ctx.clone(), plan.clone())?;
             assert_eq!(executor.name(), "DescribeTableInterpreter");
 
-            let stream = executor.execute().await?;
+            let stream = executor.execute(None).await?;
             let result = stream.try_collect::<Vec<_>>().await?;
             let expected = vec![
                 "+-------+--------+------+",

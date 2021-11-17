@@ -32,7 +32,7 @@ pub use number::*;
 pub use string::*;
 
 // capacity.
-pub trait TypeSerializer {
+pub trait TypeSerializer: Send + Sync {
     fn serialize_strings(&self, column: &DataColumn) -> Result<Vec<String>>;
 
     fn de(&mut self, reader: &mut &[u8]) -> Result<()>;

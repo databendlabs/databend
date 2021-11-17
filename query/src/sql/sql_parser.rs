@@ -19,6 +19,8 @@ use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_meta_types::AuthType;
+use common_meta_types::UserPrivilege;
+use common_meta_types::UserPrivilegeType;
 use common_planners::ExplainType;
 use metrics::histogram;
 use sqlparser::ast::BinaryOperator;
@@ -38,6 +40,7 @@ use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::Whitespace;
 
+use crate::sql::DfAlterUser;
 use crate::sql::DfCreateDatabase;
 use crate::sql::DfCreateTable;
 use crate::sql::DfCreateUser;
@@ -45,6 +48,7 @@ use crate::sql::DfDescribeTable;
 use crate::sql::DfDropDatabase;
 use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
+use crate::sql::DfGrantStatement;
 use crate::sql::DfHint;
 use crate::sql::DfKillStatement;
 use crate::sql::DfShowCreateTable;
@@ -153,6 +157,10 @@ impl<'a> DfParser<'a> {
                         self.parser.next_token();
                         self.parse_create()
                     }
+                    Keyword::ALTER => {
+                        self.parser.next_token();
+                        self.parse_alter()
+                    }
                     Keyword::DESC => {
                         self.parser.next_token();
                         self.parse_describe()
@@ -210,6 +218,10 @@ impl<'a> DfParser<'a> {
                     Keyword::TRUNCATE => {
                         self.parser.next_token();
                         self.parse_truncate()
+                    }
+                    Keyword::GRANT => {
+                        self.parser.next_token();
+                        self.parse_grant()
                     }
                     Keyword::NoKeyword => match w.value.to_uppercase().as_str() {
                         // Use database
@@ -396,6 +408,16 @@ impl<'a> DfParser<'a> {
         }
     }
 
+    fn parse_alter(&mut self) -> Result<DfStatement, ParserError> {
+        match self.parser.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::USER => self.parse_alter_user(),
+                _ => self.expected("alter statement", Token::Word(w)),
+            },
+            unexpected => self.expected("alter statement", unexpected),
+        }
+    }
+
     fn parse_create_database(&mut self) -> Result<DfStatement, ParserError> {
         let if_not_exists =
             self.parser
@@ -494,12 +516,58 @@ impl<'a> DfParser<'a> {
             String::from("%")
         };
 
+        let (auth_type, password) = self.get_auth_option()?;
+
+        let create = DfCreateUser {
+            if_not_exists,
+            name,
+            hostname,
+            auth_type,
+            password,
+        };
+
+        Ok(DfStatement::CreateUser(create))
+    }
+
+    fn parse_alter_user(&mut self) -> Result<DfStatement, ParserError> {
+        let if_current_user = self.consume_token("USER")
+            && self.parser.expect_token(&Token::LParen).is_ok()
+            && self.parser.expect_token(&Token::RParen).is_ok();
+        let name = if !if_current_user {
+            self.parser.parse_literal_string()?
+        } else {
+            String::from("")
+        };
+        let hostname = if !if_current_user {
+            if self.consume_token("@") {
+                self.parser.parse_literal_string()?
+            } else {
+                String::from("%")
+            }
+        } else {
+            String::from("")
+        };
+
+        let (auth_type, password) = self.get_auth_option()?;
+
+        let alter = DfAlterUser {
+            if_current_user,
+            name,
+            hostname,
+            new_auth_type: auth_type,
+            new_password: password,
+        };
+
+        Ok(DfStatement::AlterUser(alter))
+    }
+
+    fn get_auth_option(&mut self) -> Result<(AuthType, String), ParserError> {
         let exist_not_identified = self.parser.parse_keyword(Keyword::NOT);
         let exist_identified = self.consume_token("IDENTIFIED");
         let exist_with = self.consume_token("WITH");
 
-        let (auth_type, password) = if exist_not_identified || !exist_identified {
-            (AuthType::None, String::from(""))
+        if exist_not_identified || !exist_identified {
+            Ok((AuthType::None, String::from("")))
         } else {
             let auth_type = if exist_with {
                 match self.parser.parse_literal_string()?.as_str() {
@@ -514,27 +582,17 @@ impl<'a> DfParser<'a> {
             };
 
             if AuthType::None == auth_type {
-                (AuthType::None, String::from(""))
+                Ok((AuthType::None, String::from("")))
             } else if self.parser.parse_keyword(Keyword::BY) {
                 let password = self.parser.parse_literal_string()?;
                 if password.is_empty() {
                     return parser_err!("Missing password");
                 }
-                (auth_type, password)
+                Ok((auth_type, password))
             } else {
                 return parser_err!("Expected keyword BY");
             }
-        };
-
-        let create = DfCreateUser {
-            if_not_exists,
-            name,
-            hostname,
-            auth_type,
-            password,
-        };
-
-        Ok(DfStatement::CreateUser(create))
+        }
     }
 
     fn parse_create_table(&mut self) -> Result<DfStatement, ParserError> {
@@ -572,7 +630,7 @@ impl<'a> DfParser<'a> {
     fn parse_table_engine(&mut self) -> Result<String, ParserError> {
         // TODO make ENGINE as a keyword
         if !self.consume_token("ENGINE") {
-            return Ok("NULL".to_string());
+            return Ok("FUSE".to_string());
         }
 
         self.parser.expect_token(&Token::Eq)?;
@@ -606,6 +664,62 @@ impl<'a> DfParser<'a> {
             },
             unexpected => self.expected("truncate statement", unexpected),
         }
+    }
+
+    fn parse_privileges(&mut self) -> Result<UserPrivilege, ParserError> {
+        let mut privileges = UserPrivilege::empty();
+        loop {
+            match self.parser.next_token() {
+                Token::Word(w) => match w.keyword {
+                    // Keyword::USAGE => privileges.set_privilege(UserPrivilegeType::Usage),
+                    Keyword::CREATE => privileges.set_privilege(UserPrivilegeType::Create),
+                    Keyword::SELECT => privileges.set_privilege(UserPrivilegeType::Select),
+                    Keyword::INSERT => privileges.set_privilege(UserPrivilegeType::Insert),
+                    Keyword::SET => privileges.set_privilege(UserPrivilegeType::Set),
+                    Keyword::ALL => {
+                        privileges.set_all_privileges();
+                        // GRANT ALL [PRIVILEGES]
+                        self.consume_token("PRIVILEGES");
+                        break;
+                    }
+                    _ => return self.expected("privilege type", Token::Word(w)),
+                },
+                unexpected => return self.expected("privilege type", unexpected),
+            };
+            if !self.parser.consume_token(&Token::Comma) {
+                break;
+            }
+        }
+        Ok(privileges)
+    }
+
+    fn parse_grant(&mut self) -> Result<DfStatement, ParserError> {
+        let privileges = self.parse_privileges()?;
+        if !self.parser.parse_keyword(Keyword::ON) {
+            return self.expected("keyword ON", self.parser.peek_token());
+        }
+        // TODO: Support `db_name.tbl_name` privilege level.
+        if !self.parser.consume_token(&Token::Mul) {
+            return self.expected("*", self.parser.peek_token());
+        }
+        if self.parser.consume_token(&Token::Period) && !self.parser.consume_token(&Token::Mul) {
+            return self.expected("*.*", self.parser.peek_token());
+        }
+        if !self.parser.parse_keyword(Keyword::TO) {
+            return self.expected("keyword TO", self.parser.peek_token());
+        }
+        let name = self.parser.parse_literal_string()?;
+        let hostname = if self.consume_token("@") {
+            self.parser.parse_literal_string()?
+        } else {
+            String::from("%")
+        };
+        let grant = DfGrantStatement {
+            name,
+            hostname,
+            priv_types: privileges,
+        };
+        Ok(DfStatement::GrantPrivilege(grant))
     }
 
     fn consume_token(&mut self, expected: &str) -> bool {

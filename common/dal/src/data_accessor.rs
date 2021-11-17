@@ -39,8 +39,6 @@ impl<T> SeekableReader for T where T: Read + Seek {}
 pub trait DataAccessor: Send + Sync {
     fn get_input_stream(&self, path: &str, stream_len: Option<u64>) -> Result<InputStream>;
 
-    async fn get(&self, path: &str) -> Result<Bytes>;
-
     async fn put(&self, path: &str, content: Vec<u8>) -> Result<()>;
 
     async fn put_stream(

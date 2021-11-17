@@ -17,6 +17,8 @@ Description for this bug.
 
 If applicable, add screenshots to help explain your problem.
 
+[How to get the server logs](https://databend.rs/development/how-to-get-server-logs/)
+
 **Additional context**
 
 Add any other context about the problem here.

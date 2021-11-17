@@ -7,6 +7,10 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lib]
+doctest = false
+test = false
+
 [[bin]]
 name = "databend-meta"
 path = "src/bin/metasrv.rs"
@@ -69,7 +73,7 @@ tonic = { version = "0.6.0", features = ["tls"]}
 
 sha2 = "0.9.8"
 uuid = { version = "0.8", features = ["serde", "v4"] }
-poem = { version = "1.0.23", features = ["rustls"] }
+poem = { version = "1.0.27", features = ["rustls"] }
 
 [dev-dependencies]
 common-meta-api = {path = "../common/meta/api" }

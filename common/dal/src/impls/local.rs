@@ -25,10 +25,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::Stream;
 use futures::StreamExt;
-use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 
-use crate::Bytes;
 use crate::DataAccessor;
 use crate::InputStream;
 
@@ -45,10 +43,8 @@ impl Local {
     pub fn with_path(root_path: PathBuf) -> Local {
         Local { root: root_path }
     }
-}
 
-impl Local {
-    fn prefix_with_root(&self, path: &str) -> Result<PathBuf> {
+    pub fn prefix_with_root(&self, path: &str) -> Result<PathBuf> {
         let path = normalize_path(&self.root.join(&path));
         if path.starts_with(&self.root) {
             Ok(path)
@@ -56,7 +52,10 @@ impl Local {
             // TODO customize error code
             Err(ErrorCode::from(Error::new(
                 ErrorKind::Other,
-                format!("please dont play with me, malicious path {:?}", path),
+                format!(
+                    "please dont play with me, malicious path {:?}, root path {:?}",
+                    path, self.root
+                ),
             )))
         }
     }
@@ -69,14 +68,6 @@ impl DataAccessor for Local {
         let std_file = std::fs::File::open(path)?;
         let tokio_file = tokio::fs::File::from_std(std_file);
         Ok(Box::new(tokio_file.compat()))
-    }
-
-    async fn get(&self, path: &str) -> Result<Bytes> {
-        let path = self.prefix_with_root(path)?;
-        let mut file = tokio::fs::File::open(path).await?;
-        let mut contents = vec![];
-        let _ = file.read_to_end(&mut contents).await?;
-        Ok(contents)
     }
 
     // not "atomic", for test purpose only
@@ -120,7 +111,7 @@ impl DataAccessor for Local {
 }
 
 // from cargo::util::path
-fn normalize_path(path: &Path) -> PathBuf {
+pub fn normalize_path(path: &Path) -> PathBuf {
     let mut components = path.components().peekable();
     let mut ret = if let Some(c @ Component::Prefix(..)) = components.peek().cloned() {
         components.next();

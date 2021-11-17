@@ -15,7 +15,9 @@
 use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::AbsFunction;
 use crate::scalars::CRC32Function;
+use crate::scalars::CeilFunction;
 use crate::scalars::DegressFunction;
+use crate::scalars::FloorFunction;
 use crate::scalars::LnFunction;
 use crate::scalars::Log10Function;
 use crate::scalars::Log2Function;
@@ -44,5 +46,8 @@ impl MathsFunction {
         factory.register("log10", Log10Function::desc());
         factory.register("log2", Log2Function::desc());
         factory.register("ln", LnFunction::desc());
+        factory.register("ceil", CeilFunction::desc());
+        factory.register("ceiling", CeilFunction::desc());
+        factory.register("floor", FloorFunction::desc());
     }
 }

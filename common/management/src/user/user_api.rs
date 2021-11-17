@@ -33,12 +33,7 @@ pub struct UserInfo {
 }
 
 impl UserInfo {
-    pub(crate) fn new(
-        name: String,
-        hostname: String,
-        password: Vec<u8>,
-        auth_type: AuthType,
-    ) -> Self {
+    pub fn new(name: String, hostname: String, password: Vec<u8>, auth_type: AuthType) -> Self {
         // Default is no privileges.
         let privileges = UserPrivilege::empty();
         let quota = UserQuota::no_limit();
@@ -51,6 +46,10 @@ impl UserInfo {
             privileges,
             quota,
         }
+    }
+
+    pub fn set_privileges(&mut self, privileges: UserPrivilege) {
+        self.privileges |= privileges;
     }
 }
 
@@ -73,6 +72,14 @@ pub trait UserMgrApi: Sync + Send {
         hostname: String,
         new_password: Option<Vec<u8>>,
         new_auth: Option<AuthType>,
+        seq: Option<u64>,
+    ) -> Result<Option<u64>>;
+
+    async fn set_user_privileges(
+        &self,
+        username: String,
+        hostname: String,
+        privileges: UserPrivilege,
         seq: Option<u64>,
     ) -> Result<Option<u64>>;
 

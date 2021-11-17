@@ -22,6 +22,3 @@ pub use flight_token::FlightToken;
 mod client_conf;
 mod dns_resolver;
 mod flight_token;
-
-#[cfg(test)]
-mod dns_resolver_test;

@@ -13,9 +13,6 @@
 // limitations under the License.
 //
 
-#[cfg(test)]
-mod cluster_mgr_test;
-
 mod cluster_api;
 mod cluster_mgr;
 

@@ -14,6 +14,8 @@
 
 use common_exception::Result;
 use common_meta_types::AuthType;
+use common_meta_types::UserPrivilege;
+use common_meta_types::UserPrivilegeType;
 use sqlparser::ast::*;
 
 use crate::sql::sql_statement::DfDropDatabase;
@@ -503,5 +505,206 @@ fn create_user_test() -> Result<()> {
         "CREATE USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY ''",
         String::from("sql parser error: Missing password"),
     )?;
+    Ok(())
+}
+
+#[test]
+fn alter_user_test() -> Result<()> {
+    expect_parse_ok(
+        "ALTER USER 'test'@'localhost' IDENTIFIED BY 'password'",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            new_auth_type: AuthType::Sha256,
+            new_password: String::from("password"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "ALTER USER USER() IDENTIFIED BY 'password'",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: true,
+            name: String::from(""),
+            hostname: String::from(""),
+            new_auth_type: AuthType::Sha256,
+            new_password: String::from("password"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "ALTER USER 'test'@'localhost' IDENTIFIED WITH plaintext_password BY 'password'",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            new_auth_type: AuthType::PlainText,
+            new_password: String::from("password"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "ALTER USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY 'password'",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            new_auth_type: AuthType::Sha256,
+            new_password: String::from("password"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "ALTER USER 'test'@'localhost' IDENTIFIED WITH double_sha1_password BY 'password'",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            new_auth_type: AuthType::DoubleSha1,
+            new_password: String::from("password"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "ALTER USER 'test'@'localhost' IDENTIFIED WITH no_password",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            new_auth_type: AuthType::None,
+            new_password: String::from(""),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "ALTER USER 'test@localhost' IDENTIFIED WITH sha256_password BY 'password'",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            name: String::from("test@localhost"),
+            hostname: String::from("%"),
+            new_auth_type: AuthType::Sha256,
+            new_password: String::from("password"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "ALTER USER 'test'@'localhost' NOT IDENTIFIED",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            new_auth_type: AuthType::None,
+            new_password: String::from(""),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "ALTER USER 'test'@'localhost'",
+        DfStatement::AlterUser(DfAlterUser {
+            if_current_user: false,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            new_auth_type: AuthType::None,
+            new_password: String::from(""),
+        }),
+    )?;
+
+    expect_parse_err(
+        "ALTER USER 'test'@'localhost' IDENTIFIED WITH no_password BY 'password'",
+        String::from("sql parser error: Expected end of statement, found: BY"),
+    )?;
+
+    expect_parse_err(
+        "ALTER USER 'test'@'localhost' IDENTIFIED WITH sha256_password",
+        String::from("sql parser error: Expected keyword BY"),
+    )?;
+
+    expect_parse_err(
+        "ALTER USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY",
+        String::from("sql parser error: Expected literal string, found: EOF"),
+    )?;
+
+    expect_parse_err(
+        "ALTER USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY ''",
+        String::from("sql parser error: Missing password"),
+    )?;
+    Ok(())
+}
+
+#[test]
+fn grant_privilege_test() -> Result<()> {
+    expect_parse_ok(
+        "GRANT ALL ON * TO 'test'@'localhost'",
+        DfStatement::GrantPrivilege(DfGrantStatement {
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            priv_types: {
+                let mut user_priv = UserPrivilege::empty();
+                user_priv.set_all_privileges();
+                user_priv
+            },
+        }),
+    )?;
+
+    expect_parse_ok(
+        "GRANT ALL PRIVILEGES ON * TO 'test'@'localhost'",
+        DfStatement::GrantPrivilege(DfGrantStatement {
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            priv_types: {
+                let mut user_priv = UserPrivilege::empty();
+                user_priv.set_all_privileges();
+                user_priv
+            },
+        }),
+    )?;
+
+    expect_parse_ok(
+        "GRANT INSERT ON * TO 'test'@'localhost'",
+        DfStatement::GrantPrivilege(DfGrantStatement {
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            priv_types: {
+                let mut user_priv = UserPrivilege::empty();
+                user_priv.set_privilege(UserPrivilegeType::Insert);
+                user_priv
+            },
+        }),
+    )?;
+
+    expect_parse_ok(
+        "GRANT CREATE, SELECT ON * TO 'test'@'localhost'",
+        DfStatement::GrantPrivilege(DfGrantStatement {
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            priv_types: {
+                let mut user_priv = UserPrivilege::empty();
+                user_priv.set_privilege(UserPrivilegeType::Select);
+                user_priv.set_privilege(UserPrivilegeType::Create);
+                user_priv
+            },
+        }),
+    )?;
+
+    expect_parse_err(
+        "GRANT TEST, ON * TO 'test'@'localhost'",
+        String::from("sql parser error: Expected privilege type, found: TEST"),
+    )?;
+
+    expect_parse_err(
+        "GRANT SELECT, ON * TO 'test'@'localhost'",
+        String::from("sql parser error: Expected privilege type, found: ON"),
+    )?;
+
+    expect_parse_err(
+        "GRANT SELECT IN * TO 'test'@'localhost'",
+        String::from("sql parser error: Expected keyword ON, found: IN"),
+    )?;
+
+    expect_parse_err(
+        "GRANT SELECT ON * 'test'@'localhost'",
+        String::from("sql parser error: Expected keyword TO, found: 'test'"),
+    )?;
+
     Ok(())
 }

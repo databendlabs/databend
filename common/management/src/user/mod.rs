@@ -15,6 +15,3 @@
 
 pub(crate) mod user_api;
 pub(crate) mod user_mgr;
-
-#[cfg(test)]
-mod user_mgr_test;

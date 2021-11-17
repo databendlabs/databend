@@ -46,4 +46,5 @@ pub use optimizer_projection_push_down::ProjectionPushDownOptimizer;
 pub use optimizer_scatters::ScattersOptimizer;
 pub use optimizer_statistics_exact::StatisticsExactOptimizer;
 pub use optimizer_top_n_push_down::TopNPushDownOptimizer;
+pub use utils::MonotonicityCheckVisitor;
 pub use utils::RequireColumnsVisitor;

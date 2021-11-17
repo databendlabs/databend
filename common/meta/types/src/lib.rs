@@ -14,15 +14,6 @@
 
 //! This crate defines data types used in meta data storage service.
 
-#[cfg(test)]
-mod cluster_test;
-#[cfg(test)]
-mod match_seq_test;
-#[cfg(test)]
-mod user_privilege_test;
-#[cfg(test)]
-mod user_quota_test;
-
 pub use change::AddResult;
 pub use change::Change;
 pub use cluster::Node;

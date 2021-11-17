@@ -15,12 +15,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_infallible::Mutex;
 use common_meta_types::TableMeta;
 use common_planners::expand_aggregate_arg_exprs;
 use common_planners::expand_wildcard;
@@ -33,6 +31,7 @@ use common_planners::rebase_expr_from_input;
 use common_planners::resolve_aliases_to_exprs;
 use common_planners::sort_to_inner_expr;
 use common_planners::unwrap_alias_exprs;
+use common_planners::AlterUserPlan;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::CreateUserPlan;
@@ -42,6 +41,7 @@ use common_planners::DropTablePlan;
 use common_planners::ExplainPlan;
 use common_planners::Expression;
 use common_planners::Extras;
+use common_planners::GrantPrivilegePlan;
 use common_planners::InsertIntoPlan;
 use common_planners::KillPlan;
 use common_planners::PlanBuilder;
@@ -52,8 +52,6 @@ use common_planners::ShowCreateTablePlan;
 use common_planners::TruncateTablePlan;
 use common_planners::UseDatabasePlan;
 use common_planners::VarValue;
-use common_streams::Source;
-use common_streams::ValueSource;
 use common_tracing::tracing;
 use nom::FindSubstring;
 use sqlparser::ast::FunctionArg;
@@ -72,11 +70,13 @@ use crate::sessions::DatabendQueryContextRef;
 use crate::sql::sql_statement::DfCreateTable;
 use crate::sql::sql_statement::DfDropDatabase;
 use crate::sql::sql_statement::DfUseDatabase;
+use crate::sql::DfAlterUser;
 use crate::sql::DfCreateDatabase;
 use crate::sql::DfCreateUser;
 use crate::sql::DfDescribeTable;
 use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
+use crate::sql::DfGrantStatement;
 use crate::sql::DfHint;
 use crate::sql::DfKillStatement;
 use crate::sql::DfParser;
@@ -178,6 +178,8 @@ impl PlanParser {
             DfStatement::ShowUsers(_) => {
                 self.build_from_sql("SELECT * FROM system.users ORDER BY name")
             }
+            DfStatement::AlterUser(v) => self.sql_alter_user_to_plan(v),
+            DfStatement::GrantPrivilege(v) => self.sql_grant_privilege_to_plan(v),
         }
     }
 
@@ -347,6 +349,26 @@ impl PlanParser {
         }))
     }
 
+    #[tracing::instrument(level = "info", skip(self, alter), fields(ctx.id = self.ctx.get_id().as_str()))]
+    pub fn sql_alter_user_to_plan(&self, alter: &DfAlterUser) -> Result<PlanNode> {
+        Ok(PlanNode::AlterUser(AlterUserPlan {
+            if_current_user: alter.if_current_user,
+            name: alter.name.clone(),
+            new_password: Vec::from(alter.new_password.clone()),
+            hostname: alter.hostname.clone(),
+            new_auth_type: alter.new_auth_type.clone(),
+        }))
+    }
+
+    #[tracing::instrument(level = "info", skip(self, grant), fields(ctx.id = self.ctx.get_id().as_str()))]
+    pub fn sql_grant_privilege_to_plan(&self, grant: &DfGrantStatement) -> Result<PlanNode> {
+        Ok(PlanNode::GrantPrivilege(GrantPrivilegePlan {
+            name: grant.name.clone(),
+            hostname: grant.hostname.clone(),
+            priv_types: grant.priv_types,
+        }))
+    }
+
     #[tracing::instrument(level = "info", skip(self, show_create), fields(ctx.id = self.ctx.get_id().as_str()))]
     pub fn sql_show_create_table_to_plan(
         &self,
@@ -469,25 +491,13 @@ impl PlanParser {
             schema = DataSchemaRefExt::create(fields);
         }
 
-        let mut input_stream = futures::stream::iter::<Vec<DataBlock>>(vec![]);
-
+        let mut values_opt = None;
         if let Some(source) = source {
             if let sqlparser::ast::SetExpr::Values(_vs) = &source.body {
                 tracing::debug!("{:?}", format_sql);
                 let index = format_sql.find_substring(" VALUES ").unwrap();
                 let values = &format_sql[index + " VALUES ".len()..];
-
-                let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
-                let mut source = ValueSource::new(values.as_bytes(), schema.clone(), block_size);
-                let mut blocks = vec![];
-                loop {
-                    let block = source.read()?;
-                    match block {
-                        Some(b) => blocks.push(b),
-                        None => break,
-                    }
-                }
-                input_stream = futures::stream::iter(blocks);
+                values_opt = Some(values.to_owned());
             }
         }
 
@@ -496,7 +506,7 @@ impl PlanParser {
             tbl_name,
             tbl_id,
             schema,
-            input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
+            values_opt,
         };
         Ok(PlanNode::InsertInto(plan_node))
     }
@@ -579,13 +589,14 @@ impl PlanParser {
         let order_by_exprs = order_by
             .iter()
             .map(|e| -> Result<Expression> {
+                let new_expr = self
+                    .sql_to_rex(&e.expr, &plan.schema(), Some(select))
+                    .and_then(|expr| resolve_aliases_to_exprs(&expr, &aliases))?;
                 Ok(Expression::Sort {
-                    expr: Box::new(
-                        self.sql_to_rex(&e.expr, &plan.schema(), Some(select))
-                            .and_then(|expr| resolve_aliases_to_exprs(&expr, &aliases))?,
-                    ),
+                    expr: Box::new(new_expr.clone()),
                     asc: e.asc.unwrap_or(true),
                     nulls_first: e.nulls_first.unwrap_or(true),
+                    origin_expr: Box::new(new_expr),
                 })
             })
             .collect::<Result<Vec<Expression>>>()?;
@@ -1001,6 +1012,20 @@ impl PlanParser {
             }),
             sqlparser::ast::Expr::Subquery(q) => Ok(self.scalar_subquery_to_rex(q)?),
             sqlparser::ast::Expr::Nested(e) => self.sql_to_rex(e, schema, select),
+            sqlparser::ast::Expr::Tuple(exprs) => {
+                if exprs.len() == 1 {
+                    return self.sql_to_rex(&exprs[0], schema, select);
+                }
+
+                let mut args = vec![];
+                for expr in exprs {
+                    args.push(self.sql_to_rex(expr, schema, select)?);
+                }
+                Ok(Expression::ScalarFunction {
+                    op: "tuple".to_owned(),
+                    args,
+                })
+            }
             sqlparser::ast::Expr::CompoundIdentifier(ids) => {
                 self.process_compound_ident(ids.as_slice(), select)
             }

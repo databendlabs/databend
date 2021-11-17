@@ -12,25 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod stream_datablock_test;
-
-#[cfg(test)]
-mod stream_progress_test;
-
-#[cfg(test)]
-mod stream_skip_test;
-
-#[cfg(test)]
-mod stream_limit_by_test;
-
 mod sources;
 mod stream;
 mod stream_abort;
 mod stream_correct_with_schema;
 mod stream_datablock;
 mod stream_limit_by;
-mod stream_parquet;
 mod stream_progress;
 mod stream_skip;
 mod stream_sort;
@@ -39,12 +26,11 @@ mod stream_sub_queries;
 mod stream_take;
 
 pub use sources::*;
-pub use stream::SendableDataBlockStream;
+pub use stream::*;
 pub use stream_abort::AbortStream;
 pub use stream_correct_with_schema::CorrectWithSchemaStream;
 pub use stream_datablock::DataBlockStream;
 pub use stream_limit_by::LimitByStream;
-pub use stream_parquet::ParquetStream;
 pub use stream_progress::ProgressStream;
 pub use stream_skip::SkipStream;
 pub use stream_sort::SortStream;

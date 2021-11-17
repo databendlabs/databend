@@ -24,9 +24,9 @@ use common_base::SignalStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_metrics::label_counter;
 use futures::future::Either;
 use futures::StreamExt;
-use metrics::counter;
 
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
@@ -98,8 +98,6 @@ impl SessionManager {
     }
 
     pub fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {
-        counter!(super::metrics::METRIC_SESSION_CONNECT_NUMBERS, 1);
-
         let mut sessions = self.active_sessions.write();
         match sessions.len() == self.max_sessions {
             true => Err(ErrorCode::TooManyUserConnections(
@@ -113,6 +111,12 @@ impl SessionManager {
                     self.clone(),
                 )?;
 
+                label_counter(
+                    super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
+                    &self.conf.query.tenant_id,
+                    &self.conf.query.cluster_id,
+                );
+
                 sessions.insert(session.get_id(), session.clone());
                 Ok(SessionRef::create(session))
             }
@@ -120,8 +124,6 @@ impl SessionManager {
     }
 
     pub fn create_rpc_session(self: &Arc<Self>, id: String, aborted: bool) -> Result<SessionRef> {
-        counter!(super::metrics::METRIC_SESSION_CONNECT_NUMBERS, 1);
-
         let mut sessions = self.active_sessions.write();
 
         let session = match sessions.entry(id) {
@@ -134,6 +136,12 @@ impl SessionManager {
                     String::from("RPCSession"),
                     self.clone(),
                 )?;
+
+                label_counter(
+                    super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
+                    &self.conf.query.tenant_id,
+                    &self.conf.query.cluster_id,
+                );
 
                 entry.insert(session).clone()
             }
@@ -152,7 +160,11 @@ impl SessionManager {
 
     #[allow(clippy::ptr_arg)]
     pub fn destroy_session(self: &Arc<Self>, session_id: &String) {
-        counter!(super::metrics::METRIC_SESSION_CLOSE_NUMBERS, 1);
+        label_counter(
+            super::metrics::METRIC_SESSION_CLOSE_NUMBERS,
+            &self.conf.query.tenant_id,
+            &self.conf.query.cluster_id,
+        );
 
         self.active_sessions.write().remove(session_id);
     }

@@ -18,6 +18,7 @@ use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
+use crate::AlterUserPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
 use crate::CreateUserPlan;
@@ -29,6 +30,7 @@ use crate::ExplainPlan;
 use crate::Expression;
 use crate::ExpressionPlan;
 use crate::FilterPlan;
+use crate::GrantPrivilegePlan;
 use crate::HavingPlan;
 use crate::InsertIntoPlan;
 use crate::KillPlan;
@@ -119,6 +121,8 @@ pub trait PlanVisitor {
             PlanNode::SubQueryExpression(plan) => self.visit_sub_queries_sets(plan),
             PlanNode::Kill(plan) => self.visit_kill_query(plan),
             PlanNode::CreateUser(plan) => self.visit_create_user(plan),
+            PlanNode::AlterUser(plan) => self.visit_alter_user(plan),
+            PlanNode::GrantPrivilege(plan) => self.visit_grant_privilege(plan),
         }
     }
 
@@ -239,6 +243,14 @@ pub trait PlanVisitor {
     }
 
     fn visit_create_user(&mut self, _: &CreateUserPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_alter_user(&mut self, _: &AlterUserPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_grant_privilege(&mut self, _: &GrantPrivilegePlan) -> Result<()> {
         Ok(())
     }
 

@@ -18,6 +18,7 @@ use std::marker::PhantomData;
 use common_datavalues::prelude::*;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
@@ -61,8 +62,15 @@ where T: AngleConvertFunction + Clone + Sync + Send + 'static
         1
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
-        Ok(DataType::Float64)
+    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+        if is_numeric(&args[0]) || args[0] == DataType::String {
+            Ok(DataType::Float64)
+        } else {
+            Err(ErrorCode::IllegalDataType(format!(
+                "Expected numeric, but got {}",
+                args[0]
+            )))
+        }
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
