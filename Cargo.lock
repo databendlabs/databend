@@ -1203,6 +1203,7 @@ dependencies = [
  "common-datablocks",
  "common-exception",
  "common-infallible",
+ "common-metrics",
  "futures",
  "metrics",
  "pretty_assertions",
@@ -1212,6 +1213,7 @@ dependencies = [
  "rusoto_s3",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -2128,8 +2130,6 @@ dependencies = [
  "quantiles",
  "rand 0.8.4",
  "reqwest",
- "rusoto_core",
- "rusoto_s3",
  "serde",
  "serde_json",
  "sha1",
@@ -3236,9 +3236,9 @@ checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "hyper"
-version = "0.14.14"
+version = "0.14.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b91bb1f221b6ea1f1e4371216b70f40748774c2fb5971b450c07773fb92d26b"
+checksum = "436ec0091e4f20e655156a30a0df3770fe2900aa301e548e08446ec794b6953c"
 dependencies = [
  "bytes",
  "futures-channel",
