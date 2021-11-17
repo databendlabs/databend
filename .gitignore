@@ -16,10 +16,6 @@ cli/e2e/bendctl
 .AppleDouble
 .LSOverride
 
-### Linux(include WSL) ###
-
-### Windows ###
-
 # profile
 flamegraph.*
 perf.*
@@ -35,6 +31,9 @@ _local_fs/*
 _meta*/*
 stateless_test_data/*
 **/_logs*/*
+_data/*
+_tmp/*
+tls/certs/*
 
 # for tests in mac
 *.stderr-e
@@ -43,5 +42,3 @@ tests/perfs/*-result.json
 
 # python
 venv/
-
-tls/certs/*

@@ -46,6 +46,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     // Prefer to use env variable in cloud native deployment
     // Override configs based on env variables
     conf = Config::load_from_env(&conf)?;
+    conf.initial_dir()?;
 
     env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or(conf.log.log_level.to_lowercase().as_str()),
