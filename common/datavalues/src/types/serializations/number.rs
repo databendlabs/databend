@@ -12,26 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
+use std::marker::PhantomData;
+
 use common_exception::Result;
-use common_io::prelude::*;
-use lexical_core::FromLexical;
 
 use crate::prelude::*;
-use crate::DFPrimitiveType;
-use crate::TypeSerializer;
 
 pub struct NumberSerializer<T: DFPrimitiveType> {
-    pub builder: PrimitiveArrayBuilder<T>,
+    t: PhantomData<T>,
 }
 
-impl<T> TypeSerializer for NumberSerializer<T>
-where
-    T: DFPrimitiveType,
-    T: Unmarshal<T> + StatBuffer + FromLexical,
-    DFPrimitiveArray<T>: IntoSeries,
-{
-    fn serialize_strings(&self, column: &DataColumn) -> Result<Vec<String>> {
+impl<T: DFPrimitiveType> Default for NumberSerializer<T> {
+    fn default() -> Self {
+        Self {
+            t: Default::default(),
+        }
+    }
+}
+
+impl<T: DFPrimitiveType> TypeSerializer for NumberSerializer<T> {
+    fn serialize_value(&self, value: &DataValue) -> Result<String> {
+        Ok(format!("{:?}", value))
+    }
+
+    fn serialize_column(&self, column: &DataColumn) -> Result<Vec<String>> {
         let array = column.to_array()?;
         let array: &DFPrimitiveArray<T> = array.static_cast();
 
@@ -43,46 +47,5 @@ where
             })
             .collect();
         Ok(result)
-    }
-
-    fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
-        let value: T = reader.read_scalar()?;
-        self.builder.append_value(value);
-        Ok(())
-    }
-
-    fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
-        for row in 0..rows {
-            let mut reader = &reader[step * row..];
-            let value: T = reader.read_scalar()?;
-            self.builder.append_value(value);
-        }
-        Ok(())
-    }
-
-    fn de_text(&mut self, reader: &[u8]) -> Result<()> {
-        if reader.eq_ignore_ascii_case(b"null") {
-            self.builder.append_null();
-            return Ok(());
-        }
-
-        match lexical_core::parse_partial::<T>(reader) {
-            Ok((v, _)) => {
-                self.builder.append_value(v);
-                Ok(())
-            }
-            Err(e) => Err(ErrorCode::BadBytes(format!(
-                "Incorrect number value: {}",
-                e
-            ))),
-        }
-    }
-
-    fn de_null(&mut self) {
-        self.builder.append_null()
-    }
-
-    fn finish_to_series(&mut self) -> Series {
-        self.builder.finish().into_series()
     }
 }

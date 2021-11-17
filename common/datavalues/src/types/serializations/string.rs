@@ -12,19 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Read;
-
+use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::BinaryRead;
 
 use crate::prelude::*;
 
-pub struct StringSerializer {
-    pub builder: StringArrayBuilder,
-}
+pub struct StringSerializer {}
 
 impl TypeSerializer for StringSerializer {
-    fn serialize_strings(&self, column: &DataColumn) -> Result<Vec<String>> {
+    fn serialize_value(&self, value: &DataValue) -> Result<String> {
+        if let DataValue::String(x) = value {
+            Ok(x.as_ref()
+                .map(|v| String::from_utf8_lossy(v).to_string())
+                .unwrap_or_else(|| "NULL".to_owned()))
+        } else {
+            Err(ErrorCode::BadBytes("Incorrect String value"))
+        }
+    }
+
+    fn serialize_column(&self, column: &DataColumn) -> Result<Vec<String>> {
         let array = column.to_array()?;
         let array: &DFStringArray = array.static_cast();
 
@@ -36,34 +42,5 @@ impl TypeSerializer for StringSerializer {
             })
             .collect();
         Ok(result)
-    }
-
-    fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
-        let offset: u64 = reader.read_uvarint()?;
-        let mut values: Vec<u8> = Vec::with_capacity(offset as usize);
-        reader.read_exact(&mut values)?;
-        self.builder.append_value(reader);
-        Ok(())
-    }
-
-    fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
-        for row in 0..rows {
-            let reader = &reader[step * row..];
-            self.builder.append_value(reader);
-        }
-        Ok(())
-    }
-
-    fn de_text(&mut self, reader: &[u8]) -> Result<()> {
-        self.builder.append_value(reader);
-        Ok(())
-    }
-
-    fn de_null(&mut self) {
-        self.builder.append_null()
-    }
-
-    fn finish_to_series(&mut self) -> Series {
-        self.builder.finish().into_series()
     }
 }

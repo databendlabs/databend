@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod arrays;
-mod data_array_filter;
-mod series;
-mod types;
+use common_exception::Result;
+
+use crate::prelude::DataColumn;
+use crate::prelude::DataValue;
+use crate::TypeSerializer;
+
+pub struct NullSerializer {}
+
+impl TypeSerializer for NullSerializer {
+    fn serialize_value(&self, _value: &DataValue) -> Result<String> {
+        Ok("NULL".to_owned())
+    }
+
+    fn serialize_column(&self, column: &DataColumn) -> Result<Vec<String>> {
+        let result: Vec<String> = vec!["NULL".to_owned(); column.len()];
+        Ok(result)
+    }
+}
