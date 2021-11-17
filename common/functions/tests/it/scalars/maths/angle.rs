@@ -72,6 +72,10 @@ fn test_angle_function() -> Result<()> {
 
         let v = &(func.eval(&columns, rows)?);
         assert_eq!(v, &t.expect, "{}", t.name);
+
+        let return_type = v.data_type();
+        let expected_type = func.return_type(&[t.columns.data_type()])?;
+        assert_eq!(expected_type, return_type);
     }
     Ok(())
 }
