@@ -15,14 +15,17 @@
 
 use std::sync::Arc;
 
+use async_stream::stream;
 use common_context::IOContext;
 use common_context::TableIOContext;
+use common_datavalues::DataSchema;
 use common_exception::Result;
 use common_planners::Extras;
+use common_streams::ParquetSource;
 use common_streams::SendableDataBlockStream;
+use common_streams::Source;
 use futures::StreamExt;
 
-use super::io;
 use crate::datasources::table::fuse::FuseTable;
 use crate::sessions::DatabendQueryContext;
 
@@ -65,11 +68,27 @@ impl FuseTable {
         };
         let da = io_ctx.get_data_accessor()?;
         let arrow_schema = self.table_info.schema().to_arrow();
+        let table_schema = Arc::new(DataSchema::from(arrow_schema));
 
-        let stream = futures::stream::iter(iter);
-        let stream = stream.then(move |part| {
-            io::do_read(part, da.clone(), projection.clone(), arrow_schema.clone())
-        });
+        let mut iter = futures::stream::iter(iter);
+        let stream = stream! {
+            while let Some(part) = iter.next().await {
+                let mut source = ParquetSource::new(
+                    da.clone(),
+                    part.name.clone(),
+                    table_schema.clone(),
+                    projection.clone(),
+                );
+                loop {
+                    let block = source.read().await;
+                    match block {
+                        Ok(None) => break,
+                        Ok(Some(b)) =>  yield(Ok(b)),
+                        Err(e) => yield(Err(e)),
+                    }
+                }
+            }
+        };
         Ok(Box::pin(stream))
     }
 }
