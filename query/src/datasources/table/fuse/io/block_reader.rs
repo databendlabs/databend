@@ -74,6 +74,7 @@ pub async fn do_read(
     // we only put one page in the a parquet file (reference xxx)
     let row_group = 0;
     let cols = projection
+        .clone()
         .into_iter()
         .map(|idx| (metadata.row_groups[row_group].column(idx).clone(), idx));
 
@@ -102,6 +103,7 @@ pub async fn do_read(
     let n = std::cmp::min(buffer_size, col_num);
     let data_cols = stream.buffered(n).try_collect().await?;
 
-    let block = DataBlock::create(Arc::new(DataSchema::from(arrow_schema)), data_cols);
+    let schema = DataSchema::from(arrow_schema);
+    let block = DataBlock::create(Arc::new(schema.project(projection)), data_cols);
     Ok(block)
 }
