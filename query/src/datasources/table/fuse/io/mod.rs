@@ -14,12 +14,8 @@
 //
 
 pub(crate) use block_appender::*;
-pub use block_reader::*;
 
 mod block_appender;
-mod block_reader;
 
 #[cfg(test)]
 mod block_appender_test;
-#[cfg(test)]
-mod block_reader_test;
