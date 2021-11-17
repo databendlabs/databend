@@ -16,6 +16,7 @@ use common_base::tokio::sync::broadcast;
 use common_base::HttpShutdownHandler;
 use common_base::Stoppable;
 use common_exception::Result;
+use common_tracing::tracing;
 use poem::get;
 use poem::listener::RustlsConfig;
 use poem::Endpoint;
@@ -64,7 +65,7 @@ impl HttpService {
     }
 
     async fn start_with_tls(&mut self, listening: String) -> Result<()> {
-        log::info!("Http API TLS enabled");
+        tracing::info!("Http API TLS enabled");
 
         let tls_config = Self::build_tls(&self.cfg.clone())?;
         self.shutdown_handler
@@ -74,7 +75,7 @@ impl HttpService {
     }
 
     async fn start_without_tls(&mut self, listening: String) -> Result<()> {
-        log::warn!("Http API TLS not set");
+        tracing::warn!("Http API TLS not set");
 
         self.shutdown_handler
             .start_service(listening, None, self.build_router())
@@ -94,16 +95,6 @@ impl Stoppable for HttpService {
     }
 
     async fn stop(&mut self, force: Option<broadcast::Receiver<()>>) -> Result<()> {
-        self.shutdown_handler.shutdown(true).await;
-        if let Some(mut force) = force {
-            log::info!("waiting for force");
-            let _ = force
-                .recv()
-                .await
-                .expect("Failed to recv the shutdown signal");
-            log::info!("shutdown the service force");
-            self.shutdown_handler.shutdown(false).await;
-        }
-        Ok(())
+        self.shutdown_handler.stop(force).await
     }
 }
