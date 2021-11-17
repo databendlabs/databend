@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fs;
+use std::str::FromStr;
+
+use common_dal::StorageScheme;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_flight_rpc::FlightClientTlsConfig;
@@ -131,6 +135,25 @@ impl Config {
         QueryConfig::load_from_env(&mut mut_config);
 
         Ok(mut_config)
+    }
+
+    /// Initial the directory of the config.
+    /// Such as the localfs data_path and temp_data_path.
+    pub fn initial_dir(&self) -> Result<()> {
+        let scheme = StorageScheme::from_str(self.storage.storage_type.as_str())?;
+        match scheme {
+            StorageScheme::LocalFs => {
+                if !self.storage.disk.data_path.is_empty() {
+                    fs::create_dir_all(self.storage.disk.data_path.as_str())?;
+                }
+                if !self.storage.disk.temp_data_path.is_empty() {
+                    fs::create_dir_all(self.storage.disk.temp_data_path.as_str())?;
+                }
+            }
+            StorageScheme::S3 => {}
+            StorageScheme::AzureStorageBlob => {}
+        }
+        Ok(())
     }
 
     pub fn tls_query_client_conf(&self) -> FlightClientTlsConfig {

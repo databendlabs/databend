@@ -76,7 +76,7 @@ rpc_tls_meta_service_domain_name = \"localhost\"
 storage_type = \"disk\"
 
 [storage.disk]
-data_path = \"\"
+data_path = \"_data\"
 temp_data_path = \"\"
 
 [storage.s3]
@@ -172,5 +172,21 @@ fn test_env_config() -> Result<()> {
 fn test_fuse_commit_version() -> Result<()> {
     let v = &crate::configs::config::DATABEND_COMMIT_VERSION;
     assert!(v.len() > 0);
+    Ok(())
+}
+
+#[test]
+fn test_initial_dir() -> Result<()> {
+    let mut conf = Config::default();
+    conf.storage.storage_type = "disk".to_string();
+    conf.initial_dir()?;
+
+    // Remove.
+    if !conf.storage.disk.data_path.is_empty() {
+        std::fs::remove_dir_all(conf.storage.disk.data_path)?;
+    }
+    if !conf.storage.disk.temp_data_path.is_empty() {
+        std::fs::remove_dir_all(conf.storage.disk.temp_data_path)?;
+    }
     Ok(())
 }

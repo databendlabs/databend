@@ -64,10 +64,10 @@ impl FromStr for StorageType {
     Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
 )]
 pub struct DiskStorageConfig {
-    #[structopt(long, env = DISK_STORAGE_DATA_PATH, default_value = "", help = "Disk storage backend data path")]
+    #[structopt(long, env = DISK_STORAGE_DATA_PATH, default_value = "_data", help = "Disk storage backend data path")]
     #[serde(default)]
     pub data_path: String,
-    #[structopt(long, env = DISK_STORAGE_TEMP_DATA_PATH, default_value = "", help = "Disk storage tempory data path for external data")]
+    #[structopt(long, env = DISK_STORAGE_TEMP_DATA_PATH, default_value = "", help = "Disk storage temporary data path for external data")]
     #[serde(default)]
     pub temp_data_path: String,
 }
@@ -75,7 +75,7 @@ pub struct DiskStorageConfig {
 impl DiskStorageConfig {
     pub fn default() -> Self {
         DiskStorageConfig {
-            data_path: "".to_string(),
+            data_path: "_data".to_string(),
             temp_data_path: "".to_string(),
         }
     }
