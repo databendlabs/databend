@@ -52,9 +52,7 @@ impl Function for ExpFunction {
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if args[0] == DataType::Null {
-            Ok(DataType::Null)
-        } else if is_numeric(&args[0]) || args[0] == DataType::String {
+        if is_numeric(&args[0]) || args[0] == DataType::String || args[0] == DataType::Null {
             Ok(DataType::Float64)
         } else {
             Err(ErrorCode::IllegalDataType(format!(
