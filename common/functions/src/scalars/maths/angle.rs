@@ -64,14 +64,7 @@ where T: AngleConvertFunction + Clone + Sync + Send + 'static
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
         if is_numeric(&args[0]) || args[0] == DataType::String {
-            Ok(match &args[0] {
-                DataType::Int8 => DataType::UInt8,
-                DataType::Int16 => DataType::UInt16,
-                DataType::Int32 => DataType::UInt32,
-                DataType::Int64 => DataType::UInt64,
-                DataType::String => DataType::Float64,
-                dt => dt.clone(),
-            })
+            Ok(DataType::Float64)
         } else {
             Err(ErrorCode::IllegalDataType(format!(
                 "Expected numeric, but got {}",
