@@ -19,6 +19,7 @@ use common_arrow::arrow::array::Int64Array;
 use common_datablocks::*;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_functions::scalars::InetAtonFunction;
 use common_functions::scalars::InetNtoaFunction;
 use common_functions::scalars::RunningDifferenceFunction;
 
@@ -493,6 +494,51 @@ fn test_running_difference_datetime32_first_null() -> Result<()> {
         assert_eq!(result_type, DataType::Int64);
     }
 
+    Ok(())
+}
+
+#[test]
+fn test_inet_aton_function() -> Result<()> {
+    struct Test {
+        name: &'static str,
+        arg: DataColumnWithField,
+        expect: Result<DataColumn>,
+    }
+    let tests = vec![
+        Test {
+            name: "valid input",
+            arg: DataColumnWithField::new(
+                Series::new(["127.0.0.1"]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(DataColumn::Constant(
+                DataValue::UInt32(Some(2130706433_u32)),
+                1,
+            )),
+        },
+        Test {
+            name: "invalid input",
+            arg: DataColumnWithField::new(
+                Series::new(["invalid"]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(DataColumn::Constant(DataValue::UInt32(Some(0)), 1)),
+        },
+    ];
+
+    let func = InetAtonFunction::try_create("inet_aton")?;
+    for t in tests {
+        let got = func.return_type(&[t.arg.data_type().clone()]);
+        let got = got.and_then(|_| func.eval(&[t.arg], 1));
+        match t.expect {
+            Ok(expected) => {
+                assert_eq!(&got.unwrap(), &expected, "case: {}", t.name);
+            }
+            Err(expected_err) => {
+                assert_eq!(got.unwrap_err().to_string(), expected_err.to_string());
+            }
+        }
+    }
     Ok(())
 }
 
