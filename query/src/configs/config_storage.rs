@@ -165,7 +165,7 @@ impl fmt::Debug for AzureStorageBlobConfig {
     Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
 )]
 pub struct StorageConfig {
-    #[structopt(long, env = STORAGE_TYPE, default_value = "", help = "Current storage type: disk|s3")]
+    #[structopt(long, env = STORAGE_TYPE, default_value = "disk", help = "Current storage type: disk|s3")]
     #[serde(default)]
     pub storage_type: String,
 
