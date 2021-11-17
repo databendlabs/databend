@@ -11,6 +11,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
-mod dns_resolver;
-mod flight_token;
+use common_exception::Result;
+use common_flight_rpc::FlightClaim;
+use common_flight_rpc::FlightToken;
+
+#[test]
+fn test_flight_token() -> Result<()> {
+    let token = FlightToken::create();
+    let user = "batman";
+
+    let claim = FlightClaim {
+        username: String::from(user),
+    };
+
+    let jwt = token.try_create_token(claim)?;
+    let claim = token.try_verify_token(jwt)?;
+
+    assert_eq!(claim.username, user);
+    Ok(())
+}
