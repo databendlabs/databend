@@ -143,8 +143,12 @@ impl Config {
         let scheme = StorageScheme::from_str(self.storage.storage_type.as_str())?;
         match scheme {
             StorageScheme::LocalFs => {
-                fs::create_dir_all(self.storage.disk.data_path.as_str())?;
-                fs::create_dir_all(self.storage.disk.temp_data_path.as_str())?;
+                if !self.storage.disk.data_path.is_empty() {
+                    fs::create_dir_all(self.storage.disk.data_path.as_str())?;
+                }
+                if !self.storage.disk.temp_data_path.is_empty() {
+                    fs::create_dir_all(self.storage.disk.temp_data_path.as_str())?;
+                }
             }
             StorageScheme::S3 => {}
             StorageScheme::AzureStorageBlob => {}

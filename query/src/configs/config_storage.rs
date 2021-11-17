@@ -67,7 +67,7 @@ pub struct DiskStorageConfig {
     #[structopt(long, env = DISK_STORAGE_DATA_PATH, default_value = "_data", help = "Disk storage backend data path")]
     #[serde(default)]
     pub data_path: String,
-    #[structopt(long, env = DISK_STORAGE_TEMP_DATA_PATH, default_value = "_tmp", help = "Disk storage temporary data path for external data")]
+    #[structopt(long, env = DISK_STORAGE_TEMP_DATA_PATH, default_value = "", help = "Disk storage temporary data path for external data")]
     #[serde(default)]
     pub temp_data_path: String,
 }
@@ -76,7 +76,7 @@ impl DiskStorageConfig {
     pub fn default() -> Self {
         DiskStorageConfig {
             data_path: "_data".to_string(),
-            temp_data_path: "_tmp".to_string(),
+            temp_data_path: "".to_string(),
         }
     }
 }
