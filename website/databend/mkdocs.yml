@@ -239,7 +239,7 @@ nav:
           - DatabendCLI Design: rfcs/cli/0001-cli-design.md
   - Performance: overview/performance.md
   - Whitepapers: overview/architecture.md
-  - Weekly: https://datafuselabs.github.io/weekly/
+  - Weekly: https://weekly.databend.rs/ 
 
 # Google Analytics
 google_analytics:
