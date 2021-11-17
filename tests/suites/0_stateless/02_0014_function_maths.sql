@@ -24,5 +24,9 @@ SELECT log2(2);
 SELECT mod(234, 10);
 SELECT mod(29, 9);
 SELECT mod(34.5, 3);
+SELECT exp(NULL);
+SELECT exp(2);
+SELECT exp('2');
+SELECT exp('a');
 
 DROP TABLE math_sample_numbers;

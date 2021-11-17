@@ -18,6 +18,7 @@ use crate::scalars::ArithmeticModuloFunction;
 use crate::scalars::CRC32Function;
 use crate::scalars::CeilFunction;
 use crate::scalars::DegressFunction;
+use crate::scalars::ExpFunction;
 use crate::scalars::FloorFunction;
 use crate::scalars::LnFunction;
 use crate::scalars::Log10Function;
@@ -51,5 +52,6 @@ impl MathsFunction {
         factory.register("ceiling", CeilFunction::desc());
         factory.register("floor", FloorFunction::desc());
         factory.register("mod", ArithmeticModuloFunction::desc());
+        factory.register("exp", ExpFunction::desc());
     }
 }
