@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod inet_ntoa;
 mod other;
 mod running_difference_function;
 
+pub use inet_ntoa::InetNtoaFunction;
 pub use other::OtherFunction;
 pub use running_difference_function::RunningDifferenceFunction;

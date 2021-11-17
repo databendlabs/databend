@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::inet_ntoa::InetNtoaFunction;
 use super::running_difference_function::RunningDifferenceFunction;
 use crate::scalars::function_factory::FunctionFactory;
 
@@ -21,5 +22,7 @@ pub struct OtherFunction {}
 impl OtherFunction {
     pub fn register(factory: &mut FunctionFactory) {
         factory.register("runningDifference", RunningDifferenceFunction::desc());
+        factory.register("inet_ntoa", InetNtoaFunction::desc());
+        factory.register("IPv4NumToString", InetNtoaFunction::desc());
     }
 }

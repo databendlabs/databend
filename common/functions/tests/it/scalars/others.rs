@@ -19,6 +19,7 @@ use common_arrow::arrow::array::Int64Array;
 use common_datablocks::*;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_functions::scalars::InetNtoaFunction;
 use common_functions::scalars::RunningDifferenceFunction;
 
 macro_rules! run_difference_constant_test {
@@ -492,5 +493,156 @@ fn test_running_difference_datetime32_first_null() -> Result<()> {
         assert_eq!(result_type, DataType::Int64);
     }
 
+    Ok(())
+}
+
+#[test]
+fn test_inet_ntoa_function() -> Result<()> {
+    struct Test {
+        name: &'static str,
+        arg: DataColumnWithField,
+        expect: Result<DataColumn>,
+    }
+    let tests = vec![
+        // integer input test cases
+        Test {
+            name: "integer_input_i32_positive",
+            arg: DataColumnWithField::new(
+                Series::new([2130706433_i32]).into(),
+                DataField::new("arg1", DataType::Int32, true),
+            ),
+            expect: Ok(DataColumn::Constant(
+                DataValue::String(Some(b"127.0.0.1".to_vec())),
+                1,
+            )),
+        },
+        // TODO block on DataValue::Null can't assert_eq! bug
+        // temporary ignore this test case because it return NULL can't assert_eq!
+        #[cfg(FALSE)]
+        Test {
+            name: "integer_input_i32_negative",
+            func: InetNtoaFunction::try_create("inet_ntoa('-1')")?,
+            arg: DataColumnWithField::new(
+                Series::new(["-1"]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(DataColumn::Constant(DataValue::Null, 1)),
+        },
+        Test {
+            name: "integer_input_u8",
+            arg: DataColumnWithField::new(
+                Series::new([0_u8]).into(),
+                DataField::new("arg1", DataType::UInt8, true),
+            ),
+            expect: Ok(DataColumn::Constant(
+                DataValue::String(Some(b"0.0.0.0".to_vec())),
+                1,
+            )),
+        },
+        Test {
+            name: "integer_input_u32",
+            arg: DataColumnWithField::new(
+                Series::new([3232235777_u32]).into(),
+                DataField::new("arg1", DataType::UInt32, true),
+            ),
+            expect: Ok(DataColumn::Constant(
+                DataValue::String(Some(b"192.168.1.1".to_vec())),
+                1,
+            )),
+        },
+        // float input test cases
+        Test {
+            name: "float_input_f64",
+            arg: DataColumnWithField::new(
+                Series::new([2130706433.3917_f64]).into(),
+                DataField::new("arg1", DataType::UInt8, true),
+            ),
+            expect: Ok(DataColumn::Constant(
+                DataValue::String(Some(b"127.0.0.1".to_vec())),
+                1,
+            )),
+        },
+        // string input test cases
+        Test {
+            name: "string_input_empty",
+            arg: DataColumnWithField::new(
+                Series::new([""]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(DataColumn::Constant(
+                DataValue::String(Some(b"0.0.0.0".to_vec())),
+                1,
+            )),
+        },
+        Test {
+            name: "string_input_u32",
+            arg: DataColumnWithField::new(
+                Series::new(["3232235777"]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(DataColumn::Constant(
+                DataValue::String(Some(b"192.168.1.1".to_vec())),
+                1,
+            )),
+        },
+        Test {
+            name: "string_input_f64",
+            arg: DataColumnWithField::new(
+                Series::new(["3232235777.72319"]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(DataColumn::Constant(
+                DataValue::String(Some(b"192.168.1.1".to_vec())),
+                1,
+            )),
+        },
+        Test {
+            name: "string_input_starts_with_integer",
+            arg: DataColumnWithField::new(
+                Series::new(["323a"]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(DataColumn::Constant(
+                DataValue::String(Some(b"0.0.1.67".to_vec())),
+                1,
+            )),
+        },
+        Test {
+            name: "string_input_char_inside_integer",
+            arg: DataColumnWithField::new(
+                Series::new(["323a111"]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(DataColumn::Constant(
+                DataValue::String(Some(b"0.0.1.67".to_vec())),
+                1,
+            )),
+        },
+        Test {
+            name: "string_input_invalid_string",
+            arg: DataColumnWithField::new(
+                Series::new(["-sad"]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(DataColumn::Constant(
+                DataValue::String(Some(b"0.0.0.0".to_vec())),
+                1,
+            )),
+        },
+    ];
+
+    let func = InetNtoaFunction::try_create("inet_ntoa")?;
+    for t in tests {
+        let got = func.return_type(&[t.arg.data_type().clone()]);
+        let got = got.and_then(|_| func.eval(&[t.arg], 1));
+        match t.expect {
+            Ok(expected) => {
+                assert_eq!(&got.unwrap(), &expected, "case: {}", t.name);
+            }
+            Err(expected_err) => {
+                assert_eq!(got.unwrap_err().to_string(), expected_err.to_string());
+            }
+        }
+    }
     Ok(())
 }
