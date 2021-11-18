@@ -40,7 +40,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
         if let PlanNode::InsertInto(plan) = PlanParser::create(ctx.clone())
             .build_from_sql("insert into default.a values('1,1', '2,2')")?
         {
-            let executor = InsertIntoInterpreter::try_create(ctx.clone(), plan.clone())?;
+            let executor = InsertIntoInterpreter::try_create(ctx.clone(), plan.clone(), None)?;
             let _ = executor.execute(None).await?;
         }
     }

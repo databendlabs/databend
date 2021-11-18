@@ -15,6 +15,7 @@
 mod sources;
 mod stream;
 mod stream_abort;
+mod stream_cast;
 mod stream_correct_with_schema;
 mod stream_datablock;
 mod stream_limit_by;
@@ -28,6 +29,7 @@ mod stream_take;
 pub use sources::*;
 pub use stream::*;
 pub use stream_abort::AbortStream;
+pub use stream_cast::CastStream;
 pub use stream_correct_with_schema::CorrectWithSchemaStream;
 pub use stream_datablock::DataBlockStream;
 pub use stream_limit_by::LimitByStream;
