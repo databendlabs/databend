@@ -11,7 +11,7 @@ use crate::sessions::{DatabendQueryContext, DatabendQueryContextRef};
 use crate::sql::{PlanParser, SQLCommon};
 use crate::sql::statements::{AnalyzableStatement, AnalyzedResult, DfQueryStatement};
 use crate::sql::statements::analyzer_value_expr::ValueExprAnalyzer;
-use crate::sql::statements::query::AnalyzeQuerySchema;
+use crate::sql::statements::query::JoinedSchema;
 
 pub struct ExpressionAnalyzer {
     context: DatabendQueryContextRef,

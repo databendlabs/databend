@@ -3,16 +3,16 @@ use crate::sql::statements::QueryNormalizerData;
 use common_exception::{ErrorCode, Result};
 use common_planners::Expression;
 use crate::sessions::DatabendQueryContextRef;
-use crate::sql::statements::query::{AnalyzeQueryColumnDesc, AnalyzeQuerySchema};
-use crate::sql::statements::query::query_schema::AnalyzeQueryTableDesc;
+use crate::sql::statements::query::{JoinedColumnDesc, JoinedSchema};
+use crate::sql::statements::query::query_schema::JoinedTableDesc;
 
 pub struct QualifiedRewriter {
-    tables_schema: AnalyzeQuerySchema,
+    tables_schema: JoinedSchema,
     ctx: DatabendQueryContextRef,
 }
 
 impl QualifiedRewriter {
-    pub fn create(tables_schema: AnalyzeQuerySchema, ctx: DatabendQueryContextRef) -> QualifiedRewriter {
+    pub fn create(tables_schema: JoinedSchema, ctx: DatabendQueryContextRef) -> QualifiedRewriter {
         QualifiedRewriter { tables_schema, ctx }
     }
 
@@ -222,7 +222,7 @@ impl QualifiedRewriter {
         }
     }
 
-    fn find_column(table_desc: &AnalyzeQueryTableDesc, name: &str) -> Result<Expression> {
+    fn find_column(table_desc: &JoinedTableDesc, name: &str) -> Result<Expression> {
         let name_parts = table_desc.get_name_parts();
         for column_desc in table_desc.get_columns_desc() {
             if &column_desc.short_name == name {
@@ -248,7 +248,7 @@ impl QualifiedRewriter {
         min_len
     }
 
-    fn best_match_table(&self, ref_names: &[String]) -> Option<(usize, AnalyzeQueryTableDesc)> {
+    fn best_match_table(&self, ref_names: &[String]) -> Option<(usize, JoinedTableDesc)> {
         if ref_names.len() <= 1 {
             return None;
         }

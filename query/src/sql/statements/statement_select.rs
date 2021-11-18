@@ -10,7 +10,7 @@ use crate::sessions::{DatabendQueryContextRef};
 use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
 use crate::sql::statements::analyzer_expr::{ExpressionAnalyzer};
 use crate::sql::statements::analyzer_statement::QueryAnalyzeState;
-use crate::sql::statements::query::{AnalyzeQuerySchema, AnalyzeQueryColumnDesc, FromAnalyzer, QualifiedRewriter};
+use crate::sql::statements::query::{JoinedSchema, JoinedColumnDesc, FromAnalyzer, QualifiedRewriter};
 use crate::sql::statements::query::{QueryNormalizerData, QueryNormalizer};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -137,7 +137,7 @@ impl DfQueryStatement {
 }
 
 impl DfQueryStatement {
-    pub async fn finalize(&self, schema: AnalyzeQuerySchema, mut state: QueryAnalyzeState) -> Result<AnalyzedResult> {
+    pub async fn finalize(&self, schema: JoinedSchema, mut state: QueryAnalyzeState) -> Result<AnalyzedResult> {
         let dry_run_res = Self::verify_with_dry_run(&schema, &state)?;
         state.finalize_schema = dry_run_res.schema().clone();
 
@@ -145,7 +145,7 @@ impl DfQueryStatement {
         Ok(AnalyzedResult::SelectQuery(state))
     }
 
-    fn verify_with_dry_run(schema: &AnalyzeQuerySchema, state: &QueryAnalyzeState) -> Result<DataBlock> {
+    fn verify_with_dry_run(schema: &JoinedSchema, state: &QueryAnalyzeState) -> Result<DataBlock> {
         let mut data_block = DataBlock::empty_with_schema(schema.to_data_schema());
 
         if let Some(predicate) = &state.filter {

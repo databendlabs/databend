@@ -2,7 +2,7 @@ use std::fs::read;
 use sqlparser::ast::{FunctionArg, Ident, JoinOperator, ObjectName, Query, TableAlias, TableFactor, TableWithJoins};
 use crate::sessions::DatabendQueryContextRef;
 use common_exception::{ErrorCode, Result};
-use crate::sql::statements::query::query_schema::AnalyzeQuerySchema;
+use crate::sql::statements::query::query_schema::JoinedSchema;
 use crate::sql::statements::{AnalyzableStatement, AnalyzedResult, DfQueryStatement};
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 
@@ -15,7 +15,7 @@ impl FromAnalyzer {
         FromAnalyzer { ctx }
     }
 
-    pub async fn analyze(&self, query: &DfQueryStatement) -> Result<AnalyzeQuerySchema> {
+    pub async fn analyze(&self, query: &DfQueryStatement) -> Result<JoinedSchema> {
         let mut analyzed_tables = Vec::new();
 
         // Build RPN for tables. because async function unsupported recursion
@@ -47,18 +47,18 @@ impl FromAnalyzer {
         Ok(analyzed_tables.remove(0))
     }
 
-    async fn subquery(&self, v: &DerivedRPNItem) -> Result<AnalyzeQuerySchema> {
+    async fn subquery(&self, v: &DerivedRPNItem) -> Result<JoinedSchema> {
         let subquery = &(*v.subquery);
         let subquery = DfQueryStatement::try_from(subquery.clone())?;
         match subquery.analyze(self.ctx.clone()).await? {
             AnalyzedResult::SelectQuery(state) => {
                 match &v.alias {
                     None => {
-                        AnalyzeQuerySchema::from_subquery(state, Vec::new())
+                        JoinedSchema::from_subquery(state, Vec::new())
                     }
                     Some(alias) => {
                         let name_prefix = vec![alias.name.value.clone()];
-                        AnalyzeQuerySchema::from_subquery(state, name_prefix)
+                        JoinedSchema::from_subquery(state, name_prefix)
                     }
                 }
             }
@@ -66,7 +66,7 @@ impl FromAnalyzer {
         }
     }
 
-    async fn table(&self, item: &TableRPNItem) -> Result<AnalyzeQuerySchema> {
+    async fn table(&self, item: &TableRPNItem) -> Result<JoinedSchema> {
         // TODO(Winter): await query_context.get_table
         let (database, table) = self.resolve_table(&item.name)?;
         let read_table = self.ctx.get_table(&database, &table)?;
@@ -74,16 +74,16 @@ impl FromAnalyzer {
         match &item.alias {
             None => {
                 let name_prefix = vec![database, table];
-                AnalyzeQuerySchema::from_table(read_table, name_prefix)
+                JoinedSchema::from_table(read_table, name_prefix)
             }
             Some(table_alias) => {
                 let name_prefix = vec![table_alias.name.value.clone()];
-                AnalyzeQuerySchema::from_table(read_table, name_prefix)
+                JoinedSchema::from_table(read_table, name_prefix)
             }
         }
     }
 
-    async fn table_function(&self, item: &TableFunctionRPNItem) -> Result<AnalyzeQuerySchema> {
+    async fn table_function(&self, item: &TableFunctionRPNItem) -> Result<JoinedSchema> {
         if item.name.0.len() >= 2 {
             return Result::Err(ErrorCode::BadArguments(
                 "Currently table can't have arguments",
@@ -102,7 +102,7 @@ impl FromAnalyzer {
         }
 
         let table_function = self.ctx.get_table_function(&table_name, Some(table_args))?;
-        AnalyzeQuerySchema::from_table(table_function.as_table(), Vec::new())
+        JoinedSchema::from_table(table_function.as_table(), Vec::new())
     }
 
     fn resolve_table(&self, name: &ObjectName) -> Result<(String, String)> {

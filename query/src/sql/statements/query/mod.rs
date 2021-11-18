@@ -16,7 +16,7 @@ mod query_qualified_rewriter;
 
 pub use query_normalizer::QueryNormalizerData;
 pub use query_normalizer::QueryNormalizer;
-pub use query_schema::AnalyzeQuerySchema;
-pub use query_schema::AnalyzeQueryColumnDesc;
+pub use query_schema::JoinedSchema;
+pub use query_schema::JoinedColumnDesc;
 pub use from_analyzer::FromAnalyzer;
 pub use query_qualified_rewriter::QualifiedRewriter;
