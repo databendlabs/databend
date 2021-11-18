@@ -207,6 +207,9 @@ nav:
               - CRC32: sqlstatement/numeric-functions/crc32.md
               - DEGREES: sqlstatement/numeric-functions/degrees.md
               - RADIANS: sqlstatement/numeric-functions/radians.md
+              - CEIL: sqlstatement/numeric-functions/ceil.md
+              - CEILING: sqlstatement/numeric-functions/ceiling.md
+              - FLOOR: sqlstatement/numeric-functions/floor.md
           - String Functions:
               - SUBSTRING: sqlstatement/string-functions/substring.md
           - Test Functions:
