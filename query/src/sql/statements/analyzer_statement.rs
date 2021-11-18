@@ -12,12 +12,14 @@ pub enum AnalyzedResult {
     ExplainQuery(QueryNormalizerData),
 }
 
+#[derive(Clone)]
 pub enum QueryRelation {
     None,
     FromTable(ReadDataSourcePlan),
     Nested(Box<QueryAnalyzeState>),
 }
 
+#[derive(Clone)]
 pub struct QueryAnalyzeState {
     pub filter: Option<Expression>,
     pub having: Option<Expression>,

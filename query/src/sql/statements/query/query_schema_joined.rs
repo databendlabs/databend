@@ -62,6 +62,10 @@ impl JoinedSchema {
         &self.tables_long_name_columns
     }
 
+    pub fn take_tables_desc(mut self) -> Vec<JoinedTableDesc> {
+        self.tables_long_name_columns
+    }
+
     pub fn to_data_schema(&self) -> DataSchemaRef {
         let mut fields = Vec::with_capacity(self.short_name_columns.len());
 
@@ -125,7 +129,7 @@ pub enum JoinedTableDesc {
         columns_desc: Vec<JoinedColumnDesc>,
     },
     Subquery {
-        state: Arc<QueryAnalyzeState>,
+        state: QueryAnalyzeState,
         name_parts: Vec<String>,
         columns_desc: Vec<JoinedColumnDesc>,
     },
@@ -156,7 +160,7 @@ impl JoinedTableDesc {
         }
 
         JoinedTableDesc::Subquery {
-            state: Arc::new(state),
+            state,
             columns_desc,
             name_parts: prefix,
         }

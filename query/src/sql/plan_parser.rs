@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::PlanBuilder;
+use common_planners::{PlanBuilder, SelectPlan};
 use common_planners::PlanNode;
 
 use crate::sessions::DatabendQueryContextRef;
@@ -58,8 +59,8 @@ impl PlanParser {
         let having = Self::build_having_plan(group_by, data)?;
         let order_by = Self::build_order_by_plan(having, data)?;
         let projection = Self::build_projection_plan(order_by, data)?;
-
-        Self::build_limit_plan(projection, data)
+        let limit = Self::build_limit_plan(projection, data)?;
+        Ok(PlanNode::Select(SelectPlan { input: Arc::new(limit) }))
     }
 
     fn build_explain_plan(data: &QueryNormalizerData, ctx: &DatabendQueryContextRef) -> Result<PlanNode> {
@@ -146,6 +147,7 @@ impl PlanParser {
     }
 
     fn build_limit_plan(input: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
-        unimplemented!("")
+        // TODO
+        Ok(input)
     }
 }

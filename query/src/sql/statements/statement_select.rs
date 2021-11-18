@@ -1,16 +1,18 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use sqlparser::ast::{Expr, Offset, OrderByExpr, SelectItem, TableWithJoins};
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRefExt;
 
 use common_exception::{ErrorCode, Result};
-use common_planners::{expand_aggregate_arg_exprs, expr_as_column_expr, Expression, extract_aliases, find_aggregate_exprs, find_aggregate_exprs_in_expr, ReadDataSourcePlan, rebase_expr, resolve_aliases_to_exprs};
+use common_planners::{expand_aggregate_arg_exprs, expr_as_column_expr, Expression, extract_aliases, Extras, find_aggregate_exprs, find_aggregate_exprs_in_expr, ReadDataSourcePlan, rebase_expr, resolve_aliases_to_exprs};
+use crate::catalogs::ToReadDataSourcePlan;
 
 use crate::sessions::{DatabendQueryContextRef};
-use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
+use crate::sql::statements::{AnalyzableStatement, AnalyzedResult, QueryRelation};
 use crate::sql::statements::analyzer_expr::{ExpressionAnalyzer};
 use crate::sql::statements::analyzer_statement::QueryAnalyzeState;
-use crate::sql::statements::query::{JoinedSchema, JoinedColumnDesc, JoinedSchemaAnalyzer, QualifiedRewriter};
+use crate::sql::statements::query::{JoinedSchema, JoinedColumnDesc, JoinedSchemaAnalyzer, QualifiedRewriter, JoinedTableDesc};
 use crate::sql::statements::query::{QueryNormalizerData, QueryNormalizer};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -39,7 +41,7 @@ impl AnalyzableStatement for DfQueryStatement {
         let normalized_result = qualified_rewriter.rewrite(normalized_result).await?;
 
         let analyze_state = self.analyze_query(normalized_result).await?;
-        self.finalize(joined_schema, analyze_state).await
+        self.check_and_finalize(joined_schema, analyze_state, ctx).await
     }
 }
 
@@ -137,11 +139,29 @@ impl DfQueryStatement {
 }
 
 impl DfQueryStatement {
-    pub async fn finalize(&self, schema: JoinedSchema, mut state: QueryAnalyzeState) -> Result<AnalyzedResult> {
+    pub async fn check_and_finalize(&self, schema: JoinedSchema, mut state: QueryAnalyzeState, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let dry_run_res = Self::verify_with_dry_run(&schema, &state)?;
         state.finalize_schema = dry_run_res.schema().clone();
 
-        // TODO: read source
+        let mut tables_desc = schema.take_tables_desc();
+
+        if tables_desc.len() != 1 {
+            return Err(ErrorCode::UnImplement("Select join unimplemented yet."));
+        }
+
+
+        match tables_desc.remove(0) {
+            JoinedTableDesc::Table { table, .. } => {
+                let io_ctx = Arc::new(ctx.get_cluster_table_io_context()?);
+                // TODO: collect push down
+                let source_plan = table.read_plan(io_ctx, Some(Extras::default()), None).await?;
+                state.relation = QueryRelation::FromTable(source_plan);
+            }
+            JoinedTableDesc::Subquery { state: subquery_state, .. } => {
+                state.relation = QueryRelation::Nested(Box::new(subquery_state));
+            }
+        }
+
         Ok(AnalyzedResult::SelectQuery(state))
     }
 
