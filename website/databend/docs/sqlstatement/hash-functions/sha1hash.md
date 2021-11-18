@@ -1,5 +1,5 @@
 ---
-id: hash-sha1
+id: hash-sha1hash
 title: SHA1
 ---
 

@@ -1,5 +1,5 @@
 ---
-id: hash-md5
+id: hash-md5hash
 title: MD5
 ---
 
