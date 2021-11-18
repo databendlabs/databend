@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use sqlparser::ast::{Expr, Offset, OrderByExpr, SelectItem, TableWithJoins};
+use common_datablocks::DataBlock;
+use common_datavalues::DataSchemaRefExt;
 
 use common_exception::{ErrorCode, Result};
 use common_planners::{expand_aggregate_arg_exprs, expr_as_column_expr, Expression, extract_aliases, find_aggregate_exprs, find_aggregate_exprs_in_expr, ReadDataSourcePlan, rebase_expr, resolve_aliases_to_exprs};
@@ -23,11 +25,6 @@ pub struct DfQueryStatement {
     pub offset: Option<Offset>,
 }
 
-pub enum QueryRelation {
-    FromTable(ReadDataSourcePlan),
-    Nested(Box<QueryNormalizerData>),
-}
-
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfQueryStatement {
     async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
@@ -41,12 +38,13 @@ impl AnalyzableStatement for DfQueryStatement {
         let qualified_rewriter = QualifiedRewriter::create(schema, ctx.clone());
         let normalized_result = qualified_rewriter.rewrite(normalized_result).await?;
 
-        self.analyze_query(normalized_result).await
+        let analyze_state = self.analyze_query(normalized_result).await?;
+        self.finalize(analyzed_from_schema, analyze_state).await
     }
 }
 
 impl DfQueryStatement {
-    async fn analyze_query(&self, data: QueryNormalizerData) -> Result<AnalyzedResult> {
+    async fn analyze_query(&self, data: QueryNormalizerData) -> Result<QueryAnalyzeState> {
         let mut analyze_state = QueryAnalyzeState::default();
 
         if let Some(predicate) = &data.filter_predicate {
@@ -97,7 +95,7 @@ impl DfQueryStatement {
             Self::analyze_aggregate(&data.aggregate_expressions, &mut analyze_state)?;
         }
 
-        Ok(AnalyzedResult::SelectQuery(analyze_state))
+        Ok(analyze_state)
     }
 
     fn analyze_aggregate(exprs: &[Expression], state: &mut QueryAnalyzeState) -> Result<()> {
@@ -135,6 +133,119 @@ impl DfQueryStatement {
             true => Ok(()),
             false => Err(ErrorCode::SyntaxException(format!("{} cannot contain aggregate functions", info))),
         }
+    }
+}
+
+impl DfQueryStatement {
+    pub async fn finalize(&self, schema: AnalyzeQuerySchema, mut state: QueryAnalyzeState) -> Result<AnalyzedResult> {
+        let dry_run_res = Self::verify_with_dry_run(&schema, &state)?;
+        state.finalize_schema = dry_run_res.schema().clone();
+
+        // TODO: read source
+        Ok(AnalyzedResult::SelectQuery(state))
+    }
+
+    fn verify_with_dry_run(schema: &AnalyzeQuerySchema, state: &QueryAnalyzeState) -> Result<DataBlock> {
+        let mut data_block = DataBlock::empty_with_schema(schema.to_data_schema());
+
+        if let Some(predicate) = &state.filter {
+            if let Err(cause) = Self::dry_run_expr(predicate, &data_block) {
+                return Err(cause.add_message_back(" (while in select filter)"));
+            }
+        }
+
+        if !state.before_group_by_expressions.is_empty() {
+            match Self::dry_run_exprs(&state.before_group_by_expressions, &data_block) {
+                Ok(res) => { data_block = res; }
+                Err(cause) => {
+                    return Err(cause.add_message_back(" (while in select before group by)"));
+                }
+            }
+        }
+
+        if !state.group_by_expressions.is_empty() || !state.aggregate_expressions.is_empty() {
+            let new_len = state.aggregate_expressions.len() + state.group_by_expressions.len();
+            let mut new_expression = Vec::with_capacity(new_len);
+
+            for group_by_expression in &state.group_by_expressions {
+                new_expression.push(group_by_expression);
+            }
+
+            for aggregate_expression in &state.aggregate_expressions {
+                new_expression.push(aggregate_expression);
+            }
+
+            match Self::dry_run_exprs_ref(&new_expression, &data_block) {
+                Ok(res) => {
+                    data_block = res;
+                }
+                Err(cause) => {
+                    return Err(cause.add_message_back(" (while in select group by)"));
+                }
+            }
+        }
+
+        if !state.expressions.is_empty() {
+            match Self::dry_run_exprs(&state.expressions, &data_block) {
+                Ok(res) => {
+                    data_block = res;
+                }
+                Err(cause) if state.order_by_expressions.is_empty() => {
+                    return Err(cause.add_message_back(" (while in select before projection)"));
+                }
+                Err(cause) => {
+                    return Err(cause.add_message_back(" (while in select before order by)"));
+                }
+            }
+        }
+
+        if let Some(predicate) = &state.having {
+            if let Err(cause) = Self::dry_run_expr(predicate, &data_block) {
+                return Err(cause.add_message_back(" (while in select having)"));
+            }
+        }
+
+        if !state.order_by_expressions.is_empty() {
+            if let Err(cause) = Self::dry_run_exprs(&state.order_by_expressions, &data_block) {
+                return Err(cause.add_message_back(" (while in select order by)"));
+            }
+        }
+
+        if !state.projection_expressions.is_empty() {
+            if let Err(cause) = Self::dry_run_exprs(&state.projection_expressions, &data_block) {
+                return Err(cause.add_message_back(" (while in select projection)"));
+            }
+        }
+
+        Ok(data_block)
+    }
+
+    fn dry_run_expr(expr: &Expression, data: &DataBlock) -> Result<DataBlock> {
+        let schema = data.schema();
+        let data_field = expr.to_data_field(schema)?;
+        Ok(DataBlock::empty_with_schema(DataSchemaRefExt::create(vec![data_field])))
+    }
+
+    fn dry_run_exprs(exprs: &[Expression], data: &DataBlock) -> Result<DataBlock> {
+        let schema = data.schema();
+        let mut new_data_fields = Vec::with_capacity(exprs.len());
+
+        for expr in exprs {
+            new_data_fields.push(expr.to_data_field(schema)?);
+        }
+
+        Ok(DataBlock::empty_with_schema(DataSchemaRefExt::create(new_data_fields)))
+    }
+
+    fn dry_run_exprs_ref(exprs: &[&Expression], data: &DataBlock) -> Result<DataBlock> {
+        let schema = data.schema();
+        let mut new_data_fields = Vec::with_capacity(exprs.len());
+
+        for expr in exprs {
+            new_data_fields.push(expr.to_data_field(schema)?);
+        }
+
+        Ok(DataBlock::empty_with_schema(DataSchemaRefExt::create(new_data_fields)))
     }
 }
 

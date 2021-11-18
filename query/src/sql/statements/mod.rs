@@ -38,7 +38,6 @@ pub use statement_select::DfQueryStatement;
 pub use statement_kill::DfKillStatement;
 pub use query::QueryNormalizerData;
 pub use analyzer_statement::QueryAnalyzeState;
-pub use statement_select::QueryRelation;
 pub use statement_set_variable::DfSetVariable;
 pub use statement_show_create_table::DfShowCreateTable;
 pub use statement_show_databases::DfShowDatabases;
@@ -49,4 +48,5 @@ pub use statement_show_tables::DfShowTables;
 pub use statement_truncate_table::DfTruncateTable;
 pub use statement_use_database::DfUseDatabase;
 pub use statement_explain::DfExplain;
+pub use analyzer_statement::QueryRelation;
 

@@ -6,7 +6,7 @@ use common_planners::{Expression, extract_aliases, find_aggregate_exprs_in_expr,
 use std::collections::HashMap;
 use crate::sql::statements::query::query_schema::AnalyzeQuerySchema;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
-use crate::sql::statements::{DfQueryStatement, AnalyzableStatement, QueryRelation, AnalyzedResult};
+use crate::sql::statements::{DfQueryStatement, AnalyzableStatement, AnalyzedResult};
 use std::convert::TryFrom;
 use std::fmt::Debug;
 use common_datavalues::{DataSchemaRef, DataSchema};

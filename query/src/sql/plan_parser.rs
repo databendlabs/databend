@@ -69,14 +69,11 @@ impl PlanParser {
     }
 
     fn build_from_plan(data: &QueryAnalyzeState) -> Result<PlanNode> {
-        unimplemented!()
-        // match &data.relation {
-        //     None => Err(ErrorCode::LogicalError("Not from in select query")),
-        //     Some(relation) => match relation.as_ref() {
-        //         QueryRelation::Nested(data) => Self::build_query_plan(&data),
-        //         QueryRelation::FromTable(plan) => Ok(PlanNode::ReadSource(plan.clone())),
-        //     }
-        // }
+        match &data.relation {
+            QueryRelation::None => Err(ErrorCode::LogicalError("Not from in select query")),
+            QueryRelation::Nested(data) => Self::build_query_plan(data),
+            QueryRelation::FromTable(plan) => Ok(PlanNode::ReadSource(plan.clone())),
+        }
     }
 
     /// Apply a filter to the plan
@@ -96,20 +93,19 @@ impl PlanParser {
         // S1: Apply a fragment plan for distributed planners split.
         // S2: Apply a final aggregator plan.
 
-        // let mut builder = PlanBuilder::from(&plan);
-        //
-        // if !data.aggregate_expressions.is_empty() || !data.group_by_expressions.is_empty() {
-        //     let schema = plan.schema();
-        //     let aggr_expr = &data.aggregate_expressions;
-        //     let group_by_expr = &data.group_by_expressions;
-        //     let before_group_by_expr = &data.before_group_by_expressions;
-        //     builder = builder.expression(before_group_by_expr, "Before group by")?;
-        //     builder = builder.aggregate_partial(aggr_expr, group_by_expr)?;
-        //     builder = builder.aggregate_final(schema, aggr_expr, group_by_expr)?;
-        // }
-        //
-        // builder.build()
-        unimplemented!()
+        let mut builder = PlanBuilder::from(&plan);
+
+        if !data.aggregate_expressions.is_empty() || !data.group_by_expressions.is_empty() {
+            let schema = plan.schema();
+            let aggr_expr = &data.aggregate_expressions;
+            let group_by_expr = &data.group_by_expressions;
+            let before_group_by_expr = &data.before_group_by_expressions;
+            builder = builder.expression(before_group_by_expr, "Before group by")?;
+            builder = builder.aggregate_partial(aggr_expr, group_by_expr)?;
+            builder = builder.aggregate_final(schema, aggr_expr, group_by_expr)?;
+        }
+
+        builder.build()
     }
 
     fn build_having_plan(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {

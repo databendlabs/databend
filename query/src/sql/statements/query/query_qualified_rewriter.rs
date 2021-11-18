@@ -199,16 +199,17 @@ impl QualifiedRewriter {
     }
 
     fn find_column(table_desc: &AnalyzeQueryTableDesc, name: &str) -> Result<Expression> {
-        for column_desc in &table_desc.columns_desc {
+        let name_parts = table_desc.get_name_parts();
+        for column_desc in table_desc.get_columns_desc() {
             if &column_desc.short_name == name {
                 return match column_desc.is_ambiguity {
-                    true => Ok(Expression::Column(format!("{}.{}", table_desc.name_parts.join("."), name))),
+                    true => Ok(Expression::Column(format!("{}.{}", name_parts.join("."), name))),
                     false => Ok(Expression::Column(name.to_string()))
                 };
             }
         }
 
-        Err(ErrorCode::UnknownColumn(format!("Unknown column: {}.{}", table_desc.name_parts.join("."), name)))
+        Err(ErrorCode::UnknownColumn(format!("Unknown column: {}.{}", name_parts.join("."), name)))
     }
 
     fn first_diff_pos(left: &[String], right: &[String]) -> usize {
@@ -230,8 +231,7 @@ impl QualifiedRewriter {
 
         let current_database = self.ctx.get_current_database();
         for table_desc in self.tables_schema.get_tables_desc() {
-            let name_parts = &table_desc.name_parts;
-
+            let name_parts = table_desc.get_name_parts();
             if Self::first_diff_pos(ref_names, name_parts) == name_parts.len() {
                 // alias.column or database.table.column
                 return Some((name_parts.len(), table_desc.clone()));

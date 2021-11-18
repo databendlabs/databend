@@ -4,7 +4,9 @@ use std::sync::Arc;
 use common_exception::{Result, ErrorCode};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use common_planners::Expression;
+use common_planners::{col, Expression};
+use crate::catalogs::Table;
+use crate::sql::statements::QueryAnalyzeState;
 
 #[derive(Clone)]
 pub struct AnalyzeQuerySchema {
@@ -22,16 +24,25 @@ impl AnalyzeQuerySchema {
         }
     }
 
-    pub fn from_schema(schema: DataSchemaRef, prefix: Vec<String>) -> Result<AnalyzeQuerySchema> {
-        let table_desc = AnalyzeQueryTableDesc::from_schema(schema, prefix);
+    pub fn from_table(table: Arc<dyn Table>, prefix: Vec<String>) -> Result<AnalyzeQuerySchema> {
+        let table_desc = AnalyzeQueryTableDesc::from_table(table, prefix);
+        Self::from_table_desc(table_desc)
+    }
+
+    pub fn from_subquery(state: QueryAnalyzeState, prefix: Vec<String>) -> Result<AnalyzeQuerySchema> {
+        let table_desc = AnalyzeQueryTableDesc::from_subquery(state, prefix);
+        Self::from_table_desc(table_desc)
+    }
+
+    fn from_table_desc(table_desc: AnalyzeQueryTableDesc) -> Result<AnalyzeQuerySchema> {
         let mut short_name_columns = HashMap::new();
 
-        for column_desc in &table_desc.columns_desc {
+        for column_desc in table_desc.get_columns_desc() {
             match short_name_columns.entry(column_desc.short_name.clone()) {
                 Entry::Vacant(v) => { v.insert(column_desc.clone()); }
                 Entry::Occupied(_) => {
                     return Err(ErrorCode::LogicalError(
-                        format!("Logical error: same columns in {:?}, this is a bug.", table_desc.name_parts)
+                        format!("Logical error: same columns in {:?}, this is a bug.", table_desc.get_name_parts())
                     ));
                 }
             };
@@ -51,28 +62,11 @@ impl AnalyzeQuerySchema {
         &self.tables_long_name_columns
     }
 
-    pub fn get_column_by_fullname(&self, fullname: &[String]) -> Option<&AnalyzeQueryColumnDesc> {
-        for table_desc in &self.tables_long_name_columns {
-            if table_desc.name_parts.len() < fullname.len()
-                && table_desc.name_parts[..] == fullname[0..fullname.len() - 1] {
-                for column_desc in &table_desc.columns_desc {
-                    if column_desc.short_name == fullname[fullname.len() - 1] {
-                        return Some(column_desc);
-                    }
-                }
-            }
-        }
-
-        // TODO: We need to check whether they are references to payload types when we support complex types.
-        // Such as: CREATE TABLE test(a STRUCT(b tinyint)); SELECT a.b FROM test;
-        None
-    }
-
     pub fn to_data_schema(&self) -> DataSchemaRef {
         let mut fields = Vec::with_capacity(self.short_name_columns.len());
 
         for table_desc in &self.tables_long_name_columns {
-            for column_desc in &table_desc.columns_desc {
+            for column_desc in table_desc.get_columns_desc() {
                 fields.push(DataField::new(
                     &column_desc.column_name(),
                     column_desc.data_type.clone(),
@@ -94,10 +88,10 @@ impl Debug for AnalyzeQuerySchema {
         let mut ambiguity_names = Vec::new();
         let mut short_names = Vec::with_capacity(self.short_name_columns.len());
         for table_desc in &self.tables_long_name_columns {
-            for column_desc in &table_desc.columns_desc {
+            for column_desc in table_desc.get_columns_desc() {
                 match column_desc.is_ambiguity {
                     true => {
-                        let mut name_parts = table_desc.name_parts.clone();
+                        let mut name_parts = table_desc.get_name_parts().to_vec();
                         name_parts.push(column_desc.short_name.clone());
                         ambiguity_names.push(name_parts);
                     }
@@ -124,22 +118,61 @@ impl Debug for AnalyzeQuerySchema {
 }
 
 #[derive(Clone)]
-pub struct AnalyzeQueryTableDesc {
-    pub name_parts: Vec<String>,
-    pub columns_desc: Vec<AnalyzeQueryColumnDesc>,
+pub enum AnalyzeQueryTableDesc {
+    Table {
+        table: Arc<dyn Table>,
+        name_parts: Vec<String>,
+        columns_desc: Vec<AnalyzeQueryColumnDesc>,
+    },
+    Subquery {
+        state: Arc<QueryAnalyzeState>,
+        name_parts: Vec<String>,
+        columns_desc: Vec<AnalyzeQueryColumnDesc>,
+    },
 }
 
 impl AnalyzeQueryTableDesc {
-    pub fn from_schema(schema: DataSchemaRef, prefix: Vec<String>) -> AnalyzeQueryTableDesc {
+    pub fn from_table(table: Arc<dyn Table>, prefix: Vec<String>) -> AnalyzeQueryTableDesc {
+        let schema = table.schema();
         let mut columns_desc = Vec::with_capacity(schema.fields().len());
 
         for data_field in schema.fields() {
             columns_desc.push(AnalyzeQueryColumnDesc::from_field(data_field, false));
         }
 
-        AnalyzeQueryTableDesc {
-            name_parts: prefix,
+        AnalyzeQueryTableDesc::Table {
+            table,
             columns_desc,
+            name_parts: prefix,
+        }
+    }
+
+    pub fn from_subquery(state: QueryAnalyzeState, prefix: Vec<String>) -> AnalyzeQueryTableDesc {
+        let schema = state.finalize_schema.clone();
+        let mut columns_desc = Vec::with_capacity(schema.fields().len());
+
+        for data_field in schema.fields() {
+            columns_desc.push(AnalyzeQueryColumnDesc::from_field(data_field, false));
+        }
+
+        AnalyzeQueryTableDesc::Subquery {
+            state: Arc::new(state),
+            columns_desc,
+            name_parts: prefix,
+        }
+    }
+
+    pub fn get_name_parts(&self) -> &[String] {
+        match self {
+            AnalyzeQueryTableDesc::Table { name_parts, .. } => name_parts,
+            AnalyzeQueryTableDesc::Subquery { name_parts, .. } => name_parts,
+        }
+    }
+
+    pub fn get_columns_desc(&self) -> &[AnalyzeQueryColumnDesc] {
+        match self {
+            AnalyzeQueryTableDesc::Table { columns_desc, .. } => columns_desc,
+            AnalyzeQueryTableDesc::Subquery { columns_desc, .. } => columns_desc,
         }
     }
 }

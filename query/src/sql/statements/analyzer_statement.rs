@@ -1,4 +1,6 @@
-use common_planners::{Expression, PlanNode};
+use std::sync::Arc;
+use common_datavalues::{DataSchema, DataSchemaRef, DataSchemaRefExt};
+use common_planners::{Expression, PlanNode, ReadDataSourcePlan};
 use crate::sql::DfStatement;
 use common_exception::Result;
 use crate::sessions::DatabendQueryContextRef;
@@ -8,6 +10,12 @@ pub enum AnalyzedResult {
     SimpleQuery(PlanNode),
     SelectQuery(QueryAnalyzeState),
     ExplainQuery(QueryNormalizerData),
+}
+
+pub enum QueryRelation {
+    None,
+    FromTable(ReadDataSourcePlan),
+    Nested(Box<QueryAnalyzeState>),
 }
 
 pub struct QueryAnalyzeState {
@@ -21,11 +29,25 @@ pub struct QueryAnalyzeState {
     pub group_by_expressions: Vec<Expression>,
     pub aggregate_expressions: Vec<Expression>,
     pub before_group_by_expressions: Vec<Expression>,
+
+    pub relation: QueryRelation,
+    pub finalize_schema: DataSchemaRef,
 }
 
 impl Default for QueryAnalyzeState {
     fn default() -> Self {
-        todo!()
+        QueryAnalyzeState {
+            filter: None,
+            having: None,
+            order_by_expressions: vec![],
+            expressions: vec![],
+            projection_expressions: vec![],
+            group_by_expressions: vec![],
+            aggregate_expressions: vec![],
+            before_group_by_expressions: vec![],
+            relation: QueryRelation::None,
+            finalize_schema: Arc::new(DataSchema::empty()),
+        }
     }
 }
 

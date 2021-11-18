@@ -1,3 +1,4 @@
+use std::fs::read;
 use sqlparser::ast::{FunctionArg, Ident, JoinOperator, ObjectName, Query, TableAlias, TableFactor, TableWithJoins};
 use crate::sessions::DatabendQueryContextRef;
 use common_exception::{ErrorCode, Result};
@@ -51,18 +52,15 @@ impl FromAnalyzer {
         let subquery = DfQueryStatement::try_from(subquery.clone())?;
         match subquery.analyze(self.ctx.clone()).await? {
             AnalyzedResult::SelectQuery(state) => {
-                unimplemented!("")
-                // match &v.alias {
-                //     None => {
-                //         let schema = state.finalize_schema.clone();
-                //         AnalyzeQuerySchema::from_schema(schema, Vec::new())
-                //     }
-                //     Some(alias) => {
-                //         let schema = state.finalize_schema.clone();
-                //         let name_prefix = vec![alias.name.value.clone()];
-                //         AnalyzeQuerySchema::from_schema(schema, name_prefix)
-                //     }
-                // }
+                match &v.alias {
+                    None => {
+                        AnalyzeQuerySchema::from_subquery(state, Vec::new())
+                    }
+                    Some(alias) => {
+                        let name_prefix = vec![alias.name.value.clone()];
+                        AnalyzeQuerySchema::from_subquery(state, name_prefix)
+                    }
+                }
             }
             _ => Err(ErrorCode::LogicalError("Logical error, subquery analyzed data must be SelectQuery, it's a bug.")),
         }
@@ -75,14 +73,12 @@ impl FromAnalyzer {
 
         match &item.alias {
             None => {
-                let schema = read_table.schema();
                 let name_prefix = vec![database, table];
-                AnalyzeQuerySchema::from_schema(schema, name_prefix)
+                AnalyzeQuerySchema::from_table(read_table, name_prefix)
             }
             Some(table_alias) => {
-                let schema = read_table.schema();
                 let name_prefix = vec![table_alias.name.value.clone()];
-                AnalyzeQuerySchema::from_schema(schema, name_prefix)
+                AnalyzeQuerySchema::from_table(read_table, name_prefix)
             }
         }
     }
@@ -106,7 +102,7 @@ impl FromAnalyzer {
         }
 
         let table_function = self.ctx.get_table_function(&table_name, Some(table_args))?;
-        AnalyzeQuerySchema::from_schema(table_function.schema(), Vec::new())
+        AnalyzeQuerySchema::from_table(table_function.as_table(), Vec::new())
     }
 
     fn resolve_table(&self, name: &ObjectName) -> Result<(String, String)> {
