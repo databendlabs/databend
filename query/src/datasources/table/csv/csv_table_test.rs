@@ -61,12 +61,10 @@ async fn test_csv_table() -> Result<()> {
         Arc::new(TableDataContext::default()),
     )?;
 
-    let io_ctx = ctx.get_cluster_table_io_context()?;
-    let io_ctx = Arc::new(io_ctx);
-    let source_plan = table.read_plan(io_ctx.clone(), Some(Extras::default()))?;
+    let source_plan = table.read_plan(ctx.clone(), Some(Extras::default()))?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
-    let stream = table.read(io_ctx, &source_plan).await?;
+    let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 1);
@@ -122,12 +120,10 @@ async fn test_csv_table_parse_error() -> Result<()> {
         Arc::new(TableDataContext::default()),
     )?;
 
-    let io_ctx = ctx.get_cluster_table_io_context()?;
-    let io_ctx = Arc::new(io_ctx);
-    let source_plan = table.read_plan(io_ctx.clone(), Some(Extras::default()))?;
+    let source_plan = table.read_plan(ctx.clone(), Some(Extras::default()))?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
-    let stream = table.read(io_ctx, &source_plan).await?;
+    let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await;
     // integer parse error will result to Null value
     assert!(!result.is_err());

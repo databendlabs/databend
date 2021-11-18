@@ -20,8 +20,6 @@ use std::sync::Arc;
 use async_stream::stream;
 use common_base::tokio;
 use common_context::DataContext;
-use common_context::IOContext;
-use common_context::TableIOContext;
 use common_dal::Local;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -37,7 +35,7 @@ use common_streams::Source;
 
 use crate::catalogs::Table;
 use crate::datasources::common::count_lines;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct CsvTable {
     table_info: TableInfo,
@@ -82,7 +80,7 @@ impl Table for CsvTable {
 
     fn read_partitions(
         &self,
-        _io_ctx: Arc<TableIOContext>,
+        _ctx: DatabendQueryContextRef,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let file = &self.file;
@@ -98,13 +96,9 @@ impl Table for CsvTable {
 
     async fn read(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let ctx: Arc<DatabendQueryContext> = io_ctx
-            .get_user_data()?
-            .expect("DatabendQueryContext should not be None");
-
         let conf = ctx.get_config().storage.disk;
         let local = Local::new(conf.temp_data_path.as_str());
 

@@ -15,8 +15,6 @@
 //! `catalog` defines catalog related data types, such as table or database.
 
 pub use table_io_context::DataContext;
-pub use table_io_context::IOContext;
 pub use table_io_context::TableDataContext;
-pub use table_io_context::TableIOContext;
 
 mod table_io_context;

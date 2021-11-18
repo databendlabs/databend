@@ -50,9 +50,6 @@ async fn test_memorytable() -> Result<()> {
         Arc::new(TableDataContext::default()),
     )?;
 
-    let io_ctx = ctx.get_cluster_table_io_context()?;
-    let io_ctx = Arc::new(io_ctx);
-
     // append data.
     {
         let block = DataBlock::create_by_array(schema.clone(), vec![
@@ -75,18 +72,18 @@ async fn test_memorytable() -> Result<()> {
             values_opt: None,
         };
         table
-            .append_data(io_ctx.clone(), insert_plan, Box::pin(input_stream))
+            .append_data(ctx.clone(), insert_plan, Box::pin(input_stream))
             .await
             .unwrap();
     }
 
     // read.
     {
-        let source_plan = table.read_plan(io_ctx.clone(), None)?;
+        let source_plan = table.read_plan(ctx.clone(), None)?;
         ctx.try_set_partitions(source_plan.parts.clone())?;
         assert_eq!(table.engine(), "Memory");
 
-        let stream = table.read(io_ctx.clone(), &source_plan).await?;
+        let stream = table.read(ctx.clone(), &source_plan).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         assert_blocks_sorted_eq(
             vec![
@@ -109,12 +106,10 @@ async fn test_memorytable() -> Result<()> {
             db: "default".to_string(),
             table: "a".to_string(),
         };
-        table.truncate(io_ctx, truncate_plan).await?;
+        table.truncate(ctx.clone(), truncate_plan).await?;
 
-        let io_ctx = ctx.get_cluster_table_io_context()?;
-        let io_ctx = Arc::new(io_ctx);
-        let source_plan = table.read_plan(io_ctx.clone(), None)?;
-        let stream = table.read(io_ctx, &source_plan).await?;
+        let source_plan = table.read_plan(ctx.clone(), None)?;
+        let stream = table.read(ctx, &source_plan).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         assert_blocks_sorted_eq(vec!["++", "++"], &result);
     }

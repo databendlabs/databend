@@ -25,7 +25,8 @@ use common_base::ProgressCallback;
 use common_base::ProgressValues;
 use common_base::Runtime;
 use common_base::TrySpawn;
-use common_context::TableIOContext;
+use common_dal::DataAccessor;
+use common_dal::DataAccessorBuilder;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -253,27 +254,10 @@ impl DatabendQueryContext {
         self.shared.try_get_runtime()
     }
 
-    /// Build a TableIOContext that contains cluster information so that one using it could distributed data evenly in the cluster.
-    pub fn get_cluster_table_io_context(self: &Arc<Self>) -> Result<TableIOContext> {
-        let cluster = self.get_cluster();
-        let nodes = cluster.get_nodes();
-
-        let settings = self.get_settings();
-        let max_threads = settings.get_max_threads()? as usize;
-
-        let tenant_id = self.shared.conf.query.tenant_id.clone();
-        let cluster_id = self.shared.conf.query.cluster_id.clone();
-        Ok(TableIOContext::new(
-            self.get_shared_runtime()?,
-            Arc::new(ContextDalBuilder::new(
-                tenant_id,
-                cluster_id,
-                self.get_config().storage,
-            )),
-            max_threads,
-            nodes,
-            Some(self.clone()),
-        ))
+    pub(crate) fn get_data_accessor(&self) -> Result<Arc<dyn DataAccessor>> {
+        let tenant_id = self.get_config().query.tenant_id;
+        let cluster_id = self.get_config().query.cluster_id;
+        ContextDalBuilder::new(tenant_id, cluster_id, self.get_config().storage).build()
     }
 }
 

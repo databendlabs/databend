@@ -16,7 +16,6 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_context::DataContext;
-use common_context::TableIOContext;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_meta_types::TableInfo;
@@ -29,6 +28,7 @@ use common_tracing::tracing::info;
 use futures::stream::StreamExt;
 
 use crate::catalogs::Table;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct NullTable {
     table_info: TableInfo,
@@ -55,7 +55,7 @@ impl Table for NullTable {
 
     async fn read(
         &self,
-        _io_ctx: Arc<TableIOContext>,
+        _ctx: DatabendQueryContextRef,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let block = DataBlock::empty_with_schema(self.table_info.schema());
@@ -69,7 +69,7 @@ impl Table for NullTable {
 
     async fn append_data(
         &self,
-        _io_ctx: Arc<TableIOContext>,
+        _ctx: DatabendQueryContextRef,
         _insert_plan: InsertIntoPlan,
         mut stream: SendableDataBlockStream,
     ) -> Result<()> {
@@ -82,7 +82,7 @@ impl Table for NullTable {
 
     async fn truncate(
         &self,
-        _io_ctx: Arc<TableIOContext>,
+        _ctx: DatabendQueryContextRef,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Ok(())
