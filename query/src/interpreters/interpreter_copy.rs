@@ -90,6 +90,7 @@ impl Interpreter for CopyInterpreter {
             tbl_id: self.plan.tbl_id,
             schema: self.plan.schema.clone(),
             values_opt: None,
+            select_plan: None,
         };
 
         table.append_data(io_ctx, insert_plan, input_stream).await?;
