@@ -84,16 +84,6 @@ impl Stoppable for MetricService {
     }
 
     async fn stop(&mut self, force: Option<broadcast::Receiver<()>>) -> Result<()> {
-        self.shutdown_handler.shutdown(true).await;
-        if let Some(mut force) = force {
-            log::info!("waiting for force");
-            let _ = force
-                .recv()
-                .await
-                .expect("Failed to recv the shutdown signal");
-            log::info!("shutdown the service force");
-            self.shutdown_handler.shutdown(false).await;
-        }
-        Ok(())
+        self.shutdown_handler.stop(force).await
     }
 }
