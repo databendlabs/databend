@@ -1896,9 +1896,8 @@ dependencies = [
 
 [[package]]
 name = "csv-async"
-version = "1.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7240eee21f34a5a649dbba0dc52e79c71870dd8350263bdd3e7c95d642ebda03"
+version = "1.2.3"
+source = "git+https://github.com/datafuse-extras/csv-async?rev=cb521c7#cb521c73cf5996687985f83aba19afc1e49b3b8c"
 dependencies = [
  "bstr",
  "cfg-if 1.0.0",
@@ -1907,8 +1906,6 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
- "tokio",
- "tokio-stream",
 ]
 
 [[package]]
