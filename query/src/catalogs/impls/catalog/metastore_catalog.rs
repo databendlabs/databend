@@ -218,4 +218,17 @@ impl Catalog for MetaStoreCatalog {
 
         Ok(tbl)
     }
+
+    async fn exists_database(&self, db_name: &str) -> Result<bool> {
+        match self.get_database(db_name).await {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                if err.code() == ErrorCode::UnknownDatabaseCode() {
+                    Ok(false)
+                } else {
+                    Err(err)
+                }
+            }
+        }
+    }
 }

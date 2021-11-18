@@ -8,3 +8,6 @@ CREATE DATABASE IF NOT EXISTS db;
 CREATE DATABASE db; -- {ErrorCode 4001}
 
 DROP DATABASE IF EXISTS db;
+
+CREATE DATABASE system; -- {ErrorCode 4001}
+DROP DATABASE system; -- {ErrorCode 54}
