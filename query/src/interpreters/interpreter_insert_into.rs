@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
 use common_planners::InsertIntoPlan;
+use common_planners::PlanNode;
 use common_streams::CastStream;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -27,6 +28,7 @@ use common_streams::ValueSource;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::interpreters::SelectInterpreter;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct InsertIntoInterpreter {
@@ -39,8 +41,23 @@ impl InsertIntoInterpreter {
     pub fn try_create(
         ctx: DatabendQueryContextRef,
         plan: InsertIntoPlan,
-        select: Option<Arc<dyn Interpreter>>,
     ) -> Result<InterpreterPtr> {
+        let select = match plan.select_plan.clone().take() {
+            Some(select_plan) => {
+                if let PlanNode::Select(select_plan_node) = *select_plan {
+                    Ok(Some(SelectInterpreter::try_create(
+                        ctx.clone(),
+                        select_plan_node,
+                    )?))
+                } else {
+                    Result::Err(ErrorCode::UnknownTypeOfQuery(format!(
+                        "Unsupported select query plan for insert_into interpreter:{}",
+                        select_plan.name()
+                    )))
+                }
+            }
+            None => Ok(None),
+        }?;
         Ok(Arc::new(InsertIntoInterpreter { ctx, plan, select }))
     }
 }
