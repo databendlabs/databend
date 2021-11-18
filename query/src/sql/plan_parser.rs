@@ -81,22 +81,21 @@ impl PlanParser {
 
     /// Apply a filter to the plan
     fn build_filter_plan(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
-        // match &data.filter_predicate {
-        //     None => Ok(plan),
-        //     Some(predicate) => {
-        //         let predicate = predicate.clone();
-        //         let builder = PlanBuilder::from(&plan).filter(predicate)?;
-        //         builder.build()
-        //     }
-        // }
-        unimplemented!()
+        match &data.filter {
+            None => Ok(plan),
+            Some(predicate) => {
+                let predicate = predicate.clone();
+                let builder = PlanBuilder::from(&plan).filter(predicate)?;
+                builder.build()
+            }
+        }
     }
 
     fn build_group_by_plan(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
         // S0: Apply a partial aggregator plan.
         // S1: Apply a fragment plan for distributed planners split.
         // S2: Apply a final aggregator plan.
-        unimplemented!()
+
         // let mut builder = PlanBuilder::from(&plan);
         //
         // if !data.aggregate_expressions.is_empty() || !data.group_by_expressions.is_empty() {
@@ -110,46 +109,44 @@ impl PlanParser {
         // }
         //
         // builder.build()
+        unimplemented!()
     }
 
     fn build_having_plan(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
-        unimplemented!()
-        // let mut builder = PlanBuilder::from(&plan);
-        //
-        // if !data.before_having_expressions.is_empty() {
-        //     let before_having_exprs = &data.before_having_expressions;
-        //     match data.order_by_expressions.is_empty() {
-        //         true => {
-        //             builder = builder.expression(before_having_exprs, "Before order")?;
-        //         }
-        //         false => {
-        //             builder = builder.expression(before_having_exprs, "Before projection")?;
-        //         }
-        //     };
-        // }
-        //
-        // if let Some(having_predicate) = &data.having_predicate {
-        //     builder = builder.having(having_predicate.clone())?;
-        // }
-        //
-        // builder.build()
+        let mut builder = PlanBuilder::from(&plan);
+
+        if !data.expressions.is_empty() {
+            let before_expressions = &data.expressions;
+            match data.order_by_expressions.is_empty() {
+                true => {
+                    builder = builder.expression(before_expressions, "Before order")?;
+                }
+                false => {
+                    builder = builder.expression(before_expressions, "Before projection")?;
+                }
+            };
+        }
+
+        if let Some(having_predicate) = &data.having {
+            builder = builder.having(having_predicate.clone())?;
+        }
+
+        builder.build()
     }
 
     fn build_order_by_plan(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
-        // match data.order_by_expressions.is_empty() {
-        //     true => Ok(plan),
-        //     false => PlanBuilder::from(&plan)
-        //         .sort(&data.order_by_expressions)?
-        //         .build(),
-        // }
-        unimplemented!()
+        match data.order_by_expressions.is_empty() {
+            true => Ok(plan),
+            false => PlanBuilder::from(&plan)
+                .sort(&data.order_by_expressions)?
+                .build(),
+        }
     }
 
     fn build_projection_plan(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
-        // PlanBuilder::from(&plan)
-        //     .project(&data.projection_expressions)?
-        //     .build()
-        unimplemented!()
+        PlanBuilder::from(&plan)
+            .project(&data.projection_expressions)?
+            .build()
     }
 
     fn build_limit_plan(input: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {

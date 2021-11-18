@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use sqlparser::ast::{Expr, Offset, OrderByExpr, SelectItem, TableWithJoins};
 
 use common_exception::{ErrorCode, Result};
-use common_planners::{expand_aggregate_arg_exprs, expr_as_column_expr, Expression, extract_aliases, find_aggregate_exprs_in_expr, ReadDataSourcePlan, rebase_expr, resolve_aliases_to_exprs};
+use common_planners::{expand_aggregate_arg_exprs, expr_as_column_expr, Expression, extract_aliases, find_aggregate_exprs, find_aggregate_exprs_in_expr, ReadDataSourcePlan, rebase_expr, resolve_aliases_to_exprs};
 
 use crate::sessions::{DatabendQueryContextRef};
 use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
@@ -41,34 +41,20 @@ impl AnalyzableStatement for DfQueryStatement {
         let qualified_rewriter = QualifiedRewriter::create(schema, ctx.clone());
         let normalized_result = qualified_rewriter.rewrite(normalized_result).await?;
 
-        match normalized_result.group_by_expressions.is_empty() && normalized_result.aggregate_expressions.is_empty() {
-            true => self.analyze_without_aggr(normalized_result).await,
-            false => self.analyze_with_aggr(normalized_result).await
-        }
+        self.analyze_query(normalized_result).await
     }
 }
 
 impl DfQueryStatement {
-    async fn analyze_with_aggr(&self, data: QueryNormalizerData) -> Result<AnalyzedResult> {
-        unimplemented!()
-    }
-
-    async fn analyze_without_aggr(&self, data: QueryNormalizerData) -> Result<AnalyzedResult> {
+    async fn analyze_query(&self, data: QueryNormalizerData) -> Result<AnalyzedResult> {
         let mut analyze_state = QueryAnalyzeState::default();
 
         if let Some(predicate) = &data.filter_predicate {
+            Self::verify_no_aggregate(predicate, "filter")?;
             analyze_state.filter = Some(predicate.clone());
         }
 
-        for item in &data.projection_expressions {
-            match item {
-                Expression::Alias(_, expr) => analyze_state.add_expression(expr),
-                _ => analyze_state.add_expression(item),
-            }
-
-            let rebased_expr = rebase_expr(item, &analyze_state.expressions)?;
-            analyze_state.projection_expressions.push(rebased_expr);
-        }
+        Self::analyze_projection(&data.projection_expressions, &mut analyze_state)?;
 
         // Allow `SELECT name FROM system.databases HAVING name = 'xxx'`
         if let Some(predicate) = &data.having_predicate {
@@ -82,7 +68,7 @@ impl DfQueryStatement {
             match item {
                 Expression::Sort { expr, asc, nulls_first } => {
                     analyze_state.add_expression(&expr);
-                    analyze_state.order_by_expression.push(Expression::Sort {
+                    analyze_state.order_by_expressions.push(Expression::Sort {
                         expr: Box::new(rebase_expr(&expr, &analyze_state.expressions)?),
                         asc: *asc,
                         nulls_first: *nulls_first,
@@ -92,11 +78,63 @@ impl DfQueryStatement {
             }
         }
 
+        if !data.aggregate_expressions.is_empty() || !data.group_by_expressions.is_empty() {
+            // Rebase expressions using aggregate expressions and group by expressions
+            let mut expressions = Vec::with_capacity(analyze_state.expressions.len());
+            for expression in &analyze_state.expressions {
+                let expression = rebase_expr(expression, &data.group_by_expressions)?;
+                expressions.push(rebase_expr(&expression, &data.aggregate_expressions)?);
+            }
+
+            analyze_state.expressions = expressions;
+
+            for group_expression in &data.group_by_expressions {
+                analyze_state.add_before_group_expression(group_expression);
+                let base_exprs = &analyze_state.before_group_by_expressions;
+                analyze_state.group_by_expressions.push(rebase_expr(group_expression, base_exprs)?);
+            }
+
+            Self::analyze_aggregate(&data.aggregate_expressions, &mut analyze_state)?;
+        }
+
         Ok(AnalyzedResult::SelectQuery(analyze_state))
     }
 
+    fn analyze_aggregate(exprs: &[Expression], state: &mut QueryAnalyzeState) -> Result<()> {
+        let aggregate_functions = find_aggregate_exprs(exprs);
+        let aggregate_functions_args = expand_aggregate_arg_exprs(&aggregate_functions);
+
+        for aggregate_function_arg in &aggregate_functions_args {
+            state.add_before_group_expression(aggregate_function_arg);
+        }
+
+        for aggr_expression in exprs {
+            let base_exprs = &state.before_group_by_expressions;
+            state.aggregate_expressions.push(rebase_expr(aggr_expression, base_exprs)?);
+        }
+
+        Ok(())
+    }
+
+    fn analyze_projection(exprs: &[Expression], state: &mut QueryAnalyzeState) -> Result<()> {
+        for item in exprs {
+            match item {
+                Expression::Alias(_, expr) => state.add_expression(expr),
+                _ => state.add_expression(item),
+            }
+
+            let rebased_expr = rebase_expr(item, &state.expressions)?;
+            state.projection_expressions.push(rebased_expr);
+        }
+
+        Ok(())
+    }
+
     fn verify_no_aggregate(expr: &Expression, info: &str) -> Result<()> {
-        unimplemented!()
+        match find_aggregate_exprs_in_expr(expr).is_empty() {
+            true => Ok(()),
+            false => Err(ErrorCode::SyntaxException(format!("{} cannot contain aggregate functions", info))),
+        }
     }
 }
 

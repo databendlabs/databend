@@ -13,11 +13,14 @@ pub enum AnalyzedResult {
 pub struct QueryAnalyzeState {
     pub filter: Option<Expression>,
     pub having: Option<Expression>,
-    pub order_by_expression: Vec<Expression>,
+    pub order_by_expressions: Vec<Expression>,
     // before order or before projection expression plan
     pub expressions: Vec<Expression>,
     pub projection_expressions: Vec<Expression>,
 
+    pub group_by_expressions: Vec<Expression>,
+    pub aggregate_expressions: Vec<Expression>,
+    pub before_group_by_expressions: Vec<Expression>,
 }
 
 impl Default for QueryAnalyzeState {
@@ -30,6 +33,12 @@ impl QueryAnalyzeState {
     pub fn add_expression(&mut self, expr: &Expression) {
         if !self.expressions.contains(expr) {
             self.expressions.push(expr.clone());
+        }
+    }
+
+    pub fn add_before_group_expression(&mut self, expr: &Expression) {
+        if !self.before_group_by_expressions.contains(expr) {
+            self.before_group_by_expressions.push(expr.clone());
         }
     }
 }
