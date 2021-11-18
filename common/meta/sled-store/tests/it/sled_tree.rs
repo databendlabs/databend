@@ -19,6 +19,7 @@ use common_base::tokio;
 use common_base::GlobalSequence;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::SledTree;
+use common_meta_sled_store::TreeAPI;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;

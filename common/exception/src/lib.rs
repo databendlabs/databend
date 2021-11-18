@@ -16,6 +16,7 @@ pub mod exception;
 
 pub use exception::ErrorCode;
 pub use exception::Result;
+pub use exception::SledConflictableTransactionError;
 pub use exception::ToErrorCode;
 
 pub mod prelude {

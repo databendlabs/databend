@@ -14,14 +14,20 @@
 
 #![allow(non_snake_case)]
 
+use std::error::Error;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::fmt::Result as Fmt_Result;
+use std::io;
 use std::net::AddrParseError;
 use std::string::FromUtf8Error;
 use std::sync::Arc;
 
 use backtrace::Backtrace;
+use sled::transaction::ConflictableTransactionError;
+use sled::transaction::TransactionError;
+use sled::transaction::UnabortableTransactionError;
 use thiserror::Error;
 use tonic::Code;
 use tonic::Status;
@@ -43,6 +49,139 @@ impl ToString for ErrorCodeBacktrace {
             ErrorCodeBacktrace::Serialized(backtrace) => Arc::as_ref(backtrace).clone(),
             ErrorCodeBacktrace::Origin(backtrace) => {
                 format!("{:?}", backtrace)
+            }
+        }
+    }
+}
+/// Put Sled's errors wrapper here to avoid circular references
+/// Error returned by a Sled transaction
+#[derive(Debug)]
+pub enum SledTransactionError<T> {
+    Abort(T),
+    /// A storage related error
+    Storage(io::Error),
+}
+
+impl<T: Display> Display for SledTransactionError<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Fmt_Result {
+        match self {
+            Self::Abort(e) => Display::fmt(&e, f),
+            Self::Storage(e) => Display::fmt(&e, f),
+        }
+    }
+}
+
+impl<T: Error + 'static> Error for SledTransactionError<T> {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Abort(e) => Some(e),
+            Self::Storage(e) => Some(e),
+        }
+    }
+}
+
+impl<T> From<TransactionError<T>> for SledTransactionError<T> {
+    fn from(e: TransactionError<T>) -> Self {
+        match e {
+            TransactionError::Abort(e) => Self::Abort(e),
+            TransactionError::Storage(e) => Self::Storage(e.into()),
+        }
+    }
+}
+
+impl<T: Into<io::Error>> From<SledTransactionError<T>> for io::Error {
+    fn from(e: SledTransactionError<T>) -> Self {
+        match e {
+            SledTransactionError::Abort(e) => e.into(),
+            SledTransactionError::Storage(e) => e,
+        }
+    }
+}
+
+/// An error returned from the transaction methods.
+/// Should be returned as-is
+#[derive(Debug)]
+pub enum SledUnabortableTransactionError {
+    #[doc(hidden)]
+    Conflict,
+    /// A regular error
+    Storage(io::Error),
+}
+
+impl Display for SledUnabortableTransactionError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Fmt_Result {
+        match self {
+            Self::Conflict => write!(f, "Transaction conflict"),
+            Self::Storage(e) => Display::fmt(&e, f),
+        }
+    }
+}
+
+impl Error for SledUnabortableTransactionError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Storage(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<UnabortableTransactionError> for SledUnabortableTransactionError {
+    fn from(e: UnabortableTransactionError) -> Self {
+        match e {
+            UnabortableTransactionError::Storage(e) => Self::Storage(e.into()),
+            UnabortableTransactionError::Conflict => Self::Conflict,
+        }
+    }
+}
+
+/// An error returned from the transaction closure
+#[derive(Debug)]
+pub enum SledConflictableTransactionError<T> {
+    /// A failure returned by the user that will abort the transaction
+    Abort(T),
+    #[doc(hidden)]
+    Conflict,
+    /// A storage related error
+    Storage(io::Error),
+}
+
+impl<T: Display> Display for SledConflictableTransactionError<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Fmt_Result {
+        match self {
+            Self::Conflict => write!(f, "Transaction conflict"),
+            Self::Storage(e) => Display::fmt(&e, f),
+            Self::Abort(e) => Display::fmt(&e, f),
+        }
+    }
+}
+
+impl<T: Error + 'static> Error for SledConflictableTransactionError<T> {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Abort(e) => Some(e),
+            Self::Storage(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl<T> From<SledUnabortableTransactionError> for SledConflictableTransactionError<T> {
+    fn from(e: SledUnabortableTransactionError) -> Self {
+        match e {
+            SledUnabortableTransactionError::Storage(e) => Self::Storage(e),
+            SledUnabortableTransactionError::Conflict => Self::Conflict,
+        }
+    }
+}
+
+impl<T> From<SledConflictableTransactionError<T>> for ConflictableTransactionError<T> {
+    fn from(e: SledConflictableTransactionError<T>) -> Self {
+        match e {
+            SledConflictableTransactionError::Abort(e) => ConflictableTransactionError::Abort(e),
+            SledConflictableTransactionError::Conflict => ConflictableTransactionError::Conflict,
+            SledConflictableTransactionError::Storage(e) => {
+                ConflictableTransactionError::Storage(e.into())
             }
         }
     }
@@ -232,6 +371,8 @@ build_exceptions! {
     // KVSrv server error
 
     MetaSrvError(2501),
+    TransactionAbort(2502),
+    TransactionError(2503),
 
     // FS error
 
@@ -430,6 +571,21 @@ impl From<prost::EncodeError> for ErrorCode {
             "Bad bytes, cannot parse bytes with prost, cause: {}",
             error
         ))
+    }
+}
+
+impl<T: Display> From<SledConflictableTransactionError<T>> for ErrorCode {
+    fn from(error: SledConflictableTransactionError<T>) -> Self {
+        match error {
+            SledConflictableTransactionError::Abort(e) => {
+                ErrorCode::TransactionAbort(format!("Transaction abort, cause: {}", e))
+            }
+            SledConflictableTransactionError::Storage(e) => {
+                ErrorCode::TransactionError(format!("Transaction storage error, cause: {}", e))
+            }
+
+            _ => ErrorCode::MetaSrvError(format!("Unexpect transaction error")),
+        }
     }
 }
 

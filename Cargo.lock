@@ -1248,6 +1248,7 @@ dependencies = [
  "prost 0.9.0",
  "serde",
  "serde_json",
+ "sled",
  "sqlparser",
  "thiserror",
  "tonic",
@@ -1463,6 +1464,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-raft",
+ "async-trait",
  "byteorder",
  "common-base",
  "common-exception",

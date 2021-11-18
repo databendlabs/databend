@@ -27,6 +27,8 @@ use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledTree;
+use common_meta_sled_store::TransactionSledTree;
+use common_meta_sled_store::TreeAPI;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::DatabaseMeta;
@@ -246,9 +248,15 @@ impl StateMachine {
         let log_id = &entry.log_id;
 
         let sm_meta = self.sm_meta();
-        sm_meta
-            .insert(&LastApplied, &StateMachineMetaValue::LogId(*log_id))
-            .await?;
+        sm_meta.txn(move |t| {
+            t.insert(&LastApplied, &StateMachineMetaValue::LogId(*log_id))
+                .await?;
+            t.txn_tree.flush();
+            Ok(())
+        });
+        // sm_meta
+        //     .insert(&LastApplied, &StateMachineMetaValue::LogId(*log_id))
+        //     .await?;
 
         match entry.payload {
             EntryPayload::Blank => {}
