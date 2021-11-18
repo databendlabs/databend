@@ -522,7 +522,7 @@ fn test_inet_aton_function() -> Result<()> {
                 Series::new(["invalid"]).into(),
                 DataField::new("arg1", DataType::String, true),
             ),
-            expect: Ok(DataColumn::Constant(DataValue::UInt32(Some(0)), 1)),
+            expect: Ok(DataColumn::Constant(DataValue::UInt32(None), 1)),
         },
     ];
 

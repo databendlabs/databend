@@ -77,14 +77,12 @@ impl Function for InetAtonFunction {
             .to_minimal_array()?
             .cast_with_type(&DataType::String)?;
 
-        let opt_iter = opt_iter.string()?.into_iter().map(|val_opt| {
-            val_opt.map(|v| {
-                u32::from(
-                    String::from_utf8_lossy(v)
-                        .parse::<std::net::Ipv4Addr>()
-                        .unwrap_or(std::net::Ipv4Addr::new(0, 0, 0, 0)),
-                )
-            })
+        let opt_iter = opt_iter.string()?.into_iter().map(|vo| match vo {
+            Some(v) => match String::from_utf8_lossy(v).parse::<std::net::Ipv4Addr>() {
+                Ok(a) => Some(u32::from(a)),
+                Err(_) => None,
+            },
+            None => None,
         });
 
         let result = DFUInt32Array::new_from_opt_iter(opt_iter);
