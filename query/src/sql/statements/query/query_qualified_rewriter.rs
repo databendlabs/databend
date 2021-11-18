@@ -96,18 +96,42 @@ impl QualifiedRewriter {
     fn rewrite_projection(&self, mut data: &mut QueryNormalizerData) -> Result<()> {
         let mut projection_expressions = Vec::with_capacity(data.projection_expressions.len());
 
-        // TODO: replace * or alias.*
+        // TODO: alias.*
         for projection_expression in &data.projection_expressions {
-            match self.rewrite_expr(projection_expression) {
-                Ok(expr) => { projection_expressions.push(expr); }
-                Err(cause) => {
-                    return Err(cause.add_message_back(format!(" (while in analyze projection expr: {:?})", projection_expression)));
+            if let Expression::Alias(_, x) = projection_expression {
+                if let Expression::Wildcard = x.as_ref() {
+                    return Err(ErrorCode::SyntaxException("* AS alias is wrong syntax"));
+                }
+            }
+
+            match projection_expression {
+                Expression::Wildcard => self.expand_wildcard(&mut projection_expressions),
+                _ => match self.rewrite_expr(projection_expression) {
+                    Ok(expr) => { projection_expressions.push(expr); }
+                    Err(cause) => {
+                        return Err(cause.add_message_back(format!(" (while in analyze projection expr: {:?})", projection_expression)));
+                    }
                 }
             }
         }
 
         data.projection_expressions = projection_expressions;
         Ok(())
+    }
+
+    fn expand_wildcard(&self, columns_expression: &mut Vec<Expression>) {
+        for table_desc in self.tables_schema.get_tables_desc() {
+            for column_desc in table_desc.get_columns_desc() {
+                let name = column_desc.short_name.clone();
+                match column_desc.is_ambiguity {
+                    true => {
+                        let prefix = table_desc.get_name_parts().join(".");
+                        columns_expression.push(Expression::Column(format!("{}.{}", prefix, name)));
+                    }
+                    false => columns_expression.push(Expression::Column(name)),
+                }
+            }
+        }
     }
 
     fn rewrite_expr(&self, expr: &Expression) -> Result<Expression> {

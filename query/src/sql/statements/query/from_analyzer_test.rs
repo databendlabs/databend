@@ -17,6 +17,22 @@ async fn test_from_analyzer() -> Result<()> {
             query: "SELECT 1",
             expect: "QuerySchema { short_names: [\"dummy\"] }",
         },
+        TestCase {
+            name: "Table query",
+            query: "SELECT * FROM system.databases",
+            expect: "QuerySchema { short_names: [\"name\"] }",
+        },
+        TestCase {
+            name: "Subquery query",
+            query: "SELECT * FROM (SELECT name FROM system.databases)",
+            expect: "QuerySchema { short_names: [\"name\"] }",
+        },
+        // TODO:
+        TestCase {
+            name: "Subquery query with wildcard",
+            query: "SELECT * FROM (SELECT * FROM system.databases)",
+            expect: "QuerySchema { short_names: [\"name\"] }",
+        },
     ];
 
     for test_case in &tests {
