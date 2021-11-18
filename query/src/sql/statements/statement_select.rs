@@ -58,10 +58,8 @@ impl DfQueryStatement {
 
         // Allow `SELECT name FROM system.databases HAVING name = 'xxx'`
         if let Some(predicate) = &data.having_predicate {
-            // TODO: We can also push having into expressions, which helps:
-            //     - SELECT number + 5 AS number FROM numbers(100) HAVING number = 5;
-            //     - SELECT number FROM numbers(100) HAVING number + 5 > 5 ORDER BY number + 5 > 5 (bad sql)
-            analyze_state.having = Some(predicate.clone());
+            analyze_state.add_expression(predicate);
+            analyze_state.having = Some(rebase_expr(predicate, &analyze_state.expressions)?);
         }
 
         for item in &data.order_by_expressions {
@@ -176,7 +174,9 @@ impl DfQueryStatement {
 
         if !state.before_group_by_expressions.is_empty() {
             match Self::dry_run_exprs(&state.before_group_by_expressions, &data_block) {
-                Ok(res) => { data_block = res; }
+                Ok(res) => {
+                    data_block = res;
+                }
                 Err(cause) => {
                     return Err(cause.add_message_back(" (while in select before group by)"));
                 }

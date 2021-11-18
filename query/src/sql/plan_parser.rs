@@ -95,13 +95,15 @@ impl PlanParser {
         // S2: Apply a final aggregator plan.
 
         let mut builder = PlanBuilder::from(&plan);
-
         if !data.aggregate_expressions.is_empty() || !data.group_by_expressions.is_empty() {
-            let schema = plan.schema();
-            let aggr_expr = &data.aggregate_expressions;
-            let group_by_expr = &data.group_by_expressions;
             let before_group_by_expr = &data.before_group_by_expressions;
             builder = builder.expression(before_group_by_expr, "Before group by")?;
+            let after_expression = builder.build()?;
+
+            let schema = after_expression.schema();
+            let aggr_expr = &data.aggregate_expressions;
+            let group_by_expr = &data.group_by_expressions;
+            builder = PlanBuilder::from(&after_expression);
             builder = builder.aggregate_partial(aggr_expr, group_by_expr)?;
             builder = builder.aggregate_final(schema, aggr_expr, group_by_expr)?;
         }
