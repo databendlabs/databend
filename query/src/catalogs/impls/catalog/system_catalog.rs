@@ -155,8 +155,18 @@ impl Catalog for SystemCatalog {
         unimplemented!("programming error: SystemCatalog does not support create table")
     }
 
-    async fn drop_table(&self, _plan: DropTablePlan) -> Result<()> {
-        unimplemented!("programming error: SystemCatalog does not support drop table")
+    async fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
+        let db_name = &plan.db;
+        let table_name = &plan.table;
+        if db_name == "system" {
+            return Err(ErrorCode::UnImplement(
+                "Cannot drop table in system database",
+            ));
+        }
+        return Err(ErrorCode::UnknownTable(format!(
+            "Unknown table: '{}'",
+            table_name
+        )));
     }
 
     async fn create_database(&self, _plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
