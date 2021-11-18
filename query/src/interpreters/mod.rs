@@ -63,12 +63,14 @@ mod interpreter_user_create;
 mod plan_do_readsource;
 mod utils;
 
+mod interpreter_copy;
 mod interpreter_user_alter;
 #[allow(clippy::needless_range_loop)]
 mod plan_scheduler;
 
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
+pub use interpreter_copy::CopyInterpreter;
 pub use interpreter_database_create::CreateDatabaseInterpreter;
 pub use interpreter_database_drop::DropDatabaseInterpreter;
 pub use interpreter_describe_table::DescribeTableInterpreter;

@@ -110,6 +110,16 @@ pub struct DfKillStatement {
     pub object_id: Ident,
 }
 
+// https://www.postgresql.org/docs/13/sql-copy.html
+#[derive(Debug, Clone, PartialEq)]
+pub struct DfCopy {
+    pub name: ObjectName,
+    pub columns: Vec<Ident>,
+    pub location: String,
+    pub format: String,
+    pub options: Vec<SqlOption>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfCreateUser {
     pub if_not_exists: bool,
@@ -178,6 +188,9 @@ pub enum DfStatement {
     CreateUser(DfCreateUser),
     AlterUser(DfAlterUser),
     ShowUsers(DfShowUsers),
+
+    // Copy
+    Copy(DfCopy),
 
     // Grant
     GrantPrivilege(DfGrantStatement),

@@ -32,6 +32,7 @@ use common_planners::resolve_aliases_to_exprs;
 use common_planners::sort_to_inner_expr;
 use common_planners::unwrap_alias_exprs;
 use common_planners::AlterUserPlan;
+use common_planners::CopyPlan;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::CreateUserPlan;
@@ -63,6 +64,7 @@ use sqlparser::ast::Statement;
 use sqlparser::ast::TableFactor;
 use sqlparser::ast::UnaryOperator;
 
+use super::DfCopy;
 use crate::catalogs::Catalog;
 use crate::catalogs::ToReadDataSourcePlan;
 use crate::functions::ContextFunction;
@@ -178,6 +180,7 @@ impl PlanParser {
             DfStatement::ShowUsers(_) => {
                 self.build_from_sql("SELECT * FROM system.users ORDER BY name")
             }
+            DfStatement::Copy(v) => self.copy_to_plan(v),
             DfStatement::AlterUser(v) => self.sql_alter_user_to_plan(v),
             DfStatement::GrantPrivilege(v) => self.sql_grant_privilege_to_plan(v),
         }
@@ -442,6 +445,54 @@ impl PlanParser {
             db,
             table,
         }))
+    }
+
+    // we can transform copy plan into insert plan
+    #[tracing::instrument(level = "info", skip(self, copy_stmt), fields(ctx.id = self.ctx.get_id().as_str()))]
+    pub fn copy_to_plan(&self, copy_stmt: &DfCopy) -> Result<PlanNode> {
+        let mut db_name = self.ctx.get_current_database();
+        let mut tbl_name = copy_stmt.name.0[0].value.clone();
+
+        if copy_stmt.name.0.len() > 1 {
+            db_name = tbl_name;
+            tbl_name = copy_stmt.name.0[1].value.clone();
+        }
+
+        let table = self.ctx.get_table(&db_name, &tbl_name)?;
+        let mut schema = table.schema();
+        let tbl_id = table.get_id();
+
+        if !copy_stmt.columns.is_empty() {
+            let fields = copy_stmt
+                .columns
+                .iter()
+                .map(|ident| schema.field_with_name(&ident.value).map(|v| v.clone()))
+                .collect::<Result<Vec<_>>>()?;
+
+            schema = DataSchemaRefExt::create(fields);
+        }
+
+        let mut options = HashMap::new();
+        for p in copy_stmt.options.iter() {
+            options.insert(
+                p.name.value.to_lowercase(),
+                p.value
+                    .to_string()
+                    .trim_matches(|s| s == '\'' || s == '"')
+                    .to_string(),
+            );
+        }
+
+        let plan_node = CopyPlan {
+            db_name,
+            tbl_name,
+            tbl_id,
+            schema,
+            location: copy_stmt.location.clone(),
+            format: copy_stmt.format.clone(),
+            options,
+        };
+        Ok(PlanNode::Copy(plan_node))
     }
 
     // DfTruncateTable to plan.

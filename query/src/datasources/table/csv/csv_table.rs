@@ -104,8 +104,6 @@ impl Table for CsvTable {
             .get_user_data()?
             .expect("DatabendQueryContext should not be None");
 
-        let conf = ctx.get_config().storage.disk;
-
         let ctx_clone = ctx.clone();
         let schema = plan.schema();
         let block_size = ctx.get_settings().get_max_block_size()? as usize;
@@ -123,10 +121,7 @@ impl Table for CsvTable {
                             break;
                         }
 
-                        /// TODO use dal, but inputstream is not send which is need for csv-async reader
                         let part = partitions.get(0).unwrap();
-                        let file = part.name.clone();
-
                         let mut source = CsvSource::try_create(dal.clone(), part.name.clone(), schema.clone(), has_header, block_size)?;
 
                         loop {
