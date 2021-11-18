@@ -137,7 +137,17 @@ impl Catalog for OverlaidCatalog {
     }
 
     async fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
-        self.bottom.drop_table(plan).await
+        let r = self.read_only.drop_table(plan.clone()).await;
+        match r {
+            Err(e) => {
+                if e.code() == ErrorCode::UnknownTable("").code() {
+                    self.bottom.drop_table(plan).await
+                } else {
+                    Err(e)
+                }
+            }
+            Ok(()) => Ok(()),
+        }
     }
 
     fn build_table(&self, table_info: &TableInfo) -> common_exception::Result<Arc<dyn Table>> {
