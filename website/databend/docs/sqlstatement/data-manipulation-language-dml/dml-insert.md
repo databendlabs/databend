@@ -5,7 +5,8 @@ title: INSERT
 
 Writing data.
 
-## Syntax
+## Insert Into Statement
+### Syntax
 
 ```
 INSERT INTO [db.]table [(c1, c2, c3)] VALUES (v11, v12, v13), (v21, v22, v23), ...
@@ -17,9 +18,9 @@ INSERT INTO [db.]table [(c1, c2, c3)] VALUES (v11, v12, v13), (v21, v22, v23), .
 
     Remote engine is `remote`, will be stored in the remote DatabendStore cluster.
 
-## Examples
+### Examples
 
-### Memory engine
+#### Memory engine
 
 ```sql
 mysql> CREATE TABLE test(a UInt64, b Varchar) Engine = Memory;
@@ -34,4 +35,46 @@ mysql> SELECT * FROM test;
 |  888 | stars |
 | 1024 | stars |
 +------+-------+
+```
+
+## Inserting the Results of SELECT
+### Syntax
+
+```
+INSERT INTO [db.]table [(c1, c2, c3)] SELECT ...
+```
+!!! note
+    Columns are mapped according to their position in the SELECT clause, So the number of columns in SELECT should be greater or equal to the INSERT table.
+
+    The data type of columns in the SELECT and INSERT table could be different, if necessary, type casting will be performed. 
+
+### Examples
+
+#### Memory engine
+
+```sql
+mysql> CREATE TABLE select_table(a Varchar, b Varchar, c Varchar) Engine = Memory;
+mysql> INSERT INTO select_table values('1','11','abc');
+mysql> SELECT * FROM select_table;
++------+------+------+
+| a    | b    | c    |
++------+------+------+
+| 1    | 11   | abc  |
++------+------+------+
+
+mysql> CREATE TABLE test(c1 UInt8, c2 UInt64, c3 String) Engine = Memory;
+mysql> INSERT INTO test SELECT * FROM select_table;
+mysql> SELECT * from test;
++------+------+------+
+| c1   | c2   | c3   |
++------+------+------+
+|    1 |   11 | abc  |
++------+------+------+
+
+mysql> SELECT toTypeName(c1), toTypeName(c2), toTypeName(c3) from test;
++----------------+----------------+----------------+
+| toTypeName(c1) | toTypeName(c2) | toTypeName(c3) |
++----------------+----------------+----------------+
+| UInt8          | UInt64         | String         |
++----------------+----------------+----------------+
 ```
