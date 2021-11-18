@@ -4,7 +4,7 @@ use common_exception::{ErrorCode, Result};
 use common_planners::Expression;
 use crate::sessions::DatabendQueryContextRef;
 use crate::sql::statements::query::{JoinedColumnDesc, JoinedSchema};
-use crate::sql::statements::query::query_schema::JoinedTableDesc;
+use crate::sql::statements::query::query_schema_joined::JoinedTableDesc;
 
 pub struct QualifiedRewriter {
     tables_schema: JoinedSchema,

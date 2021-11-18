@@ -2,17 +2,17 @@ use std::fs::read;
 use sqlparser::ast::{FunctionArg, Ident, JoinOperator, ObjectName, Query, TableAlias, TableFactor, TableWithJoins};
 use crate::sessions::DatabendQueryContextRef;
 use common_exception::{ErrorCode, Result};
-use crate::sql::statements::query::query_schema::JoinedSchema;
+use crate::sql::statements::query::query_schema_joined::JoinedSchema;
 use crate::sql::statements::{AnalyzableStatement, AnalyzedResult, DfQueryStatement};
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 
-pub struct FromAnalyzer {
+pub struct JoinedSchemaAnalyzer {
     ctx: DatabendQueryContextRef,
 }
 
-impl FromAnalyzer {
-    pub fn create(ctx: DatabendQueryContextRef) -> FromAnalyzer {
-        FromAnalyzer { ctx }
+impl JoinedSchemaAnalyzer {
+    pub fn create(ctx: DatabendQueryContextRef) -> JoinedSchemaAnalyzer {
+        JoinedSchemaAnalyzer { ctx }
     }
 
     pub async fn analyze(&self, query: &DfQueryStatement) -> Result<JoinedSchema> {

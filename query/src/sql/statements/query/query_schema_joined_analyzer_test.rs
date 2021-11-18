@@ -2,10 +2,10 @@ use common_base::tokio;
 use common_exception::{ErrorCode, Result};
 use crate::sql::{DfParser, DfStatement};
 use crate::tests::try_create_context;
-use crate::sql::statements::query::from_analyzer::FromAnalyzer;
+use crate::sql::statements::query::query_schema_joined_analyzer::JoinedSchemaAnalyzer;
 
 #[tokio::test]
-async fn test_from_analyzer() -> Result<()> {
+async fn test_joined_schema_analyzer() -> Result<()> {
     struct TestCase {
         name: &'static str,
         query: &'static str,
@@ -40,8 +40,8 @@ async fn test_from_analyzer() -> Result<()> {
 
         match statements.remove(0) {
             DfStatement::Query(query) => {
-                let from_analyzer = FromAnalyzer::create(ctx);
-                assert_eq!(test_case.expect, format!("{:?}", from_analyzer.analyze(&query).await?), "{:#?}", test_case.name)
+                let analyzer = JoinedSchemaAnalyzer::create(ctx);
+                assert_eq!(test_case.expect, format!("{:?}", analyzer.analyze(&query).await?), "{:#?}", test_case.name)
             }
             _ => {
                 return Err(ErrorCode::LogicalError("Cannot get analyze query state."));

@@ -45,19 +45,6 @@ impl ExpressionAnalyzer {
         }
     }
 
-    pub fn extend_wildcard_exprs(&self) -> Result<Vec<Expression>> {
-        unimplemented!()
-        // let data_schema = self.schema.to_data_schema();
-        //
-        // let columns_field = data_schema.fields();
-        // let mut expressions = Vec::with_capacity(columns_field.len());
-        // for column_field in columns_field {
-        //     expressions.push(Expression::Column(column_field.name().clone()));
-        // }
-        //
-        // Ok(expressions)
-    }
-
     fn analyze_value(value: &Value, args: &mut Vec<Expression>) -> Result<()> {
         args.push(ValueExprAnalyzer::analyze(value)?);
         Ok(())

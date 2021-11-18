@@ -10,7 +10,7 @@ use crate::sessions::{DatabendQueryContextRef};
 use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
 use crate::sql::statements::analyzer_expr::{ExpressionAnalyzer};
 use crate::sql::statements::analyzer_statement::QueryAnalyzeState;
-use crate::sql::statements::query::{JoinedSchema, JoinedColumnDesc, FromAnalyzer, QualifiedRewriter};
+use crate::sql::statements::query::{JoinedSchema, JoinedColumnDesc, JoinedSchemaAnalyzer, QualifiedRewriter};
 use crate::sql::statements::query::{QueryNormalizerData, QueryNormalizer};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -28,18 +28,18 @@ pub struct DfQueryStatement {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfQueryStatement {
     async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
-        let from_analyzer = FromAnalyzer::create(ctx.clone());
-        let analyzed_from_schema = from_analyzer.analyze(self).await?;
+        let analyzer = JoinedSchemaAnalyzer::create(ctx.clone());
+        let joined_schema = analyzer.analyze(self).await?;
 
         let normal_transform = QueryNormalizer::create(ctx.clone());
         let normalized_result = normal_transform.transform(self).await?;
 
-        let schema = analyzed_from_schema.clone();
+        let schema = joined_schema.clone();
         let qualified_rewriter = QualifiedRewriter::create(schema, ctx.clone());
         let normalized_result = qualified_rewriter.rewrite(normalized_result).await?;
 
         let analyze_state = self.analyze_query(normalized_result).await?;
-        self.finalize(analyzed_from_schema, analyze_state).await
+        self.finalize(joined_schema, analyze_state).await
     }
 }
 

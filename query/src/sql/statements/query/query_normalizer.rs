@@ -4,7 +4,7 @@ use common_exception::Result;
 use crate::sessions::{DatabendQueryContextRef, DatabendQueryContext};
 use common_planners::{Expression, extract_aliases, find_aggregate_exprs_in_expr, resolve_aliases_to_exprs};
 use std::collections::HashMap;
-use crate::sql::statements::query::query_schema::JoinedSchema;
+use crate::sql::statements::query::query_schema_joined::JoinedSchema;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::{DfQueryStatement, AnalyzableStatement, AnalyzedResult};
 use std::convert::TryFrom;
