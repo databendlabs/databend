@@ -137,7 +137,17 @@ impl Catalog for OverlaidCatalog {
     }
 
     async fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
-        self.bottom.drop_table(plan).await
+        let r = self.read_only.drop_table(plan.clone()).await;
+        match r {
+            Err(e) => {
+                if e.code() == ErrorCode::UnknownTable("").code() {
+                    self.bottom.drop_table(plan).await
+                } else {
+                    Err(e)
+                }
+            }
+            Ok(()) => Ok(()),
+        }
     }
 
     fn build_table(&self, table_info: &TableInfo) -> common_exception::Result<Arc<dyn Table>> {
@@ -190,12 +200,37 @@ impl Catalog for OverlaidCatalog {
         &self,
         plan: CreateDatabasePlan,
     ) -> common_exception::Result<CreateDatabaseReply> {
+        if self.read_only.exists_database(&plan.db).await? {
+            return Err(ErrorCode::DatabaseAlreadyExists(format!(
+                "{} database exists",
+                plan.db
+            )));
+        }
         // create db in BOTTOM layer only
         self.bottom.create_database(plan).await
     }
 
     async fn drop_database(&self, plan: DropDatabasePlan) -> common_exception::Result<()> {
         // drop db in BOTTOM layer only
+        if self.read_only.exists_database(&plan.db).await? {
+            return Err(ErrorCode::UnexpectedError(format!(
+                "user can not drop {} database",
+                plan.db
+            )));
+        }
         self.bottom.drop_database(plan).await
+    }
+
+    async fn exists_database(&self, db_name: &str) -> common_exception::Result<bool> {
+        match self.get_database(db_name).await {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                if err.code() == ErrorCode::UnknownDatabaseCode() {
+                    Ok(false)
+                } else {
+                    Err(err)
+                }
+            }
+        }
     }
 }

@@ -102,6 +102,7 @@ impl TestFixture {
             tbl_name: self.default_table(),
             tbl_id: table.get_id(),
             schema: TestFixture::default_schema(),
+            select_plan: None,
             values_opt: None,
         }
     }

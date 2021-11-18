@@ -85,6 +85,7 @@ async fn test_min_max_index() -> Result<()> {
         tbl_name: test_tbl_name.to_string(),
         tbl_id: table.get_id(),
         schema: test_schema.clone(),
+        select_plan: None,
         values_opt: None,
     };
     let io_ctx = Arc::new(ctx.get_cluster_table_io_context()?);

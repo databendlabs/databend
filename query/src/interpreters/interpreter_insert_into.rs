@@ -17,7 +17,10 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::CastFunction;
 use common_planners::InsertIntoPlan;
+use common_planners::PlanNode;
+use common_streams::CastStream;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_streams::SourceStream;
@@ -25,11 +28,13 @@ use common_streams::ValueSource;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::interpreters::SelectInterpreter;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct InsertIntoInterpreter {
     ctx: DatabendQueryContextRef,
     plan: InsertIntoPlan,
+    select: Option<Arc<dyn Interpreter>>,
 }
 
 impl InsertIntoInterpreter {
@@ -37,7 +42,23 @@ impl InsertIntoInterpreter {
         ctx: DatabendQueryContextRef,
         plan: InsertIntoPlan,
     ) -> Result<InterpreterPtr> {
-        Ok(Arc::new(InsertIntoInterpreter { ctx, plan }))
+        let select = match plan.select_plan.clone().take() {
+            Some(select_plan) => {
+                if let PlanNode::Select(select_plan_node) = *select_plan {
+                    Ok(Some(SelectInterpreter::try_create(
+                        ctx.clone(),
+                        select_plan_node,
+                    )?))
+                } else {
+                    Result::Err(ErrorCode::UnknownTypeOfQuery(format!(
+                        "Unsupported select query plan for insert_into interpreter:{}",
+                        select_plan.name()
+                    )))
+                }
+            }
+            None => Ok(None),
+        }?;
+        Ok(Arc::new(InsertIntoInterpreter { ctx, plan, select }))
     }
 }
 
@@ -64,6 +85,27 @@ impl Interpreter for InsertIntoInterpreter {
                 ValueSource::new(Cursor::new(values), self.plan.schema(), block_size);
             let stream_source = SourceStream::new(Box::new(values_source));
             stream_source.execute().await
+        } else if let Some(select_executor) = &self.select {
+            let output_schema = self.plan.schema();
+            let select_schema = select_executor.schema();
+            if select_schema.fields().len() < output_schema.fields().len() {
+                return Err(ErrorCode::BadArguments(
+                    "Fields in select statement is less than expected",
+                ));
+            }
+
+            let mut functions = Vec::with_capacity(output_schema.fields().len());
+            for field in output_schema.fields() {
+                let cast_function =
+                    CastFunction::create("cast".to_string(), field.data_type().clone())?;
+                functions.push(cast_function);
+            }
+            let stream: SendableDataBlockStream = Box::pin(CastStream::try_create(
+                select_executor.execute(None).await?,
+                output_schema,
+                functions,
+            )?);
+            Ok(stream)
         } else {
             input_stream
                 .take()

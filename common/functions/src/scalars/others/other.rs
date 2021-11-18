@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::inet_aton::InetAtonFunction;
 use super::inet_ntoa::InetNtoaFunction;
 use super::running_difference_function::RunningDifferenceFunction;
 use crate::scalars::function_factory::FunctionFactory;
@@ -24,5 +25,7 @@ impl OtherFunction {
         factory.register("runningDifference", RunningDifferenceFunction::desc());
         factory.register("inet_ntoa", InetNtoaFunction::desc());
         factory.register("IPv4NumToString", InetNtoaFunction::desc());
+        factory.register("inet_aton", InetAtonFunction::desc());
+        factory.register("IPv4StringToNum", InetAtonFunction::desc());
     }
 }

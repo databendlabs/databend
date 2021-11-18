@@ -15,6 +15,8 @@
 use common_datavalues::DataSchemaRef;
 use common_meta_types::MetaId;
 
+use crate::PlanNode;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct InsertIntoPlan {
     pub db_name: String,
@@ -22,6 +24,7 @@ pub struct InsertIntoPlan {
     pub tbl_id: MetaId,
     pub schema: DataSchemaRef,
 
+    pub select_plan: Option<Box<PlanNode>>,
     pub values_opt: Option<String>,
 }
 
