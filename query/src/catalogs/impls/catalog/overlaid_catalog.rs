@@ -190,12 +190,37 @@ impl Catalog for OverlaidCatalog {
         &self,
         plan: CreateDatabasePlan,
     ) -> common_exception::Result<CreateDatabaseReply> {
+        if self.read_only.exists_database(&plan.db).await? {
+            return Err(ErrorCode::DatabaseAlreadyExists(format!(
+                "{} database exists",
+                plan.db
+            )));
+        }
         // create db in BOTTOM layer only
         self.bottom.create_database(plan).await
     }
 
     async fn drop_database(&self, plan: DropDatabasePlan) -> common_exception::Result<()> {
         // drop db in BOTTOM layer only
+        if self.read_only.exists_database(&plan.db).await? {
+            return Err(ErrorCode::UnexpectedError(format!(
+                "user can not drop {} database",
+                plan.db
+            )));
+        }
         self.bottom.drop_database(plan).await
+    }
+
+    async fn exists_database(&self, db_name: &str) -> common_exception::Result<bool> {
+        match self.get_database(db_name).await {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                if err.code() == ErrorCode::UnknownDatabaseCode() {
+                    Ok(false)
+                } else {
+                    Err(err)
+                }
+            }
+        }
     }
 }

@@ -80,4 +80,6 @@ pub trait Catalog {
     async fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply>;
 
     async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
+
+    async fn exists_database(&self, db_name: &str) -> Result<bool>;
 }
