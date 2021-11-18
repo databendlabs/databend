@@ -17,6 +17,7 @@ use common_exception::Result;
 
 use crate::datasources::table::csv::csv_table::CsvTable;
 use crate::datasources::table::fuse::FuseTable;
+use crate::datasources::table::github::github_table::GithubTable;
 use crate::datasources::table::memory::memory_table::MemoryTable;
 use crate::datasources::table::null::null_table::NullTable;
 use crate::datasources::table::parquet::parquet_table::ParquetTable;
@@ -28,5 +29,6 @@ pub fn register_prelude_tbl_engines(registry: &TableEngineRegistry) -> Result<()
     registry.register("NULL", std::sync::Arc::new(NullTable::try_create))?;
     registry.register("MEMORY", std::sync::Arc::new(MemoryTable::try_create))?;
     registry.register("FUSE", std::sync::Arc::new(FuseTable::try_create))?;
+    registry.register("GITHUB", std::sync::Arc::new(GithubTable::try_create))?;
     Ok(())
 }
