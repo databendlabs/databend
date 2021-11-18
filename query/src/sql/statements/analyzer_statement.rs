@@ -16,6 +16,7 @@ pub struct QueryAnalyzeState {
     pub order_by_expression: Vec<Expression>,
     // before order or before projection expression plan
     pub expressions: Vec<Expression>,
+    pub projection_expressions: Vec<Expression>,
 
 }
 

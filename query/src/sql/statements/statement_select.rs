@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use sqlparser::ast::{Expr, Offset, OrderByExpr, SelectItem, TableWithJoins};
 
 use common_exception::{ErrorCode, Result};
@@ -7,7 +8,7 @@ use crate::sessions::{DatabendQueryContextRef};
 use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
 use crate::sql::statements::analyzer_expr::{ExpressionAnalyzer};
 use crate::sql::statements::analyzer_statement::QueryAnalyzeState;
-use crate::sql::statements::query::{AnalyzeQuerySchema, AnalyzeQueryColumnDesc, FromAnalyzer};
+use crate::sql::statements::query::{AnalyzeQuerySchema, AnalyzeQueryColumnDesc, FromAnalyzer, QualifiedRewriter};
 use crate::sql::statements::query::{QueryNormalizerData, QueryNormalizer};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -30,38 +31,43 @@ pub enum QueryRelation {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfQueryStatement {
     async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+        let from_analyzer = FromAnalyzer::create(ctx.clone());
+        let analyzed_from_schema = from_analyzer.analyze(self).await?;
+
         let normal_transform = QueryNormalizer::create(ctx.clone());
         let normalized_result = normal_transform.transform(self).await?;
 
-        let from_analyzer = FromAnalyzer::create(ctx.clone());
-        let query_schema = from_analyzer.analyze(self).await?;
+        let schema = analyzed_from_schema.clone();
+        let qualified_rewriter = QualifiedRewriter::create(schema, ctx.clone());
+        let normalized_result = qualified_rewriter.rewrite(normalized_result).await?;
 
         match normalized_result.group_by_expressions.is_empty() && normalized_result.aggregate_expressions.is_empty() {
-            true => self.analyze_without_aggr(query_schema, normalized_result).await,
-            false => self.analyze_with_aggr(query_schema, normalized_result).await
+            true => self.analyze_without_aggr(normalized_result).await,
+            false => self.analyze_with_aggr(normalized_result).await
         }
     }
 }
 
 impl DfQueryStatement {
-    async fn analyze_with_aggr(&self, schema: AnalyzeQuerySchema, data: QueryNormalizerData) -> Result<AnalyzedResult> {
+    async fn analyze_with_aggr(&self, data: QueryNormalizerData) -> Result<AnalyzedResult> {
         unimplemented!()
     }
 
-    async fn analyze_without_aggr(&self, schema: AnalyzeQuerySchema, data: QueryNormalizerData) -> Result<AnalyzedResult> {
+    async fn analyze_without_aggr(&self, data: QueryNormalizerData) -> Result<AnalyzedResult> {
         let mut analyze_state = QueryAnalyzeState::default();
 
         if let Some(predicate) = &data.filter_predicate {
-            Self::verify_no_aggregate(predicate, "filter")?;
             analyze_state.filter = Some(predicate.clone());
         }
 
         for item in &data.projection_expressions {
-            // TODO:
             match item {
                 Expression::Alias(_, expr) => analyze_state.add_expression(expr),
                 _ => analyze_state.add_expression(item),
             }
+
+            let rebased_expr = rebase_expr(item, &analyze_state.expressions)?;
+            analyze_state.projection_expressions.push(rebased_expr);
         }
 
         // Allow `SELECT name FROM system.databases HAVING name = 'xxx'`
@@ -75,7 +81,6 @@ impl DfQueryStatement {
         for item in &data.order_by_expressions {
             match item {
                 Expression::Sort { expr, asc, nulls_first } => {
-                    // TODO: 需要注意如果推送的expression与原有的expression产生冲突, 我们需要rename order by
                     analyze_state.add_expression(&expr);
                     analyze_state.order_by_expression.push(Expression::Sort {
                         expr: Box::new(rebase_expr(&expr, &analyze_state.expressions)?),

@@ -4,6 +4,7 @@ use std::sync::Arc;
 use common_exception::{Result, ErrorCode};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use common_planners::Expression;
 
 #[derive(Clone)]
 pub struct AnalyzeQuerySchema {
@@ -46,6 +47,10 @@ impl AnalyzeQuerySchema {
         self.short_name_columns.contains_key(column_name)
     }
 
+    pub fn get_tables_desc(&self) -> &[AnalyzeQueryTableDesc] {
+        &self.tables_long_name_columns
+    }
+
     pub fn get_column_by_fullname(&self, fullname: &[String]) -> Option<&AnalyzeQueryColumnDesc> {
         for table_desc in &self.tables_long_name_columns {
             if table_desc.name_parts.len() < fullname.len()
@@ -61,24 +66,6 @@ impl AnalyzeQuerySchema {
         // TODO: We need to check whether they are references to payload types when we support complex types.
         // Such as: CREATE TABLE test(a STRUCT(b tinyint)); SELECT a.b FROM test;
         None
-    }
-
-    pub fn add_projection(&mut self, desc: AnalyzeQueryColumnDesc, replace: bool) -> Result<()> {
-        let short_name = desc.short_name.clone();
-
-        if replace || !self.short_name_columns.contains_key(&short_name) {
-            self.short_name_columns.insert(short_name.clone(), desc);
-        }
-
-        for table_desc in &mut self.tables_long_name_columns {
-            for column_desc in &mut table_desc.columns_desc {
-                if !column_desc.is_ambiguity && *column_desc.short_name == short_name {
-                    column_desc.is_ambiguity = true;
-                }
-            }
-        }
-
-        Ok(())
     }
 
     pub fn to_data_schema(&self) -> DataSchemaRef {
@@ -137,9 +124,9 @@ impl Debug for AnalyzeQuerySchema {
 }
 
 #[derive(Clone)]
-struct AnalyzeQueryTableDesc {
-    name_parts: Vec<String>,
-    columns_desc: Vec<AnalyzeQueryColumnDesc>,
+pub struct AnalyzeQueryTableDesc {
+    pub name_parts: Vec<String>,
+    pub columns_desc: Vec<AnalyzeQueryColumnDesc>,
 }
 
 impl AnalyzeQueryTableDesc {
@@ -159,10 +146,10 @@ impl AnalyzeQueryTableDesc {
 
 #[derive(Clone)]
 pub struct AnalyzeQueryColumnDesc {
-    short_name: String,
-    data_type: DataType,
-    nullable: bool,
-    is_ambiguity: bool,
+    pub short_name: String,
+    pub data_type: DataType,
+    pub nullable: bool,
+    pub is_ambiguity: bool,
 }
 
 impl AnalyzeQueryColumnDesc {
@@ -185,11 +172,6 @@ impl AnalyzeQueryColumnDesc {
     }
 
     pub fn column_name(&self) -> String {
-        // TODO: Full name may still be ambiguous in the join? for example:
-        // SELECT * FROM
-        // (SELECT column_a FROM table_a),
-        // (SELECT column_a FROM table_b),
-        // (SELECT 'failure' AS `table_b.column_a` FROM table_c)
         match self.is_ambiguity {
             true => unimplemented!(),
             false => self.short_name.clone()
