@@ -13,6 +13,9 @@
 // limitations under the License.
 
 use crate::scalars::function_factory::FunctionFactory;
+use crate::scalars::Md5HashFunction;
+use crate::scalars::Sha1HashFunction;
+use crate::scalars::Sha2HashFunction;
 use crate::scalars::SipHashFunction;
 
 #[derive(Clone)]
@@ -22,5 +25,9 @@ impl HashesFunction {
     pub fn register(factory: &mut FunctionFactory) {
         factory.register("siphash", SipHashFunction::desc());
         factory.register("siphash64", SipHashFunction::desc());
+        factory.register("md5", Md5HashFunction::desc());
+        factory.register("sha", Sha1HashFunction::desc());
+        factory.register("sha1", Sha1HashFunction::desc());
+        factory.register("sha2", Sha2HashFunction::desc());
     }
 }
