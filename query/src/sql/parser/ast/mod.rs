@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod ast_visitor;
 mod expression;
 mod query;
 mod statement;
