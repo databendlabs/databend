@@ -13,5 +13,4 @@
 //  limitations under the License.
 //
 
-pub const METRIC_DAL_READ_BYTES: &str = "dal_read_bytes";
-pub const METRIC_DAL_WRITE_BYTES: &str = "dal_write_bytes";
+mod data_accessor_interceptor;
