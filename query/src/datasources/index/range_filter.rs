@@ -20,12 +20,14 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::Monotonicity;
 use common_planners::lit;
 use common_planners::Expression;
 use common_planners::Expressions;
 use common_planners::RewriteHelper;
 
 use crate::datasources::table::fuse::util::BlockStats;
+use crate::optimizers::MonotonicityCheckVisitor;
 use crate::optimizers::RequireColumnsVisitor;
 use crate::pipelines::transforms::ExpressionExecutor;
 
@@ -39,20 +41,20 @@ pub struct RangeFilter {
 impl RangeFilter {
     pub fn try_create(expr: &Expression, schema: DataSchemaRef) -> Result<Self> {
         let mut stat_columns: StatColumns = Vec::new();
-        let varifiable_expr = build_verifiable_expr(expr, schema, &mut stat_columns);
+        let verifiable_expr = build_verifiable_expr(expr, schema, &mut stat_columns);
         let input_fields = stat_columns
             .iter()
             .map(|c| c.stat_field.clone())
             .collect::<Vec<_>>();
         let input_schema = Arc::new(DataSchema::new(input_fields));
 
-        let output_fields = vec![varifiable_expr.to_data_field(&input_schema)?];
+        let output_fields = vec![verifiable_expr.to_data_field(&input_schema)?];
         let output_schema = DataSchemaRefExt::create(output_fields);
         let expr_executor = ExpressionExecutor::try_create(
-            "variable expression executor in RangeFilter",
+            "verifiable expression executor in RangeFilter",
             input_schema.clone(),
             output_schema,
-            vec![varifiable_expr],
+            vec![verifiable_expr],
             false,
         )?;
 
@@ -129,39 +131,6 @@ pub(crate) fn build_verifiable_expr(
     .map_or(unhandled.clone(), |mut v| v.build().unwrap_or(unhandled))
 }
 
-struct Monotonic {
-    is_monotonic: bool,
-    is_positive: bool,
-}
-
-// TODO: need add monotonic check for the expression, will move to FunctionFeatures.
-// ISSUE-2343: https://github.com/datafuselabs/databend/issues/2343
-fn is_monotonic_expression(expr: &Expression) -> Monotonic {
-    match expr {
-        Expression::Column(_) => Monotonic {
-            is_monotonic: true,
-            is_positive: true,
-        },
-        Expression::UnaryExpression { op, expr } => match op.as_str() {
-            "-" => {
-                let mut monotonic = is_monotonic_expression(expr);
-                if monotonic.is_monotonic {
-                    monotonic.is_positive = !monotonic.is_positive;
-                }
-                monotonic
-            }
-            _ => Monotonic {
-                is_monotonic: false,
-                is_positive: true,
-            },
-        },
-        _ => Monotonic {
-            is_monotonic: false,
-            is_positive: true,
-        },
-    }
-}
-
 fn inverse_operator(op: &str) -> Result<&str> {
     match op {
         "<" => Ok(">"),
@@ -225,7 +194,7 @@ struct VerifiableExprBuilder<'a> {
     op: &'a str,
     column_name: String,
     column_id: u32,
-    monotonic: Monotonic,
+    monotonic: Monotonicity,
     field: &'a DataField,
     stat_columns: &'a mut StatColumns,
 }
@@ -272,7 +241,9 @@ impl<'a> VerifiableExprBuilder<'a> {
             }
         };
 
-        let monotonic = is_monotonic_expression(&args[0]);
+        // TODO: maybe pass in the range with block stats MIN and MAX
+        let (monotonic, _column) = MonotonicityCheckVisitor::check_expression(&args[0], None)?;
+
         if !monotonic.is_monotonic {
             return Err(ErrorCode::UnknownException(
                 "Only support the monotonic expression",

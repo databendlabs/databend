@@ -17,11 +17,15 @@ use std::fmt;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnWithField;
 use common_datavalues::prelude::DataColumnsWithField;
+use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use dyn_clone::DynClone;
+
+use super::ComparisonGtEqFunction;
+use super::ComparisonLtEqFunction;
 
 // Represents the range of data column for monotonic function calculation.
 // For example, f(x) = x+2 where x > 10 should have variable range [10, MAX), and f(x) should
@@ -29,8 +33,46 @@ use dyn_clone::DynClone;
 // function's eval method.
 #[derive(Clone)]
 pub struct Range {
-    pub begin: DataColumnWithField, // should have constant DataValue
-    pub end: DataColumnWithField,   // should have constant DataValue
+    pub begin: Option<DataColumnWithField>, // should have constant DataValue
+    pub end: Option<DataColumnWithField>,   // should have constant DataValue
+}
+
+impl Range {
+    /// Check whether the range is greater-equal than zero.
+    /// The function will compare the 'begin' field in the range with zero, return true if begin >= 0.
+    pub fn gt_eq_zero(&self) -> Result<bool> {
+        if self.begin.is_none() {
+            return Ok(false);
+        }
+
+        let zero = DataColumn::Constant(DataValue::Int8(Some(0)), 1);
+        let zero_column_field =
+            DataColumnWithField::new(zero, DataField::new("", DataType::Int8, false));
+
+        let min_val = self.begin.clone().unwrap();
+        let f = ComparisonGtEqFunction::try_create_func("")?;
+        let res = f.eval(&[min_val, zero_column_field], 1)?;
+        let res_value = res.try_get(0)?;
+        res_value.as_bool()
+    }
+
+    /// Check whether the range is less-equal than zero.
+    /// The function will compare the 'end' field in the range with zero, return true if end <= 0.
+    pub fn lt_eq_zero(&self) -> Result<bool> {
+        if self.end.is_none() {
+            return Ok(false);
+        }
+
+        let zero = DataColumn::Constant(DataValue::Int8(Some(0)), 1);
+        let zero_column_field =
+            DataColumnWithField::new(zero, DataField::new("", DataType::Int8, false));
+
+        let max_val = self.end.clone().unwrap();
+        let f = ComparisonLtEqFunction::try_create_func("")?;
+        let res = f.eval(&[max_val, zero_column_field], 1)?;
+        let res_value = res.try_get(0)?;
+        res_value.as_bool()
+    }
 }
 
 // Represents the node of function tree for calculating monotonicity.
@@ -55,19 +97,17 @@ pub struct Range {
 #[derive(Clone)]
 pub enum MonotonicityNode {
     // Describe a function monotonicity information for the range of data.
-    Function(Monotonicity, Option<Range>),
-    Constant(DataValue),
-    Variable(String, Option<Range>),
+    Function(Monotonicity, Range),
+    Constant(DataColumnWithField),
+    Variable(String, Range),
 }
 
 #[derive(Clone)]
 pub struct Monotonicity {
-    // Is the function monotonous (nondecreasing or nonincreasing).
+    // Is the function monotonous (non-decreasing or non-increasing).
     pub is_monotonic: bool,
-    // true if the function is nondecreasing, false, if notincreasing. If is_monotonic = false, then it does not matter.
+    // true if the function is non-decreasing, false, if non-increasing. If is_monotonic = false, then it does not matter.
     pub is_positive: bool,
-    // Is true if function is monotonic on the whole input range.
-    pub is_always_monotonic: bool,
 }
 
 impl Monotonicity {
@@ -79,13 +119,15 @@ impl Monotonicity {
             // Field for indicating monotonic increase or decrease
             //   1. is_positive=true means non-decreasing
             //   2. is_positive=false means non-increasing
-            // when is_monotonic and is_always_monotonic are both false, just ignore ths is_positive information.
+            // when is_monotonic is false, just ignore ths is_positive information.
             is_positive: true,
+        }
+    }
 
-            // Field for indicating whether the function is always monotonic regardless of data rage.
-            // For example, f(x) = x+5 should have is_always_monotonic = true. When this field is true,
-            // is_monotonic MUST also be true.
-            is_always_monotonic: false,
+    pub fn flip_clone(&self) -> Self {
+        Self {
+            is_monotonic: self.is_monotonic,
+            is_positive: !self.is_positive,
         }
     }
 }
@@ -105,7 +147,10 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
 
     // return monotonicity node, should always return MonotonicityNode::Function
     fn get_monotonicity(&self, _args: &[MonotonicityNode]) -> Result<MonotonicityNode> {
-        Ok(MonotonicityNode::Function(Monotonicity::default(), None))
+        Ok(MonotonicityNode::Function(Monotonicity::default(), Range {
+            begin: None,
+            end: None,
+        }))
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType>;

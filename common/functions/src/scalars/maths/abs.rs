@@ -21,6 +21,9 @@ use common_exception::Result;
 use crate::scalars::function::Function;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::Monotonicity;
+use crate::scalars::MonotonicityNode;
+use crate::scalars::Range;
 
 #[derive(Clone)]
 pub struct AbsFunction {
@@ -102,6 +105,86 @@ impl Function for AbsFunction {
                 Ok(columns[0].column().clone())
             }
             _ => unreachable!(),
+        }
+    }
+
+    fn get_monotonicity(&self, args: &[MonotonicityNode]) -> Result<MonotonicityNode> {
+        let eval_single_row = |input: DataColumnWithField| -> Result<DataColumnWithField> {
+            let nullable = input.field().is_nullable();
+            let data_type = input.data_type().clone();
+            let output_data_column = self.eval(&[input], 1)?;
+            let output_data_type = self.return_type(&[data_type])?;
+            let output_data_column_field = DataColumnWithField::new(
+                output_data_column,
+                DataField::new("", output_data_type, nullable),
+            );
+            Ok(output_data_column_field)
+        };
+
+        let eval_optional_single_row =
+            |input_opt: Option<DataColumnWithField>| -> Result<Option<DataColumnWithField>> {
+                match input_opt {
+                    None => Ok(None),
+                    Some(val) => Ok(Some(eval_single_row(val)?)),
+                }
+            };
+
+        let flip_monotonicity =
+            |current_is_positive: bool, current_range: Range| -> Result<MonotonicityNode> {
+                // the range is <= 0, abs function is same as '-'
+                let new_begin = eval_optional_single_row(current_range.end)?;
+                let new_end = eval_optional_single_row(current_range.begin)?;
+                Ok(MonotonicityNode::Function(
+                    Monotonicity {
+                        is_monotonic: true,
+                        is_positive: !current_is_positive,
+                    },
+                    Range {
+                        begin: new_begin,
+                        end: new_end,
+                    },
+                ))
+            };
+
+        match &args[0] {
+            MonotonicityNode::Function(mono, range) => {
+                if !mono.is_monotonic {
+                    return Ok(args[0].clone());
+                }
+
+                if range.gt_eq_zero()? {
+                    // the range is >= 0, abs function does nothing
+                    Ok(args[0].clone())
+                } else if range.lt_eq_zero()? {
+                    // the range is <= 0, abs function does the same thing as '-'
+                    flip_monotonicity(mono.is_positive, range.clone())
+                } else {
+                    // the range covers zero, then the function is no longer monotonic any more
+                    Ok(MonotonicityNode::Function(Monotonicity::default(), Range {
+                        begin: None,
+                        end: None,
+                    }))
+                }
+            }
+            MonotonicityNode::Constant(val) => {
+                let output = eval_single_row(val.clone())?;
+                Ok(MonotonicityNode::Constant(output))
+            }
+            MonotonicityNode::Variable(_column_name, range) => {
+                if range.gt_eq_zero()? {
+                    // the range is >= 0, abs function does nothing
+                    Ok(args[0].clone())
+                } else if range.lt_eq_zero()? {
+                    // the range is <= 0, abs function does the same thing as '-'
+                    flip_monotonicity(true, range.clone())
+                } else {
+                    // the range covers zero, then the function is no longer monotonic any more
+                    Ok(MonotonicityNode::Function(Monotonicity::default(), Range {
+                        begin: None,
+                        end: None,
+                    }))
+                }
+            }
         }
     }
 }

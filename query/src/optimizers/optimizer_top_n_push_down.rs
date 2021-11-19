@@ -167,12 +167,9 @@ impl TopNPushDownImpl {
 
                 let column_name = columns.iter().next().unwrap();
 
-                let monotonic_checker = match self.variables_range.get(column_name) {
-                    None => MonotonicityCheckVisitor::new(None),
-                    Some(range) => MonotonicityCheckVisitor::new(Some(range.clone())),
-                };
+                let range: Option<Range> = self.variables_range.get(column_name).cloned();
 
-                match monotonic_checker.extract_sort_column(expr) {
+                match MonotonicityCheckVisitor::extract_sort_column(expr, range) {
                     Ok(new_expr) => Ok(new_expr),
                     Err(error) => {
                         tracing::error!(

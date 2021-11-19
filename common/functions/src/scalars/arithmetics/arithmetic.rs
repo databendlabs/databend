@@ -50,7 +50,37 @@ impl ArithmeticFunction {
     }
 
     pub fn try_create_func(op: DataValueArithmeticOperator) -> Result<Box<dyn Function>> {
-        Ok(Box::new(ArithmeticFunction { op }))
+        Ok(Box::new(ArithmeticFunction::new(op)))
+    }
+
+    pub fn new(op: DataValueArithmeticOperator) -> Self {
+        ArithmeticFunction { op }
+    }
+
+    pub fn eval_range_boundary(
+        &self,
+        args: &[Option<DataColumnWithField>],
+    ) -> Result<Option<DataColumnWithField>> {
+        // if any argument is None, the new boundary will be unknown thus return None.
+        if args.iter().any(|arg| arg.is_none()) {
+            return Ok(None);
+        }
+
+        let input = args
+            .iter()
+            .map(|arg_opt| arg_opt.clone().unwrap())
+            .collect::<Vec<_>>();
+        let new_data_column = self.eval(&input, 1)?;
+
+        let input_types = input
+            .iter()
+            .map(|arg| arg.data_type().clone())
+            .collect::<Vec<_>>();
+        let new_data_column_field = DataColumnWithField::new(
+            new_data_column,
+            DataField::new("", self.return_type(&input_types)?, false),
+        );
+        Ok(Some(new_data_column_field))
     }
 }
 
