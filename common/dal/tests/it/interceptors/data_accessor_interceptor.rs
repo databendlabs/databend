@@ -13,70 +13,50 @@
 //  limitations under the License.
 //
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::tokio;
 use common_base::tokio::io::SeekFrom;
-use common_dal::DalWithMetric;
+use common_dal::DalContext;
+use common_dal::DalMetrics;
 use common_dal::DataAccessor;
+use common_dal::DataAccessorInterceptor;
 use common_dal::Local;
-use common_dal::METRIC_DAL_READ_BYTES;
-use common_dal::METRIC_DAL_WRITE_BYTES;
-use common_metrics::dump_metric_samples;
 use common_metrics::init_default_metrics_recorder;
-use common_metrics::try_handle;
-use common_metrics::MetricSample;
-use common_metrics::MetricValue;
-use common_metrics::TenantLabel;
-use common_metrics::LABEL_KEY_CLUSTER;
-use common_metrics::LABEL_KEY_TENANT;
 use futures::AsyncReadExt;
 use futures::AsyncSeekExt;
 use tempfile::TempDir;
 
 struct TestFixture {
     _tmp_dir: TempDir,
-    label_map: HashMap<String, String>,
+    ctx: Arc<DalContext>,
     da_with_metric: Arc<dyn DataAccessor>,
     raw_da: Local,
 }
 
 impl TestFixture {
-    fn new(tenant_label: TenantLabel) -> Self {
-        let label_map = [
-            (
-                LABEL_KEY_CLUSTER.to_owned(),
-                tenant_label.cluster_id.to_owned(),
-            ),
-            (
-                LABEL_KEY_TENANT.to_owned(),
-                tenant_label.tenant_id.to_owned(),
-            ),
-        ]
-        .into_iter()
-        .collect::<HashMap<_, _>>();
-
+    fn new() -> Self {
+        let ctx = Arc::new(DalContext::create());
         let tmp_dir = TempDir::new().unwrap();
         let path = tmp_dir.path().to_str().unwrap();
         let raw_da = Local::new(path);
 
         // da with metric
         let local = Local::new(path);
-        let da_with_metric = DalWithMetric::new(tenant_label, Arc::new(local));
+        let da_with_metric = DataAccessorInterceptor::new(ctx.clone(), Arc::new(local));
 
         init_default_metrics_recorder();
 
         Self {
             _tmp_dir: tmp_dir,
-            label_map,
+            ctx,
             da_with_metric: Arc::new(da_with_metric),
             raw_da,
         }
     }
 
-    fn label_map(&self) -> &HashMap<String, String> {
-        &self.label_map
+    fn get_metrics(&self) -> DalMetrics {
+        self.ctx.get_metrics()
     }
 
     async fn gen_rand_content(&self, path: &str, len: i64) -> common_exception::Result<()> {
@@ -87,8 +67,7 @@ impl TestFixture {
 #[tokio::test]
 async fn test_dal_metrics_write() -> common_exception::Result<()> {
     // setup
-    let label = TenantLabel::new("test_tenant", "test_cluster");
-    let fixture = TestFixture::new(label);
+    let fixture = TestFixture::new();
     let dal = &fixture.da_with_metric;
 
     let len = 100;
@@ -98,45 +77,36 @@ async fn test_dal_metrics_write() -> common_exception::Result<()> {
     dal.put("test_path", random_bytes).await?;
 
     // check
-    let label_map = fixture.label_map();
-    let samples = dump_samples(METRIC_DAL_WRITE_BYTES, label_map);
-    assert_eq!(1, samples.len());
-    let sample = &samples[0];
-    assert_eq!(MetricValue::Counter(len as f64), sample.value);
+    let metrics = fixture.get_metrics();
+    assert_eq!(len, metrics.write_bytes);
     Ok(())
 }
 
 #[tokio::test]
 async fn test_dal_metrics_put_stream() -> common_exception::Result<()> {
     // setup
-    let label = TenantLabel::new("test_tenant_put_stream", "test_cluster_put_stream");
-    let fixture = TestFixture::new(label);
+    let fixture = TestFixture::new();
     let dal = &fixture.da_with_metric;
 
     let len = 100;
     let random_bytes: Vec<u8> = (0..len).map(|_| rand::random::<u8>()).collect();
 
     // write 100 bytes
-
     let stream = Box::pin(futures::stream::once(async move {
         Ok(bytes::Bytes::from(random_bytes))
     }));
     dal.put_stream("test_path", Box::new(stream), len).await?;
 
     // check
-    let label_map = fixture.label_map();
-    let samples = dump_samples(METRIC_DAL_WRITE_BYTES, label_map);
-    assert_eq!(1, samples.len());
-    let sample = &samples[0];
-    assert_eq!(MetricValue::Counter(len as f64), sample.value);
+    let metrics = fixture.get_metrics();
+    assert_eq!(len, metrics.write_bytes);
     Ok(())
 }
 
 #[tokio::test]
 async fn test_dal_metrics_read() -> common_exception::Result<()> {
     // setup
-    let label = TenantLabel::new("test_tenant_read", "test_cluster_read");
-    let fixture = TestFixture::new(label);
+    let fixture = TestFixture::new();
     let dal = &fixture.da_with_metric;
 
     let len = 100;
@@ -147,11 +117,9 @@ async fn test_dal_metrics_read() -> common_exception::Result<()> {
     let mut buf = Vec::new();
     input_stream.read_to_end(&mut buf).await?;
 
-    let label_map = fixture.label_map();
-    let samples = dump_samples(METRIC_DAL_READ_BYTES, label_map);
-    assert_eq!(1, samples.len());
-    let sample = &samples[0];
-    assert_eq!(MetricValue::Counter(len as f64), sample.value);
+    // check
+    let metrics = fixture.get_metrics();
+    assert_eq!(len as usize, metrics.read_bytes);
 
     Ok(())
 }
@@ -159,8 +127,7 @@ async fn test_dal_metrics_read() -> common_exception::Result<()> {
 #[tokio::test]
 async fn test_dal_metrics_partial_read() -> common_exception::Result<()> {
     // setup
-    let label = TenantLabel::new("test_tenant_partial_read", "test_cluster_partial_read");
-    let fixture = TestFixture::new(label);
+    let fixture = TestFixture::new();
     let dal = &fixture.da_with_metric;
 
     let len = 100;
@@ -173,21 +140,10 @@ async fn test_dal_metrics_partial_read() -> common_exception::Result<()> {
     input_stream.seek(SeekFrom::Current(seek_pos)).await?;
     input_stream.read_to_end(&mut buf).await?;
 
+    // check
     let partial_read_len = len - seek_pos;
-    let label_map = fixture.label_map();
-    let samples = dump_samples(METRIC_DAL_READ_BYTES, label_map);
-    assert_eq!(1, samples.len());
-    let sample = &samples[0];
-    assert_eq!(MetricValue::Counter(partial_read_len as f64), sample.value);
+    let metrics = fixture.get_metrics();
+    assert_eq!(partial_read_len as usize, metrics.read_bytes);
 
     Ok(())
-}
-
-fn dump_samples(name: &str, lbl_map: &HashMap<String, String>) -> Vec<MetricSample> {
-    let handle = try_handle().unwrap();
-    dump_metric_samples(handle)
-        .unwrap()
-        .into_iter()
-        .filter(|s| s.name == name && &s.labels == lbl_map)
-        .collect()
 }
