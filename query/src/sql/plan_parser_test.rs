@@ -115,13 +115,15 @@ fn test_plan_parser() -> Result<()> {
             name: "aggr-fail1",
             sql: "select number + 1, number + 3 from numbers(10) group by number + 2, number + 1",
             expect: "",
-            error: "Code: 26, displayText = Column `number` is not under aggregate function and not in GROUP BY: While processing [(number + 1), (number + 3)].",
+            // TODO: better message
+            error: "Code: 6, displayText = Unable to get field named \"number\". Valid fields: [\"(number + 2)\", \"(number + 1)\"] (while in select before projection).",
+            // error: "Code: 26, displayText = Column `number` is not under aggregate function and not in GROUP BY: While processing [(number + 1), (number + 3)].",
         },
         Test {
             name: "unsupported-function",
             sql: "select unsupported()",
             expect: "",
-            error: "Code: 8, displayText = Unsupported function: \"unsupported\".",
+            error: "Code: 8, displayText = Unsupported function: \"unsupported\" (while in analyze select projection).",
         },
         Test {
             name: "interval-passed",
@@ -175,12 +177,11 @@ fn test_plan_parser() -> Result<()> {
             \n                  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
             error: "",
         },
-
         Test {
             name: "unimplemented-cte",
             sql: "with t as ( select sum(number) n from numbers_mt(1000) )select * from t",
             expect: "",
-            error: "Code: 2, displayText = CTE is not yet implement.",
+            error: "Code: 5, displayText = sql parser error: CTE is not yet implement.",
         },
         Test {
             name: "kleene-logic-null",
@@ -207,7 +208,7 @@ fn test_plan_parser() -> Result<()> {
             Projection: metric:String, kind:String, labels:String, value:String\
             \n  ReadDataSource: scan partitions: [1], scan schema: [metric:String, kind:String, labels:String, value:String], statistics: [read_rows: 0, read_bytes: 0]",
             error: "",
-        }
+        },
     ];
 
     let ctx = crate::tests::try_create_context()?;

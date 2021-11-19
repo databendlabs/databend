@@ -76,7 +76,7 @@ impl ValueExprAnalyzer {
                 "Interval must have unit, e.g: '1 HOUR'",
             )),
             Some(DateTimeField::Year) => Self::year_month_interval(num * 12),
-            Some(DateTimeField::Month) => Self::year_month_interval(num * 12),
+            Some(DateTimeField::Month) => Self::year_month_interval(num),
             Some(DateTimeField::Day) => Self::day_time_interval(num, 0),
             Some(DateTimeField::Hour) => Self::day_time_interval(0, num * 3600 * 1000),
             Some(DateTimeField::Minute) => Self::day_time_interval(0, num * 60 * 1000),

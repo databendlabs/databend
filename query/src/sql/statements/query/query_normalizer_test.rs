@@ -29,7 +29,7 @@ async fn test_query_normalizer() -> Result<()> {
         TestCase {
             name: "Filter query",
             query: "SELECT * FROM numbers(100) WHERE number = 3",
-            expect: "NormalQuery { filter: =(number, 3), projection: [*] }",
+            expect: "NormalQuery { filter: (number = 3), projection: [*] }",
         },
         TestCase {
             name: "Group column query",
@@ -39,37 +39,37 @@ async fn test_query_normalizer() -> Result<()> {
         TestCase {
             name: "Group alias query",
             query: "SELECT number + 1 AS number FROM numbers(100) GROUP BY number",
-            expect: "NormalQuery { group by: [+(number, 1)], projection: [+(number, 1) as number] }",
+            expect: "NormalQuery { group by: [(number + 1)], projection: [(number + 1) as number] }",
         },
         TestCase {
             name: "Having column without group query",
             query: "SELECT number FROM numbers(100) HAVING number = 3",
-            expect: "NormalQuery { having: =(number, 3), projection: [number] }",
+            expect: "NormalQuery { having: (number = 3), projection: [number] }",
         },
         TestCase {
             name: "Having alias without group query",
             query: "SELECT number + 1 AS number FROM numbers(100) HAVING number = 3",
-            expect: "NormalQuery { having: =(+(number, 1), 3), projection: [+(number, 1) as number] }",
+            expect: "NormalQuery { having: ((number + 1) = 3), projection: [(number + 1) as number] }",
         },
         TestCase {
             name: "Having column with group query and without aggr",
             query: "SELECT number FROM numbers(100) GROUP BY number HAVING number = 3",
-            expect: "NormalQuery { group by: [number], having: =(number, 3), projection: [number] }",
+            expect: "NormalQuery { group by: [number], having: (number = 3), projection: [number] }",
         },
         TestCase {
             name: "Having alias with group query and without aggr",
             query: "SELECT number + 1 AS number FROM numbers(100) GROUP BY number HAVING number = 3",
-            expect: "NormalQuery { group by: [+(number, 1)], having: =(+(number, 1), 3), projection: [+(number, 1) as number] }",
+            expect: "NormalQuery { group by: [(number + 1)], having: ((number + 1) = 3), projection: [(number + 1) as number] }",
         },
         TestCase {
             name: "Having aggr column with group query and with aggr",
             query: "SELECT number AS number1 FROM numbers(100) GROUP BY number HAVING SUM(number1) = 3",
-            expect: "NormalQuery { group by: [number], having: =(SUM(number), 3), aggregate: [SUM(number)], projection: [number as number1] }",
+            expect: "NormalQuery { group by: [number], having: (SUM(number) = 3), aggregate: [SUM(number)], projection: [number as number1] }",
         },
         TestCase {
             name: "Having aggr alias with group query and with aggr",
             query: "SELECT SUM(number) AS number1 FROM numbers(100) GROUP BY number HAVING number1 = 3",
-            expect: "NormalQuery { group by: [number], having: =(SUM(number), 3), aggregate: [SUM(number)], projection: [SUM(number) as number1] }",
+            expect: "NormalQuery { group by: [number], having: (SUM(number) = 3), aggregate: [SUM(number)], projection: [SUM(number) as number1] }",
         },
         TestCase {
             name: "Order column without group query",
@@ -79,7 +79,7 @@ async fn test_query_normalizer() -> Result<()> {
         TestCase {
             name: "Order alias without group query",
             query: "SELECT number + 1 AS number FROM numbers(100) ORDER BY number",
-            expect: "NormalQuery { order by: [+(number, 1)], projection: [+(number, 1) as number] }",
+            expect: "NormalQuery { order by: [(number + 1)], projection: [(number + 1) as number] }",
         },
         TestCase {
             name: "Order column with group query and without aggr",
@@ -89,7 +89,7 @@ async fn test_query_normalizer() -> Result<()> {
         TestCase {
             name: "Order alias with group query and without aggr",
             query: "SELECT number + 1 AS number FROM numbers(100) GROUP BY number ORDER BY number",
-            expect: "NormalQuery { group by: [+(number, 1)], order by: [+(number, 1)], projection: [+(number, 1) as number] }",
+            expect: "NormalQuery { group by: [(number + 1)], order by: [(number + 1)], projection: [(number + 1) as number] }",
         },
         TestCase {
             name: "Order aggr column with group query and with aggr",

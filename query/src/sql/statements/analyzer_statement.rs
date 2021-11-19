@@ -5,19 +5,19 @@ use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatte
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_planners::ExplainType;
 use common_planners::Expression;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
 
 use crate::sessions::DatabendQueryContextRef;
-use crate::sql::statements::QueryNormalizerData;
 use crate::sql::DfStatement;
 
 #[allow(clippy::enum_variant_names)]
 pub enum AnalyzedResult {
     SimpleQuery(PlanNode),
     SelectQuery(Box<QueryAnalyzeState>),
-    ExplainQuery(QueryNormalizerData),
+    ExplainQuery((ExplainType, Box<QueryAnalyzeState>)),
 }
 
 #[derive(Clone)]

@@ -74,4 +74,20 @@ impl InsertIntoPlan {
             values_opt: Some(values),
         }
     }
+
+    pub fn insert_without_source(
+        db: String,
+        table: String,
+        table_meta_id: MetaId,
+        schema: DataSchemaRef,
+    ) -> InsertIntoPlan {
+        InsertIntoPlan {
+            db_name: db,
+            tbl_name: table,
+            tbl_id: table_meta_id,
+            schema,
+            select_plan: None,
+            values_opt: None,
+        }
+    }
 }

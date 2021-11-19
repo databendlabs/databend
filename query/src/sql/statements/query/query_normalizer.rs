@@ -54,27 +54,27 @@ impl QueryNormalizer {
 
     pub async fn transform(mut self, query: &DfQueryStatement) -> Result<QueryNormalizerData> {
         if let Err(cause) = self.visit_filter(query).await {
-            return Err(cause.add_message_back(" (while in analyze select filter)."));
+            return Err(cause.add_message_back(" (while in analyze select filter)"));
         }
 
         if let Err(cause) = self.analyze_projection(query).await {
-            return Err(cause.add_message_back(" (while in analyze select projection)."));
+            return Err(cause.add_message_back(" (while in analyze select projection)"));
         }
 
         if let Err(cause) = self.analyze_group_by(query).await {
-            return Err(cause.add_message_back(" (while in analyze select group by)."));
+            return Err(cause.add_message_back(" (while in analyze select group by)"));
         }
 
         if let Err(cause) = self.analyze_having(query).await {
-            return Err(cause.add_message_back(" (while in analyze select having)."));
+            return Err(cause.add_message_back(" (while in analyze select having)"));
         }
 
         if let Err(cause) = self.analyze_order_by(query).await {
-            return Err(cause.add_message_back(" (while in analyze select order by)."));
+            return Err(cause.add_message_back(" (while in analyze select order by)"));
         }
 
         if let Err(cause) = self.analyze_limit(query).await {
-            return Err(cause.add_message_back(" (while in analyze select limit)."));
+            return Err(cause.add_message_back(" (while in analyze select limit)"));
         }
 
         Ok(self.data)

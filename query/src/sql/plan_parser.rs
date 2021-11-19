@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::ExplainPlan;
+use common_planners::Expression;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
@@ -24,7 +26,6 @@ use crate::sessions::DatabendQueryContextRef;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::QueryAnalyzeState;
-use crate::sql::statements::QueryNormalizerData;
 use crate::sql::statements::QueryRelation;
 use crate::sql::DfHint;
 use crate::sql::DfParser;
@@ -59,7 +60,13 @@ impl PlanParser {
         match statements[0].analyze(ctx.clone()).await? {
             AnalyzedResult::SimpleQuery(plan) => Ok(plan),
             AnalyzedResult::SelectQuery(data) => Self::build_query_plan(&data),
-            AnalyzedResult::ExplainQuery(data) => Self::build_explain_plan(&data, &ctx),
+            AnalyzedResult::ExplainQuery((typ, data)) => {
+                let res = Self::build_query_plan(&data)?;
+                Ok(PlanNode::Explain(ExplainPlan {
+                    typ,
+                    input: Arc::new(res),
+                }))
+            }
         }
     }
 
@@ -67,7 +74,8 @@ impl PlanParser {
         let from = Self::build_from_plan(data)?;
         let filter = Self::build_filter_plan(from, data)?;
         let group_by = Self::build_group_by_plan(filter, data)?;
-        let having = Self::build_having_plan(group_by, data)?;
+        let before_order = Self::build_before_order(group_by, data)?;
+        let having = Self::build_having_plan(before_order, data)?;
         let order_by = Self::build_order_by_plan(having, data)?;
         let projection = Self::build_projection_plan(order_by, data)?;
         let limit = Self::build_limit_plan(projection, data)?;
@@ -75,15 +83,6 @@ impl PlanParser {
         Ok(PlanNode::Select(SelectPlan {
             input: Arc::new(limit),
         }))
-    }
-
-    fn build_explain_plan(
-        _data: &QueryNormalizerData,
-        _ctx: &DatabendQueryContextRef,
-    ) -> Result<PlanNode> {
-        // let query_plan = Self::build_query_plan(data)?;
-        // Ok(PlanNode::Explain(ExplainPlan {}))
-        unimplemented!("")
     }
 
     fn build_from_plan(data: &QueryAnalyzeState) -> Result<PlanNode> {
@@ -110,44 +109,66 @@ impl PlanParser {
         // S0: Apply a partial aggregator plan.
         // S1: Apply a fragment plan for distributed planners split.
         // S2: Apply a final aggregator plan.
+        match data.aggregate_expressions.is_empty() && data.group_by_expressions.is_empty() {
+            true => Ok(plan),
+            false => {
+                let input_plan = Self::build_before_group_by(plan, data)?;
 
-        let mut builder = PlanBuilder::from(&plan);
-        if !data.aggregate_expressions.is_empty() || !data.group_by_expressions.is_empty() {
-            let before_group_by_expr = &data.before_group_by_expressions;
-            builder = builder.expression(before_group_by_expr, "Before group by")?;
-            let after_expression = builder.build()?;
+                let schema = input_plan.schema();
+                let group_by_exprs = &data.group_by_expressions;
+                let aggregate_exprs = &data.aggregate_expressions;
+                PlanBuilder::from(&input_plan)
+                    .aggregate_partial(aggregate_exprs, group_by_exprs)?
+                    .aggregate_final(schema, aggregate_exprs, group_by_exprs)?
+                    .build()
+            }
+        }
+    }
 
-            let schema = after_expression.schema();
-            let aggr_expr = &data.aggregate_expressions;
-            let group_by_expr = &data.group_by_expressions;
-            builder = PlanBuilder::from(&after_expression);
-            builder = builder.aggregate_partial(aggr_expr, group_by_expr)?;
-            builder = builder.aggregate_final(schema, aggr_expr, group_by_expr)?;
+    fn build_before_group_by(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
+        fn is_all_column(exprs: &[Expression]) -> bool {
+            exprs
+                .iter()
+                .all(|expr| matches!(expr, Expression::Column(_)))
         }
 
-        builder.build()
+        match data.before_group_by_expressions.is_empty() {
+            true => Ok(plan),
+            // if all expression is column expression expression, we skip this expression
+            false if is_all_column(&data.before_group_by_expressions) => Ok(plan),
+            false => PlanBuilder::from(&plan)
+                .expression(&data.before_group_by_expressions, "Before GroupBy")?
+                .build(),
+        }
     }
 
     fn build_having_plan(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
-        let mut builder = PlanBuilder::from(&plan);
+        match &data.having {
+            None => Ok(plan),
+            Some(predicate) => PlanBuilder::from(&plan).having(predicate.clone())?.build(),
+        }
+    }
 
-        if !data.expressions.is_empty() {
-            let before_expressions = &data.expressions;
-            match data.order_by_expressions.is_empty() {
-                true => {
-                    builder = builder.expression(before_expressions, "Before order")?;
-                }
-                false => {
-                    builder = builder.expression(before_expressions, "Before projection")?;
-                }
-            };
+    fn build_before_order(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
+        fn is_all_column(exprs: &[Expression]) -> bool {
+            exprs
+                .iter()
+                .all(|expr| matches!(expr, Expression::Column(_)))
         }
 
-        if let Some(having_predicate) = &data.having {
-            builder = builder.having(having_predicate.clone())?;
+        match data.expressions.is_empty() {
+            true => Ok(plan),
+            // if all expression is column expression expression, we skip this expression
+            false if is_all_column(&data.expressions) => Ok(plan),
+            false => match data.order_by_expressions.is_empty() {
+                true => PlanBuilder::from(&plan)
+                    .expression(&data.expressions, "Before Projection")?
+                    .build(),
+                false => PlanBuilder::from(&plan)
+                    .expression(&data.expressions, "Before OrderBy")?
+                    .build(),
+            },
         }
-
-        builder.build()
     }
 
     fn build_order_by_plan(plan: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
@@ -166,8 +187,11 @@ impl PlanParser {
     }
 
     fn build_limit_plan(input: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
-        PlanBuilder::from(&input)
-            .limit_offset(data.limit, data.offset.unwrap_or(0))?
-            .build()
+        match (&data.limit, &data.offset) {
+            (None, None) => Ok(input),
+            (limit, offset) => PlanBuilder::from(&input)
+                .limit_offset(*limit, offset.unwrap_or(0))?
+                .build(),
+        }
     }
 }

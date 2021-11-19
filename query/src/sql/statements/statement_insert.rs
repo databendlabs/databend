@@ -13,6 +13,7 @@ use sqlparser::ast::ObjectName;
 use sqlparser::ast::Query;
 use sqlparser::ast::SetExpr;
 use sqlparser::ast::SqliteOnConflict;
+use sqlparser::ast::Values;
 
 use crate::catalogs::Table;
 use crate::sessions::DatabendQueryContext;
@@ -50,11 +51,9 @@ impl AnalyzableStatement for DfInsertStatement {
         self.is_supported()?;
 
         match &self.source {
-            None => Err(ErrorCode::SyntaxException(
-                "Insert must be have values or select.",
-            )),
-            Some(source) => match source.body {
-                SetExpr::Values(_) => self.analyze_insert_values(&ctx, source),
+            None => self.analyze_insert_without_source(&ctx).await,
+            Some(source) => match &source.body {
+                SetExpr::Values(v) => self.analyze_insert_values(&ctx, v),
                 SetExpr::Select(_) => self.analyze_insert_select(&ctx, source).await,
                 _ => Err(ErrorCode::SyntaxException(
                     "Insert must be have values or select.",
@@ -66,14 +65,16 @@ impl AnalyzableStatement for DfInsertStatement {
 
 impl DfInsertStatement {
     fn resolve_table(&self, ctx: &DatabendQueryContext) -> Result<(String, String)> {
-        let Self {
-            table_name: ObjectName(idents),
-            ..
-        } = self;
-        match idents.len() {
+        match self.table_name.0.len() {
             0 => Err(ErrorCode::SyntaxException("Insert table name is empty")),
-            1 => Ok((ctx.get_current_database(), idents[0].value.clone())),
-            2 => Ok((idents[0].value.clone(), idents[1].value.clone())),
+            1 => Ok((
+                ctx.get_current_database(),
+                self.table_name.0[0].value.clone(),
+            )),
+            2 => Ok((
+                self.table_name.0[0].value.clone(),
+                self.table_name.0[1].value.clone(),
+            )),
             _ => Err(ErrorCode::SyntaxException(
                 "Insert table name must be [`db`].`table`",
             )),
@@ -105,18 +106,33 @@ impl DfInsertStatement {
     fn analyze_insert_values(
         &self,
         ctx: &DatabendQueryContext,
-        source: &Query,
+        values: &Values,
     ) -> Result<AnalyzedResult> {
-        tracing::debug!("{:?}", source);
+        tracing::debug!("{:?}", values);
 
         let (db, table) = self.resolve_table(ctx)?;
         let write_table = ctx.get_table(&db, &table)?;
         let table_meta_id = write_table.get_id();
         let schema = self.insert_schema(write_table)?;
 
-        let values = format!("{}", source);
+        let values = format!("{}", values);
+        let values_data = (values["VALUES ".len()..]).to_string();
         Ok(AnalyzedResult::SimpleQuery(PlanNode::InsertInto(
-            InsertIntoPlan::insert_values(db, table, table_meta_id, schema, values),
+            InsertIntoPlan::insert_values(db, table, table_meta_id, schema, values_data),
+        )))
+    }
+
+    async fn analyze_insert_without_source(
+        &self,
+        ctx: &DatabendQueryContextRef,
+    ) -> Result<AnalyzedResult> {
+        let (db, table) = self.resolve_table(ctx)?;
+        let write_table = ctx.get_table(&db, &table)?;
+        let table_meta_id = write_table.get_id();
+        let table_schema = self.insert_schema(write_table)?;
+
+        Ok(AnalyzedResult::SimpleQuery(PlanNode::InsertInto(
+            InsertIntoPlan::insert_without_source(db, table, table_meta_id, table_schema),
         )))
     }
 

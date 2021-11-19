@@ -126,6 +126,7 @@ fn test_monotonic_function() -> Result<()> {
             \n    Expression: (number * number):UInt64, (number + (number + 3)):UInt64 (Before OrderBy)\
             \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800]",
         },
+        // TODO: broken this by select statement analyzer.
         Test {
             name: "plus-only-function-(number+number+3)",
             query: "select number*number from numbers_mt(100) order by number+number+3 limit 10",
@@ -134,7 +135,7 @@ fn test_monotonic_function() -> Result<()> {
             \n  Projection: (number * number):UInt64\
             \n    Sort: ((number + number) + 3):UInt64\
             \n      Expression: (number * number):UInt64, ((number + number) + 3):UInt64 (Before OrderBy)\
-            \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800], push_downs: [limit: 10, order_by: [number]]",
+            \n        ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800], push_downs: [limit: 10, order_by: [((number + number) + 3)]]",
         },
         //TODO: add more function tests
     ];

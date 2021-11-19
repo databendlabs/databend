@@ -12,8 +12,10 @@ use sqlparser::ast::Function;
 use sqlparser::ast::FunctionArg;
 use sqlparser::ast::Ident;
 use sqlparser::ast::Query;
+use sqlparser::ast::UnaryOperator;
 use sqlparser::ast::Value;
 
+use crate::functions::ContextFunction;
 use crate::sessions::DatabendQueryContext;
 use crate::sessions::DatabendQueryContextRef;
 use crate::sql::statements::analyzer_value_expr::ValueExprAnalyzer;
@@ -33,31 +35,24 @@ impl ExpressionAnalyzer {
     }
 
     pub async fn analyze(&self, expr: &Expr) -> Result<Expression> {
-        let mut arguments = Vec::new();
+        let mut stack = Vec::new();
 
         // Build RPN for expr. because async function unsupported recursion
         for rpn_item in &ExprRPNBuilder::build(expr)? {
             match rpn_item {
-                ExprRPNItem::Value(value) => Self::analyze_value(value, &mut arguments)?,
-                ExprRPNItem::Identifier(ident) => self.analyze_identifier(ident, &mut arguments)?,
-                ExprRPNItem::QualifiedIdentifier(idents) => {
-                    self.analyze_identifiers(idents, &mut arguments)?
-                }
-                ExprRPNItem::Function(info) => self.analyze_function(info, &mut arguments)?,
-                ExprRPNItem::Wildcard => self.analyze_wildcard(&mut arguments)?,
-                ExprRPNItem::Exists(subquery) => {
-                    self.analyze_exists(subquery, &mut arguments).await?
-                }
-                ExprRPNItem::Subquery(subquery) => {
-                    self.analyze_scalar_subquery(subquery, &mut arguments)
-                        .await?
-                }
-                ExprRPNItem::Cast(data_type) => self.analyze_cast(data_type, &mut arguments)?,
+                ExprRPNItem::Value(v) => Self::analyze_value(v, &mut stack)?,
+                ExprRPNItem::Identifier(v) => self.analyze_identifier(v, &mut stack)?,
+                ExprRPNItem::QualifiedIdentifier(v) => self.analyze_identifiers(v, &mut stack)?,
+                ExprRPNItem::Function(v) => self.analyze_function(v, &mut stack)?,
+                ExprRPNItem::Wildcard => self.analyze_wildcard(&mut stack)?,
+                ExprRPNItem::Exists(v) => self.analyze_exists(v, &mut stack).await?,
+                ExprRPNItem::Subquery(v) => self.analyze_scalar_subquery(v, &mut stack).await?,
+                ExprRPNItem::Cast(v) => self.analyze_cast(v, &mut stack)?,
             }
         }
 
-        match arguments.len() {
-            1 => Ok(arguments.remove(0)),
+        match stack.len() {
+            1 => Ok(stack.remove(0)),
             _ => Err(ErrorCode::LogicalError(
                 "Logical error: this is expr rpn bug.",
             )),
@@ -69,42 +64,83 @@ impl ExpressionAnalyzer {
         Ok(())
     }
 
-    fn analyze_function(
-        &self,
-        info: &FunctionExprInfo,
-        arguments: &mut Vec<Expression>,
-    ) -> Result<()> {
-        match AggregateFunctionFactory::instance().check(&info.name) {
-            true => self.analyze_aggr_function(info, arguments),
+    fn analyze_function(&self, info: &FunctionExprInfo, args: &mut Vec<Expression>) -> Result<()> {
+        let mut arguments = Vec::with_capacity(info.args_count);
+        for _index in 0..info.args_count {
+            match args.pop() {
+                None => {
+                    return Err(ErrorCode::LogicalError("It's a bug."));
+                }
+                Some(arg) => {
+                    arguments.insert(0, arg);
+                }
+            }
+        }
+
+        args.push(
+            match AggregateFunctionFactory::instance().check(&info.name) {
+                true => self.aggr_function(info, &arguments),
+                false => match (info.unary_operator, info.binary_operator) {
+                    (true, _) => Self::unary_function(info, &arguments),
+                    (_, true) => Self::binary_function(info, &arguments),
+                    _ => self.function(info, &arguments),
+                },
+            }?,
+        );
+        Ok(())
+    }
+
+    fn unary_function(info: &FunctionExprInfo, args: &[Expression]) -> Result<Expression> {
+        match args.is_empty() {
+            true => Err(ErrorCode::LogicalError(
+                "Unary operator must be two children.",
+            )),
+            false => Ok(Expression::UnaryExpression {
+                op: info.name.clone(),
+                expr: Box::new(args[0].to_owned()),
+            }),
+        }
+    }
+
+    fn binary_function(info: &FunctionExprInfo, args: &[Expression]) -> Result<Expression> {
+        let op = info.name.clone();
+        match args.len() < 2 {
+            true => Err(ErrorCode::LogicalError(
+                "Binary operator must be two children.",
+            )),
+            false => Ok(Expression::BinaryExpression {
+                op,
+                left: Box::new(args[0].to_owned()),
+                right: Box::new(args[1].to_owned()),
+            }),
+        }
+    }
+
+    fn function(&self, info: &FunctionExprInfo, args: &[Expression]) -> Result<Expression> {
+        let query_context = self.context.clone();
+        let context_args = ContextFunction::build_args_from_ctx(&info.name, query_context)?;
+
+        match context_args.is_empty() {
+            true => {
+                let op = info.name.clone();
+                let arguments = args.to_owned();
+                Ok(Expression::ScalarFunction {
+                    op,
+                    args: arguments,
+                })
+            }
             false => {
                 let op = info.name.clone();
-                let args = arguments.to_owned();
-
-                arguments.clear();
-                arguments.push(Expression::ScalarFunction { op, args });
-                Ok(())
+                Ok(Expression::ScalarFunction {
+                    op,
+                    args: context_args,
+                })
             }
         }
     }
 
-    fn analyze_aggr_function(
-        &self,
-        info: &FunctionExprInfo,
-        args: &mut Vec<Expression>,
-    ) -> Result<()> {
-        let mut arguments = Vec::with_capacity(args.len());
+    fn aggr_function(&self, info: &FunctionExprInfo, args: &[Expression]) -> Result<Expression> {
         let mut parameters = Vec::with_capacity(info.parameters.len());
-
-        while !args.is_empty() {
-            match args.remove(0) {
-                Expression::Wildcard if info.name.eq_ignore_ascii_case("count") => {
-                    arguments.push(common_planners::lit(0i64));
-                }
-                argument => {
-                    arguments.push(argument);
-                }
-            };
-        }
 
         for parameter in &info.parameters {
             match ValueExprAnalyzer::analyze(parameter)? {
@@ -120,14 +156,24 @@ impl ExpressionAnalyzer {
             };
         }
 
-        args.push(Expression::AggregateFunction {
-            op: info.name.clone(),
-            distinct: info.distinct,
-            args: arguments,
-            params: parameters,
-        });
-
-        Ok(())
+        if info.name.eq_ignore_ascii_case("count")
+            && !args.is_empty()
+            && matches!(args[0], Expression::Wildcard)
+        {
+            Ok(Expression::AggregateFunction {
+                op: info.name.clone(),
+                distinct: info.distinct,
+                args: vec![common_planners::lit(0i64)],
+                params: parameters,
+            })
+        } else {
+            Ok(Expression::AggregateFunction {
+                op: info.name.clone(),
+                distinct: info.distinct,
+                args: args.to_owned(),
+                params: parameters,
+            })
+        }
     }
 
     fn analyze_identifier(&self, ident: &Ident, arguments: &mut Vec<Expression>) -> Result<()> {
@@ -214,18 +260,27 @@ impl ExpressionAnalyzer {
         data_type: &common_datavalues::DataType,
         args: &mut Vec<Expression>,
     ) -> Result<()> {
-        let expr = args.remove(0);
-        args.push(Expression::Cast {
-            expr: Box::new(expr),
-            data_type: data_type.clone(),
-        });
-        Ok(())
+        match args.pop() {
+            None => Err(ErrorCode::LogicalError(
+                "Cast operator must be one children.",
+            )),
+            Some(inner_expr) => {
+                args.push(Expression::Cast {
+                    expr: Box::new(inner_expr),
+                    data_type: data_type.clone(),
+                });
+                Ok(())
+            }
+        }
     }
 }
 
 struct FunctionExprInfo {
     name: String,
     distinct: bool,
+    args_count: usize,
+    unary_operator: bool,
+    binary_operator: bool,
     parameters: Vec<Value>,
 }
 
@@ -241,10 +296,35 @@ enum ExprRPNItem {
 }
 
 impl ExprRPNItem {
-    pub fn function(name: String) -> ExprRPNItem {
+    pub fn function(name: String, args_count: usize) -> ExprRPNItem {
         ExprRPNItem::Function(FunctionExprInfo {
             name,
             distinct: false,
+            args_count,
+            unary_operator: false,
+            binary_operator: false,
+            parameters: Vec::new(),
+        })
+    }
+
+    pub fn binary_operator(name: String) -> ExprRPNItem {
+        ExprRPNItem::Function(FunctionExprInfo {
+            name,
+            distinct: false,
+            args_count: 2,
+            unary_operator: false,
+            binary_operator: true,
+            parameters: Vec::new(),
+        })
+    }
+
+    pub fn unary_operator(name: String) -> ExprRPNItem {
+        ExprRPNItem::Function(FunctionExprInfo {
+            name,
+            distinct: false,
+            args_count: 1,
+            unary_operator: true,
+            binary_operator: false,
             parameters: Vec::new(),
         })
     }
@@ -269,7 +349,7 @@ impl ExprRPNBuilder {
             Expr::CompoundIdentifier(idents) => self.visit_identifiers(idents),
             Expr::IsNull(expr) => self.visit_simple_function(expr, "isnull"),
             Expr::IsNotNull(expr) => self.visit_simple_function(expr, "isnotnull"),
-            Expr::UnaryOp { op, expr } => self.visit_simple_function(expr, op.to_string()),
+            Expr::UnaryOp { op, expr } => self.visit_unary_expr(op, expr),
             Expr::BinaryOp { left, op, right } => self.visit_binary_expr(left, op, right),
             Expr::Wildcard => self.visit_wildcard(),
             Expr::Exists(subquery) => self.visit_exists(subquery),
@@ -340,6 +420,9 @@ impl ExprRPNBuilder {
         self.rpn.push(ExprRPNItem::Function(FunctionExprInfo {
             name: function.name.to_string(),
             distinct: function.distinct,
+            args_count: function.args.len(),
+            unary_operator: false,
+            binary_operator: false,
             parameters: function.params.to_owned(),
         }));
         Ok(())
@@ -363,14 +446,20 @@ impl ExprRPNBuilder {
 
     fn visit_simple_function(&mut self, expr: &Expr, name: impl ToString) -> Result<()> {
         self.visit(expr)?;
-        self.rpn.push(ExprRPNItem::function(name.to_string()));
+        self.rpn.push(ExprRPNItem::function(name.to_string(), 1));
+        Ok(())
+    }
+
+    fn visit_unary_expr(&mut self, op: &UnaryOperator, expr: &Expr) -> Result<()> {
+        self.visit(expr)?;
+        self.rpn.push(ExprRPNItem::unary_operator(op.to_string()));
         Ok(())
     }
 
     fn visit_binary_expr(&mut self, left: &Expr, op: &BinaryOperator, right: &Expr) -> Result<()> {
         self.visit(left)?;
         self.visit(right)?;
-        self.rpn.push(ExprRPNItem::function(op.to_string()));
+        self.rpn.push(ExprRPNItem::binary_operator(op.to_string()));
         Ok(())
     }
 
@@ -386,14 +475,18 @@ impl ExprRPNBuilder {
 
         match *negated {
             true => {
-                self.rpn.push(ExprRPNItem::function(String::from(">=")));
+                self.rpn
+                    .push(ExprRPNItem::binary_operator(String::from(">=")));
                 self.visit(high)?;
-                self.rpn.push(ExprRPNItem::function(String::from("<")));
+                self.rpn
+                    .push(ExprRPNItem::binary_operator(String::from("<")));
             }
             false => {
-                self.rpn.push(ExprRPNItem::function(String::from("<")));
+                self.rpn
+                    .push(ExprRPNItem::binary_operator(String::from("<")));
                 self.visit(high)?;
-                self.rpn.push(ExprRPNItem::function(String::from(">=")));
+                self.rpn
+                    .push(ExprRPNItem::binary_operator(String::from(">=")));
             }
         }
 
@@ -408,13 +501,20 @@ impl ExprRPNBuilder {
     ) -> Result<()> {
         self.visit(expr)?;
 
-        // TODO: default from argument
-        if let Some(expr) = from {
-            self.visit(expr)?;
-        }
+        match from {
+            None => self
+                .rpn
+                .push(ExprRPNItem::Value(Value::Number(String::from("1"), false))),
+            Some(from) => self.visit(from)?,
+        };
 
-        if let Some(expr) = length {
-            self.visit(expr)?;
+        let name = String::from("substring");
+        match length {
+            None => self.rpn.push(ExprRPNItem::function(name, 2)),
+            Some(length) => {
+                self.visit(length)?;
+                self.rpn.push(ExprRPNItem::function(name, 3));
+            }
         }
 
         Ok(())

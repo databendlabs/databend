@@ -36,12 +36,12 @@ async fn test_query_qualified_rewriter() -> Result<()> {
         TestCase {
             name: "Alias query with filter",
             query: "SELECT name FROM system.databases AS alias WHERE alias.name = 'XXX'",
-            expect: "NormalQuery { filter: =(name, XXX), projection: [name] }",
+            expect: "NormalQuery { filter: (name = XXX), projection: [name] }",
         },
         TestCase {
             name: "Database and table query with filter",
             query: "SELECT name FROM system.databases WHERE system.databases.name = 'XXX'",
-            expect: "NormalQuery { filter: =(name, XXX), projection: [name] }",
+            expect: "NormalQuery { filter: (name = XXX), projection: [name] }",
         },
         TestCase {
             name: "Alias query with group",
@@ -56,12 +56,12 @@ async fn test_query_qualified_rewriter() -> Result<()> {
         TestCase {
             name: "Alias query with having",
             query: "SELECT name FROM system.databases AS alias HAVING alias.name = 'xxx'",
-            expect: "NormalQuery { having: =(name, xxx), projection: [name] }",
+            expect: "NormalQuery { having: (name = xxx), projection: [name] }",
         },
         TestCase {
             name: "Database and table query with having",
             query: "SELECT name FROM system.databases HAVING system.databases.name = 'xxx'",
-            expect: "NormalQuery { having: =(name, xxx), projection: [name] }",
+            expect: "NormalQuery { having: (name = xxx), projection: [name] }",
         },
         TestCase {
             name: "Alias query with order",
@@ -76,12 +76,12 @@ async fn test_query_qualified_rewriter() -> Result<()> {
         TestCase {
             name: "Alias query with aggregate",
             query: "SELECT COUNT(alias.name) AS name FROM system.databases AS alias WHERE name = 'xxx'",
-            expect: "NormalQuery { filter: =(name, xxx), aggregate: [COUNT(name)], projection: [COUNT(name) as name] }",
+            expect: "NormalQuery { filter: (name = xxx), aggregate: [COUNT(name)], projection: [COUNT(name) as name] }",
         },
         TestCase {
             name: "Database and table query with aggregate",
             query: "SELECT COUNT(system.databases.name) AS name FROM system.databases WHERE system.databases.name = 'xxx'",
-            expect: "NormalQuery { filter: =(name, xxx), aggregate: [COUNT(name)], projection: [COUNT(name) as name] }",
+            expect: "NormalQuery { filter: (name = xxx), aggregate: [COUNT(name)], projection: [COUNT(name) as name] }",
         },
     ];
 

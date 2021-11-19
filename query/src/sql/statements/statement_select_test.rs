@@ -25,12 +25,12 @@ async fn test_statement_select_analyze() -> Result<()> {
         TestCase {
             name: "Simple filter query",
             query: "SELECT * FROM system.databases WHERE name = 'xxx'",
-            expect: "QueryAnalyzeState { filter: =(name, xxx), before_projection: [name], projection: [name] }",
+            expect: "QueryAnalyzeState { filter: (name = xxx), before_projection: [name], projection: [name] }",
         },
         TestCase {
             name: "Simple having query",
             query: "SELECT * FROM system.databases HAVING name = 'xxx'",
-            expect: "QueryAnalyzeState { before_projection: [name], having: =(name, xxx), projection: [name] }",
+            expect: "QueryAnalyzeState { before_projection: [name], having: (name = xxx), projection: [name] }",
         },
         TestCase {
             name: "Simple order by query",
@@ -40,62 +40,62 @@ async fn test_statement_select_analyze() -> Result<()> {
         TestCase {
             name: "Simple order by query 2",
             query: "SELECT * FROM system.databases ORDER BY name = 'xxx'",
-            expect: "QueryAnalyzeState { before_order_by: [name, =(name, xxx)], order_by: [=(name, 'xxx')], projection: [name] }",
+            expect: "QueryAnalyzeState { before_order_by: [name, (name = xxx)], order_by: [(name = 'xxx')], projection: [name] }",
         },
         TestCase {
             name: "Group by query with filter",
             query: "SELECT number % 2 AS number FROM numbers(10) WHERE number > 2 GROUP BY number",
-            expect: "QueryAnalyzeState { filter: >(number, 2), before_group_by: [%(number, 2)], group_by: [%(number, 2)], before_projection: [%(number, 2)], projection: [%(number, 2) as number] }",
+            expect: "QueryAnalyzeState { filter: (number > 2), before_group_by: [(number % 2)], group_by: [(number % 2)], before_projection: [(number % 2)], projection: [(number % 2) as number] }",
         },
         TestCase {
             name: "Group by query with aggregate",
             query: "SELECT number % 2 AS number, COUNT() as count FROM numbers(10) GROUP BY number",
-            expect: "QueryAnalyzeState { before_group_by: [%(number, 2)], group_by: [%(number, 2)], aggregate: [COUNT()], before_projection: [%(number, 2), COUNT()], projection: [%(number, 2) as number, COUNT() as count] }",
+            expect: "QueryAnalyzeState { before_group_by: [(number % 2)], group_by: [(number % 2)], aggregate: [COUNT()], before_projection: [(number % 2), COUNT()], projection: [(number % 2) as number, COUNT() as count] }",
         },
         TestCase {
             name: "Group by query with having",
             query: "SELECT number % 2 AS number FROM numbers(10) GROUP BY number HAVING number > 10",
-            expect: "QueryAnalyzeState { before_group_by: [%(number, 2)], group_by: [%(number, 2)], before_projection: [%(number, 2)], having: >(%(number, 2), 10), projection: [%(number, 2) as number] }",
+            expect: "QueryAnalyzeState { before_group_by: [(number % 2)], group_by: [(number % 2)], before_projection: [(number % 2)], having: ((number % 2) > 10), projection: [(number % 2) as number] }",
         },
         TestCase {
             name: "Group by query with having 2",
             query: "SELECT number % 2 AS number FROM numbers(10) GROUP BY number HAVING number % 2 > 10",
-            expect: "QueryAnalyzeState { before_group_by: [%(number, 2)], group_by: [%(number, 2)], before_projection: [%(number, 2)], having: >(%(%(number, 2), 2), 10), projection: [%(number, 2) as number] }",
+            expect: "QueryAnalyzeState { before_group_by: [(number % 2)], group_by: [(number % 2)], before_projection: [(number % 2)], having: (((number % 2) % 2) > 10), projection: [(number % 2) as number] }",
         },
         TestCase {
             name: "Group by query with having 3",
             query: "SELECT number % 2 AS number FROM numbers(10) GROUP BY number HAVING COUNT() > 2",
-            expect: "QueryAnalyzeState { before_group_by: [%(number, 2)], group_by: [%(number, 2)], aggregate: [COUNT()], before_projection: [%(number, 2)], having: >(COUNT(), 2), projection: [%(number, 2) as number] }",
+            expect: "QueryAnalyzeState { before_group_by: [(number % 2)], group_by: [(number % 2)], aggregate: [COUNT()], before_projection: [(number % 2)], having: (COUNT() > 2), projection: [(number % 2) as number] }",
         },
         TestCase {
             name: "Group by query with order",
             query: "SELECT number % 2 AS number FROM numbers(10) GROUP BY number ORDER BY number",
-            expect: "QueryAnalyzeState { before_group_by: [%(number, 2)], group_by: [%(number, 2)], before_order_by: [%(number, 2)], order_by: [%(number, 2)], projection: [%(number, 2) as number] }",
+            expect: "QueryAnalyzeState { before_group_by: [(number % 2)], group_by: [(number % 2)], before_order_by: [(number % 2)], order_by: [(number % 2)], projection: [(number % 2) as number] }",
         },
         TestCase {
             name: "Group by query with having 2",
             query: "SELECT number % 2 AS number FROM numbers(10) GROUP BY number ORDER BY number % 3",
-            expect: "QueryAnalyzeState { before_group_by: [%(number, 2)], group_by: [%(number, 2)], before_order_by: [%(number, 2), %(%(number, 2), 3)], order_by: [%(%(number, 2), 3)], projection: [%(number, 2) as number] }",
+            expect: "QueryAnalyzeState { before_group_by: [(number % 2)], group_by: [(number % 2)], before_order_by: [(number % 2), ((number % 2) % 3)], order_by: [((number % 2) % 3)], projection: [(number % 2) as number] }",
         },
         TestCase {
             name: "Group by query with having 3",
             query: "SELECT number % 2 AS number FROM numbers(10) GROUP BY number ORDER BY COUNT()",
-            expect: "QueryAnalyzeState { before_group_by: [%(number, 2)], group_by: [%(number, 2)], aggregate: [COUNT()], before_order_by: [%(number, 2), COUNT()], order_by: [COUNT()], projection: [%(number, 2) as number] }",
+            expect: "QueryAnalyzeState { before_group_by: [(number % 2)], group_by: [(number % 2)], aggregate: [COUNT()], before_order_by: [(number % 2), COUNT()], order_by: [COUNT()], projection: [(number % 2) as number] }",
         },
         TestCase {
             name: "Group by query with projection",
             query: "SELECT number % 2 AS number1 FROM numbers(10) GROUP BY number % 2",
-            expect: "QueryAnalyzeState { before_group_by: [%(number, 2)], group_by: [%(number, 2)], before_projection: [%(number, 2)], projection: [%(number, 2) as number1] }",
+            expect: "QueryAnalyzeState { before_group_by: [(number % 2)], group_by: [(number % 2)], before_projection: [(number % 2)], projection: [(number % 2) as number1] }",
         },
         TestCase {
             name: "Group by query with projection 2",
             query: "SELECT number % 2 % 3 AS number1 FROM numbers(10) GROUP BY number % 2",
-            expect: "QueryAnalyzeState { before_group_by: [%(number, 2)], group_by: [%(number, 2)], before_projection: [%(%(number, 2), 3)], projection: [%(%(number, 2), 3) as number1] }",
+            expect: "QueryAnalyzeState { before_group_by: [(number % 2)], group_by: [(number % 2)], before_projection: [((number % 2) % 3)], projection: [((number % 2) % 3) as number1] }",
         },
         TestCase {
             name: "Group by query with projection 3",
             query: "SELECT COUNT() AS count FROM numbers(10) GROUP BY number % 2",
-            expect: "QueryAnalyzeState { before_group_by: [%(number, 2)], group_by: [%(number, 2)], aggregate: [COUNT()], before_projection: [COUNT()], projection: [COUNT() as count] }",
+            expect: "QueryAnalyzeState { before_group_by: [(number % 2)], group_by: [(number % 2)], aggregate: [COUNT()], before_projection: [COUNT()], projection: [COUNT() as count] }",
         },
     ];
 
