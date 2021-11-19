@@ -1291,11 +1291,14 @@ dependencies = [
  "float-cmp 0.9.0",
  "indexmap",
  "lazy_static",
+ "md5",
  "num",
  "ordered-float 2.8.0",
  "pretty_assertions",
  "serde",
  "serde_json",
+ "sha1",
+ "sha2",
 ]
 
 [[package]]
