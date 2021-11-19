@@ -26,6 +26,10 @@ use crate::scalars::Log2Function;
 use crate::scalars::LogFunction;
 use crate::scalars::PiFunction;
 use crate::scalars::RadiansFunction;
+use crate::scalars::TrigonometricAcosFunction;
+use crate::scalars::TrigonometricAsinFunction;
+use crate::scalars::TrigonometricAtan2Function;
+use crate::scalars::TrigonometricAtanFunction;
 use crate::scalars::TrigonometricCosFunction;
 use crate::scalars::TrigonometricCotFunction;
 use crate::scalars::TrigonometricSinFunction;
@@ -53,5 +57,9 @@ impl MathsFunction {
         factory.register("floor", FloorFunction::desc());
         factory.register("mod", ArithmeticModuloFunction::desc());
         factory.register("exp", ExpFunction::desc());
+        factory.register("asin", TrigonometricAsinFunction::desc());
+        factory.register("acos", TrigonometricAcosFunction::desc());
+        factory.register("atan", TrigonometricAtanFunction::desc());
+        factory.register("atan2", TrigonometricAtan2Function::desc());
     }
 }
