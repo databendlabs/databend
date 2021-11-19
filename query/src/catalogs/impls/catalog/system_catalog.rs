@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::DropDatabaseReq;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
@@ -26,7 +27,6 @@ use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateTablePlan;
-use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
 use crate::catalogs::catalog::Catalog;
@@ -173,7 +173,7 @@ impl Catalog for SystemCatalog {
         Err(ErrorCode::UnImplement("Cannot create system database"))
     }
 
-    async fn drop_database(&self, _plan: DropDatabasePlan) -> Result<()> {
+    async fn drop_database(&self, _req: DropDatabaseReq) -> Result<()> {
         Err(ErrorCode::UnImplement("Cannot drop system database"))
     }
 

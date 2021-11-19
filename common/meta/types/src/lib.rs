@@ -24,6 +24,8 @@ pub use commit_table_reply::UpsertTableOptionReply;
 pub use database::CreateDatabaseReply;
 pub use database::CreateDatabaseReq;
 pub use database::DatabaseInfo;
+pub use database::DropDatabaseReply;
+pub use database::DropDatabaseReq;
 pub use errors::ConflictSeq;
 pub use kv_message::GetKVActionReply;
 pub use kv_message::MGetKVActionReply;

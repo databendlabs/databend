@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_meta_flight::CreateTableAction;
-use common_meta_flight::DropDatabaseAction;
 use common_meta_flight::DropTableAction;
 use common_meta_flight::FlightReq;
 use common_meta_flight::GetDatabaseAction;
@@ -38,6 +37,8 @@ use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
+use common_meta_types::DropDatabaseReply;
+use common_meta_types::DropDatabaseReq;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
 use common_meta_types::TableIdent;
@@ -112,10 +113,13 @@ impl RequestHandler<GetDatabaseAction> for ActionHandler {
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<DropDatabaseAction> for ActionHandler {
-    async fn handle(&self, act: DropDatabaseAction) -> common_exception::Result<()> {
-        let db_name = &act.plan.db;
-        let if_exists = act.plan.if_exists;
+impl RequestHandler<FlightReq<DropDatabaseReq>> for ActionHandler {
+    async fn handle(
+        &self,
+        act: FlightReq<DropDatabaseReq>,
+    ) -> common_exception::Result<DropDatabaseReply> {
+        let db_name = &act.req.db;
+        let if_exists = act.req.if_exists;
         let cr = LogEntry {
             txid: None,
             cmd: DropDatabase {
@@ -135,7 +139,7 @@ impl RequestHandler<DropDatabaseAction> for ActionHandler {
         };
 
         if prev.is_some() || if_exists {
-            Ok(())
+            Ok(DropDatabaseReply {})
         } else {
             Err(ErrorCode::UnknownDatabase(format!(
                 "database not found: {:}",

@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::DropDatabaseReq;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
@@ -26,7 +27,6 @@ use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateTablePlan;
-use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
 use crate::catalogs::Catalog;
@@ -210,15 +210,15 @@ impl Catalog for OverlaidCatalog {
         self.bottom.create_database(req).await
     }
 
-    async fn drop_database(&self, plan: DropDatabasePlan) -> common_exception::Result<()> {
+    async fn drop_database(&self, req: DropDatabaseReq) -> Result<(), ErrorCode> {
         // drop db in BOTTOM layer only
-        if self.read_only.exists_database(&plan.db).await? {
+        if self.read_only.exists_database(&req.db).await? {
             return Err(ErrorCode::UnexpectedError(format!(
                 "user can not drop {} database",
-                plan.db
+                req.db
             )));
         }
-        self.bottom.drop_database(plan).await
+        self.bottom.drop_database(req).await
     }
 
     async fn exists_database(&self, db_name: &str) -> common_exception::Result<bool> {

@@ -27,6 +27,8 @@ use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
+use common_meta_types::DropDatabaseReply;
+use common_meta_types::DropDatabaseReq;
 use common_meta_types::MatchSeq;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
@@ -35,7 +37,6 @@ use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateTablePlan;
-use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_tracing::tracing;
 use maplit::hashmap;
@@ -69,9 +70,9 @@ impl MetaApi for MetaEmbedded {
         })
     }
 
-    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
+    async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply> {
         let cmd = Cmd::DropDatabase {
-            name: plan.db.clone(),
+            name: req.db.clone(),
         };
 
         let sm = self.inner.lock().await;
@@ -79,14 +80,14 @@ impl MetaApi for MetaEmbedded {
 
         assert!(res.result().is_none());
 
-        if res.prev().is_none() && !plan.if_exists {
+        if res.prev().is_none() && !req.if_exists {
             return Err(ErrorCode::UnknownDatabase(format!(
                 "database not found: {:}",
-                plan.db
+                req.db
             )));
         }
 
-        Ok(())
+        Ok(DropDatabaseReply {})
     }
 
     async fn get_database(&self, db: &str) -> Result<Arc<DatabaseInfo>> {

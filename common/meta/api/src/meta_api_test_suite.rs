@@ -20,12 +20,12 @@ use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::DropDatabaseReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
-use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_tracing::tracing;
 
@@ -126,7 +126,7 @@ impl MetaApiTestSuite {
 
         tracing::info!("--- drop db2");
         {
-            mt.drop_database(DropDatabasePlan {
+            mt.drop_database(DropDatabaseReq {
                 if_exists: false,
                 db: "db2".to_string(),
             })
@@ -142,7 +142,7 @@ impl MetaApiTestSuite {
 
         tracing::info!("--- drop db2 with if_exists=true returns no error");
         {
-            mt.drop_database(DropDatabasePlan {
+            mt.drop_database(DropDatabaseReq {
                 if_exists: true,
                 db: "db2".to_string(),
             })

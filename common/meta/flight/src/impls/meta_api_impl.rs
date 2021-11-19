@@ -21,6 +21,8 @@ use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
+use common_meta_types::DropDatabaseReply;
+use common_meta_types::DropDatabaseReq;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
@@ -28,11 +30,9 @@ use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateTablePlan;
-use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
 use crate::CreateTableAction;
-use crate::DropDatabaseAction;
 use crate::DropTableAction;
 use crate::FlightReq;
 use crate::GetDatabaseAction;
@@ -53,8 +53,8 @@ impl MetaApi for MetaFlightClient {
     }
 
     /// Drop database call.
-    async fn drop_database(&self, plan: DropDatabasePlan) -> common_exception::Result<()> {
-        self.do_action(DropDatabaseAction { plan }).await
+    async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, ErrorCode> {
+        self.do_action(FlightReq { req }).await
     }
 
     async fn get_database(&self, db: &str) -> common_exception::Result<Arc<DatabaseInfo>> {

@@ -16,6 +16,7 @@ use common_base::tokio;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::DropDatabaseReq;
 use common_planners::*;
 use pretty_assertions::assert_eq;
 
@@ -52,7 +53,7 @@ async fn test_datasource() -> Result<()> {
 
         // Drop database.
         catalog
-            .drop_database(DropDatabasePlan {
+            .drop_database(DropDatabaseReq {
                 if_exists: false,
                 db: "test_db".to_string(),
             })

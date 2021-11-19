@@ -23,6 +23,8 @@ use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
+use common_meta_types::DropDatabaseReply;
+use common_meta_types::DropDatabaseReq;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MetaId;
@@ -33,7 +35,6 @@ use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateTablePlan;
-use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use prost::Message;
 use tonic::Request;
@@ -52,19 +53,18 @@ pub struct FlightReq<T> {
 // Action wrapper for do_action.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
 pub enum MetaFlightAction {
-    // database meta
     CreateDatabase(FlightReq<CreateDatabaseReq>),
+    DropDatabase(FlightReq<DropDatabaseReq>),
     GetDatabase(GetDatabaseAction),
-    DropDatabase(DropDatabaseAction),
+    GetDatabases(GetDatabasesAction),
+
     CreateTable(CreateTableAction),
     DropTable(DropTableAction),
     GetTable(GetTableAction),
     GetTableExt(GetTableExtReq),
     GetTables(GetTablesAction),
-    GetDatabases(GetDatabasesAction),
     CommitTable(UpsertTableOptionReq),
 
-    // general purpose kv
     UpsertKV(UpsertKVAction),
     GetKV(GetKVAction),
     MGetKV(MGetKVAction),
@@ -159,12 +159,8 @@ impl RequestFor for GetDatabaseAction {
     type Reply = DatabaseInfo;
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct DropDatabaseAction {
-    pub plan: DropDatabasePlan,
-}
-impl RequestFor for DropDatabaseAction {
-    type Reply = ();
+impl RequestFor for FlightReq<DropDatabaseReq> {
+    type Reply = DropDatabaseReply;
 }
 
 // == table actions ==
