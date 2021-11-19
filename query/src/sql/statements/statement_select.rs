@@ -58,7 +58,6 @@ impl DfQueryStatement {
 
         // Allow `SELECT name FROM system.databases HAVING name = 'xxx'`
         if let Some(predicate) = &data.having_predicate {
-            analyze_state.add_expression(predicate);
             analyze_state.having = Some(rebase_expr(predicate, &analyze_state.expressions)?);
         }
 

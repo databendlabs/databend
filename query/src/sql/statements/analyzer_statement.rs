@@ -1,4 +1,6 @@
+use std::fmt::Debug;
 use std::sync::Arc;
+use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
 use common_datavalues::{DataSchema, DataSchemaRef, DataSchemaRefExt};
 use common_planners::{Expression, PlanNode, ReadDataSourcePlan};
 use crate::sql::DfStatement;
@@ -36,6 +38,20 @@ pub struct QueryAnalyzeState {
     pub finalize_schema: DataSchemaRef,
 }
 
+impl QueryAnalyzeState {
+    pub fn add_expression(&mut self, expr: &Expression) {
+        if !self.expressions.contains(expr) {
+            self.expressions.push(expr.clone());
+        }
+    }
+
+    pub fn add_before_group_expression(&mut self, expr: &Expression) {
+        if !self.before_group_by_expressions.contains(expr) {
+            self.before_group_by_expressions.push(expr.clone());
+        }
+    }
+}
+
 impl Default for QueryAnalyzeState {
     fn default() -> Self {
         QueryAnalyzeState {
@@ -53,17 +69,46 @@ impl Default for QueryAnalyzeState {
     }
 }
 
-impl QueryAnalyzeState {
-    pub fn add_expression(&mut self, expr: &Expression) {
-        if !self.expressions.contains(expr) {
-            self.expressions.push(expr.clone());
-        }
-    }
+impl Debug for QueryAnalyzeState {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        let mut debug_struct = f.debug_struct("QueryAnalyzeState");
 
-    pub fn add_before_group_expression(&mut self, expr: &Expression) {
-        if !self.before_group_by_expressions.contains(expr) {
-            self.before_group_by_expressions.push(expr.clone());
+        if let Some(predicate) = &self.filter {
+            debug_struct.field("filter", predicate);
         }
+
+        if !self.before_group_by_expressions.is_empty() {
+            debug_struct.field("before_group_by", &self.before_group_by_expressions);
+        }
+
+        if !self.group_by_expressions.is_empty() {
+            debug_struct.field("group_by", &self.group_by_expressions);
+        }
+
+        if !self.aggregate_expressions.is_empty() {
+            debug_struct.field("aggregate", &self.aggregate_expressions);
+        }
+
+        if !self.expressions.is_empty() {
+            match self.order_by_expressions.is_empty() {
+                true => debug_struct.field("before_projection", &self.expressions),
+                false => debug_struct.field("before_order_by", &self.expressions)
+            };
+        }
+
+        if let Some(predicate) = &self.having {
+            debug_struct.field("having", predicate);
+        }
+
+        if !self.order_by_expressions.is_empty() {
+            debug_struct.field("order_by", &self.order_by_expressions);
+        }
+
+        if !self.projection_expressions.is_empty() {
+            debug_struct.field("projection", &self.projection_expressions);
+        }
+
+        debug_struct.finish()
     }
 }
 
