@@ -71,11 +71,24 @@ impl JoinedSchema {
 
         for table_desc in &self.tables_long_name_columns {
             for column_desc in table_desc.get_columns_desc() {
-                fields.push(DataField::new(
-                    &column_desc.column_name(),
-                    column_desc.data_type.clone(),
-                    column_desc.nullable,
-                ));
+                match column_desc.is_ambiguity {
+                    true => {
+                        let prefix = table_desc.get_name_parts().join(".");
+                        let fullname = format!("{}.{}", prefix, column_desc.short_name);
+                        fields.push(DataField::new(
+                            &fullname,
+                            column_desc.data_type.clone(),
+                            column_desc.nullable,
+                        ));
+                    }
+                    false => {
+                        fields.push(DataField::new(
+                            &column_desc.short_name,
+                            column_desc.data_type.clone(),
+                            column_desc.nullable,
+                        ));
+                    }
+                };
             }
         }
 
@@ -205,13 +218,6 @@ impl JoinedColumnDesc {
             data_type,
             nullable,
             is_ambiguity: false,
-        }
-    }
-
-    pub fn column_name(&self) -> String {
-        match self.is_ambiguity {
-            true => unimplemented!(),
-            false => self.short_name.clone()
         }
     }
 }
