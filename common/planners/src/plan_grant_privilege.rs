@@ -23,6 +23,8 @@ pub struct GrantPrivilegePlan {
     pub name: String,
     pub hostname: String,
     pub priv_types: UserPrivilege,
+    pub database_pattern: String,
+    pub table_pattern: String,
 }
 
 impl GrantPrivilegePlan {

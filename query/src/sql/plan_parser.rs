@@ -365,6 +365,8 @@ impl PlanParser {
         Ok(PlanNode::GrantPrivilege(GrantPrivilegePlan {
             name: grant.name.clone(),
             hostname: grant.hostname.clone(),
+            database_pattern: grant.database_pattern.clone(),
+            table_pattern: grant.table_pattern.clone(),
             priv_types: grant.priv_types,
         }))
     }
