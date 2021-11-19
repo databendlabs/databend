@@ -638,6 +638,8 @@ fn grant_privilege_test() -> Result<()> {
         DfStatement::GrantPrivilege(DfGrantStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
+            database_pattern: String::from("*"),
+            table_pattern: String::from("*"),
             priv_types: {
                 let mut user_priv = UserPrivilege::empty();
                 user_priv.set_all_privileges();
@@ -651,6 +653,8 @@ fn grant_privilege_test() -> Result<()> {
         DfStatement::GrantPrivilege(DfGrantStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
+            database_pattern: String::from("*"),
+            table_pattern: String::from("*"),
             priv_types: {
                 let mut user_priv = UserPrivilege::empty();
                 user_priv.set_all_privileges();
@@ -660,10 +664,57 @@ fn grant_privilege_test() -> Result<()> {
     )?;
 
     expect_parse_ok(
-        "GRANT INSERT ON * TO 'test'@'localhost'",
+        "GRANT INSERT ON *.`tb1` TO 'test'@'localhost'",
         DfStatement::GrantPrivilege(DfGrantStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
+            database_pattern: String::from("*"),
+            table_pattern: String::from("tb1"),
+            priv_types: {
+                let mut user_priv = UserPrivilege::empty();
+                user_priv.set_privilege(UserPrivilegeType::Insert);
+                user_priv
+            },
+        }),
+    )?;
+
+    expect_parse_ok(
+        "GRANT INSERT ON `db1`.`tb1` TO 'test'@'localhost'",
+        DfStatement::GrantPrivilege(DfGrantStatement {
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            database_pattern: String::from("db1"),
+            table_pattern: String::from("tb1"),
+            priv_types: {
+                let mut user_priv = UserPrivilege::empty();
+                user_priv.set_privilege(UserPrivilegeType::Insert);
+                user_priv
+            },
+        }),
+    )?;
+
+    expect_parse_ok(
+        "GRANT INSERT ON `db1` TO 'test'@'localhost'",
+        DfStatement::GrantPrivilege(DfGrantStatement {
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            database_pattern: String::from("db1"),
+            table_pattern: String::from("*"),
+            priv_types: {
+                let mut user_priv = UserPrivilege::empty();
+                user_priv.set_privilege(UserPrivilegeType::Insert);
+                user_priv
+            },
+        }),
+    )?;
+
+    expect_parse_ok(
+        "GRANT INSERT ON `db1`.'*' TO 'test'@'localhost'",
+        DfStatement::GrantPrivilege(DfGrantStatement {
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            database_pattern: String::from("db1"),
+            table_pattern: String::from("*"),
             priv_types: {
                 let mut user_priv = UserPrivilege::empty();
                 user_priv.set_privilege(UserPrivilegeType::Insert);
@@ -677,6 +728,8 @@ fn grant_privilege_test() -> Result<()> {
         DfStatement::GrantPrivilege(DfGrantStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
+            database_pattern: String::from("*"),
+            table_pattern: String::from("*"),
             priv_types: {
                 let mut user_priv = UserPrivilege::empty();
                 user_priv.set_privilege(UserPrivilegeType::Select);

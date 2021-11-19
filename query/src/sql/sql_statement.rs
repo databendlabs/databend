@@ -137,6 +137,8 @@ pub struct DfShowUsers;
 pub struct DfGrantStatement {
     pub name: String,
     pub hostname: String,
+    pub database_pattern: String,
+    pub table_pattern: String,
     pub priv_types: UserPrivilege,
 }
 

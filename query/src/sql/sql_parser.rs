@@ -698,13 +698,7 @@ impl<'a> DfParser<'a> {
         if !self.parser.parse_keyword(Keyword::ON) {
             return self.expected("keyword ON", self.parser.peek_token());
         }
-        // TODO: Support `db_name.tbl_name` privilege level.
-        if !self.parser.consume_token(&Token::Mul) {
-            return self.expected("*", self.parser.peek_token());
-        }
-        if self.parser.consume_token(&Token::Period) && !self.parser.consume_token(&Token::Mul) {
-            return self.expected("*.*", self.parser.peek_token());
-        }
+        let (database_pattern, table_pattern) = self.parse_grant_object_pattern()?;
         if !self.parser.parse_keyword(Keyword::TO) {
             return self.expected("keyword TO", self.parser.peek_token());
         }
@@ -717,9 +711,33 @@ impl<'a> DfParser<'a> {
         let grant = DfGrantStatement {
             name,
             hostname,
+            database_pattern: database_pattern.value,
+            table_pattern: table_pattern.value,
             priv_types: privileges,
         };
         Ok(DfStatement::GrantPrivilege(grant))
+    }
+
+    /// Parse a possibly qualified, possibly quoted identifier or wild card, e.g.
+    /// `*` or `myschema`.* . Do not support sub string pattern like "db0%" yet.
+    fn parse_grant_object_pattern(&mut self) -> Result<(Ident, Ident), ParserError> {
+        let database_pattern = self.parse_grant_object_pattern_chunk()?;
+        if !self.consume_token(".") {
+            return Ok((database_pattern, Ident::new("*")));
+        }
+        let table_pattern = self.parse_grant_object_pattern_chunk()?;
+        Ok((database_pattern, table_pattern))
+    }
+
+    /// Parse a chunk from the object pattern, it might be * or an identifier
+    pub fn parse_grant_object_pattern_chunk(&mut self) -> Result<Ident, ParserError> {
+        match self.parser.next_token() {
+            Token::Mul => Ok(Ident::new("*")),
+            Token::Word(w) => Ok(w.to_ident()),
+            Token::SingleQuotedString(s) => Ok(Ident::with_quote('\'', s)),
+            Token::BackQuotedString(s) => Ok(Ident::with_quote('`', s)),
+            unexpected => self.expected("identifier or *", unexpected),
+        }
     }
 
     fn consume_token(&mut self, expected: &str) -> bool {
