@@ -27,6 +27,7 @@ use common_base::ProgressValues;
 use common_base::Runtime;
 use common_base::TrySpawn;
 use common_dal::AzureBlobAccessor;
+use common_dal::DalMetrics;
 use common_dal::DataAccessor;
 use common_dal::DataAccessorInterceptor;
 use common_dal::Local;
@@ -289,6 +290,11 @@ impl DatabendQueryContext {
             self.shared.dal_ctx.clone(),
             da,
         )))
+    }
+
+    /// Get the data accessor metrics.
+    pub fn get_dal_metrics(&self) -> DalMetrics {
+        self.shared.dal_ctx.get_metrics()
     }
 }
 
