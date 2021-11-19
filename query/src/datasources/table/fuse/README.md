@@ -33,7 +33,7 @@ the latest snapshot of a given table.
 - Insert `Interpreter`
 
   Accumulates/batch data into blocks, naturally ordered, not partitioning
-t this stage, we reply on background task to merge the data properly.
+t this stage, we rely on background tasks to merge the data properly.
   
 - `Table::append`
   

@@ -13,9 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
-use common_context::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -31,6 +29,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct OneTable {
     table_info: TableInfo,
@@ -67,9 +66,8 @@ impl Table for OneTable {
 
     async fn read_partitions(
         &self,
-        _io_ctx: Arc<TableIOContext>,
+        _ctx: DatabendQueryContextRef,
         _push_downs: Option<Extras>,
-        _partition_num_hint: Option<usize>,
     ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::new_exact(1, 1), vec![Part {
             name: "".to_string(),
@@ -79,7 +77,7 @@ impl Table for OneTable {
 
     async fn read(
         &self,
-        _io_ctx: Arc<TableIOContext>,
+        _ctx: DatabendQueryContextRef,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let block =

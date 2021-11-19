@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use clap::App;
@@ -160,7 +160,6 @@ const PLAYGROUND_VERSION: &str = "v0.4.1-nightly";
 pub struct UpCommand {
     #[allow(dead_code)]
     conf: Config,
-    clap: App<'static>,
 }
 
 // Support to load datasets from official resource
@@ -223,56 +222,13 @@ fn render(ddl: &str, template: serde_json::Value) -> Result<String> {
 
 impl UpCommand {
     pub fn create(conf: Config) -> Self {
-        let clap = UpCommand::generate();
-        UpCommand { conf, clap }
-    }
-    pub fn generate() -> App<'static> {
-        let app = App::new("up")
-            .setting(AppSettings::DisableVersionFlag)
-            .about("Set up a cluster and load prepared dataset for demo")
-            .arg(
-                Arg::new("profile")
-                    .long("profile")
-                    .about("Profile to run queries")
-                    .required(false)
-                    .possible_values(&["local"])
-                    .default_value("local"),
-            )
-            .arg(
-                Arg::new("dataset")
-                    .about("Prepared datasets")
-                    .takes_value(true)
-                    .possible_values(&["ontime_mini"])
-                    .default_value("ontime_mini")
-                    .required(false),
-            );
-        app
+        UpCommand { conf }
     }
 
-    pub(crate) async fn exec_match(
-        &self,
-        writer: &mut Writer,
-        args: Option<&ArgMatches>,
-    ) -> Result<()> {
-        match args {
-            Some(matches) => {
-                let profile = matches.value_of_t("profile");
-                match profile {
-                    Ok(ClusterProfile::Local) => {
-                        return self.local_exec_match(writer, matches).await;
-                    }
-                    Ok(ClusterProfile::Cluster) => {
-                        todo!()
-                    }
-                    Err(_) => writer.write_err("currently profile only support cluster or local"),
-                }
-            }
-            None => {
-                println!("none ");
-            }
-        }
-        Ok(())
+    pub fn default() -> Self {
+        UpCommand::create(Config::default())
     }
+
     async fn download_dataset(&self, dataset: DataSets) -> Result<String> {
         return match dataset {
             DataSets::OntimeMini(url, _) => {
@@ -335,7 +291,7 @@ impl UpCommand {
 
     async fn local_up(&self, dataset: DataSets, writer: &mut Writer) -> Result<()> {
         // bootstrap cluster
-        writer.write_ok("Welcome to use our databend product 🎉🎉🎉");
+        writer.write_ok("Welcome to use our databend product 🎉🎉🎉".to_string());
         let cluster = ClusterCommand::create(self.conf.clone());
         if let Err(e) = cluster
             .exec(writer, ["cluster", "create", "--force"].join(" "))
@@ -346,9 +302,10 @@ impl UpCommand {
                 e
             )));
         }
-        writer.write_ok("Start to download dataset");
+        writer.write_ok("Start to download dataset".to_string());
         match self.download_dataset(dataset.clone()).await {
             Ok(dataset_location) => {
+                writer.write_ok(format!("Download dataset to {}", dataset_location));
                 match dataset {
                     DataSets::OntimeMini(_, ddl) => {
                         if let Err(e) = self
@@ -359,7 +316,7 @@ impl UpCommand {
                         }
                     }
                 }
-                writer.write_ok("Start to download playground");
+                writer.write_ok("Start to download playground".to_string());
 
                 match self.download_playground().await {
                     Ok(path) => {
@@ -411,15 +368,12 @@ impl UpCommand {
                     "dashboard_config_0.yaml".to_string(),
                     &dash_config.clone(),
                 )?;
-                writer.write_ok(
-                    format!(
-                        "👏 successfully started meta service listen on {}",
-                        dash_config
-                            .listen_addr
-                            .expect("dashboard config has no listen address")
-                    )
-                    .as_str(),
-                );
+                writer.write_ok(format!(
+                    "👏 Successfully started meta service listen on {}",
+                    dash_config
+                        .listen_addr
+                        .expect("dashboard config has no listen address")
+                ));
                 Ok(())
             }
             Err(e) => Err(e),
@@ -472,23 +426,23 @@ impl UpCommand {
                 match dataset {
                     Ok(d) => {
                         if let Err(e) = self.local_up(d, writer).await {
-                            writer.write_err(&*format!("{:?}", e));
+                            writer.write_err(format!("{:?}", e));
                             let mut status = Status::read(self.conf.clone())?;
                             if let Err(e) =
                                 StopCommand::stop_current_local_services(&mut status, writer).await
                             {
-                                writer.write_err(&*format!("{:?}", e));
+                                writer.write_err(format!("{:?}", e));
                             }
                         }
                     }
                     Err(e) => {
-                        writer.write_err(&*format!("Cannot find public dataset, error {:?}", e));
+                        writer.write_err(format!("Cannot find public dataset, error {:?}", e));
                     }
                 }
                 Ok(())
             }
             Err(e) => {
-                writer.write_err(&*format!("Query command precheck failed, error {:?}", e));
+                writer.write_err(format!("Query command precheck failed, error {:?}", e));
                 Ok(())
             }
         }
@@ -499,13 +453,36 @@ impl UpCommand {
         Ok(())
     }
 }
+
 #[async_trait]
 impl Command for UpCommand {
     fn name(&self) -> &str {
         "up"
     }
 
-    fn about(&self) -> &str {
+    fn clap(&self) -> App<'static> {
+        App::new("up")
+            .setting(AppSettings::DisableVersionFlag)
+            .about("Set up a cluster and load prepared dataset for demo")
+            .arg(
+                Arg::new("profile")
+                    .long("profile")
+                    .about("Profile to run queries")
+                    .required(false)
+                    .possible_values(&["local"])
+                    .default_value("local"),
+            )
+            .arg(
+                Arg::new("dataset")
+                    .about("Prepared datasets")
+                    .takes_value(true)
+                    .possible_values(&["ontime_mini"])
+                    .default_value("ontime_mini")
+                    .required(false),
+            )
+    }
+
+    fn about(&self) -> &'static str {
         "Bootstrap a single cluster with dashboard"
     }
 
@@ -513,16 +490,29 @@ impl Command for UpCommand {
         s.contains(self.name())
     }
 
-    async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
-        match self.clap.clone().try_get_matches_from(args.split(' ')) {
-            Ok(matches) => {
-                return self.exec_match(writer, Some(matches.borrow())).await;
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
+    }
+
+    async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+        match args {
+            Some(matches) => {
+                let profile = matches.value_of_t("profile");
+                match profile {
+                    Ok(ClusterProfile::Local) => {
+                        return self.local_exec_match(writer, matches).await;
+                    }
+                    Ok(ClusterProfile::Cluster) => {
+                        todo!()
+                    }
+                    Err(_) => writer
+                        .write_err("Currently profile only support cluster or local".to_string()),
+                }
             }
-            Err(err) => {
-                println!("Cannot get subcommand matches: {}", err);
+            None => {
+                println!("none ");
             }
         }
-
         Ok(())
     }
 }

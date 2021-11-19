@@ -211,7 +211,30 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
             PlanNode::display_scan_fields(&plan.scan_fields()),
             plan.statistics.read_rows,
             plan.statistics.read_bytes,
-        )
+        )?;
+
+        if let Some(p) = &plan.push_downs {
+            if p.limit.is_some() || p.projection.is_some() {
+                write!(f, ", push_downs: [")?;
+                let mut comma = false;
+                if p.projection.is_some() {
+                    write!(f, "projections: {:?}", p.projection.clone().unwrap())?;
+                    comma = true;
+                }
+
+                if p.limit.is_some() {
+                    if comma {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "limit: {:?}", p.limit.unwrap())?;
+                    write!(f, ", order_by: {:?}", p.order_by)?;
+                }
+
+                write!(f, "]")?;
+            }
+        }
+        Ok(())
     }
 
     fn format_create_database(f: &mut Formatter, plan: &CreateDatabasePlan) -> fmt::Result {

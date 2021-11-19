@@ -21,6 +21,7 @@ use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
 use crate::scalars::dates::IntervalFunctionFactory;
+use crate::scalars::function::MonotonicityNode;
 use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::ArithmeticDivFunction;
 use crate::scalars::ArithmeticMinusFunction;
@@ -111,6 +112,16 @@ impl Function for ArithmeticFunction {
 
     fn variadic_arguments(&self) -> Option<(usize, usize)> {
         Some((1, 2))
+    }
+
+    fn get_monotonicity(&self, args: &[MonotonicityNode]) -> Result<MonotonicityNode> {
+        match self.op {
+            Plus => ArithmeticPlusFunction::get_monotonicity(args),
+            Minus => ArithmeticMinusFunction::get_monotonicity(args),
+            Mul => ArithmeticMulFunction::get_monotonicity(args),
+            Div => ArithmeticDivFunction::get_monotonicity(args),
+            Modulo => ArithmeticModuloFunction::get_monotonicity(args),
+        }
     }
 }
 

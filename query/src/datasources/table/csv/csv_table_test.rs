@@ -14,10 +14,8 @@
 //
 
 use std::env;
-use std::sync::Arc;
 
 use common_base::tokio;
-use common_context::TableDataContext;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -27,6 +25,7 @@ use common_planners::*;
 use futures::TryStreamExt;
 
 use crate::catalogs::ToReadDataSourcePlan;
+use crate::datasources::context::TableContext;
 use crate::datasources::table::csv::csv_table::CsvTable;
 
 #[tokio::test]
@@ -58,35 +57,13 @@ async fn test_csv_table() -> Result<()> {
                 options,
             },
         },
-        Arc::new(TableDataContext::default()),
+        TableContext::default(),
     )?;
 
-    let scan_plan = &ScanPlan {
-        schema_name: "".to_string(),
-        table_schema: DataSchemaRefExt::create(vec![]),
-        table_id: 0,
-        table_version: None,
-        table_args: None,
-        projected_schema: DataSchemaRefExt::create(vec![DataField::new(
-            "column1",
-            DataType::UInt64,
-            false,
-        )]),
-        push_downs: Extras::default(),
-    };
-    let partitions = ctx.get_settings().get_max_threads()? as usize;
-    let io_ctx = ctx.get_single_node_table_io_context()?;
-    let io_ctx = Arc::new(io_ctx);
-    let source_plan = table
-        .read_plan(
-            io_ctx.clone(),
-            Some(scan_plan.push_downs.clone()),
-            Some(partitions),
-        )
-        .await?;
+    let source_plan = table.read_plan(ctx.clone(), Some(Extras::default())).await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
-    let stream = table.read(io_ctx, &source_plan).await?;
+    let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 1);
@@ -139,9 +116,10 @@ async fn test_csv_table_parse_error() -> Result<()> {
                 options,
             },
         },
-        Arc::new(TableDataContext::default()),
+        TableContext::default(),
     )?;
 
+<<<<<<< HEAD
     let scan_plan = &ScanPlan {
         schema_name: "".to_string(),
         table_id: 0,
@@ -165,9 +143,12 @@ async fn test_csv_table_parse_error() -> Result<()> {
             Some(partitions),
         )
         .await?;
+=======
+    let source_plan = table.read_plan(ctx.clone(), Some(Extras::default()))?;
+>>>>>>> main
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
-    let stream = table.read(io_ctx, &source_plan).await?;
+    let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await;
     // integer parse error will result to Null value
     assert!(!result.is_err());
@@ -176,12 +157,12 @@ async fn test_csv_table_parse_error() -> Result<()> {
             "+---------+---------+---------+---------+",
             "| column1 | column2 | column3 | column4 |",
             "+---------+---------+---------+---------+",
-            "| 1       | NULL    | 100     | NULL    |",
-            "| 2       | NULL    | 80      | NULL    |",
-            "| 3       | NULL    | 60      | NULL    |",
-            "| 4       | NULL    | 70      | NULL    |",
-            "| 5       | NULL    | 55      | NULL    |",
-            "| 6       | NULL    | 99      | NULL    |",
+            "| 1       | 0       | 100     | NULL    |",
+            "| 2       | 0       | 80      | NULL    |",
+            "| 3       | 0       | 60      | NULL    |",
+            "| 4       | 0       | 70      | NULL    |",
+            "| 5       | 0       | 55      | NULL    |",
+            "| 6       | 0       | 99      | NULL    |",
             "+---------+---------+---------+---------+",
         ],
         &result.unwrap(),

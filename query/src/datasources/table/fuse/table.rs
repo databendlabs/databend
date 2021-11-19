@@ -14,17 +14,12 @@
 //
 
 use std::any::Any;
-use std::sync::Arc;
 
-use common_context::DataContext;
-use common_context::IOContext;
-use common_context::TableIOContext;
 use common_dal::read_obj;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
-use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
@@ -33,18 +28,16 @@ use common_streams::SendableDataBlockStream;
 
 use super::util;
 use crate::catalogs::Table;
-use crate::datasources::table::fuse::BlockMeta;
+use crate::datasources::context::TableContext;
 use crate::datasources::table::fuse::TableSnapshot;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct FuseTable {
     pub(crate) table_info: TableInfo,
 }
 
 impl FuseTable {
-    pub fn try_create(
-        table_info: TableInfo,
-        _data_ctx: Arc<dyn DataContext<u64>>,
-    ) -> Result<Box<dyn Table>> {
+    pub fn try_create(table_info: TableInfo, _table_ctx: TableContext) -> Result<Box<dyn Table>> {
         Ok(Box::new(FuseTable { table_info }))
     }
 }
@@ -63,37 +56,41 @@ impl Table for FuseTable {
         &self.table_info
     }
 
+    fn benefit_column_prune(&self) -> bool {
+        true
+    }
+
     async fn read_partitions(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         push_downs: Option<Extras>,
-        _partition_num_hint: Option<usize>,
     ) -> Result<(Statistics, Partitions)> {
-        self.do_read_partitions(io_ctx.as_ref(), push_downs).await
+        self.do_read_partitions(ctx, push_downs).await
     }
 
     async fn read(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        self.do_read(io_ctx, &plan.push_downs).await
+        self.do_read(ctx, &plan.push_downs).await
     }
 
     async fn append_data(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         insert_plan: InsertIntoPlan,
+        stream: SendableDataBlockStream,
     ) -> Result<()> {
-        self.do_append(io_ctx, insert_plan).await
+        self.do_append(ctx, insert_plan, stream).await
     }
 
     async fn truncate(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
-        self.do_truncate(io_ctx, truncate_plan).await
+        self.do_truncate(ctx, truncate_plan).await
     }
 }
 
@@ -107,28 +104,13 @@ impl FuseTable {
 
     pub(crate) async fn table_snapshot(
         &self,
-        io_ctx: &TableIOContext,
+        ctx: DatabendQueryContextRef,
     ) -> Result<Option<TableSnapshot>> {
         if let Some(loc) = self.snapshot_loc() {
-            let da = io_ctx.get_data_accessor()?;
+            let da = ctx.get_data_accessor()?;
             Ok(Some(read_obj(da, loc.to_string()).await?))
         } else {
             Ok(None)
         }
-    }
-
-    pub(crate) fn to_partitions(&self, blocks_metas: &[BlockMeta]) -> (Statistics, Partitions) {
-        blocks_metas.iter().fold(
-            (Statistics::default(), Partitions::default()),
-            |(mut stats, mut parts), item| {
-                stats.read_rows += item.row_count as usize;
-                stats.read_bytes += item.block_size as usize;
-                parts.push(Part {
-                    name: item.location.location.clone(),
-                    version: 0,
-                });
-                (stats, parts)
-            },
-        )
     }
 }

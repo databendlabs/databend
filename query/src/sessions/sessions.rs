@@ -24,14 +24,16 @@ use common_base::SignalStream;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_metrics::label_counter;
 use futures::future::Either;
 use futures::StreamExt;
-use metrics::counter;
 
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
 use crate::clusters::ClusterDiscoveryRef;
 use crate::configs::Config;
+use crate::servers::http::v1::query::HttpQueryManager;
+use crate::servers::http::v1::query::HttpQueryManagerRef;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 use crate::users::UserManager;
@@ -42,6 +44,7 @@ pub struct SessionManager {
     pub(in crate::sessions) discovery: ClusterDiscoveryRef,
     pub(in crate::sessions) catalog: Arc<DatabaseCatalog>,
     pub(in crate::sessions) user: UserManagerRef,
+    pub(in crate::sessions) http_query_manager: HttpQueryManagerRef,
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
@@ -51,7 +54,7 @@ pub type SessionManagerRef = Arc<SessionManager>;
 
 impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<SessionManagerRef> {
-        let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone())?);
+        let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
 
         // Cluster discovery.
         let discovery = ClusterDiscovery::create_global(conf.clone()).await?;
@@ -59,12 +62,15 @@ impl SessionManager {
         // User manager and init the default users.
         let user = UserManager::create_global(conf.clone()).await?;
 
+        let http_query_manager = HttpQueryManager::create_global(conf.clone()).await?;
+
         let max_active_sessions = conf.query.max_active_sessions as usize;
         Ok(Arc::new(SessionManager {
             catalog,
             conf,
             discovery,
             user,
+            http_query_manager,
             max_sessions: max_active_sessions,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
         }))
@@ -78,6 +84,10 @@ impl SessionManager {
         self.discovery.clone()
     }
 
+    pub fn get_http_query_manager(self: &Arc<Self>) -> HttpQueryManagerRef {
+        self.http_query_manager.clone()
+    }
+
     // Get the user api provider.
     pub fn get_user_manager(self: &Arc<Self>) -> UserManagerRef {
         self.user.clone()
@@ -88,8 +98,6 @@ impl SessionManager {
     }
 
     pub fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {
-        counter!(super::metrics::METRIC_SESSION_CONNECT_NUMBERS, 1);
-
         let mut sessions = self.active_sessions.write();
         match sessions.len() == self.max_sessions {
             true => Err(ErrorCode::TooManyUserConnections(
@@ -103,6 +111,12 @@ impl SessionManager {
                     self.clone(),
                 )?;
 
+                label_counter(
+                    super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
+                    &self.conf.query.tenant_id,
+                    &self.conf.query.cluster_id,
+                );
+
                 sessions.insert(session.get_id(), session.clone());
                 Ok(SessionRef::create(session))
             }
@@ -110,8 +124,6 @@ impl SessionManager {
     }
 
     pub fn create_rpc_session(self: &Arc<Self>, id: String, aborted: bool) -> Result<SessionRef> {
-        counter!(super::metrics::METRIC_SESSION_CONNECT_NUMBERS, 1);
-
         let mut sessions = self.active_sessions.write();
 
         let session = match sessions.entry(id) {
@@ -124,6 +136,12 @@ impl SessionManager {
                     String::from("RPCSession"),
                     self.clone(),
                 )?;
+
+                label_counter(
+                    super::metrics::METRIC_SESSION_CONNECT_NUMBERS,
+                    &self.conf.query.tenant_id,
+                    &self.conf.query.cluster_id,
+                );
 
                 entry.insert(session).clone()
             }
@@ -142,7 +160,11 @@ impl SessionManager {
 
     #[allow(clippy::ptr_arg)]
     pub fn destroy_session(self: &Arc<Self>, session_id: &String) {
-        counter!(super::metrics::METRIC_SESSION_CLOSE_NUMBERS, 1);
+        label_counter(
+            super::metrics::METRIC_SESSION_CLOSE_NUMBERS,
+            &self.conf.query.tenant_id,
+            &self.conf.query.cluster_id,
+        );
 
         self.active_sessions.write().remove(session_id);
     }

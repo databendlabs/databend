@@ -17,9 +17,6 @@ mod series_debug;
 mod series_impl;
 mod wrap;
 
-#[cfg(test)]
-mod arithmetic_test;
-
 pub use arithmetic::*;
 pub use comparison::*;
 pub use series_debug::*;

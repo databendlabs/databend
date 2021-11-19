@@ -22,16 +22,20 @@ use std::sync::Arc;
 use chrono_tz::Tz;
 
 use self::chunk::ChunkColumnData;
-pub(crate) use self::column_data::ColumnData;
+pub use self::column_data::ArcColumnData;
+pub use self::column_data::BoxColumnData;
+pub use self::column_data::ColumnData;
+pub use self::column_data::ColumnDataExt;
 pub use self::concat::ConcatColumnData;
+pub use self::list::List;
 pub use self::numeric::VectorColumnData;
-pub(crate) use self::string_pool::StringPool;
+pub use self::string::StringColumnData;
+pub use self::string_pool::StringPool;
 use crate::binary::Encoder;
 use crate::binary::ReadEx;
 use crate::errors::Error;
 use crate::errors::FromSqlError;
 use crate::errors::Result;
-use crate::types::column::column_data::ArcColumnData;
 use crate::types::column::decimal::DecimalAdapter;
 use crate::types::column::decimal::NullableDecimalAdapter;
 use crate::types::column::enums::Enum16Adapter;
@@ -54,12 +58,12 @@ mod array;
 pub(crate) mod chrono_datetime;
 mod chunk;
 mod column_data;
-mod concat;
+pub mod concat;
 mod date;
-pub(crate) mod datetime64;
+pub mod datetime64;
 mod decimal;
 mod enums;
-mod factory;
+pub mod factory;
 pub(crate) mod fixed_string;
 mod ip;
 pub(crate) mod iter;
@@ -494,7 +498,7 @@ pub trait ColumnWrapper {
     fn wrap_arc(data: ArcColumnData) -> Self::Wrapper;
 }
 
-pub(crate) struct ArcColumnWrapper {
+pub struct ArcColumnWrapper {
     _private: (),
 }
 

@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 pub mod prelude;
 
 mod binary_de;
@@ -22,15 +23,3 @@ mod marshal;
 mod stat_buffer;
 mod unmarshal;
 mod utils;
-
-#[cfg(test)]
-mod binary_read_test;
-#[cfg(test)]
-mod binary_write_test;
-#[cfg(test)]
-mod buf_read_test;
-#[cfg(test)]
-mod marshal_test;
-
-#[cfg(test)]
-mod utils_test;

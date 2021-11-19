@@ -37,8 +37,8 @@ fn test_default_config() -> Result<()> {
     let tom_expect = "config_file = \"\"
 
 [query]
-tenant = \"\"
-namespace = \"\"
+tenant_id = \"\"
+cluster_id = \"\"
 num_cpus = 8
 mysql_handler_host = \"127.0.0.1\"
 mysql_handler_port = 3307
@@ -57,12 +57,14 @@ rpc_tls_server_cert = \"\"
 rpc_tls_server_key = \"\"
 rpc_tls_query_server_root_ca_cert = \"\"
 rpc_tls_query_service_domain_name = \"localhost\"
+wait_timeout_mills = 5000
 
 [log]
 log_level = \"INFO\"
 log_dir = \"./_logs\"
 
 [meta]
+meta_embedded_dir = \"./_meta_embedded\"
 meta_address = \"\"
 meta_username = \"root\"
 meta_password = \"\"
@@ -74,15 +76,17 @@ rpc_tls_meta_service_domain_name = \"localhost\"
 storage_type = \"disk\"
 
 [storage.disk]
-data_path = \"\"
+data_path = \"_data\"
+temp_data_path = \"\"
 
 [storage.s3]
 region = \"\"
+endpoint_url = \"\"
 access_key_id = \"\"
 secret_access_key = \"\"
 bucket = \"\"
 
-[storage.asb]
+[storage.azure_storage_blob]
 account = \"\"
 master_key = \"\"
 container = \"\"
@@ -97,8 +101,8 @@ container = \"\"
 #[test]
 fn test_env_config() -> Result<()> {
     std::env::set_var("LOG_LEVEL", "DEBUG");
-    std::env::set_var("QUERY_TENANT", "tenant-1");
-    std::env::set_var("QUERY_NAMESPACE", "cluster-1");
+    std::env::set_var("QUERY_TENANT_ID", "tenant-1");
+    std::env::set_var("QUERY_CLUSTER_ID", "cluster-1");
     std::env::set_var("QUERY_MYSQL_HANDLER_HOST", "0.0.0.0");
     std::env::set_var("QUERY_MYSQL_HANDLER_PORT", "3306");
     std::env::set_var("QUERY_MAX_ACTIVE_SESSIONS", "255");
@@ -110,6 +114,7 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("STORAGE_TYPE", "s3");
     std::env::set_var("DISK_STORAGE_DATA_PATH", "/tmp/test");
     std::env::set_var("S3_STORAGE_REGION", "us.region");
+    std::env::set_var("S3_STORAGE_ENDPOINT_URL", "");
     std::env::set_var("S3_STORAGE_ACCESS_KEY_ID", "us.key.id");
     std::env::set_var("S3_STORAGE_SECRET_ACCESS_KEY", "us.key");
     std::env::set_var("S3_STORAGE_BUCKET", "us.bucket");
@@ -119,8 +124,8 @@ fn test_env_config() -> Result<()> {
     let configured = Config::load_from_env(&default)?;
     assert_eq!("DEBUG", configured.log.log_level);
 
-    assert_eq!("tenant-1", configured.query.tenant);
-    assert_eq!("cluster-1", configured.query.namespace);
+    assert_eq!("tenant-1", configured.query.tenant_id);
+    assert_eq!("cluster-1", configured.query.cluster_id);
     assert_eq!("0.0.0.0", configured.query.mysql_handler_host);
     assert_eq!(3306, configured.query.mysql_handler_port);
     assert_eq!(255, configured.query.max_active_sessions);
@@ -136,14 +141,15 @@ fn test_env_config() -> Result<()> {
     assert_eq!("/tmp/test", configured.storage.disk.data_path);
 
     assert_eq!("us.region", configured.storage.s3.region);
+    assert_eq!("", configured.storage.s3.endpoint_url);
     assert_eq!("us.key.id", configured.storage.s3.access_key_id);
     assert_eq!("us.key", configured.storage.s3.secret_access_key);
     assert_eq!("us.bucket", configured.storage.s3.bucket);
 
     // clean up
     std::env::remove_var("LOG_LEVEL");
-    std::env::remove_var("QUERY_TENANT");
-    std::env::remove_var("QUERY_NAMESPACE");
+    std::env::remove_var("QUERY_TENANT_ID");
+    std::env::remove_var("QUERY_CLUSTER_ID");
     std::env::remove_var("QUERY_MYSQL_HANDLER_HOST");
     std::env::remove_var("QUERY_MYSQL_HANDLER_PORT");
     std::env::remove_var("QUERY_MAX_ACTIVE_SESSIONS");
@@ -166,5 +172,21 @@ fn test_env_config() -> Result<()> {
 fn test_fuse_commit_version() -> Result<()> {
     let v = &crate::configs::config::DATABEND_COMMIT_VERSION;
     assert!(v.len() > 0);
+    Ok(())
+}
+
+#[test]
+fn test_initial_dir() -> Result<()> {
+    let mut conf = Config::default();
+    conf.storage.storage_type = "disk".to_string();
+    conf.initial_dir()?;
+
+    // Remove.
+    if !conf.storage.disk.data_path.is_empty() {
+        std::fs::remove_dir_all(conf.storage.disk.data_path)?;
+    }
+    if !conf.storage.disk.temp_data_path.is_empty() {
+        std::fs::remove_dir_all(conf.storage.disk.temp_data_path)?;
+    }
     Ok(())
 }

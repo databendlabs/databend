@@ -71,6 +71,7 @@ impl PlanParser {
         let order_by = Self::build_order_by_plan(having, data)?;
         let projection = Self::build_projection_plan(order_by, data)?;
         let limit = Self::build_limit_plan(projection, data)?;
+
         Ok(PlanNode::Select(SelectPlan {
             input: Arc::new(limit),
         }))

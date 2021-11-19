@@ -13,13 +13,12 @@
 // limitations under the License.
 
 use async_raft::raft::Entry;
-use common_meta_sled_store::SeqNum;
 use common_meta_sled_store::SledKeySpace;
-use common_meta_types::DatabaseInfo;
 use common_meta_types::LogEntry;
 use common_meta_types::LogIndex;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
+use common_meta_types::SeqNum;
 use common_meta_types::SeqV;
 use common_meta_types::TableMeta;
 
@@ -97,7 +96,7 @@ impl SledKeySpace for Databases {
     const PREFIX: u8 = 8;
     const NAME: &'static str = "databases";
     type K = String;
-    type V = SeqV<DatabaseInfo>;
+    type V = SeqV<u64>;
 }
 
 pub struct Tables {}

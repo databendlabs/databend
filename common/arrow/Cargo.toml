@@ -6,6 +6,10 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lib]
+doctest = false
+test = false
+
 [features]
 default = ["arrow-default", "parquet-default"]
 arrow-default = ["arrow/compute", "arrow/regex", "arrow/merge_sort", "arrow/io_csv", "arrow/io_parquet", "arrow/io_json", "arrow/io_flight"]
@@ -16,8 +20,8 @@ simd = ["arrow/simd"]
 # Workspace dependencies
 
 # Github dependencies
-arrow = { package = "arrow2", git="https://github.com/datafuse-extras/arrow2", default-features = false, rev = "bd8f02b" }
-arrow-format = { version = "0.2.1", features = ["flight-data", "flight-service"]}
+arrow = { package = "arrow2", git="https://github.com/datafuse-extras/arrow2", default-features = false, rev = "83d828c" }
+arrow-format = { version = "0.3.0", features = ["flight-data", "flight-service"]}
 parquet2 = { version = "0.6", default_features = false }
 # Crates.io dependencies
 

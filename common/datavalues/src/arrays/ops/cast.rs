@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute::cast;
+use common_arrow::arrow::compute::cast::CastOptions;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -38,7 +39,10 @@ fn cast_ca(ca: &dyn Array, data_type: &DataType) -> Result<Series> {
     let arrow_type = data_type.to_arrow();
     let arrow_type = get_physical_arrow_type(&arrow_type);
     // we enable ignore_overflow by default
-    let array = cast::wrapping_cast(ca, arrow_type)?;
+    let array = cast::cast(ca, arrow_type, CastOptions {
+        wrapped: true,
+        partial: true,
+    })?;
     let array: ArrayRef = Arc::from(array);
     Ok(array.into_series())
 }
@@ -53,7 +57,26 @@ where T: DFPrimitiveType
 
 impl ArrayCast for DFStringArray {
     fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
-        cast_ca(&self.array, data_type)
+        // special case for string to float
+        if data_type == &DataType::Float32 {
+            let c = self.apply_cast_numeric(|v| {
+                lexical_core::parse_partial::<f32>(v)
+                    .unwrap_or((0.0f32, 0))
+                    .0
+            });
+
+            Ok(c.into_series())
+        } else if data_type == &DataType::Float64 {
+            let c = self.apply_cast_numeric(|v| {
+                lexical_core::parse_partial::<f64>(v)
+                    .unwrap_or((0.0f64, 0))
+                    .0
+            });
+
+            Ok(c.into_series())
+        } else {
+            cast_ca(&self.array, data_type)
+        }
     }
 }
 

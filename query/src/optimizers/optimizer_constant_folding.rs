@@ -282,9 +282,15 @@ impl PlanRewriter for ConstantFoldingImpl {
                 expr,
                 asc,
                 nulls_first,
+                origin_expr,
             } => {
                 let new_expr = self.rewrite_expr(schema, expr)?;
-                Ok(ConstantFoldingImpl::create_sort(asc, nulls_first, new_expr))
+                Ok(ConstantFoldingImpl::create_sort(
+                    asc,
+                    nulls_first,
+                    new_expr,
+                    origin_expr.clone(),
+                ))
             }
             Expression::AggregateFunction {
                 op,
@@ -372,11 +378,17 @@ impl ConstantFoldingOptimizer {
 }
 
 impl ConstantFoldingImpl {
-    fn create_sort(asc: &bool, nulls_first: &bool, new_expr: Expression) -> Expression {
+    fn create_sort(
+        asc: &bool,
+        nulls_first: &bool,
+        new_expr: Expression,
+        origin_expr: Box<Expression>,
+    ) -> Expression {
         Expression::Sort {
             expr: Box::new(new_expr),
             asc: *asc,
             nulls_first: *nulls_first,
+            origin_expr,
         }
     }
 }

@@ -25,16 +25,12 @@ pub use table_lookup::TableLookupValue;
 
 pub mod applied_state;
 pub mod client_last_resp;
+pub mod placement;
 pub mod sm;
+mod sm_kv_api_impl;
 pub mod snapshot;
 pub mod state_machine_meta;
 pub mod table_lookup;
-
-pub mod placement;
-#[cfg(test)]
-mod placement_test;
-#[cfg(test)]
-mod state_machine_test;
 
 // will be accessed by other crate, can not cfg(test)
 pub mod testing;

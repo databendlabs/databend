@@ -10,6 +10,12 @@ build-cli () {
   echo "All done..."
 }
 
+build-cli-debug () {
+  echo "Build(RELEASE) start..."
+  cargo build --bin=bendctl
+  echo "All done..."
+}
+
 install-cli () {
   echo "Install(RELEASE) start..."
   cargo install --bin=bendctl --path ./cli

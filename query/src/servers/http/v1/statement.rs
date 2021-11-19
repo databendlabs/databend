@@ -12,23 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::Infallible;
+use std::collections::HashMap;
 
-use axum::body::Bytes;
-use axum::body::Full;
-use axum::extract::Extension;
-use axum::handler::post;
-use axum::http::header;
-use axum::http::Response;
-use axum::http::StatusCode;
-use axum::response::IntoResponse;
-use axum::routing::BoxRoute;
-use axum::Router;
 use common_base::ProgressValues;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
+use hyper::http::header;
+use poem::http::StatusCode;
+use poem::post;
+use poem::web::Data;
+use poem::web::Query;
+use poem::Endpoint;
+use poem::IntoResponse;
+use poem::Response;
+use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json;
@@ -68,11 +67,8 @@ impl HttpQueryResult {
 }
 
 impl IntoResponse for HttpQueryResult {
-    type Body = Full<Bytes>;
-    type BodyError = Infallible;
-
-    fn into_response(self) -> Response<Self::Body> {
-        let body = Full::from(serde_json::to_vec(&self).unwrap());
+    fn into_response(self) -> Response {
+        let body = serde_json::to_vec(&self).unwrap();
         // TODO(youngsofun): when should we return other status code here?
         let status = StatusCode::OK;
         let content_type = "application/javascript";
@@ -81,7 +77,6 @@ impl IntoResponse for HttpQueryResult {
             .status(status)
             .header(header::CONTENT_TYPE, content_type)
             .body(body)
-            .unwrap()
     }
 }
 
@@ -89,6 +84,7 @@ struct HttpQuery {
     id: String,
     sql: String,
     state: Option<HttpQueryState>,
+    db: Option<String>,
 }
 
 struct HttpQueryState {
@@ -101,21 +97,25 @@ struct HttpQueryState {
 
 // TODO(youngsofun): add a HttpQueryManager in SessionManger to support async query.
 impl HttpQuery {
-    fn new(id: String, sql: String) -> HttpQuery {
+    fn new(id: String, sql: String, db: Option<String>) -> HttpQuery {
         HttpQuery {
             id,
             sql,
             state: None,
+            db,
         }
     }
 
     async fn start(&mut self, session_manager: SessionManagerRef) -> Result<HttpQueryState> {
         let session = session_manager.create_session("http-statement")?;
         let ctx = session.create_context().await?;
+        if self.db.is_some() && !self.db.clone().unwrap().is_empty() {
+            ctx.set_current_database(self.db.clone().unwrap())?;
+        }
         ctx.attach_query_str(&self.sql);
         let plan = PlanParser::parse(&self.sql, ctx.clone()).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let data_stream = interpreter.execute().await?;
+        let data_stream = interpreter.execute(None).await?;
         let state = HttpQueryState {
             session,
             data_stream,
@@ -150,7 +150,7 @@ impl HttpQueryState {
     async fn collect_all(&mut self) -> Result<Vec<Vec<JsonValue>>> {
         let mut results: Vec<Vec<Vec<JsonValue>>> = Vec::new();
         while let Some(block) = self.data_stream.next().await {
-            results.push(block_to_json(block.unwrap())?);
+            results.push(block_to_json(&block.unwrap())?);
         }
         Ok(results.concat())
     }
@@ -169,16 +169,19 @@ impl HttpQueryState {
     }
 }
 
+#[poem::handler]
 pub(crate) async fn statement_handler(
-    sessions_extension: Extension<SessionManagerRef>,
+    sessions_extension: Data<&SessionManagerRef>,
     sql: String,
+    Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
-    let session_manager = sessions_extension.0;
+    let session_manager = sessions_extension.0.clone();
     let query_id = uuid::Uuid::new_v4().to_string();
-    let mut query = HttpQuery::new(query_id, sql);
+    let db = params.get("db");
+    let mut query = HttpQuery::new(query_id, sql, db.cloned());
     query.initial_result(session_manager).await
 }
 
-pub fn statement_router() -> Router<BoxRoute> {
-    Router::new().route("/", post(statement_handler)).boxed()
+pub fn statement_router() -> impl Endpoint {
+    Route::new().at("/", post(statement_handler))
 }

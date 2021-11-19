@@ -29,7 +29,7 @@ async fn test_setting_interpreter() -> Result<()> {
         let executor = SettingInterpreter::try_create(ctx, plan)?;
         assert_eq!(executor.name(), "SettingInterpreter");
 
-        let mut stream = executor.execute().await?;
+        let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
     } else {
         panic!()
@@ -44,7 +44,7 @@ async fn test_setting_interpreter_error() -> Result<()> {
 
     if let PlanNode::SetVariable(plan) = parse_query("SET xx = 1", &ctx)? {
         let executor = SettingInterpreter::try_create(ctx, plan)?;
-        if let Err(e) = executor.execute().await {
+        if let Err(e) = executor.execute(None).await {
             let expect = "Code: 20, displayText = Unknown variable: \"xx\".";
             assert_eq!(expect, format!("{}", e));
         } else {

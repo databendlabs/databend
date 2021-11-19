@@ -18,7 +18,6 @@ use async_raft::storage::HardState;
 use common_exception::ErrorCode;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::SledOrderedSerde;
-use common_meta_sled_store::SledSerde;
 use common_meta_types::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
@@ -89,8 +88,6 @@ impl SledOrderedSerde for RaftStateKey {
         Err(ErrorCode::MetaStoreDamaged("invalid key IVec"))
     }
 }
-
-impl SledSerde for RaftStateValue {}
 
 impl From<RaftStateValue> for NodeId {
     fn from(v: RaftStateValue) -> Self {

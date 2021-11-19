@@ -15,11 +15,12 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_management::AuthType;
 use common_management::UserInfo;
 use common_management::UserMgr;
 use common_management::UserMgrApi;
 use common_meta_api::KVApi;
+use common_meta_types::AuthType;
+use common_meta_types::UserPrivilege;
 use sha2::Digest;
 
 use crate::common::MetaClientProvider;
@@ -34,40 +35,43 @@ pub struct UserManager {
 
 impl UserManager {
     async fn create_kv_client(cfg: &Config) -> Result<Arc<dyn KVApi>> {
-        match MetaClientProvider::new(cfg).try_get_kv_client().await {
+        match MetaClientProvider::new(cfg.meta.to_flight_client_config())
+            .try_get_kv_client()
+            .await
+        {
             Ok(client) => Ok(client),
             Err(cause) => Err(cause.add_message_back("(while create user api).")),
         }
     }
 
     pub async fn create_global(cfg: Config) -> Result<UserManagerRef> {
-        let tenant = &cfg.query.tenant;
+        let tenant_id = &cfg.query.tenant_id;
         let kv_client = UserManager::create_kv_client(&cfg).await?;
 
         Ok(Arc::new(UserManager {
-            api_provider: Arc::new(UserMgr::new(kv_client, tenant)),
+            api_provider: Arc::new(UserMgr::new(kv_client, tenant_id)),
         }))
     }
 
     // Get one user from by tenant.
-    pub async fn get_user(&self, user: &str) -> Result<UserInfo> {
+    pub async fn get_user(&self, user: &str, hostname: &str) -> Result<UserInfo> {
         match user {
             // TODO(BohuTANG): Mock, need removed.
             "default" | "" | "root" => {
-                let user = User::new(user, "", AuthType::None);
+                let user = User::new(user, "%", "", AuthType::None);
                 Ok(user.into())
             }
             _ => {
-                let get_user = self.api_provider.get_user(user.to_string(), None);
+                let get_user =
+                    self.api_provider
+                        .get_user(user.to_string(), hostname.to_string(), None);
                 Ok(get_user.await?.data)
             }
         }
     }
 
     // Auth the user and password for different Auth type.
-    pub async fn auth_user(&self, info: CertifiedInfo) -> Result<bool> {
-        let user = self.get_user(&info.user_name).await?;
-
+    pub async fn auth_user(&self, user: UserInfo, info: CertifiedInfo) -> Result<bool> {
         match user.auth_type {
             AuthType::None => Ok(true),
             AuthType::PlainText => Ok(user.password == info.user_password),
@@ -116,12 +120,53 @@ impl UserManager {
         }
     }
 
-    // Drop a user by name.
-    pub async fn drop_user(&self, user: &str) -> Result<()> {
-        let drop_user = self.api_provider.drop_user(user.to_string(), None);
+    pub async fn set_user_privileges(
+        &self,
+        username: &str,
+        hostname: &str,
+        privileges: UserPrivilege,
+    ) -> Result<Option<u64>> {
+        let set_user_privileges = self.api_provider.set_user_privileges(
+            username.to_string(),
+            hostname.to_string(),
+            privileges,
+            None,
+        );
+        match set_user_privileges.await {
+            Ok(res) => Ok(res),
+            Err(failure) => Err(failure.add_message_back("(while set user privileges)")),
+        }
+    }
+
+    // Drop a user by name and hostname.
+    pub async fn drop_user(&self, username: &str, hostname: &str) -> Result<()> {
+        let drop_user =
+            self.api_provider
+                .drop_user(username.to_string(), hostname.to_string(), None);
         match drop_user.await {
             Ok(res) => Ok(res),
             Err(failure) => Err(failure.add_message_back("(while drop user).")),
+        }
+    }
+
+    // Update a user by name and hostname.
+    pub async fn update_user(
+        &self,
+        username: &str,
+        hostname: &str,
+        new_auth_type: Option<AuthType>,
+        new_password: Option<Vec<u8>>,
+    ) -> Result<Option<u64>> {
+        let update_user = self.api_provider.update_user(
+            username.to_string(),
+            hostname.to_string(),
+            new_password,
+            new_auth_type,
+            None,
+        );
+        match update_user.await {
+            Ok(res) => Ok(res),
+            Err(failure) => Err(failure.add_message_back("(while alter user).")),
         }
     }
 }

@@ -30,6 +30,7 @@ use common_tracing::tracing;
 use futures::Stream;
 use futures::StreamExt;
 
+use super::utils::apply_plan_rewrite;
 use crate::api::CancelAction;
 use crate::api::FlightAction;
 use crate::interpreters::plan_scheduler::PlanScheduler;
@@ -56,8 +57,11 @@ impl Interpreter for SelectInterpreter {
         "SelectInterpreter"
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    #[tracing::instrument(level = "info", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
+    async fn execute(
+        &self,
+        _input_stream: Option<SendableDataBlockStream>,
+    ) -> Result<SendableDataBlockStream> {
         // TODO: maybe panic?
         let mut scheduled = Scheduled::new();
         let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
@@ -79,8 +83,11 @@ type Scheduled = HashMap<String, Arc<NodeInfo>>;
 
 impl SelectInterpreter {
     async fn schedule_query(&self, scheduled: &mut Scheduled) -> Result<SendableDataBlockStream> {
-        let optimized_plan = Optimizers::create(self.ctx.clone()).optimize(&self.select.input)?;
-
+        let optimized_plan = apply_plan_rewrite(
+            self.ctx.clone(),
+            Optimizers::create(self.ctx.clone()),
+            &self.select.input,
+        )?;
         let scheduler = PlanScheduler::try_create(self.ctx.clone())?;
         let scheduled_tasks = scheduler.reschedule(&optimized_plan)?;
         let remote_stage_actions = scheduled_tasks.get_tasks()?;

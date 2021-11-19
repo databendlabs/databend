@@ -12,19 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::Infallible;
-use std::sync::Arc;
-
-use axum::body::Bytes;
-use axum::body::Full;
-use axum::extract::Extension;
-use axum::http::Response;
-use axum::http::StatusCode;
-use axum::response::Html;
-use axum::response::IntoResponse;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
+use poem::http::StatusCode;
+use poem::web::Data;
+use poem::web::Html;
+use poem::IntoResponse;
+use poem::Response;
 use tokio_stream::StreamExt;
 
 use crate::catalogs::ToReadDataSourcePlan;
@@ -36,25 +31,22 @@ pub struct LogTemplate {
 }
 
 impl IntoResponse for LogTemplate {
-    type Body = Full<Bytes>;
-    type BodyError = Infallible;
-
-    fn into_response(self) -> Response<Self::Body> {
+    fn into_response(self) -> Response {
         match self.result {
             Ok(log) => Html(log).into_response(),
             Err(err) => Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(Full::from(format!("Failed to fetch log. Error: {}", err)))
-                .unwrap(),
+                .body(format!("Failed to fetch log. Error: {}", err)),
         }
     }
 }
 
 // read log files from cfg.log.log_dir
-pub async fn logs_handler(sessions_extension: Extension<SessionManagerRef>) -> LogTemplate {
+#[poem::handler]
+pub async fn logs_handler(sessions_extension: Data<&SessionManagerRef>) -> LogTemplate {
     let sessions = sessions_extension.0;
     LogTemplate {
-        result: select_table(sessions).await,
+        result: select_table(sessions.clone()).await,
     }
 }
 
@@ -69,18 +61,9 @@ async fn select_table(sessions: SessionManagerRef) -> Result<String> {
     Ok(format!("{:?}", tracing_logs))
 }
 
-async fn execute_query(context: DatabendQueryContextRef) -> Result<SendableDataBlockStream> {
-    let tracing_table = context.get_table("system", "tracing")?;
-    let io_ctx = context.get_single_node_table_io_context()?;
-    let io_ctx = Arc::new(io_ctx);
+async fn execute_query(ctx: DatabendQueryContextRef) -> Result<SendableDataBlockStream> {
+    let tracing_table = ctx.get_table("system", "tracing")?;
+    let tracing_table_read_plan = tracing_table.read_plan(ctx.clone(), None).await?;
 
-    let tracing_table_read_plan = tracing_table
-        .read_plan(
-            io_ctx.clone(),
-            None,
-            Some(context.get_settings().get_max_threads()? as usize),
-        )
-        .await?;
-
-    tracing_table.read(io_ctx, &tracing_table_read_plan).await
+    tracing_table.read(ctx, &tracing_table_read_plan).await
 }

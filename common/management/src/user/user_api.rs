@@ -17,30 +17,39 @@ use std::convert::TryFrom;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::AuthType;
 use common_meta_types::SeqV;
+use common_meta_types::UserPrivilege;
+use common_meta_types::UserQuota;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub enum AuthType {
-    None = 0,
-    PlainText = 1,
-    DoubleSha1 = 2,
-    Sha256 = 3,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct UserInfo {
     pub name: String,
+    pub hostname: String,
     pub password: Vec<u8>,
     pub auth_type: AuthType,
+    pub privileges: UserPrivilege,
+    pub quota: UserQuota,
 }
 
 impl UserInfo {
-    pub(crate) fn new(name: String, password: Vec<u8>, auth_type: AuthType) -> Self {
+    pub fn new(name: String, hostname: String, password: Vec<u8>, auth_type: AuthType) -> Self {
+        // Default is no privileges.
+        let privileges = UserPrivilege::empty();
+        let quota = UserQuota::no_limit();
+
         UserInfo {
             name,
+            hostname,
             password,
             auth_type,
+            privileges,
+            quota,
         }
+    }
+
+    pub fn set_privileges(&mut self, privileges: UserPrivilege) {
+        self.privileges |= privileges;
     }
 }
 
@@ -48,19 +57,33 @@ impl UserInfo {
 pub trait UserMgrApi: Sync + Send {
     async fn add_user(&self, user_info: UserInfo) -> Result<u64>;
 
-    async fn get_user(&self, username: String, seq: Option<u64>) -> Result<SeqV<UserInfo>>;
+    async fn get_user(
+        &self,
+        username: String,
+        hostname: String,
+        seq: Option<u64>,
+    ) -> Result<SeqV<UserInfo>>;
 
     async fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>>;
 
     async fn update_user(
         &self,
         username: String,
+        hostname: String,
         new_password: Option<Vec<u8>>,
         new_auth: Option<AuthType>,
         seq: Option<u64>,
     ) -> Result<Option<u64>>;
 
-    async fn drop_user(&self, username: String, seq: Option<u64>) -> Result<()>;
+    async fn set_user_privileges(
+        &self,
+        username: String,
+        hostname: String,
+        privileges: UserPrivilege,
+        seq: Option<u64>,
+    ) -> Result<Option<u64>>;
+
+    async fn drop_user(&self, username: String, hostname: String, seq: Option<u64>) -> Result<()>;
 }
 
 impl TryFrom<Vec<u8>> for UserInfo {

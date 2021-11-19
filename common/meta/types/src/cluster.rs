@@ -20,7 +20,6 @@ use std::str::FromStr;
 use async_raft::NodeId;
 use common_exception::exception::ErrorCode;
 use common_exception::exception::Result;
-use common_meta_sled_store::SledSerde;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -44,9 +43,6 @@ impl fmt::Display for Node {
     }
 }
 
-/// For Node to be able to be stored in sled::Tree as a value.
-impl SledSerde for Node {}
-
 /// Query node
 #[derive(
     serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Default,
@@ -69,7 +65,7 @@ impl TryFrom<Vec<u8>> for NodeInfo {
         match serde_json::from_slice(&value) {
             Ok(user_info) => Ok(user_info),
             Err(serialize_error) => Err(ErrorCode::IllegalUserInfoFormat(format!(
-                "Cannot deserialize namespace from bytes. cause {}",
+                "Cannot deserialize cluster id from bytes. cause {}",
                 serialize_error
             ))),
         }

@@ -14,15 +14,15 @@
 
 use std::net::SocketAddr;
 
-use axum::handler::get;
-use axum::routing::BoxRoute;
-use axum::AddExtensionLayer;
-use axum::Router;
-use common_base::tokio;
 use common_exception::Result;
+use poem::get;
+use poem::Endpoint;
+use poem::EndpointExt;
+use poem::Route;
 
 use crate::common::service::HttpShutdownHandler;
-use crate::servers::http::v1::statement::statement_router;
+use crate::servers::http::v1::query_route;
+use crate::servers::http::v1::statement_router;
 use crate::servers::Server;
 use crate::sessions::SessionManagerRef;
 
@@ -38,19 +38,23 @@ impl HttpHandler {
             shutdown_handler: HttpShutdownHandler::create("http handler".to_string()),
         })
     }
-    fn build_router(&self) -> Router<BoxRoute> {
-        Router::new()
-            .route("/", get(|| async { "This is http handler." }))
+    fn build_router(&self) -> impl Endpoint {
+        Route::new()
+            .at(
+                "/",
+                get(poem::endpoint::make_sync(|_| "This is http handler.")),
+            )
             .nest("/v1/statement", statement_router())
-            .layer(AddExtensionLayer::new(self.session_manager.clone()))
+            .nest("/v1/query", query_route())
+            .data(self.session_manager.clone())
             .boxed()
     }
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        let server = axum_server::bind(listening.to_string())
-            .handle(self.shutdown_handler.abort_handle.clone())
-            .serve(self.build_router());
-
-        self.shutdown_handler.try_listen(tokio::spawn(server)).await
+        let addr = self
+            .shutdown_handler
+            .start_service(listening, None, self.build_router())
+            .await?;
+        Ok(addr)
     }
 }
 

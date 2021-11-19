@@ -12,30 +12,78 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyhow::anyhow;
-use anyhow::Result;
-use metrics_exporter_prometheus::PrometheusBuilder;
+use std::net::SocketAddr;
+
+use common_base::tokio::sync::broadcast;
+use common_base::HttpShutdownHandler;
+use common_base::Stoppable;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_metrics::PrometheusHandle;
+use poem::web::Data;
+use poem::web::Html;
+use poem::EndpointExt;
+use poem::IntoResponse;
+use poem::Response;
 
 use crate::configs::Config;
 
 pub struct MetricService {
     conf: Config,
+    shutdown_handler: HttpShutdownHandler,
+}
+
+pub struct MetricTemplate {
+    prom: PrometheusHandle,
+}
+
+impl IntoResponse for MetricTemplate {
+    fn into_response(self) -> Response {
+        Html(self.prom.render()).into_response()
+    }
+}
+
+#[poem::handler]
+pub async fn metric_handler(prom_extension: Data<&PrometheusHandle>) -> MetricTemplate {
+    let prom = prom_extension.0.clone();
+    MetricTemplate { prom }
 }
 
 impl MetricService {
-    pub fn create(conf: Config) -> Self {
-        MetricService { conf }
+    // TODO add session tls handler
+    pub fn create(conf: Config) -> Box<MetricService> {
+        Box::new(MetricService {
+            conf,
+            shutdown_handler: HttpShutdownHandler::create("metric api".to_string()),
+        })
     }
 
-    pub fn make_server(&self) -> Result<()> {
+    async fn start_without_tls(&mut self, listening: String) -> Result<SocketAddr> {
+        let prometheus_handle = common_metrics::try_handle().ok_or_else(|| {
+            ErrorCode::InitPrometheusFailure("Prometheus recorder has not been initialized yet.")
+        })?;
+        let app = poem::Route::new()
+            .at("/metrics", poem::get(metric_handler))
+            .data(prometheus_handle);
         let addr = self
-            .conf
-            .metric_api_address
-            .parse::<std::net::SocketAddr>()?;
+            .shutdown_handler
+            .start_service(listening, None, app)
+            .await?;
+        Ok(addr)
+    }
+}
 
-        PrometheusBuilder::new()
-            .listen_address(addr)
-            .install()
-            .map_err(|e| anyhow!(format!("Metrics prometheus exporter error: {:?}", e)))
+#[async_trait::async_trait]
+impl Stoppable for MetricService {
+    async fn start(&mut self) -> Result<()> {
+        let config = self.conf.clone();
+        self.start_without_tls(config.metric_api_address)
+            .await
+            .expect("Failed to start the metrics server");
+        Ok(())
+    }
+
+    async fn stop(&mut self, force: Option<broadcast::Receiver<()>>) -> Result<()> {
+        self.shutdown_handler.stop(force).await
     }
 }

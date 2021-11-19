@@ -29,7 +29,7 @@ pub use config::DATABEND_COMMIT_VERSION;
 pub use config_log::LogConfig;
 pub use config_meta::MetaConfig;
 pub use config_query::QueryConfig;
-pub use config_storage::ASBlobConfig;
+pub use config_storage::AzureStorageBlobConfig;
 pub use config_storage::DiskStorageConfig;
 pub use config_storage::S3StorageConfig;
 pub use config_storage::StorageConfig;

@@ -17,8 +17,6 @@ use std::any::Any;
 use std::mem::size_of;
 use std::sync::Arc;
 
-use common_context::IOContext;
-use common_context::TableIOContext;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
@@ -40,7 +38,8 @@ use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
 use crate::datasources::common::generate_parts;
 use crate::datasources::table_func_engine::TableArgs;
-use crate::sessions::DatabendQueryContext;
+use crate::pipelines::transforms::get_sort_descriptions;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct NumbersTable {
     table_info: TableInfo,
@@ -119,29 +118,57 @@ impl Table for NumbersTable {
 
     async fn read_partitions(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         _push_downs: Option<Extras>,
-        _partition_num_hint: Option<usize>,
     ) -> Result<(Statistics, Partitions)> {
         let statistics = Statistics::new_exact(
             self.total as usize,
             ((self.total) * size_of::<u64>() as u64) as usize,
         );
-        let parts = generate_parts(0, io_ctx.get_max_threads() as u64, self.total);
+        let parts = generate_parts(0, ctx.get_settings().get_max_threads()? as u64, self.total);
 
         Ok((statistics, parts))
     }
 
     async fn read(
         &self,
-        io_ctx: Arc<TableIOContext>,
-        _plan: &ReadDataSourcePlan,
+        ctx: DatabendQueryContextRef,
+        plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let ctx: Arc<DatabendQueryContext> = io_ctx
-            .get_user_data()?
-            .expect("DatabendQueryContext should not be None");
+        // If we have order-by and limit push-downs, try the best to only generate top n rows.
+        if let Some(extras) = &plan.push_downs {
+            if extras.limit.is_some() {
+                let sort_descriptions_result =
+                    get_sort_descriptions(&self.table_info.schema(), &extras.order_by);
 
-        Ok(Box::pin(NumbersStream::try_create(ctx, self.schema())?))
+                // It is allowed to have an error when we can't get sort columns from the expression. For
+                // example 'select number from numbers(10) order by number+4 limit 10', the column 'number+4'
+                // doesn't exist in the numbers table.
+                // For case like that, we ignore the error and don't apply any optimization.
+                if sort_descriptions_result.is_err() {
+                    return Ok(Box::pin(NumbersStream::try_create(
+                        ctx,
+                        self.schema(),
+                        vec![],
+                        None,
+                    )?));
+                }
+                let stream = NumbersStream::try_create(
+                    ctx,
+                    self.schema(),
+                    sort_descriptions_result.unwrap(),
+                    extras.limit,
+                )?;
+                return Ok(Box::pin(stream));
+            }
+        }
+
+        Ok(Box::pin(NumbersStream::try_create(
+            ctx,
+            self.schema(),
+            vec![],
+            None,
+        )?))
     }
 }
 

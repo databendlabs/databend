@@ -22,7 +22,6 @@ use common_meta_types::TableInfo;
 use crate::Expression;
 use crate::Extras;
 use crate::Partitions;
-use crate::ScanPlan;
 use crate::Statistics;
 
 // TODO: Delete the scan plan field, but it depends on plan_parser:L394
@@ -41,7 +40,6 @@ pub struct ReadDataSourcePlan {
     pub parts: Partitions,
     pub statistics: Statistics,
     pub description: String,
-    pub scan_plan: Arc<ScanPlan>,
 
     pub tbl_args: Option<Vec<Expression>>,
     pub push_downs: Option<Extras>,
@@ -54,7 +52,7 @@ impl ReadDataSourcePlan {
             .clone()
             .map(|x| {
                 let fields: Vec<_> = x.iter().map(|(_, f)| f.clone()).collect();
-                Arc::new(self.table_info.schema().project(fields))
+                Arc::new(self.table_info.schema().project_by_fields(fields))
             })
             .unwrap_or_else(|| self.table_info.schema())
     }
@@ -64,5 +62,23 @@ impl ReadDataSourcePlan {
         self.scan_fields
             .clone()
             .unwrap_or_else(|| self.table_info.schema().fields_map())
+    }
+
+    pub fn projections(&self) -> Vec<usize> {
+        let default_proj = || {
+            (0..self.table_info.schema().fields().len())
+                .into_iter()
+                .collect::<Vec<usize>>()
+        };
+
+        if let Some(Extras {
+            projection: Some(prj),
+            ..
+        }) = &self.push_downs
+        {
+            prj.clone()
+        } else {
+            default_proj()
+        }
     }
 }

@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_context::TableIOContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -30,6 +30,8 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
+
+use crate::sessions::DatabendQueryContextRef;
 
 #[async_trait::async_trait]
 pub trait Table: Sync + Send {
@@ -57,12 +59,16 @@ pub trait Table: Sync + Send {
 
     fn get_table_info(&self) -> &TableInfo;
 
+    /// whether column prune(projection) can help in table read
+    fn benefit_column_prune(&self) -> bool {
+        false
+    }
+
     // defaults to generate one single part and empty statistics
     async fn read_partitions(
         &self,
-        _io_ctx: Arc<TableIOContext>,
+        _ctx: DatabendQueryContextRef,
         _push_downs: Option<Extras>,
-        _partition_num_hint: Option<usize>,
     ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::default(), vec![Part {
             name: "".to_string(),
@@ -77,15 +83,16 @@ pub trait Table: Sync + Send {
     // Read block data from the underling.
     async fn read(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        _ctx: DatabendQueryContextRef,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream>;
 
     // temporary added, pls feel free to rm it
     async fn append_data(
         &self,
-        _io_ctx: Arc<TableIOContext>,
+        _ctx: DatabendQueryContextRef,
         _insert_plan: InsertIntoPlan,
+        _stream: SendableDataBlockStream,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
             "append data for local table {} is not implemented",
@@ -95,7 +102,7 @@ pub trait Table: Sync + Send {
 
     async fn truncate(
         &self,
-        _io_ctx: Arc<TableIOContext>,
+        _ctx: DatabendQueryContextRef,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
@@ -109,11 +116,11 @@ pub type TablePtr = Arc<dyn Table>;
 
 #[async_trait::async_trait]
 pub trait ToReadDataSourcePlan {
+    /// Real read_plan to access partitions/push_downs
     async fn read_plan(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         push_downs: Option<Extras>,
-        partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan>;
 }
 
@@ -121,41 +128,53 @@ pub trait ToReadDataSourcePlan {
 impl ToReadDataSourcePlan for dyn Table {
     async fn read_plan(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         push_downs: Option<Extras>,
-        partition_num_hint: Option<usize>,
     ) -> Result<ReadDataSourcePlan> {
-        let (statistics, parts) = self
-            .read_partitions(io_ctx, push_downs.clone(), partition_num_hint)
-            .await?;
+        let (statistics, parts) = self.read_partitions(ctx, push_downs.clone()).await?;
         let table_info = self.get_table_info();
+        let description = get_description(table_info, &statistics);
 
-        let description = if statistics.read_rows > 0 {
-            format!(
-                "(Read from {} table, {} Read Rows:{}, Read Bytes:{})",
-                table_info.desc,
-                if statistics.is_exact {
-                    "Exactly"
-                } else {
-                    "Approximately"
-                },
-                statistics.read_rows,
-                statistics.read_bytes,
-            )
-        } else {
-            format!("(Read from {} table)", table_info.desc)
+        let scan_fields = match (self.benefit_column_prune(), &push_downs) {
+            (true, Some(push_downs)) => match &push_downs.projection {
+                Some(projection) if projection.len() < table_info.schema().fields().len() => {
+                    let fields = projection
+                        .iter()
+                        .map(|i| table_info.schema().field(*i).clone());
+
+                    Some((projection.iter().cloned().zip(fields)).collect::<BTreeMap<_, _>>())
+                }
+                _ => None,
+            },
+            _ => None,
         };
 
         Ok(ReadDataSourcePlan {
             table_info: table_info.clone(),
-
-            scan_fields: None,
+            scan_fields,
             parts,
             statistics,
             description,
-            scan_plan: Default::default(), // scan_plan will be removed form ReadSourcePlan soon
             tbl_args: self.table_args(),
             push_downs,
         })
+    }
+}
+
+fn get_description(table_info: &TableInfo, statistics: &Statistics) -> String {
+    if statistics.read_rows > 0 {
+        format!(
+            "(Read from {} table, {} Read Rows:{}, Read Bytes:{})",
+            table_info.desc,
+            if statistics.is_exact {
+                "Exactly"
+            } else {
+                "Approximately"
+            },
+            statistics.read_rows,
+            statistics.read_bytes,
+        )
+    } else {
+        format!("(Read from {} table)", table_info.desc)
     }
 }

@@ -35,7 +35,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
 
         if let PlanNode::CreateTable(plan) = parse_query(TEST_CREATE_QUERY, &ctx)? {
             let interpreter = CreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let _ = interpreter.execute().await?;
+            let _ = interpreter.execute(None).await?;
         }
     }
 
@@ -44,7 +44,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
         static TEST_INSERT_QUERY: &str = "INSERT INTO default.a VALUES('1,1', '2,2')";
         if let PlanNode::InsertInto(plan) = parse_query(TEST_INSERT_QUERY, &ctx)? {
             let executor = InsertIntoInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let _ = executor.execute().await?;
+            let _ = executor.execute(None).await?;
         }
     }
 
@@ -53,7 +53,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
         static TEST_SELECT_QUERY: &str = "SELECT * FROM default.a";
         if let PlanNode::Select(plan) = parse_query(TEST_SELECT_QUERY, &ctx)? {
             let interpreter = SelectInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let stream = interpreter.execute().await?;
+            let stream = interpreter.execute(None).await?;
             let result = stream.try_collect::<Vec<_>>().await?;
             let expected = vec![
                 "+-----+-----+",
@@ -75,7 +75,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
             let interpreter = TruncateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
             assert_eq!(interpreter.name(), "TruncateTableInterpreter");
 
-            let stream = interpreter.execute().await?;
+            let stream = interpreter.execute(None).await?;
             let result = stream.try_collect::<Vec<_>>().await?;
             let expected = vec!["++", "++"];
             common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
@@ -89,7 +89,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
         static TEST_SELECT_QUERY: &str = "SELECT * FROM default.a";
         if let PlanNode::Select(plan) = parse_query(TEST_SELECT_QUERY, &ctx)? {
             let executor = SelectInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let stream = executor.execute().await?;
+            let stream = executor.execute(None).await?;
             let result = stream.try_collect::<Vec<_>>().await?;
             let expected = vec!["++", "++"];
             common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

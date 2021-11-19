@@ -13,10 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
-use common_context::IOContext;
-use common_context::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -28,7 +25,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct SettingsTable {
     table_info: TableInfo,
@@ -71,13 +68,9 @@ impl Table for SettingsTable {
 
     async fn read(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let ctx: Arc<DatabendQueryContext> = io_ctx
-            .get_user_data()?
-            .expect("DatabendQueryContext should not be None");
-
         let settings = ctx.get_settings();
 
         let mut names: Vec<String> = vec![];

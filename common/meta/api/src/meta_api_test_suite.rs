@@ -30,6 +30,11 @@ use common_tracing::tracing;
 
 use crate::MetaApi;
 
+/// Test suite of `MetaApi`.
+///
+/// It is not used by this crate, but is used by other crate that impl `MetaApi`,
+/// to ensure an impl works as expected,
+/// such as `common/meta/embedded` and `metasrv`.
 pub struct MetaApiTestSuite {}
 
 impl MetaApiTestSuite {
@@ -274,21 +279,41 @@ impl MetaApiTestSuite {
                 assert_eq!(want, got.as_ref().clone(), "get old table");
             }
 
-            tracing::info!("--- upsert table options with key1=val1");
+            tracing::info!("--- upsert table options");
             {
-                let table = mt.get_table("db1", "tb2").await.unwrap();
-                let got = mt
-                    .upsert_table_option(
+                tracing::info!("--- upsert table options with key1=val1");
+                {
+                    let table = mt.get_table("db1", "tb2").await.unwrap();
+
+                    mt.upsert_table_option(
                         table.ident.table_id,
                         table.ident.version,
                         "key1".into(),
                         "val1".into(),
                     )
-                    .await;
-                if let Err(ref err) = got {
-                    // TODO: remove this check after upsert_table_option is implemented for MetaEmbedded
-                    assert_eq!(err.code(), ErrorCode::UnImplementCode());
-                } else {
+                    .await?;
+
+                    let table = mt.get_table("db1", "tb2").await.unwrap();
+                    assert_eq!(table.options().get("key1"), Some(&"val1".into()));
+                }
+
+                tracing::info!("--- upsert table options with key1=val1");
+                {
+                    let table = mt.get_table("db1", "tb2").await.unwrap();
+
+                    let got = mt
+                        .upsert_table_option(
+                            table.ident.table_id,
+                            table.ident.version - 1,
+                            "key1".into(),
+                            "val2".into(),
+                        )
+                        .await;
+
+                    let got = got.unwrap_err();
+                    assert_eq!(ErrorCode::TableVersionMissMatch("").code(), got.code());
+
+                    // table is not affected.
                     let table = mt.get_table("db1", "tb2").await.unwrap();
                     assert_eq!(table.options().get("key1"), Some(&"val1".into()));
                 }

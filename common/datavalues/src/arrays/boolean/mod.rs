@@ -27,9 +27,6 @@ use crate::prelude::*;
 mod builder;
 mod iterator;
 
-#[cfg(test)]
-mod builder_test;
-
 pub use builder::*;
 pub use iterator::*;
 

@@ -22,13 +22,12 @@ use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::GetKVActionReply;
-use common_meta_types::KVMeta;
 use common_meta_types::MGetKVActionReply;
-use common_meta_types::MatchSeq;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::PrefixListReply;
 use common_meta_types::TableInfo;
+use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 use common_meta_types::UpsertTableOptionReply;
 use common_planners::CreateDatabasePlan;
@@ -44,23 +43,8 @@ pub trait RequestFor {
     type Reply;
 }
 
-#[macro_export]
-macro_rules! action_declare {
-    ($req:ident, $reply:ty, $enum_ctor:expr) => {
-        impl RequestFor for $req {
-            type Reply = $reply;
-        }
-
-        impl From<$req> for MetaFlightAction {
-            fn from(act: $req) -> Self {
-                $enum_ctor(act)
-            }
-        }
-    };
-}
-
 // Action wrapper for do_action.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
 pub enum MetaFlightAction {
     // database meta
     CreateDatabase(CreateDatabaseAction),
@@ -76,7 +60,6 @@ pub enum MetaFlightAction {
 
     // general purpose kv
     UpsertKV(UpsertKVAction),
-    UpdateKVMeta(KVMetaAction),
     GetKV(GetKVAction),
     MGetKV(MGetKVAction),
     PrefixListKV(PrefixListReq),
@@ -131,15 +114,6 @@ impl RequestFor for GetKVAction {
     type Reply = GetKVActionReply;
 }
 
-// Explicitly defined the converter for MetaDoAction
-// It's implementations' choice, that they gonna using enum MetaDoAction as wrapper.
-// This can be simplified by using macro (see code below)
-impl From<GetKVAction> for MetaFlightAction {
-    fn from(act: GetKVAction) -> Self {
-        MetaFlightAction::GetKV(act)
-    }
-}
-
 // - MGetKV
 
 // Again, impl chooses to wrap it up
@@ -149,44 +123,20 @@ pub struct MGetKVAction {
 }
 
 // here we use a macro to simplify the declarations
-action_declare!(MGetKVAction, MGetKVActionReply, MetaFlightAction::MGetKV);
+impl RequestFor for MGetKVAction {
+    type Reply = MGetKVActionReply;
+}
 
 // - prefix list
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct PrefixListReq(pub String);
-action_declare!(
-    PrefixListReq,
-    PrefixListReply,
-    MetaFlightAction::PrefixListKV
-);
-
-// === general-kv: upsert ===
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct UpsertKVAction {
-    pub key: String,
-    pub seq: MatchSeq,
-    pub value: Option<Vec<u8>>,
-    pub value_meta: Option<KVMeta>,
+impl RequestFor for PrefixListReq {
+    type Reply = PrefixListReply;
 }
 
-action_declare!(
-    UpsertKVAction,
-    UpsertKVActionReply,
-    MetaFlightAction::UpsertKV
-);
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct KVMetaAction {
-    pub key: String,
-    pub seq: MatchSeq,
-    pub value_meta: Option<KVMeta>,
+impl RequestFor for UpsertKVAction {
+    type Reply = UpsertKVActionReply;
 }
-
-action_declare!(
-    KVMetaAction,
-    UpsertKVActionReply,
-    MetaFlightAction::UpdateKVMeta
-);
 
 // == database actions ==
 // - create database
@@ -194,28 +144,26 @@ action_declare!(
 pub struct CreateDatabaseAction {
     pub plan: CreateDatabasePlan,
 }
-action_declare!(
-    CreateDatabaseAction,
-    CreateDatabaseReply,
-    MetaFlightAction::CreateDatabase
-);
+impl RequestFor for CreateDatabaseAction {
+    type Reply = CreateDatabaseReply;
+}
 
 // - get database
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct GetDatabaseAction {
     pub db: String,
 }
-action_declare!(
-    GetDatabaseAction,
-    DatabaseInfo,
-    MetaFlightAction::GetDatabase
-);
+impl RequestFor for GetDatabaseAction {
+    type Reply = DatabaseInfo;
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct DropDatabaseAction {
     pub plan: DropDatabasePlan,
 }
-action_declare!(DropDatabaseAction, (), MetaFlightAction::DropDatabase);
+impl RequestFor for DropDatabaseAction {
+    type Reply = ();
+}
 
 // == table actions ==
 // - create table
@@ -223,18 +171,18 @@ action_declare!(DropDatabaseAction, (), MetaFlightAction::DropDatabase);
 pub struct CreateTableAction {
     pub plan: CreateTablePlan,
 }
-action_declare!(
-    CreateTableAction,
-    CreateTableReply,
-    MetaFlightAction::CreateTable
-);
+impl RequestFor for CreateTableAction {
+    type Reply = CreateTableReply;
+}
 
 // - drop table
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct DropTableAction {
     pub plan: DropTablePlan,
 }
-action_declare!(DropTableAction, (), MetaFlightAction::DropTable);
+impl RequestFor for DropTableAction {
+    type Reply = ();
+}
 
 // - get table
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -243,13 +191,17 @@ pub struct GetTableAction {
     pub table: String,
 }
 
-action_declare!(GetTableAction, TableInfo, MetaFlightAction::GetTable);
+impl RequestFor for GetTableAction {
+    type Reply = TableInfo;
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct GetTableExtReq {
     pub tbl_id: MetaId,
 }
-action_declare!(GetTableExtReq, TableInfo, MetaFlightAction::GetTableExt);
+impl RequestFor for GetTableExtReq {
+    type Reply = TableInfo;
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct UpsertTableOptionReq {
@@ -258,11 +210,9 @@ pub struct UpsertTableOptionReq {
     pub option_key: String,
     pub option_value: String,
 }
-action_declare!(
-    UpsertTableOptionReq,
-    UpsertTableOptionReply,
-    MetaFlightAction::CommitTable
-);
+impl RequestFor for UpsertTableOptionReq {
+    type Reply = UpsertTableOptionReply;
+}
 
 // - get tables
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -270,19 +220,15 @@ pub struct GetTablesAction {
     pub db: String,
 }
 
-action_declare!(
-    GetTablesAction,
-    Vec<Arc<TableInfo>>,
-    MetaFlightAction::GetTables
-);
+impl RequestFor for GetTablesAction {
+    type Reply = Vec<Arc<TableInfo>>;
+}
 
 // -get databases
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct GetDatabasesAction;
 
-action_declare!(
-    GetDatabasesAction,
-    Vec<Arc<DatabaseInfo>>,
-    MetaFlightAction::GetDatabases
-);
+impl RequestFor for GetDatabasesAction {
+    type Reply = Vec<Arc<DatabaseInfo>>;
+}

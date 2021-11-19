@@ -12,16 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(backtrace)]
+
 #[allow(clippy::all)]
-pub mod protobuf {
+pub mod proto {
     include!(concat!(env!("OUT_DIR"), concat!("/meta.rs")));
 }
 
-#[macro_use]
-pub mod tests;
-
+pub mod any_error;
 pub mod api;
 pub mod configs;
+pub mod errors;
 pub mod executor;
 pub mod meta_service;
 pub mod metrics;
+pub mod store;
+
+pub trait Opened {
+    /// Return true if it is opened from a previous persistent state.
+    /// Otherwise it is just created.
+    fn is_opened(&self) -> bool;
+}

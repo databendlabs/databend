@@ -1,5 +1,13 @@
 name: Stateless(Cluster)
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore:
+      - 'website/'
+      - '*.md'
+  pull_request:
+    paths-ignore:
+      - 'website/'
+      - '*.md'
 
 env:
   CARGO_TERM_COLOR: always

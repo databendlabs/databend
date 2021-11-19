@@ -15,6 +15,7 @@
 use std::io;
 use std::io::BufReader;
 
+use async_trait::async_trait;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
@@ -43,10 +44,11 @@ where R: io::Read + Send + Sync
     }
 }
 
+#[async_trait]
 impl<R> Source for ValueSource<R>
 where R: io::Read + Send + Sync
 {
-    fn read(&mut self) -> Result<Option<DataBlock>> {
+    async fn read(&mut self) -> Result<Option<DataBlock>> {
         let reader = &mut self.reader;
         let mut buf = Vec::new();
         let mut temp = Vec::new();
@@ -55,7 +57,7 @@ where R: io::Read + Send + Sync
             .schema
             .fields()
             .iter()
-            .map(|f| f.data_type().create_serializer(self.block_size))
+            .map(|f| f.data_type().create_deserializer(self.block_size))
             .collect::<Result<Vec<_>>>()?;
 
         let col_size = desers.len();

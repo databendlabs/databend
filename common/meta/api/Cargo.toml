@@ -8,6 +8,10 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+doctest = false
+test = false
+
 [dependencies]
 common-base = {path = "../../base" }
 common-datavalues = {path = "../../datavalues" }
@@ -16,9 +20,7 @@ common-meta-types = {path= "../types" }
 common-planners = {path = "../../planners"}
 common-tracing = { path = "../../tracing" }
 
-
-
-anyhow = "1.0.44"
+anyhow = "1.0.45"
 async-trait = "0.1"
 futures = "0.3"
 maplit = "1.0.2"

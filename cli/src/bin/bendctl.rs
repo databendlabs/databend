@@ -12,14 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use bendctl::cmds::Command;
 use bendctl::cmds::Config;
 use bendctl::cmds::Processor;
+use bendctl::cmds::RootCommand;
 use bendctl::error::Result;
 use common_base::tokio;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let conf = Config::create();
+    let cmd = RootCommand::create();
+    let conf = Config::create(cmd.clap());
     let mut processor = Processor::create(conf);
     processor.process_run().await
 }

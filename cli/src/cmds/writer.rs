@@ -43,17 +43,26 @@ impl Writer {
         writeln!(self, "{}", value).unwrap();
     }
 
-    pub fn write_ok(&mut self, msg: &str) {
-        writeln!(self, "{} {}", "[ok]".bold().green(), msg).unwrap();
+    pub fn write_ok(&mut self, msg: String) {
+        writeln!(self, "{} ✅ {}", "[ok]".bold().green(), msg).unwrap();
     }
-    pub fn write_debug(&mut self, msg: &str) {
+
+    pub fn write_warn(&mut self, msg: String) {
+        writeln!(self, "{} ⚠ {}", "[ok]".bold().green(), msg).unwrap();
+    }
+
+    pub fn write_rocket(&mut self, msg: String) {
+        writeln!(self, "{} 🚀 {}", "[ok]".bold().green(), msg).unwrap();
+    }
+
+    pub fn write_debug(&mut self, msg: String) {
         if self.debug {
             writeln!(self, "{} {}", "[debug]".bold().yellow(), msg).unwrap();
         }
     }
 
-    pub fn write_err(&mut self, msg: &str) {
-        writeln!(self, "{} {}", "[failed]".bold().red(), msg.red()).unwrap();
+    pub fn write_err(&mut self, msg: String) {
+        writeln!(self, "{} ❌ {}", "[failed]".bold().red(), msg.red()).unwrap();
     }
 }
 

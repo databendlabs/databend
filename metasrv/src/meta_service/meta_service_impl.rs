@@ -21,11 +21,14 @@ use std::sync::Arc;
 use common_meta_types::LogEntry;
 use common_tracing::tracing;
 
-use crate::meta_service::GetReply;
-use crate::meta_service::GetReq;
+use crate::errors::MetaError;
+use crate::meta_service::message::AdminRequest;
 use crate::meta_service::MetaNode;
-use crate::meta_service::MetaService;
-use crate::meta_service::RaftMes;
+use crate::proto::meta_service_server::MetaService;
+use crate::proto::GetReply;
+use crate::proto::GetReq;
+use crate::proto::RaftReply;
+use crate::proto::RaftRequest;
 
 pub struct MetaServiceImpl {
     pub meta_node: Arc<MetaNode>,
@@ -44,21 +47,28 @@ impl MetaService for MetaServiceImpl {
     #[tracing::instrument(level = "info", skip(self))]
     async fn write(
         &self,
-        request: tonic::Request<RaftMes>,
-    ) -> Result<tonic::Response<RaftMes>, tonic::Status> {
+        request: tonic::Request<RaftRequest>,
+    ) -> Result<tonic::Response<RaftReply>, tonic::Status> {
         common_tracing::extract_remote_span_as_parent(&request);
 
         let mes = request.into_inner();
         let req: LogEntry = mes.try_into()?;
 
-        let rst = self
-            .meta_node
-            .write_to_local_leader(req)
-            .await
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+        let leader = self.meta_node.as_leader().await;
 
-        let raft_mes = rst.into();
-        Ok(tonic::Response::new(raft_mes))
+        let leader = match leader {
+            Ok(x) => x,
+            Err(err) => {
+                let err: MetaError = err.into();
+                let raft_reply = Err::<(), _>(err).into();
+                return Ok(tonic::Response::new(raft_reply));
+            }
+        };
+
+        let rst = leader.write(req).await;
+
+        let raft_reply = rst.into();
+        Ok(tonic::Response::new(raft_reply))
     }
 
     #[tracing::instrument(level = "info", skip(self))]
@@ -80,11 +90,30 @@ impl MetaService for MetaServiceImpl {
         Ok(tonic::Response::new(rst))
     }
 
+    #[tracing::instrument(level = "info", skip(self))]
+    async fn forward(
+        &self,
+        request: tonic::Request<RaftRequest>,
+    ) -> Result<tonic::Response<RaftReply>, tonic::Status> {
+        common_tracing::extract_remote_span_as_parent(&request);
+
+        let req = request.into_inner();
+
+        let admin_req: AdminRequest = serde_json::from_str(&req.data)
+            .map_err(|x| tonic::Status::invalid_argument(x.to_string()))?;
+
+        let res = self.meta_node.handle_admin_req(admin_req).await;
+
+        let raft_mes: RaftReply = res.into();
+
+        Ok(tonic::Response::new(raft_mes))
+    }
+
     #[tracing::instrument(level = "info", skip(self, request))]
     async fn append_entries(
         &self,
-        request: tonic::Request<RaftMes>,
-    ) -> Result<tonic::Response<RaftMes>, tonic::Status> {
+        request: tonic::Request<RaftRequest>,
+    ) -> Result<tonic::Response<RaftReply>, tonic::Status> {
         common_tracing::extract_remote_span_as_parent(&request);
 
         let req = request.into_inner();
@@ -99,7 +128,7 @@ impl MetaService for MetaServiceImpl {
             .await
             .map_err(|x| tonic::Status::internal(x.to_string()))?;
         let data = serde_json::to_string(&resp).expect("fail to serialize resp");
-        let mes = RaftMes {
+        let mes = RaftReply {
             data,
             error: "".to_string(),
         };
@@ -110,8 +139,8 @@ impl MetaService for MetaServiceImpl {
     #[tracing::instrument(level = "info", skip(self, request))]
     async fn install_snapshot(
         &self,
-        request: tonic::Request<RaftMes>,
-    ) -> Result<tonic::Response<RaftMes>, tonic::Status> {
+        request: tonic::Request<RaftRequest>,
+    ) -> Result<tonic::Response<RaftReply>, tonic::Status> {
         common_tracing::extract_remote_span_as_parent(&request);
 
         let req = request.into_inner();
@@ -126,7 +155,7 @@ impl MetaService for MetaServiceImpl {
             .await
             .map_err(|x| tonic::Status::internal(x.to_string()))?;
         let data = serde_json::to_string(&resp).expect("fail to serialize resp");
-        let mes = RaftMes {
+        let mes = RaftReply {
             data,
             error: "".to_string(),
         };
@@ -137,8 +166,8 @@ impl MetaService for MetaServiceImpl {
     #[tracing::instrument(level = "info", skip(self, request))]
     async fn vote(
         &self,
-        request: tonic::Request<RaftMes>,
-    ) -> Result<tonic::Response<RaftMes>, tonic::Status> {
+        request: tonic::Request<RaftRequest>,
+    ) -> Result<tonic::Response<RaftReply>, tonic::Status> {
         common_tracing::extract_remote_span_as_parent(&request);
 
         let req = request.into_inner();
@@ -153,7 +182,7 @@ impl MetaService for MetaServiceImpl {
             .await
             .map_err(|x| tonic::Status::internal(x.to_string()))?;
         let data = serde_json::to_string(&resp).expect("fail to serialize resp");
-        let mes = RaftMes {
+        let mes = RaftReply {
             data,
             error: "".to_string(),
         };

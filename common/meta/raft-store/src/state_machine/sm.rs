@@ -26,8 +26,8 @@ use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledTree;
+use common_meta_types::Change;
 use common_meta_types::Cmd;
-use common_meta_types::DatabaseInfo;
 use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
@@ -293,7 +293,7 @@ impl StateMachine {
     /// This is the only entry to modify state machine.
     /// The `cmd` is always committed by raft before applying.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn apply_cmd(&mut self, cmd: &Cmd) -> common_exception::Result<AppliedState> {
+    pub async fn apply_cmd(&self, cmd: &Cmd) -> common_exception::Result<AppliedState> {
         match cmd {
             Cmd::IncrSeq { ref key } => Ok(self.incr_seq(key).await?.into()),
 
@@ -314,16 +314,19 @@ impl StateMachine {
                 }
             }
 
-            Cmd::CreateDatabase {
-                ref name, ref db, ..
-            } => {
-                let mut db = db.clone();
-                db.database_id = self.incr_seq(SEQ_DATABASE_ID).await?;
+            Cmd::CreateDatabase { ref name } => {
+                let db_id = self.incr_seq(SEQ_DATABASE_ID).await?;
 
                 let dbs = self.databases();
 
                 let (prev, result) = self
-                    .sub_tree_upsert(dbs, name, &MatchSeq::Exact(0), Operation::Update(db), None)
+                    .sub_tree_upsert(
+                        dbs,
+                        name,
+                        &MatchSeq::Exact(0),
+                        Operation::Update(db_id),
+                        None,
+                    )
                     .await?;
 
                 // if it is just created
@@ -333,7 +336,7 @@ impl StateMachine {
                 }
 
                 tracing::debug!("applied create Database: {} {:?}", name, result);
-                Ok((prev, result).into())
+                Ok(Change::new(prev, result).into())
             }
 
             Cmd::DropDatabase { ref name } => {
@@ -350,7 +353,7 @@ impl StateMachine {
                 }
 
                 tracing::debug!("applied drop Database: {} {:?}", name, result);
-                Ok((prev, result).into())
+                Ok(Change::new(prev, result).into())
             }
 
             Cmd::CreateTable {
@@ -425,7 +428,7 @@ impl StateMachine {
                 let seq_table_id = table_lookup_tree.get(&lookup_key)?;
 
                 if seq_table_id.is_none() {
-                    return Ok((None::<SeqV<TableMeta>>, None).into());
+                    return Ok(Change::<TableMeta>::new(None, None).into());
                 }
 
                 self.sub_tree_upsert(
@@ -451,7 +454,7 @@ impl StateMachine {
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
                 }
                 tracing::debug!("applied drop Table: {} {:?}", table_name, result);
-                Ok((prev, result).into())
+                Ok(Change::new(prev, result).into())
             }
 
             Cmd::UpsertKV {
@@ -465,7 +468,54 @@ impl StateMachine {
                     .await?;
 
                 tracing::debug!("applied UpsertKV: {} {:?}", key, result);
-                Ok((prev, result).into())
+                Ok(Change::new(prev, result).into())
+            }
+
+            Cmd::UpsertTableOptions {
+                ref table_id,
+                ref seq,
+                ref table_options,
+            } => {
+                let prev = self.tables().get(table_id)?;
+
+                // Unlike other Cmd, prev to be None is not allowed for upsert-options.
+                let prev = match prev {
+                    None => {
+                        return Err(ErrorCode::UnknownTableId(format!("table_id:{}", table_id)))
+                    }
+                    Some(x) => x,
+                };
+
+                if seq.match_seq(&prev).is_err() {
+                    let res = AppliedState::TableMeta(Change::new(Some(prev.clone()), Some(prev)));
+                    return Ok(res);
+                }
+
+                let meta = prev.meta.clone();
+                let mut table_meta = prev.data.clone();
+                let opts = &mut table_meta.options;
+
+                for (k, opt_v) in table_options {
+                    match opt_v {
+                        None => {
+                            opts.remove(k);
+                        }
+                        Some(v) => {
+                            opts.insert(k.to_string(), v.to_string());
+                        }
+                    }
+                }
+
+                let new_seq = self.incr_seq(Tables::NAME).await?;
+                let sv = SeqV {
+                    seq: new_seq,
+                    meta,
+                    data: table_meta,
+                };
+
+                self.tables().insert(table_id, &sv).await?;
+
+                Ok(AppliedState::TableMeta(Change::new(Some(prev), Some(sv))))
             }
         }
     }
@@ -545,7 +595,7 @@ impl StateMachine {
             .get(db_name)?
             .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
 
-        Ok(seq_dbi.data.database_id)
+        Ok(seq_dbi.data)
     }
 
     async fn client_last_resp_update(
@@ -607,13 +657,14 @@ impl StateMachine {
         sm_nodes.get(node_id)
     }
 
-    pub fn get_database(&self, name: &str) -> Result<Option<SeqV<DatabaseInfo>>, ErrorCode> {
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub fn get_database(&self, name: &str) -> Result<Option<SeqV<u64>>, ErrorCode> {
         let dbs = self.databases();
         let x = dbs.get(&name.to_string())?;
         Ok(x)
     }
 
-    pub fn get_databases(&self) -> Result<Vec<(String, DatabaseInfo)>, ErrorCode> {
+    pub fn get_databases(&self) -> Result<Vec<(String, u64)>, ErrorCode> {
         let mut res = vec![];
 
         let it = self.databases().range(..)?;
@@ -662,7 +713,7 @@ impl StateMachine {
             }
         };
 
-        let db_id = db.data.database_id;
+        let db_id = db.data;
 
         let mut tbls = vec![];
         let tables = self.tables();
@@ -697,59 +748,14 @@ impl StateMachine {
         Ok(tbls)
     }
 
-    pub fn get_kv(&self, key: &str) -> common_exception::Result<Option<SeqV<Vec<u8>>>> {
-        // TODO(xp) refine get(): a &str is enough for key
-        let sv = self.kvs().get(&key.to_string())?;
-        tracing::debug!("get_kv sv:{:?}", sv);
-        let sv = match sv {
-            None => return Ok(None),
-            Some(sv) => sv,
-        };
-
-        Ok(Self::unexpired(sv))
-    }
-
-    pub fn mget_kv(
-        &self,
-        keys: &[impl AsRef<str>],
-    ) -> common_exception::Result<Vec<Option<SeqV<Vec<u8>>>>> {
-        let kvs = self.kvs();
-        let mut res = vec![];
-        for x in keys.iter() {
-            let v = kvs.get(&x.as_ref().to_string())?;
-            let v = Self::unexpired_opt(v);
-            res.push(v)
-        }
-
-        Ok(res)
-    }
-
-    pub fn prefix_list_kv(
-        &self,
-        prefix: &str,
-    ) -> common_exception::Result<Vec<(String, SeqV<Vec<u8>>)>> {
-        let kvs = self.kvs();
-        let kv_pairs = kvs.scan_prefix(&prefix.to_string())?;
-
-        let x = kv_pairs.into_iter();
-
-        // Convert expired to None
-        let x = x.map(|(k, v)| (k, Self::unexpired(v)));
-        // Remove None
-        let x = x.filter(|(_k, v)| v.is_some());
-        // Extract from an Option
-        let x = x.map(|(k, v)| (k, v.unwrap()));
-
-        Ok(x.collect())
-    }
-
-    fn unexpired_opt<V: Debug>(seq_value: Option<SeqV<V>>) -> Option<SeqV<V>> {
+    pub fn unexpired_opt<V: Debug>(seq_value: Option<SeqV<V>>) -> Option<SeqV<V>> {
         match seq_value {
             None => None,
             Some(sv) => Self::unexpired(sv),
         }
     }
-    fn unexpired<V: Debug>(seq_value: SeqV<V>) -> Option<SeqV<V>> {
+
+    pub fn unexpired<V: Debug>(seq_value: SeqV<V>) -> Option<SeqV<V>> {
         // TODO(xp): log must be assigned with a ts.
 
         // TODO(xp): background task to clean expired

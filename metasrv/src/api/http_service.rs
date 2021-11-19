@@ -12,60 +12,89 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use axum::handler::get;
-use axum::AddExtensionLayer;
-use axum::Router;
+use common_base::tokio::sync::broadcast;
+use common_base::HttpShutdownHandler;
+use common_base::Stoppable;
 use common_exception::Result;
+use common_tracing::tracing;
+use poem::get;
+use poem::listener::RustlsConfig;
+use poem::Endpoint;
+use poem::EndpointExt;
+use poem::Route;
 
 use crate::configs::Config;
 
 pub struct HttpService {
     cfg: Config,
-}
-
-// build axum router
-macro_rules! build_router {
-    ($cfg: expr) => {
-        Router::new()
-            .route("/v1/health", get(super::http::v1::health::health_handler))
-            .route("/v1/config", get(super::http::v1::config::config_handler))
-            .route(
-                "/debug/home",
-                get(super::http::debug::home::debug_home_handler),
-            )
-            .route(
-                "/debug/pprof/profile",
-                get(super::http::debug::pprof::debug_pprof_handler),
-            )
-            .layer(AddExtensionLayer::new($cfg.clone()))
-    };
+    shutdown_handler: HttpShutdownHandler,
 }
 
 impl HttpService {
     pub fn create(cfg: Config) -> Box<Self> {
-        Box::new(HttpService { cfg })
+        Box::new(HttpService {
+            cfg,
+            shutdown_handler: HttpShutdownHandler::create("http api".to_string()),
+        })
     }
 
-    pub async fn start(&mut self) -> Result<()> {
-        let app = build_router!(self.cfg.clone());
+    fn build_router(&self) -> impl Endpoint {
+        Route::new()
+            .at("/v1/health", get(super::http::v1::health::health_handler))
+            .at("/v1/config", get(super::http::v1::config::config_handler))
+            .at(
+                "/debug/home",
+                get(super::http::debug::home::debug_home_handler),
+            )
+            .at(
+                "/debug/pprof/profile",
+                get(super::http::debug::pprof::debug_pprof_handler),
+            )
+            .data(self.cfg.clone())
+    }
 
-        let conf = self.cfg.clone();
+    fn build_tls(config: &Config) -> Result<RustlsConfig> {
+        let conf = config.clone();
         let tls_cert = conf.admin_tls_server_cert;
         let tls_key = conf.admin_tls_server_key;
 
-        let address = conf.admin_api_address;
+        let cfg = RustlsConfig::new()
+            .cert(std::fs::read(tls_cert.as_str())?)
+            .key(std::fs::read(tls_key.as_str())?);
+        Ok(cfg)
+    }
 
-        if !tls_cert.is_empty() && !tls_key.is_empty() {
-            log::info!("Http API TLS enabled");
-            axum_server::bind_rustls(address)
-                .private_key_file(tls_key)
-                .certificate_file(tls_cert)
-                .serve(app)
-                .await?;
-        } else {
-            log::warn!("Http API TLS not set");
-            axum_server::bind(address).serve(app).await?;
-        }
+    async fn start_with_tls(&mut self, listening: String) -> Result<()> {
+        tracing::info!("Http API TLS enabled");
+
+        let tls_config = Self::build_tls(&self.cfg.clone())?;
+        self.shutdown_handler
+            .start_service(listening, Some(tls_config), self.build_router())
+            .await?;
         Ok(())
+    }
+
+    async fn start_without_tls(&mut self, listening: String) -> Result<()> {
+        tracing::warn!("Http API TLS not set");
+
+        self.shutdown_handler
+            .start_service(listening, None, self.build_router())
+            .await?;
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl Stoppable for HttpService {
+    async fn start(&mut self) -> Result<()> {
+        let conf = self.cfg.clone();
+        match conf.admin_tls_server_key.is_empty() || conf.admin_tls_server_cert.is_empty() {
+            true => self.start_without_tls(conf.admin_api_address).await,
+            false => self.start_with_tls(conf.admin_api_address).await,
+        }
+    }
+
+    async fn stop(&mut self, force: Option<broadcast::Receiver<()>>) -> Result<()> {
+        self.shutdown_handler.stop(force).await
     }
 }

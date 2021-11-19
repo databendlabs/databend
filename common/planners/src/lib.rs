@@ -12,42 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod plan_aggregator_test;
-#[cfg(test)]
-mod plan_builder_test;
-#[cfg(test)]
-mod plan_describe_table_test;
-#[cfg(test)]
-mod plan_display_test;
-#[cfg(test)]
-mod plan_explain_test;
-#[cfg(test)]
-mod plan_expression_test;
-#[cfg(test)]
-mod plan_extras_test;
-#[cfg(test)]
-mod plan_filter_test;
-#[cfg(test)]
-mod plan_having_test;
-#[cfg(test)]
-mod plan_limit_test;
-#[cfg(test)]
-mod plan_projection_test;
-#[cfg(test)]
-mod plan_rewriter_test;
-#[cfg(test)]
-mod plan_scan_test;
-#[cfg(test)]
-mod plan_select_test;
-#[cfg(test)]
-mod test;
-
 mod plan_aggregator_final;
 mod plan_aggregator_partial;
 mod plan_broadcast;
 mod plan_builder;
-mod plan_builder_scan;
 mod plan_database_create;
 mod plan_database_drop;
 mod plan_describe_table;
@@ -68,6 +36,7 @@ mod plan_expression_validator;
 mod plan_expression_visitor;
 mod plan_extras;
 mod plan_filter;
+mod plan_grant_privilege;
 mod plan_having;
 mod plan_insert_into;
 mod plan_kill;
@@ -79,7 +48,6 @@ mod plan_projection;
 mod plan_read_datasource;
 mod plan_remote;
 mod plan_rewriter;
-mod plan_scan;
 mod plan_select;
 mod plan_setting;
 mod plan_show_table_create;
@@ -91,13 +59,14 @@ mod plan_table_create;
 mod plan_table_drop;
 mod plan_truncate_table;
 mod plan_use_database;
+mod plan_user_alter;
+mod plan_user_create;
 mod plan_visitor;
 
 pub use plan_aggregator_final::AggregatorFinalPlan;
 pub use plan_aggregator_partial::AggregatorPartialPlan;
 pub use plan_broadcast::BroadcastPlan;
 pub use plan_builder::PlanBuilder;
-pub use plan_builder_scan::TableScanInfo;
 pub use plan_database_create::CreateDatabasePlan;
 pub use plan_database_create::DatabaseOptions;
 pub use plan_database_drop::DropDatabasePlan;
@@ -137,6 +106,7 @@ pub use plan_expression_visitor::ExpressionVisitor;
 pub use plan_expression_visitor::Recursion;
 pub use plan_extras::Extras;
 pub use plan_filter::FilterPlan;
+pub use plan_grant_privilege::GrantPrivilegePlan;
 pub use plan_having::HavingPlan;
 pub use plan_insert_into::InsertIntoPlan;
 pub use plan_kill::KillPlan;
@@ -150,7 +120,6 @@ pub use plan_read_datasource::ReadDataSourcePlan;
 pub use plan_remote::RemotePlan;
 pub use plan_rewriter::PlanRewriter;
 pub use plan_rewriter::RewriteHelper;
-pub use plan_scan::ScanPlan;
 pub use plan_select::SelectPlan;
 pub use plan_setting::SettingPlan;
 pub use plan_setting::VarValue;
@@ -165,4 +134,6 @@ pub use plan_table_create::TableOptions;
 pub use plan_table_drop::DropTablePlan;
 pub use plan_truncate_table::TruncateTablePlan;
 pub use plan_use_database::UseDatabasePlan;
+pub use plan_user_alter::AlterUserPlan;
+pub use plan_user_create::CreateUserPlan;
 pub use plan_visitor::PlanVisitor;

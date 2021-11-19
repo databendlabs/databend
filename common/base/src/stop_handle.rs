@@ -41,6 +41,9 @@ impl StopHandle {
         }
     }
 
+    /// Call `Stoppable::stop` on every task, with an arg of **force shutdown signal receiver**.
+    ///
+    /// It blocks until all `Stoppable::stop()` return.
     pub fn stop_all(
         &mut self,
         force_tx: Option<broadcast::Sender<()>>,
@@ -65,6 +68,13 @@ impl StopHandle {
         })
     }
 
+    /// Impl a two phase shutting down procedure(graceful then force):
+    ///
+    /// - The first signal initiates a **graceful** shutdown by calling
+    ///   `Stoppable::stop(Option<rx>)` on every managed tasks.
+    ///
+    /// - The second signal will be passed through `rx`, and it's the impl's duty to decide
+    ///   whether to forcefully shutdown or just ignore the second signal.
     pub fn wait_to_terminate(
         mut self,
         signal: broadcast::Sender<()>,
@@ -88,6 +98,11 @@ impl StopHandle {
         }
     }
 
+    /// Build a Sender `tx` for user to send **stop** signal to all tasks managed by this StopHandle.
+    /// It also installs a `ctrl-c` monitor to let user send a signal to the `tx` by press `ctrl-c`.
+    /// Thus there are two ways to stop tasks: `ctrl-c` or `tx.send()`.
+    ///
+    /// How to deal with the signal is not defined in this method.
     pub fn install_termination_handle() -> broadcast::Sender<()> {
         let (tx, _rx) = broadcast::channel(16);
 

@@ -19,13 +19,16 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_meta_api::KVApi;
+use common_meta_types::AddResult;
+use common_meta_types::AuthType;
 use common_meta_types::IntoSeqV;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
+use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_meta_types::UpsertKVActionReply;
+use common_meta_types::UpsertKVAction;
+use common_meta_types::UserPrivilege;
 
-use super::user_api::AuthType;
 use crate::user::user_api::UserInfo;
 use crate::user::user_api::UserMgrApi;
 
@@ -49,43 +52,45 @@ impl UserMgr {
 impl UserMgrApi for UserMgr {
     async fn add_user(&self, user_info: UserInfo) -> common_exception::Result<u64> {
         let match_seq = MatchSeq::Exact(0);
-        let key = format!("{}/{}", self.user_prefix, user_info.name);
+        let user_key = format_user_key(&user_info.name, &user_info.hostname);
+        let key = format!("{}/{}", self.user_prefix, user_key);
         let value = serde_json::to_vec(&user_info)?;
 
         let kv_api = self.kv_api.clone();
-        let upsert_kv = kv_api.upsert_kv(&key, match_seq, Some(value), None);
-        match upsert_kv.await? {
-            UpsertKVActionReply {
-                prev: None,
-                result: Some(SeqV { seq: s, .. }),
-            } => Ok(s),
-            UpsertKVActionReply {
-                prev: Some(SeqV { seq: s, .. }),
-                result: _,
-            } => Err(ErrorCode::UserAlreadyExists(format!(
+        let upsert_kv = kv_api.upsert_kv(UpsertKVAction::new(
+            &key,
+            match_seq,
+            Operation::Update(value),
+            None,
+        ));
+        let res = upsert_kv.await?.into_add_result()?;
+        match res {
+            AddResult::Ok(v) => Ok(v.seq),
+            AddResult::Exists(v) => Err(ErrorCode::UserAlreadyExists(format!(
                 "User already exists, seq [{}]",
-                s
-            ))),
-            catch_result @ UpsertKVActionReply { .. } => Err(ErrorCode::UnknownException(format!(
-                "upsert result not expected (using version 0, got {:?})",
-                catch_result
+                v.seq
             ))),
         }
     }
 
-    async fn get_user(&self, username: String, seq: Option<u64>) -> Result<SeqV<UserInfo>> {
-        let key = format!("{}/{}", self.user_prefix, username);
+    async fn get_user(
+        &self,
+        username: String,
+        hostname: String,
+        seq: Option<u64>,
+    ) -> Result<SeqV<UserInfo>> {
+        let user_key = format_user_key(&username, &hostname);
+        let key = format!("{}/{}", self.user_prefix, user_key);
         let kv_api = self.kv_api.clone();
         let get_kv = async move { kv_api.get_kv(&key).await };
         let res = get_kv.await?;
-        let seq_value = res
-            .result
-            .ok_or_else(|| ErrorCode::UnknownUser(format!("unknown user {}", username)))?;
+        let seq_value =
+            res.ok_or_else(|| ErrorCode::UnknownUser(format!("unknown user {}", user_key)))?;
 
         match MatchSeq::from(seq).match_seq(&seq_value) {
             // Ok(_) => Ok(SeqV::new(seq_value.seq, seq_value.data.try_into()?)),
             Ok(_) => Ok(seq_value.into_seqv()?),
-            Err(_) => Err(ErrorCode::UnknownUser(format!("username: {}", username))),
+            Err(_) => Err(ErrorCode::UnknownUser(format!("unknown user {}", user_key))),
         }
     }
 
@@ -109,6 +114,7 @@ impl UserMgrApi for UserMgr {
     async fn update_user(
         &self,
         username: String,
+        hostname: String,
         new_password: Option<Vec<u8>>,
         new_auth: Option<AuthType>,
         seq: Option<u64>,
@@ -116,21 +122,20 @@ impl UserMgrApi for UserMgr {
         if new_password.is_none() && new_auth.is_none() {
             return Ok(seq);
         }
-        let partial_update = new_auth.is_none() || new_password.is_none();
-        let user_info = if partial_update {
-            let user_val_seq = self.get_user(username.clone(), seq);
-            let user_info = user_val_seq.await?.data;
-            UserInfo::new(
-                username.clone(),
-                new_password.map_or(user_info.password, |v| v.to_vec()),
-                new_auth.map_or(user_info.auth_type, |v| v),
-            )
-        } else {
-            UserInfo::new(username.clone(), new_password.unwrap(), new_auth.unwrap())
-        };
+        let user_val_seq = self.get_user(username.clone(), hostname.clone(), seq);
+        let user_info = user_val_seq.await?.data;
 
-        let key = format!("{}/{}", self.user_prefix, user_info.name);
-        let value = serde_json::to_vec(&user_info)?;
+        let mut new_user_info = UserInfo::new(
+            username.clone(),
+            hostname.clone(),
+            new_password.map_or(user_info.password.clone(), |v| v.to_vec()),
+            new_auth.unwrap_or(user_info.auth_type),
+        );
+        new_user_info.set_privileges(user_info.privileges);
+
+        let user_key = format_user_key(&new_user_info.name, &new_user_info.hostname);
+        let key = format!("{}/{}", self.user_prefix, user_key);
+        let value = serde_json::to_vec(&new_user_info)?;
 
         let match_seq = match seq {
             None => MatchSeq::GE(1),
@@ -138,7 +143,16 @@ impl UserMgrApi for UserMgr {
         };
 
         let kv_api = self.kv_api.clone();
-        let upsert_kv = async move { kv_api.upsert_kv(&key, match_seq, Some(value), None).await };
+        let upsert_kv = async move {
+            kv_api
+                .upsert_kv(UpsertKVAction::new(
+                    &key,
+                    match_seq,
+                    Operation::Update(value),
+                    None,
+                ))
+                .await
+        };
         let res = upsert_kv.await?;
         match res.result {
             Some(SeqV { seq: s, .. }) => Ok(Some(s)),
@@ -149,15 +163,70 @@ impl UserMgrApi for UserMgr {
         }
     }
 
-    async fn drop_user(&self, username: String, seq: Option<u64>) -> Result<()> {
-        let key = format!("{}/{}", self.user_prefix, username);
+    async fn set_user_privileges(
+        &self,
+        username: String,
+        hostname: String,
+        privileges: UserPrivilege,
+        seq: Option<u64>,
+    ) -> Result<Option<u64>> {
+        let user_val_seq = self.get_user(username.clone(), hostname.clone(), seq);
+        let mut user_info = user_val_seq.await?.data;
+        user_info.set_privileges(privileges);
+
+        let user_key = format_user_key(&user_info.name, &user_info.hostname);
+        let key = format!("{}/{}", self.user_prefix, user_key);
+        let value = serde_json::to_vec(&user_info)?;
+
+        let match_seq = match seq {
+            None => MatchSeq::GE(1),
+            Some(s) => MatchSeq::Exact(s),
+        };
+
         let kv_api = self.kv_api.clone();
-        let upsert_kv = async move { kv_api.upsert_kv(&key, seq.into(), None, None).await };
+        let upsert_kv = async move {
+            kv_api
+                .upsert_kv(UpsertKVAction::new(
+                    &key,
+                    match_seq,
+                    Operation::Update(value),
+                    None,
+                ))
+                .await
+        };
+        let res = upsert_kv.await?;
+        match res.result {
+            Some(SeqV { seq: s, .. }) => Ok(Some(s)),
+            None => Err(ErrorCode::UnknownUser(format!(
+                "unknown user, or seq not match {}",
+                username
+            ))),
+        }
+    }
+
+    async fn drop_user(&self, username: String, hostname: String, seq: Option<u64>) -> Result<()> {
+        let user_key = format_user_key(&username, &hostname);
+        let key = format!("{}/{}", self.user_prefix, user_key);
+        let kv_api = self.kv_api.clone();
+        let upsert_kv = async move {
+            kv_api
+                .upsert_kv(UpsertKVAction::new(
+                    &key,
+                    seq.into(),
+                    Operation::Delete,
+                    None,
+                ))
+                .await
+        };
         let res = upsert_kv.await?;
         if res.prev.is_some() && res.result.is_none() {
             Ok(())
         } else {
-            Err(ErrorCode::UnknownUser(format!("unknown user {}", username)))
+            Err(ErrorCode::UnknownUser(format!("unknown user {}", user_key)))
         }
     }
+}
+
+pub fn format_user_key(username: &str, hostname: &str) -> String {
+    format!("'{}'@'{}'", username, hostname)
 }

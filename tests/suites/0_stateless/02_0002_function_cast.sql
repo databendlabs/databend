@@ -14,8 +14,17 @@ SELECT CAST(Null as Int64);
 SELECT CAST(Null as Boolean);
 SELECT CAST(Null as Varchar);
 
+SELECT CAST('33' as signed) = 33;
+SELECT CAST('33' as unsigned) = 33;
+SELECT CAST('-33aa' as signed) = 33;
+SELECT CAST('33 aa' as unsigned) = 33;
+SELECT CAST('-33' as unsigned) = 0;
+SELECT CAST('aa' as unsigned) = 0;
+SELECT CAST('aa' as Float64) = 0;
+
 SELECT '===DATE/DATETIME===';
 SELECT  toDateTime('2021-03-05 01:01:01') + 1 = toDateTime('2021-03-05 01:01:02');
 SELECT  toDate('2021-03-05') + 1 = toDate('2021-03-06');
 SELECT  toString(toDate('2021-03-05') + 1) = '2021-03-06';
 SELECT toDateTime(toDate('2021-03-05')) = toDateTime('2021-03-05 00:00:00');
+SELECT toDate(toDateTime('2021-03-05 01:00:00')) = toDate('2021-03-05');

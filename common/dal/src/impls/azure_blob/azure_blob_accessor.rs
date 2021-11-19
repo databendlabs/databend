@@ -27,7 +27,6 @@ use crate::AzureBlobInputStream;
 use crate::Bytes;
 use crate::DataAccessor;
 use crate::InputStream;
-use crate::SeekableReader;
 
 pub struct AzureBlobAccessor {
     client: Arc<StorageClient>,
@@ -98,36 +97,11 @@ impl AzureBlobAccessor {
 
         AzureBlobInputStream::create(blob_client)
     }
-}
-
-#[async_trait::async_trait]
-impl DataAccessor for AzureBlobAccessor {
-    fn get_reader(
-        &self,
-        _path: &str,
-        _stream_len: Option<u64>,
-    ) -> common_exception::Result<Box<dyn SeekableReader>> {
-        todo!()
-    }
-
-    fn get_input_stream(
-        &self,
-        path: &str,
-        _stream_len: Option<u64>,
-    ) -> common_exception::Result<InputStream> {
-        let blob_client = self
-            .client
-            .clone()
-            .as_container_client(&self.container)
-            .as_blob_client(path);
-
-        Ok(Box::new(AzureBlobInputStream::create(blob_client)))
-    }
 
     /// Get blob as Bytes from Azure blob
     ///
     /// * `blob` - the blob name is corresponding to the BlobName in the example url 'https://myaccount.blob.core.windows.net/mycontainer/BlobName'
-    async fn get(&self, blob: &str) -> common_exception::Result<Bytes> {
+    pub async fn get(&self, blob: &str) -> common_exception::Result<Bytes> {
         let blob = self
             .client
             .as_container_client(&self.container)
@@ -143,6 +117,23 @@ impl DataAccessor for AzureBlobAccessor {
             }
             Ok(blob_data) => Ok(blob_data.data),
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl DataAccessor for AzureBlobAccessor {
+    fn get_input_stream(
+        &self,
+        path: &str,
+        _stream_len: Option<u64>,
+    ) -> common_exception::Result<InputStream> {
+        let blob_client = self
+            .client
+            .clone()
+            .as_container_client(&self.container)
+            .as_blob_client(path);
+
+        Ok(Box::new(AzureBlobInputStream::create(blob_client)))
     }
 
     async fn put(&self, path: &str, content: Vec<u8>) -> common_exception::Result<()> {

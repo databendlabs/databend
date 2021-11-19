@@ -77,14 +77,9 @@ fn test_projection_push_down_optimizer_group_by() -> Result<()> {
     let mut project_push_down = ProjectionPushDownOptimizer::create(ctx);
     let optimized = project_push_down.optimize(&plan)?;
 
-    let expect = "\
-        Projection: max(value) as c1:String, name as c2:String\
-        \n  AggregatorFinal: groupBy=[[name]], aggr=[[max(value)]]\
-        \n    AggregatorPartial: groupBy=[[name]], aggr=[[max(value)]]\
-        \n      ReadDataSource: scan partitions: [1], scan schema: [name:String, value:String], statistics: [read_rows: 0, read_bytes: 0]";
-
+    let expect_has = "[projections: [0, 1]]";
     let actual = format!("{:?}", optimized);
-    assert_eq!(expect, actual);
+    assert!(actual.contains(&expect_has));
     Ok(())
 }
 
@@ -115,7 +110,6 @@ fn test_projection_push_down_optimizer_2() -> Result<()> {
             statistics.read_rows,
             statistics.read_bytes
         ),
-        scan_plan: Arc::new(ScanPlan::empty()),
         tbl_args: None,
         push_downs: None,
     });
@@ -133,12 +127,9 @@ fn test_projection_push_down_optimizer_2() -> Result<()> {
     let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
     let optimized = projection_push_down.optimize(&plan)?;
 
-    let expect = "\
-        Projection: a:String\
-        \n  Filter: ((a > 6) and (b <= 10))\
-        \n    ReadDataSource: scan partitions: [8], scan schema: [a:String, b:String], statistics: [read_rows: 10000, read_bytes: 80000]";
+    let expect_has = "[projections: [0, 1]";
     let actual = format!("{:?}", optimized);
-    assert_eq!(expect, actual);
+    assert!(actual.contains(&expect_has));
 
     Ok(())
 }
@@ -174,7 +165,6 @@ fn test_projection_push_down_optimizer_3() -> Result<()> {
             statistics.read_rows,
             statistics.read_bytes
         ),
-        scan_plan: Arc::new(ScanPlan::empty()),
         tbl_args: None,
         push_downs: None,
     });
@@ -195,18 +185,9 @@ fn test_projection_push_down_optimizer_3() -> Result<()> {
     let mut projection_push_down = ProjectionPushDownOptimizer::create(ctx);
     let optimized = projection_push_down.optimize(&plan)?;
 
-    let expect = "\
-    Projection: a:String\
-    \n  Limit: 10\
-    \n    Sort: c:String\
-    \n      Having: (a < 10)\
-    \n        AggregatorFinal: groupBy=[[a, c]], aggr=[[]]\
-    \n          AggregatorPartial: groupBy=[[a, c]], aggr=[[]]\
-    \n            Filter: (b = 10)\
-    \n              ReadDataSource: scan partitions: [8], scan schema: [a:String, b:String, c:String], statistics: [read_rows: 10000, read_bytes: 80000]";
-
+    let expect_has = "[projections: [0, 1, 2]";
     let actual = format!("{:?}", optimized);
-    assert_eq!(expect, actual);
+    assert!(actual.contains(&expect_has));
 
     Ok(())
 }
@@ -225,24 +206,10 @@ fn test_projection_push_down_optimizer_4() -> Result<()> {
     let mut project_push_down = ProjectionPushDownOptimizer::create(ctx);
     let optimized = project_push_down.optimize(&plan)?;
 
-    let expect = "Projection: substring(value, 1, 3) as c1:String\
-                        \n  Expression: substring(value, 1, 3):String (Before Projection)\
-                        \n    ReadDataSource: scan partitions: [1], scan schema: [value:String], statistics: [read_rows: 0, read_bytes: 0]";
+    let expect_has = "[projections: [1]";
 
     let actual = format!("{:?}", optimized);
-    assert_eq!(expect, actual);
+    assert!(actual.contains(&expect_has));
 
-    let read_source_node = optimized.input(0).input(0).input(0);
-    match read_source_node.as_ref() {
-        PlanNode::ReadSource(ref read_source_plan) => {
-            let schema = read_source_plan.schema();
-            assert_eq!(schema.fields().len(), 1);
-            assert_eq!(schema.field(0).data_type(), &DataType::String);
-        }
-        _ => panic!(
-            "unexpected plan node, must be ReadDataSource, but got: {:?}",
-            read_source_node
-        ),
-    }
     Ok(())
 }

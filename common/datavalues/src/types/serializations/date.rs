@@ -12,34 +12,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::marker::PhantomData;
 use std::ops::AddAssign;
-use std::ops::Sub;
 
-use chrono::Date;
-use chrono::DateTime;
 use chrono::Duration;
 use chrono::NaiveDate;
-use chrono::TimeZone;
-use chrono_tz::Tz;
 use common_exception::*;
-use common_io::prelude::*;
-use lexical_core::FromLexical;
-use num::cast::AsPrimitive;
 
 use crate::prelude::*;
 
 pub struct DateSerializer<T: DFPrimitiveType> {
-    pub builder: PrimitiveArrayBuilder<T>,
+    t: PhantomData<T>,
 }
 
-impl<T> TypeSerializer for DateSerializer<T>
-where
-    i64: AsPrimitive<T>,
-    T: DFPrimitiveType,
-    T: Unmarshal<T> + StatBuffer + FromLexical,
-    DFPrimitiveArray<T>: IntoSeries,
-{
-    fn serialize_strings(&self, column: &DataColumn) -> Result<Vec<String>> {
+impl<T: DFPrimitiveType> Default for DateSerializer<T> {
+    fn default() -> Self {
+        Self {
+            t: Default::default(),
+        }
+    }
+}
+
+impl<T: DFPrimitiveType> TypeSerializer for DateSerializer<T> {
+    fn serialize_value(&self, value: &DataValue) -> Result<String> {
+        if value.is_null() {
+            return Ok("NULL".to_owned());
+        }
+
+        let mut date = NaiveDate::from_ymd(1970, 1, 1);
+        let d = Duration::days(value.as_i64()?);
+        date.add_assign(d);
+        Ok(date.format("%Y-%m-%d").to_string())
+    }
+
+    fn serialize_column(&self, column: &DataColumn) -> Result<Vec<String>> {
         let array = column.to_array()?;
         let array: &DFPrimitiveArray<T> = array.static_cast();
 
@@ -56,72 +62,5 @@ where
             })
             .collect();
         Ok(result)
-    }
-
-    fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
-        let value: T = reader.read_scalar()?;
-        self.builder.append_value(value);
-        Ok(())
-    }
-
-    fn de_batch(&mut self, reader: &[u8], step: usize, rows: usize) -> Result<()> {
-        for row in 0..rows {
-            let mut reader = &reader[step * row..];
-            let value: T = reader.read_scalar()?;
-            self.builder.append_value(value);
-        }
-        Ok(())
-    }
-
-    fn de_text(&mut self, reader: &[u8]) -> Result<()> {
-        if reader.eq_ignore_ascii_case(b"null") {
-            self.builder.append_null();
-            return Ok(());
-        }
-
-        match lexical_core::parse::<T>(reader) {
-            Ok(v) => {
-                self.builder.append_value(v);
-                Ok(())
-            }
-            Err(_) => {
-                let v = std::str::from_utf8(reader)
-                    .map_err_to_code(ErrorCode::BadBytes, || "Cannot convert value to utf8")?;
-                let res = v
-                    .parse::<chrono::NaiveDate>()
-                    .map_err_to_code(ErrorCode::BadBytes, || "Cannot parse value to Date type")?;
-                let epoch = NaiveDate::from_ymd(1970, 1, 1);
-                let duration = res.sub(epoch);
-                self.builder.append_value(duration.num_days().as_());
-                Ok(())
-            }
-        }
-    }
-
-    fn de_null(&mut self) {
-        self.builder.append_null()
-    }
-
-    fn finish_to_series(&mut self) -> Series {
-        self.builder.finish().into_series()
-    }
-}
-
-pub trait DateConverter {
-    fn to_date(&self, tz: &Tz) -> Date<Tz>;
-    fn to_date_time(&self, tz: &Tz) -> DateTime<Tz>;
-}
-
-impl<T> DateConverter for T
-where T: AsPrimitive<i64>
-{
-    fn to_date(&self, tz: &Tz) -> Date<Tz> {
-        let mut dt = tz.ymd(1970, 1, 1);
-        dt = dt.checked_add_signed(Duration::days(self.as_())).unwrap();
-        dt
-    }
-
-    fn to_date_time(&self, tz: &Tz) -> DateTime<Tz> {
-        tz.timestamp_millis(self.as_() * 1000)
     }
 }

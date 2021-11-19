@@ -46,6 +46,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     // Prefer to use env variable in cloud native deployment
     // Override configs based on env variables
     conf = Config::load_from_env(&conf)?;
+    conf.initial_dir()?;
 
     env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or(conf.log.log_level.to_lowercase().as_str()),
@@ -140,12 +141,15 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         info!("RPC API server listening on {}", listening);
     }
 
-    // Namespace
+    // Cluster register.
     {
         let cluster_discovery = session_manager.get_cluster_discovery();
         let register_to_metastore = cluster_discovery.register_to_metastore(&conf);
         register_to_metastore.await?;
-        info!("Databend query has been registered to metastore.");
+        info!(
+            "Databend query has been registered:{:?} to metasrv:[{:?}].",
+            conf.query.cluster_id, conf.meta.meta_address
+        );
     }
 
     log::info!("Ready for connections.");

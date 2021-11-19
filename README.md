@@ -1,6 +1,6 @@
 <div align="center">
-<h1>Databend</h1>
-<p align="center">The Open Source Cloud Warehouse for Everyone</p>
+<p align="center"><img alt="Databend Logo" src="website/databend/docs/images/databend-logo.png" width="20%"/></p>
+<p align="center">The Open Source Serverless Data Warehouse for Everyone</p>
  
 <h4 align="center">
   <a href="https://databend.rs">Website</a> |
@@ -41,13 +41,13 @@
 
 ## What is Databend?
 
-Databend aimed to be an open source **elastic** and **reliable** cloud warehouse, it offers blazing fast query and combines elasticity, simplicity, low cost of the cloud, built to make the Data Cloud easy.
+Databend aimed to be an open source **elastic** and **reliable** serverless data warehouse, it offers blazing fast query and combines elasticity, simplicity, low cost of the cloud, built to make the Data Cloud easy.
 
 Databend design principles:
-1. **Elastic**  In Databend, storage and compute resources can dynamically scale up and down on demand.
-2. **Secure** All data files and network traffic in Databend is encrypted end-to-end, and provide Role Based Access Control in SQL level.
+1. **Elastic**  In Databend, storage and compute resources can be scaled on demand.
+2. **Serverless**  In Databend, you don’t have to think about servers, you pay only for what you actually used.
 3. **User-friendly** Databend is an ANSI SQL compliant cloud warehouse, it is easy for data scientist and engineers to use.
-4. **Cost-efficient** Databend processes queries with high performance, and the user only pays for what is actually used.
+4. **Secure** All data files and network traffic in Databend is encrypted end-to-end, and provide Role Based Access Control in SQL level.
 
 ## Design Overview
 
@@ -82,12 +82,12 @@ For efficient pruning, Databend also creates indexes for each Parquet file to sp
 
 ## Getting Started
 
-* [Quick Start](https://databend.rs/overview/building-and-running/)
-* [Whitepapers](https://databend.rs/overview/architecture/)
-* [Performance](https://databend.rs/overview/performance/)
-* [CLI Design](https://databend.rs/rfcs/cli/0001-cli-design/)
-* [Contributing](https://databend.rs/development/contributing/)
-* [Databend Weekly](https://datafuselabs.github.io/weekly/)
+* [Databend Docs](https://databend.rs/overview/building-and-running/)
+* [Databend CLI Docs](https://databend.rs/cli/cli/)
+* [Databend Contributing](https://databend.rs/development/contributing/)
+* [Databend Architecture](https://databend.rs/overview/architecture/)
+* [Databend Performance](https://databend.rs/overview/performance/)
+* [Databend Weekly](https://weekly.databend.rs/)
 
 ## Roadmap
 

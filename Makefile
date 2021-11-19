@@ -1,7 +1,19 @@
 HUB ?= datafuselabs
 TAG ?= latest
-PLATFORM ?= linux/amd64
+PLATFORM ?= linux/amd64,linux/arm64
 VERSION ?= latest
+ADD_NODES ?= 0
+NUM_CPUS ?= 2
+TENANT_ID ?= "tenant"
+CLUSTER_ID ?= "test"
+
+# yamllint vars
+YAML_FILES ?= $(shell find . -path ./target -prune -type f -name '*.yaml' -or -name '*.yml')
+YAML_DOCKER_ARGS ?= run --rm --user "$$(id -u)" -v "$${PWD}:/component" --workdir /component
+YAMLLINT_ARGS ?= --no-warnings
+YAMLLINT_CONFIG ?= .yamllint.yml
+YAMLLINT_IMAGE ?= docker.io/cytopia/yamllint:latest
+YAMLLINT_DOCKER ?= docker $(YAML_DOCKER_ARGS) $(YAMLLINT_IMAGE)
 
 # Setup dev toolchain
 setup:
@@ -13,6 +25,9 @@ fmt:
 lint:
 	cargo fmt
 	cargo clippy --tests -- -D warnings
+
+lint-yaml: $(YAML_FILES)
+	$(YAMLLINT_DOCKER) -f parsable -c $(YAMLLINT_CONFIG) $(YAMLLINT_ARGS) -- $?
 
 miri:
 	cargo miri setup
@@ -43,16 +58,15 @@ build-tool:
 
 cross-compile-debug:
 	cross build --target aarch64-unknown-linux-gnu
-	cross build --target arm-unknown-linux-gnueabi
-	cross build --target armv7-unknown-linux-gnueabihf
 
 cross-compile-release:
 	cross build --target aarch64-unknown-linux-gnu --release
-	cross build --target arm-unknown-linux-gnueabi --release
-	cross build --target armv7-unknown-linux-gnueabihf --release
 
 cli-build:
 	bash ./scripts/build/build-cli.sh build-cli
+
+cli-build-debug:
+	bash ./scripts/build/build-cli.sh build-cli-debug
 
 cli-install:
 	bash ./scripts/build/build-cli.sh install-cli
@@ -61,27 +75,66 @@ cli-test:
 	bash ./scripts/ci/ci-run-cli-unit-tests.sh
 
 unit-test:
-	bash ./scripts/ci/ci-run-unit-tests.sh
+	ulimit -n 10000; bash ./scripts/ci/ci-run-unit-tests.sh
 
-stateless-test:
-	rm -rf ./_meta/
-	bash ./scripts/build/build-debug.sh
-	bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
+# Bendctl with cluster for stateful test.
+cluster: build cli-build
+	mkdir -p ./.databend/local/bin/test/ && make cluster_stop || echo "stop"
+	cp ./target/release/databend-query ./.databend/local/bin/test/databend-query
+	cp ./target/release/databend-meta ./.databend/local/bin/test/databend-meta
+	./target/release/bendctl cluster create --databend_dir ./.databend --group local --version test --num-cpus ${NUM_CPUS} --query-tenant-id ${TENANT_ID} --query-cluster-id ${CLUSTER_ID} --force
+	for i in `seq 1 ${ADD_NODES}`; do make cluster_add; done;
+	make cluster_view
+cluster_add:
+	./target/release/bendctl cluster add --databend_dir ./.databend --group local --num-cpus ${NUM_CPUS}
+cluster_view:
+	./target/release/bendctl cluster view --databend_dir ./.databend --group local
+cluster_stop:
+	@if find ./.databend/local/configs/local/ -maxdepth 0 -empty | read v ; then echo there is no cluster exists; else ./target/release/bendctl cluster stop --databend_dir ./.databend --group local; fi
 
-stateless-cluster-test:
+embedded-meta-test: build-debug
+	rm -rf ./_meta_embedded
+	bash ./scripts/ci/ci-run-tests-embedded-meta.sh
+
+stateless-test: build-debug
 	rm -rf ./_meta/
-	bash ./scripts/build/build-debug.sh
+	ulimit -n 10000; bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
+
+stateful-test:
+	rm -rf ./_meta/
+	rm -rf ./.databend/
+	ulimit -n 10000; bash ./scripts/ci/ci-run-stateful-tests-standalone.sh
+
+stateful-cluster-test:
+	rm -rf ./_meta/
+	rm -rf ./.databend/
+	bash ./scripts/ci/ci-run-stateful-tests-cluster.sh
+
+stateless-cluster-test: build-debug
+	rm -rf ./_meta/
 	bash ./scripts/ci/ci-run-stateless-tests-cluster.sh
 
-stateless-cluster-test-tls:
+stateless-cluster-test-tls: build-debug
 	rm -rf ./_meta/
-	bash ./scripts/build/build-debug.sh
 	bash ./scripts/ci/ci-run-stateless-tests-cluster-tls.sh
 
 test: unit-test stateless-test
 
 docker:
 	docker build --network host -f docker/Dockerfile -t ${HUB}/databend-query:${TAG} .
+
+k8s-docker:
+#	cargo build --target x86_64-unknown-linux-gnu --release
+#	cross build --target aarch64-unknown-linux-gnu --release
+	mkdir -p ./distro/linux/amd64
+	mkdir -p ./distro/linux/arm64
+	cp ./target/x86_64-unknown-linux-gnu/release/databend-meta ./distro/linux/amd64
+	cp ./target/x86_64-unknown-linux-gnu/release/databend-query ./distro/linux/amd64
+	cp ./target/aarch64-unknown-linux-gnu/release/databend-meta ./distro/linux/arm64
+	cp ./target/aarch64-unknown-linux-gnu/release/databend-query ./distro/linux/arm64
+	mkdir -p ./distro/linux/arm64
+	docker buildx build . -f ./docker/meta/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend-meta:${TAG} --push
+	docker buildx build . -f ./docker/query/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend-query:${TAG} --push
 
 docker_release:
 	docker buildx build . -f ./docker/release/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend:${TAG} --build-arg VERSION=${VERSION}--push

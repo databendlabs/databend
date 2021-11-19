@@ -13,48 +13,26 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
-use std::collections::HashSet;
-use std::io::Cursor;
-use std::ops::Bound;
 use std::sync::Arc;
 
-use async_raft::async_trait::async_trait;
 use async_raft::config::Config;
-use async_raft::raft::ClientWriteRequest;
-use async_raft::raft::Entry;
-use async_raft::raft::EntryPayload;
-use async_raft::raft::MembershipConfig;
-use async_raft::storage::CurrentSnapshotData;
-use async_raft::storage::HardState;
-use async_raft::storage::InitialState;
-use async_raft::ClientWriteError;
 use async_raft::Raft;
 use async_raft::RaftMetrics;
-use async_raft::RaftStorage;
-use async_raft::SnapshotMeta;
 use async_raft::SnapshotPolicy;
 use common_base::tokio;
 use common_base::tokio::sync::watch;
 use common_base::tokio::sync::Mutex;
-use common_base::tokio::sync::RwLock;
-use common_base::tokio::sync::RwLockWriteGuard;
+use common_base::tokio::sync::RwLockReadGuard;
 use common_base::tokio::task::JoinHandle;
 use common_exception::prelude::ErrorCode;
 use common_exception::prelude::ToErrorCode;
 use common_meta_raft_store::config::RaftConfig;
-use common_meta_raft_store::log::RaftLog;
-use common_meta_raft_store::state::RaftState;
 use common_meta_raft_store::state_machine::AppliedState;
-use common_meta_raft_store::state_machine::SerializableSnapshot;
-use common_meta_raft_store::state_machine::Snapshot;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_raft_store::state_machine::TableLookupKey;
 use common_meta_raft_store::state_machine::TableLookupValue;
-use common_meta_sled_store::get_sled_db;
 use common_meta_types::Cmd;
-use common_meta_types::DatabaseInfo;
 use common_meta_types::LogEntry;
-use common_meta_types::MatchSeq;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::SeqV;
@@ -63,485 +41,20 @@ use common_meta_types::TableMeta;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 
-use crate::meta_service::MetaServiceClient;
+use crate::errors::ConnectionError;
+use crate::errors::ForwardToLeader;
+use crate::errors::MetaError;
+use crate::meta_service::message::AdminRequest;
+use crate::meta_service::message::AdminResponse;
+use crate::meta_service::meta_leader::MetaLeader;
+use crate::meta_service::AdminRequestInner;
+use crate::meta_service::JoinRequest;
 use crate::meta_service::MetaServiceImpl;
-use crate::meta_service::MetaServiceServer;
 use crate::meta_service::Network;
-use crate::meta_service::RetryableError;
-use crate::meta_service::ShutdownError;
-
-/// An storage system implementing the `async_raft::RaftStorage` trait.
-///
-/// Trees:
-///   state:
-///       id
-///       hard_state
-///   log
-///   state_machine
-/// TODO(xp): MetaNode recovers persisted state when restarted.
-/// TODO(xp): move metasrv to a standalone file.
-pub struct MetaRaftStore {
-    /// The ID of the Raft node for which this storage instances is configured.
-    /// ID is also stored in raft_state. Since `id` never changes, this is a cache for fast access.
-    pub id: NodeId,
-
-    config: RaftConfig,
-
-    /// If the instance is opened from an existent state(e.g. load from disk) or created.
-    is_open: bool,
-
-    /// The sled db for log and raft_state.
-    /// state machine is stored in another sled db since it contains user data and needs to be export/import as a whole.
-    /// This db is also used to generate a locally unique id.
-    /// Currently the id is used to create a unique snapshot id.
-    _db: sled::Db,
-
-    // Raft state includes:
-    // id: NodeId,
-    //     current_term,
-    //     voted_for
-    pub raft_state: RaftState,
-
-    pub log: RaftLog,
-
-    /// The Raft state machine.
-    ///
-    /// sled db has its own concurrency control, e.g., batch or transaction.
-    /// But we still need a lock, when installing a snapshot, which is done by replacing the state machine:
-    ///
-    /// - Acquire a read lock to WRITE or READ. Transactional RW relies on sled concurrency control.
-    /// - Acquire a write lock before installing a snapshot, to prevent any write to the db.
-    pub state_machine: RwLock<StateMachine>,
-
-    /// The current snapshot.
-    pub current_snapshot: RwLock<Option<Snapshot>>,
-}
-
-// TODO(xp): the following is a draft struct when meta storage is migrated to sled based impl.
-//           keep it until the migration is done.
-// /// Impl a raft store.
-// /// Includes:
-// /// - raft state, e.g., node-id, current_term and which node it has voted-for.
-// /// - raft log: distributed logs
-// /// - raft state machine.
-// pub struct C {
-//     /// The Raft log.
-//     pub log: sled::Tree,
-//
-//     /// The Raft state machine.
-//     /// State machine is a relatively standalone component in raft.
-//     /// In our impl a state machine has its own sled db.
-//     pub state_machine: RwLock<StateMachine>,
-//
-//     /// The current snapshot of the state machine.
-//     /// Currently snapshot data is a complete backup of the state machine and is not persisted on disk.
-//     /// When server restarts, a new snapshot is created on demand.
-//     pub current_snapshot: RwLock<Option<Snapshot>>,
-// }
-
-impl MetaRaftStore {
-    /// If the instance is opened(true) from an existent state(e.g. load from disk) or created(false).
-    /// TODO(xp): introduce a trait to define this behavior?
-    pub fn is_open(&self) -> bool {
-        self.is_open
-    }
-}
-
-impl MetaRaftStore {
-    /// Open an existent `metasrv` instance or create an new one:
-    /// 1. If `open` is `Some`, try to open an existent one.
-    /// 2. If `create` is `Some`, try to create one.
-    /// Otherwise it panic
-    #[tracing::instrument(level = "info", skip(config), fields(config_id=%config.config_id))]
-    pub async fn open_create(
-        config: &RaftConfig,
-        open: Option<()>,
-        create: Option<()>,
-    ) -> common_exception::Result<MetaRaftStore> {
-        let db = get_sled_db();
-
-        let raft_state = RaftState::open_create(&db, config, open, create).await?;
-        let is_open = raft_state.is_open();
-        tracing::info!("RaftState opened is_open: {}", is_open);
-
-        let log = RaftLog::open(&db, config).await?;
-        tracing::info!("RaftLog opened");
-
-        let (sm_id, prev_sm_id) = raft_state.read_state_machine_id()?;
-
-        // There is a garbage state machine need to be cleaned.
-        if sm_id != prev_sm_id {
-            StateMachine::clean(config, prev_sm_id)?;
-            raft_state.write_state_machine_id(&(sm_id, sm_id)).await?;
-        }
-
-        let sm = RwLock::new(StateMachine::open(config, sm_id).await?);
-        let current_snapshot = RwLock::new(None);
-
-        Ok(Self {
-            id: raft_state.id,
-            config: config.clone(),
-            is_open,
-            _db: db,
-            raft_state,
-            log,
-            state_machine: sm,
-            current_snapshot,
-        })
-    }
-
-    /// Get a handle to the state machine for testing purposes.
-    pub async fn get_state_machine(&self) -> RwLockWriteGuard<'_, StateMachine> {
-        self.state_machine.write().await
-    }
-
-    pub async fn read_hard_state(&self) -> common_exception::Result<Option<HardState>> {
-        self.raft_state.read_hard_state()
-    }
-
-    /// Install a snapshot to build a state machine from it and replace the old state machine with the new one.
-    #[tracing::instrument(level = "debug", skip(self, data))]
-    pub async fn install_snapshot(&self, data: &[u8]) -> common_exception::Result<()> {
-        let mut sm = self.state_machine.write().await;
-
-        let (sm_id, prev_sm_id) = self.raft_state.read_state_machine_id()?;
-        if sm_id != prev_sm_id {
-            return Err(ErrorCode::ConcurrentSnapshotInstall(format!(
-                "another snapshot install is not finished yet: {} {}",
-                sm_id, prev_sm_id
-            )));
-        }
-
-        let new_sm_id = sm_id + 1;
-
-        tracing::debug!("snapshot data len: {}", data.len());
-
-        let snap: SerializableSnapshot = serde_json::from_slice(data)?;
-
-        // If not finished, clean up the new tree.
-        self.raft_state
-            .write_state_machine_id(&(sm_id, new_sm_id))
-            .await?;
-
-        let new_sm = StateMachine::open(&self.config, new_sm_id).await?;
-        tracing::info!(
-            "insert all key-value into new state machine, n={}",
-            snap.kvs.len()
-        );
-
-        let tree = &new_sm.sm_tree.tree;
-        let nkvs = snap.kvs.len();
-        for x in snap.kvs.into_iter() {
-            let k = &x[0];
-            let v = &x[1];
-            tree.insert(k, v.clone())
-                .map_err_to_code(ErrorCode::MetaStoreDamaged, || "fail to insert snapshot")?;
-        }
-
-        tracing::info!(
-            "installed state machine from snapshot, no_kvs: {} last_applied: {}",
-            nkvs,
-            new_sm.get_last_applied()?,
-        );
-
-        tree.flush_async()
-            .await
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || "fail to flush snapshot")?;
-
-        tracing::info!("flushed tree, no_kvs: {}", nkvs);
-
-        // Start to use the new tree, the old can be cleaned.
-        self.raft_state
-            .write_state_machine_id(&(new_sm_id, sm_id))
-            .await?;
-
-        tracing::info!(
-            "installed state machine from snapshot, last_applied: {}",
-            new_sm.get_last_applied()?,
-        );
-
-        StateMachine::clean(&self.config, sm_id)?;
-
-        self.raft_state
-            .write_state_machine_id(&(new_sm_id, new_sm_id))
-            .await?;
-
-        // TODO(xp): use checksum to check consistency?
-
-        *sm = new_sm;
-        Ok(())
-    }
-
-    /// Go backwards through the log to find the most recent membership config <= `upto_index`.
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_membership_from_log(
-        &self,
-        upto_index: Option<u64>,
-    ) -> anyhow::Result<MembershipConfig> {
-        let right_bound = match upto_index {
-            Some(upto) => Bound::Included(upto),
-            None => Bound::Unbounded,
-        };
-
-        let it = self.log.range((Bound::Included(0), right_bound))?.rev();
-
-        for rkv in it {
-            let (_log_index, ent) = rkv?;
-            match &ent.payload {
-                EntryPayload::ConfigChange(cfg) => {
-                    return Ok(cfg.membership.clone());
-                }
-                EntryPayload::SnapshotPointer(snap_ptr) => {
-                    return Ok(snap_ptr.membership.clone());
-                }
-                _ => {}
-            }
-        }
-
-        Ok(MembershipConfig::new_initial(self.id))
-    }
-}
-
-#[async_trait]
-impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
-    type Snapshot = Cursor<Vec<u8>>;
-    type ShutdownError = ShutdownError;
-
-    #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
-    async fn get_membership_config(&self) -> anyhow::Result<MembershipConfig> {
-        self.get_membership_from_log(None).await
-    }
-
-    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
-    async fn get_initial_state(&self) -> anyhow::Result<InitialState> {
-        let hard_state = self.raft_state.read_hard_state()?;
-
-        let membership = self.get_membership_config().await?;
-        let sm = self.state_machine.read().await;
-
-        match hard_state {
-            Some(inner) => {
-                let last = self.log.last()?;
-                let last_log_id = match last {
-                    Some((_index, ent)) => ent.log_id,
-                    None => (0, 0).into(),
-                };
-
-                let last_applied_log = sm.get_last_applied()?;
-
-                let st = InitialState {
-                    last_log_id,
-                    last_applied_log,
-                    hard_state: inner,
-                    membership,
-                };
-                tracing::info!("build initial state from storage: {:?}", st);
-                Ok(st)
-            }
-            None => {
-                let new = InitialState::new_initial(self.id);
-                tracing::info!("create initial state: {:?}", new);
-                self.raft_state.write_hard_state(&new.hard_state).await?;
-                Ok(new)
-            }
-        }
-    }
-
-    #[tracing::instrument(level = "info", skip(self, hs), fields(id=self.id))]
-    async fn save_hard_state(&self, hs: &HardState) -> anyhow::Result<()> {
-        self.raft_state.write_hard_state(hs).await?;
-        Ok(())
-    }
-
-    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
-    async fn get_log_entries(&self, start: u64, stop: u64) -> anyhow::Result<Vec<Entry<LogEntry>>> {
-        // Invalid request, return empty vec.
-        if start > stop {
-            tracing::error!(
-                "get_log_entries: invalid request, start({}) > stop({})",
-                start,
-                stop
-            );
-            return Ok(vec![]);
-        }
-
-        Ok(self.log.range_values(start..stop)?)
-    }
-
-    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
-    async fn delete_logs_from(&self, start: u64, stop: Option<u64>) -> anyhow::Result<()> {
-        if stop.as_ref().map(|stop| &start > stop).unwrap_or(false) {
-            tracing::error!(
-                "delete_logs_from: invalid request, start({}) > stop({:?})",
-                start,
-                stop
-            );
-            return Ok(());
-        }
-
-        // If a stop point was specified, delete from start until the given stop point.
-        if let Some(stop) = stop.as_ref() {
-            self.log.range_remove(start..*stop).await?;
-        } else {
-            self.log.range_remove(start..).await?;
-        }
-        Ok(())
-    }
-
-    #[tracing::instrument(level = "info", skip(self, entry), fields(id=self.id))]
-    async fn append_entry_to_log(&self, entry: &Entry<LogEntry>) -> anyhow::Result<()> {
-        self.log.insert(entry).await?;
-        Ok(())
-    }
-
-    #[tracing::instrument(level = "info", skip(self, entries), fields(id=self.id))]
-    async fn replicate_to_log(&self, entries: &[Entry<LogEntry>]) -> anyhow::Result<()> {
-        // TODO(xp): replicated_to_log should not block. Do the actual work in another task.
-        self.log.append(entries).await?;
-        Ok(())
-    }
-
-    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
-    async fn apply_entry_to_state_machine(
-        &self,
-        entry: &Entry<LogEntry>,
-    ) -> anyhow::Result<AppliedState> {
-        let mut sm = self.state_machine.write().await;
-        let resp = sm.apply(entry).await?;
-        Ok(resp)
-    }
-
-    #[tracing::instrument(level = "info", skip(self, entries), fields(id=self.id))]
-    async fn replicate_to_state_machine(&self, entries: &[&Entry<LogEntry>]) -> anyhow::Result<()> {
-        let mut sm = self.state_machine.write().await;
-        for entry in entries {
-            sm.apply(*entry).await?;
-        }
-        Ok(())
-    }
-
-    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
-    async fn do_log_compaction(&self) -> anyhow::Result<CurrentSnapshotData<Self::Snapshot>> {
-        // NOTE: do_log_compaction is guaranteed to be serialized called by RaftCore.
-
-        // TODO(xp): add test of small chunk snapshot transfer and installation
-
-        // TODO(xp): disallow to install a snapshot with smaller last_applied_log
-
-        // 1. Take a serialized snapshot
-
-        let (view, last_applied_log, last_membership, snapshot_id) =
-            self.state_machine.write().await.snapshot()?;
-
-        let data = StateMachine::serialize_snapshot(view)?;
-        let snapshot_size = data.len();
-
-        let snap_meta = SnapshotMeta {
-            last_log_id: last_applied_log,
-            snapshot_id,
-            membership: last_membership.clone(),
-        };
-
-        let snapshot = Snapshot {
-            meta: snap_meta.clone(),
-            data: data.clone(),
-        };
-
-        // 2. Remove logs that are included in snapshot.
-
-        // When encountered a snapshot pointer, raft replication is switched to snapshot replication.
-        self.log
-            .insert(&Entry::new_snapshot_pointer(&snapshot.meta))
-            .await?;
-
-        self.log.range_remove(0..last_applied_log.index).await?;
-
-        tracing::debug!("log range_remove complete");
-
-        // Update the snapshot first.
-        {
-            let mut current_snapshot = self.current_snapshot.write().await;
-            *current_snapshot = Some(snapshot);
-        }
-
-        tracing::debug!(snapshot_size = snapshot_size, "log compaction complete");
-
-        Ok(CurrentSnapshotData {
-            meta: snap_meta,
-            snapshot: Box::new(Cursor::new(data)),
-        })
-    }
-
-    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
-    async fn create_snapshot(&self) -> anyhow::Result<Box<Self::Snapshot>> {
-        Ok(Box::new(Cursor::new(Vec::new())))
-    }
-
-    #[tracing::instrument(level = "info", skip(self, snapshot), fields(id=self.id))]
-    async fn finalize_snapshot_installation(
-        &self,
-        meta: &SnapshotMeta,
-        snapshot: Box<Self::Snapshot>,
-    ) -> anyhow::Result<()> {
-        // TODO(xp): disallow installing a snapshot with smaller last_applied.
-
-        tracing::debug!(
-            { snapshot_size = snapshot.get_ref().len() },
-            "decoding snapshot for installation"
-        );
-
-        let new_snapshot = Snapshot {
-            meta: meta.clone(),
-            data: snapshot.into_inner(),
-        };
-
-        tracing::debug!("SNAP META:{:?}", meta);
-
-        // Replace state machine with the new one
-        let res = self.install_snapshot(&new_snapshot.data).await;
-        match res {
-            Ok(_) => {}
-            Err(e) => {
-                tracing::error!("error: {:?} when install_snapshot", e);
-            }
-        };
-
-        // When encountered a snapshot pointer, raft replication is switched to snapshot replication.
-        self.log
-            .insert(&Entry::new_snapshot_pointer(&new_snapshot.meta))
-            .await?;
-
-        self.log.range_remove(0..meta.last_log_id.index).await?;
-
-        // Update current snapshot.
-        {
-            let mut current_snapshot = self.current_snapshot.write().await;
-            *current_snapshot = Some(new_snapshot);
-        }
-        Ok(())
-    }
-
-    #[tracing::instrument(level = "info", skip(self), fields(id=self.id))]
-    async fn get_current_snapshot(
-        &self,
-    ) -> anyhow::Result<Option<CurrentSnapshotData<Self::Snapshot>>> {
-        tracing::info!("got snapshot start");
-        let snap = match &*self.current_snapshot.read().await {
-            Some(snapshot) => {
-                let data = snapshot.data.clone();
-                Ok(Some(CurrentSnapshotData {
-                    meta: snapshot.meta.clone(),
-                    snapshot: Box::new(Cursor::new(data)),
-                }))
-            }
-            None => Ok(None),
-        };
-
-        tracing::info!("got snapshot complete");
-
-        snap
-    }
-}
+use crate::proto::meta_service_client::MetaServiceClient;
+use crate::proto::meta_service_server::MetaServiceServer;
+use crate::store::MetaRaftStore;
+use crate::Opened;
 
 // MetaRaft is a impl of the generic Raft handling meta data R/W.
 pub type MetaRaft = Raft<LogEntry, AppliedState, Network, MetaRaftStore>;
@@ -557,44 +70,9 @@ pub struct MetaNode {
     pub join_handles: Mutex<Vec<JoinHandle<common_exception::Result<()>>>>,
 }
 
-impl MetaRaftStore {
-    pub async fn get_node(&self, node_id: &NodeId) -> common_exception::Result<Option<Node>> {
-        let sm = self.state_machine.read().await;
-
-        sm.get_node(node_id)
-    }
-
-    pub async fn get_node_addr(&self, node_id: &NodeId) -> common_exception::Result<String> {
-        let addr = self
-            .get_node(node_id)
-            .await?
-            .map(|n| n.address)
-            .ok_or_else(|| ErrorCode::UnknownNode(format!("node id: {}", node_id)))?;
-
-        Ok(addr)
-    }
-
-    /// A non-voter is a node stored in raft store, but is not configured as a voter in the raft group.
-    pub async fn list_non_voters(&self) -> HashSet<NodeId> {
-        // TODO(xp): consistency
-        let mut rst = HashSet::new();
-        let ms = self
-            .get_membership_config()
-            .await
-            .expect("fail to get membership");
-
-        let node_ids = {
-            let sm = self.state_machine.read().await;
-            let sm_nodes = sm.nodes();
-            sm_nodes.range_keys(..).expect("fail to list nodes")
-        };
-        for node_id in node_ids {
-            // it has been added into this cluster and is not a voter.
-            if !ms.contains(&node_id) {
-                rst.insert(node_id);
-            }
-        }
-        rst
+impl Opened for MetaNode {
+    fn is_opened(&self) -> bool {
+        self.sto.is_opened()
     }
 }
 
@@ -648,7 +126,7 @@ impl MetaNodeBuilder {
         } else {
             sto.get_node_addr(&node_id).await?
         };
-        tracing::info!("about to start grpc on {}", addr);
+        tracing::info!("about to start raft grpc on {}", addr);
 
         MetaNode::start_grpc(mn.clone(), &addr).await?;
 
@@ -738,47 +216,56 @@ impl MetaNode {
         Ok(())
     }
 
-    /// Start a metasrv node from initialized store.
-    #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
-    pub async fn open(config: &RaftConfig) -> common_exception::Result<Arc<MetaNode>> {
-        let (mn, _is_open) = Self::open_create_boot(config, Some(()), None, None).await?;
-        Ok(mn)
-    }
-
     /// Open or create a metasrv node.
     /// Optionally boot a single node cluster.
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create an one in non-voter mode.
-    /// 3. If `boot` is `Some` and it is just created, try to initialize a single-node cluster.
+    /// 3. If `init_cluster` is `Some` and it is just created, try to initialize a single-node cluster.
+    ///
+    /// TODO(xp): `init_cluster`: pass in a Map<id, address> to initialize the cluster.
     #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
     pub async fn open_create_boot(
         config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
-        boot: Option<()>,
-    ) -> common_exception::Result<(Arc<MetaNode>, bool)> {
-        let sto = MetaRaftStore::open_create(config, open, create).await?;
-        let is_open = sto.is_open();
+        init_cluster: Option<Vec<String>>,
+    ) -> common_exception::Result<Arc<MetaNode>> {
+        let mut config = config.clone();
+
+        // Always disable fsync on mac.
+        // Because there are some integration tests running on mac VM.
+        //
+        // On mac File::sync_all() takes 10 ms ~ 30 ms, 500 ms at worst, which very likely to fail a test.
+        if cfg!(target_os = "macos") {
+            tracing::warn!("Disabled fsync for meta data tests. fsync on mac is quite slow");
+            config.no_sync = true;
+        }
+
+        let sto = MetaRaftStore::open_create(&config, open, create).await?;
+        let is_open = sto.is_opened();
         let sto = Arc::new(sto);
-        let mut b = MetaNode::builder(config).sto(sto.clone());
+
+        let mut builder = MetaNode::builder(&config).sto(sto.clone());
 
         if is_open {
             // read id from sto, read listening addr from sto
-            b = b.node_id(sto.id);
+            builder = builder.node_id(sto.id);
         } else {
             // read id from config, read listening addr from config.
-            b = b.node_id(config.id).addr(config.raft_api_addr());
+            builder = builder.node_id(config.id).addr(config.raft_api_addr());
         }
 
-        let mn = b.build().await?;
+        let mn = builder.build().await?;
 
         tracing::info!("MetaNode started: {:?}", config);
 
-        if !is_open && boot.is_some() {
-            mn.init_cluster(config.raft_api_addr()).await?;
+        if !is_open {
+            if let Some(_addrs) = init_cluster {
+                mn.init_cluster(config.raft_api_addr()).await?;
+            }
         }
 
-        Ok((mn, is_open))
+        Ok(mn)
     }
 
     #[tracing::instrument(level = "info", skip(self))]
@@ -871,20 +358,67 @@ impl MetaNode {
         jh.push(h);
     }
 
+    /// Start MetaNode in either `boot`, `single`, `join` or `open` mode,
+    /// according to config.
+    #[tracing::instrument(level = "info")]
+    pub async fn start(config: &RaftConfig) -> Result<Arc<MetaNode>, ErrorCode> {
+        let mn = Self::do_start(config).await?;
+        tracing::info!("Done starting MetaNode: {:?}", config);
+        Ok(mn)
+    }
+
+    async fn do_start(conf: &RaftConfig) -> Result<Arc<MetaNode>, ErrorCode> {
+        // TODO(xp): remove boot mode
+        if conf.boot {
+            let mn = Self::open_create_boot(conf, None, Some(()), Some(vec![])).await?;
+            return Ok(mn);
+        }
+
+        if conf.single {
+            let mn = MetaNode::open_create_boot(conf, Some(()), Some(()), Some(vec![])).await?;
+            return Ok(mn);
+        }
+
+        if !conf.join.is_empty() {
+            // Bring up a new node, join an cluster
+            let mn = MetaNode::open_create_boot(conf, Some(()), Some(()), None).await?;
+
+            let addrs = &conf.join;
+            for addr in addrs {
+                let mut client = MetaServiceClient::connect(format!("http://{}", addr))
+                    .await
+                    .map_err(|e| ErrorCode::CannotConnectNode(e.to_string()))?;
+
+                let admin_req = AdminRequest {
+                    forward_to_leader: true,
+                    req: AdminRequestInner::Join(JoinRequest {
+                        node_id: conf.id,
+                        address: conf.raft_api_addr(),
+                    }),
+                };
+
+                let _res = client.forward(admin_req.clone()).await?;
+                // TODO: retry
+                // break;
+            }
+
+            return Ok(mn);
+        }
+
+        // open mode
+        let mn = MetaNode::open_create_boot(conf, Some(()), None, None).await?;
+        Ok(mn)
+    }
+
     /// Boot up the first node to create a cluster.
     /// For every cluster this func should be called exactly once.
-    /// When a node is initialized with boot or boot_non_voter, start it with databend_meta::new().
     #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
-    pub async fn boot(
-        node_id: NodeId,
-        config: &RaftConfig,
-    ) -> common_exception::Result<Arc<MetaNode>> {
+    pub async fn boot(config: &RaftConfig) -> common_exception::Result<Arc<MetaNode>> {
         // 1. Bring a node up as non voter, start the grpc service for raft communication.
         // 2. Initialize itself as leader, because it is the only one in the new cluster.
         // 3. Add itself to the cluster storage by committing an `add-node` log so that the cluster members(only this node) is persisted.
 
-        let mn = MetaNode::boot_non_voter(node_id, config).await?;
-        mn.init_cluster(config.raft_api_addr()).await?;
+        let mn = Self::open_create_boot(config, None, Some(()), Some(vec![])).await?;
 
         Ok(mn)
     }
@@ -910,26 +444,6 @@ impl MetaNode {
         self.add_node(node_id, addr).await?;
 
         Ok(())
-    }
-
-    /// Boot a node that is going to join an existent cluster.
-    /// For every node this should be called exactly once.
-    /// When successfully initialized(e.g. received logs from raft leader), a node should be started with MetaNode::open().
-    #[tracing::instrument(level = "info", skip(config), fields(config_id=config.config_id.as_str()))]
-    pub async fn boot_non_voter(
-        node_id: NodeId,
-        config: &RaftConfig,
-    ) -> common_exception::Result<Arc<MetaNode>> {
-        // TODO(xp): what if fill in the node info into an empty state-machine, then MetaNode can be started without delaying grpc.
-
-        let mut config = config.clone();
-        config.id = node_id;
-
-        let (mn, _is_open) = Self::open_create_boot(&config, None, Some(()), None).await?;
-
-        tracing::info!("booted non-voter: {:?}", config);
-
-        Ok(mn)
     }
 
     /// When a leader is established, it is the leader's responsibility to setup replication from itself to non-voters, AKA learners.
@@ -960,6 +474,58 @@ impl MetaNode {
         sm.get_node(node_id)
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn handle_admin_req(&self, req: AdminRequest) -> Result<AdminResponse, MetaError> {
+        let forward = req.forward_to_leader;
+
+        let l = self.as_leader().await;
+        let res = match l {
+            Ok(l) => l.handle_admin_req(req.clone()).await,
+            Err(e) => Err(MetaError::ForwardToLeader(e)),
+        };
+
+        let e = match res {
+            Ok(x) => return Ok(x),
+            Err(e) => e,
+        };
+
+        let e = match e {
+            MetaError::ForwardToLeader(e) => e,
+            _ => return Err(e),
+        };
+
+        if !forward {
+            return Err(MetaError::ForwardToLeader(e));
+        }
+
+        let leader_id = match e.leader {
+            Some(leader_id) => leader_id,
+            None => return Err(MetaError::ForwardToLeader(e)),
+        };
+
+        let mut r2 = req.clone();
+        // Avoid infinite forward
+        r2.set_forward(false);
+
+        let res: AdminResponse = self.forward(&leader_id, r2).await?;
+
+        Ok(res)
+    }
+
+    /// Return a MetaLeader if `self` believes it is the leader.
+    ///
+    /// Otherwise it returns the leader in a ForwardToLeader error.
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn as_leader(&self) -> Result<MetaLeader<'_>, ForwardToLeader> {
+        let curr_leader = self.get_leader().await;
+        if curr_leader == self.sto.id {
+            return Ok(MetaLeader::new(self));
+        }
+        Err(ForwardToLeader {
+            leader: Some(curr_leader),
+        })
+    }
+
     /// Add a new node into this cluster.
     /// The node info is committed with raft, thus it must be called on an initialized node.
     #[tracing::instrument(level = "debug", skip(self))]
@@ -969,7 +535,7 @@ impl MetaNode {
         addr: String,
     ) -> common_exception::Result<AppliedState> {
         // TODO: use txid?
-        let _resp = self
+        let resp = self
             .write(LogEntry {
                 txid: None,
                 cmd: Cmd::AddNode {
@@ -981,17 +547,11 @@ impl MetaNode {
                 },
             })
             .await?;
-        Ok(_resp)
+        Ok(resp)
     }
 
-    /// Get a database from local meta state machine.
-    /// The returned value may not be the latest written.
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_database(&self, name: &str) -> Result<Option<SeqV<DatabaseInfo>>, ErrorCode> {
-        // inconsistent get: from local state machine
-
-        let sm = self.sto.state_machine.read().await;
-        sm.get_database(name)
+    pub async fn get_state_machine(&self) -> RwLockReadGuard<'_, StateMachine> {
+        self.sto.state_machine.read().await
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
@@ -1012,13 +572,6 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_databases(&self) -> Result<Vec<(String, DatabaseInfo)>, ErrorCode> {
-        let sm = self.sto.state_machine.read().await;
-
-        sm.get_databases()
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn get_tables(&self, db_name: &str) -> Result<Vec<TableInfo>, ErrorCode> {
         // inconsistent get: from local state machine
 
@@ -1034,95 +587,19 @@ impl MetaNode {
         sm.get_table_by_id(tid)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn upsert_table_opt(
-        &self,
-        table_id: u64,
-        table_version: u64,
-        opt_key: String,
-        opt_value: String,
-    ) -> common_exception::Result<()> {
-        // non-consensus modification, tobe fixed latter
-        let sm = self.sto.state_machine.write().await;
-        let seq_table = sm.tables().get(&table_id)?;
-        if let Some(tbl) = seq_table {
-            let seq = tbl.seq;
-            let mut table_meta = tbl.data;
-            if seq != table_version {
-                Err(ErrorCode::TableVersionMissMatch(format!(
-                    "targeting version {}, current version {}",
-                    table_version, seq,
-                )))
-            } else {
-                table_meta.options.insert(opt_key, opt_value);
-                sm.upsert_table(table_id, table_meta, &MatchSeq::Exact(seq))
-                    .await?;
-                Ok(())
-            }
-        } else {
-            Err(ErrorCode::UnknownTable(format!(
-                "unknown table of id {}",
-                table_id
-            )))
-        }
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_kv(&self, key: &str) -> common_exception::Result<Option<SeqV<Vec<u8>>>> {
-        // inconsistent get: from local state machine
-
-        let sm = self.sto.state_machine.read().await;
-        sm.get_kv(key)
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn mget_kv(
-        &self,
-        keys: &[impl AsRef<str> + std::fmt::Debug],
-    ) -> common_exception::Result<Vec<Option<SeqV<Vec<u8>>>>> {
-        // inconsistent get: from local state machine
-        let sm = self.sto.state_machine.read().await;
-        sm.mget_kv(keys)
-    }
-
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn prefix_list_kv(
-        &self,
-        prefix: &str,
-    ) -> common_exception::Result<Vec<(String, SeqV<Vec<u8>>)>> {
-        // inconsistent get: from local state machine
-        let sm = self.sto.state_machine.read().await;
-        sm.prefix_list_kv(prefix)
-    }
-
     /// Submit a write request to the known leader. Returns the response after applying the request.
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn write(&self, req: LogEntry) -> common_exception::Result<AppliedState> {
-        let mut curr_leader = self.get_leader().await;
-        loop {
-            let rst = if curr_leader == self.sto.id {
-                self.write_to_local_leader(req.clone()).await?
-            } else {
-                // forward to leader
+        let res = self
+            .handle_admin_req(AdminRequest {
+                forward_to_leader: true,
+                req: AdminRequestInner::Write(req.clone()),
+            })
+            .await?;
 
-                let addr = self.sto.get_node_addr(&curr_leader).await?;
+        let res: AppliedState = res.try_into().expect("expect AppliedState");
 
-                // TODO: retry
-                let mut client = MetaServiceClient::connect(format!("http://{}", addr))
-                    .await
-                    .map_err(|e| ErrorCode::CannotConnectNode(e.to_string()))?;
-                let resp = client.write(req.clone()).await?;
-                let rst: Result<AppliedState, RetryableError> = resp.into_inner().into();
-                rst
-            };
-
-            match rst {
-                Ok(resp) => return Ok(resp),
-                Err(write_err) => match write_err {
-                    RetryableError::ForwardToLeader { leader } => curr_leader = leader,
-                },
-            }
-        }
+        Ok(res)
     }
 
     /// Try to get the leader from the latest metrics of the local raft node.
@@ -1157,33 +634,29 @@ impl MetaNode {
         }
     }
 
-    /// Write a meta log through local raft node.
-    /// It works only when this node is the leader,
-    /// otherwise it returns ClientWriteError::ForwardToLeader error indicating the latest leader.
     #[tracing::instrument(level = "info", skip(self))]
-    pub async fn write_to_local_leader(
+    pub async fn forward(
         &self,
-        req: LogEntry,
-    ) -> common_exception::Result<Result<AppliedState, RetryableError>> {
-        let write_rst = self.raft.client_write(ClientWriteRequest::new(req)).await;
+        node_id: &NodeId,
+        req: AdminRequest,
+    ) -> Result<AdminResponse, MetaError> {
+        let addr = self
+            .sto
+            .get_node_addr(node_id)
+            .await
+            .map_err(|e| MetaError::UnknownError(e.to_string()))?;
 
-        tracing::debug!("raft.client_write rst: {:?}", write_rst);
+        let mut client = MetaServiceClient::connect(format!("http://{}", addr))
+            .await
+            .map_err(|e| ConnectionError::new(e, format!("address: {}", addr)))?;
 
-        match write_rst {
-            Ok(resp) => Ok(Ok(resp.data)),
-            Err(cli_write_err) => match cli_write_err {
-                // fatal error
-                ClientWriteError::RaftError(raft_err) => {
-                    Err(ErrorCode::MetaServiceError(raft_err.to_string()))
-                }
-                // retryable error
-                ClientWriteError::ForwardToLeader(_, leader) => match leader {
-                    Some(id) => Ok(Err(RetryableError::ForwardToLeader { leader: id })),
-                    None => Err(ErrorCode::MetaServiceUnavailable(
-                        "no leader to write".to_string(),
-                    )),
-                },
-            },
-        }
+        let resp = client
+            .forward(req)
+            .await
+            .map_err(|e| MetaError::UnknownError(e.to_string()))?;
+        let raft_mes = resp.into_inner();
+
+        let res: Result<AdminResponse, MetaError> = raft_mes.into();
+        res
     }
 }

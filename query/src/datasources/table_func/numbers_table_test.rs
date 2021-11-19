@@ -13,8 +13,6 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
-
 use common_base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -30,34 +28,13 @@ async fn test_number_table() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let table = NumbersTable::create("system", "numbers_mt", 1, tbl_args)?;
 
-    let scan = &ScanPlan {
-        schema_name: "scan_test".to_string(),
-        table_id: 0,
-        table_version: None,
-        table_schema: DataSchemaRefExt::create(vec![]),
-        table_args: Some(Expression::create_literal(DataValue::UInt64(Some(8)))),
-        projected_schema: DataSchemaRefExt::create(vec![DataField::new(
-            "number",
-            DataType::UInt64,
-            false,
-        )]),
-        push_downs: Extras::default(),
-    };
-    let partitions = ctx.get_settings().get_max_threads()? as usize;
-    let io_ctx = ctx.get_single_node_table_io_context()?;
-    let io_ctx = Arc::new(io_ctx);
     let source_plan = table
         .clone()
         .as_table()
-        .read_plan(
-            io_ctx.clone(),
-            Some(scan.push_downs.clone()),
-            Some(partitions),
-        )
-        .await?;
+        .read_plan(ctx.clone(), Some(Extras::default())).await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
-    let stream = table.read(io_ctx, &source_plan).await?;
+    let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 1);

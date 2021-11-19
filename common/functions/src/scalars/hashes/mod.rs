@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod siphash_test;
-
 mod hash;
+mod md5hash;
+mod sha1hash;
+mod sha2hash;
 mod siphash;
 
 pub use hash::HashesFunction;
+pub use md5hash::Md5HashFunction;
+pub use sha1hash::Sha1HashFunction;
+pub use sha2hash::Sha2HashFunction;
 pub use siphash::SipHashFunction;

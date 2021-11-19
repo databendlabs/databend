@@ -5,16 +5,15 @@ title: Whitepapers
 
 ## Design Overview
 
-Databend is an open source **elastic** and **scalable** cloud warehouse, it offers blazing fast query and combines elasticity, simplicity, low cost of the cloud, built to make the Data Cloud easy.
+Databend is an open source **elastic** and **scalable** serverless data warehouse, it offers blazing fast query and combines elasticity, simplicity, low cost of the cloud, built to make the Data Cloud easy.
 
 Databend is intended for executing workloads with data stored in cloud storage systems, such as AWS S3 and Azure Blob Storage or others.
 
 We design Databend with the following key functionalities in mind:
-
-1. **Elastic** In Databend storage and compute resources can dynamically scale up and down on demand.
-2. **Secure** All data files and network traffic in Databend is encrypted end-to-end, and provider *Role Based Access Control*  in SQL level.
+1. **Elastic**  In Databend, storage and compute resources can be scaled on demand.
+2. **Serverless**  In Databend, you don’t have to think about servers, you pay only for what you actually used.
 3. **User-friendly** Databend is an ANSI SQL compliant cloud warehouse, it is easy for data scientist and engineers to use.
-4. **Cost-efficient** Databend processes queries with high performance, and the user only pays for what is actually used.
+4. **Secure** All data files and network traffic in Databend is encrypted end-to-end, and provide Role Based Access Control in SQL level.
 
 
 ![Databend Architecture](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/arch/datafuse-arch-20210817.svg)

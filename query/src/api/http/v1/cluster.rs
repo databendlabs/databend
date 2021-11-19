@@ -12,16 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::Infallible;
-
-use axum::body::Bytes;
-use axum::body::Full;
-use axum::extract::Extension;
-use axum::http::Response;
-use axum::http::StatusCode;
-use axum::response::Html;
-use axum::response::IntoResponse;
 use common_exception::Result;
+use poem::http::StatusCode;
+use poem::web::Data;
+use poem::web::Html;
+use poem::web::IntoResponse;
+use poem::Response;
 
 use crate::sessions::SessionManagerRef;
 
@@ -30,19 +26,15 @@ pub struct ClusterTemplate {
 }
 
 impl IntoResponse for ClusterTemplate {
-    type Body = Full<Bytes>;
-    type BodyError = Infallible;
-
-    fn into_response(self) -> Response<Self::Body> {
+    fn into_response(self) -> Response {
         match self.result {
             Ok(nodes) => Html(nodes).into_response(),
             Err(cause) => Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(Full::from(format!(
+                .body(format!(
                     "Failed to fetch cluster nodes list. cause: {}",
                     cause
-                )))
-                .unwrap(),
+                )),
         }
     }
 }
@@ -52,10 +44,11 @@ impl IntoResponse for ClusterTemplate {
 // request: None
 // cluster_state: the shared in memory state which store all nodes known to current node
 // return: return a list of cluster node information
-pub async fn cluster_list_handler(sessions: Extension<SessionManagerRef>) -> ClusterTemplate {
+#[poem::handler]
+pub async fn cluster_list_handler(sessions: Data<&SessionManagerRef>) -> ClusterTemplate {
     let sessions = sessions.0;
     ClusterTemplate {
-        result: list_nodes(sessions).await,
+        result: list_nodes(sessions.clone()).await,
     }
 }
 

@@ -17,20 +17,23 @@ use std::future::Future;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
+use std::time::Duration;
 
 use common_base::tokio::task::JoinHandle;
+use common_base::BlockingWait;
 use common_base::ProgressCallback;
 use common_base::ProgressValues;
 use common_base::Runtime;
 use common_base::TrySpawn;
-use common_context::TableIOContext;
+use common_dal::DataAccessor;
+use common_dal::DataAccessorBuilder;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_meta_types::NodeInfo;
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
+use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
@@ -38,11 +41,10 @@ use common_streams::SendableDataBlockStream;
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::Catalog;
 use crate::catalogs::Table;
-use crate::catalogs::TableFunction;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
 use crate::datasources::common::ContextDalBuilder;
-use crate::datasources::table_func_engine::TableArgs;
+use crate::servers::http::v1::query::HttpQueryHandle;
 use crate::sessions::context_shared::DatabendQueryContextShared;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
@@ -155,13 +157,25 @@ impl DatabendQueryContext {
         self.shared.get_table(database, table)
     }
 
-    pub fn get_table_function(
+    /// Build a table instance the plan wants to operate on.
+    ///
+    /// A plan just contains raw information about a table or table function.
+    /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
+    pub fn build_table_from_source_plan(
         &self,
-        function_name: &str,
-        tbl_args: TableArgs,
-    ) -> Result<Arc<dyn TableFunction>> {
-        self.get_catalog()
-            .get_table_function(function_name, tbl_args)
+        plan: &ReadDataSourcePlan,
+    ) -> Result<Arc<dyn Table>> {
+        let catalog = self.get_catalog();
+
+        let t = if plan.tbl_args.is_none() {
+            catalog.build_table(&plan.table_info)?
+        } else {
+            catalog
+                .get_table_function(&plan.table_info.name, plan.tbl_args.clone())?
+                .as_table()
+        };
+
+        Ok(t)
     }
 
     pub fn get_id(&self) -> String {
@@ -174,12 +188,27 @@ impl DatabendQueryContext {
         Ok(abort_stream)
     }
 
+    pub fn attach_http_query(&self, handle: HttpQueryHandle) {
+        self.shared.attach_http_query(handle);
+    }
+
     pub fn get_current_database(&self) -> String {
         self.shared.get_current_database()
     }
 
     pub fn set_current_database(&self, new_database_name: String) -> Result<()> {
-        match self.get_catalog().get_database(new_database_name.as_str()) {
+        let rt = self.shared.try_get_runtime()?;
+        let cata = self.get_catalog();
+        let db_name = new_database_name.clone();
+
+        let res = (async move { cata.get_database(&db_name).await }).wait_in(
+            &rt,
+            Some(Duration::from_millis(
+                self.get_config().query.wait_timeout_mills,
+            )),
+        )?;
+
+        match res {
             Ok(_) => self.shared.set_current_database(new_database_name),
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(
@@ -225,39 +254,10 @@ impl DatabendQueryContext {
         self.shared.try_get_runtime()
     }
 
-    /// Build a TableIOContext for single node service.
-    pub fn get_single_node_table_io_context(self: &Arc<Self>) -> Result<TableIOContext> {
-        let nodes = vec![Arc::new(NodeInfo {
-            id: self.get_cluster().local_id(),
-            ..Default::default()
-        })];
-
-        let settings = self.get_settings();
-        let max_threads = settings.get_max_threads()? as usize;
-
-        Ok(TableIOContext::new(
-            self.get_shared_runtime()?,
-            Arc::new(ContextDalBuilder::new(self.get_config().storage)),
-            max_threads,
-            nodes,
-            Some(self.clone()),
-        ))
-    }
-
-    /// Build a TableIOContext that contains cluster information so that one using it could distributed data evenly in the cluster.
-    pub fn get_cluster_table_io_context(self: &Arc<Self>) -> Result<TableIOContext> {
-        let cluster = self.get_cluster();
-        let nodes = cluster.get_nodes();
-        let settings = self.get_settings();
-        let max_threads = settings.get_max_threads()? as usize;
-
-        Ok(TableIOContext::new(
-            self.get_shared_runtime()?,
-            Arc::new(ContextDalBuilder::new(self.get_config().storage)),
-            max_threads,
-            nodes,
-            Some(self.clone()),
-        ))
+    pub(crate) fn get_data_accessor(&self) -> Result<Arc<dyn DataAccessor>> {
+        let tenant_id = self.get_config().query.tenant_id;
+        let cluster_id = self.get_config().query.cluster_id;
+        ContextDalBuilder::new(tenant_id, cluster_id, self.get_config().storage).build()
     }
 }
 

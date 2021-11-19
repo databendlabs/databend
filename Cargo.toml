@@ -5,7 +5,6 @@ members = [
     "common/base",
     "common/building",
     "common/cache",
-    "common/context",
     "common/clickhouse-srv",
     "common/dal",
     "common/datablocks",
@@ -31,10 +30,11 @@ members = [
 
     # Query
     "query",
-    "metasrv",
-
     # SQL Fuzz
     "query/fuzz",
+
+    # Meta
+    "metasrv",
 
     # CLI
     "cli"

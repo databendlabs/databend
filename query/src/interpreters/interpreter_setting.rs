@@ -43,7 +43,10 @@ impl Interpreter for SettingInterpreter {
         "SettingInterpreter"
     }
 
-    async fn execute(&self) -> Result<SendableDataBlockStream> {
+    async fn execute(
+        &self,
+        _input_stream: Option<SendableDataBlockStream>,
+    ) -> Result<SendableDataBlockStream> {
         let plan = self.set.clone();
         for var in plan.vars {
             match var.variable.to_lowercase().as_str() {

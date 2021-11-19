@@ -13,21 +13,18 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
-
 use common_base::tokio;
-use common_context::TableDataContext;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use common_infallible::Mutex;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_planners::*;
 use futures::TryStreamExt;
 
 use crate::catalogs::ToReadDataSourcePlan;
+use crate::datasources::context::TableContext;
 use crate::datasources::table::memory::memory_table::MemoryTable;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -48,11 +45,8 @@ async fn test_memorytable() -> Result<()> {
                 options: TableOptions::default(),
             },
         },
-        Arc::new(TableDataContext::default()),
+        TableContext::default(),
     )?;
-
-    let io_ctx = ctx.get_single_node_table_io_context()?;
-    let io_ctx = Arc::new(io_ctx);
 
     // append data.
     {
@@ -64,35 +58,30 @@ async fn test_memorytable() -> Result<()> {
             Series::new(vec![4u64, 3]),
             Series::new(vec![33u64, 33]),
         ]);
-        let blocks = vec![block, block2];
+        let blocks = vec![Ok(block), Ok(block2)];
 
-        let input_stream = futures::stream::iter::<Vec<DataBlock>>(blocks.clone());
+        let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks.clone());
         let insert_plan = InsertIntoPlan {
             db_name: "default".to_string(),
             tbl_name: "a".to_string(),
             tbl_id: 0,
             schema,
-            input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
+            select_plan: None,
+            values_opt: None,
         };
         table
-            .append_data(io_ctx.clone(), insert_plan)
+            .append_data(ctx.clone(), insert_plan, Box::pin(input_stream))
             .await
             .unwrap();
     }
 
     // read.
     {
-        let source_plan = table
-            .read_plan(
-                io_ctx.clone(),
-                None,
-                Some(ctx.get_settings().get_max_threads()? as usize),
-            )
-            .await?;
+        let source_plan = table.read_plan(ctx.clone(), None).await?;
         ctx.try_set_partitions(source_plan.parts.clone())?;
         assert_eq!(table.engine(), "Memory");
 
-        let stream = table.read(io_ctx.clone(), &source_plan).await?;
+        let stream = table.read(ctx.clone(), &source_plan).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         assert_blocks_sorted_eq(
             vec![
@@ -115,18 +104,10 @@ async fn test_memorytable() -> Result<()> {
             db: "default".to_string(),
             table: "a".to_string(),
         };
-        table.truncate(io_ctx, truncate_plan).await?;
+        table.truncate(ctx.clone(), truncate_plan).await?;
 
-        let io_ctx = ctx.get_single_node_table_io_context()?;
-        let io_ctx = Arc::new(io_ctx);
-        let source_plan = table
-            .read_plan(
-                io_ctx.clone(),
-                None,
-                Some(ctx.get_settings().get_max_threads()? as usize),
-            )
-            .await?;
-        let stream = table.read(io_ctx, &source_plan).await?;
+        let source_plan = table.read_plan(ctx.clone(), None).await?;
+        let stream = table.read(ctx, &source_plan).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         assert_blocks_sorted_eq(vec!["++", "++"], &result);
     }

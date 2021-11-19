@@ -20,7 +20,10 @@ use common_streams::SendableDataBlockStream;
 #[async_trait::async_trait]
 pub trait Interpreter: Sync + Send {
     fn name(&self) -> &str;
-    async fn execute(&self) -> Result<SendableDataBlockStream>;
+    async fn execute(
+        &self,
+        input_stream: Option<SendableDataBlockStream>,
+    ) -> Result<SendableDataBlockStream>;
 
     fn schema(&self) -> DataSchemaRef {
         DataSchemaRefExt::create(vec![])

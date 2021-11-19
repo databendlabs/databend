@@ -131,5 +131,42 @@ jobs:
           platforms: linux/amd64
           context: .
           file: ./docker/release/Dockerfile
-          build-args: |
-            VERSION=${{ steps.get_version.outputs.VERSION }}
+          build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
+
+      - name: Download binaries for usage
+        id: download_binaries
+        run: |
+          wget https://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
+          wget https://repo.databend.rs/databend/${{ steps.get_version.outputs.VERSION }}/databend-${{ steps.get_version.outputs.VERSION }}-aarch64-unknown-linux-gnu.tar.gz
+          mkdir -p ./target/x86_64-unknown-linux-gnu/release
+          mkdir -p ./target/aarch64-unknown-linux-gnu/release
+          tar xC ./target/x86_64-unknown-linux-gnu/release -f ./databend-${{ steps.get_version.outputs.VERSION }}-x86_64-unknown-linux-gnu.tar.gz
+          tar xC ./target/aarch64-unknown-linux-gnu/release -f ./databend-${{ steps.get_version.outputs.VERSION }}-aarch64-unknown-linux-gnu.tar.gz
+          mkdir -p ./distro/linux/amd64
+          mkdir -p ./distro/linux/arm64
+          cp ./target/x86_64-unknown-linux-gnu/release/databend-meta ./distro/linux/amd64
+          cp ./target/x86_64-unknown-linux-gnu/release/databend-query ./distro/linux/amd64
+          cp ./target/aarch64-unknown-linux-gnu/release/databend-meta ./distro/linux/arm64
+          cp ./target/aarch64-unknown-linux-gnu/release/databend-query ./distro/linux/arm64
+
+      - name: push meta service
+        id: push_meta_service
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/databend-meta:${{ steps.get_version.outputs.VERSION }}
+          platforms: linux/amd64,linux/arm64
+          context: .
+          file: ./docker/meta/Dockerfile
+          build-args: VERSION=${{ steps.get_version.outputs.VERSION }}
+
+      - name: push query service
+        id: push_query_service
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          tags: ${{ secrets.DOCKERHUB_NAMESPACE }}/databend-query:${{ steps.get_version.outputs.VERSION }}
+          platforms: linux/amd64,linux/arm64
+          context: .
+          file: ./docker/query/Dockerfile
+          build-args: VERSION=${{ steps.get_version.outputs.VERSION }}

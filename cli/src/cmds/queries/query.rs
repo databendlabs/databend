@@ -16,6 +16,7 @@ use std::borrow::Borrow;
 use std::io::Read;
 use std::net::SocketAddr;
 use std::path::Path;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use clap::App;
@@ -26,12 +27,15 @@ use comfy_table::Cell;
 use comfy_table::Color;
 use comfy_table::Table;
 use common_base::ProgressValues;
+use common_datavalues::prelude::*;
 use lexical_util::num::AsPrimitive;
 use num_format::Locale;
 use num_format::ToFormattedString;
+use serde_json::Value;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::command::Command;
+use crate::cmds::status::LocalRuntime;
 use crate::cmds::Config;
 use crate::cmds::Status;
 use crate::cmds::Writer;
@@ -42,64 +46,21 @@ use crate::error::Result;
 pub struct QueryCommand {
     #[allow(dead_code)]
     conf: Config,
-    clap: App<'static>,
 }
 
 impl QueryCommand {
     pub fn create(conf: Config) -> Self {
-        let clap = QueryCommand::generate();
-        QueryCommand { conf, clap }
-    }
-    pub fn generate() -> App<'static> {
-        let app = App::new("query")
-            .setting(AppSettings::DisableVersionFlag)
-            .about("Query on databend cluster")
-            .arg(
-                Arg::new("profile")
-                    .long("profile")
-                    .about("Profile to run queries")
-                    .required(false)
-                    .possible_values(&["local"])
-                    .default_value("local"),
-            )
-            .arg(
-                Arg::new("query")
-                    .about("Query statements to run")
-                    .takes_value(true)
-                    .required(true),
-            );
-        app
+        QueryCommand { conf }
     }
 
-    pub(crate) async fn exec_match(
-        &self,
-        writer: &mut Writer,
-        args: Option<&ArgMatches>,
-    ) -> Result<()> {
-        match args {
-            Some(matches) => {
-                let profile = matches.value_of_t("profile");
-                match profile {
-                    Ok(ClusterProfile::Local) => {
-                        return self.local_exec_match(writer, matches).await;
-                    }
-                    Ok(ClusterProfile::Cluster) => {
-                        todo!()
-                    }
-                    Err(_) => writer.write_err("currently profile only support cluster or local"),
-                }
-            }
-            None => {
-                println!("none ");
-            }
-        }
-        Ok(())
+    pub fn default() -> Self {
+        QueryCommand::create(Config::default())
     }
 
     async fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
-        match self.local_exec_precheck(args) {
+        match self.local_exec_precheck(args).await {
             Ok(_) => {
-                writer.write_debug("Query precheck passed!");
+                writer.write_ok("Query precheck passed!".to_string());
                 let status = Status::read(self.conf.clone())?;
                 let queries = match args.value_of("query") {
                     Some(val) => {
@@ -137,44 +98,60 @@ impl QueryCommand {
                         .map(|elem| format!("{};", elem))
                         .collect::<Vec<String>>()
                     {
-                        writer.write_debug(
-                            format!("Execute query {} on {}", query.clone(), url).as_str(),
-                        );
+                        writer.write_debug(format!("Execute query {} on {}", query.clone(), url));
                         if let Err(e) =
                             query_writer(&cli, url.as_str(), query.clone(), writer).await
                         {
-                            writer.write_err(
-                                format!("query {} execution error: {:?}", query, e).as_str(),
-                            );
+                            writer.write_err(format!("Query {} execution error: {:?}", query, e));
                         }
                     }
                 } else {
-                    writer.write_err(
-                        format!(
-                            "Query command error: cannot parse query url with error: {:?}",
-                            res.unwrap_err()
-                        )
-                        .as_str(),
-                    );
+                    writer.write_err(format!(
+                        "Query command error: cannot parse query url with error: {:?}",
+                        res.unwrap_err()
+                    ));
                 }
 
                 Ok(())
             }
             Err(e) => {
-                writer.write_err(&*format!("Query command precheck failed, error {:?}", e));
+                writer.write_err(format!(
+                "Query command precheck failed, error {:?}, please run `bendctl cluster create` to create a new local cluster or '\\admin' switch to the admin mode", e));
                 Ok(())
             }
         }
     }
 
     /// precheck whether current local profile applicable for local host machine
-    fn local_exec_precheck(&self, _args: &ArgMatches) -> Result<()> {
+    async fn local_exec_precheck(&self, _args: &ArgMatches) -> Result<()> {
         let status = Status::read(self.conf.clone())?;
-        if !status.has_local_configs() {
+        if status.current_profile.is_none() {
             return Err(CliError::Unknown(format!(
-                "Query command error: cannot find local configs in {}, please run `bendctl cluster create --profile local` to create a new local cluster",
+                "cannot find local configs in {}",
                 status.local_config_dir
             )));
+        }
+
+        let query_configs = status.get_local_query_configs();
+        let (_, query) = query_configs.first().expect("cannot find query configs");
+        match query.verify(None, None).await {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
+        match self
+            .clap()
+            .clone()
+            .try_get_matches_from(vec!["query", args.as_str()])
+        {
+            Ok(matches) => {
+                return self.exec_matches(writer, Some(matches.borrow())).await;
+            }
+            Err(err) => {
+                println!("Cannot get subcommand matches: {}", err);
+            }
         }
 
         Ok(())
@@ -202,27 +179,23 @@ async fn query_writer(
                 .get_appropriate_unit(false);
                 writer.write_ok(
                     format!(
-                        "read rows: {}, read bytes: {}, rows/sec: {} (rows/sec), bytes/sec: {} ({}/sec)",
+                        "read rows: {}, read bytes: {}, rows/sec: {} (rows/sec), bytes/sec: {} ({}/sec), time: {} sec",
                         stat.read_rows.to_formatted_string(&Locale::en),
                         byte_unit::Byte::from_bytes(stat.read_bytes as u128)
                             .get_appropriate_unit(false)
                             .to_string(),
                         (stat.read_rows as f64 / time).as_u128().to_formatted_string(&Locale::en),
                         byte_per_sec.get_value(),
-                        byte_per_sec.get_unit().to_string()
+                        byte_per_sec.get_unit().to_string(), time
                     )
-                        .as_str(),
                 );
             }
         }
         Err(e) => {
-            writer.write_err(
-                format!(
-                    "Query command error: cannot execute query with error: {:?}",
-                    e
-                )
-                .as_str(),
-            );
+            writer.write_err(format!(
+                "Query command error: cannot execute query with error: {:?}",
+                e
+            ));
         }
     }
     Ok(())
@@ -255,11 +228,15 @@ pub fn build_query_endpoint(status: &Status) -> Result<(reqwest::Client, String)
     Ok((client, url))
 }
 
-async fn execute_query(
+pub async fn execute_query_json(
     cli: &reqwest::Client,
     url: &str,
     query: String,
-) -> Result<(String, Option<ProgressValues>)> {
+) -> Result<(
+    Option<DataSchemaRef>,
+    Option<Vec<Vec<Value>>>,
+    Option<ProgressValues>,
+)> {
     let ans = cli
         .post(url)
         .body(query.clone())
@@ -275,34 +252,43 @@ async fn execute_query(
         )));
     } else {
         let ans = ans.unwrap();
-        let mut table = Table::new();
         if ans.error.is_some() {
             return Err(CliError::Unknown(format!(
                 "Query has error: {:?}",
                 ans.error.unwrap()
             )));
         }
-        table.load_preset("||--+-++|    ++++++");
-        if let Some(column) = ans.columns {
-            table.set_header(
-                column
-                    .fields()
-                    .iter()
-                    .map(|field| Cell::new(field.name().as_str()).fg(Color::Green)),
-            );
-        }
-        if let Some(rows) = ans.data {
-            if rows.is_empty() {
-                return Ok(("".to_string(), ans.stats));
-            } else {
-                for row in rows {
-                    table.add_row(row.iter().map(|elem| Cell::new(elem.to_string())));
-                }
-                return Ok((table.trim_fmt(), ans.stats));
-            }
-        }
-        Ok(("".to_string(), ans.stats))
+        Ok((ans.columns, ans.data, ans.stats))
     }
+}
+
+async fn execute_query(
+    cli: &reqwest::Client,
+    url: &str,
+    query: String,
+) -> Result<(String, Option<ProgressValues>)> {
+    let (columns, data, stats) = execute_query_json(cli, url, query).await?;
+    let mut table = Table::new();
+    table.load_preset("||--+-++|    ++++++");
+    if let Some(column) = columns {
+        table.set_header(
+            column
+                .fields()
+                .iter()
+                .map(|field| Cell::new(field.name().as_str()).fg(Color::Green)),
+        );
+    }
+    if let Some(rows) = data {
+        if rows.is_empty() {
+            return Ok(("".to_string(), stats));
+        } else {
+            for row in rows {
+                table.add_row(row.iter().map(|elem| Cell::new(elem.to_string())));
+            }
+            return Ok((table.trim_fmt(), stats));
+        }
+    }
+    Ok(("".to_string(), stats))
 }
 
 #[async_trait]
@@ -311,7 +297,27 @@ impl Command for QueryCommand {
         "query"
     }
 
-    fn about(&self) -> &str {
+    fn clap(&self) -> App<'static> {
+        App::new("query")
+            .setting(AppSettings::DisableVersionFlag)
+            .about("Query on databend cluster")
+            .arg(
+                Arg::new("profile")
+                    .long("profile")
+                    .about("Profile to run queries")
+                    .required(false)
+                    .possible_values(&["local"])
+                    .default_value("local"),
+            )
+            .arg(
+                Arg::new("query")
+                    .about("Query statements to run")
+                    .takes_value(true)
+                    .required(true),
+            )
+    }
+
+    fn about(&self) -> &'static str {
         "Query on databend cluster"
     }
 
@@ -319,20 +325,29 @@ impl Command for QueryCommand {
         s.contains(self.name())
     }
 
-    async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
-        match self
-            .clap
-            .clone()
-            .try_get_matches_from(vec!["query", args.as_str()])
-        {
-            Ok(matches) => {
-                return self.exec_match(writer, Some(matches.borrow())).await;
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
+    }
+
+    async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+        match args {
+            Some(matches) => {
+                let profile = matches.value_of_t("profile");
+                match profile {
+                    Ok(ClusterProfile::Local) => {
+                        return self.local_exec_match(writer, matches).await;
+                    }
+                    Ok(ClusterProfile::Cluster) => {
+                        todo!()
+                    }
+                    Err(_) => writer
+                        .write_err("Currently profile only support cluster or local".to_string()),
+                }
             }
-            Err(err) => {
-                println!("Cannot get subcommand matches: {}", err);
+            None => {
+                println!("none ");
             }
         }
-
         Ok(())
     }
 }

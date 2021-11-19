@@ -13,6 +13,7 @@
 //  limitations under the License.
 //
 
+use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
@@ -121,12 +122,15 @@ pub(super) fn block_stats(data_block: &DataBlock) -> Result<BlockStats> {
                         0
                     }
                 }
-            };
+            } as u64;
+
+            let in_memory_size = col.get_array_memory_size() as u64;
 
             let col_stats = ColStats {
                 min,
                 max,
                 null_count,
+                in_memory_size,
             };
 
             Ok((idx, col_stats))
@@ -134,15 +138,15 @@ pub(super) fn block_stats(data_block: &DataBlock) -> Result<BlockStats> {
         .collect()
 }
 
-pub fn column_stats_reduce_with_schema(
-    stats: &[HashMap<ColumnId, ColStats>],
+pub fn column_stats_reduce_with_schema<T: Borrow<HashMap<ColumnId, ColStats>>>(
+    stats: &[T],
     schema: &DataSchema,
 ) -> Result<HashMap<ColumnId, ColStats>> {
     let len = stats.len();
 
     // transpose Vec<HashMap<_,(_,_)>> to HashMap<_, (_, Vec<_>)>
     let col_stat_list = stats.iter().fold(HashMap::new(), |acc, item| {
-        item.iter().fold(
+        item.borrow().iter().fold(
             acc,
             |mut acc: HashMap<ColumnId, Vec<&ColStats>>, (col_id, stats)| {
                 let entry = acc.entry(*col_id);
@@ -165,6 +169,7 @@ pub fn column_stats_reduce_with_schema(
             let mut min_stats = Vec::with_capacity(stats.len());
             let mut max_stats = Vec::with_capacity(stats.len());
             let mut null_count = 0;
+            let mut in_memory_size = 0;
 
             for col_stats in stats {
                 // to be optimized, with DataType and the value of data, we may
@@ -173,6 +178,7 @@ pub fn column_stats_reduce_with_schema(
                 max_stats.push(col_stats.max.clone());
 
                 null_count += col_stats.null_count;
+                in_memory_size += col_stats.in_memory_size;
             }
 
             // TODO panic
@@ -180,7 +186,7 @@ pub fn column_stats_reduce_with_schema(
 
             // TODO
             // for some data types, we shall balance the accuracy and the length
-            // e.g. for a string col, which max value is "xxxxxxxxxxxx....", we record the max as something like "y"
+            // e.g. for a string col, which max value is "abcdef....", we record the max as something like "b"
             let min =
                 common_datavalues::DataValue::try_into_data_array(min_stats.as_slice(), data_type)?
                     .min()?;
@@ -193,6 +199,7 @@ pub fn column_stats_reduce_with_schema(
                 min,
                 max,
                 null_count,
+                in_memory_size,
             });
             Ok(acc)
         })
@@ -204,10 +211,7 @@ pub fn merge_stats(schema: &DataSchema, l: &Stats, r: &Stats) -> Result<Stats> {
         block_count: l.block_count + r.block_count,
         uncompressed_byte_size: l.uncompressed_byte_size + r.uncompressed_byte_size,
         compressed_byte_size: l.compressed_byte_size + r.compressed_byte_size,
-        col_stats: util::column_stats_reduce_with_schema(
-            &[l.col_stats.clone(), r.col_stats.clone()],
-            schema,
-        )?,
+        col_stats: util::column_stats_reduce_with_schema(&[&l.col_stats, &r.col_stats], schema)?,
     };
     Ok(s)
 }

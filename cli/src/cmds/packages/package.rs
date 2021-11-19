@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use clap::App;
-use clap::Arg;
 use clap::ArgMatches;
 
 use crate::cmds::command::Command;
@@ -30,58 +29,15 @@ use crate::error::Result;
 #[derive(Clone)]
 pub struct PackageCommand {
     conf: Config,
-    clap: App<'static>,
 }
 
 impl PackageCommand {
     pub fn create(conf: Config) -> Self {
-        let clap = PackageCommand::generate();
-        PackageCommand { conf, clap }
-    }
-    pub fn generate() -> App<'static> {
-        return App::new("package")
-            .about("Package manage databend binary releases")
-            .subcommand(
-                App::new("fetch")
-                    .about("Fetch the given version binary package")
-                    .arg(Arg::new("version").about("Version of databend package to fetch").default_value("latest")),
-            )
-            .subcommand(
-                App::new("list")
-                    .about("List all the packages"),
-            )
-            .subcommand(
-                App::new("switch")
-                    .about("Switch the active databend to a specified version")
-                    .arg(Arg::new("version").required(true).about(
-                        "Version of databend package, e.g. v0.4.69-nightly. Check the versions: package list"
-                    ))
-            );
+        PackageCommand { conf }
     }
 
-    pub(crate) fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
-        match args {
-            Some(matches) => match matches.subcommand_name() {
-                Some("fetch") => {
-                    let fetch = FetchCommand::create(self.conf.clone());
-                    fetch.exec_match(writer, matches.subcommand_matches("fetch"))?;
-                }
-                Some("list") => {
-                    let list = ListCommand::create(self.conf.clone());
-                    list.exec_match(writer, matches.subcommand_matches("list"))?;
-                }
-                Some("switch") => {
-                    let switch = SwitchCommand::create(self.conf.clone());
-                    switch.exec_match(writer, matches.subcommand_matches("switch"))?;
-                }
-                _ => writer.write_err("unknown command, usage: package -h"),
-            },
-            None => {
-                println!("None")
-            }
-        }
-
-        Ok(())
+    pub fn default() -> Self {
+        PackageCommand::create(Config::default())
     }
 }
 
@@ -91,24 +47,33 @@ impl Command for PackageCommand {
         "package"
     }
 
-    fn about(&self) -> &str {
-        "Package command"
+    fn about(&self) -> &'static str {
+        "Package manage databend binary releases"
+    }
+
+    fn clap(&self) -> App<'static> {
+        let subcommands = self.subcommands();
+        let app = App::new("package")
+            .about(self.about())
+            .subcommand(subcommands[0].clap())
+            .subcommand(subcommands[1].clap())
+            .subcommand(subcommands[2].clap());
+        app
+    }
+
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![
+            Arc::new(ListCommand::create(self.conf.clone())),
+            Arc::new(FetchCommand::create(self.conf.clone())),
+            Arc::new(SwitchCommand::create(self.conf.clone())),
+        ]
     }
 
     fn is(&self, s: &str) -> bool {
         s.contains(self.name())
     }
 
-    async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
-        match self.clap.clone().try_get_matches_from(args.split(' ')) {
-            Ok(matches) => {
-                return self.exec_match(writer, Some(matches.borrow()));
-            }
-            Err(err) => {
-                println!("Cannot get subcommand matches: {}", err);
-            }
-        }
-
-        Ok(())
+    async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+        self.exec_subcommand(writer, args).await
     }
 }

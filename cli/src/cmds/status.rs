@@ -441,12 +441,12 @@ impl LocalRuntime for LocalQueryConfig {
                 conf.log.log_dir,
             )
             .env(
-                databend_query::configs::config_query::QUERY_NAMESPACE,
-                conf.query.namespace,
+                databend_query::configs::config_query::QUERY_CLUSTER_ID,
+                conf.query.cluster_id,
             )
             .env(
-                databend_query::configs::config_query::QUERY_TENANT,
-                conf.query.tenant,
+                databend_query::configs::config_query::QUERY_TENANT_ID,
+                conf.query.tenant_id,
             )
             .env(
                 databend_query::configs::config_query::QUERY_NUM_CPUS,
@@ -497,8 +497,16 @@ impl LocalRuntime for LocalQueryConfig {
                 conf.storage.storage_type,
             )
             .env(
+                databend_query::configs::config_meta::META_EMBEDDED_DIR,
+                "/tmp/embedded",
+            )
+            .env(
                 databend_query::configs::config_storage::DISK_STORAGE_DATA_PATH,
                 conf.storage.disk.data_path,
+            )
+            .env(
+                databend_query::configs::config_storage::DISK_STORAGE_TEMP_DATA_PATH,
+                conf.storage.disk.temp_data_path,
             )
             .env(
                 databend_query::configs::config_query::QUERY_HTTP_HANDLER_HOST,

@@ -6,17 +6,21 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lib]
+doctest = false
+test = false
+
 [dependencies] # In alphabetical order
 common-arrow = { path = "../arrow" }
 
-anyhow = "1.0.44"
-backtrace = "0.3.62"
+anyhow = "1.0.45"
+backtrace = "0.3.63"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0.30"
-tonic = "0.5.2"
-prost = "0.8.0"
+tonic = "0.6.0"
+prost = "0.9.0"
 paste = "^1.0"
 
 # Github dependencies
-sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "cdd2ce1", default-features = false }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "599d75a", default-features = false }

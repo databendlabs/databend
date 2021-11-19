@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_datavalues::DataValue;
 use common_exception::Result;
-use common_io::prelude::BinaryWrite;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::Expression;
@@ -24,7 +23,6 @@ use common_planners::ExpressionPlan;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
-use common_planners::TableScanInfo;
 
 use crate::catalogs::ToReadDataSourcePlan;
 use crate::optimizers::Optimizer;
@@ -32,6 +30,7 @@ use crate::sessions::DatabendQueryContextRef;
 
 struct StatisticsExactImpl<'a> {
     ctx: &'a DatabendQueryContextRef,
+    rewritten: bool,
 }
 
 pub struct StatisticsExactOptimizer {
@@ -61,50 +60,23 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                     let db_name = "system";
                     let table_name = "one";
 
-                    let dummy_read_plan =
-                        self.ctx.get_table(db_name, table_name).and_then(|table| {
-                            let table_id = table.get_id();
-                            let table_version = Some(table.get_table_info().ident.version);
+                    let table = self.ctx.get_table(db_name, table_name)?;
 
-                            let tbl_scan_info = TableScanInfo {
-                                table_name,
-                                table_id,
-                                table_version,
-                                table_schema: &table.schema(),
-                                table_args: None,
-                            };
-                            PlanBuilder::scan(db_name, tbl_scan_info, None, None)
-                                .and_then(|builder| builder.build())
-                                .and_then(|dummy_scan_plan| match dummy_scan_plan {
-                                    PlanNode::Scan(ref dummy_scan_plan) => {
-                                        //
-                                        let io_ctx = self.ctx.get_single_node_table_io_context()?;
-                                        futures::executor::block_on(async move {
-                                            table
-                                                .read_plan(
-                                                    Arc::new(io_ctx),
-                                                    Some(dummy_scan_plan.push_downs.clone()),
-                                                    Some(
-                                                        self.ctx.get_settings().get_max_threads()?
-                                                            as usize,
-                                                    ),
-                                                )
-                                                .await
-                                                .map(PlanNode::ReadSource)
-                                        })
-                                    }
-                                    _unreachable_plan => {
-                                        panic!("Logical error: cannot downcast to scan plan")
-                                    }
-                                })
-                        })?;
-                    let mut body: Vec<u8> = Vec::new();
-                    body.write_uvarint(read_source_plan.statistics.read_rows as u64)?;
-                    let expr = Expression::create_literal(DataValue::String(Some(body)));
-                    PlanBuilder::from(&dummy_read_plan)
-                        .expression(&[expr.clone()], "Exact Statistics")?
-                        .project(&[expr.alias("count(0)")])?
-                        .build()?
+                    futures::executor::block_on(async move {
+                        let source_plan = table.read_plan(self.ctx.clone(), None).await?;
+                        let dummy_read_plan = PlanNode::ReadSource(source_plan);
+
+                        let expr = Expression::create_literal(DataValue::UInt64(Some(
+                            read_source_plan.statistics.read_rows as u64,
+                        )));
+
+                        self.rewritten = true;
+                        let alias_name = plan.aggr_expr[0].column_name();
+                        PlanBuilder::from(&dummy_read_plan)
+                            .expression(&[expr.clone()], "Exact Statistics")?
+                            .project(&[expr.alias(&alias_name)])?
+                            .build()?
+                    })
                 }
                 _ => PlanNode::AggregatorPartial(plan.clone()),
             },
@@ -114,12 +86,19 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
     }
 
     fn rewrite_aggregate_final(&mut self, plan: &AggregatorFinalPlan) -> Result<PlanNode> {
+        let input = self.rewrite_plan_node(plan.input.as_ref())?;
+
+        if self.rewritten {
+            self.rewritten = false;
+            return Ok(input);
+        }
+
         Ok(PlanNode::AggregatorFinal(AggregatorFinalPlan {
             schema: plan.schema.clone(),
             schema_before_group_by: plan.schema_before_group_by.clone(),
             aggr_expr: plan.aggr_expr.clone(),
             group_expr: plan.group_expr.clone(),
-            input: Arc::new(self.rewrite_plan_node(plan.input.as_ref())?),
+            input: Arc::new(input),
         }))
     }
 }
@@ -138,7 +117,10 @@ impl Optimizer for StatisticsExactOptimizer {
                     )
                 )
         */
-        let mut visitor = StatisticsExactImpl { ctx: &self.ctx };
+        let mut visitor = StatisticsExactImpl {
+            ctx: &self.ctx,
+            rewritten: false,
+        };
         visitor.rewrite_plan_node(plan)
     }
 }

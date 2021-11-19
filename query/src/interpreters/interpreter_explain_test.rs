@@ -34,7 +34,7 @@ async fn test_explain_interpreter() -> Result<()> {
         let executor = ExplainInterpreter::try_create(ctx, plan)?;
         assert_eq!(executor.name(), "ExplainInterpreter");
 
-        let stream = executor.execute().await?;
+        let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let block = &result[0];
         assert_eq!(block.num_columns(), 1);

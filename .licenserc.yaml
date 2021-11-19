@@ -29,5 +29,7 @@ header:
     - "rustfmt.toml"
     - "**/*.proto"
     - ".cargo"
+    - "metasrv/src/proto/meta.rs"
+    - ".yamllint.yml"
 
   comment: on-failure

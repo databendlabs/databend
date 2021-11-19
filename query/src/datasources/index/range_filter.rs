@@ -13,7 +13,6 @@
 // limitations under the License.
 //
 
-use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
@@ -221,12 +220,6 @@ impl StatColumn {
 
 pub(crate) type StatColumns = Vec<StatColumn>;
 
-fn collect_columns_from_expr(expr: &Expression) -> Result<HashSet<String>> {
-    let mut visitor = RequireColumnsVisitor::default();
-    visitor = expr.accept(visitor)?;
-    Ok(visitor.required_columns)
-}
-
 struct VerifiableExprBuilder<'a> {
     args: Expressions,
     op: &'a str,
@@ -246,7 +239,7 @@ impl<'a> VerifiableExprBuilder<'a> {
     ) -> Result<Self> {
         let (args, cols, op) = match exprs.len() {
             1 => {
-                let cols = collect_columns_from_expr(&exprs[0])?;
+                let cols = RequireColumnsVisitor::collect_columns_from_expr(&exprs[0])?;
                 match cols.len() {
                     1 => (exprs, cols, op),
                     _ => {
@@ -257,8 +250,8 @@ impl<'a> VerifiableExprBuilder<'a> {
                 }
             }
             2 => {
-                let lhs_cols = collect_columns_from_expr(&exprs[0])?;
-                let rhs_cols = collect_columns_from_expr(&exprs[1])?;
+                let lhs_cols = RequireColumnsVisitor::collect_columns_from_expr(&exprs[0])?;
+                let rhs_cols = RequireColumnsVisitor::collect_columns_from_expr(&exprs[1])?;
                 match (lhs_cols.len(), rhs_cols.len()) {
                     (1, 0) => (vec![exprs[0].clone(), exprs[1].clone()], lhs_cols, op),
                     (0, 1) => {
@@ -376,7 +369,7 @@ impl<'a> VerifiableExprBuilder<'a> {
                 } = &self.args[1]
                 {
                     // Only support such as 'abc' or 'ab%'.
-                    match check_pattern_type(v) {
+                    match check_pattern_type(v, true) {
                         // e.g. col not like 'abc' => min_col != 'abc' or max_col != 'abc'
                         PatternType::OrdinalStr => {
                             let const_arg = left_bound_for_like_pattern(v);
@@ -464,8 +457,8 @@ fn is_like_pattern_escape(c: u8) -> bool {
 
 pub(crate) fn left_bound_for_like_pattern(pattern: &[u8]) -> Vec<u8> {
     let mut index = 0;
-    let mut prefix: Vec<u8> = Vec::new();
     let len = pattern.len();
+    let mut prefix: Vec<u8> = Vec::with_capacity(len);
     while index < len {
         match pattern[index] {
             b'%' | b'_' => break,
@@ -498,43 +491,4 @@ pub(crate) fn right_bound_for_like_pattern(prefix: Vec<u8>) -> Vec<u8> {
     }
 
     res
-}
-
-enum PatternType {
-    // e.g. "abc"
-    OrdinalStr,
-    // e.g. "a%c" or "ab_"
-    PatternStr,
-    // e.g. "ab%"
-    EndOfPercent,
-}
-
-// check not like pattern type.
-fn check_pattern_type(pattern: &[u8]) -> PatternType {
-    let mut index = 0;
-    let mut percent = false;
-    let len = pattern.len();
-    while index < len {
-        match pattern[index] {
-            b'_' => return PatternType::PatternStr,
-            b'%' => percent = true,
-            b'\\' => {
-                if percent {
-                    return PatternType::PatternStr;
-                }
-                index += 1;
-            }
-            _ => {
-                if percent {
-                    return PatternType::PatternStr;
-                }
-            }
-        }
-        index += 1;
-    }
-    if percent {
-        PatternType::EndOfPercent
-    } else {
-        PatternType::OrdinalStr
-    }
 }

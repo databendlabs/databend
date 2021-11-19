@@ -35,7 +35,7 @@ async fn interpreter_describe_table_test() -> Result<()> {
 
         if let PlanNode::CreateTable(plan) = parse_query(TEST_CREATE_QUERY, &ctx)? {
             let interpreter = CreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let _ = interpreter.execute().await?;
+            let _ = interpreter.execute(None).await?;
         }
     }
 
@@ -45,7 +45,7 @@ async fn interpreter_describe_table_test() -> Result<()> {
             let executor = DescribeTableInterpreter::try_create(ctx.clone(), plan.clone())?;
             assert_eq!(executor.name(), "DescribeTableInterpreter");
 
-            let stream = executor.execute().await?;
+            let stream = executor.execute(None).await?;
             let result = stream.try_collect::<Vec<_>>().await?;
             let expected = vec![
                 "+-------+--------+------+",

@@ -14,8 +14,10 @@
 
 use std::fmt;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 
+use async_trait::async_trait;
 use clap::App;
 use clap::AppSettings;
 use clap::Arg;
@@ -28,6 +30,7 @@ use sysinfo::SystemExt;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::clusters::utils;
+use crate::cmds::command::Command;
 use crate::cmds::status::LocalRuntime;
 use crate::cmds::Config;
 use crate::cmds::Status;
@@ -54,21 +57,52 @@ impl fmt::Display for HealthStatus {
     }
 }
 
+// poll_health would check the health of active meta service and query service, and return their status quo
+// first element is the health status in dashboard service and the second element is the health status of meta services
+// the third element is the health status in query services
+pub async fn poll_health(
+    profile: &ClusterProfile,
+    status: &Status,
+    retry: Option<u32>,
+    duration: Option<Duration>,
+) -> (
+    Option<(String, Result<()>)>,
+    Option<(String, Result<()>)>,
+    (Vec<String>, Vec<Result<()>>),
+) {
+    match profile {
+        ClusterProfile::Local => {
+            let meta_config = status.get_local_meta_config();
+            let query_config = status.get_local_query_configs();
+            let dashboard_config = status.get_local_dashboard_config();
+            let mut handles = Vec::with_capacity(query_config.len() + 2);
+            let mut fs_vec = Vec::with_capacity(query_config.len() + 2);
+            for (fs, dashboard_config) in dashboard_config.iter() {
+                fs_vec.push(fs.clone());
+                handles.push(dashboard_config.verify(retry, duration));
+            }
+            for (fs, meta_config) in meta_config.iter() {
+                fs_vec.push(fs.clone());
+                handles.push(meta_config.verify(retry, duration));
+            }
+            for (fs, query_config) in query_config.iter() {
+                fs_vec.push(fs.clone());
+                handles.push(query_config.verify(retry, duration));
+            }
+            let mut res = futures::future::join_all(handles).await;
+            let dash_res = dashboard_config.map(|_| (fs_vec.remove(0), res.remove(0)));
+            let meta_res = meta_config.map(|_| (fs_vec.remove(0), res.remove(0)));
+            (dash_res, meta_res, (fs_vec, res))
+        }
+        ClusterProfile::Cluster => {
+            todo!()
+        }
+    }
+}
+
 impl ViewCommand {
     pub fn create(conf: Config) -> Self {
         ViewCommand { conf }
-    }
-    pub fn generate() -> App<'static> {
-        App::new("view")
-            .setting(AppSettings::DisableVersionFlag)
-            .about("View health status of current profile")
-            .arg(
-                Arg::new("profile")
-                    .long("profile")
-                    .about("Profile to view, support local and clusters")
-                    .required(false)
-                    .takes_value(true),
-            )
     }
 
     async fn local_exec_match(&self, writer: &mut Writer, _args: &ArgMatches) -> Result<()> {
@@ -79,21 +113,19 @@ impl ViewCommand {
                 if let Ok(t) = table {
                     writer.writeln(&t.trim_fmt());
                 } else {
-                    writer.write_err(
-                        format!(
-                            "cannot retrieve view table, error: {:?}",
-                            table.unwrap_err()
-                        )
-                        .as_str(),
-                    );
+                    writer.write_err(format!(
+                        "Cannot retrieve view table, error: {:?}",
+                        table.unwrap_err()
+                    ));
                 }
             }
             Err(e) => {
-                writer.write_err(format!("View precheck failed: {:?}", e).as_str());
+                writer.write_err(format!("View precheck failed: {:?}", e));
             }
         }
         Ok(())
     }
+
     /// precheck whether on view configs
     async fn local_exec_precheck(&self) -> Result<()> {
         let status = Status::read(self.conf.clone())?;
@@ -157,31 +189,53 @@ impl ViewCommand {
             Cell::new("Tls"),
             Cell::new("Config"),
         ]);
-        let dash_config = status.get_local_dashboard_config();
-        let meta_config = status.get_local_meta_config();
-        let query_config = status.get_local_query_configs();
-        let mut fs_vec = Vec::with_capacity(query_config.len() + 2);
-        let mut handles = Vec::with_capacity(query_config.len() + 2);
-        for (fs, dash_config) in dash_config.iter() {
-            fs_vec.push(fs);
-            handles.push(dash_config.verify(retry, duration));
+        let (dashboard, meta, query) =
+            poll_health(&ClusterProfile::Local, status, retry, duration).await;
+        if let Some(meta) = meta {
+            table.add_row(ViewCommand::build_row(&*meta.0, &meta.1));
         }
-        for (fs, meta_config) in meta_config.iter() {
-            fs_vec.push(fs);
-            handles.push(meta_config.verify(retry, duration));
+        for (i, fs) in query.0.iter().enumerate() {
+            table.add_row(ViewCommand::build_row(fs, query.1.get(i).unwrap()));
         }
-        for (fs, query_config) in query_config.iter() {
-            fs_vec.push(fs);
-            handles.push(query_config.verify(retry, duration));
-        }
-        let res = futures::future::join_all(handles).await;
-        for (i, fs) in fs_vec.iter().enumerate() {
-            table.add_row(ViewCommand::build_row(fs, res.get(i).unwrap()));
+        if let Some(dashboard) = dashboard {
+            table.add_row(ViewCommand::build_row(&*dashboard.0, &dashboard.1));
         }
         Ok(table)
     }
+}
 
-    pub async fn exec_match(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+#[async_trait]
+impl Command for ViewCommand {
+    fn name(&self) -> &str {
+        "view"
+    }
+
+    fn clap(&self) -> App<'static> {
+        App::new("view")
+            .setting(AppSettings::DisableVersionFlag)
+            .about(self.about())
+            .arg(
+                Arg::new("profile")
+                    .long("profile")
+                    .about("Profile to view, support local and clusters")
+                    .required(false)
+                    .takes_value(true),
+            )
+    }
+
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![]
+    }
+
+    fn about(&self) -> &'static str {
+        "View health status of current profile"
+    }
+
+    fn is(&self, s: &str) -> bool {
+        s.contains(self.name())
+    }
+
+    async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
         match args {
             Some(matches) => {
                 let status = Status::read(self.conf.clone())?;
@@ -193,11 +247,11 @@ impl ViewCommand {
                     Ok(ClusterProfile::Cluster) => {
                         todo!()
                     }
-                    Err(e) => writer.write_err(format!("cannot parse profile, {:?}", e).as_str()),
+                    Err(e) => writer.write_err(format!("cannot parse profile, {:?}", e)),
                 }
             }
             None => {
-                writer.write_err(&*"cannot find available profile to view");
+                writer.write_err("cannot find available profile to view".to_string());
             }
         }
         Ok(())

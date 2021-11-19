@@ -13,10 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
-use common_context::IOContext;
-use common_context::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -29,7 +26,7 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct TablesTable {
     table_info: TableInfo,
@@ -71,20 +68,16 @@ impl Table for TablesTable {
 
     async fn read(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let ctx: Arc<DatabendQueryContext> = io_ctx
-            .get_user_data()?
-            .expect("DatabendQueryContext should not be None");
-
-        let cata = ctx.get_catalog();
-        let databases = cata.get_databases()?;
+        let catalog = ctx.get_catalog();
+        let databases = catalog.get_databases().await?;
 
         let mut database_tables = vec![];
         for database in databases {
             let name = database.name();
-            for table in cata.get_tables(name)? {
+            for table in catalog.get_tables(name).await? {
                 database_tables.push((name.to_string(), table));
             }
         }

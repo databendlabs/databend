@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod comparison_test;
-
 mod comparison;
 mod comparison_eq;
 mod comparison_gt;

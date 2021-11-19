@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub use clusters_table::ClustersTable;
+pub use columns_table::ColumnsTable;
 pub use configs_table::ConfigsTable;
 pub use contributors_table::ContributorsTable;
 pub use credits_table::CreditsTable;
@@ -26,9 +27,12 @@ pub use system_database::SystemDatabase;
 pub use tables_table::TablesTable;
 pub use tracing_table::TracingTable;
 pub use tracing_table_stream::TracingTableStream;
+pub use users_table::UsersTable;
 
 #[cfg(test)]
 mod clusters_table_test;
+#[cfg(test)]
+mod columns_table_test;
 #[cfg(test)]
 mod configs_table_test;
 #[cfg(test)]
@@ -47,8 +51,11 @@ mod settings_table_test;
 mod tables_table_test;
 #[cfg(test)]
 mod tracing_table_test;
+#[cfg(test)]
+mod users_table_test;
 
 mod clusters_table;
+mod columns_table;
 mod configs_table;
 mod contributors_table;
 mod credits_table;
@@ -62,5 +69,6 @@ mod system_database;
 mod tables_table;
 mod tracing_table;
 mod tracing_table_stream;
+mod users_table;
 
 // TODO introduce A "base" type VTable, to de-duplicate codes of system tables

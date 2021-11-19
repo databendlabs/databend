@@ -57,6 +57,7 @@ Databend roadmap 2021.
 | Task                                         | Status    | Release Target | Comments        | 
 | ----------------------------------------------- | --------- | -------------- | --------------- | 
 | [ databend cli #938](https://github.com/datafuselabs/databend/issues/938) | PROGRESS  | v0.5   |  All-in-one tool for setting up, managing with Databend |
+| online playground  | PROGRESS  |   | User can try the demo on the databend.rs website |
 
 # Experimental and interns tasks
 
@@ -64,12 +65,9 @@ Databend roadmap 2021.
 | ----------------------------------------------- | --------- | -------------- | --------------- | 
 | [Hash method in ClickHouse way #754](https://github.com/datafuselabs/databend/issues/754) | DONE  |   |  |
 | [Join #559](https://github.com/datafuselabs/databend/pull/559) |  PLANNING |   | @leiysky  |
-| Online Playgroud  | PLANNING  |   | User can try the demo on the databend.rs website |
 | Window functions | PLANNING  |   |  |
 | Limited support for transactions | PLANNING  |   |  |
 | Tuple functions | PLANNING  |   | Reference: https://clickhouse.tech/docs/en/sql-reference/functions/tuple-functions/  |
 | Array functions | PLANNING  |   |  Reference: https://clickhouse.tech/docs/en/sql-reference/functions/array-functions/ |
 | Lambda functions | PLANNING  |   | Reference: https://clickhouse.tech/docs/en/sql-reference/functions/#higher-order-functions  |
 | Compile aggregate functions(JIT) | PLANNING  |   | Reference: https://github.com/ClickHouse/ClickHouse/pull/24789  |
-
-

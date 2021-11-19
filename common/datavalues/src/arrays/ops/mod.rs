@@ -20,33 +20,13 @@ mod contain;
 mod fill;
 mod group_hash;
 mod r#if;
+mod like;
 mod scatter;
 mod take;
 mod take_random;
 mod take_single;
 mod to_values;
 mod vec_hash;
-
-#[cfg(test)]
-mod agg_test;
-#[cfg(test)]
-mod apply_test;
-#[cfg(test)]
-mod cast_test;
-#[cfg(test)]
-mod contain_test;
-#[cfg(test)]
-mod fill_test;
-#[cfg(test)]
-mod group_hash_test;
-#[cfg(test)]
-mod if_test;
-#[cfg(test)]
-mod scatter_test;
-#[cfg(test)]
-mod take_random_test;
-#[cfg(test)]
-mod take_test;
 
 pub use agg::*;
 pub use apply::*;
@@ -55,6 +35,7 @@ pub use cast::*;
 pub use contain::*;
 pub use fill::*;
 pub use group_hash::GroupHash;
+pub use like::*;
 pub use r#if::*;
 pub use scatter::*;
 pub use take::*;

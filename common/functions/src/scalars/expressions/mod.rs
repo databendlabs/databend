@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod cast_test;
-mod expression;
-
 mod cast;
+mod expression;
 
 pub use cast::CastFunction;
 pub use expression::ToCastFunction;

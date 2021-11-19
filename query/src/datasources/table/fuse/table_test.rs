@@ -13,8 +13,6 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
-
 use common_base::tokio;
 use common_exception::Result;
 use common_planners::ReadDataSourcePlan;
@@ -27,35 +25,44 @@ use crate::datasources::table::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test]
 async fn test_fuse_table_simple_case() -> Result<()> {
-    let fixture = TestFixture::new();
+    let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
 
     // create test table
     let crate_table_plan = fixture.default_crate_table_plan();
     let catalog = ctx.get_catalog();
-    catalog.create_table(crate_table_plan)?;
+    catalog.create_table(crate_table_plan).await?;
 
     // get table
-    let table = catalog.get_table(
-        fixture.default_db().as_str(),
-        fixture.default_table().as_str(),
-    )?;
+    let table = catalog
+        .get_table(
+            fixture.default_db().as_str(),
+            fixture.default_table().as_str(),
+        )
+        .await?;
 
     // insert 10 blocks
     let num_blocks = 5;
-    let io_ctx = Arc::new(ctx.get_single_node_table_io_context()?);
-    let insert_into_plan = fixture.insert_plan_of_table(table.as_ref(), num_blocks);
-    table.append_data(io_ctx.clone(), insert_into_plan).await?;
+    let insert_into_plan = fixture.insert_plan_of_table(table.as_ref());
+    let stream = Box::pin(futures::stream::iter(TestFixture::gen_block_stream(
+        num_blocks,
+    )));
+
+    table
+        .append_data(ctx.clone(), insert_into_plan, stream)
+        .await?;
 
     // get the latest tbl
     let prev_version = table.get_table_info().ident.version;
-    let table = catalog.get_table(
-        fixture.default_db().as_str(),
-        fixture.default_table().as_str(),
-    )?;
+    let table = catalog
+        .get_table(
+            fixture.default_db().as_str(),
+            fixture.default_table().as_str(),
+        )
+        .await?;
     assert_ne!(prev_version, table.get_table_info().ident.version);
 
-    let (stats, parts) = table.read_partitions(io_ctx.clone(), None, None).await?;
+    let (stats, parts) = table.read_partitions(ctx.clone(), None).await?;
     assert_eq!(parts.len(), num_blocks as usize);
     assert_eq!(stats.read_rows, num_blocks as usize * 3);
 
@@ -63,13 +70,12 @@ async fn test_fuse_table_simple_case() -> Result<()> {
     ctx.try_set_partitions(parts)?;
 
     let stream = table
-        .read(io_ctx, &ReadDataSourcePlan {
+        .read(ctx, &ReadDataSourcePlan {
             table_info: Default::default(),
             scan_fields: None,
             parts: Default::default(),
             statistics: Default::default(),
             description: "".to_string(),
-            scan_plan: Arc::new(Default::default()),
             tbl_args: None,
             push_downs: None,
         })
@@ -106,19 +112,20 @@ async fn test_fuse_table_simple_case() -> Result<()> {
 
 #[tokio::test]
 async fn test_fuse_table_truncate() -> Result<()> {
-    let fixture = TestFixture::new();
+    let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
 
     let crate_table_plan = fixture.default_crate_table_plan();
     let catalog = ctx.get_catalog();
-    catalog.create_table(crate_table_plan)?;
+    catalog.create_table(crate_table_plan).await?;
 
-    let table = catalog.get_table(
-        fixture.default_db().as_str(),
-        fixture.default_table().as_str(),
-    )?;
+    let table = catalog
+        .get_table(
+            fixture.default_db().as_str(),
+            fixture.default_table().as_str(),
+        )
+        .await?;
 
-    let io_ctx = Arc::new(ctx.get_single_node_table_io_context()?);
     let truncate_plan = TruncateTablePlan {
         db: "".to_string(),
         table: "".to_string(),
@@ -126,16 +133,19 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     // 1. truncate empty table
     let prev_version = table.get_table_info().ident.version;
-    let r = table.truncate(io_ctx.clone(), truncate_plan.clone()).await;
-    let table = catalog.get_table(
-        fixture.default_db().as_str(),
-        fixture.default_table().as_str(),
-    )?;
+    let r = table.truncate(ctx.clone(), truncate_plan.clone()).await;
+    let table = catalog
+        .get_table(
+            fixture.default_db().as_str(),
+            fixture.default_table().as_str(),
+        )
+        .await?;
     // no side effects
     assert_eq!(prev_version, table.get_table_info().ident.version);
     assert!(r.is_ok());
 
     // 2. truncate table which has data
+<<<<<<< HEAD
     let insert_into_plan = fixture.insert_plan_of_table(table.as_ref(), 10);
     table.append_data(io_ctx.clone(), insert_into_plan).await?;
     let source_plan = table
@@ -145,36 +155,60 @@ async fn test_fuse_table_truncate() -> Result<()> {
             Some(ctx.get_settings().get_max_threads()? as usize),
         )
         .await?;
+=======
+    let num_blocks = 10;
+    let insert_into_plan = fixture.insert_plan_of_table(table.as_ref());
+    let stream = Box::pin(futures::stream::iter(TestFixture::gen_block_stream(
+        num_blocks,
+    )));
+
+    table
+        .append_data(ctx.clone(), insert_into_plan, stream)
+        .await?;
+    let source_plan = table.read_plan(ctx.clone(), None)?;
+>>>>>>> main
 
     // get the latest tbl
     let prev_version = table.get_table_info().ident.version;
-    let table = catalog.get_table(
-        fixture.default_db().as_str(),
-        fixture.default_table().as_str(),
-    )?;
+    let table = catalog
+        .get_table(
+            fixture.default_db().as_str(),
+            fixture.default_table().as_str(),
+        )
+        .await?;
     assert_ne!(prev_version, table.get_table_info().ident.version);
 
     // ensure data ingested
+<<<<<<< HEAD
     let (stats, parts) = table
         .read_partitions(io_ctx.clone(), source_plan.push_downs.clone(), None)
         .await?;
+=======
+    let (stats, parts) = table.read_partitions(ctx.clone(), source_plan.push_downs.clone())?;
+>>>>>>> main
     assert_eq!(parts.len(), 10);
     assert_eq!(stats.read_rows, 10 * 3);
 
     // truncate
-    let r = table.truncate(io_ctx.clone(), truncate_plan).await;
+    let r = table.truncate(ctx.clone(), truncate_plan).await;
     assert!(r.is_ok());
 
     // get the latest tbl
     let prev_version = table.get_table_info().ident.version;
-    let table = catalog.get_table(
-        fixture.default_db().as_str(),
-        fixture.default_table().as_str(),
-    )?;
+    let table = catalog
+        .get_table(
+            fixture.default_db().as_str(),
+            fixture.default_table().as_str(),
+        )
+        .await?;
     assert_ne!(prev_version, table.get_table_info().ident.version);
+<<<<<<< HEAD
     let (stats, parts) = table
         .read_partitions(io_ctx.clone(), source_plan.push_downs.clone(), None)
         .await?;
+=======
+    let (stats, parts) = table.read_partitions(ctx.clone(), source_plan.push_downs.clone())?;
+>>>>>>> main
     // cleared?
     assert_eq!(parts.len(), 0);
     assert_eq!(stats.read_rows, 0);

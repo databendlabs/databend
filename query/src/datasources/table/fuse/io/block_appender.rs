@@ -23,15 +23,12 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
-use rusoto_core::ByteStream;
 
 use crate::datasources::table::fuse::util;
 use crate::datasources::table::fuse::SegmentInfo;
 use crate::datasources::table::fuse::Stats;
-
-pub type BlockStream =
-    std::pin::Pin<Box<dyn futures::stream::Stream<Item = DataBlock> + Sync + Send + 'static>>;
 
 /// dummy struct, namespace placeholder
 pub struct BlockAppender;
@@ -40,7 +37,7 @@ impl BlockAppender {
     // TODO should return a stream of SegmentInfo (batch blocks into segments)
     pub async fn append_blocks(
         data_accessor: Arc<dyn DataAccessor>,
-        mut stream: BlockStream,
+        mut stream: SendableDataBlockStream,
         data_schema: &DataSchema,
     ) -> Result<SegmentInfo> {
         let mut stats_acc = util::StatisticsAccumulator::new();
@@ -48,6 +45,7 @@ impl BlockAppender {
 
         // accumulate the stats and save the blocks
         while let Some(block) = stream.next().await {
+            let block = block?;
             stats_acc.acc(&block)?;
             let schema = block.schema().to_arrow();
             let location = util::gen_unique_block_location();
@@ -116,9 +114,9 @@ impl BlockAppender {
 
         let parquet = writer.into_inner();
         let stream_len = parquet.len();
-        let stream = ByteStream::from(parquet);
+        let stream = futures::stream::once(async move { Ok(bytes::Bytes::from(parquet)) });
         data_accessor
-            .put_stream(location, Box::new(stream), stream_len)
+            .put_stream(location, Box::new(Box::pin(stream)), stream_len)
             .await?;
 
         Ok(len)

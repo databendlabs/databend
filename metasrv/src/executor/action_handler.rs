@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
+use common_meta_api::KVApi;
 use common_meta_flight::MetaFlightAction;
 use common_meta_flight::RequestFor;
 use serde::Serialize;
@@ -55,11 +56,12 @@ impl ActionHandler {
         // To keep the code IDE-friendly, we manually expand the enum variants and dispatch them one by one
 
         match action {
-            MetaFlightAction::UpsertKV(a) => s.serialize(self.handle(a).await?),
-            MetaFlightAction::UpdateKVMeta(a) => s.serialize(self.handle(a).await?),
-            MetaFlightAction::GetKV(a) => s.serialize(self.handle(a).await?),
-            MetaFlightAction::MGetKV(a) => s.serialize(self.handle(a).await?),
-            MetaFlightAction::PrefixListKV(a) => s.serialize(self.handle(a).await?),
+            MetaFlightAction::UpsertKV(a) => s.serialize(self.meta_node.upsert_kv(a).await?),
+            MetaFlightAction::GetKV(a) => s.serialize(self.meta_node.get_kv(&a.key).await?),
+            MetaFlightAction::MGetKV(a) => s.serialize(self.meta_node.mget_kv(&a.keys).await?),
+            MetaFlightAction::PrefixListKV(a) => {
+                s.serialize(self.meta_node.prefix_list_kv(&a.0).await?)
+            }
 
             // database
             MetaFlightAction::CreateDatabase(a) => s.serialize(self.handle(a).await?),

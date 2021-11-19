@@ -14,16 +14,18 @@
 
 use std::sync::Arc;
 
-use common_base::tokio;
 use common_base::RuntimeTracker;
-use common_exception::ErrorCode;
-use common_exception::ToErrorCode;
+use common_base::StopHandle;
+use common_base::Stoppable;
 use common_macros::databend_main;
 use common_meta_sled_store::init_sled_db;
+use common_metrics::init_default_metrics_recorder;
 use common_tracing::init_tracing_with_file;
+use common_tracing::tracing;
 use databend_meta::api::FlightServer;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
+use databend_meta::meta_service::MetaNode;
 use databend_meta::metrics::MetricService;
 use log::info;
 use structopt::StructOpt;
@@ -49,37 +51,47 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     );
 
     init_sled_db(conf.raft_config.raft_dir.clone());
+    init_default_metrics_recorder();
+
+    tracing::info!(
+        "Starting MetaNode boot:{} single: {} with config: {:?}",
+        conf.raft_config.boot,
+        conf.raft_config.single,
+        conf
+    );
+
+    let meta_node = MetaNode::start(&conf.raft_config).await?;
+
+    let mut stop_handler = StopHandle::create();
+    let stop_tx = StopHandle::install_termination_handle();
 
     // Metric API service.
     {
-        let srv = MetricService::create(conf.clone());
-        tokio::spawn(async move {
-            srv.make_server().expect("Metrics service error");
-        });
+        let mut srv = MetricService::create(conf.clone());
+        srv.start().await.expect("Failed to start metrics server");
         info!("Metric API server listening on {}", conf.metric_api_address);
+        stop_handler.push(srv);
     }
 
     // HTTP API service.
     {
         let mut srv = HttpService::create(conf.clone());
         info!("HTTP API server listening on {}", conf.admin_api_address);
-        tokio::spawn(async move {
-            srv.start().await.expect("HTTP: admin api error");
-        });
+        srv.start().await.expect("Failed to start http server");
+        stop_handler.push(srv);
     }
 
     // Flight API service.
     {
-        let srv = FlightServer::create(conf.clone());
+        let mut srv = FlightServer::create(conf.clone(), meta_node);
         info!(
             "Databend-meta API server listening on {}",
             conf.flight_api_address
         );
-        let (_stop_tx, fin_rx) = srv.start().await.expect("Databend-meta service error");
-        fin_rx.await.map_err_to_code(ErrorCode::TokioError, || {
-            "Cannot receive data from Flight API service fin_rx"
-        })?;
+        srv.start().await.expect("Databend-meta service error");
+        stop_handler.push(Box::new(srv));
     }
+    stop_handler.wait_to_terminate(stop_tx).await;
 
     Ok(())
 }

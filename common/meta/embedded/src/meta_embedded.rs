@@ -16,22 +16,10 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use common_base::tokio::sync::Mutex;
-use common_exception::Result;
-use common_meta_api::KVApi;
 use common_meta_raft_store::config::RaftConfig;
-use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_raft_store::state_machine::StateMachine;
 pub use common_meta_sled_store::init_temp_sled_db;
-use common_meta_types::Cmd;
-use common_meta_types::GetKVActionReply;
-use common_meta_types::KVMeta;
-use common_meta_types::MGetKVActionReply;
-use common_meta_types::MatchSeq;
-use common_meta_types::Operation;
-use common_meta_types::PrefixListReply;
-use common_meta_types::UpsertKVActionReply;
 use common_tracing::tracing;
 
 /// Local storage that provides the API defined by `KVApi+MetaApi`.
@@ -51,11 +39,11 @@ pub struct MetaEmbedded {
 impl MetaEmbedded {
     /// Creates a KVApi impl backed with a `StateMachine`.
     ///
-    /// A LocalKVStore is identified by the `name`.
+    /// A MetaEmbedded is identified by the `name`.
     /// Caveat: Two instances with the same `name` reference to the same underlying sled::Tree.
     ///
     /// One of the following has to be called to initialize a process-wise sled::Db,
-    /// before using `LocalKVStore`:
+    /// before using `MetaEmbedded`:
     /// - `common_meta_sled_store::init_sled_db`
     /// - `common_meta_sled_store::init_temp_sled_db`
     #[allow(dead_code)]
@@ -93,75 +81,5 @@ impl MetaEmbedded {
 
     pub fn sync_new_temp() -> common_exception::Result<MetaEmbedded> {
         futures::executor::block_on(MetaEmbedded::new_temp())
-    }
-}
-
-#[async_trait]
-impl KVApi for MetaEmbedded {
-    async fn upsert_kv(
-        &self,
-        key: &str,
-        seq: MatchSeq,
-        value: Option<Vec<u8>>,
-        value_meta: Option<KVMeta>,
-    ) -> Result<UpsertKVActionReply> {
-        let cmd = Cmd::UpsertKV {
-            key: key.to_string(),
-            seq,
-            value: value.into(),
-            value_meta,
-        };
-
-        let mut sm = self.inner.lock().await;
-        let res = sm.apply_cmd(&cmd).await?;
-
-        match res {
-            AppliedState::KV { prev, result } => Ok(UpsertKVActionReply { prev, result }),
-            _ => {
-                panic!("expect AppliedState::KV");
-            }
-        }
-    }
-
-    async fn update_kv_meta(
-        &self,
-        key: &str,
-        seq: MatchSeq,
-        value_meta: Option<KVMeta>,
-    ) -> Result<UpsertKVActionReply> {
-        let cmd = Cmd::UpsertKV {
-            key: key.to_string(),
-            seq,
-            value: Operation::AsIs,
-            value_meta,
-        };
-
-        let mut sm = self.inner.lock().await;
-        let res = sm.apply_cmd(&cmd).await?;
-
-        match res {
-            AppliedState::KV { prev, result } => Ok(UpsertKVActionReply { prev, result }),
-            _ => {
-                panic!("expect AppliedState::KV");
-            }
-        }
-    }
-
-    async fn get_kv(&self, key: &str) -> Result<GetKVActionReply> {
-        let sm = self.inner.lock().await;
-        let res = sm.get_kv(key)?;
-        Ok(GetKVActionReply { result: res })
-    }
-
-    async fn mget_kv(&self, key: &[String]) -> Result<MGetKVActionReply> {
-        let sm = self.inner.lock().await;
-        let res = sm.mget_kv(key)?;
-        Ok(MGetKVActionReply { result: res })
-    }
-
-    async fn prefix_list_kv(&self, prefix: &str) -> Result<PrefixListReply> {
-        let sm = self.inner.lock().await;
-        let res = sm.prefix_list_kv(prefix)?;
-        Ok(res)
     }
 }

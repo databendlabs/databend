@@ -13,14 +13,6 @@
 // limitations under the License.
 
 mod date;
-#[cfg(test)]
-mod date_function_test;
-#[cfg(test)]
-mod date_test;
-
-#[cfg(test)]
-mod interval_function_test;
-
 mod interval_function;
 mod now;
 mod number_function;
@@ -38,6 +30,7 @@ pub use number_function::ToDayOfWeekFunction;
 pub use number_function::ToDayOfYearFunction;
 pub use number_function::ToHourFunction;
 pub use number_function::ToMinuteFunction;
+pub use number_function::ToMondayFunction;
 pub use number_function::ToMonthFunction;
 pub use number_function::ToSecondFunction;
 pub use number_function::ToStartOfISOYearFunction;

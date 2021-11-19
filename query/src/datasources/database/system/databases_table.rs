@@ -13,10 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
-use common_context::IOContext;
-use common_context::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -29,7 +26,7 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct DatabasesTable {
     table_info: TableInfo,
@@ -67,31 +64,24 @@ impl Table for DatabasesTable {
 
     async fn read(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let ctx: Arc<DatabendQueryContext> = io_ctx
-            .get_user_data()?
-            .expect("DatabendQueryContext should not be None");
+        let dbs = ctx.get_catalog().get_databases().await?;
 
-        ctx.get_catalog()
-            .get_databases()
-            .map(|databases_name| -> SendableDataBlockStream {
-                let databases_name_str: Vec<&[u8]> = databases_name
-                    .iter()
-                    .map(|database| database.name().as_bytes())
-                    .collect();
+        let db_names: Vec<&[u8]> = dbs
+            .iter()
+            .map(|database| database.name().as_bytes())
+            .collect();
 
-                let block =
-                    DataBlock::create_by_array(self.table_info.schema(), vec![Series::new(
-                        databases_name_str,
-                    )]);
+        let block =
+            DataBlock::create_by_array(self.table_info.schema(), vec![Series::new(db_names)]);
 
-                Box::pin(DataBlockStream::create(
-                    self.table_info.schema(),
-                    None,
-                    vec![block],
-                ))
-            })
+        let s = Box::pin(DataBlockStream::create(
+            self.table_info.schema(),
+            None,
+            vec![block],
+        ));
+        Ok(s)
     }
 }

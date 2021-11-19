@@ -157,6 +157,11 @@ impl From<&ArrowDataType> for DataType {
                 _ => unimplemented!("data_type: {}", dt),
             },
 
+            ArrowDataType::Struct(fields) => {
+                let fields: Vec<DataField> = fields.iter().map(|f| f.into()).collect();
+                DataType::Struct(fields)
+            }
+
             // this is safe, because we define the datatype firstly
             _ => {
                 unimplemented!("data_type: {}", dt)

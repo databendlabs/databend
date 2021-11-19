@@ -17,28 +17,15 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_meta_types::GetKVActionReply;
-use common_meta_types::KVMeta;
 use common_meta_types::MGetKVActionReply;
-use common_meta_types::MatchSeq;
 use common_meta_types::PrefixListReply;
+use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 
 #[async_trait]
 pub trait KVApi: Send + Sync {
-    async fn upsert_kv(
-        &self,
-        key: &str,
-        seq: MatchSeq,
-        value: Option<Vec<u8>>,
-        value_meta: Option<KVMeta>,
-    ) -> common_exception::Result<UpsertKVActionReply>;
-
-    async fn update_kv_meta(
-        &self,
-        key: &str,
-        seq: MatchSeq,
-        value_meta: Option<KVMeta>,
-    ) -> common_exception::Result<UpsertKVActionReply>;
+    async fn upsert_kv(&self, act: UpsertKVAction)
+        -> common_exception::Result<UpsertKVActionReply>;
 
     async fn get_kv(&self, key: &str) -> common_exception::Result<GetKVActionReply>;
 
@@ -52,21 +39,9 @@ pub trait KVApi: Send + Sync {
 impl KVApi for Arc<dyn KVApi> {
     async fn upsert_kv(
         &self,
-        key: &str,
-        seq: MatchSeq,
-        value: Option<Vec<u8>>,
-        value_meta: Option<KVMeta>,
+        act: UpsertKVAction,
     ) -> common_exception::Result<UpsertKVActionReply> {
-        self.as_ref().upsert_kv(key, seq, value, value_meta).await
-    }
-
-    async fn update_kv_meta(
-        &self,
-        key: &str,
-        seq: MatchSeq,
-        value_meta: Option<KVMeta>,
-    ) -> common_exception::Result<UpsertKVActionReply> {
-        self.as_ref().update_kv_meta(key, seq, value_meta).await
+        self.as_ref().upsert_kv(act).await
     }
 
     async fn get_kv(&self, key: &str) -> common_exception::Result<GetKVActionReply> {

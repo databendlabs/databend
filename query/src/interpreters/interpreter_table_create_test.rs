@@ -35,29 +35,7 @@ async fn test_create_table_interpreter() -> Result<()> {
     if let PlanNode::CreateTable(plan) = parse_query(TEST_CREATE_QUERY, &ctx)? {
         let interpreter = CreateTableInterpreter::try_create(ctx, plan.clone())?;
 
-        assert_eq!(interpreter.name(), "CreateTableInterpreter");
-        assert_eq!(
-            plan.schema().field_with_name("a")?.data_type(),
-            &DataType::Int64
-        );
-        assert_eq!(
-            plan.schema().field_with_name("b")?.data_type(),
-            &DataType::Int32
-        );
-        assert_eq!(
-            plan.schema().field_with_name("c")?.data_type(),
-            &DataType::String
-        );
-        assert_eq!(
-            plan.schema().field_with_name("d")?.data_type(),
-            &DataType::Int16
-        );
-        assert_eq!(
-            plan.schema().field_with_name("e")?.data_type(),
-            &DataType::Date16
-        );
-
-        let mut stream = interpreter.execute().await?;
+        let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
     } else {
         panic!()

@@ -55,10 +55,12 @@ impl ExpressionPlan {
 pub enum Expression {
     /// An expression with a alias name.
     Alias(String, Box<Expression>),
+
     /// Column name.
     Column(String),
     /// Qualified column name.
     QualifiedColumn(Vec<String>),
+
     /// Constant value.
     /// Note: When literal represents a column, its column_name will not be None
     Literal {
@@ -68,6 +70,7 @@ pub enum Expression {
         // Logic data_type for this literal
         data_type: DataType,
     },
+
     /// A unary expression such as "NOT foo"
     UnaryExpression { op: String, expr: Box<Expression> },
 
@@ -98,9 +101,15 @@ pub enum Expression {
         asc: bool,
         /// Whether to put Nulls before all other data values
         nulls_first: bool,
+        /// The original expression from parser. Because sort 'expr' field maybe overwritten by a Column expression, like
+        /// from BinaryExpression { +, number, number} to Column(number+number), the orig_expr is for keeping the original
+        /// one that is before overwritten. This field is mostly for function monotonicity optimization purpose.
+        origin_expr: Box<Expression>,
     },
+
     /// All fields(*) in a schema.
     Wildcard,
+
     /// Casts the expression to a given type and will return a runtime error if the expression cannot be cast.
     /// This expression is guaranteed to have a fixed type.
     Cast {
@@ -109,11 +118,13 @@ pub enum Expression {
         /// The `DataType` the expression will yield
         data_type: DataType,
     },
+
     /// Scalar sub query. such as `SELECT (SELECT 1)`
     ScalarSubquery {
         name: String,
         query_plan: Arc<PlanNode>,
     },
+
     Subquery {
         name: String,
         query_plan: Arc<PlanNode>,

@@ -11,13 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+pub mod add;
 pub mod cluster;
 pub mod create;
-#[cfg(test)]
-mod create_test;
 pub mod stop;
 mod utils;
 pub mod view;
-
-#[cfg(test)]
-mod view_test;

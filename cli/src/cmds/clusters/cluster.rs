@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use clap::App;
@@ -22,6 +22,7 @@ use clap::ArgMatches;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::cmds::clusters::add::AddCommand;
 use crate::cmds::clusters::create::CreateCommand;
 use crate::cmds::clusters::stop::StopCommand;
 use crate::cmds::clusters::view::ViewCommand;
@@ -33,7 +34,6 @@ use crate::error::Result;
 #[derive(Clone)]
 pub struct ClusterCommand {
     conf: Config,
-    clap: App<'static>,
 }
 
 // Support to up and run databend cluster on different platforms
@@ -61,51 +61,13 @@ impl FromStr for ClusterProfile {
 
 impl ClusterCommand {
     pub fn create(conf: Config) -> Self {
-        let clap = ClusterCommand::generate();
-        ClusterCommand { conf, clap }
-    }
-    pub fn generate() -> App<'static> {
-        let app = App::new("cluster")
-            .setting(AppSettings::DisableVersionFlag)
-            .about("Cluster life cycle management")
-            .subcommand(CreateCommand::generate())
-            .subcommand(StopCommand::generate())
-            .subcommand(ViewCommand::generate());
-        app
+        ClusterCommand { conf }
     }
 
-    pub(crate) async fn exec_match(
-        &self,
-        writer: &mut Writer,
-        args: Option<&ArgMatches>,
-    ) -> Result<()> {
-        match args {
-            Some(matches) => match matches.subcommand_name() {
-                Some("create") => {
-                    let create = CreateCommand::create(self.conf.clone());
-                    create
-                        .exec_match(writer, matches.subcommand_matches("create"))
-                        .await?;
-                }
-                Some("delete") => {
-                    let create = StopCommand::create(self.conf.clone());
-                    create
-                        .exec_match(writer, matches.subcommand_matches("delete"))
-                        .await?;
-                }
-                Some("view") => {
-                    let view = ViewCommand::create(self.conf.clone());
-                    view.exec_match(writer, matches.subcommand_matches("view"))
-                        .await?;
-                }
-                _ => writer.write_err("unknown command, usage: cluster -h"),
-            },
-            None => {
-                println!("None")
-            }
-        }
-
-        Ok(())
+    pub fn default() -> Self {
+        // TODO: this function is a hack to avoid the dependency cycle on the Config struct
+        // the dependency cycle is avoidable, but we need some work to work around it
+        ClusterCommand::create(Config::default())
     }
 }
 
@@ -115,7 +77,28 @@ impl Command for ClusterCommand {
         "cluster"
     }
 
-    fn about(&self) -> &str {
+    fn clap(&self) -> App<'static> {
+        let subcommands = self.subcommands();
+        let app = App::new("cluster")
+            .setting(AppSettings::DisableVersionFlag)
+            .about(self.about())
+            .subcommand(subcommands[0].clap())
+            .subcommand(subcommands[1].clap())
+            .subcommand(subcommands[2].clap())
+            .subcommand(subcommands[3].clap());
+        app
+    }
+
+    fn subcommands(&self) -> Vec<Arc<dyn Command>> {
+        vec![
+            Arc::new(CreateCommand::create(self.conf.clone())),
+            Arc::new(StopCommand::create(self.conf.clone())),
+            Arc::new(ViewCommand::create(self.conf.clone())),
+            Arc::new(AddCommand::create(self.conf.clone())),
+        ]
+    }
+
+    fn about(&self) -> &'static str {
         "Cluster life cycle management"
     }
 
@@ -123,16 +106,7 @@ impl Command for ClusterCommand {
         s.contains(self.name())
     }
 
-    async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
-        match self.clap.clone().try_get_matches_from(args.split(' ')) {
-            Ok(matches) => {
-                return self.exec_match(writer, Some(matches.borrow())).await;
-            }
-            Err(err) => {
-                println!("Cannot get subcommand matches: {}", err);
-            }
-        }
-
-        Ok(())
+    async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()> {
+        self.exec_subcommand(writer, args).await
     }
 }

@@ -21,7 +21,6 @@ use common_io::prelude::BinaryRead;
 use common_io::prelude::BinaryWriteBuf;
 use common_meta_sled_store::sled::IVec;
 use common_meta_sled_store::SledOrderedSerde;
-use common_meta_sled_store::SledSerde;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -31,8 +30,6 @@ pub struct TableLookupKey {
     pub database_id: DbKey,
     pub table_name: String,
 }
-
-impl SledSerde for TableLookupKey {}
 
 impl SledOrderedSerde for TableLookupKey {
     fn ser(&self) -> Result<IVec, ErrorCode> {
@@ -75,5 +72,3 @@ impl fmt::Display for TableLookupValue {
         write!(f, "{}", self.0)
     }
 }
-
-impl SledSerde for TableLookupValue {}

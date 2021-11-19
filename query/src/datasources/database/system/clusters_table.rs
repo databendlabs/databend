@@ -13,10 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
-use common_context::IOContext;
-use common_context::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -28,6 +25,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct ClustersTable {
     table_info: TableInfo,
@@ -68,10 +66,10 @@ impl Table for ClustersTable {
 
     async fn read(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let cluster_nodes = io_ctx.get_query_nodes();
+        let cluster_nodes = ctx.get_cluster().get_nodes();
 
         let mut names = StringArrayBuilder::with_capacity(cluster_nodes.len());
         let mut addresses = StringArrayBuilder::with_capacity(cluster_nodes.len());

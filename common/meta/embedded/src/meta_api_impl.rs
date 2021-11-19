@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::convert::TryInto;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -20,10 +21,12 @@ use common_exception::Result;
 use common_meta_api::MetaApi;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_raft_store::state_machine::TableLookupKey;
+use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
+use common_meta_types::MatchSeq;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
@@ -35,6 +38,7 @@ use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_tracing::tracing;
+use maplit::hashmap;
 
 use crate::MetaEmbedded;
 
@@ -43,19 +47,13 @@ impl MetaApi for MetaEmbedded {
     async fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
         let cmd = Cmd::CreateDatabase {
             name: plan.db.clone(),
-            db: DatabaseInfo {
-                database_id: 0,
-                db: plan.db.clone(),
-            },
         };
 
-        let mut sm = self.inner.lock().await;
+        let sm = self.inner.lock().await;
         let res = sm.apply_cmd(&cmd).await?;
 
-        let (prev, result) = match res {
-            AppliedState::DataBase { prev, result } => (prev, result),
-            _ => return Err(ErrorCode::MetaNodeInternalError("not a Database result")),
-        };
+        let ch: Change<u64> = res.try_into().unwrap();
+        let (prev, result) = ch.unpack_data();
 
         assert!(result.is_some());
 
@@ -67,7 +65,7 @@ impl MetaApi for MetaEmbedded {
         }
 
         Ok(CreateDatabaseReply {
-            database_id: result.unwrap().data.database_id,
+            database_id: result.unwrap(),
         })
     }
 
@@ -76,7 +74,7 @@ impl MetaApi for MetaEmbedded {
             name: plan.db.clone(),
         };
 
-        let mut sm = self.inner.lock().await;
+        let sm = self.inner.lock().await;
         let res = sm.apply_cmd(&cmd).await?;
 
         assert!(res.result().is_none());
@@ -96,7 +94,12 @@ impl MetaApi for MetaEmbedded {
         let res = sm
             .get_database(db)?
             .ok_or_else(|| ErrorCode::UnknownDatabase(db.to_string()))?;
-        Ok(Arc::new(res.data))
+
+        let dbi = DatabaseInfo {
+            database_id: res.data,
+            db: db.to_string(),
+        };
+        Ok(Arc::new(dbi))
     }
 
     async fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>> {
@@ -104,7 +107,12 @@ impl MetaApi for MetaEmbedded {
         let res = sm.get_databases()?;
         Ok(res
             .iter()
-            .map(|(_name, db)| Arc::new(db.clone()))
+            .map(|(name, db)| {
+                Arc::new(DatabaseInfo {
+                    database_id: *db,
+                    db: name.to_string(),
+                })
+            })
             .collect::<Vec<_>>())
     }
 
@@ -123,7 +131,7 @@ impl MetaApi for MetaEmbedded {
             table_meta,
         };
 
-        let mut sm = self.inner.lock().await;
+        let sm = self.inner.lock().await;
         let res = sm.apply_cmd(&cr).await?;
         let (prev, result) = match res {
             AppliedState::TableIdent { prev, result } => (prev, result),
@@ -156,7 +164,7 @@ impl MetaApi for MetaEmbedded {
             table_name: table_name.clone(),
         };
 
-        let mut sm = self.inner.lock().await;
+        let sm = self.inner.lock().await;
         let res = sm.apply_cmd(&cr).await?;
 
         assert!(res.result().is_none());
@@ -178,8 +186,7 @@ impl MetaApi for MetaEmbedded {
             ErrorCode::UnknownDatabase(format!("get table: database not found {:}", db))
         })?;
 
-        let dbi = seq_db.data;
-        let db_id = dbi.database_id;
+        let db_id = seq_db.data;
 
         let table_id = sm
             .table_lookup()
@@ -230,14 +237,33 @@ impl MetaApi for MetaEmbedded {
 
     async fn upsert_table_option(
         &self,
-        _table_id: MetaId,
-        _table_version: MetaVersion,
-        _option_key: String,
-        _option_value: String,
+        table_id: MetaId,
+        table_version: MetaVersion,
+        option_key: String,
+        option_value: String,
     ) -> Result<UpsertTableOptionReply> {
-        Err(ErrorCode::UnImplement(
-            "not implemented in MetaEmbedded yet",
-        ))
+        let sm = self.inner.lock().await;
+
+        let cmd = Cmd::UpsertTableOptions {
+            table_id,
+            seq: MatchSeq::Exact(table_version),
+            table_options: hashmap! {
+                option_key => Some(option_value),
+            },
+        };
+
+        let res = sm.apply_cmd(&cmd).await?;
+        if !res.changed() {
+            let ch: Change<TableMeta> = res.try_into().unwrap();
+            let (prev, _result) = ch.unwrap();
+
+            return Err(ErrorCode::TableVersionMissMatch(format!(
+                "targeting version {}, current version {}",
+                table_version, prev.seq,
+            )));
+        }
+
+        Ok(())
     }
 
     fn name(&self) -> String {
