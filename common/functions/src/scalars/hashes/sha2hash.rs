@@ -74,45 +74,52 @@ impl Function for Sha2HashFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        let hash = |i: &[u8], l: &u16| match l {
+            224 => {
+                let mut h = sha2::Sha224::new();
+                h.update(i);
+                Some(format!("{:x}", h.finalize()))
+            }
+            256 | 0 => {
+                let mut h = sha2::Sha256::new();
+                h.update(i);
+                Some(format!("{:x}", h.finalize()))
+            }
+            384 => {
+                let mut h = sha2::Sha384::new();
+                h.update(i);
+                Some(format!("{:x}", h.finalize()))
+            }
+            512 => {
+                let mut h = sha2::Sha512::new();
+                h.update(i);
+                Some(format!("{:x}", h.finalize()))
+            }
+            _ => None,
+        };
+
         let i_series = columns[0]
             .column()
             .to_minimal_array()?
             .cast_with_type(&DataType::String)?;
 
-        let l_series = columns[1]
-            .column()
-            .to_minimal_array()?
-            .cast_with_type(&DataType::UInt16)?;
+        let l_column: DataColumn = columns[1].column().cast_with_type(&DataType::UInt16)?;
 
-        let opt_iter = i_series
-            .string()?
-            .into_no_null_iter()
-            .zip(l_series.u16()?.into_no_null_iter())
-            .map(|(i, l)| match l {
-                224 => {
-                    let mut h = sha2::Sha224::new();
-                    h.update(i);
-                    Some(format!("{:x}", h.finalize()))
-                }
-                256 | 0 => {
-                    let mut h = sha2::Sha256::new();
-                    h.update(i);
-                    Some(format!("{:x}", h.finalize()))
-                }
-                384 => {
-                    let mut h = sha2::Sha384::new();
-                    h.update(i);
-                    Some(format!("{:x}", h.finalize()))
-                }
-                512 => {
-                    let mut h = sha2::Sha512::new();
-                    h.update(i);
-                    Some(format!("{:x}", h.finalize()))
-                }
-                _ => None,
-            });
-
-        let result = DFStringArray::new_from_opt_iter(opt_iter);
+        let result = match l_column {
+            DataColumn::Constant(v, _) => {
+                let l = &DFTryFrom::try_from(v)?;
+                let opt_iter = i_series.string()?.into_no_null_iter().map(|i| hash(i, l));
+                DFStringArray::new_from_opt_iter(opt_iter)
+            }
+            DataColumn::Array(l_series) => {
+                let opt_iter = i_series
+                    .string()?
+                    .into_no_null_iter()
+                    .zip(l_series.u16()?.into_no_null_iter())
+                    .map(|(i, l)| hash(i, l));
+                DFStringArray::new_from_opt_iter(opt_iter)
+            }
+        };
         let column: DataColumn = result.into();
         Ok(column.resize_constant(columns[0].column().len()))
     }

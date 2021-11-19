@@ -375,7 +375,27 @@ fn test_sha2hash_function() -> Result<()> {
                 1,
             )),
         },
-
+        Test {
+            name: "Sha Length as Const Field",
+            arg: vec![
+                DataColumnWithField::new(
+                    Series::new(["abc"]).into(),
+                    DataField::new("i", DataType::String, true),
+                ),
+                DataColumnWithField::new(
+                    DataColumn::Constant(DataValue::UInt16(Some(224_u16)), 1),
+                    DataField::new("l", DataType::UInt16, true),
+                ),
+            ],
+            expect: Ok(DataColumn::Constant(
+                DataValue::String(Some(
+                    "23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7"
+                        .as_bytes()
+                        .to_vec(),
+                )),
+                1,
+            )),
+        },
     ];
 
     let func = Sha2HashFunction::try_create("sha2")?;
