@@ -24,7 +24,6 @@ use crate::sessions::DatabendQueryContextRef;
 pub struct ContextFunction;
 
 impl ContextFunction {
-
     // Some function args need from context
     // such as `SELECT database()`, the arg is ctx.get_default_db()
     pub fn build_args_from_ctx(

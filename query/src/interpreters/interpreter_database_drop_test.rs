@@ -17,9 +17,9 @@ use common_exception::Result;
 use common_planners::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
-use crate::tests::parse_query;
 
 use crate::interpreters::*;
+use crate::tests::parse_query;
 
 #[tokio::test]
 async fn test_drop_database_interpreter() -> Result<()> {

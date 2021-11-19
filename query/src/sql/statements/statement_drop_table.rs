@@ -1,8 +1,12 @@
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_planners::DropTablePlan;
+use common_planners::PlanNode;
 use sqlparser::ast::ObjectName;
-use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
+
 use crate::sessions::DatabendQueryContextRef;
-use common_exception::{Result, ErrorCode};
-use common_planners::{PlanNode, DropTablePlan};
+use crate::sql::statements::AnalyzableStatement;
+use crate::sql::statements::AnalyzedResult;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfDropTable {
@@ -16,23 +20,29 @@ impl AnalyzableStatement for DfDropTable {
         let if_exists = self.if_exists;
         let (db, table) = self.resolve_table(ctx)?;
 
-        Ok(AnalyzedResult::SimpleQuery(
-            PlanNode::DropTable(
-                DropTablePlan { if_exists, db, table }
-            )
-        ))
+        Ok(AnalyzedResult::SimpleQuery(PlanNode::DropTable(
+            DropTablePlan {
+                if_exists,
+                db,
+                table,
+            },
+        )))
     }
 }
 
 impl DfDropTable {
     fn resolve_table(&self, ctx: DatabendQueryContextRef) -> Result<(String, String)> {
-        let DfDropTable { name: ObjectName(idents), .. } = self;
+        let DfDropTable {
+            name: ObjectName(idents),
+            ..
+        } = self;
         match idents.len() {
             0 => Err(ErrorCode::SyntaxException("Drop table name is empty")),
             1 => Ok((ctx.get_current_database(), idents[0].value.clone())),
             2 => Ok((idents[0].value.clone(), idents[1].value.clone())),
-            _ => Err(ErrorCode::SyntaxException("Drop table name must be [`db`].`table`"))
+            _ => Err(ErrorCode::SyntaxException(
+                "Drop table name must be [`db`].`table`",
+            )),
         }
     }
 }
-

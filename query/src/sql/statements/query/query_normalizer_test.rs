@@ -1,10 +1,11 @@
-use std::fmt::format;
 use common_base::tokio;
-use common_exception::{ErrorCode, Result};
-use crate::sql::{DfParser, DfStatement};
-use crate::sql::statements::QueryNormalizerData;
+use common_exception::ErrorCode;
+use common_exception::Result;
+
 use crate::sql::statements::query::QueryNormalizer;
-use crate::tests::{parse_query, try_create_context};
+use crate::sql::DfParser;
+use crate::sql::DfStatement;
+use crate::tests::try_create_context;
 
 #[tokio::test]
 async fn test_query_normalizer() -> Result<()> {
@@ -109,7 +110,12 @@ async fn test_query_normalizer() -> Result<()> {
         match statements.remove(0) {
             DfStatement::Query(query) => {
                 let transform = QueryNormalizer::create(ctx);
-                assert_eq!(test_case.expect, format!("{:?}", transform.transform(&query).await?), "{:#?}", test_case.name)
+                assert_eq!(
+                    test_case.expect,
+                    format!("{:?}", transform.transform(&query).await?),
+                    "{:#?}",
+                    test_case.name
+                )
             }
             _ => {
                 return Err(ErrorCode::LogicalError("Cannot get analyze query state."));
@@ -119,4 +125,3 @@ async fn test_query_normalizer() -> Result<()> {
 
     Ok(())
 }
-

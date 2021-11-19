@@ -1,7 +1,12 @@
 use common_base::tokio;
-use common_exception::{ErrorCode, Result};
-use crate::sql::{DfParser, DfStatement};
-use crate::sql::statements::query::{JoinedSchemaAnalyzer, QualifiedRewriter, QueryNormalizer};
+use common_exception::ErrorCode;
+use common_exception::Result;
+
+use crate::sql::statements::query::JoinedSchemaAnalyzer;
+use crate::sql::statements::query::QualifiedRewriter;
+use crate::sql::statements::query::QueryNormalizer;
+use crate::sql::DfParser;
+use crate::sql::DfStatement;
 use crate::tests::try_create_context;
 
 #[tokio::test]
@@ -93,7 +98,12 @@ async fn test_query_qualified_rewriter() -> Result<()> {
                 let data = transform.transform(&query).await?;
 
                 let rewriter = QualifiedRewriter::create(joined_schema, ctx);
-                assert_eq!(test_case.expect, format!("{:?}", rewriter.rewrite(data).await?), "{:#?}", test_case.name)
+                assert_eq!(
+                    test_case.expect,
+                    format!("{:?}", rewriter.rewrite(data).await?),
+                    "{:#?}",
+                    test_case.name
+                )
             }
             _ => {
                 return Err(ErrorCode::LogicalError("Cannot get analyze query state."));
@@ -103,4 +113,3 @@ async fn test_query_qualified_rewriter() -> Result<()> {
 
     Ok(())
 }
-

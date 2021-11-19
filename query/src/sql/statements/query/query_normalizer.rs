@@ -1,17 +1,20 @@
-use sqlparser::ast::{ObjectName, FunctionArg, Query, TableAlias, JoinOperator, TableWithJoins, TableFactor, Ident, Expr, SelectItem, OffsetRows};
+use std::collections::HashMap;
+use std::fmt::Debug;
+
+use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use crate::sessions::{DatabendQueryContextRef, DatabendQueryContext};
-use common_planners::{Expression, extract_aliases, find_aggregate_exprs_in_expr, resolve_aliases_to_exprs};
-use std::collections::HashMap;
-use crate::sql::statements::query::query_schema_joined::JoinedSchema;
+use common_planners::extract_aliases;
+use common_planners::find_aggregate_exprs_in_expr;
+use common_planners::resolve_aliases_to_exprs;
+use common_planners::Expression;
+use sqlparser::ast::Expr;
+use sqlparser::ast::OffsetRows;
+use sqlparser::ast::SelectItem;
+
+use crate::sessions::DatabendQueryContextRef;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
-use crate::sql::statements::{DfQueryStatement, AnalyzableStatement, AnalyzedResult};
-use std::convert::TryFrom;
-use std::fmt::Debug;
-use common_datavalues::{DataSchemaRef, DataSchema};
-use std::sync::Arc;
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
+use crate::sql::statements::DfQueryStatement;
 
 pub struct QueryNormalizerData {
     pub filter_predicate: Option<Expression>,
@@ -25,19 +28,16 @@ pub struct QueryNormalizerData {
 }
 
 pub struct QueryNormalizer {
-    ctx: DatabendQueryContextRef,
     data: QueryNormalizerData,
     expression_analyzer: ExpressionAnalyzer,
     aliases_map: HashMap<String, Expression>,
 }
 
-
 /// Replace alias in query and collect aggregate functions
 impl QueryNormalizer {
     pub fn create(ctx: DatabendQueryContextRef) -> QueryNormalizer {
         QueryNormalizer {
-            ctx: ctx.clone(),
-            expression_analyzer: ExpressionAnalyzer::create(ctx.clone()),
+            expression_analyzer: ExpressionAnalyzer::create(ctx),
             aliases_map: HashMap::new(),
             data: QueryNormalizerData {
                 filter_predicate: None,
@@ -47,7 +47,7 @@ impl QueryNormalizer {
                 order_by_expressions: vec![],
                 projection_expressions: vec![],
                 limit: None,
-                offset: None
+                offset: None,
             },
         }
     }
@@ -184,7 +184,12 @@ impl QueryNormalizer {
                     let expr = Box::new(expr_analyzer.analyze(expr).await?);
                     output_columns.push(Expression::Alias(expr_alias, expr));
                 }
-                _ => { return Err(ErrorCode::SyntaxException(format!("SelectItem: {:?} are not supported", item))); }
+                _ => {
+                    return Err(ErrorCode::SyntaxException(format!(
+                        "SelectItem: {:?} are not supported",
+                        item
+                    )));
+                }
             };
         }
 
@@ -198,7 +203,7 @@ impl QueryNormalizer {
     }
 
     fn add_aggregate_function(&mut self, expr: &Expression) -> Result<()> {
-        for aggregate_expr in find_aggregate_exprs_in_expr(&expr) {
+        for aggregate_expr in find_aggregate_exprs_in_expr(expr) {
             if !self.data.aggregate_expressions.contains(&aggregate_expr) {
                 self.data.aggregate_expressions.push(aggregate_expr);
             }

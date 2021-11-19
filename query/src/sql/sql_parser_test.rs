@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::Result;
 use sqlparser::ast::*;
 
-use common_exception::Result;
-
-use crate::sql::*;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfDescribeTable;
@@ -24,8 +22,9 @@ use crate::sql::statements::DfDropDatabase;
 use crate::sql::statements::DfDropTable;
 use crate::sql::statements::DfShowDatabases;
 use crate::sql::statements::DfShowTables;
-use crate::sql::statements::DfUseDatabase;
 use crate::sql::statements::DfTruncateTable;
+use crate::sql::statements::DfUseDatabase;
+use crate::sql::*;
 
 fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
     let (statements, _) = DfParser::parse_sql(sql)?;
@@ -181,8 +180,9 @@ fn show_queries() -> Result<()> {
     use sqlparser::dialect::GenericDialect;
     use sqlparser::parser::Parser;
     use sqlparser::tokenizer::Tokenizer;
-    use crate::sql::statements::DfShowTables;
+
     use crate::sql::statements::DfShowSettings;
+    use crate::sql::statements::DfShowTables;
 
     // positive case
     expect_parse_ok("SHOW TABLES", DfStatement::ShowTables(DfShowTables::All))?;

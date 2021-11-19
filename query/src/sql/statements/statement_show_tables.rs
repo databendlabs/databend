@@ -1,7 +1,11 @@
-use sqlparser::ast::{Expr, Ident, ObjectName};
-use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
-use crate::sessions::DatabendQueryContextRef;
 use common_exception::Result;
+use sqlparser::ast::Expr;
+use sqlparser::ast::Ident;
+use sqlparser::ast::ObjectName;
+
+use crate::sessions::DatabendQueryContextRef;
+use crate::sql::statements::AnalyzableStatement;
+use crate::sql::statements::AnalyzedResult;
 use crate::sql::PlanParser;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -39,7 +43,8 @@ impl DfShowTables {
     fn show_tables_with_predicate(&self, e: &Expr, ctx: DatabendQueryContextRef) -> String {
         format!(
             "SELECT name FROM system.tables where database = '{}' AND ({}) ORDER BY database, name",
-            ctx.get_current_database(), e,
+            ctx.get_current_database(),
+            e,
         )
     }
 
@@ -59,4 +64,3 @@ impl DfShowTables {
         }
     }
 }
-

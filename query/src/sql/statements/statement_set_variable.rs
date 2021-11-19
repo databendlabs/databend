@@ -1,8 +1,14 @@
-use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
-use sqlparser::ast::{SetVariableValue, Ident};
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_planners::PlanNode;
+use common_planners::SettingPlan;
+use common_planners::VarValue;
+use sqlparser::ast::Ident;
+use sqlparser::ast::SetVariableValue;
+
 use crate::sessions::DatabendQueryContextRef;
-use common_exception::{Result, ErrorCode};
-use common_planners::{VarValue, PlanNode, SettingPlan};
+use crate::sql::statements::AnalyzableStatement;
+use crate::sql::statements::AnalyzedResult;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfSetVariable {
@@ -16,12 +22,16 @@ pub struct DfSetVariable {
 impl AnalyzableStatement for DfSetVariable {
     async fn analyze(&self, _: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         if self.hivevar {
-            return Err(ErrorCode::SyntaxException("Unsupport hive style set varible"));
+            return Err(ErrorCode::SyntaxException(
+                "Unsupport hive style set varible",
+            ));
         }
 
         // TODO: session variable and local variable
         let vars = self.mapping_set_vars();
-        Ok(AnalyzedResult::SimpleQuery(PlanNode::SetVariable(SettingPlan { vars })))
+        Ok(AnalyzedResult::SimpleQuery(PlanNode::SetVariable(
+            SettingPlan { vars },
+        )))
     }
 }
 
@@ -38,7 +48,8 @@ impl DfSetVariable {
 
     fn mapping_set_vars(&self) -> Vec<VarValue> {
         let variable = self.variable.value.clone();
-        self.value.iter()
+        self.value
+            .iter()
             .map(|value| DfSetVariable::mapping_set_var(variable.clone(), value))
             .collect()
     }

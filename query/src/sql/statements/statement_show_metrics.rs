@@ -1,7 +1,9 @@
-use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
-use crate::sessions::DatabendQueryContextRef;
-use crate::sql::PlanParser;
 use common_exception::Result;
+
+use crate::sessions::DatabendQueryContextRef;
+use crate::sql::statements::AnalyzableStatement;
+use crate::sql::statements::AnalyzedResult;
+use crate::sql::PlanParser;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfShowMetrics;
@@ -14,4 +16,3 @@ impl AnalyzableStatement for DfShowMetrics {
         Ok(AnalyzedResult::SimpleQuery(rewritten_query_plan.await?))
     }
 }
-

@@ -1,10 +1,20 @@
-use std::fs::read;
-use sqlparser::ast::{FunctionArg, Ident, JoinOperator, ObjectName, Query, TableAlias, TableFactor, TableWithJoins};
+use common_exception::ErrorCode;
+use common_exception::Result;
+use sqlparser::ast::FunctionArg;
+use sqlparser::ast::Ident;
+use sqlparser::ast::JoinOperator;
+use sqlparser::ast::ObjectName;
+use sqlparser::ast::Query;
+use sqlparser::ast::TableAlias;
+use sqlparser::ast::TableFactor;
+use sqlparser::ast::TableWithJoins;
+
 use crate::sessions::DatabendQueryContextRef;
-use common_exception::{ErrorCode, Result};
-use crate::sql::statements::query::query_schema_joined::JoinedSchema;
-use crate::sql::statements::{AnalyzableStatement, AnalyzedResult, DfQueryStatement};
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
+use crate::sql::statements::query::query_schema_joined::JoinedSchema;
+use crate::sql::statements::AnalyzableStatement;
+use crate::sql::statements::AnalyzedResult;
+use crate::sql::statements::DfQueryStatement;
 
 pub struct JoinedSchemaAnalyzer {
     ctx: DatabendQueryContextRef,
@@ -41,7 +51,9 @@ impl JoinedSchemaAnalyzer {
         }
 
         if analyzed_tables.len() != 1 {
-            return Err(ErrorCode::LogicalError("Logical error: this is relation rpn bug."));
+            return Err(ErrorCode::LogicalError(
+                "Logical error: this is relation rpn bug.",
+            ));
         }
 
         Ok(analyzed_tables.remove(0))
@@ -51,18 +63,16 @@ impl JoinedSchemaAnalyzer {
         let subquery = &(*v.subquery);
         let subquery = DfQueryStatement::try_from(subquery.clone())?;
         match subquery.analyze(self.ctx.clone()).await? {
-            AnalyzedResult::SelectQuery(state) => {
-                match &v.alias {
-                    None => {
-                        JoinedSchema::from_subquery(state, Vec::new())
-                    }
-                    Some(alias) => {
-                        let name_prefix = vec![alias.name.value.clone()];
-                        JoinedSchema::from_subquery(state, name_prefix)
-                    }
+            AnalyzedResult::SelectQuery(state) => match &v.alias {
+                None => JoinedSchema::from_subquery(state, Vec::new()),
+                Some(alias) => {
+                    let name_prefix = vec![alias.name.value.clone()];
+                    JoinedSchema::from_subquery(state, name_prefix)
                 }
-            }
-            _ => Err(ErrorCode::LogicalError("Logical error, subquery analyzed data must be SelectQuery, it's a bug.")),
+            },
+            _ => Err(ErrorCode::LogicalError(
+                "Logical error, subquery analyzed data must be SelectQuery, it's a bug.",
+            )),
         }
     }
 
@@ -110,11 +120,12 @@ impl JoinedSchemaAnalyzer {
             0 => Err(ErrorCode::SyntaxException("Table name is empty")),
             1 => Ok((self.ctx.get_current_database(), name.0[0].value.clone())),
             2 => Ok((name.0[0].value.clone(), name.0[1].value.clone())),
-            _ => Err(ErrorCode::SyntaxException("Table name must be [`db`].`table`"))
+            _ => Err(ErrorCode::SyntaxException(
+                "Table name must be [`db`].`table`",
+            )),
         }
     }
 }
-
 
 struct TableRPNItem {
     name: ObjectName,
@@ -147,7 +158,7 @@ impl RelationRPNBuilder {
         let mut builder = RelationRPNBuilder { rpn: Vec::new() };
         match exprs.is_empty() {
             true => builder.visit_dummy_table(),
-            false => builder.visit(exprs)?
+            false => builder.visit(exprs)?,
         }
 
         Ok(builder.rpn)
@@ -163,10 +174,13 @@ impl RelationRPNBuilder {
     fn visit(&mut self, exprs: &[TableWithJoins]) -> Result<()> {
         for expr in exprs {
             match self.rpn.is_empty() {
-                true => { self.visit_joins(expr)?; }
+                true => {
+                    self.visit_joins(expr)?;
+                }
                 false => {
                     self.visit_joins(expr)?;
-                    self.rpn.push(RelationRPNItem::Join(JoinOperator::CrossJoin));
+                    self.rpn
+                        .push(RelationRPNItem::Join(JoinOperator::CrossJoin));
                 }
             }
         }
@@ -179,7 +193,8 @@ impl RelationRPNBuilder {
 
         for join in &expr.joins {
             self.visit_table_factor(&join.relation)?;
-            self.rpn.push(RelationRPNItem::Join(join.join_operator.clone()));
+            self.rpn
+                .push(RelationRPNItem::Join(join.join_operator.clone()));
         }
 
         Ok(())
@@ -187,9 +202,16 @@ impl RelationRPNBuilder {
 
     fn visit_table_factor(&mut self, factor: &TableFactor) -> Result<()> {
         match factor {
-            TableFactor::Table { name, args, alias, with_hints } => {
+            TableFactor::Table {
+                name,
+                args,
+                alias,
+                with_hints,
+            } => {
                 if !with_hints.is_empty() {
-                    return Err(ErrorCode::SyntaxException("MSSQL-specific `WITH (...)` hints is unsupported."));
+                    return Err(ErrorCode::SyntaxException(
+                        "MSSQL-specific `WITH (...)` hints is unsupported.",
+                    ));
                 }
 
                 match args.is_empty() {
@@ -198,30 +220,42 @@ impl RelationRPNBuilder {
                     false => Err(ErrorCode::SyntaxException("Table function cannot named.")),
                 }
             }
-            TableFactor::Derived { lateral, subquery, alias } => {
+            TableFactor::Derived {
+                lateral,
+                subquery,
+                alias,
+            } => {
                 if *lateral {
                     return Err(ErrorCode::UnImplement("Cannot SELECT LATERAL subquery."));
                 }
 
-                self.rpn.push(RelationRPNItem::Derived(DerivedRPNItem { subquery: subquery.clone(), alias: alias.clone() }));
+                self.rpn.push(RelationRPNItem::Derived(DerivedRPNItem {
+                    subquery: subquery.clone(),
+                    alias: alias.clone(),
+                }));
                 Ok(())
             }
-            TableFactor::NestedJoin(joins) => self.visit_joins(&joins),
-            TableFactor::TableFunction { .. } => Err(ErrorCode::UnImplement("Unsupported table function")),
+            TableFactor::NestedJoin(joins) => self.visit_joins(joins),
+            TableFactor::TableFunction { .. } => {
+                Err(ErrorCode::UnImplement("Unsupported table function"))
+            }
         }
     }
 
     fn visit_table(&mut self, name: &ObjectName, alias: &Option<TableAlias>) -> Result<()> {
-        self.rpn.push(RelationRPNItem::Table(TableRPNItem { name: name.clone(), alias: alias.clone() }));
+        self.rpn.push(RelationRPNItem::Table(TableRPNItem {
+            name: name.clone(),
+            alias: alias.clone(),
+        }));
         Ok(())
     }
 
     fn visit_table_function(&mut self, name: &ObjectName, args: &[FunctionArg]) -> Result<()> {
-        self.rpn.push(RelationRPNItem::TableFunction(TableFunctionRPNItem {
-            name: name.clone(),
-            args: args.to_owned(),
-        }));
+        self.rpn
+            .push(RelationRPNItem::TableFunction(TableFunctionRPNItem {
+                name: name.clone(),
+                args: args.to_owned(),
+            }));
         Ok(())
     }
 }
-

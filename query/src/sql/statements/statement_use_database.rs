@@ -1,8 +1,12 @@
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_planners::PlanNode;
+use common_planners::UseDatabasePlan;
 use sqlparser::ast::ObjectName;
-use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
+
 use crate::sessions::DatabendQueryContextRef;
-use common_planners::{PlanNode, UseDatabasePlan};
-use common_exception::{Result, ErrorCode};
+use crate::sql::statements::AnalyzableStatement;
+use crate::sql::statements::AnalyzedResult;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfUseDatabase {
@@ -17,7 +21,8 @@ impl AnalyzableStatement for DfUseDatabase {
         }
 
         let db = self.name.0[0].value.clone();
-        Ok(AnalyzedResult::SimpleQuery(PlanNode::UseDatabase(UseDatabasePlan { db })))
+        Ok(AnalyzedResult::SimpleQuery(PlanNode::UseDatabase(
+            UseDatabasePlan { db },
+        )))
     }
 }
-

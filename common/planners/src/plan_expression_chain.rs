@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use common_datavalues::DataSchemaRef;
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
 
 use crate::ActionAlias;
@@ -67,7 +68,9 @@ impl ExpressionChain {
                 self.actions.push(ExpressionAction::Input(input));
             }
             Expression::QualifiedColumn(_) => {
-                return Err(ErrorCode::LogicalError("QualifiedColumn should be resolve in analyze."));
+                return Err(ErrorCode::LogicalError(
+                    "QualifiedColumn should be resolve in analyze.",
+                ));
             }
             Expression::Literal {
                 value, data_type, ..

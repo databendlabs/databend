@@ -1,10 +1,16 @@
-use common_datavalues::{DataSchemaRef, DataField, DataType, DataSchema};
-use std::fmt::{Debug, Formatter};
-use std::sync::Arc;
-use common_exception::{Result, ErrorCode};
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use common_planners::{col, Expression};
+use std::collections::HashMap;
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::sync::Arc;
+
+use common_datavalues::DataField;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
+use common_exception::ErrorCode;
+use common_exception::Result;
+
 use crate::catalogs::Table;
 use crate::sql::statements::QueryAnalyzeState;
 
@@ -29,7 +35,10 @@ impl JoinedSchema {
         Self::from_table_desc(table_desc)
     }
 
-    pub fn from_subquery(state: QueryAnalyzeState, prefix: Vec<String>) -> Result<JoinedSchema> {
+    pub fn from_subquery(
+        state: Box<QueryAnalyzeState>,
+        prefix: Vec<String>,
+    ) -> Result<JoinedSchema> {
         let table_desc = JoinedTableDesc::from_subquery(state, prefix);
         Self::from_table_desc(table_desc)
     }
@@ -39,11 +48,14 @@ impl JoinedSchema {
 
         for column_desc in table_desc.get_columns_desc() {
             match short_name_columns.entry(column_desc.short_name.clone()) {
-                Entry::Vacant(v) => { v.insert(column_desc.clone()); }
+                Entry::Vacant(v) => {
+                    v.insert(column_desc.clone());
+                }
                 Entry::Occupied(_) => {
-                    return Err(ErrorCode::LogicalError(
-                        format!("Logical error: same columns in {:?}, this is a bug.", table_desc.get_name_parts())
-                    ));
+                    return Err(ErrorCode::LogicalError(format!(
+                        "Logical error: same columns in {:?}, this is a bug.",
+                        table_desc.get_name_parts()
+                    )));
                 }
             };
         }
@@ -62,7 +74,7 @@ impl JoinedSchema {
         &self.tables_long_name_columns
     }
 
-    pub fn take_tables_desc(mut self) -> Vec<JoinedTableDesc> {
+    pub fn take_tables_desc(self) -> Vec<JoinedTableDesc> {
         self.tables_long_name_columns
     }
 
@@ -113,9 +125,7 @@ impl Debug for JoinedSchema {
                         ambiguity_names.push(name_parts);
                     }
                     false => {
-                        short_names.push(
-                            column_desc.short_name.clone()
-                        );
+                        short_names.push(column_desc.short_name.clone());
                     }
                 }
             }
@@ -142,7 +152,7 @@ pub enum JoinedTableDesc {
         columns_desc: Vec<JoinedColumnDesc>,
     },
     Subquery {
-        state: QueryAnalyzeState,
+        state: Box<QueryAnalyzeState>,
         name_parts: Vec<String>,
         columns_desc: Vec<JoinedColumnDesc>,
     },
@@ -164,7 +174,7 @@ impl JoinedTableDesc {
         }
     }
 
-    pub fn from_subquery(state: QueryAnalyzeState, prefix: Vec<String>) -> JoinedTableDesc {
+    pub fn from_subquery(state: Box<QueryAnalyzeState>, prefix: Vec<String>) -> JoinedTableDesc {
         let schema = state.finalize_schema.clone();
         let mut columns_desc = Vec::with_capacity(schema.fields().len());
 
@@ -221,4 +231,3 @@ impl JoinedColumnDesc {
         }
     }
 }
-

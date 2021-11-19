@@ -1,8 +1,12 @@
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_planners::DropDatabasePlan;
+use common_planners::PlanNode;
 use sqlparser::ast::ObjectName;
-use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
+
 use crate::sessions::DatabendQueryContextRef;
-use common_exception::{Result, ErrorCode};
-use common_planners::{PlanNode, DropDatabasePlan};
+use crate::sql::statements::AnalyzableStatement;
+use crate::sql::statements::AnalyzedResult;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfDropDatabase {
@@ -16,11 +20,9 @@ impl AnalyzableStatement for DfDropDatabase {
         let db = self.database_name()?;
         let if_exists = self.if_exists;
 
-        Ok(AnalyzedResult::SimpleQuery(
-            PlanNode::DropDatabase(
-                DropDatabasePlan { db, if_exists }
-            )
-        ))
+        Ok(AnalyzedResult::SimpleQuery(PlanNode::DropDatabase(
+            DropDatabasePlan { db, if_exists },
+        )))
     }
 }
 
@@ -33,4 +35,3 @@ impl DfDropDatabase {
         Ok(self.name.0[0].value.clone())
     }
 }
-

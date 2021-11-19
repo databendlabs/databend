@@ -1,13 +1,24 @@
-use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
-use crate::sessions::{DatabendQueryContextRef, DatabendQueryContext};
-use sqlparser::ast::{SqliteOnConflict, ObjectName, Ident, Expr, Query};
-use common_exception::{Result, ErrorCode};
+use std::sync::Arc;
+
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRefExt;
-use common_planners::{PlanNode, InsertIntoPlan};
-use std::sync::Arc;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_infallible::Mutex;
-use common_streams::{ValueSource, Source};
+use common_planners::InsertIntoPlan;
+use common_planners::PlanNode;
+use common_streams::Source;
+use common_streams::ValueSource;
+use sqlparser::ast::Expr;
+use sqlparser::ast::Ident;
+use sqlparser::ast::ObjectName;
+use sqlparser::ast::Query;
+use sqlparser::ast::SqliteOnConflict;
+
+use crate::sessions::DatabendQueryContext;
+use crate::sessions::DatabendQueryContextRef;
+use crate::sql::statements::AnalyzableStatement;
+use crate::sql::statements::AnalyzedResult;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfInsertStatement {
@@ -41,7 +52,8 @@ impl AnalyzableStatement for DfInsertStatement {
         let table_meta_id = source.get_id();
 
         if !self.columns.is_empty() {
-            let fields = self.columns
+            let fields = self
+                .columns
                 .iter()
                 .map(|ident| schema.field_with_name(&ident.value).map(|v| v.clone()))
                 .collect::<Result<Vec<_>>>()?;
@@ -68,42 +80,51 @@ impl AnalyzableStatement for DfInsertStatement {
             }
         }
 
-        Ok(AnalyzedResult::SimpleQuery(
-            PlanNode::InsertInto(
-                InsertIntoPlan {
-                    db_name: db,
-                    tbl_name: table,
-                    tbl_id: table_meta_id,
-                    schema,
-                    input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
-                }
-            )
-        ))
+        Ok(AnalyzedResult::SimpleQuery(PlanNode::InsertInto(
+            InsertIntoPlan {
+                db_name: db,
+                tbl_name: table,
+                tbl_id: table_meta_id,
+                schema,
+                input_stream: Arc::new(Mutex::new(Some(Box::pin(input_stream)))),
+            },
+        )))
     }
 }
 
 impl DfInsertStatement {
     fn resolve_table(&self, ctx: &DatabendQueryContext) -> Result<(String, String)> {
-        let Self { table_name: ObjectName(idents), .. } = self;
+        let Self {
+            table_name: ObjectName(idents),
+            ..
+        } = self;
         match idents.len() {
             0 => Err(ErrorCode::SyntaxException("Insert table name is empty")),
             1 => Ok((ctx.get_current_database(), idents[0].value.clone())),
             2 => Ok((idents[0].value.clone(), idents[1].value.clone())),
-            _ => Err(ErrorCode::SyntaxException("Insert table name must be [`db`].`table`"))
+            _ => Err(ErrorCode::SyntaxException(
+                "Insert table name must be [`db`].`table`",
+            )),
         }
     }
 
     fn is_supported(&self) -> Result<()> {
         if self.overwrite {
-            return Err(ErrorCode::SyntaxException("Unsupport insert overwrite statement."));
+            return Err(ErrorCode::SyntaxException(
+                "Unsupport insert overwrite statement.",
+            ));
         }
 
         if self.partitioned.is_some() {
-            return Err(ErrorCode::SyntaxException("Unsupport insert ... partition statement."));
+            return Err(ErrorCode::SyntaxException(
+                "Unsupport insert ... partition statement.",
+            ));
         }
 
         if !self.after_columns.is_empty() {
-            return Err(ErrorCode::SyntaxException("Unsupport specify columns after partitions."));
+            return Err(ErrorCode::SyntaxException(
+                "Unsupport specify columns after partitions.",
+            ));
         }
 
         Ok(())

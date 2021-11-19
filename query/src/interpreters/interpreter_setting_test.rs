@@ -17,9 +17,9 @@ use common_exception::Result;
 use common_planners::*;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
-use crate::tests::parse_query;
 
 use crate::interpreters::*;
+use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_setting_interpreter() -> Result<()> {

@@ -14,7 +14,6 @@
 
 use std::collections::HashSet;
 use std::fmt;
-use std::fmt::write;
 use std::sync::Arc;
 
 use common_datavalues::DataField;
@@ -256,7 +255,9 @@ impl Expression {
         match self {
             Expression::Alias(_, expr) => expr.to_data_type(input_schema),
             Expression::Column(s) => Ok(input_schema.field_with_name(s)?.data_type().clone()),
-            Expression::QualifiedColumn(_) => Err(ErrorCode::LogicalError("QualifiedColumn should be resolve in analyze.")),
+            Expression::QualifiedColumn(_) => Err(ErrorCode::LogicalError(
+                "QualifiedColumn should be resolve in analyze.",
+            )),
             Expression::Literal { data_type, .. } => Ok(data_type.clone()),
             Expression::Subquery { query_plan, .. } => Ok(Self::to_subquery_type(query_plan)),
             Expression::ScalarSubquery { query_plan, .. } => {
@@ -367,7 +368,7 @@ impl fmt::Debug for Expression {
             Expression::Subquery { name, .. } => write!(f, "subquery({})", name),
             Expression::ScalarSubquery { name, .. } => write!(f, "scalar subquery({})", name),
             Expression::BinaryExpression { op, left, right } => {
-                write!(f, "({:?} {} {:?})", left, op, right, )
+                write!(f, "({:?} {} {:?})", left, op, right,)
             }
 
             Expression::UnaryExpression { op, expr } => {
@@ -381,7 +382,7 @@ impl fmt::Debug for Expression {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{:?}", args[i], )?;
+                    write!(f, "{:?}", args[i],)?;
                 }
                 write!(f, ")")
             }

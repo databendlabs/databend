@@ -1,8 +1,11 @@
-use sqlparser::ast::Ident;
-use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
-use crate::sessions::DatabendQueryContextRef;
 use common_exception::Result;
-use common_planners::{PlanNode, KillPlan};
+use common_planners::KillPlan;
+use common_planners::PlanNode;
+use sqlparser::ast::Ident;
+
+use crate::sessions::DatabendQueryContextRef;
+use crate::sql::statements::AnalyzableStatement;
+use crate::sql::statements::AnalyzedResult;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfKillStatement {
@@ -15,10 +18,9 @@ impl AnalyzableStatement for DfKillStatement {
     async fn analyze(&self, _ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let id = self.object_id.value.clone();
         let kill_connection = !self.kill_query;
-        Ok(AnalyzedResult::SimpleQuery(
-            PlanNode::Kill(
-                KillPlan { id, kill_connection }
-            )
-        ))
+        Ok(AnalyzedResult::SimpleQuery(PlanNode::Kill(KillPlan {
+            id,
+            kill_connection,
+        })))
     }
 }

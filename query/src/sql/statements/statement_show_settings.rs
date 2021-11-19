@@ -1,6 +1,8 @@
-use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
-use crate::sessions::DatabendQueryContextRef;
 use common_exception::Result;
+
+use crate::sessions::DatabendQueryContextRef;
+use crate::sql::statements::AnalyzableStatement;
+use crate::sql::statements::AnalyzedResult;
 use crate::sql::PlanParser;
 
 #[derive(Debug, Clone, PartialEq)]

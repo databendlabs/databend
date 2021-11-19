@@ -85,7 +85,7 @@ pub fn find_column_exprs(exprs: &[Expression]) -> Vec<Expression> {
 /// pass the provided test. The returned `Expression`'s are deduplicated and returned
 /// in order of appearance (depth first).
 fn find_exprs_in_exprs<F>(exprs: &[Expression], test_fn: &F) -> Vec<Expression>
-    where F: Fn(&Expression) -> bool {
+where F: Fn(&Expression) -> bool {
     exprs
         .iter()
         .flat_map(|expr| find_exprs_in_expr(expr, test_fn))
@@ -99,14 +99,14 @@ fn find_exprs_in_exprs<F>(exprs: &[Expression], test_fn: &F) -> Vec<Expression>
 
 // Visitor that find Expressionessions that match a particular predicate
 struct Finder<'a, F>
-    where F: Fn(&Expression) -> bool
+where F: Fn(&Expression) -> bool
 {
     test_fn: &'a F,
     exprs: Vec<Expression>,
 }
 
 impl<'a, F> Finder<'a, F>
-    where F: Fn(&Expression) -> bool
+where F: Fn(&Expression) -> bool
 {
     /// Create a new finder with the `test_fn`
     fn new(test_fn: &'a F) -> Self {
@@ -118,7 +118,7 @@ impl<'a, F> Finder<'a, F>
 }
 
 impl<'a, F> ExpressionVisitor for Finder<'a, F>
-    where F: Fn(&Expression) -> bool
+where F: Fn(&Expression) -> bool
 {
     fn pre_visit(mut self, expr: &Expression) -> Result<Recursion<Self>> {
         if (self.test_fn)(expr) {
@@ -137,7 +137,7 @@ impl<'a, F> ExpressionVisitor for Finder<'a, F>
 /// provided test. The returned `Expression`'s are deduplicated and returned in order
 /// of appearance (depth first).
 fn find_exprs_in_expr<F>(expr: &Expression, test_fn: &F) -> Vec<Expression>
-    where F: Fn(&Expression) -> bool {
+where F: Fn(&Expression) -> bool {
     let Finder { exprs, .. } = expr
         .accept(Finder::new(test_fn))
         // pre_visit always returns OK, so this will always too
@@ -250,7 +250,7 @@ pub fn find_columns_not_satisfy_exprs(
 /// * `Err(err)`: Any error returned by the function is returned as-is by
 ///       `clone_with_replacement()`.
 fn clone_with_replacement<F>(expr: &Expression, replacement_fn: &F) -> Result<Expression>
-    where F: Fn(&Expression) -> Result<Option<Expression>> {
+where F: Fn(&Expression) -> Result<Option<Expression>> {
     let replacement_opt = replacement_fn(expr)?;
 
     match replacement_opt {

@@ -13,17 +13,22 @@
 // limitations under the License.
 
 use std::sync::Arc;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::{PlanBuilder, SelectPlan};
+use common_planners::PlanBuilder;
 use common_planners::PlanNode;
+use common_planners::SelectPlan;
 
 use crate::sessions::DatabendQueryContextRef;
-use crate::sql::statements::{QueryAnalyzeState, QueryNormalizerData, QueryRelation};
+use crate::sql::statements::AnalyzableStatement;
+use crate::sql::statements::AnalyzedResult;
+use crate::sql::statements::QueryAnalyzeState;
+use crate::sql::statements::QueryNormalizerData;
+use crate::sql::statements::QueryRelation;
 use crate::sql::DfHint;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
-use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
 
 pub struct PlanParser;
 
@@ -33,14 +38,20 @@ impl PlanParser {
         PlanParser::build_plan(statements, ctx).await
     }
 
-    pub async fn parse_with_hint(query: &str, ctx: DatabendQueryContextRef) -> (Result<PlanNode>, Vec<DfHint>) {
+    pub async fn parse_with_hint(
+        query: &str,
+        ctx: DatabendQueryContextRef,
+    ) -> (Result<PlanNode>, Vec<DfHint>) {
         match DfParser::parse_sql(query) {
             Err(cause) => (Err(cause), vec![]),
-            Ok((statements, hints)) => (PlanParser::build_plan(statements, ctx).await, hints)
+            Ok((statements, hints)) => (PlanParser::build_plan(statements, ctx).await, hints),
         }
     }
 
-    async fn build_plan(statements: Vec<DfStatement>, ctx: DatabendQueryContextRef) -> Result<PlanNode> {
+    async fn build_plan(
+        statements: Vec<DfStatement>,
+        ctx: DatabendQueryContextRef,
+    ) -> Result<PlanNode> {
         if statements.len() != 1 {
             return Err(ErrorCode::SyntaxException("Only support single query"));
         }
@@ -60,10 +71,15 @@ impl PlanParser {
         let order_by = Self::build_order_by_plan(having, data)?;
         let projection = Self::build_projection_plan(order_by, data)?;
         let limit = Self::build_limit_plan(projection, data)?;
-        Ok(PlanNode::Select(SelectPlan { input: Arc::new(limit) }))
+        Ok(PlanNode::Select(SelectPlan {
+            input: Arc::new(limit),
+        }))
     }
 
-    fn build_explain_plan(data: &QueryNormalizerData, ctx: &DatabendQueryContextRef) -> Result<PlanNode> {
+    fn build_explain_plan(
+        _data: &QueryNormalizerData,
+        _ctx: &DatabendQueryContextRef,
+    ) -> Result<PlanNode> {
         // let query_plan = Self::build_query_plan(data)?;
         // Ok(PlanNode::Explain(ExplainPlan {}))
         unimplemented!("")
@@ -73,7 +89,7 @@ impl PlanParser {
         match &data.relation {
             QueryRelation::None => Err(ErrorCode::LogicalError("Not from in select query")),
             QueryRelation::Nested(data) => Self::build_query_plan(data),
-            QueryRelation::FromTable(plan) => Ok(PlanNode::ReadSource(plan.clone())),
+            QueryRelation::FromTable(plan) => Ok(PlanNode::ReadSource(plan.as_ref().clone())),
         }
     }
 

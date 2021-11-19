@@ -15,17 +15,19 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
+use std::convert::TryFrom;
 use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_planners::ExplainType;
 use metrics::histogram;
-use sqlparser::ast::{BinaryOperator, Statement};
+use sqlparser::ast::BinaryOperator;
 use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ColumnOptionDef;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Ident;
 use sqlparser::ast::SqlOption;
+use sqlparser::ast::Statement;
 use sqlparser::ast::TableConstraint;
 use sqlparser::ast::Value;
 use sqlparser::dialect::keywords::Keyword;
@@ -37,24 +39,26 @@ use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::Whitespace;
 
-use crate::sql::statements::{DfCreateDatabase, DfSetVariable, DfInsertStatement, DfQueryStatement};
+use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropDatabase;
 use crate::sql::statements::DfDropTable;
 use crate::sql::statements::DfExplain;
-use crate::sql::DfHint;
+use crate::sql::statements::DfInsertStatement;
 use crate::sql::statements::DfKillStatement;
+use crate::sql::statements::DfQueryStatement;
+use crate::sql::statements::DfSetVariable;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfShowDatabases;
 use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
 use crate::sql::statements::DfShowSettings;
 use crate::sql::statements::DfShowTables;
-use crate::sql::DfStatement;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
-use std::convert::TryFrom;
+use crate::sql::DfHint;
+use crate::sql::DfStatement;
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
@@ -224,17 +228,25 @@ impl<'a> DfParser<'a> {
     fn parse_query(&mut self) -> Result<DfStatement, ParserError> {
         // self.parser.prev_token();
         let native_query = self.parser.parse_query()?;
-        Ok(DfStatement::Query(DfQueryStatement::try_from(native_query)?))
+        Ok(DfStatement::Query(DfQueryStatement::try_from(
+            native_query,
+        )?))
     }
 
     fn parse_set(&mut self) -> Result<DfStatement, ParserError> {
         self.parser.next_token();
         match self.parser.parse_set()? {
-            Statement::SetVariable { local, hivevar, variable, value, } => {
-                Ok(DfStatement::SetVariable(
-                    DfSetVariable { local, hivevar, variable, value }
-                ))
-            }
+            Statement::SetVariable {
+                local,
+                hivevar,
+                variable,
+                value,
+            } => Ok(DfStatement::SetVariable(DfSetVariable {
+                local,
+                hivevar,
+                variable,
+                value,
+            })),
             _ => parser_err!("Expect set Variable statement"),
         }
     }
@@ -243,21 +255,26 @@ impl<'a> DfParser<'a> {
         self.parser.next_token();
         match self.parser.parse_insert()? {
             Statement::Insert {
-                or, table_name, columns, overwrite,
-                source, partitioned, format, after_columns,
-                table, } => {
-                Ok(DfStatement::InsertQuery(DfInsertStatement {
-                    or,
-                    table_name,
-                    columns,
-                    overwrite,
-                    source,
-                    partitioned,
-                    format,
-                    after_columns,
-                    table,
-                }))
-            },
+                or,
+                table_name,
+                columns,
+                overwrite,
+                source,
+                partitioned,
+                format,
+                after_columns,
+                table,
+            } => Ok(DfStatement::InsertQuery(DfInsertStatement {
+                or,
+                table_name,
+                columns,
+                overwrite,
+                source,
+                partitioned,
+                format,
+                after_columns,
+                table,
+            })),
             _ => parser_err!("Expect set insert statement"),
         }
     }
@@ -497,12 +514,10 @@ impl<'a> DfParser<'a> {
 
     // Parse 'KILL statement'.
     fn parse_kill<const KILL_QUERY: bool>(&mut self) -> Result<DfStatement, ParserError> {
-        Ok(DfStatement::KillStatement(
-            DfKillStatement {
-                object_id: self.parser.parse_identifier()?,
-                kill_query: KILL_QUERY,
-            }
-        ))
+        Ok(DfStatement::KillStatement(DfKillStatement {
+            object_id: self.parser.parse_identifier()?,
+            kill_query: KILL_QUERY,
+        }))
     }
 
     // Parse 'KILL statement'.

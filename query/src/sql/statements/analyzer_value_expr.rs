@@ -1,7 +1,11 @@
+use common_datavalues::DataType;
+use common_datavalues::DataValue;
+use common_datavalues::IntervalUnit;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_planners::Expression;
-use common_exception::{Result, ErrorCode};
-use sqlparser::ast::{Value, DateTimeField};
-use common_datavalues::{DataValue, IntervalUnit, DataType};
+use sqlparser::ast::DateTimeField;
+use sqlparser::ast::Value;
 
 pub struct ValueExprAnalyzer;
 
@@ -12,12 +16,23 @@ impl ValueExprAnalyzer {
             Value::Boolean(value) => Self::analyze_bool_value(value),
             Value::Number(value, _) => Self::analyze_number_value(value),
             Value::SingleQuotedString(value) => Self::analyze_string_value(value),
-            Value::Interval { leading_precision: Some(_), .. } |
-            Value::Interval { fractional_seconds_precision: Some(_), .. } |
-            Value::Interval { last_field: Some(_), .. } => Self::unsupported_interval(value),
-            Value::Interval { value, leading_field, .. } => {
-                Self::analyze_interval(value, leading_field)
-            },
+            Value::Interval {
+                leading_precision: Some(_),
+                ..
+            }
+            | Value::Interval {
+                fractional_seconds_precision: Some(_),
+                ..
+            }
+            | Value::Interval {
+                last_field: Some(_),
+                ..
+            } => Self::unsupported_interval(value),
+            Value::Interval {
+                value,
+                leading_field,
+                ..
+            } => Self::analyze_interval(value, leading_field),
             other => Result::Err(ErrorCode::SyntaxException(format!(
                 "Unsupported value expression: {}, type: {:?}",
                 value, other
@@ -33,20 +48,21 @@ impl ValueExprAnalyzer {
         Ok(Expression::create_literal(DataValue::Boolean(Some(*value))))
     }
 
-    fn analyze_number_value(value: &String) -> Result<Expression> {
+    fn analyze_number_value(value: &str) -> Result<Expression> {
         let literal = DataValue::try_from_literal(value)?;
         Ok(Expression::create_literal(literal))
     }
 
-    fn analyze_string_value(value: &String) -> Result<Expression> {
-        let data_value = DataValue::String(Some(value.clone().into_bytes()));
+    fn analyze_string_value(value: &str) -> Result<Expression> {
+        let data_value = DataValue::String(Some(value.to_string().into_bytes()));
         Ok(Expression::create_literal(data_value))
     }
 
     fn unsupported_interval(interval: &Value) -> Result<Expression> {
         //TODO: support parsing literal interval like '1 hour'
         Err(ErrorCode::SyntaxException(format!(
-            "Unsupported interval expression: {}.", interval
+            "Unsupported interval expression: {}.",
+            interval
         )))
     }
 
@@ -56,7 +72,9 @@ impl ValueExprAnalyzer {
 
         //TODO: support default unit for interval
         match unit {
-            None => Err(ErrorCode::SyntaxException("Interval must have unit, e.g: '1 HOUR'")),
+            None => Err(ErrorCode::SyntaxException(
+                "Interval must have unit, e.g: '1 HOUR'",
+            )),
             Some(DateTimeField::Year) => Self::year_month_interval(num * 12),
             Some(DateTimeField::Month) => Self::year_month_interval(num * 12),
             Some(DateTimeField::Day) => Self::day_time_interval(num, 0),

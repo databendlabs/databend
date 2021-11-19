@@ -1,7 +1,9 @@
-use sqlparser::ast::Expr;
-use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
-use crate::sessions::DatabendQueryContextRef;
 use common_exception::Result;
+use sqlparser::ast::Expr;
+
+use crate::sessions::DatabendQueryContextRef;
+use crate::sql::statements::AnalyzableStatement;
+use crate::sql::statements::AnalyzedResult;
 use crate::sql::PlanParser;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -25,7 +27,10 @@ impl DfShowDatabases {
     }
 
     fn show_databases_with_predicate(expr: &Expr) -> String {
-        format!("SELECT name AS Database FROM system.databases WHERE {} ORDER BY name", expr)
+        format!(
+            "SELECT name AS Database FROM system.databases WHERE {} ORDER BY name",
+            expr
+        )
     }
 
     fn rewritten_query(&self) -> String {

@@ -1,23 +1,29 @@
 use std::fmt::Debug;
 use std::sync::Arc;
+
 use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
-use common_datavalues::{DataSchema, DataSchemaRef, DataSchemaRefExt};
-use common_planners::{Expression, PlanNode, ReadDataSourcePlan};
-use crate::sql::DfStatement;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_planners::Expression;
+use common_planners::PlanNode;
+use common_planners::ReadDataSourcePlan;
+
 use crate::sessions::DatabendQueryContextRef;
 use crate::sql::statements::QueryNormalizerData;
+use crate::sql::DfStatement;
 
+#[allow(clippy::enum_variant_names)]
 pub enum AnalyzedResult {
     SimpleQuery(PlanNode),
-    SelectQuery(QueryAnalyzeState),
+    SelectQuery(Box<QueryAnalyzeState>),
     ExplainQuery(QueryNormalizerData),
 }
 
 #[derive(Clone)]
 pub enum QueryRelation {
     None,
-    FromTable(ReadDataSourcePlan),
+    FromTable(Box<ReadDataSourcePlan>),
     Nested(Box<QueryAnalyzeState>),
 }
 
@@ -97,7 +103,7 @@ impl Debug for QueryAnalyzeState {
         if !self.expressions.is_empty() {
             match self.order_by_expressions.is_empty() {
                 true => debug_struct.field("before_projection", &self.expressions),
-                false => debug_struct.field("before_order_by", &self.expressions)
+                false => debug_struct.field("before_order_by", &self.expressions),
             };
         }
 
@@ -143,7 +149,7 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::ShowMetrics(v) => v.analyze(ctx).await,
             DfStatement::KillStatement(v) => v.analyze(ctx).await,
             DfStatement::InsertQuery(v) => v.analyze(ctx).await,
-            DfStatement::SetVariable(v) => v.analyze(ctx).await
+            DfStatement::SetVariable(v) => v.analyze(ctx).await,
         }
     }
 }

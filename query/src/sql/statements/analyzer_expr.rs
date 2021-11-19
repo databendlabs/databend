@@ -1,25 +1,35 @@
 use std::convert::TryFrom;
 use std::sync::Arc;
 
-use sqlparser::ast::{BinaryOperator, DataType, Expr, Function, FunctionArg, Ident, Query, Value};
-
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_planners::Expression;
+use sqlparser::ast::BinaryOperator;
+use sqlparser::ast::DataType;
+use sqlparser::ast::Expr;
+use sqlparser::ast::Function;
+use sqlparser::ast::FunctionArg;
+use sqlparser::ast::Ident;
+use sqlparser::ast::Query;
+use sqlparser::ast::Value;
 
-use crate::sessions::{DatabendQueryContext, DatabendQueryContextRef};
-use crate::sql::{PlanParser, SQLCommon};
-use crate::sql::statements::{AnalyzableStatement, AnalyzedResult, DfQueryStatement};
+use crate::sessions::DatabendQueryContext;
+use crate::sessions::DatabendQueryContextRef;
 use crate::sql::statements::analyzer_value_expr::ValueExprAnalyzer;
-use crate::sql::statements::query::JoinedSchema;
+use crate::sql::statements::AnalyzableStatement;
+use crate::sql::statements::AnalyzedResult;
+use crate::sql::statements::DfQueryStatement;
+use crate::sql::PlanParser;
+use crate::sql::SQLCommon;
 
 pub struct ExpressionAnalyzer {
     context: DatabendQueryContextRef,
 }
 
 impl ExpressionAnalyzer {
-    pub fn create(ctx: DatabendQueryContextRef) -> ExpressionAnalyzer {
-        ExpressionAnalyzer { context: ctx.clone() }
+    pub fn create(context: DatabendQueryContextRef) -> ExpressionAnalyzer {
+        ExpressionAnalyzer { context }
     }
 
     pub async fn analyze(&self, expr: &Expr) -> Result<Expression> {
@@ -30,18 +40,27 @@ impl ExpressionAnalyzer {
             match rpn_item {
                 ExprRPNItem::Value(value) => Self::analyze_value(value, &mut arguments)?,
                 ExprRPNItem::Identifier(ident) => self.analyze_identifier(ident, &mut arguments)?,
-                ExprRPNItem::QualifiedIdentifier(idents) => self.analyze_identifiers(idents, &mut arguments)?,
+                ExprRPNItem::QualifiedIdentifier(idents) => {
+                    self.analyze_identifiers(idents, &mut arguments)?
+                }
                 ExprRPNItem::Function(info) => self.analyze_function(info, &mut arguments)?,
                 ExprRPNItem::Wildcard => self.analyze_wildcard(&mut arguments)?,
-                ExprRPNItem::Exists(subquery) => self.analyze_exists(subquery, &mut arguments).await?,
-                ExprRPNItem::Subquery(subquery) => self.analyze_scalar_subquery(subquery, &mut arguments).await?,
+                ExprRPNItem::Exists(subquery) => {
+                    self.analyze_exists(subquery, &mut arguments).await?
+                }
+                ExprRPNItem::Subquery(subquery) => {
+                    self.analyze_scalar_subquery(subquery, &mut arguments)
+                        .await?
+                }
                 ExprRPNItem::Cast(data_type) => self.analyze_cast(data_type, &mut arguments)?,
             }
         }
 
         match arguments.len() {
             1 => Ok(arguments.remove(0)),
-            _ => Err(ErrorCode::LogicalError("Logical error: this is expr rpn bug.")),
+            _ => Err(ErrorCode::LogicalError(
+                "Logical error: this is expr rpn bug.",
+            )),
         }
     }
 
@@ -50,7 +69,11 @@ impl ExpressionAnalyzer {
         Ok(())
     }
 
-    fn analyze_function(&self, info: &FunctionExprInfo, arguments: &mut Vec<Expression>) -> Result<()> {
+    fn analyze_function(
+        &self,
+        info: &FunctionExprInfo,
+        arguments: &mut Vec<Expression>,
+    ) -> Result<()> {
         match AggregateFunctionFactory::instance().check(&info.name) {
             true => self.analyze_aggr_function(info, arguments),
             false => {
@@ -64,7 +87,11 @@ impl ExpressionAnalyzer {
         }
     }
 
-    fn analyze_aggr_function(&self, info: &FunctionExprInfo, args: &mut Vec<Expression>) -> Result<()> {
+    fn analyze_aggr_function(
+        &self,
+        info: &FunctionExprInfo,
+        args: &mut Vec<Expression>,
+    ) -> Result<()> {
         let mut arguments = Vec::with_capacity(args.len());
         let mut parameters = Vec::with_capacity(info.parameters.len());
 
@@ -73,13 +100,17 @@ impl ExpressionAnalyzer {
                 Expression::Wildcard if info.name.eq_ignore_ascii_case("count") => {
                     arguments.push(common_planners::lit(0i64));
                 }
-                argument => { arguments.push(argument); }
+                argument => {
+                    arguments.push(argument);
+                }
             };
         }
 
         for parameter in &info.parameters {
             match ValueExprAnalyzer::analyze(parameter)? {
-                Expression::Literal { value, .. } => { parameters.push(value); }
+                Expression::Literal { value, .. } => {
+                    parameters.push(value);
+                }
                 expr => {
                     return Err(ErrorCode::SyntaxException(format!(
                         "Unsupported value expression: {:?}, must be datavalue",
@@ -118,7 +149,10 @@ impl ExpressionAnalyzer {
 
     async fn analyze_exists(&self, subquery: &Query, args: &mut Vec<Expression>) -> Result<()> {
         let subquery = vec![self.analyze_subquery(subquery).await?];
-        args.push(Expression::ScalarFunction { op: "EXISTS".to_lowercase(), args: subquery });
+        args.push(Expression::ScalarFunction {
+            op: "EXISTS".to_lowercase(),
+            args: subquery,
+        });
         Ok(())
     }
 
@@ -137,10 +171,17 @@ impl ExpressionAnalyzer {
             });
         }
 
-        Err(ErrorCode::SyntaxException(format!("Unsupported subquery type {:?}", subquery)))
+        Err(ErrorCode::SyntaxException(format!(
+            "Unsupported subquery type {:?}",
+            subquery
+        )))
     }
 
-    async fn analyze_scalar_subquery(&self, subquery: &Query, args: &mut Vec<Expression>) -> Result<()> {
+    async fn analyze_scalar_subquery(
+        &self,
+        subquery: &Query,
+        args: &mut Vec<Expression>,
+    ) -> Result<()> {
         let statement = DfQueryStatement::try_from(subquery.clone())?;
 
         let query_context = self.context.clone();
@@ -157,7 +198,10 @@ impl ExpressionAnalyzer {
             return Ok(());
         }
 
-        Err(ErrorCode::SyntaxException(format!("Unsupported subquery type {:?}", subquery)))
+        Err(ErrorCode::SyntaxException(format!(
+            "Unsupported subquery type {:?}",
+            subquery
+        )))
     }
 
     fn analyze_wildcard(&self, arguments: &mut Vec<Expression>) -> Result<()> {
@@ -165,9 +209,16 @@ impl ExpressionAnalyzer {
         Ok(())
     }
 
-    fn analyze_cast(&self, data_type: &common_datavalues::DataType, args: &mut Vec<Expression>) -> Result<()> {
+    fn analyze_cast(
+        &self,
+        data_type: &common_datavalues::DataType,
+        args: &mut Vec<Expression>,
+    ) -> Result<()> {
         let expr = args.remove(0);
-        args.push(Expression::Cast { expr: Box::new(expr), data_type: data_type.clone() });
+        args.push(Expression::Cast {
+            expr: Box::new(expr),
+            data_type: data_type.clone(),
+        });
         Ok(())
     }
 }
@@ -212,13 +263,13 @@ impl ExprRPNBuilder {
 
     fn visit(&mut self, expr: &Expr) -> Result<()> {
         match expr {
-            Expr::Nested(expr) => self.visit(&expr),
+            Expr::Nested(expr) => self.visit(expr),
             Expr::Value(value) => self.visit_value(value),
             Expr::Identifier(ident) => self.visit_identifier(ident),
             Expr::CompoundIdentifier(idents) => self.visit_identifiers(idents),
-            Expr::IsNull(expr) => self.visit_simple_function(&expr, "isnull"),
-            Expr::IsNotNull(expr) => self.visit_simple_function(&expr, "isnotnull"),
-            Expr::UnaryOp { op, expr } => self.visit_simple_function(&expr, op.to_string()),
+            Expr::IsNull(expr) => self.visit_simple_function(expr, "isnull"),
+            Expr::IsNotNull(expr) => self.visit_simple_function(expr, "isnotnull"),
+            Expr::UnaryOp { op, expr } => self.visit_simple_function(expr, op.to_string()),
             Expr::BinaryOp { left, op, right } => self.visit_binary_expr(left, op, right),
             Expr::Wildcard => self.visit_wildcard(),
             Expr::Exists(subquery) => self.visit_exists(subquery),
@@ -226,8 +277,17 @@ impl ExprRPNBuilder {
             Expr::Function(function) => self.visit_function(function),
             Expr::Cast { expr, data_type } => self.visit_cast(expr, data_type),
             Expr::TypedString { data_type, value } => self.visit_typed_string(data_type, value),
-            Expr::Substring { expr, substring_from, substring_for, } => self.visit_substring(expr, substring_from, substring_for),
-            Expr::Between { expr, negated, low, high } => self.visit_between(expr, negated, low, high),
+            Expr::Substring {
+                expr,
+                substring_from,
+                substring_for,
+            } => self.visit_substring(expr, substring_from, substring_for),
+            Expr::Between {
+                expr,
+                negated,
+                low,
+                high,
+            } => self.visit_between(expr, negated, low, high),
             other => Result::Err(ErrorCode::SyntaxException(format!(
                 "Unsupported expression: {}, type: {:?}",
                 expr, other
@@ -251,17 +311,20 @@ impl ExprRPNBuilder {
     }
 
     fn visit_identifiers(&mut self, idents: &[Ident]) -> Result<()> {
-        self.rpn.push(ExprRPNItem::QualifiedIdentifier(idents.to_vec()));
+        self.rpn
+            .push(ExprRPNItem::QualifiedIdentifier(idents.to_vec()));
         Ok(())
     }
 
     fn visit_exists(&mut self, subquery: &Query) -> Result<()> {
-        self.rpn.push(ExprRPNItem::Exists(Box::new(subquery.clone())));
+        self.rpn
+            .push(ExprRPNItem::Exists(Box::new(subquery.clone())));
         Ok(())
     }
 
     fn visit_subquery(&mut self, subquery: &Query) -> Result<()> {
-        self.rpn.push(ExprRPNItem::Subquery(Box::new(subquery.clone())));
+        self.rpn
+            .push(ExprRPNItem::Subquery(Box::new(subquery.clone())));
         Ok(())
     }
 
@@ -284,13 +347,17 @@ impl ExprRPNBuilder {
 
     fn visit_cast(&mut self, expr: &Expr, data_type: &DataType) -> Result<()> {
         self.visit(expr)?;
-        self.rpn.push(ExprRPNItem::Cast(SQLCommon::make_data_type(data_type)?));
+        self.rpn
+            .push(ExprRPNItem::Cast(SQLCommon::make_data_type(data_type)?));
         Ok(())
     }
 
     fn visit_typed_string(&mut self, data_type: &DataType, value: &str) -> Result<()> {
-        self.rpn.push(ExprRPNItem::Value(Value::SingleQuotedString(value.to_string())));
-        self.rpn.push(ExprRPNItem::Cast(SQLCommon::make_data_type(data_type)?));
+        self.rpn.push(ExprRPNItem::Value(Value::SingleQuotedString(
+            value.to_string(),
+        )));
+        self.rpn
+            .push(ExprRPNItem::Cast(SQLCommon::make_data_type(data_type)?));
         Ok(())
     }
 
@@ -307,7 +374,13 @@ impl ExprRPNBuilder {
         Ok(())
     }
 
-    fn visit_between(&mut self, expr: &Expr, negated: &bool, low: &Expr, high: &Expr) -> Result<()> {
+    fn visit_between(
+        &mut self,
+        expr: &Expr,
+        negated: &bool,
+        low: &Expr,
+        high: &Expr,
+    ) -> Result<()> {
         self.visit(expr)?;
         self.visit(low)?;
 
@@ -327,16 +400,21 @@ impl ExprRPNBuilder {
         Ok(())
     }
 
-    fn visit_substring(&mut self, expr: &Expr, from: &Option<Box<Expr>>, length: &Option<Box<Expr>>) -> Result<()> {
+    fn visit_substring(
+        &mut self,
+        expr: &Expr,
+        from: &Option<Box<Expr>>,
+        length: &Option<Box<Expr>>,
+    ) -> Result<()> {
         self.visit(expr)?;
 
         // TODO: default from argument
         if let Some(expr) = from {
-            self.visit(&expr)?;
+            self.visit(expr)?;
         }
 
         if let Some(expr) = length {
-            self.visit(&expr)?;
+            self.visit(expr)?;
         }
 
         Ok(())

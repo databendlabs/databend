@@ -25,8 +25,8 @@ use crate::api::rpc::DatabendQueryFlightDispatcher;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;
 use crate::tests::parse_query;
-use crate::tests::SessionManagerBuilder;
 use crate::tests::try_create_context;
+use crate::tests::SessionManagerBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_stream_with_non_exists_stream() -> Result<()> {

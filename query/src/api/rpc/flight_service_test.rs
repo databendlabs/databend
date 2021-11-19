@@ -33,8 +33,8 @@ use crate::api::rpc::DatabendQueryFlightService;
 use crate::api::FlightTicket;
 use crate::api::ShuffleAction;
 use crate::tests::parse_query;
-use crate::tests::SessionManagerBuilder;
 use crate::tests::try_create_context;
+use crate::tests::SessionManagerBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_do_flight_action_with_shared_session() -> Result<()> {

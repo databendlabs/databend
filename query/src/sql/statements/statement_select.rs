@@ -1,19 +1,33 @@
-use std::collections::HashMap;
 use std::sync::Arc;
-use sqlparser::ast::{Expr, Offset, OrderByExpr, SelectItem, TableWithJoins};
+
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRefExt;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_planners::expand_aggregate_arg_exprs;
+use common_planners::find_aggregate_exprs;
+use common_planners::find_aggregate_exprs_in_expr;
+use common_planners::rebase_expr;
+use common_planners::Expression;
+use common_planners::Extras;
+use sqlparser::ast::Expr;
+use sqlparser::ast::Offset;
+use sqlparser::ast::OrderByExpr;
+use sqlparser::ast::SelectItem;
+use sqlparser::ast::TableWithJoins;
 
-use common_exception::{ErrorCode, Result};
-use common_planners::{expand_aggregate_arg_exprs, expr_as_column_expr, Expression, extract_aliases, Extras, find_aggregate_exprs, find_aggregate_exprs_in_expr, ReadDataSourcePlan, rebase_expr, resolve_aliases_to_exprs};
 use crate::catalogs::ToReadDataSourcePlan;
-
-use crate::sessions::{DatabendQueryContextRef};
-use crate::sql::statements::{AnalyzableStatement, AnalyzedResult, QueryRelation};
-use crate::sql::statements::analyzer_expr::{ExpressionAnalyzer};
+use crate::sessions::DatabendQueryContextRef;
 use crate::sql::statements::analyzer_statement::QueryAnalyzeState;
-use crate::sql::statements::query::{JoinedSchema, JoinedColumnDesc, JoinedSchemaAnalyzer, QualifiedRewriter, JoinedTableDesc};
-use crate::sql::statements::query::{QueryNormalizerData, QueryNormalizer};
+use crate::sql::statements::query::JoinedSchema;
+use crate::sql::statements::query::JoinedSchemaAnalyzer;
+use crate::sql::statements::query::JoinedTableDesc;
+use crate::sql::statements::query::QualifiedRewriter;
+use crate::sql::statements::query::QueryNormalizer;
+use crate::sql::statements::query::QueryNormalizerData;
+use crate::sql::statements::AnalyzableStatement;
+use crate::sql::statements::AnalyzedResult;
+use crate::sql::statements::QueryRelation;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfQueryStatement {
@@ -41,15 +55,20 @@ impl AnalyzableStatement for DfQueryStatement {
         let normalized_result = qualified_rewriter.rewrite(normalized_result).await?;
 
         let analyze_state = self.analyze_query(normalized_result).await?;
-        self.check_and_finalize(joined_schema, analyze_state, ctx).await
+        self.check_and_finalize(joined_schema, analyze_state, ctx)
+            .await
     }
 }
 
 impl DfQueryStatement {
     async fn analyze_query(&self, data: QueryNormalizerData) -> Result<QueryAnalyzeState> {
-        let mut analyze_state = QueryAnalyzeState::default();
-        analyze_state.limit = data.limit.clone();
-        analyze_state.offset = data.offset.clone();
+        let limit = data.limit;
+        let offset = data.offset;
+        let mut analyze_state = QueryAnalyzeState {
+            limit,
+            offset,
+            ..Default::default()
+        };
 
         if let Some(predicate) = &data.filter_predicate {
             Self::verify_no_aggregate(predicate, "filter")?;
@@ -65,15 +84,23 @@ impl DfQueryStatement {
 
         for item in &data.order_by_expressions {
             match item {
-                Expression::Sort { expr, asc, nulls_first } => {
-                    analyze_state.add_expression(&expr);
+                Expression::Sort {
+                    expr,
+                    asc,
+                    nulls_first,
+                } => {
+                    analyze_state.add_expression(expr);
                     analyze_state.order_by_expressions.push(Expression::Sort {
-                        expr: Box::new(rebase_expr(&expr, &analyze_state.expressions)?),
+                        expr: Box::new(rebase_expr(expr, &analyze_state.expressions)?),
                         asc: *asc,
                         nulls_first: *nulls_first,
                     });
                 }
-                _ => { return Err(ErrorCode::SyntaxException("Order by must be sort expression. it's a bug.")); }
+                _ => {
+                    return Err(ErrorCode::SyntaxException(
+                        "Order by must be sort expression. it's a bug.",
+                    ));
+                }
             }
         }
 
@@ -90,7 +117,9 @@ impl DfQueryStatement {
             for group_expression in &data.group_by_expressions {
                 analyze_state.add_before_group_expression(group_expression);
                 let base_exprs = &analyze_state.before_group_by_expressions;
-                analyze_state.group_by_expressions.push(rebase_expr(group_expression, base_exprs)?);
+                analyze_state
+                    .group_by_expressions
+                    .push(rebase_expr(group_expression, base_exprs)?);
             }
 
             Self::analyze_aggregate(&data.aggregate_expressions, &mut analyze_state)?;
@@ -109,7 +138,9 @@ impl DfQueryStatement {
 
         for aggr_expression in exprs {
             let base_exprs = &state.before_group_by_expressions;
-            state.aggregate_expressions.push(rebase_expr(aggr_expression, base_exprs)?);
+            state
+                .aggregate_expressions
+                .push(rebase_expr(aggr_expression, base_exprs)?);
         }
 
         Ok(())
@@ -132,13 +163,21 @@ impl DfQueryStatement {
     fn verify_no_aggregate(expr: &Expression, info: &str) -> Result<()> {
         match find_aggregate_exprs_in_expr(expr).is_empty() {
             true => Ok(()),
-            false => Err(ErrorCode::SyntaxException(format!("{} cannot contain aggregate functions", info))),
+            false => Err(ErrorCode::SyntaxException(format!(
+                "{} cannot contain aggregate functions",
+                info
+            ))),
         }
     }
 }
 
 impl DfQueryStatement {
-    pub async fn check_and_finalize(&self, schema: JoinedSchema, mut state: QueryAnalyzeState, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    pub async fn check_and_finalize(
+        &self,
+        schema: JoinedSchema,
+        mut state: QueryAnalyzeState,
+        ctx: DatabendQueryContextRef,
+    ) -> Result<AnalyzedResult> {
         let dry_run_res = Self::verify_with_dry_run(&schema, &state)?;
         state.finalize_schema = dry_run_res.schema().clone();
 
@@ -148,20 +187,24 @@ impl DfQueryStatement {
             return Err(ErrorCode::UnImplement("Select join unimplemented yet."));
         }
 
-
         match tables_desc.remove(0) {
             JoinedTableDesc::Table { table, .. } => {
                 let io_ctx = Arc::new(ctx.get_cluster_table_io_context()?);
                 // TODO: collect push down
-                let source_plan = table.read_plan(io_ctx, Some(Extras::default()), None).await?;
-                state.relation = QueryRelation::FromTable(source_plan);
+                let source_plan = table
+                    .read_plan(io_ctx, Some(Extras::default()), None)
+                    .await?;
+                state.relation = QueryRelation::FromTable(Box::new(source_plan));
             }
-            JoinedTableDesc::Subquery { state: subquery_state, .. } => {
-                state.relation = QueryRelation::Nested(Box::new(subquery_state));
+            JoinedTableDesc::Subquery {
+                state: subquery_state,
+                ..
+            } => {
+                state.relation = QueryRelation::Nested(subquery_state);
             }
         }
 
-        Ok(AnalyzedResult::SelectQuery(state))
+        Ok(AnalyzedResult::SelectQuery(Box::new(state)))
     }
 
     fn verify_with_dry_run(schema: &JoinedSchema, state: &QueryAnalyzeState) -> Result<DataBlock> {
@@ -244,7 +287,9 @@ impl DfQueryStatement {
     fn dry_run_expr(expr: &Expression, data: &DataBlock) -> Result<DataBlock> {
         let schema = data.schema();
         let data_field = expr.to_data_field(schema)?;
-        Ok(DataBlock::empty_with_schema(DataSchemaRefExt::create(vec![data_field])))
+        Ok(DataBlock::empty_with_schema(DataSchemaRefExt::create(
+            vec![data_field],
+        )))
     }
 
     fn dry_run_exprs(exprs: &[Expression], data: &DataBlock) -> Result<DataBlock> {
@@ -255,7 +300,9 @@ impl DfQueryStatement {
             new_data_fields.push(expr.to_data_field(schema)?);
         }
 
-        Ok(DataBlock::empty_with_schema(DataSchemaRefExt::create(new_data_fields)))
+        Ok(DataBlock::empty_with_schema(DataSchemaRefExt::create(
+            new_data_fields,
+        )))
     }
 
     fn dry_run_exprs_ref(exprs: &[&Expression], data: &DataBlock) -> Result<DataBlock> {
@@ -266,7 +313,8 @@ impl DfQueryStatement {
             new_data_fields.push(expr.to_data_field(schema)?);
         }
 
-        Ok(DataBlock::empty_with_schema(DataSchemaRefExt::create(new_data_fields)))
+        Ok(DataBlock::empty_with_schema(DataSchemaRefExt::create(
+            new_data_fields,
+        )))
     }
 }
-

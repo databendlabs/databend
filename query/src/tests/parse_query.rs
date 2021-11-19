@@ -17,7 +17,6 @@ use common_planners::PlanNode;
 
 use crate::sessions::DatabendQueryContextRef;
 use crate::sql::PlanParser;
-use crate::tests::try_create_context;
 
 pub fn parse_query(query: impl ToString, ctx: &DatabendQueryContextRef) -> Result<PlanNode> {
     let query = query.to_string();
