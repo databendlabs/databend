@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateTableReq;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
@@ -26,7 +27,6 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
 use crate::catalogs::Catalog;
@@ -132,8 +132,8 @@ impl Catalog for OverlaidCatalog {
         }
     }
 
-    async fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
-        self.bottom.create_table(plan).await
+    async fn create_table(&self, req: CreateTableReq) -> Result<(), ErrorCode> {
+        self.bottom.create_table(req).await
     }
 
     async fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {

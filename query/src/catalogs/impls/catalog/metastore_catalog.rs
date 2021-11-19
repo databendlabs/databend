@@ -24,6 +24,7 @@ use common_meta_api::MetaApi;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::MetaId;
@@ -32,7 +33,6 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 use common_tracing::tracing;
 
@@ -162,9 +162,9 @@ impl Catalog for MetaStoreCatalog {
         self.meta.get_table_by_id(table_id).await
     }
 
-    async fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
+    async fn create_table(&self, req: CreateTableReq) -> Result<()> {
         // TODO validate table parameters by using TableFactory
-        self.meta.create_table(plan).await?;
+        self.meta.create_table(req).await?;
         Ok(())
     }
 

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateTableReq;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
@@ -24,7 +25,6 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
 use crate::catalogs::Database;
@@ -52,7 +52,7 @@ pub trait Catalog {
 
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)>;
 
-    async fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
+    async fn create_table(&self, req: CreateTableReq) -> Result<()>;
 
     async fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
 

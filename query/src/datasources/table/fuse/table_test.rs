@@ -31,7 +31,7 @@ async fn test_fuse_table_simple_case() -> Result<()> {
     // create test table
     let crate_table_plan = fixture.default_crate_table_plan();
     let catalog = ctx.get_catalog();
-    catalog.create_table(crate_table_plan).await?;
+    catalog.create_table(crate_table_plan.into()).await?;
 
     // get table
     let table = catalog
@@ -117,7 +117,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     let crate_table_plan = fixture.default_crate_table_plan();
     let catalog = ctx.get_catalog();
-    catalog.create_table(crate_table_plan).await?;
+    catalog.create_table(crate_table_plan.into()).await?;
 
     let table = catalog
         .get_table(

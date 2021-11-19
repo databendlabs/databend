@@ -22,6 +22,7 @@ use common_exception::ErrorCode;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
+use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
@@ -34,7 +35,6 @@ use common_meta_types::TableInfo;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 use prost::Message;
 use tonic::Request;
@@ -58,7 +58,7 @@ pub enum MetaFlightAction {
     GetDatabase(GetDatabaseAction),
     GetDatabases(GetDatabasesAction),
 
-    CreateTable(CreateTableAction),
+    CreateTable(FlightReq<CreateTableReq>),
     DropTable(DropTableAction),
     GetTable(GetTableAction),
     GetTableExt(GetTableExtReq),
@@ -163,13 +163,7 @@ impl RequestFor for FlightReq<DropDatabaseReq> {
     type Reply = DropDatabaseReply;
 }
 
-// == table actions ==
-// - create table
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct CreateTableAction {
-    pub plan: CreateTablePlan,
-}
-impl RequestFor for CreateTableAction {
+impl RequestFor for FlightReq<CreateTableReq> {
     type Reply = CreateTableReply;
 }
 

@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
+use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
@@ -28,7 +29,6 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
 #[async_trait::async_trait]
@@ -45,7 +45,7 @@ pub trait MetaApi: Send + Sync {
 
     // table
 
-    async fn create_table(&self, plan: CreateTablePlan) -> Result<CreateTableReply>;
+    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply>;
 
     async fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
 

@@ -20,12 +20,11 @@ use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateTableReq;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
-use common_planners::CreateDatabasePlan;
-use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 use common_tracing::tracing;
 
@@ -42,13 +41,13 @@ impl MetaApiTestSuite {
     pub async fn database_create_get_drop<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         tracing::info!("--- create db1");
         {
-            let plan = CreateDatabasePlan {
+            let req = CreateDatabaseReq {
                 if_not_exists: false,
                 db: "db1".to_string(),
                 options: Default::default(),
             };
 
-            let res = mt.create_database(plan.into()).await;
+            let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.database_id, "first database id is 1");
@@ -56,13 +55,13 @@ impl MetaApiTestSuite {
 
         tracing::info!("--- create db1 again with if_not_exists=false");
         {
-            let plan = CreateDatabasePlan {
+            let req = CreateDatabaseReq {
                 if_not_exists: false,
                 db: "db1".to_string(),
                 options: Default::default(),
             };
 
-            let res = mt.create_database(plan.into()).await;
+            let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(ErrorCode::DatabaseAlreadyExists("").code(), err.code());
@@ -70,13 +69,13 @@ impl MetaApiTestSuite {
 
         tracing::info!("--- create db1 again with if_not_exists=true");
         {
-            let plan = CreateDatabasePlan {
+            let req = CreateDatabaseReq {
                 if_not_exists: false,
                 db: "db1".to_string(),
                 options: Default::default(),
             };
 
-            let res = mt.create_database(plan.into()).await;
+            let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(ErrorCode::DatabaseAlreadyExists("").code(), err.code());
@@ -93,13 +92,13 @@ impl MetaApiTestSuite {
 
         tracing::info!("--- create db2");
         {
-            let plan = CreateDatabasePlan {
+            let req = CreateDatabaseReq {
                 if_not_exists: false,
                 db: "db2".to_string(),
                 options: Default::default(),
             };
 
-            let res = mt.create_database(plan.into()).await;
+            let res = mt.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(
@@ -201,7 +200,7 @@ impl MetaApiTestSuite {
 
             let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
 
-            let mut plan = CreateTablePlan {
+            let mut req = CreateTableReq {
                 if_not_exists: false,
                 db: db_name.to_string(),
                 table: tbl_name.to_string(),
@@ -213,7 +212,7 @@ impl MetaApiTestSuite {
             };
 
             {
-                let res = mt.create_table(plan.clone()).await?;
+                let res = mt.create_table(req.clone()).await?;
                 assert_eq!(1, res.table_id, "table id is 1");
 
                 let got = mt.get_table(db_name, tbl_name).await?;
@@ -233,8 +232,8 @@ impl MetaApiTestSuite {
 
             tracing::info!("--- create table again with if_not_exists = true");
             {
-                plan.if_not_exists = true;
-                let res = mt.create_table(plan.clone()).await?;
+                req.if_not_exists = true;
+                let res = mt.create_table(req.clone()).await?;
                 assert_eq!(1, res.table_id, "new table id");
 
                 let got = mt.get_table(db_name, tbl_name).await?;
@@ -253,9 +252,9 @@ impl MetaApiTestSuite {
 
             tracing::info!("--- create table again with if_not_exists = false");
             {
-                plan.if_not_exists = false;
+                req.if_not_exists = false;
 
-                let res = mt.create_table(plan.clone()).await;
+                let res = mt.create_table(req).await;
                 tracing::info!("create table res: {:?}", res);
 
                 let status = res.err().unwrap();
@@ -393,7 +392,7 @@ impl MetaApiTestSuite {
 
             let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
 
-            let mut plan = CreateTablePlan {
+            let mut plan = CreateTableReq {
                 if_not_exists: false,
                 db: db_name.to_string(),
                 table: "tb1".to_string(),
@@ -433,13 +432,13 @@ impl MetaApiTestSuite {
     ) -> anyhow::Result<CreateDatabaseReply> {
         tracing::info!("--- create database {}", db_name);
 
-        let plan = CreateDatabasePlan {
+        let req = CreateDatabaseReq {
             if_not_exists: false,
             db: db_name.to_string(),
             options: Default::default(),
         };
 
-        let res = mt.create_database(plan.into()).await?;
+        let res = mt.create_database(req).await?;
         tracing::info!("create database res: {:?}", res);
         Ok(res)
     }

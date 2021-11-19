@@ -26,6 +26,7 @@ use common_meta_types::Cmd;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
+use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
@@ -36,7 +37,6 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 use common_tracing::tracing;
 use maplit::hashmap;
@@ -117,14 +117,14 @@ impl MetaApi for MetaEmbedded {
             .collect::<Vec<_>>())
     }
 
-    async fn create_table(&self, plan: CreateTablePlan) -> Result<CreateTableReply> {
-        let db_name = &plan.db;
-        let table_name = &plan.table;
-        let if_not_exists = plan.if_not_exists;
+    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
+        let db_name = &req.db;
+        let table_name = &req.table;
+        let if_not_exists = req.if_not_exists;
 
         tracing::info!("create table: {:}: {:?}", &db_name, &table_name);
 
-        let table_meta = plan.table_meta;
+        let table_meta = req.table_meta;
 
         let cr = Cmd::CreateTable {
             db_name: db_name.clone(),

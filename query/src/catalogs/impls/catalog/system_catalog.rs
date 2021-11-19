@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateTableReq;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
@@ -26,7 +27,6 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateTablePlan;
 use common_planners::DropTablePlan;
 
 use crate::catalogs::catalog::Catalog;
@@ -151,7 +151,7 @@ impl Catalog for SystemCatalog {
         )))
     }
 
-    async fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
+    async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
         unimplemented!("programming error: SystemCatalog does not support create table")
     }
 
