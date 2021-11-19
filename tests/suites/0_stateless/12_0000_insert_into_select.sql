@@ -18,4 +18,16 @@ SELECT * FROM t1;
 DROP TABLE t1;
 DROP TABLE t2;
 DROP TABLE t3;
+
+-- Aggregation test
+CREATE TABLE base_table(a Int32);
+CREATE TABLE aggregate_table(b Int32);
+
+INSERT INTO base_table VALUES(1),(2),(3),(4),(5),(6);
+INSERT INTO aggregate_table SELECT SUM(a) FROM base_table GROUP BY a%3;
+SELECT * FROM aggregate_table ORDER BY b;
+
+DROP TABLE base_table;
+DROP TABLE aggregate_table;
+
 DROP DATABASE db1;
