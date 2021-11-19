@@ -15,11 +15,9 @@
 
 use std::any::Any;
 use std::fs::File;
-use std::sync::Arc;
 
 use async_stream::stream;
 use common_base::tokio;
-use common_context::DataContext;
 use common_dal::Local;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -35,6 +33,7 @@ use common_streams::Source;
 
 use crate::catalogs::Table;
 use crate::datasources::common::count_lines;
+use crate::datasources::context::TableContext;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct CsvTable {
@@ -45,10 +44,7 @@ pub struct CsvTable {
 }
 
 impl CsvTable {
-    pub fn try_create(
-        table_info: TableInfo,
-        _data_ctx: Arc<dyn DataContext<u64>>,
-    ) -> Result<Box<dyn Table>> {
+    pub fn try_create(table_info: TableInfo, _table_ctx: TableContext) -> Result<Box<dyn Table>> {
         let options = table_info.options();
         let has_header = options.get("has_header").is_some();
         let file = match options.get("location") {

@@ -14,10 +14,8 @@
 //
 
 use std::env;
-use std::sync::Arc;
 
 use common_base::tokio;
-use common_context::TableDataContext;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -27,6 +25,7 @@ use common_planners::*;
 use futures::TryStreamExt;
 
 use crate::catalogs::ToReadDataSourcePlan;
+use crate::datasources::context::TableContext;
 use crate::datasources::table::csv::csv_table::CsvTable;
 
 #[tokio::test]
@@ -58,7 +57,7 @@ async fn test_csv_table() -> Result<()> {
                 options,
             },
         },
-        Arc::new(TableDataContext::default()),
+        TableContext::default(),
     )?;
 
     let source_plan = table.read_plan(ctx.clone(), Some(Extras::default()))?;
@@ -117,7 +116,7 @@ async fn test_csv_table_parse_error() -> Result<()> {
                 options,
             },
         },
-        Arc::new(TableDataContext::default()),
+        TableContext::default(),
     )?;
 
     let source_plan = table.read_plan(ctx.clone(), Some(Extras::default()))?;

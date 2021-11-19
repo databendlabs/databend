@@ -14,9 +14,7 @@
 //
 
 use std::any::Any;
-use std::sync::Arc;
 
-use common_context::DataContext;
 use common_dal::read_obj;
 use common_exception::Result;
 use common_meta_types::TableInfo;
@@ -30,6 +28,7 @@ use common_streams::SendableDataBlockStream;
 
 use super::util;
 use crate::catalogs::Table;
+use crate::datasources::context::TableContext;
 use crate::datasources::table::fuse::TableSnapshot;
 use crate::sessions::DatabendQueryContextRef;
 
@@ -38,10 +37,7 @@ pub struct FuseTable {
 }
 
 impl FuseTable {
-    pub fn try_create(
-        table_info: TableInfo,
-        _data_ctx: Arc<dyn DataContext<u64>>,
-    ) -> Result<Box<dyn Table>> {
+    pub fn try_create(table_info: TableInfo, _table_ctx: TableContext) -> Result<Box<dyn Table>> {
         Ok(Box::new(FuseTable { table_info }))
     }
 }

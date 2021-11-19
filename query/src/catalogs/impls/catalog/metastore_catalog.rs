@@ -16,7 +16,6 @@
 use std::sync::Arc;
 
 use common_base::BlockingWait;
-use common_context::TableDataContext;
 use common_dal::InMemoryData;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -43,6 +42,7 @@ use crate::catalogs::Database;
 use crate::catalogs::Table;
 use crate::common::MetaClientProvider;
 use crate::configs::Config;
+use crate::datasources::context::TableContext;
 use crate::datasources::database::default::default_database::DefaultDatabase;
 use crate::datasources::table::register_prelude_tbl_engines;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
@@ -162,6 +162,34 @@ impl Catalog for MetaStoreCatalog {
         self.meta.get_table_by_id(table_id).await
     }
 
+    async fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
+        // TODO validate table parameters by using TableFactory
+        self.meta.create_table(plan).await?;
+        Ok(())
+    }
+
+    async fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
+        self.meta.drop_table(plan).await
+    }
+
+    fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+        let engine = table_info.engine();
+        let factory = self
+            .table_engine_registry
+            .get_table_factory(engine)
+            .ok_or_else(|| {
+                ErrorCode::UnknownTableEngine(format!("unknown table engine {}", engine))
+            })?;
+
+        let tbl: Arc<dyn Table> = factory
+            .try_create(table_info.clone(), TableContext {
+                in_memory_data: self.in_memory_data.clone(),
+            })?
+            .into();
+
+        Ok(tbl)
+    }
+
     async fn upsert_table_option(
         &self,
         table_id: MetaId,
@@ -179,16 +207,6 @@ impl Catalog for MetaStoreCatalog {
             .await
     }
 
-    async fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
-        // TODO validate table parameters by using TableFactory
-        self.meta.create_table(plan).await?;
-        Ok(())
-    }
-
-    async fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
-        self.meta.drop_table(plan).await
-    }
-
     async fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
         self.meta.create_database(plan).await
     }
@@ -196,27 +214,6 @@ impl Catalog for MetaStoreCatalog {
     async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
         self.meta.drop_database(plan).await?;
         Ok(())
-    }
-
-    fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        let engine = table_info.engine();
-        let factory = self
-            .table_engine_registry
-            .get_table_factory(engine)
-            .ok_or_else(|| {
-                ErrorCode::UnknownTableEngine(format!("unknown table engine {}", engine))
-            })?;
-
-        let tbl: Arc<dyn Table> = factory
-            .try_create(
-                table_info.clone(),
-                Arc::new(TableDataContext {
-                    in_memory_data: self.in_memory_data.clone(),
-                }),
-            )?
-            .into();
-
-        Ok(tbl)
     }
 
     async fn exists_database(&self, db_name: &str) -> Result<bool> {

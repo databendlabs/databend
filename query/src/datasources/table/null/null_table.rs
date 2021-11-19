@@ -13,9 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
-use common_context::DataContext;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_meta_types::TableInfo;
@@ -28,6 +26,7 @@ use common_tracing::tracing::info;
 use futures::stream::StreamExt;
 
 use crate::catalogs::Table;
+use crate::datasources::context::TableContext;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct NullTable {
@@ -35,10 +34,7 @@ pub struct NullTable {
 }
 
 impl NullTable {
-    pub fn try_create(
-        table_info: TableInfo,
-        _data_ctx: Arc<dyn DataContext<u64>>,
-    ) -> Result<Box<dyn Table>> {
+    pub fn try_create(table_info: TableInfo, _table_ctx: TableContext) -> Result<Box<dyn Table>> {
         Ok(Box::new(Self { table_info }))
     }
 }

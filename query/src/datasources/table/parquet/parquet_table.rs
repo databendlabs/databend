@@ -16,7 +16,6 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_stream::stream;
-use common_context::DataContext;
 use common_dal::Local;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -31,6 +30,7 @@ use common_streams::SendableDataBlockStream;
 use common_streams::Source;
 
 use crate::catalogs::Table;
+use crate::datasources::context::TableContext;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct ParquetTable {
@@ -39,10 +39,7 @@ pub struct ParquetTable {
 }
 
 impl ParquetTable {
-    pub fn try_create(
-        table_info: TableInfo,
-        _data_ctx: Arc<dyn DataContext<u64>>,
-    ) -> Result<Box<dyn Table>> {
+    pub fn try_create(table_info: TableInfo, _table_ctx: TableContext) -> Result<Box<dyn Table>> {
         let options = table_info.options();
         let file = options.get("location").cloned();
         return match file {

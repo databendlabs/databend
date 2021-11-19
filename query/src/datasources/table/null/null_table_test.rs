@@ -13,10 +13,7 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
-
 use common_base::tokio;
-use common_context::TableDataContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -26,6 +23,7 @@ use common_planners::*;
 use futures::TryStreamExt;
 
 use crate::catalogs::ToReadDataSourcePlan;
+use crate::datasources::context::TableContext;
 use crate::datasources::table::null::null_table::NullTable;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -51,7 +49,7 @@ async fn test_null_table() -> Result<()> {
                 options: TableOptions::default(),
             },
         },
-        Arc::new(TableDataContext::default()),
+        TableContext::default(),
     )?;
 
     // append data.

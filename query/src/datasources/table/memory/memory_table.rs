@@ -16,7 +16,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_context::DataContext;
 use common_dal::InMemoryData;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -34,6 +33,7 @@ use futures::stream::StreamExt;
 
 use crate::catalogs::Table;
 use crate::datasources::common::generate_parts;
+use crate::datasources::context::TableContext;
 use crate::datasources::table::memory::memory_table_stream::MemoryTableStream;
 use crate::sessions::DatabendQueryContextRef;
 
@@ -49,12 +49,9 @@ pub struct MemoryTable {
 }
 
 impl MemoryTable {
-    pub fn try_create(
-        table_info: TableInfo,
-        data_ctx: Arc<dyn DataContext<u64>>,
-    ) -> Result<Box<dyn Table>> {
+    pub fn try_create(table_info: TableInfo, table_ctx: TableContext) -> Result<Box<dyn Table>> {
         let table_id = &table_info.ident.table_id;
-        let in_memory_data = data_ctx.get_in_memory_data()?;
+        let in_memory_data = table_ctx.get_in_memory_data()?;
 
         let blocks = {
             let mut in_mem_data = in_memory_data.write();

@@ -13,10 +13,7 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
-
 use common_base::tokio;
-use common_context::TableDataContext;
 use common_datablocks::assert_blocks_sorted_eq;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -27,6 +24,7 @@ use common_planners::*;
 use futures::TryStreamExt;
 
 use crate::catalogs::ToReadDataSourcePlan;
+use crate::datasources::context::TableContext;
 use crate::datasources::table::memory::memory_table::MemoryTable;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -47,7 +45,7 @@ async fn test_memorytable() -> Result<()> {
                 options: TableOptions::default(),
             },
         },
-        Arc::new(TableDataContext::default()),
+        TableContext::default(),
     )?;
 
     // append data.
