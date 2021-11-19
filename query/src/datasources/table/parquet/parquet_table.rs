@@ -71,7 +71,7 @@ impl Table for ParquetTable {
         true
     }
 
-    fn read_partitions(
+    async fn read_partitions(
         &self,
         _ctx: DatabendQueryContextRef,
         _push_downs: Option<Extras>,

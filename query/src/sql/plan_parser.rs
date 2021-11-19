@@ -48,7 +48,7 @@ impl PlanParser {
         }
     }
 
-    async fn build_plan(
+    pub async fn build_plan(
         statements: Vec<DfStatement>,
         ctx: DatabendQueryContextRef,
     ) -> Result<PlanNode> {

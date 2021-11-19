@@ -75,8 +75,8 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                         PlanBuilder::from(&dummy_read_plan)
                             .expression(&[expr.clone()], "Exact Statistics")?
                             .project(&[expr.alias(&alias_name)])?
-                            .build()?
-                    })
+                            .build()
+                    })?
                 }
                 _ => PlanNode::AggregatorPartial(plan.clone()),
             },

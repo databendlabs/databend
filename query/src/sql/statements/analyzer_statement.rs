@@ -150,6 +150,10 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::KillStatement(v) => v.analyze(ctx).await,
             DfStatement::InsertQuery(v) => v.analyze(ctx).await,
             DfStatement::SetVariable(v) => v.analyze(ctx).await,
+            DfStatement::CreateUser(v) => v.analyze(ctx).await,
+            DfStatement::AlterUser(v) => v.analyze(ctx).await,
+            DfStatement::ShowUsers(v) => v.analyze(ctx).await,
+            DfStatement::GrantPrivilege(v) => v.analyze(ctx).await,
         }
     }
 }

@@ -42,7 +42,7 @@ use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::Whitespace;
 
-use crate::sql::statements::DfCreateDatabase;
+use crate::sql::statements::{DfAlterUser, DfCreateDatabase, DfCreateUser, DfGrantStatement};
 use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropDatabase;
@@ -60,8 +60,9 @@ use crate::sql::statements::DfShowSettings;
 use crate::sql::statements::DfShowTables;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
-use crate::sql::{DfHint, DfShowUsers};
+use crate::sql::DfHint;
 use crate::sql::DfStatement;
+use crate::sql::statements::DfShowUsers;
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
@@ -220,10 +221,10 @@ impl<'a> DfParser<'a> {
                     Keyword::SET => self.parse_set(),
                     Keyword::INSERT => self.parse_insert(),
                     Keyword::SELECT | Keyword::WITH | Keyword::VALUES => self.parse_query(),
-                    // Keyword::GRANT => {
-                    //     self.parser.next_token();
-                    //     self.parse_grant()
-                    // }
+                    Keyword::GRANT => {
+                        self.parser.next_token();
+                        self.parse_grant()
+                    }
                     Keyword::NoKeyword => match w.value.to_uppercase().as_str() {
                         // Use database
                         "USE" => self.parse_use_database(),

@@ -28,6 +28,9 @@ use crate::sql::statements::DfShowTables;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
 use crate::sql::*;
+use crate::sql::statements::DfCreateUser;
+use crate::sql::statements::DfAlterUser;
+use crate::sql::statements::DfGrantStatement;
 
 fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
     let (statements, _) = DfParser::parse_sql(sql)?;

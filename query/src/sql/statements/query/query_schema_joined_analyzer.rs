@@ -8,6 +8,7 @@ use sqlparser::ast::Query;
 use sqlparser::ast::TableAlias;
 use sqlparser::ast::TableFactor;
 use sqlparser::ast::TableWithJoins;
+use crate::catalogs::Catalog;
 
 use crate::sessions::DatabendQueryContextRef;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
@@ -111,7 +112,8 @@ impl JoinedSchemaAnalyzer {
             });
         }
 
-        let table_function = self.ctx.get_table_function(&table_name, Some(table_args))?;
+        let catalog = self.ctx.get_catalog();
+        let table_function = catalog.get_table_function(&table_name, Some(table_args))?;
         JoinedSchema::from_table(table_function.as_table(), Vec::new())
     }
 

@@ -218,10 +218,12 @@ impl QualifiedRewriter {
                 expr,
                 asc,
                 nulls_first,
+                origin_expr,
             } => Ok(Expression::Sort {
                 expr: Box::new(self.rewrite_expr(expr)?),
                 asc: *asc,
                 nulls_first: *nulls_first,
+                origin_expr: Box::new(self.rewrite_expr(origin_expr)?),
             }),
             Expression::Cast { expr, data_type } => Ok(Expression::Cast {
                 expr: Box::new(self.rewrite_expr(expr)?),

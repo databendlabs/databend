@@ -126,9 +126,10 @@ impl QueryNormalizer {
 
             self.add_aggregate_function(&expression)?;
             self.data.order_by_expressions.push(Expression::Sort {
-                expr: Box::new(expression),
+                expr: Box::new(expression.clone()),
                 asc: order_by_expr.asc.unwrap_or(true),
                 nulls_first: order_by_expr.asc.unwrap_or(true),
+                origin_expr: Box::new(expression),
             });
         }
 

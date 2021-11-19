@@ -105,7 +105,7 @@ impl ExecuteState {
         let context = session.create_context().await?;
         context.attach_query_str(sql);
 
-        let plan = PlanParser::create(context.clone()).build_from_sql(sql)?;
+        let plan = PlanParser::parse(sql, context.clone()).await?;
         let schema = plan.schema();
 
         let interpreter = InterpreterFactory::get(context.clone(), plan.clone())?;
@@ -140,7 +140,7 @@ impl ExecuteState {
                             },
                             Err(err) => {
                                 ExecuteState::stop(&state, Err(err)).await;
-                                break
+                                break;
                             }
                         };
                     } else {

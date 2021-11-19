@@ -88,12 +88,14 @@ impl DfQueryStatement {
                     expr,
                     asc,
                     nulls_first,
+                    origin_expr,
                 } => {
                     analyze_state.add_expression(expr);
                     analyze_state.order_by_expressions.push(Expression::Sort {
                         expr: Box::new(rebase_expr(expr, &analyze_state.expressions)?),
                         asc: *asc,
                         nulls_first: *nulls_first,
+                        origin_expr: Box::new(rebase_expr(origin_expr, &analyze_state.expressions)?),
                     });
                 }
                 _ => {
@@ -189,10 +191,9 @@ impl DfQueryStatement {
 
         match tables_desc.remove(0) {
             JoinedTableDesc::Table { table, .. } => {
-                let io_ctx = Arc::new(ctx.get_cluster_table_io_context()?);
                 // TODO: collect push down
                 let source_plan = table
-                    .read_plan(io_ctx, Some(Extras::default()), None)
+                    .read_plan(ctx.clone(), Some(Extras::default()))
                     .await?;
                 state.relation = QueryRelation::FromTable(Box::new(source_plan));
             }

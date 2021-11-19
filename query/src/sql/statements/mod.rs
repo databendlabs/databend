@@ -25,6 +25,10 @@ mod statement_show_settings;
 mod statement_show_tables;
 mod statement_truncate_table;
 mod statement_use_database;
+mod statement_create_user;
+mod statement_alter_user;
+mod statement_show_users;
+mod statement_grant;
 
 pub use analyzer_statement::AnalyzableStatement;
 pub use analyzer_statement::AnalyzedResult;
@@ -49,3 +53,7 @@ pub use statement_show_settings::DfShowSettings;
 pub use statement_show_tables::DfShowTables;
 pub use statement_truncate_table::DfTruncateTable;
 pub use statement_use_database::DfUseDatabase;
+pub use statement_create_user::DfCreateUser;
+pub use statement_alter_user::DfAlterUser;
+pub use statement_show_users::DfShowUsers;
+pub use statement_grant::DfGrantStatement;
