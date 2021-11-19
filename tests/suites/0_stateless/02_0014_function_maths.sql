@@ -50,5 +50,9 @@ SELECT atan2(NULL, 2);
 SELECT atan2(NULL, NULL);
 SELECT atan2(NULL, number) from numbers(2);
 SELECT atan2(number, NULL) from numbers(2);
+SELECT sqrt(4);
+SELECT sqrt(0);
+SELECT sqrt(-4);
+SELECT sqrt('a');
 
 DROP TABLE math_sample_numbers;
