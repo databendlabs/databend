@@ -103,12 +103,14 @@ impl MetaRaftStore {
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create one.
     /// Otherwise it panic
-    #[tracing::instrument(level = "info", skip(config), fields(config_id=%config.config_id))]
+    #[tracing::instrument(level = "info", skip(config,open,create), fields(config_id=%config.config_id))]
     pub async fn open_create(
         config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
     ) -> common_exception::Result<MetaRaftStore> {
+        tracing::info!("open: {:?}, create: {:?}", open, create);
+
         let db = get_sled_db();
 
         let raft_state = RaftState::open_create(&db, config, open, create).await?;
