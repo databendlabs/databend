@@ -67,4 +67,14 @@ impl NewDataArray<bool> for DFBooleanArray {
     fn new_from_iter(it: impl Iterator<Item = bool>) -> DFBooleanArray {
         it.collect()
     }
+
+    fn new_from_iter_validity(
+        it: impl Iterator<Item = bool>,
+        validity: Option<common_arrow::arrow::bitmap::Bitmap>,
+    ) -> Self {
+        let mut array: DFBooleanArray = it.collect();
+        array.array = array.inner().with_validity(validity);
+
+        array
+    }
 }

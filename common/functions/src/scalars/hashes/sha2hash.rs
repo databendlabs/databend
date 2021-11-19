@@ -73,50 +73,93 @@ impl Function for Sha2HashFunction {
         Ok(false)
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        let hash = |i: &[u8], l: &u16| match l {
-            224 => {
-                let mut h = sha2::Sha224::new();
-                h.update(i);
-                Some(format!("{:x}", h.finalize()))
-            }
-            256 | 0 => {
-                let mut h = sha2::Sha256::new();
-                h.update(i);
-                Some(format!("{:x}", h.finalize()))
-            }
-            384 => {
-                let mut h = sha2::Sha384::new();
-                h.update(i);
-                Some(format!("{:x}", h.finalize()))
-            }
-            512 => {
-                let mut h = sha2::Sha512::new();
-                h.update(i);
-                Some(format!("{:x}", h.finalize()))
-            }
-            _ => None,
-        };
-
+    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let i_series = columns[0]
             .column()
             .to_minimal_array()?
             .cast_with_type(&DataType::String)?;
-
+        let i_array = i_series.string()?;
         let l_column: DataColumn = columns[1].column().cast_with_type(&DataType::UInt16)?;
 
         let result = match l_column {
             DataColumn::Constant(v, _) => {
-                let l = &DFTryFrom::try_from(v)?;
-                let opt_iter = i_series.string()?.into_no_null_iter().map(|i| hash(i, l));
-                DFStringArray::new_from_opt_iter(opt_iter)
+                let l: Result<u16> = v.as_u64().map(|v| v as u16);
+                match l {
+                    Err(_) => DFStringArray::full_null(input_rows),
+                    Ok(v) => {
+                        let validity = i_array.inner().validity().cloned();
+                        match v {
+                            224 => {
+                                let iter = i_array.into_no_null_iter().map(|i| {
+                                    let mut h = sha2::Sha224::new();
+                                    h.update(i);
+                                    format!("{:x}", h.finalize())
+                                });
+
+                                DFStringArray::new_from_iter_validity(iter, validity)
+                            }
+                            256 | 0 => {
+                                let iter = i_array.into_no_null_iter().map(|i| {
+                                    let mut h = sha2::Sha256::new();
+                                    h.update(i);
+                                    format!("{:x}", h.finalize())
+                                });
+                                DFStringArray::new_from_iter_validity(iter, validity)
+                            }
+                            384 => {
+                                let iter = i_array.into_no_null_iter().map(|i| {
+                                    let mut h = sha2::Sha384::new();
+                                    h.update(i);
+                                    format!("{:x}", h.finalize())
+                                });
+                                DFStringArray::new_from_iter_validity(iter, validity)
+                            }
+                            512 => {
+                                let iter = i_array.into_no_null_iter().map(|i| {
+                                    let mut h = sha2::Sha512::new();
+                                    h.update(i);
+                                    format!("{:x}", h.finalize())
+                                });
+                                DFStringArray::new_from_iter_validity(iter, validity)
+                            }
+                            _ => DFStringArray::full_null(input_rows),
+                        }
+                    }
+                }
             }
             DataColumn::Array(l_series) => {
-                let opt_iter = i_series
-                    .string()?
-                    .into_no_null_iter()
-                    .zip(l_series.u16()?.into_no_null_iter())
-                    .map(|(i, l)| hash(i, l));
+                let hash = |i: &[u8], l: &u16| match l {
+                    224 => {
+                        let mut h = sha2::Sha224::new();
+                        h.update(i);
+                        Some(format!("{:x}", h.finalize()))
+                    }
+                    256 | 0 => {
+                        let mut h = sha2::Sha256::new();
+                        h.update(i);
+                        Some(format!("{:x}", h.finalize()))
+                    }
+                    384 => {
+                        let mut h = sha2::Sha384::new();
+                        h.update(i);
+                        Some(format!("{:x}", h.finalize()))
+                    }
+                    512 => {
+                        let mut h = sha2::Sha512::new();
+                        h.update(i);
+                        Some(format!("{:x}", h.finalize()))
+                    }
+                    _ => None,
+                };
+
+                let opt_iter =
+                    i_array
+                        .into_iter()
+                        .zip(l_series.u16()?.into_iter())
+                        .map(|(i, l)| match (i, l) {
+                            (Some(i), Some(l)) => hash(i, l),
+                            _ => None,
+                        });
                 DFStringArray::new_from_opt_iter(opt_iter)
             }
         };
