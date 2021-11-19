@@ -100,3 +100,52 @@ async fn test_transform_expression_error() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_transform_expression_issue2857() -> Result<()> {
+    let ctx = crate::tests::try_create_context()?;
+    let test_source = crate::tests::NumberTestData::create(ctx.clone());
+
+    let mut pipeline = Pipeline::create(ctx.clone());
+    let source = test_source.number_source_transform_for_test(8)?;
+    pipeline.add_source(Arc::new(source))?;
+
+    if let PlanNode::Projection(plan) = PlanBuilder::create(test_source.number_schema_for_test()?)
+        .project(&[
+            col("number").alias("number"),
+            add(col("number"), lit(1u8)).alias("number1"),
+        ])?
+        .build()?
+    {
+        pipeline.add_simple_transform(|| {
+            Ok(Box::new(ProjectionTransform::try_create(
+                plan.input.schema(),
+                plan.schema.clone(),
+                plan.expr.clone(),
+            )?))
+        })?;
+    }
+
+    let stream = pipeline.execute().await?;
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 2);
+
+    let expected = vec![
+        "+--------+---------+",
+        "| number | number1 |",
+        "+--------+---------+",
+        "| 0      | 1       |",
+        "| 1      | 2       |",
+        "| 2      | 3       |",
+        "| 3      | 4       |",
+        "| 4      | 5       |",
+        "| 5      | 6       |",
+        "| 6      | 7       |",
+        "| 7      | 8       |",
+        "+--------+---------+",
+    ];
+    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+
+    Ok(())
+}

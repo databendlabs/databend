@@ -74,8 +74,12 @@ impl ExpressionExecutor {
 
         let mut column_map: HashMap<String, DataColumnWithField> = HashMap::new();
 
-        // a + 1 as b, a + 1 as c
-        let mut alias_map: HashMap<String, Vec<String>> = HashMap::new();
+        let mut alias_map: HashMap<String, DataColumnWithField> = HashMap::new();
+
+        // supported a + 1 as b, a + 1 as c
+        // supported a + 1 as a, a as b
+        // !currently not supported a+1 as c, b+1 as c
+        let mut alias_action_map: HashMap<String, Vec<String>> = HashMap::new();
 
         for f in block.schema().fields().iter() {
             let column =
@@ -84,13 +88,12 @@ impl ExpressionExecutor {
         }
 
         let rows = block.num_rows();
-
         for action in self.chain.actions.iter() {
             if let ExpressionAction::Alias(alias) = action {
-                if let Some(v) = alias_map.get_mut(&alias.arg_name) {
+                if let Some(v) = alias_action_map.get_mut(&alias.arg_name) {
                     v.push(alias.name.clone());
                 } else {
-                    alias_map.insert(alias.arg_name.clone(), vec![alias.name.clone()]);
+                    alias_action_map.insert(alias.arg_name.clone(), vec![alias.name.clone()]);
                 }
             }
 
@@ -149,26 +152,35 @@ impl ExpressionExecutor {
         }
 
         if self.alias_project {
-            for (k, v) in alias_map.iter() {
+            for (k, v) in alias_action_map.iter() {
                 let column = column_map.get(k).cloned().ok_or_else(|| {
                     ErrorCode::LogicalError("Arguments must be prepared before alias transform")
                 })?;
 
                 for name in v.iter() {
-                    column_map.insert(name.clone(), column.clone());
+                    match alias_map.insert(name.clone(), column.clone()) {
+                        Some(_) => Err(ErrorCode::UnImplement(format!(
+                            "Duplicate alias name :{}",
+                            name
+                        ))),
+                        _ => Ok(()),
+                    }?;
                 }
             }
         }
 
         let mut project_columns = Vec::with_capacity(self.output_schema.fields().len());
         for f in self.output_schema.fields() {
-            let column = column_map.get(f.name()).ok_or_else(|| {
-                ErrorCode::LogicalError(format!(
-                    "Projection column: {} not exists in {:?}, there are bugs!",
-                    f.name(),
-                    column_map.keys()
-                ))
-            })?;
+            let column = match alias_map.get(f.name()) {
+                Some(data_column) => data_column,
+                None => column_map.get(f.name()).ok_or_else(|| {
+                    ErrorCode::LogicalError(format!(
+                        "Projection column: {} not exists in {:?}, there are bugs!",
+                        f.name(),
+                        column_map.keys()
+                    ))
+                })?,
+            };
             project_columns.push(column.column().clone());
         }
         // projection to remove unused columns
