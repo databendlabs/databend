@@ -66,7 +66,3 @@ pub async fn read_obj<T: DeserializeOwned>(da: Arc<dyn DataAccessor>, loc: Strin
     let r = serde_json::from_slice::<T>(&bytes)?;
     Ok(r)
 }
-
-pub trait DataAccessorBuilder: Sync + Send {
-    fn build(&self) -> Result<Arc<dyn DataAccessor>>;
-}

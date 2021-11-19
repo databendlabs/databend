@@ -13,17 +13,13 @@
 // limitations under the License.
 //
 
-pub use dal_builder::ContextDalBuilder;
 pub use line::count_lines;
 pub use part::generate_parts;
 
-#[cfg(test)]
-mod dal_builder_test;
 #[cfg(test)]
 mod line_test;
 #[cfg(test)]
 mod part_test;
 
-mod dal_builder;
 mod line;
 mod part;

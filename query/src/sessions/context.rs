@@ -26,7 +26,6 @@ use common_base::ProgressValues;
 use common_base::Runtime;
 use common_base::TrySpawn;
 use common_dal::DataAccessor;
-use common_dal::DataAccessorBuilder;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -43,7 +42,7 @@ use crate::catalogs::Catalog;
 use crate::catalogs::Table;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::datasources::common::ContextDalBuilder;
+use crate::datasources::DataSourceContext;
 use crate::servers::http::v1::query::HttpQueryHandle;
 use crate::sessions::context_shared::DatabendQueryContextShared;
 use crate::sessions::SessionManagerRef;
@@ -255,9 +254,12 @@ impl DatabendQueryContext {
     }
 
     pub(crate) fn get_data_accessor(&self) -> Result<Arc<dyn DataAccessor>> {
-        let tenant_id = self.get_config().query.tenant_id;
-        let cluster_id = self.get_config().query.cluster_id;
-        ContextDalBuilder::new(tenant_id, cluster_id, self.get_config().storage).build()
+        DataSourceContext::create(
+            self.get_config().query.tenant_id,
+            self.get_config().query.cluster_id,
+            self.get_config().storage,
+        )
+        .get_data_accessor()
     }
 }
 

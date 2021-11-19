@@ -16,7 +16,6 @@ pub use data_accessor::read_obj;
 pub use data_accessor::AsyncSeekableReader;
 pub use data_accessor::Bytes;
 pub use data_accessor::DataAccessor;
-pub use data_accessor::DataAccessorBuilder;
 pub use data_accessor::InputStream;
 pub use data_accessor::SeekableReader;
 pub use impls::aws_s3::S3InputStream;
