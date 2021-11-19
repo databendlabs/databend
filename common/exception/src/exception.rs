@@ -283,6 +283,8 @@ build_exceptions! {
     // http query error
     HttpNotFound(9404),
 
+    // network error
+    NetworkRequestError(9001),
 }
 // General errors
 build_exceptions! {
@@ -421,6 +423,12 @@ impl From<prost::EncodeError> for ErrorCode {
             "Bad bytes, cannot parse bytes with prost, cause: {}",
             error
         ))
+    }
+}
+
+impl From<reqwest::Error> for ErrorCode {
+    fn from(error: reqwest::Error) -> Self {
+        ErrorCode::NetworkRequestError(format!("reqwest error, cause: {}", error))
     }
 }
 
