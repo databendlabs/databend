@@ -44,7 +44,9 @@ impl PlanRewriter for PlanDoReadSource {
         let context = self.ctx.clone();
         futures::executor::block_on(async move {
             let table = context.build_table_from_source_plan(plan)?;
-            let plan = table.read_plan(context.clone(), plan.push_downs.clone()).await?;
+            let plan = table
+                .read_plan(context.clone(), plan.push_downs.clone())
+                .await?;
             Ok(PlanNode::ReadSource(plan))
         })
     }

@@ -60,7 +60,9 @@ async fn test_csv_table() -> Result<()> {
         TableContext::default(),
     )?;
 
-    let source_plan = table.read_plan(ctx.clone(), Some(Extras::default())).await?;
+    let source_plan = table
+        .read_plan(ctx.clone(), Some(Extras::default()))
+        .await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
     let stream = table.read(ctx, &source_plan).await?;
@@ -119,7 +121,9 @@ async fn test_csv_table_parse_error() -> Result<()> {
         TableContext::default(),
     )?;
 
-    let source_plan = table.read_plan(ctx.clone(), Some(Extras::default())).await?;
+    let source_plan = table
+        .read_plan(ctx.clone(), Some(Extras::default()))
+        .await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
     let stream = table.read(ctx, &source_plan).await?;

@@ -42,24 +42,34 @@ impl InsertIntoPlan {
     }
 
     pub fn insert_select(
-        db: String, table: String, table_meta_id: MetaId, schema: DataSchemaRef, select_plan: PlanNode) -> InsertIntoPlan {
+        db: String,
+        table: String,
+        table_meta_id: MetaId,
+        schema: DataSchemaRef,
+        select_plan: PlanNode,
+    ) -> InsertIntoPlan {
         InsertIntoPlan {
             db_name: db,
             tbl_name: table,
             tbl_id: table_meta_id,
-            schema: schema.clone(),
+            schema,
             select_plan: Some(Box::new(select_plan)),
             values_opt: None,
         }
     }
 
     pub fn insert_values(
-        db: String, table: String, table_meta_id: MetaId, schema: DataSchemaRef, values: String) -> InsertIntoPlan {
+        db: String,
+        table: String,
+        table_meta_id: MetaId,
+        schema: DataSchemaRef,
+        values: String,
+    ) -> InsertIntoPlan {
         InsertIntoPlan {
             db_name: db,
             tbl_name: table,
             tbl_id: table_meta_id,
-            schema: schema.clone(),
+            schema,
             select_plan: None,
             values_opt: Some(values),
         }

@@ -1,8 +1,11 @@
-use common_meta_types::UserPrivilege;
-use crate::sessions::DatabendQueryContextRef;
-use crate::sql::statements::{AnalyzableStatement, AnalyzedResult};
 use common_exception::Result;
-use common_planners::{GrantPrivilegePlan, PlanNode};
+use common_meta_types::UserPrivilege;
+use common_planners::GrantPrivilegePlan;
+use common_planners::PlanNode;
+
+use crate::sessions::DatabendQueryContextRef;
+use crate::sql::statements::AnalyzableStatement;
+use crate::sql::statements::AnalyzedResult;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfGrantStatement {
@@ -14,10 +17,12 @@ pub struct DfGrantStatement {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfGrantStatement {
     async fn analyze(&self, _: DatabendQueryContextRef) -> Result<AnalyzedResult> {
-        Ok(AnalyzedResult::SimpleQuery(PlanNode::GrantPrivilege(GrantPrivilegePlan {
-            name: self.name.clone(),
-            hostname: self.hostname.clone(),
-            priv_types: self.priv_types,
-        })))
+        Ok(AnalyzedResult::SimpleQuery(PlanNode::GrantPrivilege(
+            GrantPrivilegePlan {
+                name: self.name.clone(),
+                hostname: self.hostname.clone(),
+                priv_types: self.priv_types,
+            },
+        )))
     }
 }

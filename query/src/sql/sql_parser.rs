@@ -42,12 +42,15 @@ use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::Whitespace;
 
-use crate::sql::statements::{DfAlterUser, DfCreateDatabase, DfCreateUser, DfGrantStatement};
+use crate::sql::statements::DfAlterUser;
+use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfCreateTable;
+use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropDatabase;
 use crate::sql::statements::DfDropTable;
 use crate::sql::statements::DfExplain;
+use crate::sql::statements::DfGrantStatement;
 use crate::sql::statements::DfInsertStatement;
 use crate::sql::statements::DfKillStatement;
 use crate::sql::statements::DfQueryStatement;
@@ -58,11 +61,11 @@ use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
 use crate::sql::statements::DfShowSettings;
 use crate::sql::statements::DfShowTables;
+use crate::sql::statements::DfShowUsers;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
 use crate::sql::DfHint;
 use crate::sql::DfStatement;
-use crate::sql::statements::DfShowUsers;
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {

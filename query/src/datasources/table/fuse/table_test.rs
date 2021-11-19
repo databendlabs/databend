@@ -151,7 +151,9 @@ async fn test_fuse_table_truncate() -> Result<()> {
         num_blocks,
     )));
 
-    table.append_data(ctx.clone(), insert_into_plan, stream).await?;
+    table
+        .append_data(ctx.clone(), insert_into_plan, stream)
+        .await?;
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
     // get the latest tbl
@@ -165,7 +167,9 @@ async fn test_fuse_table_truncate() -> Result<()> {
     assert_ne!(prev_version, table.get_table_info().ident.version);
 
     // ensure data ingested
-    let (stats, parts) = table.read_partitions(ctx.clone(), source_plan.push_downs.clone()).await?;
+    let (stats, parts) = table
+        .read_partitions(ctx.clone(), source_plan.push_downs.clone())
+        .await?;
     assert_eq!(parts.len(), 10);
     assert_eq!(stats.read_rows, 10 * 3);
 
@@ -182,7 +186,9 @@ async fn test_fuse_table_truncate() -> Result<()> {
         )
         .await?;
     assert_ne!(prev_version, table.get_table_info().ident.version);
-    let (stats, parts) = table.read_partitions(ctx.clone(), source_plan.push_downs.clone()).await?;
+    let (stats, parts) = table
+        .read_partitions(ctx.clone(), source_plan.push_downs.clone())
+        .await?;
     // cleared?
     assert_eq!(parts.len(), 0);
     assert_eq!(stats.read_rows, 0);

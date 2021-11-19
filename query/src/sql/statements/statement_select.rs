@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
@@ -95,7 +93,10 @@ impl DfQueryStatement {
                         expr: Box::new(rebase_expr(expr, &analyze_state.expressions)?),
                         asc: *asc,
                         nulls_first: *nulls_first,
-                        origin_expr: Box::new(rebase_expr(origin_expr, &analyze_state.expressions)?),
+                        origin_expr: Box::new(rebase_expr(
+                            origin_expr,
+                            &analyze_state.expressions,
+                        )?),
                     });
                 }
                 _ => {

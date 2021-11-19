@@ -15,7 +15,6 @@
 
 use std::collections::HashSet;
 
-use common_base::BlockingWait;
 use common_dal::read_obj;
 use common_exception::Result;
 use common_planners::Extras;
@@ -23,7 +22,7 @@ use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::Statistics;
 
-use super::index;
+use crate::datasources::table::fuse::index;
 use crate::datasources::table::fuse::BlockMeta;
 use crate::datasources::table::fuse::FuseTable;
 use crate::sessions::DatabendQueryContextRef;

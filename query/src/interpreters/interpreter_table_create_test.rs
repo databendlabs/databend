@@ -13,11 +13,9 @@
 // limitations under the License.
 
 use common_base::tokio;
-use common_datavalues::DataType;
 use common_exception::Result;
 use common_planners::*;
 use futures::stream::StreamExt;
-use pretty_assertions::assert_eq;
 
 use crate::interpreters::*;
 use crate::tests::parse_query;
@@ -34,8 +32,7 @@ async fn test_create_table_interpreter() -> Result<()> {
 
     if let PlanNode::CreateTable(plan) = parse_query(TEST_CREATE_QUERY, &ctx)? {
         let interpreter = CreateTableInterpreter::try_create(ctx, plan.clone())?;
-
-        let mut stream = executor.execute(None).await?;
+        let mut stream = interpreter.execute(None).await?;
         while let Some(_block) = stream.next().await {}
     } else {
         panic!()

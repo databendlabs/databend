@@ -31,7 +31,8 @@ async fn test_number_table() -> Result<()> {
     let source_plan = table
         .clone()
         .as_table()
-        .read_plan(ctx.clone(), Some(Extras::default())).await?;
+        .read_plan(ctx.clone(), Some(Extras::default()))
+        .await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
     let stream = table.read(ctx, &source_plan).await?;

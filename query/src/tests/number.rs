@@ -50,7 +50,11 @@ impl NumberTestData {
                 numbers,
             )))]);
             let table = catalog.get_table_function(self.table, tbl_arg)?;
-            table.clone().as_table().read_plan(self.ctx.clone(), None).await
+            table
+                .clone()
+                .as_table()
+                .read_plan(self.ctx.clone(), None)
+                .await
         })
     }
 

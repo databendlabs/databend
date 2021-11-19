@@ -21,7 +21,7 @@ fn test_simple() -> Result<()> {
     let query = "select number from numbers(1000) order by number limit 10;";
     let ctx = crate::tests::try_create_context()?;
 
-    let plan = crate::tests::parse_query(query)?;
+    let plan = crate::tests::parse_query(query, &ctx)?;
 
     let mut optimizer = TopNPushDownOptimizer::create(ctx);
     let plan_node = optimizer.optimize(&plan)?;
@@ -42,7 +42,7 @@ fn test_simple_with_offset() -> Result<()> {
     let query = "select number from numbers(1000) order by number limit 10 offset 5;";
     let ctx = crate::tests::try_create_context()?;
 
-    let plan = crate::tests::parse_query(query)?;
+    let plan = crate::tests::parse_query(query, &ctx)?;
 
     let mut optimizer = TopNPushDownOptimizer::create(ctx);
     let plan_node = optimizer.optimize(&plan)?;
@@ -64,7 +64,7 @@ fn test_nested_projection() -> Result<()> {
         "select number from (select * from numbers(1000) order by number limit 11) limit 10;";
     let ctx = crate::tests::try_create_context()?;
 
-    let plan = crate::tests::parse_query(query)?;
+    let plan = crate::tests::parse_query(query, &ctx)?;
 
     let mut optimizer = TopNPushDownOptimizer::create(ctx);
     let plan_node = optimizer.optimize(&plan)?;
@@ -88,7 +88,7 @@ fn test_aggregate() -> Result<()> {
         "select sum(number) FROM numbers(1000) group by number % 10 order by sum(number) limit 5;";
     let ctx = crate::tests::try_create_context()?;
 
-    let plan = crate::tests::parse_query(query)?;
+    let plan = crate::tests::parse_query(query, &ctx)?;
 
     let mut optimizer = TopNPushDownOptimizer::create(ctx);
     let plan_node = optimizer.optimize(&plan)?;
@@ -140,8 +140,8 @@ fn test_monotonic_function() -> Result<()> {
     ];
 
     for test in tests {
-        let plan = crate::tests::parse_query(test.query)?;
         let ctx = crate::tests::try_create_context()?;
+        let plan = crate::tests::parse_query(test.query, &ctx)?;
         let mut optimizer = Optimizers::without_scatters(ctx);
 
         let optimized_plan = optimizer.optimize(&plan)?;

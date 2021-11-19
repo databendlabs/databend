@@ -44,13 +44,12 @@ async fn test_alter_user_interpreter() -> Result<()> {
     let old_user = user_mgr.get_user(name, hostname).await?;
     assert_eq!(old_user.password, Vec::from(password));
 
-    if let PlanNode::AlterUser(plan) = PlanParser::create(ctx.clone()).build_from_sql(
-        format!(
-            "ALTER USER '{}'@'{}' IDENTIFIED BY '{}'",
-            name, hostname, new_password
-        )
-        .as_str(),
-    )? {
+    let test_query = format!(
+        "ALTER USER '{}'@'{}' IDENTIFIED BY '{}'",
+        name, hostname, new_password
+    );
+
+    if let PlanNode::AlterUser(plan) = PlanParser::parse(&test_query, ctx.clone()).await? {
         let executor = AlterUserInterpreter::try_create(ctx, plan.clone())?;
         assert_eq!(executor.name(), "AlterUserInterpreter");
         let mut stream = executor.execute(None).await?;

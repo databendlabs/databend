@@ -19,12 +19,15 @@ use nom::character::complete::multispace0;
 use nom::character::complete::multispace1;
 use nom::IResult;
 
+use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfCreateTable;
+use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropDatabase;
 use crate::sql::statements::DfDropTable;
 use crate::sql::statements::DfExplain;
+use crate::sql::statements::DfGrantStatement;
 use crate::sql::statements::DfInsertStatement;
 use crate::sql::statements::DfKillStatement;
 use crate::sql::statements::DfQueryStatement;
@@ -35,12 +38,9 @@ use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
 use crate::sql::statements::DfShowSettings;
 use crate::sql::statements::DfShowTables;
+use crate::sql::statements::DfShowUsers;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
-use crate::sql::statements::DfCreateUser;
-use crate::sql::statements::DfAlterUser;
-use crate::sql::statements::DfShowUsers;
-use crate::sql::statements::DfGrantStatement;
 
 /// Tokens parsed by `DFParser` are converted into these values.
 #[derive(Debug, Clone, PartialEq)]

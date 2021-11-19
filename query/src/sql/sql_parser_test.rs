@@ -18,19 +18,19 @@ use common_meta_types::UserPrivilege;
 use common_meta_types::UserPrivilegeType;
 use sqlparser::ast::*;
 
+use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfCreateTable;
+use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropDatabase;
 use crate::sql::statements::DfDropTable;
+use crate::sql::statements::DfGrantStatement;
 use crate::sql::statements::DfShowDatabases;
 use crate::sql::statements::DfShowTables;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
 use crate::sql::*;
-use crate::sql::statements::DfCreateUser;
-use crate::sql::statements::DfAlterUser;
-use crate::sql::statements::DfGrantStatement;
 
 fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
     let (statements, _) = DfParser::parse_sql(sql)?;
