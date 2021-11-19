@@ -97,7 +97,7 @@ impl Function for TrigonometricFunction {
         Ok(true)
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let result = if columns.len() == 1 {
             let opt_iter = columns[0]
                 .column()
@@ -135,29 +135,34 @@ impl Function for TrigonometricFunction {
 
             match (y_column, x_column) {
                 (DataColumn::Array(y_series), DataColumn::Constant(x, _)) => {
-                    let x = DFTryFrom::try_from(x.clone())?;
-                    let opt_iter = y_series
-                        .f64()?
-                        .into_no_null_iter()
-                        .map(|y| Some(y.atan2(x)));
-                    DFFloat64Array::new_from_opt_iter(opt_iter)
+                    if x.is_null() {
+                        DFFloat64Array::full_null(input_rows)
+                    } else {
+                        let x = DFTryFrom::try_from(x.clone())?;
+                        let opt_iter = y_series.f64()?.into_iter().map(|y| y.map(|y| y.atan2(x)));
+                        DFFloat64Array::new_from_opt_iter(opt_iter)
+                    }
                 }
                 (DataColumn::Constant(y, _), DataColumn::Array(x_series)) => {
-                    let y: f64 = DFTryFrom::try_from(y.clone())?;
-                    let opt_iter = x_series
-                        .f64()?
-                        .into_no_null_iter()
-                        .map(|x| Some(y.atan2(*x)));
-                    DFFloat64Array::new_from_opt_iter(opt_iter)
+                    if y.is_null() {
+                        DFFloat64Array::full_null(input_rows)
+                    } else {
+                        let y: f64 = DFTryFrom::try_from(y.clone())?;
+                        let opt_iter = x_series.f64()?.into_iter().map(|x| x.map(|x| y.atan2(*x)));
+                        DFFloat64Array::new_from_opt_iter(opt_iter)
+                    }
                 }
                 _ => {
                     let y_series = y_column.to_minimal_array()?;
                     let x_series = x_column.to_minimal_array()?;
                     let opt_iter = y_series
                         .f64()?
-                        .into_no_null_iter()
-                        .zip(x_series.f64()?.into_no_null_iter())
-                        .map(|(y, x)| Some(y.atan2(*x)));
+                        .into_iter()
+                        .zip(x_series.f64()?.into_iter())
+                        .map(|(y, x)| match (y, x) {
+                            (Some(y), Some(x)) => Some(y.atan2(*x)),
+                            _ => None,
+                        });
                     DFFloat64Array::new_from_opt_iter(opt_iter)
                 }
             }

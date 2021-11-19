@@ -45,5 +45,10 @@ SELECT atan(-1);
 SELECT atan(-2, 2);
 SELECT atan2(-2, 2);
 SELECT atan2(pi(), 0);
+SELECT atan2(-2, NULL);
+SELECT atan2(NULL, 2);
+SELECT atan2(NULL, NULL);
+SELECT atan2(NULL, number) from numbers(2);
+SELECT atan2(number, NULL) from numbers(2);
 
 DROP TABLE math_sample_numbers;
