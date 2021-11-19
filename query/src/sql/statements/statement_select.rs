@@ -48,6 +48,8 @@ impl AnalyzableStatement for DfQueryStatement {
 impl DfQueryStatement {
     async fn analyze_query(&self, data: QueryNormalizerData) -> Result<QueryAnalyzeState> {
         let mut analyze_state = QueryAnalyzeState::default();
+        analyze_state.limit = data.limit.clone();
+        analyze_state.offset = data.offset.clone();
 
         if let Some(predicate) = &data.filter_predicate {
             Self::verify_no_aggregate(predicate, "filter")?;

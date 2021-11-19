@@ -34,6 +34,9 @@ pub struct QueryAnalyzeState {
     pub aggregate_expressions: Vec<Expression>,
     pub before_group_by_expressions: Vec<Expression>,
 
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+
     pub relation: QueryRelation,
     pub finalize_schema: DataSchemaRef,
 }
@@ -63,6 +66,8 @@ impl Default for QueryAnalyzeState {
             group_by_expressions: vec![],
             aggregate_expressions: vec![],
             before_group_by_expressions: vec![],
+            limit: None,
+            offset: None,
             relation: QueryRelation::None,
             finalize_schema: Arc::new(DataSchema::empty()),
         }

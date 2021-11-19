@@ -1,4 +1,4 @@
-use sqlparser::ast::{ObjectName, FunctionArg, Query, TableAlias, JoinOperator, TableWithJoins, TableFactor, Ident, Expr, SelectItem};
+use sqlparser::ast::{ObjectName, FunctionArg, Query, TableAlias, JoinOperator, TableWithJoins, TableFactor, Ident, Expr, SelectItem, OffsetRows};
 use common_exception::ErrorCode;
 use common_exception::Result;
 use crate::sessions::{DatabendQueryContextRef, DatabendQueryContext};
@@ -20,6 +20,8 @@ pub struct QueryNormalizerData {
     pub aggregate_expressions: Vec<Expression>,
     pub order_by_expressions: Vec<Expression>,
     pub projection_expressions: Vec<Expression>,
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
 }
 
 pub struct QueryNormalizer {
@@ -44,6 +46,8 @@ impl QueryNormalizer {
                 aggregate_expressions: vec![],
                 order_by_expressions: vec![],
                 projection_expressions: vec![],
+                limit: None,
+                offset: None
             },
         }
     }
@@ -69,9 +73,9 @@ impl QueryNormalizer {
             return Err(cause.add_message_back(" (while in analyze select order by)."));
         }
 
-        // if let Err(cause) = self.analyze_limit(&mut data).await {
-        //     return Err(cause.add_message_back(" (while in analyze select limit)."));
-        // }
+        if let Err(cause) = self.analyze_limit(query).await {
+            return Err(cause.add_message_back(" (while in analyze select limit)."));
+        }
 
         Ok(self.data)
     }
@@ -126,6 +130,38 @@ impl QueryNormalizer {
                 asc: order_by_expr.asc.unwrap_or(true),
                 nulls_first: order_by_expr.asc.unwrap_or(true),
             });
+        }
+
+        Ok(())
+    }
+
+    async fn analyze_limit(&mut self, query: &DfQueryStatement) -> Result<()> {
+        if let Some(limit) = &query.limit {
+            let expression_analyzer = &self.expression_analyzer;
+            let limit_literal = match expression_analyzer.analyze(limit).await? {
+                Expression::Literal { value, .. } => Ok(value.as_u64()? as usize),
+                _ => Err(ErrorCode::SyntaxException(format!(
+                    "Unexpected expression for LIMIT clause: {:?}",
+                    limit
+                ))),
+            }?;
+            self.data.limit = Some(limit_literal);
+        }
+
+        if let Some(offset) = &query.offset {
+            if !matches!(offset.rows, OffsetRows::None) {
+                return Err(ErrorCode::SyntaxException("Unimplemented limit n ROW|ROWS"));
+            }
+
+            let expression_analyzer = &self.expression_analyzer;
+            let offset_literal = match expression_analyzer.analyze(&offset.value).await? {
+                Expression::Literal { value, .. } => Ok(value.as_u64()? as usize),
+                _ => Err(ErrorCode::SyntaxException(format!(
+                    "Unexpected expression for LIMIT clause: {:?}",
+                    offset
+                ))),
+            }?;
+            self.data.offset = Some(offset_literal);
         }
 
         Ok(())

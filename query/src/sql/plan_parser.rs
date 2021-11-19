@@ -149,7 +149,8 @@ impl PlanParser {
     }
 
     fn build_limit_plan(input: PlanNode, data: &QueryAnalyzeState) -> Result<PlanNode> {
-        // TODO
-        Ok(input)
+        PlanBuilder::from(&input)
+            .limit_offset(data.limit, data.offset.unwrap_or(0))?
+            .build()
     }
 }
