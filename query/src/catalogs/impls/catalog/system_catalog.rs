@@ -18,13 +18,13 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
+use common_meta_types::CreateDatabaseReq;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
@@ -169,7 +169,7 @@ impl Catalog for SystemCatalog {
         )));
     }
 
-    async fn create_database(&self, _plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
+    async fn create_database(&self, _req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         Err(ErrorCode::UnImplement("Cannot create system database"))
     }
 

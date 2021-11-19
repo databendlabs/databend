@@ -19,6 +19,7 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_meta_types::CreateDatabaseReply;
+use common_meta_types::CreateDatabaseReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
@@ -47,7 +48,7 @@ impl MetaApiTestSuite {
                 options: Default::default(),
             };
 
-            let res = mt.create_database(plan.clone()).await;
+            let res = mt.create_database(plan.into()).await;
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.database_id, "first database id is 1");
@@ -61,7 +62,7 @@ impl MetaApiTestSuite {
                 options: Default::default(),
             };
 
-            let res = mt.create_database(plan.clone()).await;
+            let res = mt.create_database(plan.into()).await;
             tracing::info!("create database res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(ErrorCode::DatabaseAlreadyExists("").code(), err.code());
@@ -75,7 +76,7 @@ impl MetaApiTestSuite {
                 options: Default::default(),
             };
 
-            let res = mt.create_database(plan.clone()).await;
+            let res = mt.create_database(plan.into()).await;
             tracing::info!("create database res: {:?}", res);
             let err = res.unwrap_err();
             assert_eq!(ErrorCode::DatabaseAlreadyExists("").code(), err.code());
@@ -98,7 +99,7 @@ impl MetaApiTestSuite {
                 options: Default::default(),
             };
 
-            let res = mt.create_database(plan.clone()).await;
+            let res = mt.create_database(plan.into()).await;
             tracing::info!("create database res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(
@@ -177,13 +178,13 @@ impl MetaApiTestSuite {
 
         tracing::info!("--- prepare db");
         {
-            let plan = CreateDatabasePlan {
+            let plan = CreateDatabaseReq {
                 if_not_exists: false,
                 db: db_name.to_string(),
                 options: Default::default(),
             };
 
-            let res = mt.create_database(plan.clone()).await?;
+            let res = mt.create_database(plan).await?;
             tracing::info!("create database res: {:?}", res);
 
             assert_eq!(1, res.database_id, "first database id is 1");
@@ -438,7 +439,7 @@ impl MetaApiTestSuite {
             options: Default::default(),
         };
 
-        let res = mt.create_database(plan.clone()).await?;
+        let res = mt.create_database(plan.into()).await?;
         tracing::info!("create database res: {:?}", res);
         Ok(res)
     }

@@ -17,10 +17,10 @@ use std::convert::TryInto;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
-use common_meta_flight::CreateDatabaseAction;
 use common_meta_flight::CreateTableAction;
 use common_meta_flight::DropDatabaseAction;
 use common_meta_flight::DropTableAction;
+use common_meta_flight::FlightReq;
 use common_meta_flight::GetDatabaseAction;
 use common_meta_flight::GetDatabasesAction;
 use common_meta_flight::GetTableAction;
@@ -35,6 +35,7 @@ use common_meta_types::Cmd::DropDatabase;
 use common_meta_types::Cmd::DropTable;
 use common_meta_types::Cmd::UpsertTableOptions;
 use common_meta_types::CreateDatabaseReply;
+use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::LogEntry;
@@ -51,14 +52,14 @@ use crate::executor::ActionHandler;
 
 // Db
 #[async_trait::async_trait]
-impl RequestHandler<CreateDatabaseAction> for ActionHandler {
+impl RequestHandler<FlightReq<CreateDatabaseReq>> for ActionHandler {
     async fn handle(
         &self,
-        act: CreateDatabaseAction,
+        act: FlightReq<CreateDatabaseReq>,
     ) -> common_exception::Result<CreateDatabaseReply> {
-        let plan = act.plan;
-        let db_name = &plan.db;
-        let if_not_exists = plan.if_not_exists;
+        let req = act.req;
+        let db_name = &req.db;
+        let if_not_exists = req.if_not_exists;
 
         let cr = LogEntry {
             txid: None,

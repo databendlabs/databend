@@ -18,13 +18,13 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_meta_types::CreateDatabaseReply;
+use common_meta_types::CreateDatabaseReq;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
@@ -198,16 +198,16 @@ impl Catalog for OverlaidCatalog {
 
     async fn create_database(
         &self,
-        plan: CreateDatabasePlan,
+        req: CreateDatabaseReq,
     ) -> common_exception::Result<CreateDatabaseReply> {
-        if self.read_only.exists_database(&plan.db).await? {
+        if self.read_only.exists_database(&req.db).await? {
             return Err(ErrorCode::DatabaseAlreadyExists(format!(
                 "{} database exists",
-                plan.db
+                req.db
             )));
         }
         // create db in BOTTOM layer only
-        self.bottom.create_database(plan).await
+        self.bottom.create_database(req).await
     }
 
     async fn drop_database(&self, plan: DropDatabasePlan) -> common_exception::Result<()> {

@@ -24,6 +24,7 @@ use common_meta_raft_store::state_machine::TableLookupKey;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::CreateDatabaseReply;
+use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::MatchSeq;
@@ -33,7 +34,6 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
@@ -44,9 +44,9 @@ use crate::MetaEmbedded;
 
 #[async_trait]
 impl MetaApi for MetaEmbedded {
-    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
+    async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         let cmd = Cmd::CreateDatabase {
-            name: plan.db.clone(),
+            name: req.db.clone(),
         };
 
         let sm = self.inner.lock().await;
@@ -57,10 +57,10 @@ impl MetaApi for MetaEmbedded {
 
         assert!(result.is_some());
 
-        if prev.is_some() && !plan.if_not_exists {
+        if prev.is_some() && !req.if_not_exists {
             return Err(ErrorCode::DatabaseAlreadyExists(format!(
                 "{} database exists",
-                plan.db
+                req.db
             )));
         }
 

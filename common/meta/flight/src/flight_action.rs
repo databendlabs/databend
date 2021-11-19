@@ -13,12 +13,14 @@
 // limitations under the License.
 
 use std::convert::TryInto;
+use std::fmt::Debug;
 use std::io::Cursor;
 use std::sync::Arc;
 
 use common_arrow::arrow_format::flight::data::Action;
 use common_exception::ErrorCode;
 use common_meta_types::CreateDatabaseReply;
+use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::GetKVActionReply;
@@ -30,7 +32,6 @@ use common_meta_types::TableInfo;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
@@ -43,11 +44,16 @@ pub trait RequestFor {
     type Reply;
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct FlightReq<T> {
+    pub req: T,
+}
+
 // Action wrapper for do_action.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
 pub enum MetaFlightAction {
     // database meta
-    CreateDatabase(CreateDatabaseAction),
+    CreateDatabase(FlightReq<CreateDatabaseReq>),
     GetDatabase(GetDatabaseAction),
     DropDatabase(DropDatabaseAction),
     CreateTable(CreateTableAction),
@@ -139,12 +145,8 @@ impl RequestFor for UpsertKVAction {
 }
 
 // == database actions ==
-// - create database
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct CreateDatabaseAction {
-    pub plan: CreateDatabasePlan,
-}
-impl RequestFor for CreateDatabaseAction {
+
+impl RequestFor for FlightReq<CreateDatabaseReq> {
     type Reply = CreateDatabaseReply;
 }
 
