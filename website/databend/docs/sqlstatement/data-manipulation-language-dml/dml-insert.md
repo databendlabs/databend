@@ -53,7 +53,7 @@ INSERT INTO [db.]table [(c1, c2, c3)] SELECT ...
 
 #### Memory engine
 
-Example1:
+Example:
 ```sql
 mysql> CREATE TABLE select_table(a Varchar, b Varchar, c Varchar) Engine = Memory;
 mysql> INSERT INTO select_table values('1','11','abc');
