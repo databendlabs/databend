@@ -18,6 +18,7 @@ use crate::sql::parser::ast::BinaryOperator;
 use crate::sql::parser::ast::ColumnDefinition;
 use crate::sql::parser::ast::Expr;
 use crate::sql::parser::ast::Identifier;
+use crate::sql::parser::ast::Indirection;
 use crate::sql::parser::ast::Join;
 use crate::sql::parser::ast::JoinCondition;
 use crate::sql::parser::ast::Literal;
@@ -152,9 +153,9 @@ pub trait AstVisitor {
         results: Vec<Expr>,
         else_result: Option<Box<Expr>>,
     ) -> Result<()> {
-        self.visit_expr(*operand.unwrap());
-        self.visit_exprs(conditions);
-        self.visit_exprs(results);
+        self.visit_expr(*operand.unwrap())?;
+        self.visit_exprs(conditions)?;
+        self.visit_exprs(results)?;
         self.visit_expr(*else_result.unwrap())
     }
 
@@ -194,7 +195,7 @@ pub trait AstVisitor {
 
     fn visit_order_by_exprs(&mut self, exprs: Vec<OrderByExpr>) -> Result<()> {
         for expr in exprs {
-            self.visit_order_by_expr(expr);
+            self.visit_order_by_expr(expr)?;
         }
         Ok(())
     }
@@ -220,9 +221,17 @@ pub trait AstVisitor {
 
     fn visit_select_target(&mut self, select_target: SelectTarget) -> Result<()> {
         match select_target {
-            SelectTarget::Projection { expr, alias } => self.visit_expr(expr),
-            SelectTarget::Indirections(_0) => Ok(()),
+            SelectTarget::Projection { expr, alias } => self.visit_projection(expr, alias),
+            SelectTarget::Indirections(indirections) => self.visit_indirections(indirections),
         }
+    }
+
+    fn visit_projection(&mut self, expr: Expr, _: Option<Identifier>) -> Result<()> {
+        self.visit_expr(expr)
+    }
+
+    fn visit_indirections(&mut self, _: Vec<Indirection>) -> Result<()> {
+        Ok(())
     }
 
     fn visit_select_targets(&mut self, select_targets: Vec<SelectTarget>) -> Result<()> {
@@ -255,6 +264,7 @@ pub trait AstVisitor {
     ) -> Result<()> {
         self.visit_table_alias(alias.unwrap())
     }
+
     fn visit_table_subquery(
         &mut self,
         subquery: Box<Query>,
@@ -263,10 +273,12 @@ pub trait AstVisitor {
         self.visit_query(*subquery)?;
         self.visit_table_alias(alias.unwrap())
     }
+
     fn visit_table_function(&mut self, expr: Expr, alias: Option<TableAlias>) -> Result<()> {
         self.visit_expr(expr)?;
         self.visit_table_alias(alias.unwrap())
     }
+
     fn visit_join(&mut self, join: Join) -> Result<()> {
         self.visit_join_condition(join.condition)?;
         self.visit_table_reference(*join.left)?;
@@ -282,8 +294,8 @@ pub trait AstVisitor {
         }
     }
 
-    fn visit_table_alias(&mut self, table_alias: TableAlias) -> Result<()> {
-        self.visit_table_alias(table_alias)
+    fn visit_table_alias(&mut self, _: TableAlias) -> Result<()> {
+        Ok(())
     }
 
     // statement
@@ -329,66 +341,70 @@ pub trait AstVisitor {
     fn visit_explain(&mut self, _: bool, query: Box<Statement>) -> Result<()> {
         self.visit_statement(*query)
     }
+
     fn visit_select(&mut self, query: Box<Query>) -> Result<()> {
-        Ok(())
+        self.visit_query(*query)
     }
+
     fn visit_show_tables(&mut self) -> Result<()> {
         Ok(())
     }
+
     fn visit_show_databases(&mut self) -> Result<()> {
         Ok(())
     }
+
     fn visit_show_settings(&mut self) -> Result<()> {
         Ok(())
     }
+
     fn visit_show_process_list(&mut self) -> Result<()> {
         Ok(())
     }
+
     fn visit_show_create_table(&mut self, _: Option<Identifier>, _: Identifier) -> Result<()> {
         Ok(())
     }
+
     fn visit_create_table(
         &mut self,
-        if_not_exists: bool,
-        database: Option<Identifier>,
-        table: Identifier,
-        columns: Vec<ColumnDefinition>,
-        engine: String,
-        options: Vec<SQLProperty>,
+        _: bool,
+        _: Option<Identifier>,
+        _: Identifier,
+        _: Vec<ColumnDefinition>,
+        _: String,
+        _: Vec<SQLProperty>,
     ) -> Result<()> {
         Ok(())
     }
-    fn visit_describe(&mut self, database: Option<Identifier>, table: Identifier) -> Result<()> {
+
+    fn visit_describe(&mut self, _: Option<Identifier>, _: Identifier) -> Result<()> {
         Ok(())
     }
-    fn visit_drop_table(
-        &mut self,
-        if_exists: bool,
-        database: Option<Identifier>,
-        table: Identifier,
-    ) -> Result<()> {
+
+    fn visit_drop_table(&mut self, _: bool, _: Option<Identifier>, _: Identifier) -> Result<()> {
         Ok(())
     }
-    fn visit_truncate_table(
-        &mut self,
-        database: Option<Identifier>,
-        table: Identifier,
-    ) -> Result<()> {
+
+    fn visit_truncate_table(&mut self, _: Option<Identifier>, _: Identifier) -> Result<()> {
         Ok(())
     }
+
     fn visit_create_database(
         &mut self,
-        if_not_exists: bool,
-        name: Identifier,
-        engine: String,
-        options: Vec<SQLProperty>,
+        _: bool,
+        _: Identifier,
+        _: String,
+        _: Vec<SQLProperty>,
     ) -> Result<()> {
         Ok(())
     }
-    fn visit_use_database(&mut self, name: Identifier) -> Result<()> {
+
+    fn visit_use_database(&mut self, _: Identifier) -> Result<()> {
         Ok(())
     }
-    fn visit_kill_stmt(&mut self, object_id: Identifier) -> Result<()> {
+
+    fn visit_kill_stmt(&mut self, _: Identifier) -> Result<()> {
         Ok(())
     }
 }
