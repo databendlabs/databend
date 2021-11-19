@@ -19,13 +19,14 @@ use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropTableReply;
+use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::DropTablePlan;
 
 use crate::catalogs::Database;
 use crate::catalogs::Table;
@@ -54,7 +55,7 @@ pub trait Catalog {
 
     async fn create_table(&self, req: CreateTableReq) -> Result<()>;
 
-    async fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply>;
 
     /// Build a `Arc<dyn Table>` from `TableInfo`.
     fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;

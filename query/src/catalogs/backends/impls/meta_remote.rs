@@ -25,13 +25,14 @@ use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropTableReply;
+use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::DropTablePlan;
 
 use crate::common::MetaClientProvider;
 
@@ -99,8 +100,8 @@ impl MetaApi for MetaRemote {
             .await
     }
 
-    async fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
-        self.query_backend(move |cli| async move { cli.drop_table(plan).await })
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
+        self.query_backend(move |cli| async move { cli.drop_table(req).await })
             .await
     }
 

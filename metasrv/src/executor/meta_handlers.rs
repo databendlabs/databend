@@ -17,7 +17,6 @@ use std::convert::TryInto;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
-use common_meta_flight::DropTableAction;
 use common_meta_flight::FlightReq;
 use common_meta_flight::GetDatabaseAction;
 use common_meta_flight::GetDatabasesAction;
@@ -39,6 +38,8 @@ use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropTableReply;
+use common_meta_types::DropTableReq;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
 use common_meta_types::TableIdent;
@@ -198,11 +199,14 @@ impl RequestHandler<FlightReq<CreateTableReq>> for ActionHandler {
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<DropTableAction> for ActionHandler {
-    async fn handle(&self, act: DropTableAction) -> common_exception::Result<()> {
-        let db_name = &act.plan.db;
-        let table_name = &act.plan.table;
-        let if_exists = act.plan.if_exists;
+impl RequestHandler<FlightReq<DropTableReq>> for ActionHandler {
+    async fn handle(
+        &self,
+        act: FlightReq<DropTableReq>,
+    ) -> common_exception::Result<DropTableReply> {
+        let db_name = &act.req.db;
+        let table_name = &act.req.table;
+        let if_exists = act.req.if_exists;
 
         let cr = LogEntry {
             txid: None,
@@ -222,7 +226,7 @@ impl RequestHandler<DropTableAction> for ActionHandler {
         let (prev, _result) = ch.unpack();
 
         if prev.is_some() || if_exists {
-            Ok(())
+            Ok(DropTableReply {})
         } else {
             Err(ErrorCode::UnknownTable(format!(
                 "Unknown table: '{:}'",

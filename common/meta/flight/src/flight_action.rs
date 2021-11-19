@@ -26,6 +26,8 @@ use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropTableReply;
+use common_meta_types::DropTableReq;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MetaId;
@@ -35,7 +37,6 @@ use common_meta_types::TableInfo;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::DropTablePlan;
 use prost::Message;
 use tonic::Request;
 
@@ -59,7 +60,7 @@ pub enum MetaFlightAction {
     GetDatabases(GetDatabasesAction),
 
     CreateTable(FlightReq<CreateTableReq>),
-    DropTable(DropTableAction),
+    DropTable(FlightReq<DropTableReq>),
     GetTable(GetTableAction),
     GetTableExt(GetTableExtReq),
     GetTables(GetTablesAction),
@@ -167,13 +168,8 @@ impl RequestFor for FlightReq<CreateTableReq> {
     type Reply = CreateTableReply;
 }
 
-// - drop table
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct DropTableAction {
-    pub plan: DropTablePlan,
-}
-impl RequestFor for DropTableAction {
-    type Reply = ();
+impl RequestFor for FlightReq<DropTableReq> {
+    type Reply = DropTableReply;
 }
 
 // - get table

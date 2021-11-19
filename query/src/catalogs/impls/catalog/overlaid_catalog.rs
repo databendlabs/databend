@@ -21,13 +21,14 @@ use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropTableReply;
+use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::DropTablePlan;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::Database;
@@ -136,17 +137,17 @@ impl Catalog for OverlaidCatalog {
         self.bottom.create_table(req).await
     }
 
-    async fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
-        let r = self.read_only.drop_table(plan.clone()).await;
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, ErrorCode> {
+        let r = self.read_only.drop_table(req.clone()).await;
         match r {
             Err(e) => {
                 if e.code() == ErrorCode::UnknownTable("").code() {
-                    self.bottom.drop_table(plan).await
+                    self.bottom.drop_table(req).await
                 } else {
                     Err(e)
                 }
             }
-            Ok(()) => Ok(()),
+            Ok(x) => Ok(x),
         }
     }
 

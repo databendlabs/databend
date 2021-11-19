@@ -22,10 +22,10 @@ use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
-use common_planners::DropTablePlan;
 use common_tracing::tracing;
 
 use crate::MetaApi;
@@ -321,7 +321,7 @@ impl MetaApiTestSuite {
 
             tracing::info!("--- drop table with if_exists = false");
             {
-                let plan = DropTablePlan {
+                let plan = DropTableReq {
                     if_exists: false,
                     db: db_name.to_string(),
                     table: tbl_name.to_string(),
@@ -343,7 +343,7 @@ impl MetaApiTestSuite {
 
             tracing::info!("--- drop table with if_exists = false again, error");
             {
-                let plan = DropTablePlan {
+                let plan = DropTableReq {
                     if_exists: false,
                     db: db_name.to_string(),
                     table: tbl_name.to_string(),
@@ -360,7 +360,7 @@ impl MetaApiTestSuite {
 
             tracing::info!("--- drop table with if_exists = true again, ok");
             {
-                let plan = DropTablePlan {
+                let plan = DropTableReq {
                     if_exists: true,
                     db: db_name.to_string(),
                     table: tbl_name.to_string(),

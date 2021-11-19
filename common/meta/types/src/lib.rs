@@ -49,6 +49,8 @@ pub use seq_value::KVMeta;
 pub use seq_value::SeqV;
 pub use table::CreateTableReply;
 pub use table::CreateTableReq;
+pub use table::DropTableReply;
+pub use table::DropTableReq;
 pub use table::TableIdent;
 pub use table::TableInfo;
 pub use table::TableMeta;
