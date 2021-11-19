@@ -20,6 +20,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
+use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::DatabendQueryContextRef;
@@ -51,6 +52,41 @@ impl Interpreter for GrantPrivilegeInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
+
+        // *.`table` is not allowed
+        if plan.database_pattern == "*" && plan.table_pattern != "*" {
+            return Err(common_exception::ErrorCode::BadArguments(format!(
+                "can not grant privilege on *.{}",
+                plan.table_pattern
+            )));
+        }
+
+        // check database & table existence
+        let catalog = self.ctx.get_catalog();
+        if plan.database_pattern != "*"
+            && !catalog
+                .as_ref()
+                .exists_database(&plan.database_pattern)
+                .await?
+        {
+            return Err(common_exception::ErrorCode::BadArguments(format!(
+                "database {} not exists",
+                plan.database_pattern
+            )));
+        }
+
+        if plan.table_pattern != "*"
+            && !catalog
+                .as_ref()
+                .exists_table(&plan.database_pattern, &plan.table_pattern)
+                .await?
+        {
+            return Err(common_exception::ErrorCode::BadArguments(format!(
+                "table {}.{} not exists",
+                plan.database_pattern, plan.table_pattern
+            )));
+        }
+
         let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
         user_mgr
             .set_user_privileges(&plan.name, &plan.hostname, plan.priv_types)
