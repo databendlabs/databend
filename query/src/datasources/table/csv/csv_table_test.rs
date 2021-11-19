@@ -119,33 +119,7 @@ async fn test_csv_table_parse_error() -> Result<()> {
         TableContext::default(),
     )?;
 
-<<<<<<< HEAD
-    let scan_plan = &ScanPlan {
-        schema_name: "".to_string(),
-        table_id: 0,
-        table_version: None,
-        table_schema: DataSchemaRefExt::create(vec![]),
-        table_args: None,
-        projected_schema: DataSchemaRefExt::create(vec![DataField::new(
-            "column2",
-            DataType::UInt64,
-            false,
-        )]),
-        push_downs: Extras::default(),
-    };
-    let partitions = ctx.get_settings().get_max_threads()? as usize;
-    let io_ctx = ctx.get_single_node_table_io_context()?;
-    let io_ctx = Arc::new(io_ctx);
-    let source_plan = table
-        .read_plan(
-            io_ctx.clone(),
-            Some(scan_plan.push_downs.clone()),
-            Some(partitions),
-        )
-        .await?;
-=======
-    let source_plan = table.read_plan(ctx.clone(), Some(Extras::default()))?;
->>>>>>> main
+    let source_plan = table.read_plan(ctx.clone(), Some(Extras::default())).await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
     let stream = table.read(ctx, &source_plan).await?;
