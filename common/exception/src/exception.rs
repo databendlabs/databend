@@ -275,12 +275,14 @@ build_exceptions! {
     UnknownStorageSchemeName(7001),
     SecretKeyNotSet(7002),
 
-
     // datasource error
     DuplicatedTableEngineProvider(8000),
     UnknownDatabaseEngine(8001),
     UnknownTableEngine(8002),
     DuplicatedDatabaseEngineProvider(8003),
+
+    // http query error
+    HttpNotFound(9404),
 
 }
 // General errors

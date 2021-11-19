@@ -43,7 +43,7 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use log::info;
+use common_tracing::tracing;
 use maplit::hashmap;
 
 use crate::executor::action_handler::RequestHandler;
@@ -153,7 +153,7 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
         let table_name = &plan.table;
         let if_not_exists = plan.if_not_exists;
 
-        info!("create table: {:}: {:?}", &db_name, &table_name);
+        tracing::info!("create table: {:}: {:?}", &db_name, &table_name);
 
         let table_meta = plan.table_meta;
 

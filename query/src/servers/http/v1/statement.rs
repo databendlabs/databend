@@ -44,7 +44,6 @@ use crate::sql::PlanParser;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HttpQueryResult {
     id: String,
-    #[serde(rename = "nextUri")] // to be compatible with presto
     pub next_uri: Option<String>,
     pub data: Option<Vec<Vec<JsonValue>>>,
     pub columns: Option<DataSchemaRef>,

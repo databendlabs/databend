@@ -26,13 +26,12 @@ use poem::Route;
 use pretty_assertions::assert_eq;
 use serde_json;
 
-use crate::servers::http::v1::http_query_handlers::make_delete_uri;
+use crate::servers::http::v1::http_query_handlers::make_final_uri;
 use crate::servers::http::v1::http_query_handlers::make_page_uri;
 use crate::servers::http::v1::http_query_handlers::make_state_uri;
 use crate::servers::http::v1::http_query_handlers::query_route;
 use crate::servers::http::v1::http_query_handlers::QueryResponse;
-use crate::servers::http::v1::query::execute_state::STATE_RUNNING;
-use crate::servers::http::v1::query::execute_state::STATE_STOPPED;
+use crate::servers::http::v1::query::execute_state::ExecuteStateName;
 use crate::sessions::SessionManagerRef;
 use crate::tests::SessionManagerBuilder;
 
@@ -40,6 +39,14 @@ use crate::tests::SessionManagerBuilder;
 // 1. kill without delete
 // 2. query fail after started
 // 3. get old page other than the last
+
+pub fn get_page_uri(query_id: &str, page_no: usize, wait_time: u32) -> String {
+    format!(
+        "{}?wait_time={}",
+        make_page_uri(query_id, page_no),
+        wait_time
+    )
+}
 
 type RouteWithData = AddDataEndpoint<Route, SessionManagerRef>;
 
@@ -49,10 +56,10 @@ async fn test_simple_sql() -> Result<()> {
     let (status, result) = post_sql(sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 10);
-    assert_eq!(result.query_state, Some(STATE_STOPPED.to_string()));
+    assert_eq!(result.state, ExecuteStateName::Succeeded);
     assert!(result.next_uri.is_none(), "{:?}", result);
-    assert!(result.query_error.is_none());
-    assert!(result.query_progress.is_some());
+    assert!(result.error.is_none());
+    assert!(result.stats.progress.is_some());
     assert!(result.columns.is_some());
     Ok(())
 }
@@ -63,105 +70,76 @@ async fn test_bad_sql() -> Result<()> {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(result.data.len(), 0);
     assert!(result.next_uri.is_none());
-    assert!(result.query_state.is_none());
-    assert!(result.query_error.is_some());
-    assert!(result.request_error.is_some());
-    assert!(result.query_progress.is_none());
+    assert_eq!(result.state, ExecuteStateName::Failed);
+    assert!(result.error.is_some());
+    assert!(result.stats.progress.is_none());
     assert!(result.columns.is_none());
     Ok(())
 }
 
 #[tokio::test]
 async fn test_async() -> Result<()> {
-    let sessions = SessionManagerBuilder::create().build().unwrap();
+    let sessions = SessionManagerBuilder::create().build()?;
     let route = Route::new().nest("/v1/query", query_route()).data(sessions);
     let sql = "select sum(number+1) from numbers(1000000) where number>0 group by number%3";
     let json = serde_json::json!({"sql": sql.to_string()});
 
     let (status, result) = post_json_to_router(&route, &json, 0).await?;
     assert_eq!(status, StatusCode::OK);
-    assert!(result.id.is_some());
-    let query_id = result.id.unwrap();
+    let query_id = result.id;
     let next_uri = make_page_uri(&query_id, 0);
-    assert_eq!(result.data.len(), 0, "should no data when async");
+    assert_eq!(result.data.len(), 0);
     assert_eq!(result.next_uri, Some(next_uri));
-    assert!(result.query_progress.is_some());
+    assert!(result.stats.progress.is_some());
     assert!(result.columns.is_some());
-    assert!(result.query_error.is_none());
-    assert!(result.request_error.is_none());
-    assert_eq!(
-        result.query_state,
-        Some(STATE_RUNNING.to_string()),
-        "query should be running"
-    );
+    assert!(result.error.is_none());
+    assert_eq!(result.state, ExecuteStateName::Running,);
 
     // get page, support retry
     for _ in 1..2 {
-        let (status, result) = get_page(&route, query_id.clone(), 0, 3).await?;
+        let uri = get_page_uri(&query_id, 0, 3);
+
+        let (status, result) = get_uri_checked(&route, &uri).await?;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(result.data.len(), 3);
         assert!(result.next_uri.is_none());
         assert!(result.columns.is_none());
-        assert!(result.query_error.is_none());
-        assert!(result.query_progress.is_some());
-        assert!(result.request_error.is_none());
-        assert_eq!(
-            result.query_state,
-            Some(STATE_STOPPED.to_string()),
-            "query should be stopped"
-        );
+        assert!(result.error.is_none());
+        assert!(result.stats.progress.is_some());
+        assert_eq!(result.state, ExecuteStateName::Succeeded);
     }
 
     // get state
-    let (status, result) = get_state(&route, query_id.clone()).await?;
+    let uri = make_state_uri(&query_id);
+    let (status, result) = get_uri_checked(&route, &uri).await?;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(result.data.len(), 0);
     assert!(result.next_uri.is_none());
     assert!(result.columns.is_none());
-    assert!(result.query_error.is_none());
-    assert!(result.query_progress.is_some());
-    assert!(result.request_error.is_none());
-    assert_eq!(
-        result.query_state,
-        Some(STATE_STOPPED.to_string()),
-        "query should be stopped"
-    );
+    assert!(result.error.is_none());
+    assert!(result.stats.progress.is_some());
+    assert_eq!(result.state, ExecuteStateName::Succeeded);
 
     // get page not expected
-    let (status, result) = get_page(&route, query_id.clone(), 1, 3).await?;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(result.data.len(), 0);
-    assert!(result.next_uri.is_none());
-    assert!(result.columns.is_none());
-    assert!(result.query_error.is_none());
-    assert!(result.request_error.is_some());
-    assert!(result.query_state.is_none());
+    let uri = get_page_uri(&query_id, 1, 3);
+    let response = get_uri(&route, &uri).await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let body = response.into_body().into_string().await.unwrap();
+    assert_eq!(body, "wrong page number 1");
 
     // delete
     let status = delete_query(&route, query_id.clone()).await;
     assert_eq!(status, StatusCode::OK);
 
-    // get state fail because query is deleted
-    let (status, result) = get_state(&route, query_id.clone()).await?;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(result.data.len(), 0);
-    assert!(result.next_uri.is_none());
-    assert!(result.columns.is_none());
-    assert!(result.query_error.is_none());
-    assert!(result.query_progress.is_none());
-    assert!(result.request_error.is_some());
+    let response = get_uri(&route, &uri).await;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
     Ok(())
 }
 
-async fn get_state(route: &RouteWithData, query_id: String) -> Result<(StatusCode, QueryResponse)> {
-    let uri = make_state_uri(&query_id);
-    get_uri_checked(route, uri).await
-}
-
 async fn delete_query(route: &RouteWithData, query_id: String) -> StatusCode {
-    let uri = make_delete_uri(&query_id);
-    let resp = get_uri(route, uri).await;
+    let uri = make_final_uri(&query_id);
+    let resp = get_uri(route, &uri).await;
     resp.status()
 }
 
@@ -175,10 +153,10 @@ async fn check_response(response: Response) -> Result<(StatusCode, QueryResponse
         &body,
         result.err()
     );
-    Ok((status, result.unwrap()))
+    Ok((status, result?))
 }
 
-async fn get_uri(route: &RouteWithData, uri: String) -> Response {
+async fn get_uri(route: &RouteWithData, uri: &str) -> Response {
     route
         .call(
             Request::builder()
@@ -188,26 +166,9 @@ async fn get_uri(route: &RouteWithData, uri: String) -> Response {
         )
         .await
 }
-async fn get_uri_checked(
-    route: &RouteWithData,
-    uri: String,
-) -> Result<(StatusCode, QueryResponse)> {
+async fn get_uri_checked(route: &RouteWithData, uri: &str) -> Result<(StatusCode, QueryResponse)> {
     let response = get_uri(route, uri).await;
     check_response(response).await
-}
-
-async fn get_page(
-    route: &RouteWithData,
-    query_id: String,
-    page_no: usize,
-    wait_time: u32,
-) -> Result<(StatusCode, QueryResponse)> {
-    let uri = format!(
-        "{}?wait_time={}",
-        make_page_uri(&query_id, page_no),
-        wait_time
-    );
-    get_uri_checked(route, uri).await
 }
 
 async fn post_sql(sql: &'static str, wait_time: i32) -> Result<(StatusCode, QueryResponse)> {
@@ -236,7 +197,7 @@ async fn post_json_to_router(
     let path = "/v1/query";
     let uri = format!("{}?wait_time={}", path, wait_time);
     let content_type = "application/json";
-    let body = serde_json::to_vec(&json).unwrap();
+    let body = serde_json::to_vec(&json)?;
 
     let response = route
         .call(

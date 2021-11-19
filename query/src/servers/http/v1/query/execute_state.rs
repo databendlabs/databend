@@ -25,6 +25,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::StreamExt;
 use serde::Deserialize;
+use serde::Serialize;
 
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::DatabendQueryContextRef;
@@ -37,9 +38,28 @@ pub struct HttpQueryRequest {
     pub sql: String,
 }
 
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
+pub enum ExecuteStateName {
+    Running,
+    Failed,
+    Succeeded,
+}
+
 pub(crate) enum ExecuteState {
     Running(ExecuteRunning),
     Stopped(ExecuteStopped),
+}
+
+impl ExecuteState {
+    pub(crate) fn extract(&self) -> (ExecuteStateName, Option<ErrorCode>) {
+        match self {
+            ExecuteState::Running(_) => (ExecuteStateName::Running, None),
+            ExecuteState::Stopped(v) => match &v.reason {
+                Ok(_) => (ExecuteStateName::Succeeded, None),
+                Err(e) => (ExecuteStateName::Failed, Some(e.clone())),
+            },
+        }
+    }
 }
 
 use ExecuteState::*;
@@ -56,16 +76,7 @@ pub(crate) struct ExecuteStateWrapper {
     pub(crate) state: ExecuteState,
 }
 
-pub const STATE_RUNNING: &str = "running";
-pub const STATE_STOPPED: &str = "stopped";
-
 impl ExecuteStateWrapper {
-    pub(crate) fn get_state(&self) -> &str {
-        match &self.state {
-            Running(_) => STATE_RUNNING,
-            Stopped(_) => STATE_STOPPED,
-        }
-    }
     pub(crate) fn get_progress(&self) -> Option<ProgressValues> {
         match &self.state {
             Running(r) => Some(r.context.get_progress_value()),
@@ -134,17 +145,17 @@ impl ExecuteState {
                             Ok(block) => tokio::select! {
                                 _ = block_tx.send(block) => { },
                                 _ = abort_rx.recv() => {
-                                    ExecuteState::stop(&state, Err(ErrorCode::AbortedQuery("query aborted"))).await;
+                                    ExecuteState::stop(&state, Err(ErrorCode::AbortedQuery("query aborted")), true).await;
                                     break;
                                 },
                             },
                             Err(err) => {
-                                ExecuteState::stop(&state, Err(err)).await;
-                                break;
+                                ExecuteState::stop(&state, Err(err), false).await;
+                                break
                             }
                         };
                     } else {
-                        ExecuteState::stop(&state, Ok(())).await;
+                        ExecuteState::stop(&state, Ok(()), false).await;
                         break;
                     }
                 }
@@ -153,12 +164,14 @@ impl ExecuteState {
         Ok((state_clone, schema))
     }
 
-    pub(crate) async fn stop(this: &ExecuteStateRef, reason: Result<()>) {
+    pub(crate) async fn stop(this: &ExecuteStateRef, reason: Result<()>, kill: bool) {
         let mut guard = this.write().await;
         if let Running(r) = &guard.state {
             // release session
             let progress = Some(r.context.get_progress_value());
-            r.session.force_kill_session();
+            if kill {
+                r.session.force_kill_query();
+            }
             guard.state = Stopped(ExecuteStopped { progress, reason });
         };
     }
