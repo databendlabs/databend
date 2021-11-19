@@ -35,8 +35,10 @@ pub struct RaftLog {
 
 impl RaftLog {
     /// Open RaftLog
-    #[tracing::instrument(level = "info", skip(db))]
+    #[tracing::instrument(level = "info", skip(db,config), fields(config_id=%config.config_id))]
     pub async fn open(db: &sled::Db, config: &RaftConfig) -> common_exception::Result<RaftLog> {
+        tracing::info!(?config);
+
         let tree_name = config.tree_name(TREE_RAFT_LOG);
         let inner = SledTree::open(db, &tree_name, config.is_sync())?;
         let rl = RaftLog { inner };

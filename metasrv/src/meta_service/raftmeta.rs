@@ -360,8 +360,9 @@ impl MetaNode {
 
     /// Start MetaNode in either `boot`, `single`, `join` or `open` mode,
     /// according to config.
-    #[tracing::instrument(level = "info")]
+    #[tracing::instrument(level = "info", skip(config))]
     pub async fn start(config: &RaftConfig) -> Result<Arc<MetaNode>, ErrorCode> {
+        tracing::info!(?config, "start()");
         let mn = Self::do_start(config).await?;
         tracing::info!("Done starting MetaNode: {:?}", config);
         Ok(mn)
