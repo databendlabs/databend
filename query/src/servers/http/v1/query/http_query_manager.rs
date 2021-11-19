@@ -19,10 +19,7 @@ use common_base::tokio::sync::RwLock;
 use common_exception::Result;
 
 use crate::configs::Config;
-use crate::servers::http::v1::query::execute_state::HttpQueryRequest;
-use crate::servers::http::v1::query::http_query::HttpQuery;
 use crate::servers::http::v1::query::http_query::HttpQueryRef;
-use crate::sessions::SessionManagerRef;
 
 pub struct HttpQueryManager {
     pub(crate) queries: Arc<RwLock<HashMap<String, HttpQueryRef>>>,
@@ -37,22 +34,8 @@ impl HttpQueryManager {
         }))
     }
 
-    fn next_query_id(self: &Arc<Self>) -> String {
+    pub(crate) fn next_query_id(self: &Arc<Self>) -> String {
         uuid::Uuid::new_v4().to_string()
-    }
-
-    pub(crate) async fn create_query(
-        self: &Arc<Self>,
-        req: HttpQueryRequest,
-        session_manager: &SessionManagerRef,
-    ) -> Result<HttpQueryRef> {
-        let query_id = self.next_query_id();
-        let query = HttpQuery::try_create(query_id.clone(), req, session_manager).await?;
-        self.queries
-            .write()
-            .await
-            .insert(query_id.clone(), query.clone());
-        Ok(query)
     }
 
     pub(crate) async fn get_query_by_id(self: &Arc<Self>, query_id: &str) -> Option<HttpQueryRef> {

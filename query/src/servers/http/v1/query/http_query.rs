@@ -22,6 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::servers::http::v1::query::execute_state::ExecuteState;
+use crate::servers::http::v1::query::execute_state::ExecuteStateName;
 use crate::servers::http::v1::query::execute_state::ExecuteStateRef;
 use crate::servers::http::v1::query::execute_state::HttpQueryRequest;
 use crate::servers::http::v1::query::result_data_manager::ResponseData;
@@ -35,8 +36,8 @@ pub struct ResponseInitialState {
 
 pub struct ResponseState {
     pub progress: Option<ProgressValues>,
-    pub state: String,
-    pub error: Option<String>,
+    pub state: ExecuteStateName,
+    pub error: Option<ErrorCode>,
 }
 
 pub struct HttpQueryResponseInternal {
@@ -110,10 +111,11 @@ impl HttpQuery {
 
     pub async fn get_state(&self) -> ResponseState {
         let state = self.state.read().await;
+        let (exe_state, err) = state.state.extract();
         ResponseState {
             progress: state.get_progress(),
-            state: state.get_state().to_string(),
-            error: None, // todo
+            state: exe_state,
+            error: err,
         }
     }
 
@@ -128,7 +130,12 @@ impl HttpQuery {
     }
 
     pub async fn kill(&self) {
-        ExecuteState::stop(&self.state, Err(ErrorCode::Ok("killed by http"))).await;
+        ExecuteState::stop(
+            &self.state,
+            Err(ErrorCode::AbortedQuery("killed by http")),
+            true,
+        )
+        .await;
         self.data.lock().await.block_rx.close();
     }
 }
