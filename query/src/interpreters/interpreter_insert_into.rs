@@ -76,8 +76,6 @@ impl Interpreter for InsertIntoInterpreter {
             .ctx
             .get_table(&self.plan.db_name, &self.plan.tbl_name)?;
 
-        let io_ctx = self.ctx.get_cluster_table_io_context()?;
-        let io_ctx = Arc::new(io_ctx);
         let input_stream = if self.plan.values_opt.is_some() {
             let values = self.plan.values_opt.clone().take().unwrap();
             let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
@@ -113,7 +111,7 @@ impl Interpreter for InsertIntoInterpreter {
         }?;
 
         table
-            .append_data(io_ctx, self.plan.clone(), input_stream)
+            .append_data(self.ctx.clone(), self.plan.clone(), input_stream)
             .await?;
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

@@ -1175,22 +1175,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-context"
-version = "0.1.0"
-dependencies = [
- "common-arrow",
- "common-base",
- "common-dal",
- "common-datavalues",
- "common-exception",
- "common-infallible",
- "common-meta-types",
- "pretty_assertions",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "common-dal"
 version = "0.1.0"
 dependencies = [
@@ -2084,7 +2068,6 @@ dependencies = [
  "common-building",
  "common-cache",
  "common-clickhouse-srv",
- "common-context",
  "common-dal",
  "common-datablocks",
  "common-datavalues",

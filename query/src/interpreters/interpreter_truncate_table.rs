@@ -51,9 +51,7 @@ impl Interpreter for TruncateTableInterpreter {
             .ctx
             .get_table(self.plan.db.as_str(), self.plan.table.as_str())?;
 
-        let io_ctx = self.ctx.get_cluster_table_io_context()?;
-        let io_ctx = Arc::new(io_ctx);
-        table.truncate(io_ctx, self.plan.clone()).await?;
+        table.truncate(self.ctx.clone(), self.plan.clone()).await?;
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
             None,

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::Result;
@@ -51,8 +49,7 @@ impl NumberTestData {
             numbers,
         )))]);
         let table = catalog.get_table_function(self.table, tbl_arg)?;
-        let io_ctx = self.ctx.get_cluster_table_io_context()?;
-        table.clone().as_table().read_plan(Arc::new(io_ctx), None)
+        table.clone().as_table().read_plan(self.ctx.clone(), None)
     }
 
     pub fn number_source_transform_for_test(&self, numbers: i64) -> Result<SourceTransform> {

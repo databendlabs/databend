@@ -16,9 +16,6 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_stream::stream;
-use common_context::DataContext;
-use common_context::IOContext;
-use common_context::TableIOContext;
 use common_dal::Local;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -33,7 +30,8 @@ use common_streams::SendableDataBlockStream;
 use common_streams::Source;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContext;
+use crate::datasources::context::TableContext;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct ParquetTable {
     table_info: TableInfo,
@@ -41,10 +39,7 @@ pub struct ParquetTable {
 }
 
 impl ParquetTable {
-    pub fn try_create(
-        table_info: TableInfo,
-        _data_ctx: Arc<dyn DataContext<u64>>,
-    ) -> Result<Box<dyn Table>> {
+    pub fn try_create(table_info: TableInfo, _table_ctx: TableContext) -> Result<Box<dyn Table>> {
         let options = table_info.options();
         let file = options.get("location").cloned();
         return match file {
@@ -78,7 +73,7 @@ impl Table for ParquetTable {
 
     fn read_partitions(
         &self,
-        _io_ctx: Arc<TableIOContext>,
+        _ctx: DatabendQueryContextRef,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let parts = vec![Part {
@@ -90,12 +85,9 @@ impl Table for ParquetTable {
 
     async fn read(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let ctx: Arc<DatabendQueryContext> = io_ctx
-            .get_user_data()?
-            .expect("DatabendQueryContext should not be None");
         let ctx_clone = ctx.clone();
         let table_schema = self.get_table_info().schema();
         let projection = plan.projections();

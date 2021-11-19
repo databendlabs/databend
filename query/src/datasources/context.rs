@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,11 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! `catalog` defines catalog related data types, such as table or database.
+use std::fmt::Debug;
+use std::sync::Arc;
 
-pub use table_io_context::DataContext;
-pub use table_io_context::IOContext;
-pub use table_io_context::TableDataContext;
-pub use table_io_context::TableIOContext;
+use common_dal::InMemoryData;
+use common_exception::ErrorCode;
+use common_infallible::RwLock;
 
-mod table_io_context;
+#[derive(Clone, Debug, Default)]
+pub struct TableContext {
+    pub in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
+}
+
+impl TableContext {
+    pub fn get_in_memory_data(&self) -> Result<Arc<RwLock<InMemoryData<u64>>>, ErrorCode> {
+        Ok(self.in_memory_data.clone())
+    }
+}
