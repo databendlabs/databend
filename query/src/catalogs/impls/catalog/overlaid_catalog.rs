@@ -220,17 +220,4 @@ impl Catalog for OverlaidCatalog {
         }
         self.bottom.drop_database(plan).await
     }
-
-    async fn exists_database(&self, db_name: &str) -> common_exception::Result<bool> {
-        match self.get_database(db_name).await {
-            Ok(_) => Ok(true),
-            Err(err) => {
-                if err.code() == ErrorCode::UnknownDatabaseCode() {
-                    Ok(false)
-                } else {
-                    Err(err)
-                }
-            }
-        }
-    }
 }
