@@ -37,7 +37,6 @@ use common_meta_flight::MetaFlightAction;
 use common_tracing::tracing;
 use futures::Stream;
 use futures::StreamExt;
-use log::info;
 use prost::Message;
 use serde::Serialize;
 use tonic::metadata::MetadataMap;
@@ -185,7 +184,7 @@ impl FlightService for MetaFlightImpl {
         common_tracing::extract_remote_span_as_parent(&request);
 
         let action: MetaFlightAction = request.try_into()?;
-        info!("Receive do_action: {:?}", action);
+        tracing::info!("Receive do_action: {:?}", action);
 
         let s = JsonSer;
         let body = self.action_handler.execute(action, s).await?;

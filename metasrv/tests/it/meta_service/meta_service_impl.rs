@@ -26,8 +26,6 @@ use databend_meta::errors::MetaError;
 use databend_meta::errors::RetryableError;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::proto::meta_service_client::MetaServiceClient;
-#[allow(unused_imports)]
-use log::info;
 use pretty_assertions::assert_eq;
 
 use crate::init_meta_ut;
