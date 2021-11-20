@@ -12,5 +12,5 @@ EXPLAIN select max(number+1) as c1, (number%3+1) as c2 from numbers_mt(10000) gr
 SELECT 'projection push down: push (name and value) to read datasource';
 
 create table a (a int, b int, c int) Engine = Fuse;
-EXPLAIN select a from a where value > 10;
+EXPLAIN select a from a where b > 10;
 drop table a;

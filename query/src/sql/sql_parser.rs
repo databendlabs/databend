@@ -15,6 +15,7 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
+use std::convert::TryFrom;
 use std::time::Instant;
 
 use common_exception::ErrorCode;
@@ -29,6 +30,7 @@ use sqlparser::ast::ColumnOptionDef;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Ident;
 use sqlparser::ast::SqlOption;
+use sqlparser::ast::Statement;
 use sqlparser::ast::TableConstraint;
 use sqlparser::ast::Value;
 use sqlparser::dialect::keywords::Keyword;
@@ -40,28 +42,31 @@ use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::Whitespace;
 
-use crate::sql::DfAlterUser;
-use crate::sql::DfCreateDatabase;
-use crate::sql::DfCreateTable;
-use crate::sql::DfCreateUser;
-use crate::sql::DfDescribeTable;
-use crate::sql::DfDropDatabase;
-use crate::sql::DfDropTable;
-use crate::sql::DfDropUser;
-use crate::sql::DfExplain;
-use crate::sql::DfGrantStatement;
+use crate::sql::statements::DfAlterUser;
+use crate::sql::statements::DfCreateDatabase;
+use crate::sql::statements::DfCreateTable;
+use crate::sql::statements::DfCreateUser;
+use crate::sql::statements::DfDescribeTable;
+use crate::sql::statements::DfDropDatabase;
+use crate::sql::statements::DfDropTable;
+use crate::sql::statements::DfDropUser;
+use crate::sql::statements::DfExplain;
+use crate::sql::statements::DfGrantStatement;
+use crate::sql::statements::DfInsertStatement;
+use crate::sql::statements::DfKillStatement;
+use crate::sql::statements::DfQueryStatement;
+use crate::sql::statements::DfSetVariable;
+use crate::sql::statements::DfShowCreateTable;
+use crate::sql::statements::DfShowDatabases;
+use crate::sql::statements::DfShowMetrics;
+use crate::sql::statements::DfShowProcessList;
+use crate::sql::statements::DfShowSettings;
+use crate::sql::statements::DfShowTables;
+use crate::sql::statements::DfShowUsers;
+use crate::sql::statements::DfTruncateTable;
+use crate::sql::statements::DfUseDatabase;
 use crate::sql::DfHint;
-use crate::sql::DfKillStatement;
-use crate::sql::DfShowCreateTable;
-use crate::sql::DfShowDatabases;
-use crate::sql::DfShowMetrics;
-use crate::sql::DfShowProcessList;
-use crate::sql::DfShowSettings;
-use crate::sql::DfShowTables;
-use crate::sql::DfShowUsers;
 use crate::sql::DfStatement;
-use crate::sql::DfTruncateTable;
-use crate::sql::DfUseDatabase;
 
 // Use `Parser::expected` instead, if possible
 macro_rules! parser_err {
@@ -216,10 +221,10 @@ impl<'a> DfParser<'a> {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
                     }
-                    Keyword::TRUNCATE => {
-                        self.parser.next_token();
-                        self.parse_truncate()
-                    }
+                    Keyword::TRUNCATE => self.parse_truncate(),
+                    Keyword::SET => self.parse_set(),
+                    Keyword::INSERT => self.parse_insert(),
+                    Keyword::SELECT | Keyword::WITH | Keyword::VALUES => self.parse_query(),
                     Keyword::GRANT => {
                         self.parser.next_token();
                         self.parse_grant()
@@ -230,16 +235,65 @@ impl<'a> DfParser<'a> {
                         "KILL" => self.parse_kill_query(),
                         _ => self.expected("Keyword", self.parser.peek_token()),
                     },
-                    _ => {
-                        // use the native parser
-                        Ok(DfStatement::Statement(self.parser.parse_statement()?))
-                    }
+                    _ => self.expected("an SQL statement", Token::Word(w)),
                 }
             }
-            _ => {
-                // use the native parser
-                Ok(DfStatement::Statement(self.parser.parse_statement()?))
-            }
+            Token::LParen => self.parse_query(),
+            unexpected => self.expected("an SQL statement", unexpected),
+        }
+    }
+
+    fn parse_query(&mut self) -> Result<DfStatement, ParserError> {
+        // self.parser.prev_token();
+        let native_query = self.parser.parse_query()?;
+        Ok(DfStatement::Query(DfQueryStatement::try_from(
+            native_query,
+        )?))
+    }
+
+    fn parse_set(&mut self) -> Result<DfStatement, ParserError> {
+        self.parser.next_token();
+        match self.parser.parse_set()? {
+            Statement::SetVariable {
+                local,
+                hivevar,
+                variable,
+                value,
+            } => Ok(DfStatement::SetVariable(DfSetVariable {
+                local,
+                hivevar,
+                variable,
+                value,
+            })),
+            _ => parser_err!("Expect set Variable statement"),
+        }
+    }
+
+    fn parse_insert(&mut self) -> Result<DfStatement, ParserError> {
+        self.parser.next_token();
+        match self.parser.parse_insert()? {
+            Statement::Insert {
+                or,
+                table_name,
+                columns,
+                overwrite,
+                source,
+                partitioned,
+                format,
+                after_columns,
+                table,
+            } => Ok(DfStatement::InsertQuery(DfInsertStatement {
+                or,
+                table_name,
+                columns,
+                overwrite,
+                source,
+                partitioned,
+                format,
+                after_columns,
+                table,
+            })),
+            _ => parser_err!("Expect set insert statement"),
         }
     }
 
@@ -262,9 +316,8 @@ impl<'a> DfParser<'a> {
             _ => ExplainType::Syntax,
         };
 
-        let statement = Box::new(self.parser.parse_statement()?);
-        let explain_plan = DfExplain { typ, statement };
-        Ok(DfStatement::Explain(explain_plan))
+        let statement = Box::new(self.parse_query()?);
+        Ok(DfStatement::Explain(DfExplain { typ, statement }))
     }
 
     // parse show databases where database = xxx or where database
@@ -490,19 +543,19 @@ impl<'a> DfParser<'a> {
     }
 
     // Parse 'KILL statement'.
-    fn parse_kill<F>(&mut self, f: F) -> Result<DfStatement, ParserError>
-    where F: Fn(DfKillStatement) -> DfStatement {
-        Ok(f(DfKillStatement {
+    fn parse_kill<const KILL_QUERY: bool>(&mut self) -> Result<DfStatement, ParserError> {
+        Ok(DfStatement::KillStatement(DfKillStatement {
             object_id: self.parser.parse_identifier()?,
+            kill_query: KILL_QUERY,
         }))
     }
 
     // Parse 'KILL statement'.
     fn parse_kill_query(&mut self) -> Result<DfStatement, ParserError> {
         match self.consume_token("KILL") {
-            true if self.consume_token("QUERY") => self.parse_kill(DfStatement::KillQuery),
-            true if self.consume_token("CONNECTION") => self.parse_kill(DfStatement::KillConn),
-            true => self.parse_kill(DfStatement::KillConn),
+            true if self.consume_token("QUERY") => self.parse_kill::<true>(),
+            true if self.consume_token("CONNECTION") => self.parse_kill::<false>(),
+            true => self.parse_kill::<false>(),
             false => self.expected("Must KILL", self.parser.peek_token()),
         }
     }
@@ -671,6 +724,7 @@ impl<'a> DfParser<'a> {
     }
 
     fn parse_truncate(&mut self) -> Result<DfStatement, ParserError> {
+        self.parser.next_token();
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::TABLE => {

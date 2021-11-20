@@ -23,6 +23,7 @@ mod plan_parser;
 mod sql_common;
 mod sql_parser;
 mod sql_statement;
+mod statements;
 
 pub use plan_parser::PlanParser;
 pub use sql_common::SQLCommon;

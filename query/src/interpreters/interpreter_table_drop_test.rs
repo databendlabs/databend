@@ -19,7 +19,7 @@ use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 use crate::interpreters::*;
-use crate::sql::*;
+use crate::tests::parse_query;
 
 #[tokio::test]
 async fn test_drop_table_interpreter() -> Result<()> {
@@ -27,9 +27,13 @@ async fn test_drop_table_interpreter() -> Result<()> {
 
     // Create table.
     {
-        if let PlanNode::CreateTable(plan) = PlanParser::create(ctx.clone())
-            .build_from_sql("create table default.a(a bigint, b int, c varchar(255), d smallint, e Date ) Engine = Null")?
-        {
+        static TEST_CREATE_QUERY: &str = "\
+            CREATE TABLE default.a(\
+                a bigint, b int, c varchar(255), d smallint, e Date\
+            ) Engine = Null\
+        ";
+
+        if let PlanNode::CreateTable(plan) = parse_query(TEST_CREATE_QUERY, &ctx)? {
             let executor = CreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
             let _ = executor.execute(None).await?;
         }
@@ -37,9 +41,7 @@ async fn test_drop_table_interpreter() -> Result<()> {
 
     // Drop table.
     {
-        if let PlanNode::DropTable(plan) =
-            PlanParser::create(ctx.clone()).build_from_sql("drop table a")?
-        {
+        if let PlanNode::DropTable(plan) = parse_query("DROP TABLE a", &ctx)? {
             let executor = DropTableInterpreter::try_create(ctx.clone(), plan.clone())?;
             assert_eq!(executor.name(), "DropTableInterpreter");
             let stream = executor.execute(None).await?;

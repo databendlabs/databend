@@ -54,7 +54,7 @@ async fn test_parquet_table() -> Result<()> {
     };
     let table = ParquetTable::try_create(table_info, TableContext::default())?;
 
-    let source_plan = table.read_plan(ctx.clone(), None)?;
+    let source_plan = table.read_plan(ctx.clone(), None).await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
     let stream = table.read(ctx, &source_plan).await?;

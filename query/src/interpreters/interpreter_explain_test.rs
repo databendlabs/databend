@@ -19,15 +19,18 @@ use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 use crate::interpreters::*;
-use crate::sql::*;
+use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_explain_interpreter() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
-    if let PlanNode::Explain(plan) = PlanParser::create(ctx.clone()).build_from_sql(
-        "explain select number from numbers_mt(10) where (number+1)=4 having (number+1)=4",
-    )? {
+    static TEST_QUERY: &str = "\
+        EXPLAIN SELECT number FROM numbers_mt(10) \
+        WHERE (number + 1) = 4 HAVING (number + 1) = 4\
+    ";
+
+    if let PlanNode::Explain(plan) = parse_query(TEST_QUERY, &ctx)? {
         let executor = ExplainInterpreter::try_create(ctx, plan)?;
         assert_eq!(executor.name(), "ExplainInterpreter");
 

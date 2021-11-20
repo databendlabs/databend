@@ -17,7 +17,7 @@ use common_exception::Result;
 
 use crate::optimizers::optimizer_scatters::ScattersOptimizer;
 use crate::optimizers::Optimizer;
-use crate::sql::PlanParser;
+use crate::tests::parse_query;
 use crate::tests::try_create_cluster_context;
 use crate::tests::ClusterDescriptor;
 
@@ -210,7 +210,7 @@ async fn test_scatter_optimizer() -> Result<()> {
                 .with_local_id("dummy_local"),
         )?;
 
-        let plan = PlanParser::create(ctx.clone()).build_from_sql(test.query)?;
+        let plan = parse_query(test.query, &ctx)?;
         let mut optimizer = ScattersOptimizer::create(ctx);
         let optimized = optimizer.optimize(&plan)?;
         let actual = format!("{:?}", optimized);

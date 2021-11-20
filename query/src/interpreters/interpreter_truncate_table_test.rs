@@ -19,7 +19,7 @@ use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
 use crate::interpreters::*;
-use crate::sql::*;
+use crate::tests::parse_query;
 
 #[tokio::test]
 async fn test_truncate_table_interpreter() -> Result<()> {
@@ -27,19 +27,22 @@ async fn test_truncate_table_interpreter() -> Result<()> {
 
     // Create table.
     {
-        if let PlanNode::CreateTable(plan) = PlanParser::create(ctx.clone())
-            .build_from_sql("create table default.a(a String, b String) Engine = Memory")?
-        {
-            let executor = CreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let _ = executor.execute(None).await?;
+        static TEST_CREATE_QUERY: &str = "\
+            CREATE TABLE default.a(\
+                a String, b String\
+            ) Engine = Memory\
+        ";
+
+        if let PlanNode::CreateTable(plan) = parse_query(TEST_CREATE_QUERY, &ctx)? {
+            let interpreter = CreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
+            let _ = interpreter.execute(None).await?;
         }
     }
 
     // Insert into.
     {
-        if let PlanNode::InsertInto(plan) = PlanParser::create(ctx.clone())
-            .build_from_sql("insert into default.a values('1,1', '2,2')")?
-        {
+        static TEST_INSERT_QUERY: &str = "INSERT INTO default.a VALUES('1,1', '2,2')";
+        if let PlanNode::InsertInto(plan) = parse_query(TEST_INSERT_QUERY, &ctx)? {
             let executor = InsertIntoInterpreter::try_create(ctx.clone(), plan.clone())?;
             let _ = executor.execute(None).await?;
         }
@@ -47,11 +50,10 @@ async fn test_truncate_table_interpreter() -> Result<()> {
 
     // select.
     {
-        if let PlanNode::Select(plan) =
-            PlanParser::create(ctx.clone()).build_from_sql("select * from default.a")?
-        {
-            let executor = SelectInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let stream = executor.execute(None).await?;
+        static TEST_SELECT_QUERY: &str = "SELECT * FROM default.a";
+        if let PlanNode::Select(plan) = parse_query(TEST_SELECT_QUERY, &ctx)? {
+            let interpreter = SelectInterpreter::try_create(ctx.clone(), plan.clone())?;
+            let stream = interpreter.execute(None).await?;
             let result = stream.try_collect::<Vec<_>>().await?;
             let expected = vec![
                 "+-----+-----+",
@@ -68,13 +70,12 @@ async fn test_truncate_table_interpreter() -> Result<()> {
 
     // truncate table.
     {
-        if let PlanNode::TruncateTable(plan) =
-            PlanParser::create(ctx.clone()).build_from_sql("truncate table default.a")?
-        {
-            let executor = TruncateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
-            assert_eq!(executor.name(), "TruncateTableInterpreter");
+        static TEST_TRUNCATE_QUERY: &str = "TRUNCATE TABLE default.a";
+        if let PlanNode::TruncateTable(plan) = parse_query(TEST_TRUNCATE_QUERY, &ctx)? {
+            let interpreter = TruncateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
+            assert_eq!(interpreter.name(), "TruncateTableInterpreter");
 
-            let stream = executor.execute(None).await?;
+            let stream = interpreter.execute(None).await?;
             let result = stream.try_collect::<Vec<_>>().await?;
             let expected = vec!["++", "++"];
             common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
@@ -85,9 +86,8 @@ async fn test_truncate_table_interpreter() -> Result<()> {
 
     // select.
     {
-        if let PlanNode::Select(plan) =
-            PlanParser::create(ctx.clone()).build_from_sql("select * from default.a")?
-        {
+        static TEST_SELECT_QUERY: &str = "SELECT * FROM default.a";
+        if let PlanNode::Select(plan) = parse_query(TEST_SELECT_QUERY, &ctx)? {
             let executor = SelectInterpreter::try_create(ctx.clone(), plan.clone())?;
             let stream = executor.execute(None).await?;
             let result = stream.try_collect::<Vec<_>>().await?;

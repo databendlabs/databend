@@ -27,9 +27,8 @@ async fn test_create_user_interpreter() -> Result<()> {
 
     let ctx = crate::tests::try_create_context()?;
 
-    if let PlanNode::CreateUser(plan) = PlanParser::create(ctx.clone())
-        .build_from_sql("CREATE USER 'test'@'localhost' IDENTIFIED BY 'password'")?
-    {
+    static TEST_QUERY: &str = "CREATE USER 'test'@'localhost' IDENTIFIED BY 'password'";
+    if let PlanNode::CreateUser(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
         let executor = CreatUserInterpreter::try_create(ctx, plan.clone())?;
         assert_eq!(executor.name(), "CreateUserInterpreter");
         let mut stream = executor.execute(None).await?;

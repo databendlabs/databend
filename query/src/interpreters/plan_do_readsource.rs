@@ -41,10 +41,14 @@ impl PlanDoReadSource {
 
 impl PlanRewriter for PlanDoReadSource {
     fn rewrite_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<PlanNode> {
-        let table = self.ctx.build_table_from_source_plan(plan)?;
-        let plan = table.read_plan(self.ctx.clone(), plan.push_downs.clone())?;
-
-        Ok(PlanNode::ReadSource(plan))
+        let context = self.ctx.clone();
+        futures::executor::block_on(async move {
+            let table = context.build_table_from_source_plan(plan)?;
+            let plan = table
+                .read_plan(context.clone(), plan.push_downs.clone())
+                .await?;
+            Ok(PlanNode::ReadSource(plan))
+        })
     }
 
     fn rewrite_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<PlanNode> {

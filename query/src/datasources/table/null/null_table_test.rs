@@ -78,7 +78,7 @@ async fn test_null_table() -> Result<()> {
 
     // read.
     {
-        let source_plan = table.read_plan(ctx.clone(), None)?;
+        let source_plan = table.read_plan(ctx.clone(), None).await?;
         assert_eq!(table.engine(), "Null");
 
         let stream = table.read(ctx.clone(), &source_plan).await?;

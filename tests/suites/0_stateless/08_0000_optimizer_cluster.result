@@ -10,5 +10,5 @@ RedistributeStage[expr: 0]
 projection push down: push (name and value) to read datasource
 RedistributeStage[expr: 0]
   Projection: a:Int32
-    Filter: (value > 10)
-      ReadDataSource: scan partitions: [0], scan schema: [a:Int32], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0]]
+    Filter: (b > 10)
+      ReadDataSource: scan partitions: [0], scan schema: [a:Int32, b:Int32], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0, 1]]
