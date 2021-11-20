@@ -15,8 +15,10 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_meta_api::MetaApi;
 use common_meta_types::CreateDatabaseReply;
+use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
@@ -25,15 +27,14 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 
-use crate::CreateDatabaseAction;
 use crate::CreateTableAction;
 use crate::DropDatabaseAction;
 use crate::DropTableAction;
+use crate::FlightReq;
 use crate::GetDatabaseAction;
 use crate::GetDatabasesAction;
 use crate::GetTableAction;
@@ -44,12 +45,11 @@ use crate::UpsertTableOptionReq;
 
 #[async_trait::async_trait]
 impl MetaApi for MetaFlightClient {
-    /// Create database call.
     async fn create_database(
         &self,
-        plan: CreateDatabasePlan,
-    ) -> common_exception::Result<CreateDatabaseReply> {
-        self.do_action(CreateDatabaseAction { plan }).await
+        req: CreateDatabaseReq,
+    ) -> Result<CreateDatabaseReply, ErrorCode> {
+        self.do_action(FlightReq { req }).await
     }
 
     /// Drop database call.

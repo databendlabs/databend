@@ -23,6 +23,7 @@ use common_infallible::RwLock;
 use common_meta_api::MetaApi;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_types::CreateDatabaseReply;
+use common_meta_types::CreateDatabaseReq;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
@@ -30,7 +31,6 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
@@ -102,13 +102,13 @@ impl MetaStoreCatalog {
 
         register_prelude_tbl_engines(&table_engine_registry)?;
 
-        let plan = CreateDatabasePlan {
+        let req = CreateDatabaseReq {
             if_not_exists: true,
             db: "default".to_string(),
             options: Default::default(),
         };
 
-        meta.create_database(plan).await?;
+        meta.create_database(req).await?;
 
         let cat = MetaStoreCatalog {
             table_engine_registry,
@@ -207,8 +207,8 @@ impl Catalog for MetaStoreCatalog {
             .await
     }
 
-    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
-        self.meta.create_database(plan).await
+    async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
+        self.meta.create_database(req).await
     }
 
     async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
