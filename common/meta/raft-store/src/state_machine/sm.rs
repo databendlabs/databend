@@ -471,22 +471,21 @@ impl StateMachine {
                 Ok(Change::new(prev, result).into())
             }
 
-            Cmd::UpsertTableOptions {
-                ref table_id,
-                ref seq,
-                ref table_options,
-            } => {
-                let prev = self.tables().get(table_id)?;
+            Cmd::UpsertTableOptions(ref req) => {
+                let prev = self.tables().get(&req.table_id)?;
 
                 // Unlike other Cmd, prev to be None is not allowed for upsert-options.
                 let prev = match prev {
                     None => {
-                        return Err(ErrorCode::UnknownTableId(format!("table_id:{}", table_id)))
+                        return Err(ErrorCode::UnknownTableId(format!(
+                            "table_id:{}",
+                            req.table_id
+                        )))
                     }
                     Some(x) => x,
                 };
 
-                if seq.match_seq(&prev).is_err() {
+                if req.seq.match_seq(&prev).is_err() {
                     let res = AppliedState::TableMeta(Change::new(Some(prev.clone()), Some(prev)));
                     return Ok(res);
                 }
@@ -495,7 +494,7 @@ impl StateMachine {
                 let mut table_meta = prev.data.clone();
                 let opts = &mut table_meta.options;
 
-                for (k, opt_v) in table_options {
+                for (k, opt_v) in &req.options {
                     match opt_v {
                         None => {
                             opts.remove(k);
@@ -513,7 +512,7 @@ impl StateMachine {
                     data: table_meta,
                 };
 
-                self.tables().insert(table_id, &sv).await?;
+                self.tables().insert(&req.table_id, &sv).await?;
 
                 Ok(AppliedState::TableMeta(Change::new(Some(prev), Some(sv))))
             }
