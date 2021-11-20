@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilege;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -23,8 +24,7 @@ pub struct GrantPrivilegePlan {
     pub name: String,
     pub hostname: String,
     pub priv_types: UserPrivilege,
-    pub database_pattern: String,
-    pub table_pattern: String,
+    pub on: GrantObject,
 }
 
 impl GrantPrivilegePlan {

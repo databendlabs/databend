@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum GrantObject {
     Global,
     Database(String),
-    Table(String, String),
+    Table(Option<String>, String),
 }

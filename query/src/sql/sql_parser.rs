@@ -19,6 +19,7 @@ use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_meta_types::AuthType;
+use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilege;
 use common_meta_types::UserPrivilegeType;
 use common_planners::ExplainType;
@@ -698,7 +699,7 @@ impl<'a> DfParser<'a> {
         if !self.parser.parse_keyword(Keyword::ON) {
             return self.expected("keyword ON", self.parser.peek_token());
         }
-        let (database_pattern, table_pattern) = self.parse_grant_object_pattern()?;
+        let on  = self.parse_grant_object()?;
         if !self.parser.parse_keyword(Keyword::TO) {
             return self.expected("keyword TO", self.parser.peek_token());
         }
@@ -711,8 +712,7 @@ impl<'a> DfParser<'a> {
         let grant = DfGrantStatement {
             name,
             hostname,
-            database_pattern: database_pattern.value,
-            table_pattern: table_pattern.value,
+            on,
             priv_types: privileges,
         };
         Ok(DfStatement::GrantPrivilege(grant))
@@ -720,13 +720,34 @@ impl<'a> DfParser<'a> {
 
     /// Parse a possibly qualified, possibly quoted identifier or wild card, e.g.
     /// `*` or `myschema`.*. The sub string pattern like "db0%" is not in planned.
-    fn parse_grant_object_pattern(&mut self) -> Result<(Ident, Ident), ParserError> {
-        let database_pattern = self.parse_grant_object_pattern_chunk()?;
+    fn parse_grant_object(&mut self) -> Result<GrantObject, ParserError> {
+        let chunk0 = self.parse_grant_object_pattern_chunk()?;
+        // "*" or "table" with current db
         if !self.consume_token(".") {
-            return Ok((database_pattern, Ident::new("*")));
+            if chunk0.to_string() == "*" {
+                return Ok(GrantObject::Global);
+            }
+            return Ok(GrantObject::Table(None, chunk0.to_string()));
         }
-        let table_pattern = self.parse_grant_object_pattern_chunk()?;
-        Ok((database_pattern, table_pattern))
+        let chunk1 = self.parse_grant_object_pattern_chunk()?;
+
+        // *.* means global
+        if chunk1.to_string() == "*" && chunk0.to_string() == "*" {
+            return Ok(GrantObject::Global);
+        }
+        // *.table is not allowed
+        if chunk0.to_string() == "*" {
+            return self.expected("whitespace", Token::Period);
+        }
+        // db.*
+        if chunk1.to_string() == "*" {
+            return Ok(GrantObject::Database(chunk0.to_string()));
+        }
+        // db.table
+        Ok(GrantObject::Table(
+            Some(chunk0.to_string()),
+            chunk1.to_string(),
+        ))
     }
 
     /// Parse a chunk from the object pattern, it might be * or an identifier
