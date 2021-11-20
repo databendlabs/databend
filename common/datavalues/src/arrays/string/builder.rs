@@ -91,4 +91,18 @@ where S: AsRef<[u8]>
         it.for_each(|v| builder.append_value(v));
         builder.finish()
     }
+
+    fn new_from_iter_validity(
+        it: impl Iterator<Item = S>,
+        validity: Option<common_arrow::arrow::bitmap::Bitmap>,
+    ) -> Self {
+        let cap = get_iter_capacity(&it);
+        let mut builder = StringArrayBuilder::with_capacity(cap * 5);
+        it.for_each(|v| builder.append_value(v));
+
+        let mut array = builder.finish();
+        array.array = array.array.with_validity(validity);
+
+        array
+    }
 }

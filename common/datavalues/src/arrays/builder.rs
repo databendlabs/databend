@@ -1,3 +1,5 @@
+use common_arrow::arrow::bitmap::Bitmap;
+
 // Copyright 2020 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,4 +35,5 @@ pub trait NewDataArray<N> {
 
     /// Create a new DataArray from an iterator.
     fn new_from_iter(it: impl Iterator<Item = N>) -> Self;
+    fn new_from_iter_validity(it: impl Iterator<Item = N>, validity: Option<Bitmap>) -> Self;
 }
