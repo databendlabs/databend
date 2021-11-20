@@ -187,4 +187,30 @@ impl Catalog for SystemCatalog {
 
         Ok(table.clone())
     }
+
+    async fn exists_database(&self, db_name: &str) -> Result<bool> {
+        match self.get_database(db_name).await {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                if err.code() == ErrorCode::UnknownDatabaseCode() {
+                    Ok(false)
+                } else {
+                    Err(err)
+                }
+            }
+        }
+    }
+
+    async fn exists_table(&self, db_name: &str, table_name: &str) -> Result<bool> {
+        match self.get_table(db_name, table_name).await {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                if err.code() == ErrorCode::UnknownTableCode() {
+                    Ok(false)
+                } else {
+                    Err(err)
+                }
+            }
+        }
+    }
 }
