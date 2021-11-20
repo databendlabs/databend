@@ -26,8 +26,8 @@ use common_meta_types::TableInfo;
 use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use octocrab::params;
 
-use super::data_accessor;
 use crate::catalogs::Table;
 use crate::datasources::context::TableContext;
 use crate::sessions::DatabendQueryContextRef;
@@ -40,7 +40,6 @@ const FORKS_COUNT: &str = "forks_count";
 const WATCHERS_COUNT: &str = "watchers_count";
 const OPEN_ISSUES_COUNT: &str = "open_issues_count";
 const SUBSCRIBERS_COUNT: &str = "subscribers_count";
-const CREATED_AT: &str = "created_at";
 
 pub struct GithubTable {
     table_info: TableInfo,
@@ -63,10 +62,67 @@ impl GithubTable {
             DataField::new(WATCHERS_COUNT, DataType::UInt32, true),
             DataField::new(OPEN_ISSUES_COUNT, DataType::UInt32, true),
             DataField::new(SUBSCRIBERS_COUNT, DataType::UInt32, true),
-            DataField::new(CREATED_AT, DataType::String, true),
         ];
 
         Arc::new(DataSchema::new(fields))
+    }
+
+    async fn get_repos_array(&self, limit: u8) -> Result<Vec<Series>> {
+        let repos = octocrab::instance()
+            .orgs(&self.table_info.name)
+            .list_repos()
+            .repo_type(params::repos::Type::Sources)
+            .sort(params::repos::Sort::Pushed)
+            .direction(params::Direction::Descending)
+            .per_page(limit)
+            .send()
+            .await?;
+
+        let mut repo_name_array: Vec<Vec<u8>> = Vec::new();
+        let mut language_array: Vec<Vec<u8>> = Vec::new();
+        let mut license_array: Vec<Vec<u8>> = Vec::new();
+        let mut star_count_array: Vec<u32> = Vec::new();
+        let mut forks_count_array: Vec<u32> = Vec::new();
+        let mut watchers_count_array: Vec<u32> = Vec::new();
+        let mut open_issues_count_array: Vec<u32> = Vec::new();
+        let mut subscribers_count_array: Vec<u32> = Vec::new();
+
+        let mut iter = repos.items.iter();
+        for repo in &mut iter {
+            repo_name_array.push(repo.name.clone().into());
+            language_array.push(
+                repo.language
+                    .as_ref()
+                    .and_then(|l| l.as_str())
+                    .unwrap_or("No Language")
+                    .as_bytes()
+                    .to_vec(),
+            );
+            license_array.push(
+                repo.license
+                    .as_ref()
+                    .map(|l| l.key.as_str())
+                    .unwrap_or("No license")
+                    .as_bytes()
+                    .to_vec(),
+            );
+            star_count_array.push(repo.stargazers_count.unwrap_or(0));
+            forks_count_array.push(repo.forks_count.unwrap_or(0));
+            watchers_count_array.push(repo.watchers_count.unwrap_or(0));
+            open_issues_count_array.push(repo.open_issues_count.unwrap_or(0));
+            subscribers_count_array.push(repo.subscribers_count.unwrap_or(0) as u32);
+        }
+
+        Ok(vec![
+            Series::new(repo_name_array),
+            Series::new(language_array),
+            Series::new(license_array),
+            Series::new(star_count_array),
+            Series::new(forks_count_array),
+            Series::new(watchers_count_array),
+            Series::new(open_issues_count_array),
+            Series::new(subscribers_count_array),
+        ])
     }
 }
 
@@ -83,51 +139,15 @@ impl Table for GithubTable {
     async fn read(
         &self,
         _ctx: DatabendQueryContextRef,
-        _plan: &ReadDataSourcePlan,
+        plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let repo_details =
-            data_accessor::get_owner_repositories_details(&self.table_info.name).await?;
+        let limit = plan
+            .push_downs
+            .as_ref()
+            .and_then(|extras| extras.limit)
+            .unwrap_or(100) as u8;
 
-        let mut repo_name_array: Vec<Vec<u8>> = Vec::new();
-        let mut language_array: Vec<Vec<u8>> = Vec::new();
-        let mut license_array: Vec<Vec<u8>> = Vec::new();
-        let mut star_count_array: Vec<u32> = Vec::new();
-        let mut forks_count_array: Vec<u32> = Vec::new();
-        let mut watchers_count_array: Vec<u32> = Vec::new();
-        let mut open_issues_count_array: Vec<u32> = Vec::new();
-        let mut subscribers_count_array: Vec<u32> = Vec::new();
-        let mut created_at_array: Vec<Vec<u8>> = Vec::new();
-
-        let mut iter = repo_details.iter();
-        for repo in &mut iter {
-            repo_name_array.push(repo.name.clone().into());
-            match &repo.language {
-                Some(language) => language_array.push(language.clone().into()),
-                None => language_array.push("".into()),
-            }
-            match &repo.license {
-                Some(license) => license_array.push(license.key.clone().into()),
-                None => license_array.push("No License".into()),
-            }
-            star_count_array.push(repo.stargazers_count);
-            forks_count_array.push(repo.forks_count);
-            watchers_count_array.push(repo.watchers_count);
-            open_issues_count_array.push(repo.open_issues_count);
-            subscribers_count_array.push(repo.subscribers_count);
-            created_at_array.push(repo.created_at.clone().into());
-        }
-
-        let arrays: Vec<Series> = vec![
-            Series::new(repo_name_array),
-            Series::new(language_array),
-            Series::new(license_array),
-            Series::new(star_count_array),
-            Series::new(forks_count_array),
-            Series::new(watchers_count_array),
-            Series::new(open_issues_count_array),
-            Series::new(subscribers_count_array),
-            Series::new(created_at_array),
-        ];
+        let arrays = self.get_repos_array(limit).await?;
         let block = DataBlock::create_by_array(self.table_info.schema(), arrays);
 
         Ok(Box::pin(DataBlockStream::create(

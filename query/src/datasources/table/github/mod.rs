@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod data_accessor;
-mod data_accessor_test;
 pub mod github_table;
-mod items;
+#[cfg(test)]
+mod github_table_test;

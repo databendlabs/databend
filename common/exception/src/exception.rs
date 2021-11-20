@@ -426,9 +426,9 @@ impl From<prost::EncodeError> for ErrorCode {
     }
 }
 
-impl From<reqwest::Error> for ErrorCode {
-    fn from(error: reqwest::Error) -> Self {
-        ErrorCode::NetworkRequestError(format!("reqwest error, cause: {}", error))
+impl From<octocrab::Error> for ErrorCode {
+    fn from(error: octocrab::Error) -> Self {
+        ErrorCode::NetworkRequestError(format!("octocrab error, cause: {}", error))
     }
 }
 
