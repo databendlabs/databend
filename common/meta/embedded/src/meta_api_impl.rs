@@ -32,7 +32,6 @@ use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
-use common_meta_types::MatchSeq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -40,7 +39,6 @@ use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
-use maplit::hashmap;
 
 use crate::MetaEmbedded;
 
@@ -243,13 +241,7 @@ impl MetaApi for MetaEmbedded {
     ) -> Result<UpsertTableOptionReply> {
         let sm = self.inner.lock().await;
 
-        let cmd = Cmd::UpsertTableOptions {
-            table_id: req.table_id,
-            seq: MatchSeq::Exact(req.table_version),
-            table_options: hashmap! {
-                req.option_key => Some(req.option_value),
-            },
-        };
+        let cmd = Cmd::UpsertTableOptions(req.clone());
 
         let res = sm.apply_cmd(&cmd).await?;
         if !res.changed() {
@@ -257,8 +249,8 @@ impl MetaApi for MetaEmbedded {
             let (prev, _result) = ch.unwrap();
 
             return Err(ErrorCode::TableVersionMissMatch(format!(
-                "targeting version {}, current version {}",
-                req.table_version, prev.seq,
+                "targeting version {:?}, current version {}",
+                req.seq, prev.seq,
             )));
         }
 
