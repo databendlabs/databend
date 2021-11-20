@@ -14,12 +14,14 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::GrantPrivilegePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
+use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -37,6 +39,25 @@ impl GrantPrivilegeInterpreter {
         plan: GrantPrivilegePlan,
     ) -> Result<InterpreterPtr> {
         Ok(Arc::new(GrantPrivilegeInterpreter { ctx, plan }))
+    }
+
+    // TODO: refactor out this after adding a exists table in Catalog
+    async fn check_table_exists(
+        &self,
+        catalog: Arc<DatabaseCatalog>,
+        database_name: &str,
+        table_name: &str,
+    ) -> Result<bool> {
+        match catalog.get_table(database_name, table_name).await {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                if err.code() == ErrorCode::UnknownTableCode() {
+                    Ok(false)
+                } else {
+                    Err(err)
+                }
+            }
+        }
     }
 }
 
@@ -76,9 +97,8 @@ impl Interpreter for GrantPrivilegeInterpreter {
         }
 
         if plan.table_pattern != "*"
-            && !catalog
-                .as_ref()
-                .exists_table(&plan.database_pattern, &plan.table_pattern)
+            && !self
+                .check_table_exists(catalog.clone(), &plan.database_pattern, &plan.table_pattern)
                 .await?
         {
             return Err(common_exception::ErrorCode::UnknownTable(format!(
