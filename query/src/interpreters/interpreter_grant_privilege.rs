@@ -99,6 +99,8 @@ impl Interpreter for GrantPrivilegeInterpreter {
             GrantObject::Global => (),
         }
 
+        // TODO: actually add grant inside to the user
+
         let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
         user_mgr
             .set_user_privileges(&plan.name, &plan.hostname, plan.priv_types)
