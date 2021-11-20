@@ -46,7 +46,6 @@ impl MetaEmbedded {
     /// before using `MetaEmbedded`:
     /// - `common_meta_sled_store::init_sled_db`
     /// - `common_meta_sled_store::init_temp_sled_db`
-    #[allow(dead_code)]
     pub async fn new(name: &str) -> common_exception::Result<MetaEmbedded> {
         let mut config = RaftConfig::empty();
 

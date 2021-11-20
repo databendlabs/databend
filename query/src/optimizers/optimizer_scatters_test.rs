@@ -23,7 +23,6 @@ use crate::tests::ClusterDescriptor;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_scatter_optimizer() -> Result<()> {
-    #[allow(dead_code)]
     struct Test {
         name: &'static str,
         query: &'static str,

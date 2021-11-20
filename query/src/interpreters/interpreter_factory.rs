@@ -19,13 +19,14 @@ use common_exception::Result;
 use common_planners::PlanNode;
 
 use crate::interpreters::interpreter_kill::KillInterpreter;
-use crate::interpreters::interpreter_user_alter::AlterUserInterpreter;
+use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreatUserInterpreter;
 use crate::interpreters::CreateDatabaseInterpreter;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DescribeTableInterpreter;
 use crate::interpreters::DropDatabaseInterpreter;
 use crate::interpreters::DropTableInterpreter;
+use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::ExplainInterpreter;
 use crate::interpreters::GrantPrivilegeInterpreter;
 use crate::interpreters::InsertIntoInterpreter;
@@ -59,6 +60,7 @@ impl InterpreterFactory {
             PlanNode::Kill(v) => KillInterpreter::try_create(ctx_clone, v),
             PlanNode::CreateUser(v) => CreatUserInterpreter::try_create(ctx_clone, v),
             PlanNode::AlterUser(v) => AlterUserInterpreter::try_create(ctx_clone, v),
+            PlanNode::DropUser(v) => DropUserInterpreter::try_create(ctx_clone, v),
             PlanNode::GrantPrivilege(v) => GrantPrivilegeInterpreter::try_create(ctx_clone, v),
             _ => Result::Err(ErrorCode::UnknownTypeOfQuery(format!(
                 "Can't get the interpreter by plan:{}",

@@ -19,7 +19,6 @@ extern crate log;
 extern crate heapsize_;
 
 mod cache;
-#[allow(dead_code)]
 mod disk_cache;
 mod meter;
 

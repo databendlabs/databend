@@ -158,7 +158,6 @@ const PLAYGROUND_VERSION: &str = "v0.4.1-nightly";
 
 #[derive(Clone)]
 pub struct UpCommand {
-    #[allow(dead_code)]
     conf: Config,
 }
 
