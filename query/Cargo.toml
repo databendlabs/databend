@@ -67,6 +67,7 @@ chrono-tz = "0.6"
 crossbeam = "0.8"
 crossbeam-queue = "0.3.2"
 ctrlc = { version = "3.1.9", features = ["termination"] }
+dyn-clone = "1.0.4"
 env_logger = "0.9"
 futures = "0.3"
 headers = "0.3.4"

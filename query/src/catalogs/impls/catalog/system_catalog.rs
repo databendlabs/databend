@@ -43,6 +43,7 @@ use crate::datasources::database::system::SystemDatabase;
 /// System Catalog contains ... all the system databases (no surprise :)
 /// Currently, this is only one database here, the "system" db.
 /// "information_schema" db is supposed to held here
+#[derive(Clone)]
 pub struct SystemCatalog {
     sys_db: Arc<SystemDatabase>,
     sys_db_meta: Arc<InMemoryMetas>,
@@ -187,18 +188,5 @@ impl Catalog for SystemCatalog {
             })?;
 
         Ok(table.clone())
-    }
-
-    async fn exists_database(&self, db_name: &str) -> Result<bool> {
-        match self.get_database(db_name).await {
-            Ok(_) => Ok(true),
-            Err(err) => {
-                if err.code() == ErrorCode::UnknownDatabaseCode() {
-                    Ok(false)
-                } else {
-                    Err(err)
-                }
-            }
-        }
     }
 }

@@ -53,6 +53,7 @@ use crate::datasources::table_engine_registry::TableEngineRegistry;
 /// - Meta data of databases are saved in meta store
 /// - Instances of `Database` are created by using database factories according to the engine
 /// - Database engines are free to save table meta in metastore or not
+#[derive(Clone)]
 pub struct MetaStoreCatalog {
     table_engine_registry: Arc<TableEngineRegistry>,
 
@@ -215,18 +216,5 @@ impl Catalog for MetaStoreCatalog {
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<()> {
         self.meta.drop_database(req).await?;
         Ok(())
-    }
-
-    async fn exists_database(&self, db_name: &str) -> Result<bool> {
-        match self.get_database(db_name).await {
-            Ok(_) => Ok(true),
-            Err(err) => {
-                if err.code() == ErrorCode::UnknownDatabaseCode() {
-                    Ok(false)
-                } else {
-                    Err(err)
-                }
-            }
-        }
     }
 }
