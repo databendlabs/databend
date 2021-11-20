@@ -741,7 +741,7 @@ fn grant_privilege_test() -> Result<()> {
 
     expect_parse_err(
         "GRANT INSERT ON *.`tb1` TO 'test'@'localhost'",
-        String::from("sql parser error: Expected whitespace, found: '.'"),
+        String::from("sql parser error: Expected whitespace, found: ."),
     )?;
 
     Ok(())

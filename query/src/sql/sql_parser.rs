@@ -724,29 +724,29 @@ impl<'a> DfParser<'a> {
         let chunk0 = self.parse_grant_object_pattern_chunk()?;
         // "*" or "table" with current db
         if !self.consume_token(".") {
-            if chunk0.to_string() == "*" {
+            if chunk0.value == "*" {
                 return Ok(DfGrantObject::Global);
             }
-            return Ok(DfGrantObject::Table(None, chunk0.to_string()));
+            return Ok(DfGrantObject::Table(None, chunk0.value.clone()));
         }
         let chunk1 = self.parse_grant_object_pattern_chunk()?;
 
         // *.* means global
-        if chunk1.to_string() == "*" && chunk0.to_string() == "*" {
+        if chunk1.value == "*" && chunk0.value == "*" {
             return Ok(DfGrantObject::Global);
         }
         // *.table is not allowed
-        if chunk0.to_string() == "*" {
+        if chunk0.value == "*" {
             return self.expected("whitespace", Token::Period);
         }
         // db.*
-        if chunk1.to_string() == "*" {
-            return Ok(DfGrantObject::Database(chunk0.to_string()));
+        if chunk1.value == "*" {
+            return Ok(DfGrantObject::Database(chunk0.value.clone()));
         }
         // db.table
         Ok(DfGrantObject::Table(
-            Some(chunk0.to_string()),
-            chunk1.to_string(),
+            Some(chunk0.value.clone()),
+            chunk1.value.clone(),
         ))
     }
 
