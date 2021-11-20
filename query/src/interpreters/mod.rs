@@ -23,6 +23,10 @@ mod interpreter_explain_test;
 #[cfg(test)]
 mod interpreter_grant_privilege_test;
 #[cfg(test)]
+mod interpreter_insert_into_test;
+#[cfg(test)]
+mod interpreter_interceptor_test;
+#[cfg(test)]
 mod interpreter_select_test;
 #[cfg(test)]
 mod interpreter_setting_test;
@@ -41,6 +45,8 @@ mod interpreter_user_alter_test;
 #[cfg(test)]
 mod interpreter_user_create_test;
 #[cfg(test)]
+mod interpreter_user_drop_test;
+#[cfg(test)]
 mod plan_scheduler_test;
 
 mod interpreter;
@@ -51,6 +57,7 @@ mod interpreter_explain;
 mod interpreter_factory;
 mod interpreter_grant_privilege;
 mod interpreter_insert_into;
+mod interpreter_interceptor;
 mod interpreter_kill;
 mod interpreter_select;
 mod interpreter_setting;
@@ -59,13 +66,13 @@ mod interpreter_table_create;
 mod interpreter_table_drop;
 mod interpreter_truncate_table;
 mod interpreter_use_database;
-mod interpreter_user_create;
-mod plan_do_readsource;
-mod utils;
-
 mod interpreter_user_alter;
+mod interpreter_user_create;
+mod interpreter_user_drop;
+mod plan_do_readsource;
 #[allow(clippy::needless_range_loop)]
 mod plan_scheduler;
+mod utils;
 
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
@@ -76,6 +83,7 @@ pub use interpreter_explain::ExplainInterpreter;
 pub use interpreter_factory::InterpreterFactory;
 pub use interpreter_grant_privilege::GrantPrivilegeInterpreter;
 pub use interpreter_insert_into::InsertIntoInterpreter;
+pub use interpreter_interceptor::InterceptorInterpreter;
 pub use interpreter_select::SelectInterpreter;
 pub use interpreter_setting::SettingInterpreter;
 pub use interpreter_show_create_table::ShowCreateTableInterpreter;
@@ -85,3 +93,4 @@ pub use interpreter_truncate_table::TruncateTableInterpreter;
 pub use interpreter_use_database::UseDatabaseInterpreter;
 pub use interpreter_user_alter::AlterUserInterpreter;
 pub use interpreter_user_create::CreatUserInterpreter;
+pub use interpreter_user_drop::DropUserInterpreter;

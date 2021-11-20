@@ -22,10 +22,10 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
+use common_meta_types::CreateTableReq;
 use common_meta_types::TableMeta;
 use common_planners::col;
 use common_planners::lit;
-use common_planners::CreateTablePlan;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
 
@@ -46,7 +46,7 @@ async fn test_min_max_index() -> Result<()> {
     ]);
 
     // create test table
-    let crate_table_plan = CreateTablePlan {
+    let crate_table_plan = CreateTableReq {
         if_not_exists: false,
         db: fixture.default_db(),
         table: test_tbl_name.to_string(),

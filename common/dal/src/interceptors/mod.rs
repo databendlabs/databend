@@ -13,4 +13,8 @@
 //  limitations under the License.
 //
 
-pub type UpsertTableOptionReply = ();
+mod data_accessor_interceptor;
+mod input_stream_interceptor;
+
+pub use data_accessor_interceptor::DataAccessorInterceptor;
+pub use input_stream_interceptor::InputStreamInterceptor;

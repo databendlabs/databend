@@ -35,7 +35,6 @@ impl CastStream {
     pub fn try_create(
         input: SendableDataBlockStream,
         output_schema: DataSchemaRef,
-
         functions: Vec<Box<dyn Function>>,
     ) -> Result<Self> {
         Ok(CastStream {

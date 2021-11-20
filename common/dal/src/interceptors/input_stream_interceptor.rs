@@ -14,30 +14,27 @@
 //
 
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::Poll;
 
 use common_base::tokio::io::SeekFrom;
-use common_metrics::label_counter_with_val;
-use common_metrics::TenantLabel;
 
-use crate::metrics::METRIC_DAL_READ_BYTES;
+use crate::DalContext;
 use crate::InputStream;
 
-pub struct InputStreamWithMetric {
-    tenant_label: TenantLabel,
+/// A interceptor for input stream.
+pub struct InputStreamInterceptor {
+    ctx: Arc<DalContext>,
     inner: InputStream,
 }
 
-impl InputStreamWithMetric {
-    pub fn new(tenant_label: TenantLabel, input_stream: InputStream) -> Self {
-        Self {
-            tenant_label,
-            inner: input_stream,
-        }
+impl InputStreamInterceptor {
+    pub fn new(ctx: Arc<DalContext>, inner: InputStream) -> Self {
+        Self { ctx, inner }
     }
 }
 
-impl futures::AsyncRead for InputStreamWithMetric {
+impl futures::AsyncRead for InputStreamInterceptor {
     fn poll_read(
         mut self: Pin<&mut Self>,
         ctx: &mut std::task::Context<'_>,
@@ -45,18 +42,13 @@ impl futures::AsyncRead for InputStreamWithMetric {
     ) -> Poll<std::result::Result<usize, std::io::Error>> {
         let r = Pin::new(&mut self.inner).poll_read(ctx, buf);
         if let Poll::Ready(Ok(len)) = r {
-            label_counter_with_val(
-                METRIC_DAL_READ_BYTES,
-                len as u64,
-                self.tenant_label.tenant_id.as_str(),
-                self.tenant_label.cluster_id.as_str(),
-            )
+            self.ctx.inc_read_bytes(len as usize);
         };
         r
     }
 }
 
-impl futures::AsyncSeek for InputStreamWithMetric {
+impl futures::AsyncSeek for InputStreamInterceptor {
     fn poll_seek(
         mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,

@@ -18,16 +18,17 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_meta_types::CreateDatabaseReply;
+use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateTableReq;
+use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropTableReply;
+use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
-use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateDatabasePlan;
-use common_planners::CreateTablePlan;
-use common_planners::DropDatabasePlan;
-use common_planners::DropTablePlan;
+use common_meta_types::UpsertTableOptionReq;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::Database;
@@ -41,6 +42,7 @@ use crate::datasources::table_func_engine_registry::TableFuncEngineRegistry;
 /// - read/search like operations are always performed at
 ///   upper layer first, and bottom layer later(if necessary)  
 /// - metadata are written to the bottom layer
+#[derive(Clone)]
 pub struct OverlaidCatalog {
     /// the upper layer, read only
     read_only: Arc<dyn Catalog + Send + Sync>,
@@ -132,21 +134,21 @@ impl Catalog for OverlaidCatalog {
         }
     }
 
-    async fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
-        self.bottom.create_table(plan).await
+    async fn create_table(&self, req: CreateTableReq) -> Result<(), ErrorCode> {
+        self.bottom.create_table(req).await
     }
 
-    async fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
-        let r = self.read_only.drop_table(plan.clone()).await;
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, ErrorCode> {
+        let r = self.read_only.drop_table(req.clone()).await;
         match r {
             Err(e) => {
                 if e.code() == ErrorCode::UnknownTable("").code() {
-                    self.bottom.drop_table(plan).await
+                    self.bottom.drop_table(req).await
                 } else {
                     Err(e)
                 }
             }
-            Ok(()) => Ok(()),
+            Ok(x) => Ok(x),
         }
     }
 
@@ -180,57 +182,34 @@ impl Catalog for OverlaidCatalog {
 
     async fn upsert_table_option(
         &self,
-        table_id: MetaId,
-        table_version: MetaVersion,
-        table_option_key: String,
-        table_option_value: String,
+        req: UpsertTableOptionReq,
     ) -> common_exception::Result<UpsertTableOptionReply> {
         // upsert table option in BOTTOM layer only
-        self.bottom
-            .upsert_table_option(
-                table_id,
-                table_version,
-                table_option_key,
-                table_option_value,
-            )
-            .await
+        self.bottom.upsert_table_option(req).await
     }
 
     async fn create_database(
         &self,
-        plan: CreateDatabasePlan,
+        req: CreateDatabaseReq,
     ) -> common_exception::Result<CreateDatabaseReply> {
-        if self.read_only.exists_database(&plan.db).await? {
+        if self.read_only.exists_database(&req.db).await? {
             return Err(ErrorCode::DatabaseAlreadyExists(format!(
                 "{} database exists",
-                plan.db
+                req.db
             )));
         }
         // create db in BOTTOM layer only
-        self.bottom.create_database(plan).await
+        self.bottom.create_database(req).await
     }
 
-    async fn drop_database(&self, plan: DropDatabasePlan) -> common_exception::Result<()> {
+    async fn drop_database(&self, req: DropDatabaseReq) -> Result<(), ErrorCode> {
         // drop db in BOTTOM layer only
-        if self.read_only.exists_database(&plan.db).await? {
+        if self.read_only.exists_database(&req.db).await? {
             return Err(ErrorCode::UnexpectedError(format!(
                 "user can not drop {} database",
-                plan.db
+                req.db
             )));
         }
-        self.bottom.drop_database(plan).await
-    }
-
-    async fn exists_database(&self, db_name: &str) -> common_exception::Result<bool> {
-        match self.get_database(db_name).await {
-            Ok(_) => Ok(true),
-            Err(err) => {
-                if err.code() == ErrorCode::UnknownDatabaseCode() {
-                    Ok(false)
-                } else {
-                    Err(err)
-                }
-            }
-        }
+        self.bottom.drop_database(req).await
     }
 }

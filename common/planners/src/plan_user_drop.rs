@@ -12,7 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct CreateTableReply {
-    pub table_id: u64,
+use std::sync::Arc;
+
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct DropUserPlan {
+    pub if_exists: bool,
+    pub name: String,
+    pub hostname: String,
+}
+
+impl DropUserPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
 }

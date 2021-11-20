@@ -32,6 +32,7 @@ use crate::CreateUserPlan;
 use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
+use crate::DropUserPlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
 use crate::Expression;
@@ -109,6 +110,7 @@ pub trait PlanRewriter {
             PlanNode::Kill(plan) => self.rewrite_kill(plan),
             PlanNode::CreateUser(plan) => self.create_user(plan),
             PlanNode::AlterUser(plan) => self.alter_user(plan),
+            PlanNode::DropUser(plan) => self.drop_user(plan),
             PlanNode::GrantPrivilege(plan) => self.grant_privilege(plan),
         }
     }
@@ -350,6 +352,10 @@ pub trait PlanRewriter {
 
     fn alter_user(&mut self, plan: &AlterUserPlan) -> Result<PlanNode> {
         Ok(PlanNode::AlterUser(plan.clone()))
+    }
+
+    fn drop_user(&mut self, plan: &DropUserPlan) -> Result<PlanNode> {
+        Ok(PlanNode::DropUser(plan.clone()))
     }
 
     fn grant_privilege(&mut self, plan: &GrantPrivilegePlan) -> Result<PlanNode> {

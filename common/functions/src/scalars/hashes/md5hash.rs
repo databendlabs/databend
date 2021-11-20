@@ -53,7 +53,7 @@ impl Function for Md5HashFunction {
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if args[0] == DataType::String {
+        if args[0] == DataType::String || args[0] == DataType::Null {
             Ok(DataType::String)
         } else {
             Err(ErrorCode::IllegalDataType(format!(

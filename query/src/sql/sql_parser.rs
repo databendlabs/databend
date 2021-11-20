@@ -49,6 +49,7 @@ use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropDatabase;
 use crate::sql::statements::DfDropTable;
+use crate::sql::statements::DfDropUser;
 use crate::sql::statements::DfExplain;
 use crate::sql::statements::DfGrantStatement;
 use crate::sql::statements::DfInsertStatement;
@@ -498,6 +499,7 @@ impl<'a> DfParser<'a> {
             Token::Word(w) => match w.keyword {
                 Keyword::DATABASE => self.parse_drop_database(),
                 Keyword::TABLE => self.parse_drop_table(),
+                Keyword::USER => self.parse_drop_user(),
                 _ => self.expected("drop statement", Token::Word(w)),
             },
             unexpected => self.expected("drop statement", unexpected),
@@ -612,6 +614,22 @@ impl<'a> DfParser<'a> {
         };
 
         Ok(DfStatement::AlterUser(alter))
+    }
+
+    fn parse_drop_user(&mut self) -> Result<DfStatement, ParserError> {
+        let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let name = self.parser.parse_literal_string()?;
+        let hostname = if self.consume_token("@") {
+            self.parser.parse_literal_string()?
+        } else {
+            String::from("%")
+        };
+        let drop = DfDropUser {
+            if_exists,
+            name,
+            hostname,
+        };
+        Ok(DfStatement::DropUser(drop))
     }
 
     fn get_auth_option(&mut self) -> Result<(AuthType, String), ParserError> {

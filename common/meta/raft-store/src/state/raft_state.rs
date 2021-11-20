@@ -55,13 +55,16 @@ impl RaftState {
     /// 1. If `open` is `Some`,  it tries to open an existent RaftState if there is one.
     /// 2. If `create` is `Some`, it tries to initialize a new RaftState if there is not one.
     /// If none of them is `Some`, it is a programming error and will panic.
-    #[tracing::instrument(level = "info", skip(db))]
+    #[tracing::instrument(level = "info", skip(db,config,open,create), fields(config_id=%config.config_id))]
     pub async fn open_create(
         db: &sled::Db,
         config: &RaftConfig,
         open: Option<()>,
         create: Option<()>,
     ) -> common_exception::Result<RaftState> {
+        tracing::info!(?config);
+        tracing::info!("open: {:?}, create: {:?}", open, create);
+
         let tree_name = config.tree_name(TREE_RAFT_STATE);
         let inner = SledTree::open(db, &tree_name, config.is_sync())?;
 

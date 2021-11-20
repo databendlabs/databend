@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_meta_types::DropTableReq;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropTablePlan {
@@ -28,5 +29,15 @@ pub struct DropTablePlan {
 impl DropTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
+    }
+}
+
+impl From<DropTablePlan> for DropTableReq {
+    fn from(p: DropTablePlan) -> Self {
+        DropTableReq {
+            if_exists: p.if_exists,
+            db: p.db,
+            table: p.table,
+        }
     }
 }

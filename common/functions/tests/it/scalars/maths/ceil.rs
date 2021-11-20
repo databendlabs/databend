@@ -19,7 +19,6 @@ use common_functions::scalars::*;
 
 #[test]
 fn test_ceil_function() -> Result<()> {
-    #[allow(dead_code)]
     struct Test {
         name: &'static str,
         func: Box<dyn Function>,

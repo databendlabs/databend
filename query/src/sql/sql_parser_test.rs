@@ -25,6 +25,7 @@ use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropDatabase;
 use crate::sql::statements::DfDropTable;
+use crate::sql::statements::DfDropUser;
 use crate::sql::statements::DfGrantStatement;
 use crate::sql::statements::DfShowDatabases;
 use crate::sql::statements::DfShowTables;
@@ -639,6 +640,64 @@ fn alter_user_test() -> Result<()> {
     expect_parse_err(
         "ALTER USER 'test'@'localhost' IDENTIFIED WITH sha256_password BY ''",
         String::from("sql parser error: Missing password"),
+    )?;
+    Ok(())
+}
+
+#[test]
+fn drop_user_test() -> Result<()> {
+    expect_parse_ok(
+        "DROP USER 'test'@'localhost'",
+        DfStatement::DropUser(DfDropUser {
+            if_exists: false,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "DROP USER 'test'@'127.0.0.1'",
+        DfStatement::DropUser(DfDropUser {
+            if_exists: false,
+            name: String::from("test"),
+            hostname: String::from("127.0.0.1"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "DROP USER 'test'",
+        DfStatement::DropUser(DfDropUser {
+            if_exists: false,
+            name: String::from("test"),
+            hostname: String::from("%"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "DROP USER IF EXISTS 'test'@'localhost'",
+        DfStatement::DropUser(DfDropUser {
+            if_exists: true,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "DROP USER IF EXISTS 'test'@'127.0.0.1'",
+        DfStatement::DropUser(DfDropUser {
+            if_exists: true,
+            name: String::from("test"),
+            hostname: String::from("127.0.0.1"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "DROP USER IF EXISTS 'test'",
+        DfStatement::DropUser(DfDropUser {
+            if_exists: true,
+            name: String::from("test"),
+            hostname: String::from("%"),
+        }),
     )?;
     Ok(())
 }

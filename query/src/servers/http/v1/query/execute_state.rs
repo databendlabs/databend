@@ -68,7 +68,6 @@ pub(crate) type ExecuteStateRef = Arc<RwLock<ExecuteStateWrapper>>;
 
 pub(crate) struct ExecuteStopped {
     progress: Option<ProgressValues>,
-    #[allow(dead_code)]
     reason: Result<()>,
 }
 

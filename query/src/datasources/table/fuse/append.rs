@@ -17,6 +17,9 @@ use common_datavalues::DataSchema;
 use common_exception::Result;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::TableIdent;
+use common_meta_types::UpsertTableOptionReply;
+use common_meta_types::UpsertTableOptionReq;
 use common_planners::InsertIntoPlan;
 use common_streams::SendableDataBlockStream;
 use uuid::Uuid;
@@ -102,14 +105,16 @@ async fn commit(
     table_id: MetaId,
     table_version: MetaVersion,
     new_snapshot_location: String,
-) -> Result<()> {
+) -> Result<UpsertTableOptionReply> {
     let catalog = ctx.get_catalog();
     catalog
-        .upsert_table_option(
-            table_id,
-            table_version,
-            TBL_OPT_KEY_SNAPSHOT_LOC.to_string(),
+        .upsert_table_option(UpsertTableOptionReq::new(
+            &TableIdent {
+                table_id,
+                version: table_version,
+            },
+            TBL_OPT_KEY_SNAPSHOT_LOC,
             new_snapshot_location,
-        )
+        ))
         .await
 }

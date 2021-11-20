@@ -109,7 +109,6 @@ fn test_aggregate() -> Result<()> {
 
 #[test]
 fn test_monotonic_function() -> Result<()> {
-    #[allow(dead_code)]
     struct Test {
         name: &'static str,
         query: &'static str,

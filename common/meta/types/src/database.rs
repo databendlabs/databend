@@ -13,8 +13,31 @@
 //  limitations under the License.
 //
 
+use std::collections::HashMap;
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseInfo {
     pub database_id: u64,
     pub db: String,
 }
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct CreateDatabaseReq {
+    pub if_not_exists: bool,
+    pub db: String,
+    pub options: HashMap<String, String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct CreateDatabaseReply {
+    pub database_id: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct DropDatabaseReq {
+    pub if_exists: bool,
+    pub db: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct DropDatabaseReply {}

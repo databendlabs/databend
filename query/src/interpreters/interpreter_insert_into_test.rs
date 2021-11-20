@@ -21,56 +21,53 @@ use crate::interpreters::*;
 use crate::sql::*;
 
 #[tokio::test]
-async fn test_insert_into_select_interpreter() -> Result<()> {
+async fn test_insert_into_interpreter() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     // Create input table.
     {
-        if let PlanNode::CreateTable(plan) = PlanParser::create(ctx.clone())
-            .build_from_sql("create table default.input_table(a String, b String, c String, d String, e String) Engine = Memory")?
-        {
+        static TEST_QUERY: &str = "create table default.input_table(a String, b String, c String, d String, e String) Engine = Memory";
+        if let PlanNode::CreateTable(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
             let executor = CreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let _ = executor.execute().await?;
+            let _ = executor.execute(None).await?;
         }
     }
 
     // Create output table.
     {
-        if let PlanNode::CreateTable(plan) = PlanParser::create(ctx.clone())
-            .build_from_sql("create table default.output_table(a UInt8, b Int8, c UInt16, d Int16, e String) Engine = Memory")?
-        {
+        static TEST_QUERY: &str = "create table default.output_table(a UInt8, b Int8, c UInt16, d Int16, e String) Engine = Memory";
+        if let PlanNode::CreateTable(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
             let executor = CreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let _ = executor.execute().await?;
+            let _ = executor.execute(None).await?;
         }
     }
 
     // Insert into input table.
     {
-        if let PlanNode::InsertInto(plan) = PlanParser::create(ctx.clone())
-            .build_from_sql("insert into default.input_table values(1,1,1,1,1), (2,2,2,2,2)")?
-        {
-            let executor = InsertIntoInterpreter::try_create(ctx.clone(), plan.clone(), None)?;
-            let _ = executor.execute().await?;
+        static TEST_QUERY: &str = "insert into default.input_table values(1,1,1,1,1), (2,2,2,2,2)";
+        if let PlanNode::InsertInto(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
+            let executor = InsertIntoInterpreter::try_create(ctx.clone(), plan.clone())?;
+            let _ = executor.execute(None).await?;
         }
     }
 
     // Insert into output table.
     {
-        let plan_node = PlanParser::create(ctx.clone())
-            .build_from_sql("insert into default.output_table select * from default.input_table")?;
+        static TEST_QUERY: &str =
+            "insert into default.output_table select * from default.input_table";
+        let plan_node = PlanParser::parse(TEST_QUERY, ctx.clone()).await?;
         {
             let executor = InterpreterFactory::get(ctx.clone(), plan_node)?;
-            let _ = executor.execute().await?;
+            let _ = executor.execute(None).await?;
         }
     }
 
     // select.
     {
-        if let PlanNode::Select(plan) =
-            PlanParser::create(ctx.clone()).build_from_sql("select * from default.output_table")?
-        {
+        static TEST_QUERY: &str = "select * from default.output_table";
+        if let PlanNode::Select(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
             let executor = SelectInterpreter::try_create(ctx.clone(), plan.clone())?;
-            let stream = executor.execute().await?;
+            let stream = executor.execute(None).await?;
             let result = stream.try_collect::<Vec<_>>().await?;
             let expected = vec![
                 "+---+---+---+---+---+",

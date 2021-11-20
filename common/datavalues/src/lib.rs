@@ -19,7 +19,6 @@
 #[macro_use]
 mod macros;
 
-#[allow(dead_code)]
 mod bit_util;
 mod data_array_filter;
 mod data_field;
@@ -29,10 +28,8 @@ mod data_schema;
 mod data_value;
 mod data_value_operator;
 mod data_value_ops;
-#[allow(dead_code)]
 mod utils;
 
-#[allow(dead_code)]
 pub mod arrays;
 pub mod columns;
 pub mod prelude;

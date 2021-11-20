@@ -67,7 +67,6 @@ mod tests {
 
     #[test]
     fn test_skip_read_data_source() -> Result<()> {
-        #[allow(dead_code)]
         struct Test {
             name: &'static str,
             query: &'static str,

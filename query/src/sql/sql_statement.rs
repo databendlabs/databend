@@ -26,6 +26,7 @@ use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropDatabase;
 use crate::sql::statements::DfDropTable;
+use crate::sql::statements::DfDropUser;
 use crate::sql::statements::DfExplain;
 use crate::sql::statements::DfGrantStatement;
 use crate::sql::statements::DfInsertStatement;
@@ -85,6 +86,7 @@ pub enum DfStatement {
     CreateUser(DfCreateUser),
     AlterUser(DfAlterUser),
     ShowUsers(DfShowUsers),
+    DropUser(DfDropUser),
 
     // Grant
     GrantPrivilege(DfGrantStatement),

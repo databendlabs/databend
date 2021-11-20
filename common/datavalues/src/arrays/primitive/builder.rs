@@ -86,4 +86,13 @@ where T: DFPrimitiveType
     fn new_from_iter(it: impl Iterator<Item = T>) -> DFPrimitiveArray<T> {
         it.collect()
     }
+
+    fn new_from_iter_validity(
+        it: impl Iterator<Item = T>,
+        validity: Option<common_arrow::arrow::bitmap::Bitmap>,
+    ) -> Self {
+        let mut array: DFPrimitiveArray<T> = it.collect();
+        array.array = array.inner().with_validity(validity);
+        array
+    }
 }

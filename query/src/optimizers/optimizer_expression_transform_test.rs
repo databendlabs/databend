@@ -20,7 +20,6 @@ mod tests {
 
     #[test]
     fn test_expression_transform_optimizer() -> Result<()> {
-        #[allow(dead_code)]
         struct Test {
             name: &'static str,
             query: &'static str,

@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod context_test;
-
 mod index;
 
 pub(crate) mod common;
@@ -26,5 +23,3 @@ pub(crate) mod table_engine_registry;
 pub(crate) mod table_func;
 pub(crate) mod table_func_engine;
 pub(crate) mod table_func_engine_registry;
-
-pub use context::DataSourceContext;
