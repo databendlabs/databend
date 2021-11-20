@@ -3,7 +3,8 @@ id: hash-md5hash
 title: MD5
 ---
 
-Calculates an MD5 128-bit checksum for the string. The value is returned as a string of 32 hexadecimal digits.
+Calculates an MD5 128-bit checksum for the string.
+The value is returned as a string of 32 hexadecimal digits or NULL if the argument was NULL.
 
 ## Syntax
 

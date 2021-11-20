@@ -178,17 +178,30 @@ fn test_md5hash_function() -> Result<()> {
         arg: DataColumnWithField,
         expect: Result<DataColumn>,
     }
-    let tests = vec![Test {
-        name: "valid input",
-        arg: DataColumnWithField::new(
-            Series::new(["testing"]).into(),
-            DataField::new("arg1", DataType::String, true),
-        ),
-        expect: Ok(DataColumn::Constant(
-            DataValue::String(Some("ae2b1fca515949e5d54fb22b8ed95575".as_bytes().to_vec())),
-            1,
-        )),
-    }];
+    let tests = vec![
+        Test {
+            name: "valid input",
+            arg: DataColumnWithField::new(
+                Series::new([Some("testing")]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(DataColumn::Constant(
+                DataValue::String(Some("ae2b1fca515949e5d54fb22b8ed95575".as_bytes().to_vec())),
+                1,
+            )),
+        },
+        Test {
+            name: "valid input with null",
+            arg: DataColumnWithField::new(
+                Series::new([Some("testing"), None]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(DataColumn::Array(Series::new(vec![
+                Some("ae2b1fca515949e5d54fb22b8ed95575".as_bytes().to_vec()),
+                None,
+            ]))),
+        },
+    ];
 
     let func = Md5HashFunction::try_create("md5")?;
     for t in tests {
@@ -213,21 +226,38 @@ fn test_sha1hash_function() -> Result<()> {
         arg: DataColumnWithField,
         expect: Result<DataColumn>,
     }
-    let tests = vec![Test {
-        name: "valid input",
-        arg: DataColumnWithField::new(
-            Series::new(["abc"]).into(),
-            DataField::new("arg1", DataType::String, true),
-        ),
-        expect: Ok(DataColumn::Constant(
-            DataValue::String(Some(
-                "a9993e364706816aba3e25717850c26c9cd0d89d"
-                    .as_bytes()
-                    .to_vec(),
+    let tests = vec![
+        Test {
+            name: "valid input",
+            arg: DataColumnWithField::new(
+                Series::new(["abc"]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(DataColumn::Constant(
+                DataValue::String(Some(
+                    "a9993e364706816aba3e25717850c26c9cd0d89d"
+                        .as_bytes()
+                        .to_vec(),
+                )),
+                1,
             )),
-            1,
-        )),
-    }];
+        },
+        Test {
+            name: "valid input with null",
+            arg: DataColumnWithField::new(
+                Series::new([Some("abc"), None]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(DataColumn::Array(Series::new(vec![
+                Some(
+                    "a9993e364706816aba3e25717850c26c9cd0d89d"
+                        .as_bytes()
+                        .to_vec(),
+                ),
+                None,
+            ]))),
+        },
+    ];
 
     let func = Sha1HashFunction::try_create("sha1")?;
     for t in tests {
