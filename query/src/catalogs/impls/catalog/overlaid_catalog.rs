@@ -24,11 +24,11 @@ use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
-use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
+use common_meta_types::UpsertTableOptionReq;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::Database;
@@ -182,20 +182,10 @@ impl Catalog for OverlaidCatalog {
 
     async fn upsert_table_option(
         &self,
-        table_id: MetaId,
-        table_version: MetaVersion,
-        table_option_key: String,
-        table_option_value: String,
+        req: UpsertTableOptionReq,
     ) -> common_exception::Result<UpsertTableOptionReply> {
         // upsert table option in BOTTOM layer only
-        self.bottom
-            .upsert_table_option(
-                table_id,
-                table_version,
-                table_option_key,
-                table_option_value,
-            )
-            .await
+        self.bottom.upsert_table_option(req).await
     }
 
     async fn create_database(

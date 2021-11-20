@@ -34,11 +34,11 @@ use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::MatchSeq;
 use common_meta_types::MetaId;
-use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
+use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 use maplit::hashmap;
 
@@ -239,18 +239,15 @@ impl MetaApi for MetaEmbedded {
 
     async fn upsert_table_option(
         &self,
-        table_id: MetaId,
-        table_version: MetaVersion,
-        option_key: String,
-        option_value: String,
+        req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
         let sm = self.inner.lock().await;
 
         let cmd = Cmd::UpsertTableOptions {
-            table_id,
-            seq: MatchSeq::Exact(table_version),
+            table_id: req.table_id,
+            seq: MatchSeq::Exact(req.table_version),
             table_options: hashmap! {
-                option_key => Some(option_value),
+                req.option_key => Some(req.option_value),
             },
         };
 
@@ -261,11 +258,11 @@ impl MetaApi for MetaEmbedded {
 
             return Err(ErrorCode::TableVersionMissMatch(format!(
                 "targeting version {}, current version {}",
-                table_version, prev.seq,
+                req.table_version, prev.seq,
             )));
         }
 
-        Ok(())
+        Ok(UpsertTableOptionReply {})
     }
 
     fn name(&self) -> String {
