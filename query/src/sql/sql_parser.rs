@@ -719,7 +719,7 @@ impl<'a> DfParser<'a> {
     }
 
     /// Parse a possibly qualified, possibly quoted identifier or wild card, e.g.
-    /// `*` or `myschema`.* . Do not support sub string pattern like "db0%" yet.
+    /// `*` or `myschema`.*. The sub string pattern like "db0%" is not in planned.
     fn parse_grant_object_pattern(&mut self) -> Result<(Ident, Ident), ParserError> {
         let database_pattern = self.parse_grant_object_pattern_chunk()?;
         if !self.consume_token(".") {
@@ -731,13 +731,13 @@ impl<'a> DfParser<'a> {
 
     /// Parse a chunk from the object pattern, it might be * or an identifier
     pub fn parse_grant_object_pattern_chunk(&mut self) -> Result<Ident, ParserError> {
-        match self.parser.next_token() {
-            Token::Mul => Ok(Ident::new("*")),
-            Token::Word(w) => Ok(w.to_ident()),
-            Token::SingleQuotedString(s) => Ok(Ident::with_quote('\'', s)),
-            Token::BackQuotedString(s) => Ok(Ident::with_quote('`', s)),
-            unexpected => self.expected("identifier or *", unexpected),
+        if self.consume_token("*") {
+            return Ok(Ident::new("*"));
         }
+        let token = self.parser.peek_token();
+        self.parser
+            .parse_identifier()
+            .or_else(|_| self.expected("identifier or *", token))
     }
 
     fn consume_token(&mut self, expected: &str) -> bool {
