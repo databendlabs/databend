@@ -42,6 +42,7 @@ use crate::datasources::table_func_engine_registry::TableFuncEngineRegistry;
 /// - read/search like operations are always performed at
 ///   upper layer first, and bottom layer later(if necessary)  
 /// - metadata are written to the bottom layer
+#[derive(Clone)]
 pub struct OverlaidCatalog {
     /// the upper layer, read only
     read_only: Arc<dyn Catalog + Send + Sync>,
@@ -210,18 +211,5 @@ impl Catalog for OverlaidCatalog {
             )));
         }
         self.bottom.drop_database(req).await
-    }
-
-    async fn exists_database(&self, db_name: &str) -> common_exception::Result<bool> {
-        match self.get_database(db_name).await {
-            Ok(_) => Ok(true),
-            Err(err) => {
-                if err.code() == ErrorCode::UnknownDatabaseCode() {
-                    Ok(false)
-                } else {
-                    Err(err)
-                }
-            }
-        }
     }
 }
