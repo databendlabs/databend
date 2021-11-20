@@ -21,6 +21,7 @@ mod floor;
 mod log;
 mod math;
 mod pi;
+mod sign;
 mod trigonometric;
 
 pub use abs::AbsFunction;
@@ -36,6 +37,7 @@ pub use log::Log2Function;
 pub use log::LogFunction;
 pub use math::MathsFunction;
 pub use pi::PiFunction;
+pub use sign::SignFunction;
 pub use trigonometric::Trigonometric;
 pub use trigonometric::TrigonometricAcosFunction;
 pub use trigonometric::TrigonometricAsinFunction;
