@@ -36,7 +36,6 @@ pub struct AzureBlobAccessor {
 impl AzureBlobAccessor {
     /// Create a azure blob accessor instance without credentials.
     /// The code will use env variable "STORAGE_ACCOUNT" and "STORAGE_MASTER_KEY".
-    #[allow(dead_code)]
     pub fn try_create(account: impl Into<String>, container: impl Into<String>) -> Result<Self> {
         let master_key_res = std::env::var("STORAGE_MASTER_KEY");
         if let Err(e) = master_key_res {

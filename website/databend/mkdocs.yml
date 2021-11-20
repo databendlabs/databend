@@ -204,12 +204,17 @@ nav:
               - COS: sqlstatement/numeric-functions/cos.md
               - TAN: sqlstatement/numeric-functions/tan.md
               - COT: sqlstatement/numeric-functions/cot.md
+              - ASIN: sqlstatement/numeric-functions/asin.md
+              - ACOS: sqlstatement/numeric-functions/acos.md
+              - ATAN: sqlstatement/numeric-functions/atan.md
+              - ATAN2: sqlstatement/numeric-functions/atan2.md
               - CRC32: sqlstatement/numeric-functions/crc32.md
               - DEGREES: sqlstatement/numeric-functions/degrees.md
               - RADIANS: sqlstatement/numeric-functions/radians.md
               - CEIL: sqlstatement/numeric-functions/ceil.md
               - CEILING: sqlstatement/numeric-functions/ceiling.md
               - FLOOR: sqlstatement/numeric-functions/floor.md
+              - EXP: sqlstatement/numeric-functions/exp.md
           - String Functions:
               - SUBSTRING: sqlstatement/string-functions/substring.md
           - Test Functions:

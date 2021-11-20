@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
@@ -63,12 +61,9 @@ async fn select_table(sessions: SessionManagerRef) -> Result<String> {
     Ok(format!("{:?}", tracing_logs))
 }
 
-async fn execute_query(context: DatabendQueryContextRef) -> Result<SendableDataBlockStream> {
-    let tracing_table = context.get_table("system", "tracing")?;
-    let io_ctx = context.get_cluster_table_io_context()?;
-    let io_ctx = Arc::new(io_ctx);
+async fn execute_query(ctx: DatabendQueryContextRef) -> Result<SendableDataBlockStream> {
+    let tracing_table = ctx.get_table("system", "tracing")?;
+    let tracing_table_read_plan = tracing_table.read_plan(ctx.clone(), None)?;
 
-    let tracing_table_read_plan = tracing_table.read_plan(io_ctx.clone(), None)?;
-
-    tracing_table.read(io_ctx, &tracing_table_read_plan).await
+    tracing_table.read(ctx, &tracing_table_read_plan).await
 }

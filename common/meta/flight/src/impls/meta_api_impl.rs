@@ -15,46 +15,44 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_meta_api::MetaApi;
 use common_meta_types::CreateDatabaseReply;
+use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
+use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
+use common_meta_types::DropDatabaseReply;
+use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropTableReply;
+use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
-use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateDatabasePlan;
-use common_planners::CreateTablePlan;
-use common_planners::DropDatabasePlan;
-use common_planners::DropTablePlan;
+use common_meta_types::UpsertTableOptionReq;
 
-use crate::CreateDatabaseAction;
-use crate::CreateTableAction;
-use crate::DropDatabaseAction;
-use crate::DropTableAction;
+use crate::FlightReq;
 use crate::GetDatabaseAction;
 use crate::GetDatabasesAction;
 use crate::GetTableAction;
 use crate::GetTableExtReq;
 use crate::GetTablesAction;
 use crate::MetaFlightClient;
-use crate::UpsertTableOptionReq;
 
 #[async_trait::async_trait]
 impl MetaApi for MetaFlightClient {
-    /// Create database call.
     async fn create_database(
         &self,
-        plan: CreateDatabasePlan,
-    ) -> common_exception::Result<CreateDatabaseReply> {
-        self.do_action(CreateDatabaseAction { plan }).await
+        req: CreateDatabaseReq,
+    ) -> Result<CreateDatabaseReply, ErrorCode> {
+        self.do_action(FlightReq { req }).await
     }
 
     /// Drop database call.
-    async fn drop_database(&self, plan: DropDatabasePlan) -> common_exception::Result<()> {
-        self.do_action(DropDatabaseAction { plan }).await
+    async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, ErrorCode> {
+        self.do_action(FlightReq { req }).await
     }
 
     async fn get_database(&self, db: &str) -> common_exception::Result<Arc<DatabaseInfo>> {
@@ -70,16 +68,13 @@ impl MetaApi for MetaFlightClient {
     }
 
     /// Create table call.
-    async fn create_table(
-        &self,
-        plan: CreateTablePlan,
-    ) -> common_exception::Result<CreateTableReply> {
-        self.do_action(CreateTableAction { plan }).await
+    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, ErrorCode> {
+        self.do_action(FlightReq { req }).await
     }
 
     /// Drop table call.
-    async fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
-        self.do_action(DropTableAction { plan }).await
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, ErrorCode> {
+        self.do_action(FlightReq { req }).await
     }
 
     /// Get table.
@@ -108,18 +103,9 @@ impl MetaApi for MetaFlightClient {
 
     async fn upsert_table_option(
         &self,
-        table_id: MetaId,
-        table_version: MetaVersion,
-        option_key: String,
-        option_value: String,
-    ) -> common_exception::Result<UpsertTableOptionReply> {
-        self.do_action(UpsertTableOptionReq {
-            table_id,
-            table_version,
-            option_key,
-            option_value,
-        })
-        .await
+        req: UpsertTableOptionReq,
+    ) -> Result<UpsertTableOptionReply, ErrorCode> {
+        self.do_action(FlightReq { req }).await
     }
 
     fn name(&self) -> String {

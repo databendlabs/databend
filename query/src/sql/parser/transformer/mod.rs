@@ -28,7 +28,6 @@ pub trait AstTransformer {
     fn transform(&self) -> Result<Statement>;
 }
 
-#[allow(dead_code)]
 pub struct AstTransformerFactory;
 
 impl AstTransformerFactory {

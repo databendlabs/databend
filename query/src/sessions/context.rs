@@ -14,6 +14,7 @@
 
 use std::collections::VecDeque;
 use std::future::Future;
+use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
@@ -25,7 +26,13 @@ use common_base::ProgressCallback;
 use common_base::ProgressValues;
 use common_base::Runtime;
 use common_base::TrySpawn;
-use common_context::TableIOContext;
+use common_dal::AzureBlobAccessor;
+use common_dal::DalMetrics;
+use common_dal::DataAccessor;
+use common_dal::DataAccessorInterceptor;
+use common_dal::Local;
+use common_dal::StorageScheme;
+use common_dal::S3;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -41,17 +48,17 @@ use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::Catalog;
 use crate::catalogs::Table;
 use crate::clusters::ClusterRef;
+use crate::configs::AzureStorageBlobConfig;
 use crate::configs::Config;
-use crate::datasources::common::ContextDalBuilder;
 use crate::servers::http::v1::query::HttpQueryHandle;
-use crate::sessions::context_shared::DatabendQueryContextShared;
+use crate::sessions::DatabendQueryContextShared;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
 
 pub struct DatabendQueryContext {
+    version: String,
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<Part>>>,
-    version: String,
     shared: Arc<DatabendQueryContextShared>,
 }
 
@@ -76,6 +83,27 @@ impl DatabendQueryContext {
             ),
             shared,
         })
+    }
+
+    /// Build a table instance the plan wants to operate on.
+    ///
+    /// A plan just contains raw information about a table or table function.
+    /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
+    pub fn build_table_from_source_plan(
+        &self,
+        plan: &ReadDataSourcePlan,
+    ) -> Result<Arc<dyn Table>> {
+        let catalog = self.get_catalog();
+
+        let t = if plan.tbl_args.is_none() {
+            catalog.build_table(&plan.table_info)?
+        } else {
+            catalog
+                .get_table_function(&plan.table_info.name, plan.tbl_args.clone())?
+                .as_table()
+        };
+
+        Ok(t)
     }
 
     /// Set progress callback to context.
@@ -137,6 +165,18 @@ impl DatabendQueryContext {
         Ok(())
     }
 
+    pub fn attach_http_query(&self, handle: HttpQueryHandle) {
+        self.shared.attach_http_query(handle);
+    }
+
+    pub fn attach_query_str(&self, query: &str) {
+        self.shared.attach_query_str(query);
+    }
+
+    pub fn attach_query_plan(&self, query_plan: &PlanNode) {
+        self.shared.attach_query_plan(query_plan);
+    }
+
     pub fn get_cluster(&self) -> ClusterRef {
         self.shared.get_cluster()
     }
@@ -156,27 +196,6 @@ impl DatabendQueryContext {
         self.shared.get_table(database, table)
     }
 
-    /// Build a table instance the plan wants to operate on.
-    ///
-    /// A plan just contains raw information about a table or table function.
-    /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
-    pub fn build_table_from_source_plan(
-        &self,
-        plan: &ReadDataSourcePlan,
-    ) -> Result<Arc<dyn Table>> {
-        let catalog = self.get_catalog();
-
-        let t = if plan.tbl_args.is_none() {
-            catalog.build_table(&plan.table_info)?
-        } else {
-            catalog
-                .get_table_function(&plan.table_info.name, plan.tbl_args.clone())?
-                .as_table()
-        };
-
-        Ok(t)
-    }
-
     pub fn get_id(&self) -> String {
         self.shared.init_query_id.as_ref().read().clone()
     }
@@ -185,10 +204,6 @@ impl DatabendQueryContext {
         let (abort_handle, abort_stream) = AbortStream::try_create(input)?;
         self.shared.add_source_abort_handle(abort_handle);
         Ok(abort_stream)
-    }
-
-    pub fn attach_http_query(&self, handle: HttpQueryHandle) {
-        self.shared.attach_http_query(handle);
     }
 
     pub fn get_current_database(&self) -> String {
@@ -237,14 +252,6 @@ impl DatabendQueryContext {
         format!("_subquery_{}", index)
     }
 
-    pub fn attach_query_str(&self, query: &str) {
-        self.shared.attach_query_str(query);
-    }
-
-    pub fn attach_query_plan(&self, query_plan: &PlanNode) {
-        self.shared.attach_query_plan(query_plan);
-    }
-
     pub fn get_sessions_manager(self: &Arc<Self>) -> SessionManagerRef {
         self.shared.session.get_sessions_manager()
     }
@@ -253,27 +260,41 @@ impl DatabendQueryContext {
         self.shared.try_get_runtime()
     }
 
-    /// Build a TableIOContext that contains cluster information so that one using it could distributed data evenly in the cluster.
-    pub fn get_cluster_table_io_context(self: &Arc<Self>) -> Result<TableIOContext> {
-        let cluster = self.get_cluster();
-        let nodes = cluster.get_nodes();
+    pub fn get_data_accessor(&self) -> Result<Arc<dyn DataAccessor>> {
+        let storage_conf = &self.get_config().storage;
+        let scheme_name = &storage_conf.storage_type;
+        let scheme = StorageScheme::from_str(scheme_name)?;
+        let da: Arc<dyn DataAccessor> = match scheme {
+            StorageScheme::S3 => {
+                let conf = &storage_conf.s3;
+                Arc::new(S3::try_create(
+                    &conf.region,
+                    &conf.endpoint_url,
+                    &conf.bucket,
+                    &conf.access_key_id,
+                    &conf.secret_access_key,
+                )?)
+            }
+            StorageScheme::AzureStorageBlob => {
+                let conf: &AzureStorageBlobConfig = &storage_conf.azure_storage_blob;
+                Arc::new(AzureBlobAccessor::with_credentials(
+                    &conf.account,
+                    &conf.container,
+                    &conf.master_key,
+                ))
+            }
+            StorageScheme::LocalFs => Arc::new(Local::new(storage_conf.disk.data_path.as_str())),
+        };
 
-        let settings = self.get_settings();
-        let max_threads = settings.get_max_threads()? as usize;
+        Ok(Arc::new(DataAccessorInterceptor::new(
+            self.shared.dal_ctx.clone(),
+            da,
+        )))
+    }
 
-        let tenant_id = self.shared.conf.query.tenant_id.clone();
-        let cluster_id = self.shared.conf.query.cluster_id.clone();
-        Ok(TableIOContext::new(
-            self.get_shared_runtime()?,
-            Arc::new(ContextDalBuilder::new(
-                tenant_id,
-                cluster_id,
-                self.get_config().storage,
-            )),
-            max_threads,
-            nodes,
-            Some(self.clone()),
-        ))
+    /// Get the data accessor metrics.
+    pub fn get_dal_metrics(&self) -> DalMetrics {
+        self.shared.dal_ctx.get_metrics()
     }
 }
 

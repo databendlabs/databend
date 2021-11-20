@@ -20,7 +20,6 @@ mod tests {
 
     #[test]
     fn test_constant_folding_optimizer() -> Result<()> {
-        #[allow(dead_code)]
         struct Test {
             name: &'static str,
             query: &'static str,

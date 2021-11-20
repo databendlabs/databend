@@ -17,26 +17,28 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
+use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
+use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
+use common_meta_types::DropDatabaseReply;
+use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropTableReply;
+use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
-use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateDatabasePlan;
-use common_planners::CreateTablePlan;
-use common_planners::DropDatabasePlan;
-use common_planners::DropTablePlan;
+use common_meta_types::UpsertTableOptionReq;
 
 #[async_trait::async_trait]
 pub trait MetaApi: Send + Sync {
     // database
 
-    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply>;
+    async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply>;
 
-    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
+    async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply>;
 
     async fn get_database(&self, db: &str) -> Result<Arc<DatabaseInfo>>;
 
@@ -44,9 +46,9 @@ pub trait MetaApi: Send + Sync {
 
     // table
 
-    async fn create_table(&self, plan: CreateTablePlan) -> Result<CreateTableReply>;
+    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply>;
 
-    async fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply>;
 
     async fn get_table(&self, db: &str, table: &str) -> Result<Arc<TableInfo>>;
 
@@ -56,10 +58,7 @@ pub trait MetaApi: Send + Sync {
 
     async fn upsert_table_option(
         &self,
-        table_id: MetaId,
-        table_version: MetaVersion,
-        option_key: String,
-        option_value: String,
+        req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply>;
 
     fn name(&self) -> String;

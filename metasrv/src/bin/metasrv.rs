@@ -20,32 +20,27 @@ use common_base::Stoppable;
 use common_macros::databend_main;
 use common_meta_sled_store::init_sled_db;
 use common_metrics::init_default_metrics_recorder;
-use common_tracing::init_tracing_with_file;
+use common_tracing::init_global_tracing;
 use common_tracing::tracing;
 use databend_meta::api::FlightServer;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::metrics::MetricService;
-use log::info;
 use structopt::StructOpt;
 
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
     let conf = Config::from_args();
-    env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or(conf.log_level.to_lowercase().as_str()),
-    )
-    .init();
 
-    let _guards = init_tracing_with_file(
+    let _guards = init_global_tracing(
         "databend-meta",
         conf.log_dir.as_str(),
         conf.log_level.as_str(),
     );
 
-    info!("{:?}", conf.clone());
-    info!(
+    tracing::info!("{:?}", conf.clone());
+    tracing::info!(
         "Databend-meta v-{}",
         *databend_meta::configs::config::DATABEND_COMMIT_VERSION
     );
@@ -69,14 +64,14 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     {
         let mut srv = MetricService::create(conf.clone());
         srv.start().await.expect("Failed to start metrics server");
-        info!("Metric API server listening on {}", conf.metric_api_address);
+        tracing::info!("Metric API server listening on {}", conf.metric_api_address);
         stop_handler.push(srv);
     }
 
     // HTTP API service.
     {
         let mut srv = HttpService::create(conf.clone());
-        info!("HTTP API server listening on {}", conf.admin_api_address);
+        tracing::info!("HTTP API server listening on {}", conf.admin_api_address);
         srv.start().await.expect("Failed to start http server");
         stop_handler.push(srv);
     }
@@ -84,7 +79,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     // Flight API service.
     {
         let mut srv = FlightServer::create(conf.clone(), meta_node);
-        info!(
+        tracing::info!(
             "Databend-meta API server listening on {}",
             conf.flight_api_address
         );
@@ -92,6 +87,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         stop_handler.push(Box::new(srv));
     }
     stop_handler.wait_to_terminate(stop_tx).await;
+    tracing::info!("Databend-meta is done shutting down");
 
     Ok(())
 }

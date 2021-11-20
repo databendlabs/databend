@@ -16,8 +16,6 @@
 use std::sync::Arc;
 
 use async_stream::stream;
-use common_context::IOContext;
-use common_context::TableIOContext;
 use common_datavalues::DataSchema;
 use common_exception::Result;
 use common_planners::Extras;
@@ -27,19 +25,15 @@ use common_streams::Source;
 use futures::StreamExt;
 
 use crate::datasources::table::fuse::FuseTable;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::DatabendQueryContextRef;
 
 impl FuseTable {
     #[inline]
     pub async fn do_read(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
-        let ctx: Arc<DatabendQueryContext> = io_ctx
-            .get_user_data()?
-            .expect("DatabendQueryContext should not be None");
-
         let default_proj = || {
             (0..self.table_info.schema().fields().len())
                 .into_iter()
@@ -58,15 +52,18 @@ impl FuseTable {
 
         // TODO we need a configuration to specify the unit of dequeue operation
         let bite_size = 1;
+        let ctx_clone = ctx.clone();
         let iter = {
-            std::iter::from_fn(move || match ctx.clone().try_get_partitions(bite_size) {
-                Err(_) => None,
-                Ok(parts) if parts.is_empty() => None,
-                Ok(parts) => Some(parts),
-            })
+            std::iter::from_fn(
+                move || match ctx_clone.clone().try_get_partitions(bite_size) {
+                    Err(_) => None,
+                    Ok(parts) if parts.is_empty() => None,
+                    Ok(parts) => Some(parts),
+                },
+            )
             .flatten()
         };
-        let da = io_ctx.get_data_accessor()?;
+        let da = ctx.get_data_accessor()?;
         let arrow_schema = self.table_info.schema().to_arrow();
         let table_schema = Arc::new(DataSchema::from(arrow_schema));
 

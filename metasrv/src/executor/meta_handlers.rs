@@ -17,16 +17,12 @@ use std::convert::TryInto;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
-use common_meta_flight::CreateDatabaseAction;
-use common_meta_flight::CreateTableAction;
-use common_meta_flight::DropDatabaseAction;
-use common_meta_flight::DropTableAction;
+use common_meta_flight::FlightReq;
 use common_meta_flight::GetDatabaseAction;
 use common_meta_flight::GetDatabasesAction;
 use common_meta_flight::GetTableAction;
 use common_meta_flight::GetTableExtReq;
 use common_meta_flight::GetTablesAction;
-use common_meta_flight::UpsertTableOptionReq;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd::CreateDatabase;
@@ -35,15 +31,22 @@ use common_meta_types::Cmd::DropDatabase;
 use common_meta_types::Cmd::DropTable;
 use common_meta_types::Cmd::UpsertTableOptions;
 use common_meta_types::CreateDatabaseReply;
+use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
+use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
+use common_meta_types::DropDatabaseReply;
+use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropTableReply;
+use common_meta_types::DropTableReq;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use log::info;
+use common_meta_types::UpsertTableOptionReq;
+use common_tracing::tracing;
 use maplit::hashmap;
 
 use crate::executor::action_handler::RequestHandler;
@@ -51,14 +54,14 @@ use crate::executor::ActionHandler;
 
 // Db
 #[async_trait::async_trait]
-impl RequestHandler<CreateDatabaseAction> for ActionHandler {
+impl RequestHandler<FlightReq<CreateDatabaseReq>> for ActionHandler {
     async fn handle(
         &self,
-        act: CreateDatabaseAction,
+        act: FlightReq<CreateDatabaseReq>,
     ) -> common_exception::Result<CreateDatabaseReply> {
-        let plan = act.plan;
-        let db_name = &plan.db;
-        let if_not_exists = plan.if_not_exists;
+        let req = act.req;
+        let db_name = &req.db;
+        let if_not_exists = req.if_not_exists;
 
         let cr = LogEntry {
             txid: None,
@@ -111,10 +114,13 @@ impl RequestHandler<GetDatabaseAction> for ActionHandler {
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<DropDatabaseAction> for ActionHandler {
-    async fn handle(&self, act: DropDatabaseAction) -> common_exception::Result<()> {
-        let db_name = &act.plan.db;
-        let if_exists = act.plan.if_exists;
+impl RequestHandler<FlightReq<DropDatabaseReq>> for ActionHandler {
+    async fn handle(
+        &self,
+        act: FlightReq<DropDatabaseReq>,
+    ) -> common_exception::Result<DropDatabaseReply> {
+        let db_name = &act.req.db;
+        let if_exists = act.req.if_exists;
         let cr = LogEntry {
             txid: None,
             cmd: DropDatabase {
@@ -134,7 +140,7 @@ impl RequestHandler<DropDatabaseAction> for ActionHandler {
         };
 
         if prev.is_some() || if_exists {
-            Ok(())
+            Ok(DropDatabaseReply {})
         } else {
             Err(ErrorCode::UnknownDatabase(format!(
                 "database not found: {:}",
@@ -146,16 +152,19 @@ impl RequestHandler<DropDatabaseAction> for ActionHandler {
 
 // table
 #[async_trait::async_trait]
-impl RequestHandler<CreateTableAction> for ActionHandler {
-    async fn handle(&self, act: CreateTableAction) -> common_exception::Result<CreateTableReply> {
-        let plan = act.plan;
-        let db_name = &plan.db;
-        let table_name = &plan.table;
-        let if_not_exists = plan.if_not_exists;
+impl RequestHandler<FlightReq<CreateTableReq>> for ActionHandler {
+    async fn handle(
+        &self,
+        act: FlightReq<CreateTableReq>,
+    ) -> common_exception::Result<CreateTableReply> {
+        let req = act.req;
+        let db_name = &req.db;
+        let table_name = &req.table;
+        let if_not_exists = req.if_not_exists;
 
-        info!("create table: {:}: {:?}", &db_name, &table_name);
+        tracing::info!("create table: {:}: {:?}", &db_name, &table_name);
 
-        let table_meta = plan.table_meta;
+        let table_meta = req.table_meta;
 
         let cr = LogEntry {
             txid: None,
@@ -190,11 +199,14 @@ impl RequestHandler<CreateTableAction> for ActionHandler {
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<DropTableAction> for ActionHandler {
-    async fn handle(&self, act: DropTableAction) -> common_exception::Result<()> {
-        let db_name = &act.plan.db;
-        let table_name = &act.plan.table;
-        let if_exists = act.plan.if_exists;
+impl RequestHandler<FlightReq<DropTableReq>> for ActionHandler {
+    async fn handle(
+        &self,
+        act: FlightReq<DropTableReq>,
+    ) -> common_exception::Result<DropTableReply> {
+        let db_name = &act.req.db;
+        let table_name = &act.req.table;
+        let if_exists = act.req.if_exists;
 
         let cr = LogEntry {
             txid: None,
@@ -214,7 +226,7 @@ impl RequestHandler<DropTableAction> for ActionHandler {
         let (prev, _result) = ch.unpack();
 
         if prev.is_some() || if_exists {
-            Ok(())
+            Ok(DropTableReply {})
         } else {
             Err(ErrorCode::UnknownTable(format!(
                 "Unknown table: '{:}'",
@@ -311,11 +323,12 @@ impl RequestHandler<GetTablesAction> for ActionHandler {
     }
 }
 #[async_trait::async_trait]
-impl RequestHandler<UpsertTableOptionReq> for ActionHandler {
+impl RequestHandler<FlightReq<UpsertTableOptionReq>> for ActionHandler {
     async fn handle(
         &self,
-        req: UpsertTableOptionReq,
+        req: FlightReq<UpsertTableOptionReq>,
     ) -> common_exception::Result<UpsertTableOptionReply> {
+        let req = req.req;
         let cr = LogEntry {
             txid: None,
             cmd: UpsertTableOptions {
@@ -343,6 +356,6 @@ impl RequestHandler<UpsertTableOptionReq> for ActionHandler {
             )));
         }
 
-        Ok(())
+        Ok(UpsertTableOptionReply {})
     }
 }

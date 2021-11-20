@@ -12,7 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct CreateTableReply {
-    pub table_id: u64,
+use std::fmt::Debug;
+use std::sync::Arc;
+
+use common_dal::InMemoryData;
+use common_exception::Result;
+use common_infallible::RwLock;
+
+/// Datasource Table Context.
+#[derive(Clone, Debug, Default)]
+pub struct TableContext {
+    pub in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
+}
+
+impl TableContext {
+    pub fn get_in_memory_data(&self) -> Result<Arc<RwLock<InMemoryData<u64>>>> {
+        Ok(self.in_memory_data.clone())
+    }
 }

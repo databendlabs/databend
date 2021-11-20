@@ -47,7 +47,6 @@ pub fn assert_binary_arguments<D: Display>(name: D, actual: usize) -> Result<()>
     Ok(())
 }
 
-#[allow(dead_code)]
 pub fn assert_arguments<D: Display>(name: D, actual: usize, expected: usize) -> Result<()> {
     if actual != expected {
         return Err(ErrorCode::NumberArgumentsNotMatch(format!(

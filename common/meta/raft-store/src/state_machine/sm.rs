@@ -617,7 +617,7 @@ impl StateMachine {
         let sm_meta = self.sm_meta();
         let mem = sm_meta
             .get(&StateMachineMetaKey::LastMembership)?
-            .map(MembershipConfig::from);
+            .map(|x| x.try_into().expect("Membership"));
 
         Ok(mem)
     }
@@ -626,7 +626,7 @@ impl StateMachine {
         let sm_meta = self.sm_meta();
         let last_applied = sm_meta
             .get(&LastApplied)?
-            .map(LogId::from)
+            .map(|x| x.try_into().expect("LogId"))
             .unwrap_or_default();
 
         Ok(last_applied)

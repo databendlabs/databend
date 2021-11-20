@@ -633,6 +633,64 @@ fn alter_user_test() -> Result<()> {
 }
 
 #[test]
+fn drop_user_test() -> Result<()> {
+    expect_parse_ok(
+        "DROP USER 'test'@'localhost'",
+        DfStatement::DropUser(DfDropUser {
+            if_exists: false,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "DROP USER 'test'@'127.0.0.1'",
+        DfStatement::DropUser(DfDropUser {
+            if_exists: false,
+            name: String::from("test"),
+            hostname: String::from("127.0.0.1"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "DROP USER 'test'",
+        DfStatement::DropUser(DfDropUser {
+            if_exists: false,
+            name: String::from("test"),
+            hostname: String::from("%"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "DROP USER IF EXISTS 'test'@'localhost'",
+        DfStatement::DropUser(DfDropUser {
+            if_exists: true,
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "DROP USER IF EXISTS 'test'@'127.0.0.1'",
+        DfStatement::DropUser(DfDropUser {
+            if_exists: true,
+            name: String::from("test"),
+            hostname: String::from("127.0.0.1"),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "DROP USER IF EXISTS 'test'",
+        DfStatement::DropUser(DfDropUser {
+            if_exists: true,
+            name: String::from("test"),
+            hostname: String::from("%"),
+        }),
+    )?;
+    Ok(())
+}
+
+#[test]
 fn grant_privilege_test() -> Result<()> {
     expect_parse_ok(
         "GRANT ALL ON * TO 'test'@'localhost'",

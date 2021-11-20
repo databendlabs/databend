@@ -29,6 +29,8 @@ use tonic::Status;
 pub static ABORT_SESSION: u16 = 42;
 pub static ABORT_QUERY: u16 = 43;
 
+pub static UNKNOWN_USER: u16 = 3000;
+
 #[derive(Clone)]
 pub enum ErrorCodeBacktrace {
     Serialized(Arc<String>),
@@ -243,7 +245,7 @@ build_exceptions! {
     // let's figure it out latter.
 
     // user-api error codes
-    UnknownUser(3000),
+    UnknownUser(UNKNOWN_USER),
     UserAlreadyExists(3001),
     IllegalUserInfoFormat(3002),
 
@@ -274,12 +276,14 @@ build_exceptions! {
     UnknownStorageSchemeName(7001),
     SecretKeyNotSet(7002),
 
-
     // datasource error
     DuplicatedTableEngineProvider(8000),
     UnknownDatabaseEngine(8001),
     UnknownTableEngine(8002),
     DuplicatedDatabaseEngineProvider(8003),
+
+    // http query error
+    HttpNotFound(9404),
 
 }
 // General errors

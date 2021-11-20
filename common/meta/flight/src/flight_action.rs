@@ -13,27 +13,30 @@
 // limitations under the License.
 
 use std::convert::TryInto;
+use std::fmt::Debug;
 use std::io::Cursor;
 use std::sync::Arc;
 
 use common_arrow::arrow_format::flight::data::Action;
 use common_exception::ErrorCode;
 use common_meta_types::CreateDatabaseReply;
+use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
+use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
+use common_meta_types::DropDatabaseReply;
+use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropTableReply;
+use common_meta_types::DropTableReq;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MetaId;
-use common_meta_types::MetaVersion;
 use common_meta_types::PrefixListReply;
 use common_meta_types::TableInfo;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateDatabasePlan;
-use common_planners::CreateTablePlan;
-use common_planners::DropDatabasePlan;
-use common_planners::DropTablePlan;
+use common_meta_types::UpsertTableOptionReq;
 use prost::Message;
 use tonic::Request;
 
@@ -43,22 +46,26 @@ pub trait RequestFor {
     type Reply;
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct FlightReq<T> {
+    pub req: T,
+}
+
 // Action wrapper for do_action.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
 pub enum MetaFlightAction {
-    // database meta
-    CreateDatabase(CreateDatabaseAction),
+    CreateDatabase(FlightReq<CreateDatabaseReq>),
+    DropDatabase(FlightReq<DropDatabaseReq>),
     GetDatabase(GetDatabaseAction),
-    DropDatabase(DropDatabaseAction),
-    CreateTable(CreateTableAction),
-    DropTable(DropTableAction),
+    GetDatabases(GetDatabasesAction),
+
+    CreateTable(FlightReq<CreateTableReq>),
+    DropTable(FlightReq<DropTableReq>),
     GetTable(GetTableAction),
     GetTableExt(GetTableExtReq),
     GetTables(GetTablesAction),
-    GetDatabases(GetDatabasesAction),
-    CommitTable(UpsertTableOptionReq),
+    CommitTable(FlightReq<UpsertTableOptionReq>),
 
-    // general purpose kv
     UpsertKV(UpsertKVAction),
     GetKV(GetKVAction),
     MGetKV(MGetKVAction),
@@ -139,12 +146,8 @@ impl RequestFor for UpsertKVAction {
 }
 
 // == database actions ==
-// - create database
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct CreateDatabaseAction {
-    pub plan: CreateDatabasePlan,
-}
-impl RequestFor for CreateDatabaseAction {
+
+impl RequestFor for FlightReq<CreateDatabaseReq> {
     type Reply = CreateDatabaseReply;
 }
 
@@ -157,31 +160,16 @@ impl RequestFor for GetDatabaseAction {
     type Reply = DatabaseInfo;
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct DropDatabaseAction {
-    pub plan: DropDatabasePlan,
-}
-impl RequestFor for DropDatabaseAction {
-    type Reply = ();
+impl RequestFor for FlightReq<DropDatabaseReq> {
+    type Reply = DropDatabaseReply;
 }
 
-// == table actions ==
-// - create table
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct CreateTableAction {
-    pub plan: CreateTablePlan,
-}
-impl RequestFor for CreateTableAction {
+impl RequestFor for FlightReq<CreateTableReq> {
     type Reply = CreateTableReply;
 }
 
-// - drop table
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct DropTableAction {
-    pub plan: DropTablePlan,
-}
-impl RequestFor for DropTableAction {
-    type Reply = ();
+impl RequestFor for FlightReq<DropTableReq> {
+    type Reply = DropTableReply;
 }
 
 // - get table
@@ -203,14 +191,7 @@ impl RequestFor for GetTableExtReq {
     type Reply = TableInfo;
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct UpsertTableOptionReq {
-    pub table_id: MetaId,
-    pub table_version: MetaVersion,
-    pub option_key: String,
-    pub option_value: String,
-}
-impl RequestFor for UpsertTableOptionReq {
+impl RequestFor for FlightReq<UpsertTableOptionReq> {
     type Reply = UpsertTableOptionReply;
 }
 

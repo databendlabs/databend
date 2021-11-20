@@ -32,10 +32,8 @@ use common_meta_types::UpsertKVActionReply;
 
 use crate::cluster::ClusterApi;
 
-#[allow(dead_code)]
 pub static CLUSTER_API_KEY_PREFIX: &str = "__fd_clusters";
 
-#[allow(dead_code)]
 pub struct ClusterMgr {
     kv_api: Arc<dyn KVApi>,
     lift_time: Duration,

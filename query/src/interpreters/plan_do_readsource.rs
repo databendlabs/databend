@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -28,14 +26,14 @@ use crate::catalogs::ToReadDataSourcePlan;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct PlanDoReadSource {
-    context: DatabendQueryContextRef,
+    ctx: DatabendQueryContextRef,
     before_group_by_schema: Option<DataSchemaRef>,
 }
 
 impl PlanDoReadSource {
-    pub fn create(context: DatabendQueryContextRef) -> PlanDoReadSource {
+    pub fn create(ctx: DatabendQueryContextRef) -> PlanDoReadSource {
         PlanDoReadSource {
-            context,
+            ctx,
             before_group_by_schema: None,
         }
     }
@@ -43,10 +41,8 @@ impl PlanDoReadSource {
 
 impl PlanRewriter for PlanDoReadSource {
     fn rewrite_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<PlanNode> {
-        let table = self.context.build_table_from_source_plan(plan)?;
-        let io_ctx = self.context.get_cluster_table_io_context()?;
-        let io_ctx = Arc::new(io_ctx);
-        let plan = table.read_plan(io_ctx, plan.push_downs.clone())?;
+        let table = self.ctx.build_table_from_source_plan(plan)?;
+        let plan = table.read_plan(self.ctx.clone(), plan.push_downs.clone())?;
 
         Ok(PlanNode::ReadSource(plan))
     }

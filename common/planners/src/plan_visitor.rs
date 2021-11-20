@@ -25,6 +25,7 @@ use crate::CreateUserPlan;
 use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
+use crate::DropUserPlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
 use crate::Expression;
@@ -122,6 +123,7 @@ pub trait PlanVisitor {
             PlanNode::Kill(plan) => self.visit_kill_query(plan),
             PlanNode::CreateUser(plan) => self.visit_create_user(plan),
             PlanNode::AlterUser(plan) => self.visit_alter_user(plan),
+            PlanNode::DropUser(plan) => self.visit_drop_user(plan),
             PlanNode::GrantPrivilege(plan) => self.visit_grant_privilege(plan),
         }
     }
@@ -247,6 +249,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_alter_user(&mut self, _: &AlterUserPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_drop_user(&mut self, _: &DropUserPlan) -> Result<()> {
         Ok(())
     }
 

@@ -13,10 +13,7 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
-
 use common_base::tokio;
-use common_context::TableDataContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -26,6 +23,7 @@ use common_planners::*;
 use futures::TryStreamExt;
 
 use crate::catalogs::ToReadDataSourcePlan;
+use crate::datasources::context::TableContext;
 use crate::datasources::table::null::null_table::NullTable;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -51,11 +49,8 @@ async fn test_null_table() -> Result<()> {
                 options: TableOptions::default(),
             },
         },
-        Arc::new(TableDataContext::default()),
+        TableContext::default(),
     )?;
-
-    let io_ctx = ctx.get_cluster_table_io_context()?;
-    let io_ctx = Arc::new(io_ctx);
 
     // append data.
     {
@@ -76,17 +71,17 @@ async fn test_null_table() -> Result<()> {
             values_opt: None,
         };
         table
-            .append_data(io_ctx.clone(), insert_plan, Box::pin(input_stream))
+            .append_data(ctx.clone(), insert_plan, Box::pin(input_stream))
             .await
             .unwrap();
     }
 
     // read.
     {
-        let source_plan = table.read_plan(io_ctx.clone(), None)?;
+        let source_plan = table.read_plan(ctx.clone(), None)?;
         assert_eq!(table.engine(), "Null");
 
-        let stream = table.read(io_ctx.clone(), &source_plan).await?;
+        let stream = table.read(ctx.clone(), &source_plan).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let block = &result[0];
         assert_eq!(block.num_columns(), 1);
@@ -98,7 +93,7 @@ async fn test_null_table() -> Result<()> {
             db: "default".to_string(),
             table: "a".to_string(),
         };
-        table.truncate(io_ctx, truncate_plan).await?;
+        table.truncate(ctx, truncate_plan).await?;
     }
 
     Ok(())

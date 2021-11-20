@@ -16,7 +16,6 @@
 use std::sync::Arc;
 
 use common_base::BlockingWait;
-use common_context::TableDataContext;
 use common_dal::InMemoryData;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -24,17 +23,18 @@ use common_infallible::RwLock;
 use common_meta_api::MetaApi;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_types::CreateDatabaseReply;
+use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
+use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropTableReply;
+use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
-use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateDatabasePlan;
-use common_planners::CreateTablePlan;
-use common_planners::DropDatabasePlan;
-use common_planners::DropTablePlan;
+use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
 use crate::catalogs::backends::MetaRemote;
@@ -43,6 +43,7 @@ use crate::catalogs::Database;
 use crate::catalogs::Table;
 use crate::common::MetaClientProvider;
 use crate::configs::Config;
+use crate::datasources::context::TableContext;
 use crate::datasources::database::default::default_database::DefaultDatabase;
 use crate::datasources::table::register_prelude_tbl_engines;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
@@ -52,6 +53,7 @@ use crate::datasources::table_engine_registry::TableEngineRegistry;
 /// - Meta data of databases are saved in meta store
 /// - Instances of `Database` are created by using database factories according to the engine
 /// - Database engines are free to save table meta in metastore or not
+#[derive(Clone)]
 pub struct MetaStoreCatalog {
     table_engine_registry: Arc<TableEngineRegistry>,
 
@@ -102,13 +104,13 @@ impl MetaStoreCatalog {
 
         register_prelude_tbl_engines(&table_engine_registry)?;
 
-        let plan = CreateDatabasePlan {
+        let req = CreateDatabaseReq {
             if_not_exists: true,
             db: "default".to_string(),
             options: Default::default(),
         };
 
-        meta.create_database(plan).await?;
+        meta.create_database(req).await?;
 
         let cat = MetaStoreCatalog {
             table_engine_registry,
@@ -162,40 +164,14 @@ impl Catalog for MetaStoreCatalog {
         self.meta.get_table_by_id(table_id).await
     }
 
-    async fn upsert_table_option(
-        &self,
-        table_id: MetaId,
-        table_version: MetaVersion,
-        table_option_key: String,
-        table_option_value: String,
-    ) -> Result<UpsertTableOptionReply> {
-        self.meta
-            .upsert_table_option(
-                table_id,
-                table_version,
-                table_option_key,
-                table_option_value,
-            )
-            .await
-    }
-
-    async fn create_table(&self, plan: CreateTablePlan) -> common_exception::Result<()> {
+    async fn create_table(&self, req: CreateTableReq) -> Result<()> {
         // TODO validate table parameters by using TableFactory
-        self.meta.create_table(plan).await?;
+        self.meta.create_table(req).await?;
         Ok(())
     }
 
-    async fn drop_table(&self, plan: DropTablePlan) -> common_exception::Result<()> {
-        self.meta.drop_table(plan).await
-    }
-
-    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
-        self.meta.create_database(plan).await
-    }
-
-    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
-        self.meta.drop_database(plan).await?;
-        Ok(())
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
+        self.meta.drop_table(req).await
     }
 
     fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
@@ -208,27 +184,27 @@ impl Catalog for MetaStoreCatalog {
             })?;
 
         let tbl: Arc<dyn Table> = factory
-            .try_create(
-                table_info.clone(),
-                Arc::new(TableDataContext {
-                    in_memory_data: self.in_memory_data.clone(),
-                }),
-            )?
+            .try_create(table_info.clone(), TableContext {
+                in_memory_data: self.in_memory_data.clone(),
+            })?
             .into();
 
         Ok(tbl)
     }
 
-    async fn exists_database(&self, db_name: &str) -> Result<bool> {
-        match self.get_database(db_name).await {
-            Ok(_) => Ok(true),
-            Err(err) => {
-                if err.code() == ErrorCode::UnknownDatabaseCode() {
-                    Ok(false)
-                } else {
-                    Err(err)
-                }
-            }
-        }
+    async fn upsert_table_option(
+        &self,
+        req: UpsertTableOptionReq,
+    ) -> common_exception::Result<UpsertTableOptionReply> {
+        self.meta.upsert_table_option(req).await
+    }
+
+    async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
+        self.meta.create_database(req).await
+    }
+
+    async fn drop_database(&self, req: DropDatabaseReq) -> Result<()> {
+        self.meta.drop_database(req).await?;
+        Ok(())
     }
 }

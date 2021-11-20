@@ -34,7 +34,7 @@ pub enum StateMachineMetaKey {
     /// The last membership config
     LastMembership,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, derive_more::TryInto)]
 pub enum StateMachineMetaValue {
     LogId(LogId),
     Bool(bool),
@@ -80,31 +80,5 @@ impl SledOrderedSerde for StateMachineMetaKey {
         }
 
         Err(ErrorCode::MetaStoreDamaged("invalid key IVec"))
-    }
-}
-
-impl From<StateMachineMetaValue> for LogId {
-    fn from(v: StateMachineMetaValue) -> Self {
-        match v {
-            StateMachineMetaValue::LogId(x) => x,
-            _ => panic!("expect LogId"),
-        }
-    }
-}
-
-impl From<StateMachineMetaValue> for bool {
-    fn from(v: StateMachineMetaValue) -> Self {
-        match v {
-            StateMachineMetaValue::Bool(x) => x,
-            _ => panic!("expect LogId"),
-        }
-    }
-}
-impl From<StateMachineMetaValue> for MembershipConfig {
-    fn from(v: StateMachineMetaValue) -> Self {
-        match v {
-            StateMachineMetaValue::Membership(x) => x,
-            _ => panic!("expect Membership"),
-        }
     }
 }

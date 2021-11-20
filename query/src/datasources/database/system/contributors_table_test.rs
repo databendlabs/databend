@@ -26,11 +26,9 @@ use crate::datasources::database::system::ContributorsTable;
 async fn test_contributors_table() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
     let table: Arc<dyn Table> = Arc::new(ContributorsTable::create(1));
-    let io_ctx = ctx.get_cluster_table_io_context()?;
-    let io_ctx = Arc::new(io_ctx);
-    let source_plan = table.read_plan(io_ctx.clone(), None)?;
+    let source_plan = table.read_plan(ctx.clone(), None)?;
 
-    let stream = table.read(io_ctx, &source_plan).await?;
+    let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 1);

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::f64::consts::FRAC_PI_2;
+use std::f64::consts::FRAC_PI_4;
 use std::f64::consts::PI;
 
 use common_datavalues::prelude::*;
@@ -25,8 +27,9 @@ fn test_trigonometic_function() -> Result<()> {
         name: &'static str,
         display: &'static str,
         nullable: bool,
-        columns: DataColumn,
+        args: Vec<DataColumnWithField>,
         expect: DataColumn,
+        input_rows: usize,
         error: &'static str,
         func: Box<dyn Function>,
     }
@@ -36,7 +39,11 @@ fn test_trigonometic_function() -> Result<()> {
             name: "sin-u8-passed",
             display: "sin",
             nullable: false,
-            columns: Series::new(vec![0_u8, 1, 3]).into(),
+            args: vec![DataColumnWithField::new(
+                Series::new(vec![0_u8, 1, 3]).into(),
+                DataField::new("dummy", DataType::UInt8, false),
+            )],
+            input_rows: 3,
             func: TrigonometricSinFunction::try_create_func("sin")?,
             expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
             error: "",
@@ -45,7 +52,11 @@ fn test_trigonometic_function() -> Result<()> {
             name: "sin-u16-passed",
             display: "sin",
             nullable: false,
-            columns: Series::new(vec![0_u16, 1, 3]).into(),
+            args: vec![DataColumnWithField::new(
+                Series::new(vec![0_u16, 1, 3]).into(),
+                DataField::new("dummy", DataType::UInt16, false),
+            )],
+            input_rows: 3,
             func: TrigonometricSinFunction::try_create_func("sin")?,
             expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
             error: "",
@@ -54,7 +65,11 @@ fn test_trigonometic_function() -> Result<()> {
             name: "sin-u32-passed",
             display: "sin",
             nullable: false,
-            columns: Series::new(vec![0_u32, 1, 3]).into(),
+            args: vec![DataColumnWithField::new(
+                Series::new(vec![0_u32, 1, 3]).into(),
+                DataField::new("dummy", DataType::UInt32, false),
+            )],
+            input_rows: 3,
             func: TrigonometricSinFunction::try_create_func("sin")?,
             expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
             error: "",
@@ -63,7 +78,11 @@ fn test_trigonometic_function() -> Result<()> {
             name: "sin-u64-passed",
             display: "sin",
             nullable: false,
-            columns: Series::new(vec![0_u64, 1, 3]).into(),
+            args: vec![DataColumnWithField::new(
+                Series::new(vec![0_u64, 1, 3]).into(),
+                DataField::new("dummy", DataType::UInt64, false),
+            )],
+            input_rows: 3,
             func: TrigonometricSinFunction::try_create_func("sin")?,
             expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
             error: "",
@@ -72,25 +91,24 @@ fn test_trigonometic_function() -> Result<()> {
             name: "sin-str-passed",
             display: "sin",
             nullable: false,
-            columns: Series::new(vec!["0", "1", "3"]).into(),
+            args: vec![DataColumnWithField::new(
+                Series::new(vec!["0", "1", "3"]).into(),
+                DataField::new("dummy", DataType::String, false),
+            )],
+            input_rows: 3,
             func: TrigonometricSinFunction::try_create_func("sin")?,
             expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
-            error: "",
-        },
-        Test {
-            name: "sin-bool-passed",
-            display: "sin",
-            nullable: false,
-            columns: Series::new(vec![true]).into(),
-            func: TrigonometricSinFunction::try_create_func("sin")?,
-            expect: Series::new(vec![0.8414709848078965]).into(),
             error: "",
         },
         Test {
             name: "sin-f64-passed",
             display: "sin",
             nullable: false,
-            columns: Series::new(vec![0_f64, 1.0, 3.0]).into(),
+            args: vec![DataColumnWithField::new(
+                Series::new(vec![0_f64, 1.0, 3.0]).into(),
+                DataField::new("dummy", DataType::Float64, false),
+            )],
+            input_rows: 3,
             func: TrigonometricSinFunction::try_create_func("sin")?,
             expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
             error: "",
@@ -99,7 +117,11 @@ fn test_trigonometic_function() -> Result<()> {
             name: "cos-f64-passed",
             display: "cos",
             nullable: false,
-            columns: Series::new(vec![0_f64, 1.0, 3.0]).into(),
+            args: vec![DataColumnWithField::new(
+                Series::new(vec![0_f64, 1.0, 3.0]).into(),
+                DataField::new("dummy", DataType::Float64, false),
+            )],
+            input_rows: 3,
             func: TrigonometricCosFunction::try_create_func("cos")?,
             expect: Series::new(vec![1f64, 0.5403023058681398, -0.9899924966004454]).into(),
             error: "",
@@ -108,7 +130,11 @@ fn test_trigonometic_function() -> Result<()> {
             name: "tan-pi4-passed",
             display: "tan",
             nullable: false,
-            columns: Series::new(vec![0_f64, PI / 4.0]).into(),
+            args: vec![DataColumnWithField::new(
+                Series::new(vec![0_f64, PI / 4.0]).into(),
+                DataField::new("dummy", DataType::Float64, false),
+            )],
+            input_rows: 2,
             func: TrigonometricTanFunction::try_create_func("tan")?,
             expect: Series::new(vec![0f64, 0.9999999999999999]).into(),
             error: "",
@@ -117,7 +143,11 @@ fn test_trigonometic_function() -> Result<()> {
             name: "cot-pi4-passed",
             display: "cot",
             nullable: false,
-            columns: Series::new(vec![PI / 4.0]).into(),
+            args: vec![DataColumnWithField::new(
+                Series::new(vec![PI / 4.0]).into(),
+                DataField::new("dummy", DataType::Float64, false),
+            )],
+            input_rows: 1,
             func: TrigonometricCotFunction::try_create_func("cot")?,
             expect: Series::new(vec![1.0000000000000002]).into(),
             error: "",
@@ -126,23 +156,136 @@ fn test_trigonometic_function() -> Result<()> {
             name: "cot-0-passed",
             display: "cot",
             nullable: false,
-            columns: Series::new(vec![0_f64]).into(),
+            args: vec![DataColumnWithField::new(
+                Series::new(vec![0_f64]).into(),
+                DataField::new("dummy", DataType::Float64, false),
+            )],
+            input_rows: 1,
             func: TrigonometricCotFunction::try_create_func("cot")?,
             expect: Series::new(vec![f64::INFINITY]).into(),
+            error: "",
+        },
+        Test {
+            name: "asin-passed",
+            display: "asin",
+            nullable: false,
+            args: vec![DataColumnWithField::new(
+                Series::new(vec![0.2_f64]).into(),
+                DataField::new("dummy", DataType::Float64, false),
+            )],
+            input_rows: 1,
+            func: TrigonometricAsinFunction::try_create_func("asin")?,
+            expect: DataColumn::Constant(0.2013579207903308_f64.into(), 1),
+            error: "",
+        },
+        Test {
+            name: "acos-passed",
+            display: "acos",
+            nullable: false,
+            args: vec![DataColumnWithField::new(
+                Series::new(vec![1]).into(),
+                DataField::new("dummy", DataType::Float64, false),
+            )],
+            input_rows: 1,
+            func: TrigonometricAcosFunction::try_create_func("acos")?,
+            expect: DataColumn::Constant(0_f64.into(), 1),
+            error: "",
+        },
+        Test {
+            name: "atan-passed",
+            display: "atan",
+            nullable: false,
+            args: vec![DataColumnWithField::new(
+                Series::new(vec![1, -1]).into(),
+                DataField::new("dummy", DataType::Float64, false),
+            )],
+            input_rows: 2,
+            func: TrigonometricAtanFunction::try_create_func("atan")?,
+            expect: Series::new(vec![FRAC_PI_4, -FRAC_PI_4]).into(),
+            error: "",
+        },
+        Test {
+            name: "atan-passed",
+            display: "atan",
+            nullable: false,
+            args: vec![
+                DataColumnWithField::new(
+                    Series::new(vec![-2_f64, PI]).into(),
+                    DataField::new("y", DataType::Float64, false),
+                ),
+                DataColumnWithField::new(
+                    Series::new(vec![2, 0]).into(),
+                    DataField::new("x", DataType::Float64, false),
+                ),
+            ],
+            input_rows: 2,
+            func: TrigonometricAtanFunction::try_create_func("atan")?,
+            expect: Series::new(vec![-FRAC_PI_4, FRAC_PI_2]).into(),
+            error: "",
+        },
+        Test {
+            name: "atan2-passed",
+            display: "atan2",
+            nullable: false,
+            args: vec![
+                DataColumnWithField::new(
+                    Series::new(vec![-2_f64, PI]).into(),
+                    DataField::new("y", DataType::Float64, false),
+                ),
+                DataColumnWithField::new(
+                    Series::new(vec![2, 0]).into(),
+                    DataField::new("x", DataType::Float64, false),
+                ),
+            ],
+            input_rows: 2,
+            func: TrigonometricAtan2Function::try_create_func("atan2")?,
+            expect: Series::new(vec![-FRAC_PI_4, FRAC_PI_2]).into(),
+            error: "",
+        },
+        Test {
+            name: "atan2-y-constant-passed",
+            display: "atan2",
+            nullable: false,
+            args: vec![
+                DataColumnWithField::new(
+                    DataColumn::Constant(2.into(), 2),
+                    DataField::new("y", DataType::Float64, false),
+                ),
+                DataColumnWithField::new(
+                    Series::new(vec![0_f64, 2.0]).into(),
+                    DataField::new("x", DataType::Float64, false),
+                ),
+            ],
+            input_rows: 2,
+            func: TrigonometricAtan2Function::try_create_func("atan2")?,
+            expect: Series::new(vec![FRAC_PI_2, FRAC_PI_4]).into(),
+            error: "",
+        },
+        Test {
+            name: "atan2-x-constant-passed",
+            display: "atan2",
+            nullable: false,
+            args: vec![
+                DataColumnWithField::new(
+                    Series::new(vec![-2_f64, 2.0]).into(),
+                    DataField::new("y", DataType::Float64, false),
+                ),
+                DataColumnWithField::new(
+                    DataColumn::Constant(2.into(), 2),
+                    DataField::new("x", DataType::Float64, false),
+                ),
+            ],
+            input_rows: 2,
+            func: TrigonometricAtan2Function::try_create_func("atan2")?,
+            expect: Series::new(vec![-FRAC_PI_4, FRAC_PI_4]).into(),
             error: "",
         },
     ];
 
     for t in tests {
         let func = t.func;
-        let rows = t.columns.len();
 
-        let columns = vec![DataColumnWithField::new(
-            t.columns.clone(),
-            DataField::new("dummpy", t.columns.data_type(), false),
-        )];
-
-        if let Err(e) = func.eval(&columns, rows) {
+        if let Err(e) = func.eval(&t.args, t.input_rows) {
             assert_eq!(t.error, e.to_string(), "{}", t.name);
         }
 
@@ -151,7 +294,7 @@ fn test_trigonometic_function() -> Result<()> {
         let actual_display = format!("{}", func);
         assert_eq!(expect_display, actual_display);
 
-        let v = &(func.eval(&columns, rows)?);
+        let v = &(func.eval(&t.args, t.input_rows)?);
         assert_eq!(v, &t.expect, "{}", t.name);
     }
     Ok(())

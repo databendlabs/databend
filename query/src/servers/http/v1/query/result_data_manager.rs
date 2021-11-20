@@ -99,7 +99,8 @@ impl ResultDataManager {
                 .ok_or_else(|| ErrorCode::UnexpectedError("last_page is None"))?
                 .clone())
         } else {
-            Err(ErrorCode::LogicalError("page no too large"))
+            let message = format!("wrong page number {}", page_no,);
+            Err(ErrorCode::HttpNotFound(message))
         }
     }
 

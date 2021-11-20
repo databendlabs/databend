@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_exception::exception::UNKNOWN_USER;
 use common_exception::Result;
 use common_management::UserInfo;
 use common_management::UserMgr;
@@ -139,13 +140,19 @@ impl UserManager {
     }
 
     // Drop a user by name and hostname.
-    pub async fn drop_user(&self, username: &str, hostname: &str) -> Result<()> {
+    pub async fn drop_user(&self, username: &str, hostname: &str, if_exist: bool) -> Result<()> {
         let drop_user =
             self.api_provider
                 .drop_user(username.to_string(), hostname.to_string(), None);
         match drop_user.await {
             Ok(res) => Ok(res),
-            Err(failure) => Err(failure.add_message_back("(while drop user).")),
+            Err(failure) => {
+                if if_exist && failure.code() == UNKNOWN_USER {
+                    Ok(())
+                } else {
+                    Err(failure.add_message_back("(while set user privileges)"))
+                }
+            }
         }
     }
 

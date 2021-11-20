@@ -13,35 +13,26 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
-
-use common_context::DataContext;
+use common_exception::Result;
 use common_meta_types::TableInfo;
 
 use crate::catalogs::Table;
+use crate::datasources::context::TableContext;
 
 // TODO maybe we should introduce a
 // `Session::store_provider(...) -> Result<StoreApiProvider>`
 // such that, we no longer need to pass store_provider to Table's constructor
 // instead, table could access apis on demand in method read_plan  and read
 pub trait TableEngine: Send + Sync {
-    fn try_create(
-        &self,
-        table_info: TableInfo,
-        data_ctx: Arc<dyn DataContext<u64>>,
-    ) -> common_exception::Result<Box<dyn Table>>;
+    fn try_create(&self, table_info: TableInfo, table_ctx: TableContext) -> Result<Box<dyn Table>>;
 }
 
 impl<T> TableEngine for T
 where
-    T: Fn(TableInfo, Arc<dyn DataContext<u64>>) -> common_exception::Result<Box<dyn Table>>,
+    T: Fn(TableInfo, TableContext) -> Result<Box<dyn Table>>,
     T: Send + Sync,
 {
-    fn try_create(
-        &self,
-        table_info: TableInfo,
-        data_ctx: Arc<dyn DataContext<u64>>,
-    ) -> common_exception::Result<Box<dyn Table>> {
-        self(table_info, data_ctx)
+    fn try_create(&self, table_info: TableInfo, table_ctx: TableContext) -> Result<Box<dyn Table>> {
+        self(table_info, table_ctx)
     }
 }

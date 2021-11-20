@@ -16,8 +16,6 @@
 use std::collections::HashSet;
 
 use common_base::BlockingWait;
-use common_context::IOContext;
-use common_context::TableIOContext;
 use common_dal::read_obj;
 use common_exception::Result;
 use common_planners::Extras;
@@ -28,24 +26,25 @@ use common_planners::Statistics;
 use super::index;
 use crate::datasources::table::fuse::BlockMeta;
 use crate::datasources::table::fuse::FuseTable;
+use crate::sessions::DatabendQueryContextRef;
 
 impl FuseTable {
     #[inline]
     pub fn do_read_partitions(
         &self,
-        io_ctx: &TableIOContext,
+        ctx: DatabendQueryContextRef,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let location = self.snapshot_loc();
         if let Some(loc) = location {
-            let da = io_ctx.get_data_accessor()?;
+            let da = ctx.get_data_accessor()?;
             let schema = self.table_info.schema();
             let push_downs_c = push_downs.clone();
             let block_metas = async {
                 let snapshot = read_obj(da.clone(), loc).await?;
                 index::range_filter(&snapshot, schema, push_downs_c, da).await
             }
-            .wait_in(&io_ctx.get_runtime(), None)??;
+            .wait_in(&ctx.get_shared_runtime()?, None)??;
 
             let (statistics, parts) = to_partitions(&block_metas, push_downs);
             Ok((statistics, parts))

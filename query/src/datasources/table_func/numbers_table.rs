@@ -17,8 +17,6 @@ use std::any::Any;
 use std::mem::size_of;
 use std::sync::Arc;
 
-use common_context::IOContext;
-use common_context::TableIOContext;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
@@ -41,7 +39,7 @@ use crate::catalogs::TableFunction;
 use crate::datasources::common::generate_parts;
 use crate::datasources::table_func_engine::TableArgs;
 use crate::pipelines::transforms::get_sort_descriptions;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct NumbersTable {
     table_info: TableInfo,
@@ -120,27 +118,23 @@ impl Table for NumbersTable {
 
     fn read_partitions(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let statistics = Statistics::new_exact(
             self.total as usize,
             ((self.total) * size_of::<u64>() as u64) as usize,
         );
-        let parts = generate_parts(0, io_ctx.get_max_threads() as u64, self.total);
+        let parts = generate_parts(0, ctx.get_settings().get_max_threads()? as u64, self.total);
 
         Ok((statistics, parts))
     }
 
     async fn read(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let ctx: Arc<DatabendQueryContext> = io_ctx
-            .get_user_data()?
-            .expect("DatabendQueryContext should not be None");
-
         // If we have order-by and limit push-downs, try the best to only generate top n rows.
         if let Some(extras) = &plan.push_downs {
             if extras.limit.is_some() {

@@ -28,6 +28,7 @@ unsafe fn index_of_unchecked<T>(slice: &[T], item: &T) -> usize {
     (item as *const _ as usize - slice.as_ptr() as usize) / std::mem::size_of::<T>()
 }
 
+#[allow(dead_code)]
 fn index_of<T>(slice: &[T], item: &T) -> Option<usize> {
     debug_assert!(std::mem::size_of::<T>() > 0);
     let ptr = item as *const T;

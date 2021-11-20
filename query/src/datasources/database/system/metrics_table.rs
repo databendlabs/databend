@@ -14,9 +14,7 @@
 
 use std::any::Any;
 use std::collections::HashMap;
-use std::sync::Arc;
 
-use common_context::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::series::Series;
 use common_datavalues::series::SeriesFrom;
@@ -35,6 +33,7 @@ use common_streams::SendableDataBlockStream;
 use serde_json;
 
 use crate::catalogs::Table;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct MetricsTable {
     table_info: TableInfo,
@@ -101,7 +100,7 @@ impl Table for MetricsTable {
 
     async fn read(
         &self,
-        _io_ctx: Arc<TableIOContext>,
+        _ctx: DatabendQueryContextRef,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let prometheus_handle = common_metrics::try_handle().ok_or_else(|| {

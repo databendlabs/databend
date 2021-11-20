@@ -14,18 +14,21 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
+use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateTableReq;
+use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropTableReply;
+use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
-use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateDatabasePlan;
-use common_planners::CreateTablePlan;
-use common_planners::DropDatabasePlan;
-use common_planners::DropTablePlan;
+use common_meta_types::UpsertTableOptionReq;
+use dyn_clone::DynClone;
 
 use crate::catalogs::Database;
 use crate::catalogs::Table;
@@ -38,7 +41,7 @@ use crate::datasources::table_func_engine::TableArgs;
 /// When we create a new database, we first to get the engine from the registered engines,
 /// and use the engine to create them.
 #[async_trait::async_trait]
-pub trait Catalog {
+pub trait Catalog: DynClone + Send + Sync {
     // Get all the databases.
     async fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>>;
 
@@ -52,9 +55,23 @@ pub trait Catalog {
 
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)>;
 
-    async fn create_table(&self, plan: CreateTablePlan) -> Result<()>;
+    async fn create_table(&self, req: CreateTableReq) -> Result<()>;
 
-    async fn drop_table(&self, plan: DropTablePlan) -> Result<()>;
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply>;
+
+    // Check a db.table is exists or not.
+    async fn exists_table(&self, db_name: &str, table_name: &str) -> Result<bool> {
+        match self.get_table(db_name, table_name).await {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                if err.code() == ErrorCode::UnknownTableCode() {
+                    Ok(false)
+                } else {
+                    Err(err)
+                }
+            }
+        }
+    }
 
     /// Build a `Arc<dyn Table>` from `TableInfo`.
     fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
@@ -70,16 +87,24 @@ pub trait Catalog {
 
     async fn upsert_table_option(
         &self,
-        table_id: MetaId,
-        table_version: MetaVersion,
-        table_option_key: String,
-        table_option_value: String,
+        req: UpsertTableOptionReq,
     ) -> common_exception::Result<UpsertTableOptionReply>;
 
     // Operation with database.
-    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply>;
+    async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply>;
 
-    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()>;
+    async fn drop_database(&self, req: DropDatabaseReq) -> Result<()>;
 
-    async fn exists_database(&self, db_name: &str) -> Result<bool>;
+    async fn exists_database(&self, db_name: &str) -> Result<bool> {
+        match self.get_database(db_name).await {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                if err.code() == ErrorCode::UnknownDatabaseCode() {
+                    Ok(false)
+                } else {
+                    Err(err)
+                }
+            }
+        }
+    }
 }

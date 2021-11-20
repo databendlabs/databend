@@ -151,3 +151,52 @@ impl Display for TableInfo {
         )
     }
 }
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct CreateTableReq {
+    pub if_not_exists: bool,
+    pub db: String,
+    pub table: String,
+    pub table_meta: TableMeta,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct CreateTableReply {
+    pub table_id: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct DropTableReq {
+    pub if_exists: bool,
+    pub db: String,
+    pub table: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct DropTableReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct UpsertTableOptionReq {
+    pub table_id: u64,
+    pub table_version: u64,
+    pub option_key: String,
+    pub option_value: String,
+}
+
+impl UpsertTableOptionReq {
+    pub fn new(
+        table_ident: &TableIdent,
+        key: impl Into<String>,
+        value: impl Into<String>,
+    ) -> UpsertTableOptionReq {
+        UpsertTableOptionReq {
+            table_id: table_ident.table_id,
+            table_version: table_ident.version,
+            option_key: key.into(),
+            option_value: value.into(),
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct UpsertTableOptionReply {}

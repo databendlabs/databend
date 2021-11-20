@@ -13,36 +13,36 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
-
-use common_context::IOContext;
-use common_context::TableIOContext;
 use common_datavalues::DataSchema;
 use common_exception::Result;
 use common_meta_types::MetaId;
 use common_meta_types::MetaVersion;
+use common_meta_types::TableIdent;
+use common_meta_types::UpsertTableOptionReply;
+use common_meta_types::UpsertTableOptionReq;
 use common_planners::InsertIntoPlan;
 use common_streams::SendableDataBlockStream;
 use uuid::Uuid;
 
+use crate::catalogs::Catalog;
 use crate::datasources::table::fuse::util;
 use crate::datasources::table::fuse::util::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::datasources::table::fuse::BlockAppender;
 use crate::datasources::table::fuse::FuseTable;
 use crate::datasources::table::fuse::SegmentInfo;
 use crate::datasources::table::fuse::TableSnapshot;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::DatabendQueryContextRef;
 
 impl FuseTable {
     #[inline]
     pub async fn do_append(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         insert_plan: InsertIntoPlan,
         stream: SendableDataBlockStream,
     ) -> Result<()> {
         // 1. get da
-        let da = io_ctx.get_data_accessor()?;
+        let da = ctx.get_data_accessor()?;
 
         // 2. Append blocks to storage
         let segment_info =
@@ -55,7 +55,7 @@ impl FuseTable {
         da.put(&seg_loc, bytes).await?;
 
         // 4. new snapshot
-        let prev_snapshot = self.table_snapshot(io_ctx.as_ref()).await?;
+        let prev_snapshot = self.table_snapshot(ctx.clone()).await?;
 
         // TODO backoff retry this block
         {
@@ -73,13 +73,7 @@ impl FuseTable {
 
             // 5. commit
             let table_id = insert_plan.tbl_id;
-            commit(
-                &io_ctx,
-                table_id,
-                self.table_info.ident.version,
-                snapshot_loc,
-            )
-            .await?;
+            commit(ctx, table_id, self.table_info.ident.version, snapshot_loc).await?;
         }
         Ok(())
     }
@@ -107,22 +101,20 @@ fn merge_snapshot(
 }
 
 async fn commit(
-    io_ctx: &TableIOContext,
+    ctx: DatabendQueryContextRef,
     table_id: MetaId,
     table_version: MetaVersion,
     new_snapshot_location: String,
-) -> Result<()> {
-    use crate::catalogs::Catalog;
-    let ctx: Arc<DatabendQueryContext> = io_ctx
-        .get_user_data()?
-        .expect("DatabendQueryContext should not be None");
+) -> Result<UpsertTableOptionReply> {
     let catalog = ctx.get_catalog();
     catalog
-        .upsert_table_option(
-            table_id,
-            table_version,
-            TBL_OPT_KEY_SNAPSHOT_LOC.to_string(),
+        .upsert_table_option(UpsertTableOptionReq::new(
+            &TableIdent {
+                table_id,
+                version: table_version,
+            },
+            TBL_OPT_KEY_SNAPSHOT_LOC,
             new_snapshot_location,
-        )
+        ))
         .await
 }
