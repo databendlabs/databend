@@ -727,7 +727,7 @@ impl<'a> DfParser<'a> {
             if chunk0.value == "*" {
                 return Ok(DfGrantObject::Global);
             }
-            return Ok(DfGrantObject::Table(None, chunk0.value.clone()));
+            return Ok(DfGrantObject::Table(None, chunk0.value));
         }
         let chunk1 = self.parse_grant_object_pattern_chunk()?;
 
@@ -741,13 +741,10 @@ impl<'a> DfParser<'a> {
         }
         // db.*
         if chunk1.value == "*" {
-            return Ok(DfGrantObject::Database(chunk0.value.clone()));
+            return Ok(DfGrantObject::Database(chunk0.value));
         }
         // db.table
-        Ok(DfGrantObject::Table(
-            Some(chunk0.value.clone()),
-            chunk1.value.clone(),
-        ))
+        Ok(DfGrantObject::Table(Some(chunk0.value), chunk1.value))
     }
 
     /// Parse a chunk from the object pattern, it might be * or an identifier
