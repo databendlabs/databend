@@ -38,6 +38,7 @@ use common_planners::CreateUserPlan;
 use common_planners::DescribeTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
+use common_planners::DropUserPlan;
 use common_planners::ExplainPlan;
 use common_planners::Expression;
 use common_planners::Extras;
@@ -75,6 +76,7 @@ use crate::sql::DfCreateDatabase;
 use crate::sql::DfCreateUser;
 use crate::sql::DfDescribeTable;
 use crate::sql::DfDropTable;
+use crate::sql::DfDropUser;
 use crate::sql::DfExplain;
 use crate::sql::DfGrantStatement;
 use crate::sql::DfHint;
@@ -179,6 +181,7 @@ impl PlanParser {
                 self.build_from_sql("SELECT * FROM system.users ORDER BY name")
             }
             DfStatement::AlterUser(v) => self.sql_alter_user_to_plan(v),
+            DfStatement::DropUser(v) => self.sql_drop_user_to_plan(v),
             DfStatement::GrantPrivilege(v) => self.sql_grant_privilege_to_plan(v),
         }
     }
@@ -357,6 +360,15 @@ impl PlanParser {
             new_password: Vec::from(alter.new_password.clone()),
             hostname: alter.hostname.clone(),
             new_auth_type: alter.new_auth_type.clone(),
+        }))
+    }
+
+    #[tracing::instrument(level = "info", skip(self, drop), fields(ctx.id = self.ctx.get_id().as_str()))]
+    pub fn sql_drop_user_to_plan(&self, drop: &DfDropUser) -> Result<PlanNode> {
+        Ok(PlanNode::DropUser(DropUserPlan {
+            if_exists: drop.if_exists,
+            name: drop.name.clone(),
+            hostname: drop.hostname.clone(),
         }))
     }
 

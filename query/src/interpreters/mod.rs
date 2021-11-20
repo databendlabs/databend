@@ -41,6 +41,8 @@ mod interpreter_user_alter_test;
 #[cfg(test)]
 mod interpreter_user_create_test;
 #[cfg(test)]
+mod interpreter_user_drop_test;
+#[cfg(test)]
 mod plan_scheduler_test;
 
 mod interpreter;
@@ -59,11 +61,12 @@ mod interpreter_table_create;
 mod interpreter_table_drop;
 mod interpreter_truncate_table;
 mod interpreter_use_database;
+mod interpreter_user_alter;
 mod interpreter_user_create;
+mod interpreter_user_drop;
 mod plan_do_readsource;
 mod utils;
 
-mod interpreter_user_alter;
 #[allow(clippy::needless_range_loop)]
 mod plan_scheduler;
 
@@ -85,3 +88,4 @@ pub use interpreter_truncate_table::TruncateTableInterpreter;
 pub use interpreter_use_database::UseDatabaseInterpreter;
 pub use interpreter_user_alter::AlterUserInterpreter;
 pub use interpreter_user_create::CreatUserInterpreter;
+pub use interpreter_user_drop::DropUserInterpreter;
