@@ -51,7 +51,6 @@ fn test_range_filter() -> Result<()> {
         in_memory_size: 0,
     });
 
-    #[allow(dead_code)]
     struct Test {
         name: &'static str,
         expr: Expression,
@@ -142,7 +141,6 @@ fn test_build_verifiable_function() -> Result<()> {
         DataField::new("c", DataType::String, false),
     ]);
 
-    #[allow(dead_code)]
     struct Test {
         name: &'static str,
         expr: Expression,
@@ -263,7 +261,6 @@ fn test_build_verifiable_function() -> Result<()> {
 
 #[test]
 fn test_bound_for_like_pattern() -> Result<()> {
-    #[allow(dead_code)]
     struct Test {
         name: &'static str,
         pattern: Vec<u8>,

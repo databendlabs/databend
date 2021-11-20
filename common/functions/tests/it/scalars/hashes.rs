@@ -22,7 +22,6 @@ use common_functions::scalars::SipHashFunction;
 
 #[test]
 fn test_siphash_function() -> Result<()> {
-    #[allow(dead_code)]
     struct Test {
         name: &'static str,
         input_column: DataColumn,

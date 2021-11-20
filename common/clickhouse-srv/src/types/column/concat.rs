@@ -25,7 +25,6 @@ use crate::types::SqlType;
 use crate::types::Value;
 use crate::types::ValueRef;
 
-#[allow(dead_code)]
 pub struct ConcatColumnData {
     data: Vec<ArcColumnData>,
     index: Vec<usize>,

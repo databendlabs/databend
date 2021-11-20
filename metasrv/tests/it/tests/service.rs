@@ -56,7 +56,6 @@ pub fn next_port() -> u32 {
 
 pub struct MetaSrvTestContext {
     // /// To hold a per-case logging guard
-    // #[allow(dead_code)]
     // logging_guard: (WorkerGuard, DefaultGuard),
     pub config: configs::Config,
 

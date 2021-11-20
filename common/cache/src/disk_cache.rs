@@ -15,8 +15,8 @@
 use std::boxed::Box;
 use std::ffi::OsStr;
 use std::ffi::OsString;
+use std::fs;
 use std::fs::File;
-use std::fs::{self};
 use std::hash::BuildHasher;
 use std::io;
 use std::io::prelude::*;
@@ -65,6 +65,7 @@ pub type LruDiskCache = DiskCache<LruCache<OsString, u64, DefaultHashBuilder, Fi
 pub struct DiskCache<C, S: BuildHasher + Clone = DefaultHashBuilder>
 where C: Cache<OsString, u64, S, FileSize>
 {
+    #[allow(dead_code)]
     hash_builder: S,
     cache: C,
     root: PathBuf,

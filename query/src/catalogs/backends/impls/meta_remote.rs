@@ -37,7 +37,6 @@ use crate::common::MetaClientProvider;
 /// A `MetaApi` impl with MetaApi RPC.
 #[derive(Clone)]
 pub struct MetaRemote {
-    #[allow(dead_code)]
     rpc_time_out: Option<Duration>,
     meta_api_provider: Arc<MetaClientProvider>,
 }
