@@ -44,7 +44,6 @@ use crate::error::Result;
 
 #[derive(Clone)]
 pub struct QueryCommand {
-    #[allow(dead_code)]
     conf: Config,
 }
 

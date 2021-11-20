@@ -18,7 +18,6 @@ use common_functions::scalars::*;
 
 #[test]
 fn test_sign_function() -> Result<()> {
-    #[allow(dead_code)]
     struct Test {
         name: &'static str,
         display: &'static str,

@@ -60,7 +60,6 @@ fn test_arithmetic_series() {
         Ok(())
     }
 
-    #[allow(dead_code)]
     struct ArrayTest {
         name: &'static str,
         args: Vec<Vec<Series>>,

@@ -97,7 +97,6 @@ impl ToString for Schema {
 
 #[derive(Clone)]
 pub struct LoadCommand {
-    #[allow(dead_code)]
     conf: Config,
     clap: App<'static>,
 }

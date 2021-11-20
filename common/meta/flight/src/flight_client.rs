@@ -40,7 +40,6 @@ use crate::flight_client_conf::MetaFlightClientConf;
 
 #[derive(Clone, Debug)]
 pub struct MetaFlightClient {
-    #[allow(dead_code)]
     token: Vec<u8>,
     pub(crate) client: FlightServiceClient<InterceptedService<Channel, AuthInterceptor>>,
 }
