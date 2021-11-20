@@ -23,6 +23,8 @@ mod interpreter_explain_test;
 #[cfg(test)]
 mod interpreter_grant_privilege_test;
 #[cfg(test)]
+mod interpreter_insert_into_test;
+#[cfg(test)]
 mod interpreter_interceptor_test;
 #[cfg(test)]
 mod interpreter_select_test;
