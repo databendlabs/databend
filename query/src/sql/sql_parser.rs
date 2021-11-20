@@ -19,7 +19,6 @@ use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_meta_types::AuthType;
-use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilege;
 use common_meta_types::UserPrivilegeType;
 use common_planners::ExplainType;
@@ -49,6 +48,7 @@ use crate::sql::DfDescribeTable;
 use crate::sql::DfDropDatabase;
 use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
+use crate::sql::DfGrantObject;
 use crate::sql::DfGrantStatement;
 use crate::sql::DfHint;
 use crate::sql::DfKillStatement;
@@ -699,7 +699,7 @@ impl<'a> DfParser<'a> {
         if !self.parser.parse_keyword(Keyword::ON) {
             return self.expected("keyword ON", self.parser.peek_token());
         }
-        let on  = self.parse_grant_object()?;
+        let on = self.parse_grant_object()?;
         if !self.parser.parse_keyword(Keyword::TO) {
             return self.expected("keyword TO", self.parser.peek_token());
         }
@@ -720,20 +720,20 @@ impl<'a> DfParser<'a> {
 
     /// Parse a possibly qualified, possibly quoted identifier or wild card, e.g.
     /// `*` or `myschema`.*. The sub string pattern like "db0%" is not in planned.
-    fn parse_grant_object(&mut self) -> Result<GrantObject, ParserError> {
+    fn parse_grant_object(&mut self) -> Result<DfGrantObject, ParserError> {
         let chunk0 = self.parse_grant_object_pattern_chunk()?;
         // "*" or "table" with current db
         if !self.consume_token(".") {
             if chunk0.to_string() == "*" {
-                return Ok(GrantObject::Global);
+                return Ok(DfGrantObject::Global);
             }
-            return Ok(GrantObject::Table(None, chunk0.to_string()));
+            return Ok(DfGrantObject::Table(None, chunk0.to_string()));
         }
         let chunk1 = self.parse_grant_object_pattern_chunk()?;
 
         // *.* means global
         if chunk1.to_string() == "*" && chunk0.to_string() == "*" {
-            return Ok(GrantObject::Global);
+            return Ok(DfGrantObject::Global);
         }
         // *.table is not allowed
         if chunk0.to_string() == "*" {
@@ -741,10 +741,10 @@ impl<'a> DfParser<'a> {
         }
         // db.*
         if chunk1.to_string() == "*" {
-            return Ok(GrantObject::Database(chunk0.to_string()));
+            return Ok(DfGrantObject::Database(chunk0.to_string()));
         }
         // db.table
-        Ok(GrantObject::Table(
+        Ok(DfGrantObject::Table(
             Some(chunk0.to_string()),
             chunk1.to_string(),
         ))

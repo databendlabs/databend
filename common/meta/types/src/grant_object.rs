@@ -16,5 +16,5 @@
 pub enum GrantObject {
     Global,
     Database(String),
-    Table(Option<String>, String),
+    Table(String, String),
 }

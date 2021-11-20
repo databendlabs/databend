@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_meta_types::AuthType;
-use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilege;
 use common_planners::ExplainType;
 use nom::bytes::complete::tag;
@@ -138,8 +137,15 @@ pub struct DfShowUsers;
 pub struct DfGrantStatement {
     pub name: String,
     pub hostname: String,
-    pub on: GrantObject,
+    pub on: DfGrantObject,
     pub priv_types: UserPrivilege,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DfGrantObject {
+    Global,
+    Database(String),
+    Table(Option<String>, String),
 }
 
 /// Tokens parsed by `DFParser` are converted into these values.

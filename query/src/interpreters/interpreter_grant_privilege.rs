@@ -76,13 +76,8 @@ impl Interpreter for GrantPrivilegeInterpreter {
         let plan = self.plan.clone();
         let catalog = self.ctx.get_catalog();
 
-        let on = match plan.on {
-            GrantObject::Table(None, table_name) => GrantObject::Table(None, table_name),
-            other => other,
-        };
-
-        match on {
-            GrantObject::Table(Some(database_name), table_name) => {
+        match &plan.on {
+            GrantObject::Table(database_name, table_name) => {
                 if !self
                     .check_table_exists(catalog.clone(), database_name, table_name)
                     .await?
@@ -102,7 +97,6 @@ impl Interpreter for GrantPrivilegeInterpreter {
                 }
             }
             GrantObject::Global => (),
-            _ => unreachable!(),
         }
 
         let user_mgr = self.ctx.get_sessions_manager().get_user_manager();

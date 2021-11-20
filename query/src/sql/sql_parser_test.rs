@@ -14,12 +14,12 @@
 
 use common_exception::Result;
 use common_meta_types::AuthType;
-use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilege;
 use common_meta_types::UserPrivilegeType;
 use sqlparser::ast::*;
 
 use crate::sql::sql_statement::DfDropDatabase;
+use crate::sql::sql_statement::DfGrantObject;
 use crate::sql::sql_statement::DfShowDatabases;
 use crate::sql::sql_statement::DfUseDatabase;
 use crate::sql::*;
@@ -639,7 +639,7 @@ fn grant_privilege_test() -> Result<()> {
         DfStatement::GrantPrivilege(DfGrantStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
-            on: GrantObject::Global,
+            on: DfGrantObject::Global,
             priv_types: {
                 let mut user_priv = UserPrivilege::empty();
                 user_priv.set_all_privileges();
@@ -653,7 +653,7 @@ fn grant_privilege_test() -> Result<()> {
         DfStatement::GrantPrivilege(DfGrantStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
-            on: GrantObject::Global,
+            on: DfGrantObject::Global,
             priv_types: {
                 let mut user_priv = UserPrivilege::empty();
                 user_priv.set_all_privileges();
@@ -667,7 +667,7 @@ fn grant_privilege_test() -> Result<()> {
         DfStatement::GrantPrivilege(DfGrantStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
-            on: GrantObject::Table(Some("db1".into()), "tb1".into()),
+            on: DfGrantObject::Table(Some("db1".into()), "tb1".into()),
             priv_types: {
                 let mut user_priv = UserPrivilege::empty();
                 user_priv.set_privilege(UserPrivilegeType::Insert);
@@ -681,7 +681,7 @@ fn grant_privilege_test() -> Result<()> {
         DfStatement::GrantPrivilege(DfGrantStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
-            on: GrantObject::Table(None, "tb1".into()),
+            on: DfGrantObject::Table(None, "tb1".into()),
             priv_types: {
                 let mut user_priv = UserPrivilege::empty();
                 user_priv.set_privilege(UserPrivilegeType::Insert);
@@ -695,7 +695,7 @@ fn grant_privilege_test() -> Result<()> {
         DfStatement::GrantPrivilege(DfGrantStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
-            on: GrantObject::Database("db1".into()),
+            on: DfGrantObject::Database("db1".into()),
             priv_types: {
                 let mut user_priv = UserPrivilege::empty();
                 user_priv.set_privilege(UserPrivilegeType::Insert);
@@ -709,7 +709,7 @@ fn grant_privilege_test() -> Result<()> {
         DfStatement::GrantPrivilege(DfGrantStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
-            on: GrantObject::Global,
+            on: DfGrantObject::Global,
             priv_types: {
                 let mut user_priv = UserPrivilege::empty();
                 user_priv.set_privilege(UserPrivilegeType::Select);

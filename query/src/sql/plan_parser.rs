@@ -19,6 +19,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
+use common_meta_types::GrantObject;
 use common_meta_types::TableMeta;
 use common_planners::expand_aggregate_arg_exprs;
 use common_planners::expand_wildcard;
@@ -76,6 +77,7 @@ use crate::sql::DfCreateUser;
 use crate::sql::DfDescribeTable;
 use crate::sql::DfDropTable;
 use crate::sql::DfExplain;
+use crate::sql::DfGrantObject;
 use crate::sql::DfGrantStatement;
 use crate::sql::DfHint;
 use crate::sql::DfKillStatement;
@@ -365,7 +367,19 @@ impl PlanParser {
         Ok(PlanNode::GrantPrivilege(GrantPrivilegePlan {
             name: grant.name.clone(),
             hostname: grant.hostname.clone(),
-            on: grant.on.clone(),
+            on: match &grant.on {
+                DfGrantObject::Global => GrantObject::Global,
+                DfGrantObject::Table(None, table_name) => {
+                    let database_name = self.ctx.get_current_database();
+                    GrantObject::Table(database_name, table_name.clone())
+                }
+                DfGrantObject::Table(Some(database_name), table_name) => {
+                    GrantObject::Table(database_name.clone(), table_name.clone())
+                }
+                DfGrantObject::Database(database_name) => {
+                    GrantObject::Database(database_name.clone())
+                }
+            },
             priv_types: grant.priv_types,
         }))
     }
