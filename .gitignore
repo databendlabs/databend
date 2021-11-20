@@ -3,6 +3,7 @@
 
 # visual studio code files
 .vscode
+.dir-locals.el
 
 # Rust
 target/*
