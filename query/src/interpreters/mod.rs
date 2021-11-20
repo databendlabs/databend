@@ -23,6 +23,8 @@ mod interpreter_explain_test;
 #[cfg(test)]
 mod interpreter_grant_privilege_test;
 #[cfg(test)]
+mod interpreter_interceptor_test;
+#[cfg(test)]
 mod interpreter_select_test;
 #[cfg(test)]
 mod interpreter_setting_test;
@@ -63,6 +65,7 @@ mod interpreter_user_create;
 mod plan_do_readsource;
 mod utils;
 
+mod interpreter_interceptor;
 mod interpreter_user_alter;
 #[allow(clippy::needless_range_loop)]
 mod plan_scheduler;
@@ -76,6 +79,7 @@ pub use interpreter_explain::ExplainInterpreter;
 pub use interpreter_factory::InterpreterFactory;
 pub use interpreter_grant_privilege::GrantPrivilegeInterpreter;
 pub use interpreter_insert_into::InsertIntoInterpreter;
+pub use interpreter_interceptor::InterceptorInterpreter;
 pub use interpreter_select::SelectInterpreter;
 pub use interpreter_setting::SettingInterpreter;
 pub use interpreter_show_create_table::ShowCreateTableInterpreter;
