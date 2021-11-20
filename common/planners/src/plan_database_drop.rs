@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
+use common_meta_types::DropDatabaseReq;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropDatabasePlan {
@@ -26,5 +27,23 @@ pub struct DropDatabasePlan {
 impl DropDatabasePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
+    }
+}
+
+impl From<DropDatabasePlan> for DropDatabaseReq {
+    fn from(p: DropDatabasePlan) -> Self {
+        DropDatabaseReq {
+            if_exists: p.if_exists,
+            db: p.db,
+        }
+    }
+}
+
+impl From<&DropDatabasePlan> for DropDatabaseReq {
+    fn from(p: &DropDatabasePlan) -> Self {
+        DropDatabaseReq {
+            if_exists: p.if_exists,
+            db: p.db.clone(),
+        }
     }
 }

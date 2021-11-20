@@ -32,3 +32,12 @@ pub struct CreateDatabaseReq {
 pub struct CreateDatabaseReply {
     pub database_id: u64,
 }
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct DropDatabaseReq {
+    pub if_exists: bool,
+    pub db: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct DropDatabaseReply {}
