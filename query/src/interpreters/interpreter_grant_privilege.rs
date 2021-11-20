@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_types::GrantObject;
 use common_planners::GrantPrivilegePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -73,38 +74,35 @@ impl Interpreter for GrantPrivilegeInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
-
-        // *.`table` is not allowed
-        if plan.database_pattern == "*" && plan.table_pattern != "*" {
-            return Err(common_exception::ErrorCode::UnknownTable(format!(
-                "can not grant privilege on *.{}",
-                plan.table_pattern
-            )));
-        }
-
-        // check database & table existence
         let catalog = self.ctx.get_catalog();
-        if plan.database_pattern != "*"
-            && !catalog
-                .as_ref()
-                .exists_database(&plan.database_pattern)
-                .await?
-        {
-            return Err(common_exception::ErrorCode::UnknownDatabase(format!(
-                "database {} not exists",
-                plan.database_pattern
-            )));
-        }
 
-        if plan.table_pattern != "*"
-            && !self
-                .check_table_exists(catalog.clone(), &plan.database_pattern, &plan.table_pattern)
-                .await?
-        {
-            return Err(common_exception::ErrorCode::UnknownTable(format!(
-                "table {}.{} not exists",
-                plan.database_pattern, plan.table_pattern
-            )));
+        let on = match plan.on {
+            GrantObject::Table(None, table_name) => GrantObject::Table(None, table_name),
+            other => other,
+        };
+
+        match on {
+            GrantObject::Table(Some(database_name), table_name) => {
+                if !self
+                    .check_table_exists(catalog.clone(), database_name, table_name)
+                    .await?
+                {
+                    return Err(common_exception::ErrorCode::UnknownTable(format!(
+                        "table {}.{} not exists",
+                        database_name, table_name,
+                    )));
+                }
+            }
+            GrantObject::Database(database_name) => {
+                if !catalog.as_ref().exists_database(database_name).await? {
+                    return Err(common_exception::ErrorCode::UnknownDatabase(format!(
+                        "database {} not exists",
+                        database_name,
+                    )));
+                }
+            }
+            GrantObject::Global => (),
+            _ => unreachable!(),
         }
 
         let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
