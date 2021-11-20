@@ -48,6 +48,7 @@ mod interpreter_user_drop_test;
 mod plan_scheduler_test;
 
 mod interpreter;
+mod interpreter_copy;
 mod interpreter_database_create;
 mod interpreter_database_drop;
 mod interpreter_describe_table;

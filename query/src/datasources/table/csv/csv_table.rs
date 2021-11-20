@@ -15,9 +15,9 @@
 
 use std::any::Any;
 use std::fs::File;
+use std::sync::Arc;
 
 use async_stream::stream;
-use common_base::tokio;
 use common_dal::Local;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -95,9 +95,6 @@ impl Table for CsvTable {
         ctx: DatabendQueryContextRef,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let conf = ctx.get_config().storage.disk;
-        let local = Local::new(conf.temp_data_path.as_str());
-
         let ctx_clone = ctx.clone();
         let schema = plan.schema();
         let block_size = ctx.get_settings().get_max_block_size()? as usize;

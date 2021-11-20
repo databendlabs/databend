@@ -57,8 +57,6 @@ impl Interpreter for CopyInterpreter {
         let table = self
             .ctx
             .get_table(&self.plan.db_name, &self.plan.tbl_name)?;
-        let io_ctx = self.ctx.get_cluster_table_io_context()?;
-        let io_ctx = Arc::new(io_ctx);
 
         let location = self.plan.location.clone();
         let c = extract_stage_location(location.as_str());
@@ -93,7 +91,9 @@ impl Interpreter for CopyInterpreter {
             select_plan: None,
         };
 
-        table.append_data(io_ctx, insert_plan, input_stream).await?;
+        table
+            .append_data(self.ctx.clone(), insert_plan, input_stream)
+            .await?;
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
             None,
