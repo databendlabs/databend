@@ -144,7 +144,7 @@ pub struct DfGrantStatement {
 #[derive(Debug, Clone, PartialEq)]
 pub enum DfGrantObject {
     Global,
-    Database(String),
+    Database(Option<String>),
     Table(Option<String>, String),
 }
 

@@ -639,7 +639,7 @@ fn grant_privilege_test() -> Result<()> {
         DfStatement::GrantPrivilege(DfGrantStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
-            on: DfGrantObject::Global,
+            on: DfGrantObject::Database(None),
             priv_types: {
                 let mut user_priv = UserPrivilege::empty();
                 user_priv.set_all_privileges();
@@ -653,7 +653,7 @@ fn grant_privilege_test() -> Result<()> {
         DfStatement::GrantPrivilege(DfGrantStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
-            on: DfGrantObject::Global,
+            on: DfGrantObject::Database(None),
             priv_types: {
                 let mut user_priv = UserPrivilege::empty();
                 user_priv.set_all_privileges();
@@ -695,7 +695,7 @@ fn grant_privilege_test() -> Result<()> {
         DfStatement::GrantPrivilege(DfGrantStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
-            on: DfGrantObject::Database("db1".into()),
+            on: DfGrantObject::Database(Some("db1".into())),
             priv_types: {
                 let mut user_priv = UserPrivilege::empty();
                 user_priv.set_privilege(UserPrivilegeType::Insert);
@@ -709,7 +709,7 @@ fn grant_privilege_test() -> Result<()> {
         DfStatement::GrantPrivilege(DfGrantStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
-            on: DfGrantObject::Global,
+            on: DfGrantObject::Database(None),
             priv_types: {
                 let mut user_priv = UserPrivilege::empty();
                 user_priv.set_privilege(UserPrivilegeType::Select);

@@ -369,15 +369,17 @@ impl PlanParser {
             hostname: grant.hostname.clone(),
             on: match &grant.on {
                 DfGrantObject::Global => GrantObject::Global,
-                DfGrantObject::Table(None, table_name) => {
-                    let database_name = self.ctx.get_current_database();
+                DfGrantObject::Table(database_name, table_name) => {
+                    let database_name = database_name
+                        .clone()
+                        .unwrap_or_else(|| self.ctx.get_current_database());
                     GrantObject::Table(database_name, table_name.clone())
                 }
-                DfGrantObject::Table(Some(database_name), table_name) => {
-                    GrantObject::Table(database_name.clone(), table_name.clone())
-                }
                 DfGrantObject::Database(database_name) => {
-                    GrantObject::Database(database_name.clone())
+                    let database_name = database_name
+                        .clone()
+                        .unwrap_or_else(|| self.ctx.get_current_database());
+                    GrantObject::Database(database_name)
                 }
             },
             priv_types: grant.priv_types,

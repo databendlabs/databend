@@ -722,10 +722,10 @@ impl<'a> DfParser<'a> {
     /// `*` or `myschema`.*. The sub string pattern like "db0%" is not in planned.
     fn parse_grant_object(&mut self) -> Result<DfGrantObject, ParserError> {
         let chunk0 = self.parse_grant_object_pattern_chunk()?;
-        // "*" or "table" with current db
+        // "*" as current db or "table" with current db
         if !self.consume_token(".") {
             if chunk0.value == "*" {
-                return Ok(DfGrantObject::Global);
+                return Ok(DfGrantObject::Database(None));
             }
             return Ok(DfGrantObject::Table(None, chunk0.value));
         }
@@ -741,7 +741,7 @@ impl<'a> DfParser<'a> {
         }
         // db.*
         if chunk1.value == "*" {
-            return Ok(DfGrantObject::Database(chunk0.value));
+            return Ok(DfGrantObject::Database(Some(chunk0.value)));
         }
         // db.table
         Ok(DfGrantObject::Table(Some(chunk0.value), chunk1.value))
