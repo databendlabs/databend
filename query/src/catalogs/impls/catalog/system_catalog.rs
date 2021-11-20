@@ -24,11 +24,11 @@ use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
-use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
+use common_meta_types::UpsertTableOptionReq;
 
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::Database;
@@ -141,14 +141,11 @@ impl Catalog for SystemCatalog {
 
     async fn upsert_table_option(
         &self,
-        table_id: MetaId,
-        _table_version: MetaVersion,
-        _key: String,
-        _value: String,
-    ) -> Result<UpsertTableOptionReply> {
+        req: UpsertTableOptionReq,
+    ) -> common_exception::Result<UpsertTableOptionReply> {
         Err(ErrorCode::UnImplement(format!(
-            "commit table not allowed for system catalog {}",
-            table_id
+            "commit table not allowed for system catalog {:?}",
+            req
         )))
     }
 

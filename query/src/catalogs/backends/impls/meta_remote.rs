@@ -28,11 +28,11 @@ use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
-use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
+use common_meta_types::UpsertTableOptionReq;
 
 use crate::common::MetaClientProvider;
 
@@ -124,16 +124,10 @@ impl MetaApi for MetaRemote {
 
     async fn upsert_table_option(
         &self,
-        table_id: MetaId,
-        table_version: MetaVersion,
-        option_key: String,
-        option_value: String,
+        req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
-        self.query_backend(move |cli| async move {
-            cli.upsert_table_option(table_id, table_version, option_key, option_value)
-                .await
-        })
-        .await
+        self.query_backend(move |cli| async move { cli.upsert_table_option(req).await })
+            .await
     }
 
     fn name(&self) -> String {
