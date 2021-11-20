@@ -36,42 +36,42 @@ use crate::sql::parser::ast::TypeName;
 use crate::sql::parser::ast::UnaryOperator;
 
 pub trait AstVisitor {
-    fn visit_expr(&mut self, expr: Expr) -> Result<()> {
+    fn visit_expr(&mut self, expr: &Expr) -> Result<()> {
         match expr {
             Expr::Wildcard => self.visit_wildcard(),
             Expr::ColumnRef { .. } => self.visit_column_ref(),
-            Expr::IsNull(expr) => self.visit_is_null(*expr),
-            Expr::IsNotNull(expr) => self.visit_is_not_null(*expr),
-            Expr::InList { expr, list, not } => self.visit_in_list(*expr, list, not),
+            Expr::IsNull(expr) => self.visit_is_null(expr),
+            Expr::IsNotNull(expr) => self.visit_is_not_null(expr),
+            Expr::InList { expr, list, not } => self.visit_in_list(expr, &list, not),
             Expr::InSubquery {
                 expr,
                 subquery,
                 not,
-            } => self.visit_in_subquery(*expr, *subquery, not),
+            } => self.visit_in_subquery(expr, subquery, not),
             Expr::Between {
                 expr,
                 negated,
                 low,
                 high,
-            } => self.visit_between(*expr, negated, *low, *high),
-            Expr::BinaryOp { op, left, right } => self.visit_binary_op(op, *left, *right),
-            Expr::UnaryOp { op, expr } => self.visit_unary_op(op, *expr),
-            Expr::Cast { expr, target_type } => self.visit_cast(*expr, target_type),
+            } => self.visit_between(expr, negated, low, high),
+            Expr::BinaryOp { op, left, right } => self.visit_binary_op(&op, left, right),
+            Expr::UnaryOp { op, expr } => self.visit_unary_op(&op, expr),
+            Expr::Cast { expr, target_type } => self.visit_cast(expr, &target_type),
             Expr::Literal(_) => self.visit_literal(),
             Expr::FunctionCall {
                 distinct,
                 name,
                 args,
                 params,
-            } => self.visit_function_call(distinct, name, args, params),
+            } => self.visit_function_call(distinct, name, &args, &params),
             Expr::Case {
                 operand,
                 conditions,
                 results,
                 else_result,
-            } => self.visit_case(operand, conditions, results, else_result),
-            Expr::Exists(query) => self.visit_exists(*query),
-            Expr::Subquery(query) => self.visit_query(*query),
+            } => self.visit_case(&operand, &conditions, &results, &else_result),
+            Expr::Exists(query) => self.visit_exists(query),
+            Expr::Subquery(query) => self.visit_query(query),
         }
     }
 
@@ -79,20 +79,20 @@ pub trait AstVisitor {
         Ok(())
     }
 
-    fn visit_is_null(&mut self, expr: Expr) -> Result<()> {
+    fn visit_is_null(&mut self, expr: &Expr) -> Result<()> {
         self.visit_expr(expr)
     }
 
-    fn visit_is_not_null(&mut self, expr: Expr) -> Result<()> {
+    fn visit_is_not_null(&mut self, expr: &Expr) -> Result<()> {
         self.visit_expr(expr)
     }
 
-    fn visit_in_list(&mut self, expr: Expr, exprs: Vec<Expr>, _: bool) -> Result<()> {
+    fn visit_in_list(&mut self, expr: &Expr, exprs: &Vec<Expr>, _: &bool) -> Result<()> {
         self.visit_expr(expr)?;
         self.visit_exprs(exprs)
     }
 
-    fn visit_in_subquery(&mut self, expr: Expr, query: Query, _: bool) -> Result<()> {
+    fn visit_in_subquery(&mut self, expr: &Expr, query: &Query, _: &bool) -> Result<()> {
         self.visit_expr(expr)?;
         self.visit_query(query)
     }
@@ -105,83 +105,83 @@ pub trait AstVisitor {
         Ok(())
     }
 
-    fn visit_binary_op(&mut self, _: BinaryOperator, left: Expr, right: Expr) -> Result<()> {
+    fn visit_binary_op(&mut self, _: &BinaryOperator, left: &Expr, right: &Expr) -> Result<()> {
         self.visit_expr(left)?;
         self.visit_expr(right)
     }
 
-    fn visit_between(&mut self, expr: Expr, _: bool, low: Expr, high: Expr) -> Result<()> {
+    fn visit_between(&mut self, expr: &Expr, _: &bool, low: &Expr, high: &Expr) -> Result<()> {
         self.visit_expr(expr)?;
         self.visit_expr(low)?;
         self.visit_expr(high)
     }
 
-    fn visit_unary_op(&mut self, _: UnaryOperator, expr: Expr) -> Result<()> {
+    fn visit_unary_op(&mut self, _: &UnaryOperator, expr: &Expr) -> Result<()> {
         self.visit_expr(expr)
     }
 
-    fn visit_cast(&mut self, expr: Expr, _: TypeName) -> Result<()> {
+    fn visit_cast(&mut self, expr: &Expr, _: &TypeName) -> Result<()> {
         self.visit_expr(expr)
     }
 
     fn visit_function_call(
         &mut self,
-        _: bool,
-        _: String,
-        exprs: Vec<Expr>,
-        _: Vec<Literal>,
+        _: &bool,
+        _: &String,
+        exprs: &Vec<Expr>,
+        _: &Vec<Literal>,
     ) -> Result<()> {
         self.visit_exprs(exprs)
     }
 
     fn visit_case(
         &mut self,
-        operand: Option<Box<Expr>>,
-        conditions: Vec<Expr>,
-        results: Vec<Expr>,
-        else_result: Option<Box<Expr>>,
+        operand: &Option<Box<Expr>>,
+        conditions: &Vec<Expr>,
+        results: &Vec<Expr>,
+        else_result: &Option<Box<Expr>>,
     ) -> Result<()> {
-        self.visit_expr(*operand.unwrap())?;
+        self.visit_expr(&operand.as_ref().unwrap())?;
         self.visit_exprs(conditions)?;
         self.visit_exprs(results)?;
-        self.visit_expr(*else_result.unwrap())
+        self.visit_expr(&else_result.as_ref().unwrap())
     }
 
-    fn visit_exists(&mut self, query: Query) -> Result<()> {
+    fn visit_exists(&mut self, query: &Query) -> Result<()> {
         self.visit_query(query)
     }
 
-    fn visit_exprs(&mut self, exprs: Vec<Expr>) -> Result<()> {
+    fn visit_exprs(&mut self, exprs: &Vec<Expr>) -> Result<()> {
         for expr in exprs {
             self.visit_expr(expr)?
         }
         Ok(())
     }
 
-    fn visit_query(&mut self, query: Query) -> Result<()> {
-        self.visit_set_expr(query.body)?;
-        self.visit_order_by_exprs(query.order_by)?;
-        self.visit_expr(query.limit.unwrap())
+    fn visit_query(&mut self, query: &Query) -> Result<()> {
+        self.visit_set_expr(&query.body)?;
+        self.visit_order_by_exprs(&query.order_by)?;
+        self.visit_expr(&query.limit.as_ref().unwrap())
     }
 
-    fn visit_set_expr(&mut self, set_expr: SetExpr) -> Result<()> {
+    fn visit_set_expr(&mut self, set_expr: &SetExpr) -> Result<()> {
         match set_expr {
-            SetExpr::Select(select_stmt) => self.visit_select_stmt(*select_stmt),
-            SetExpr::Query(query) => self.visit_query(*query),
+            SetExpr::Select(select_stmt) => self.visit_select_stmt(select_stmt),
+            SetExpr::Query(query) => self.visit_query(query),
             SetExpr::SetOperation {
                 op,
                 all,
                 left,
                 right,
-            } => self.visit_set_operation(op, all, *left, *right),
+            } => self.visit_set_operation(op, all, left, right),
         }
     }
 
-    fn visit_order_by_expr(&mut self, order_by_expr: OrderByExpr) -> Result<()> {
-        self.visit_expr(order_by_expr.expr)
+    fn visit_order_by_expr(&mut self, order_by_expr: &OrderByExpr) -> Result<()> {
+        self.visit_expr(&order_by_expr.expr)
     }
 
-    fn visit_order_by_exprs(&mut self, exprs: Vec<OrderByExpr>) -> Result<()> {
+    fn visit_order_by_exprs(&mut self, exprs: &Vec<OrderByExpr>) -> Result<()> {
         for expr in exprs {
             self.visit_order_by_expr(expr)?;
         }
@@ -190,46 +190,46 @@ pub trait AstVisitor {
 
     fn visit_set_operation(
         &mut self,
-        _: SetOperator,
-        _: bool,
-        left: SetExpr,
-        right: SetExpr,
+        _: &SetOperator,
+        _: &bool,
+        left: &SetExpr,
+        right: &SetExpr,
     ) -> Result<()> {
         self.visit_set_expr(left)?;
         self.visit_set_expr(right)
     }
 
-    fn visit_select_stmt(&mut self, select_stmt: SelectStmt) -> Result<()> {
-        self.visit_select_targets(select_stmt.select_list)?;
-        self.visit_table_reference(select_stmt.from)?;
-        self.visit_expr(select_stmt.selection.unwrap())?;
-        self.visit_exprs(select_stmt.group_by)?;
-        self.visit_expr(select_stmt.having.unwrap())
+    fn visit_select_stmt(&mut self, select_stmt: &SelectStmt) -> Result<()> {
+        self.visit_select_targets(&select_stmt.select_list)?;
+        self.visit_table_reference(&select_stmt.from)?;
+        self.visit_expr(&select_stmt.selection.as_ref().unwrap())?;
+        self.visit_exprs(&select_stmt.group_by)?;
+        self.visit_expr(&select_stmt.having.as_ref().unwrap())
     }
 
-    fn visit_select_target(&mut self, select_target: SelectTarget) -> Result<()> {
+    fn visit_select_target(&mut self, select_target: &SelectTarget) -> Result<()> {
         match select_target {
             SelectTarget::Projection { expr, alias } => self.visit_projection(expr, alias),
             SelectTarget::Indirections(indirections) => self.visit_indirections(indirections),
         }
     }
 
-    fn visit_projection(&mut self, expr: Expr, _: Option<Identifier>) -> Result<()> {
+    fn visit_projection(&mut self, expr: &Expr, _: &Option<Identifier>) -> Result<()> {
         self.visit_expr(expr)
     }
 
-    fn visit_indirections(&mut self, _: Vec<Indirection>) -> Result<()> {
+    fn visit_indirections(&mut self, _: &Vec<Indirection>) -> Result<()> {
         Ok(())
     }
 
-    fn visit_select_targets(&mut self, select_targets: Vec<SelectTarget>) -> Result<()> {
+    fn visit_select_targets(&mut self, select_targets: &Vec<SelectTarget>) -> Result<()> {
         for select_target in select_targets {
             self.visit_select_target(select_target)?;
         }
         Ok(())
     }
 
-    fn visit_table_reference(&mut self, table_reference: TableReference) -> Result<()> {
+    fn visit_table_reference(&mut self, table_reference: &TableReference) -> Result<()> {
         match table_reference {
             TableReference::Table {
                 database,
@@ -237,7 +237,7 @@ pub trait AstVisitor {
                 alias,
             } => self.visit_table(database, table, alias),
             TableReference::Subquery { subquery, alias } => {
-                self.visit_table_subquery(*subquery, alias)
+                self.visit_table_subquery(subquery, alias)
             }
             TableReference::TableFunction { expr, alias } => self.visit_table_function(expr, alias),
             TableReference::Join(join) => self.visit_join(join),
@@ -246,30 +246,30 @@ pub trait AstVisitor {
 
     fn visit_table(
         &mut self,
-        _: Option<Identifier>,
-        _: Identifier,
-        alias: Option<TableAlias>,
+        _: &Option<Identifier>,
+        _: &Identifier,
+        alias: &Option<TableAlias>,
     ) -> Result<()> {
-        self.visit_table_alias(alias.unwrap())
+        self.visit_table_alias(&alias.as_ref().unwrap())
     }
 
-    fn visit_table_subquery(&mut self, subquery: Query, alias: Option<TableAlias>) -> Result<()> {
+    fn visit_table_subquery(&mut self, subquery: &Query, alias: &Option<TableAlias>) -> Result<()> {
         self.visit_query(subquery)?;
-        self.visit_table_alias(alias.unwrap())
+        self.visit_table_alias(&alias.as_ref().unwrap())
     }
 
-    fn visit_table_function(&mut self, expr: Expr, alias: Option<TableAlias>) -> Result<()> {
+    fn visit_table_function(&mut self, expr: &Expr, alias: &Option<TableAlias>) -> Result<()> {
         self.visit_expr(expr)?;
-        self.visit_table_alias(alias.unwrap())
+        self.visit_table_alias(&alias.as_ref().unwrap())
     }
 
-    fn visit_join(&mut self, join: Join) -> Result<()> {
-        self.visit_join_condition(join.condition)?;
-        self.visit_table_reference(*join.left)?;
-        self.visit_table_reference(*join.right)
+    fn visit_join(&mut self, join: &Join) -> Result<()> {
+        self.visit_join_condition(&join.condition)?;
+        self.visit_table_reference(&join.left)?;
+        self.visit_table_reference(&join.right)
     }
 
-    fn visit_join_condition(&mut self, join_condition: JoinCondition) -> Result<()> {
+    fn visit_join_condition(&mut self, join_condition: &JoinCondition) -> Result<()> {
         match join_condition {
             JoinCondition::On(expr) => self.visit_expr(expr),
             JoinCondition::Using(_) => Ok(()),
@@ -278,15 +278,15 @@ pub trait AstVisitor {
         }
     }
 
-    fn visit_table_alias(&mut self, _: TableAlias) -> Result<()> {
+    fn visit_table_alias(&mut self, _: &TableAlias) -> Result<()> {
         Ok(())
     }
 
     // statement
-    fn visit_statement(&mut self, statement: Statement) -> Result<()> {
+    fn visit_statement(&mut self, statement: &Statement) -> Result<()> {
         match statement {
-            Statement::Explain { analyze, query } => self.visit_explain(analyze, *query),
-            Statement::Select(query) => self.visit_select(*query),
+            Statement::Explain { analyze, query } => self.visit_explain(analyze, query),
+            Statement::Select(query) => self.visit_select(query),
             Statement::ShowTables => self.visit_show_tables(),
             Statement::ShowDatabases => self.visit_show_databases(),
             Statement::ShowSettings => self.visit_show_settings(),
@@ -322,11 +322,11 @@ pub trait AstVisitor {
         }
     }
 
-    fn visit_explain(&mut self, _: bool, query: Statement) -> Result<()> {
+    fn visit_explain(&mut self, _: &bool, query: &Statement) -> Result<()> {
         self.visit_statement(query)
     }
 
-    fn visit_select(&mut self, query: Query) -> Result<()> {
+    fn visit_select(&mut self, query: &Query) -> Result<()> {
         self.visit_query(query)
     }
 
@@ -346,49 +346,49 @@ pub trait AstVisitor {
         Ok(())
     }
 
-    fn visit_show_create_table(&mut self, _: Option<Identifier>, _: Identifier) -> Result<()> {
+    fn visit_show_create_table(&mut self, _: &Option<Identifier>, _: &Identifier) -> Result<()> {
         Ok(())
     }
 
     fn visit_create_table(
         &mut self,
-        _: bool,
-        _: Option<Identifier>,
-        _: Identifier,
-        _: Vec<ColumnDefinition>,
-        _: String,
-        _: Vec<SQLProperty>,
+        _: &bool,
+        _: &Option<Identifier>,
+        _: &Identifier,
+        _: &Vec<ColumnDefinition>,
+        _: &String,
+        _: &Vec<SQLProperty>,
     ) -> Result<()> {
         Ok(())
     }
 
-    fn visit_describe(&mut self, _: Option<Identifier>, _: Identifier) -> Result<()> {
+    fn visit_describe(&mut self, _: &Option<Identifier>, _: &Identifier) -> Result<()> {
         Ok(())
     }
 
-    fn visit_drop_table(&mut self, _: bool, _: Option<Identifier>, _: Identifier) -> Result<()> {
+    fn visit_drop_table(&mut self, _: &bool, _: &Option<Identifier>, _: &Identifier) -> Result<()> {
         Ok(())
     }
 
-    fn visit_truncate_table(&mut self, _: Option<Identifier>, _: Identifier) -> Result<()> {
+    fn visit_truncate_table(&mut self, _: &Option<Identifier>, _: &Identifier) -> Result<()> {
         Ok(())
     }
 
     fn visit_create_database(
         &mut self,
-        _: bool,
-        _: Identifier,
-        _: String,
-        _: Vec<SQLProperty>,
+        _: &bool,
+        _: &Identifier,
+        _: &String,
+        _: &Vec<SQLProperty>,
     ) -> Result<()> {
         Ok(())
     }
 
-    fn visit_use_database(&mut self, _: Identifier) -> Result<()> {
+    fn visit_use_database(&mut self, _: &Identifier) -> Result<()> {
         Ok(())
     }
 
-    fn visit_kill_stmt(&mut self, _: Identifier) -> Result<()> {
+    fn visit_kill_stmt(&mut self, _: &Identifier) -> Result<()> {
         Ok(())
     }
 }
