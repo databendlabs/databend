@@ -69,9 +69,21 @@ async fn test_user_manager() -> Result<()> {
 
     // drop.
     {
-        user_mgr.drop_user(user, hostname).await?;
+        user_mgr.drop_user(user, hostname, false).await?;
         let users = user_mgr.get_users().await?;
         assert_eq!(1, users.len());
+    }
+
+    // repeat drop same user not with if exist.
+    {
+        let res = user_mgr.drop_user(user, hostname, false).await;
+        assert!(res.is_err());
+    }
+
+    // repeat drop same user with if exist.
+    {
+        let res = user_mgr.drop_user(user, hostname, true).await;
+        assert!(res.is_ok());
     }
 
     // grant privileges

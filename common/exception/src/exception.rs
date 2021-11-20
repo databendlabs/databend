@@ -29,6 +29,8 @@ use tonic::Status;
 pub static ABORT_SESSION: u16 = 42;
 pub static ABORT_QUERY: u16 = 43;
 
+pub static UNKNOWN_USER: u16 = 3000;
+
 #[derive(Clone)]
 pub enum ErrorCodeBacktrace {
     Serialized(Arc<String>),
@@ -243,7 +245,7 @@ build_exceptions! {
     // let's figure it out latter.
 
     // user-api error codes
-    UnknownUser(3000),
+    UnknownUser(UNKNOWN_USER),
     UserAlreadyExists(3001),
     IllegalUserInfoFormat(3002),
 
