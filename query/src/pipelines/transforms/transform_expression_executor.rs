@@ -72,28 +72,28 @@ impl ExpressionExecutor {
             self.chain.actions
         );
 
-        let mut column_map: HashMap<String, DataColumnWithField> = HashMap::new();
+        let mut column_map: HashMap<&str, DataColumnWithField> = HashMap::new();
 
-        let mut alias_map: HashMap<String, DataColumnWithField> = HashMap::new();
+        let mut alias_map: HashMap<&str, &DataColumnWithField> = HashMap::new();
 
         // supported a + 1 as b, a + 1 as c
         // supported a + 1 as a, a as b
         // !currently not supported a+1 as c, b+1 as c
-        let mut alias_action_map: HashMap<String, Vec<String>> = HashMap::new();
+        let mut alias_action_map: HashMap<&str, Vec<&str>> = HashMap::new();
 
         for f in block.schema().fields().iter() {
             let column =
                 DataColumnWithField::new(block.try_column_by_name(f.name())?.clone(), f.clone());
-            column_map.insert(f.name().clone(), column);
+            column_map.insert(f.name(), column);
         }
 
         let rows = block.num_rows();
         for action in self.chain.actions.iter() {
             if let ExpressionAction::Alias(alias) = action {
-                if let Some(v) = alias_action_map.get_mut(&alias.arg_name) {
-                    v.push(alias.name.clone());
+                if let Some(v) = alias_action_map.get_mut(alias.arg_name.as_str()) {
+                    v.push(alias.name.as_str());
                 } else {
-                    alias_action_map.insert(alias.arg_name.clone(), vec![alias.name.clone()]);
+                    alias_action_map.insert(alias.arg_name.as_str(), vec![alias.name.as_str()]);
                 }
             }
 
@@ -108,14 +108,14 @@ impl ExpressionExecutor {
                         column,
                         block.schema().field_with_name(&input.name)?.clone(),
                     );
-                    column_map.insert(input.name.clone(), column);
+                    column_map.insert(input.name.as_str(), column);
                 }
                 ExpressionAction::Function(f) => {
                     // check if it's cached
                     let mut arg_columns = Vec::with_capacity(f.arg_names.len());
 
                     for arg in f.arg_names.iter() {
-                        let column = column_map.get(arg).cloned().ok_or_else(|| {
+                        let column = column_map.get(arg.as_str()).cloned().ok_or_else(|| {
                             ErrorCode::LogicalError(
                                 "Arguments must be prepared before function transform",
                             )
@@ -131,7 +131,7 @@ impl ExpressionExecutor {
                         DataField::new(&f.name, f.return_type.clone(), f.is_nullable),
                     );
 
-                    column_map.insert(f.name.clone(), column);
+                    column_map.insert(f.name.as_str(), column);
                 }
                 ExpressionAction::Constant(constant) => {
                     let column = DataColumn::Constant(constant.value.clone(), rows);
@@ -145,7 +145,7 @@ impl ExpressionExecutor {
                         ),
                     );
 
-                    column_map.insert(constant.name.clone(), column);
+                    column_map.insert(constant.name.as_str(), column);
                 }
                 _ => {}
             }
@@ -153,12 +153,12 @@ impl ExpressionExecutor {
 
         if self.alias_project {
             for (k, v) in alias_action_map.iter() {
-                let column = column_map.get(k).cloned().ok_or_else(|| {
+                let column = column_map.get(k).ok_or_else(|| {
                     ErrorCode::LogicalError("Arguments must be prepared before alias transform")
                 })?;
 
                 for name in v.iter() {
-                    match alias_map.insert(name.clone(), column.clone()) {
+                    match alias_map.insert(name, column) {
                         Some(_) => Err(ErrorCode::UnImplement(format!(
                             "Duplicate alias name :{}",
                             name
@@ -171,9 +171,9 @@ impl ExpressionExecutor {
 
         let mut project_columns = Vec::with_capacity(self.output_schema.fields().len());
         for f in self.output_schema.fields() {
-            let column = match alias_map.get(f.name()) {
+            let column = match alias_map.get(f.name().as_str()) {
                 Some(data_column) => data_column,
-                None => column_map.get(f.name()).ok_or_else(|| {
+                None => column_map.get(f.name().as_str()).ok_or_else(|| {
                     ErrorCode::LogicalError(format!(
                         "Projection column: {} not exists in {:?}, there are bugs!",
                         f.name(),
