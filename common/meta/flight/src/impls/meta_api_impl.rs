@@ -27,11 +27,11 @@ use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
-use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
+use common_meta_types::UpsertTableOptionReq;
 
 use crate::FlightReq;
 use crate::GetDatabaseAction;
@@ -40,7 +40,6 @@ use crate::GetTableAction;
 use crate::GetTableExtReq;
 use crate::GetTablesAction;
 use crate::MetaFlightClient;
-use crate::UpsertTableOptionReq;
 
 #[async_trait::async_trait]
 impl MetaApi for MetaFlightClient {
@@ -104,18 +103,9 @@ impl MetaApi for MetaFlightClient {
 
     async fn upsert_table_option(
         &self,
-        table_id: MetaId,
-        table_version: MetaVersion,
-        option_key: String,
-        option_value: String,
-    ) -> common_exception::Result<UpsertTableOptionReply> {
-        self.do_action(UpsertTableOptionReq {
-            table_id,
-            table_version,
-            option_key,
-            option_value,
-        })
-        .await
+        req: UpsertTableOptionReq,
+    ) -> Result<UpsertTableOptionReply, ErrorCode> {
+        self.do_action(FlightReq { req }).await
     }
 
     fn name(&self) -> String {

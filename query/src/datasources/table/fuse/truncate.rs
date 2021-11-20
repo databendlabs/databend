@@ -14,11 +14,11 @@
 //
 
 use common_exception::Result;
+use common_meta_types::UpsertTableOptionReq;
 use common_planners::TruncateTablePlan;
 use uuid::Uuid;
 
 use crate::catalogs::Catalog;
-use crate::catalogs::Table;
 use crate::datasources::table::fuse::util;
 use crate::datasources::table::fuse::util::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::datasources::table::fuse::FuseTable;
@@ -45,16 +45,15 @@ impl FuseTable {
             da.put(&new_snapshot_loc, bytes).await?;
 
             let catalog = ctx.get_catalog();
-            let table_id = self.get_id();
             // TODO backoff retry
             catalog
-                .upsert_table_option(
-                    table_id,
-                    self.table_info.ident.version,
-                    TBL_OPT_KEY_SNAPSHOT_LOC.to_string(),
+                .upsert_table_option(UpsertTableOptionReq::new(
+                    &self.table_info.ident,
+                    TBL_OPT_KEY_SNAPSHOT_LOC,
                     new_snapshot_loc,
-                )
-                .await?
+                ))
+                .await?;
+            return Ok(());
         }
 
         Ok(())

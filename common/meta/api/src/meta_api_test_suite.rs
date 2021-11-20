@@ -26,6 +26,7 @@ use common_meta_types::DropTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
+use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
 use crate::MetaApi;
@@ -285,13 +286,8 @@ impl MetaApiTestSuite {
                 {
                     let table = mt.get_table("db1", "tb2").await.unwrap();
 
-                    mt.upsert_table_option(
-                        table.ident.table_id,
-                        table.ident.version,
-                        "key1".into(),
-                        "val1".into(),
-                    )
-                    .await?;
+                    mt.upsert_table_option(UpsertTableOptionReq::new(&table.ident, "key1", "val1"))
+                        .await?;
 
                     let table = mt.get_table("db1", "tb2").await.unwrap();
                     assert_eq!(table.options().get("key1"), Some(&"val1".into()));
@@ -302,12 +298,14 @@ impl MetaApiTestSuite {
                     let table = mt.get_table("db1", "tb2").await.unwrap();
 
                     let got = mt
-                        .upsert_table_option(
-                            table.ident.table_id,
-                            table.ident.version - 1,
-                            "key1".into(),
-                            "val2".into(),
-                        )
+                        .upsert_table_option(UpsertTableOptionReq::new(
+                            &TableIdent {
+                                table_id: table.ident.table_id,
+                                version: table.ident.version - 1,
+                            },
+                            "key1",
+                            "val2",
+                        ))
                         .await;
 
                     let got = got.unwrap_err();

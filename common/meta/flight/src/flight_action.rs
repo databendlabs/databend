@@ -31,12 +31,12 @@ use common_meta_types::DropTableReq;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MetaId;
-use common_meta_types::MetaVersion;
 use common_meta_types::PrefixListReply;
 use common_meta_types::TableInfo;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 use common_meta_types::UpsertTableOptionReply;
+use common_meta_types::UpsertTableOptionReq;
 use prost::Message;
 use tonic::Request;
 
@@ -64,7 +64,7 @@ pub enum MetaFlightAction {
     GetTable(GetTableAction),
     GetTableExt(GetTableExtReq),
     GetTables(GetTablesAction),
-    CommitTable(UpsertTableOptionReq),
+    CommitTable(FlightReq<UpsertTableOptionReq>),
 
     UpsertKV(UpsertKVAction),
     GetKV(GetKVAction),
@@ -191,14 +191,7 @@ impl RequestFor for GetTableExtReq {
     type Reply = TableInfo;
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct UpsertTableOptionReq {
-    pub table_id: MetaId,
-    pub table_version: MetaVersion,
-    pub option_key: String,
-    pub option_value: String,
-}
-impl RequestFor for UpsertTableOptionReq {
+impl RequestFor for FlightReq<UpsertTableOptionReq> {
     type Reply = UpsertTableOptionReply;
 }
 

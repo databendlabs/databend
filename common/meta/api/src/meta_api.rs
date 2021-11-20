@@ -26,11 +26,11 @@ use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
-use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
+use common_meta_types::UpsertTableOptionReq;
 
 #[async_trait::async_trait]
 pub trait MetaApi: Send + Sync {
@@ -58,10 +58,7 @@ pub trait MetaApi: Send + Sync {
 
     async fn upsert_table_option(
         &self,
-        table_id: MetaId,
-        table_version: MetaVersion,
-        option_key: String,
-        option_value: String,
+        req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply>;
 
     fn name(&self) -> String;

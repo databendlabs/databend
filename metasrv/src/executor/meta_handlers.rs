@@ -23,7 +23,6 @@ use common_meta_flight::GetDatabasesAction;
 use common_meta_flight::GetTableAction;
 use common_meta_flight::GetTableExtReq;
 use common_meta_flight::GetTablesAction;
-use common_meta_flight::UpsertTableOptionReq;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd::CreateDatabase;
@@ -46,6 +45,7 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
+use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 use maplit::hashmap;
 
@@ -323,11 +323,12 @@ impl RequestHandler<GetTablesAction> for ActionHandler {
     }
 }
 #[async_trait::async_trait]
-impl RequestHandler<UpsertTableOptionReq> for ActionHandler {
+impl RequestHandler<FlightReq<UpsertTableOptionReq>> for ActionHandler {
     async fn handle(
         &self,
-        req: UpsertTableOptionReq,
+        req: FlightReq<UpsertTableOptionReq>,
     ) -> common_exception::Result<UpsertTableOptionReply> {
+        let req = req.req;
         let cr = LogEntry {
             txid: None,
             cmd: UpsertTableOptions {
@@ -355,6 +356,6 @@ impl RequestHandler<UpsertTableOptionReq> for ActionHandler {
             )));
         }
 
-        Ok(())
+        Ok(UpsertTableOptionReply {})
     }
 }
