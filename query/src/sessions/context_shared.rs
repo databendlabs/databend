@@ -21,6 +21,7 @@ use std::time::Duration;
 use common_base::BlockingWait;
 use common_base::Progress;
 use common_base::Runtime;
+use common_dal::DalContext;
 use common_exception::Result;
 use common_infallible::Mutex;
 use common_infallible::RwLock;
@@ -62,6 +63,7 @@ pub struct DatabendQueryContextShared {
     pub(in crate::sessions) http_query: Arc<RwLock<Option<HttpQueryHandle>>>,
     pub(in crate::sessions) running_plan: Arc<RwLock<Option<PlanNode>>>,
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
+    pub(in crate::sessions) dal_ctx: Arc<DalContext>,
 }
 
 impl DatabendQueryContextShared {
@@ -84,6 +86,7 @@ impl DatabendQueryContextShared {
             http_query: Arc::new(RwLock::new(None)),
             running_plan: Arc::new(RwLock::new(None)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
+            dal_ctx: Arc::new(Default::default()),
         })
     }
 

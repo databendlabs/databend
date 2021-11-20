@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use std::env;
-use std::fs::OpenOptions;
-use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::Once;
@@ -52,7 +50,7 @@ pub fn init_default_ut_tracing() {
 
     START.call_once(|| {
         let mut g = GLOBAL_UT_LOG_GUARD.as_ref().lock().unwrap();
-        *g = Some(init_global_tracing("unittest", "_logs"));
+        *g = Some(init_global_tracing("unittest", "_logs", "DEBUG"));
     });
 }
 
@@ -120,6 +118,7 @@ pub fn init_tracing_with_file(app_name: &str, dir: &str, level: &str) -> Vec<Wor
 
     let file_appender = RollingFileAppender::new(Rotation::HOURLY, dir, app_name);
     let (file_writer, file_guard) = tracing_appender::non_blocking(file_appender);
+
     let file_logging_layer = BunyanFormattingLayer::new(app_name.to_string(), file_writer);
     guards.push(file_guard);
 
@@ -139,8 +138,8 @@ pub fn init_tracing_with_file(app_name: &str, dir: &str, level: &str) -> Vec<Wor
 /// Creates a tracing/logging subscriber that is valid until the guards are dropped.
 /// The format layer logging span/event in plain text, without color, one event per line.
 /// This is useful in a unit test.
-pub fn init_tracing(app_name: &str, dir: &str) -> (WorkerGuard, DefaultGuard) {
-    let (g, sub) = init_file_subscriber(app_name, dir);
+pub fn init_tracing(app_name: &str, dir: &str, level: &str) -> (WorkerGuard, DefaultGuard) {
+    let (g, sub) = init_file_subscriber(app_name, dir, level);
 
     let subs_guard = tracing::subscriber::set_default(sub);
 
@@ -149,8 +148,8 @@ pub fn init_tracing(app_name: &str, dir: &str) -> (WorkerGuard, DefaultGuard) {
 }
 
 /// Creates a global tracing/logging subscriber which saves events in one log file.
-pub fn init_global_tracing(app_name: &str, dir: &str) -> WorkerGuard {
-    let (g, sub) = init_file_subscriber(app_name, dir);
+pub fn init_global_tracing(app_name: &str, dir: &str, level: &str) -> WorkerGuard {
+    let (g, sub) = init_file_subscriber(app_name, dir, level);
     tracing::subscriber::set_global_default(sub).expect("error setting global tracing subscriber");
 
     tracing::info!("initialized global tracing");
@@ -161,24 +160,14 @@ pub fn init_global_tracing(app_name: &str, dir: &str) -> WorkerGuard {
 /// A guard must be held during using the logging.
 /// The format layer logging span/event in plain text, without color, one event per line.
 /// Optionally it adds a layer to send to opentelemetry if env var `DATABEND_JAEGER` is present.
-pub fn init_file_subscriber(app_name: &str, dir: &str) -> (WorkerGuard, impl Subscriber) {
-    let path_str = dir.to_string() + "/" + app_name;
-    let path: &Path = path_str.as_ref();
-
+pub fn init_file_subscriber(
+    app_name: &str,
+    dir: &str,
+    level: &str,
+) -> (WorkerGuard, impl Subscriber) {
     // open log file
 
-    let mut open_options = OpenOptions::new();
-    open_options.append(true).create(true);
-
-    let mut open_res = open_options.open(path);
-    if open_res.is_err() {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).unwrap();
-            open_res = open_options.open(path);
-        }
-    }
-
-    let f = open_res.unwrap();
+    let f = RollingFileAppender::new(Rotation::HOURLY, dir, app_name);
 
     // build subscriber
 
@@ -191,8 +180,13 @@ pub fn init_file_subscriber(app_name: &str, dir: &str) -> (WorkerGuard, impl Sub
         .with_ansi(false)
         .with_span_events(fmt::format::FmtSpan::FULL);
 
+    // Use env RUST_LOG to initialize log if present.
+    // Otherwise use the specified level.
+    let directives = env::var(EnvFilter::DEFAULT_ENV).unwrap_or_else(|_x| level.to_string());
+    let env_filter = EnvFilter::new(directives);
+
     let subscriber = Registry::default()
-        .with(EnvFilter::from_default_env())
+        .with(env_filter)
         .with(f_layer)
         .with(jaeger_layer());
 

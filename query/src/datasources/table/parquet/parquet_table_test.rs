@@ -14,10 +14,8 @@
 //
 
 use std::env;
-use std::sync::Arc;
 
 use common_base::tokio;
-use common_context::TableDataContext;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
@@ -26,6 +24,7 @@ use common_planners::*;
 use futures::TryStreamExt;
 
 use crate::catalogs::ToReadDataSourcePlan;
+use crate::datasources::context::TableContext;
 use crate::datasources::table::parquet::parquet_table::ParquetTable;
 
 #[tokio::test]
@@ -53,14 +52,12 @@ async fn test_parquet_table() -> Result<()> {
             options,
         },
     };
-    let table = ParquetTable::try_create(table_info, Arc::new(TableDataContext::default()))?;
+    let table = ParquetTable::try_create(table_info, TableContext::default())?;
 
-    let io_ctx = ctx.get_cluster_table_io_context()?;
-    let io_ctx = Arc::new(io_ctx);
-    let source_plan = table.read_plan(io_ctx.clone(), None)?;
+    let source_plan = table.read_plan(ctx.clone(), None)?;
     ctx.try_set_partitions(source_plan.parts.clone())?;
 
-    let stream = table.read(io_ctx, &source_plan).await?;
+    let stream = table.read(ctx, &source_plan).await?;
     let blocks = stream.try_collect::<Vec<_>>().await?;
     let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
 

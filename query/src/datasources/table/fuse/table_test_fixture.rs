@@ -58,7 +58,10 @@ impl TestFixture {
             db: db_name,
             options: Default::default(),
         };
-        ctx.get_catalog().create_database(plan).await.unwrap();
+        ctx.get_catalog()
+            .create_database(plan.into())
+            .await
+            .unwrap();
 
         Self {
             _tmp_dir: tmp_dir,

@@ -13,10 +13,7 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
-
 use common_base::tokio;
-use common_context::IOContext;
 use common_dal::read_obj;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::SeriesFrom;
@@ -25,10 +22,10 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
+use common_meta_types::CreateTableReq;
 use common_meta_types::TableMeta;
 use common_planners::col;
 use common_planners::lit;
-use common_planners::CreateTablePlan;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
 
@@ -49,7 +46,7 @@ async fn test_min_max_index() -> Result<()> {
     ]);
 
     // create test table
-    let crate_table_plan = CreateTablePlan {
+    let crate_table_plan = CreateTableReq {
         if_not_exists: false,
         db: fixture.default_db(),
         table: test_tbl_name.to_string(),
@@ -88,11 +85,10 @@ async fn test_min_max_index() -> Result<()> {
         select_plan: None,
         values_opt: None,
     };
-    let io_ctx = Arc::new(ctx.get_cluster_table_io_context()?);
-    let da = io_ctx.get_data_accessor()?;
+    let da = ctx.get_data_accessor()?;
     let stream = Box::pin(futures::stream::iter(blocks));
     table
-        .append_data(io_ctx.clone(), insert_into_plan, stream)
+        .append_data(ctx.clone(), insert_into_plan, stream)
         .await?;
 
     // get the latest tbl

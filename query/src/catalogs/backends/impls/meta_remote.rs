@@ -19,25 +19,26 @@ use std::time::Duration;
 use common_exception::Result;
 use common_meta_api::MetaApi;
 use common_meta_types::CreateDatabaseReply;
+use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
+use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
+use common_meta_types::DropDatabaseReply;
+use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropTableReply;
+use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
-use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateDatabasePlan;
-use common_planners::CreateTablePlan;
-use common_planners::DropDatabasePlan;
-use common_planners::DropTablePlan;
+use common_meta_types::UpsertTableOptionReq;
 
 use crate::common::MetaClientProvider;
 
 /// A `MetaApi` impl with MetaApi RPC.
 #[derive(Clone)]
 pub struct MetaRemote {
-    #[allow(dead_code)]
     rpc_time_out: Option<Duration>,
     meta_api_provider: Arc<MetaClientProvider>,
 }
@@ -71,13 +72,13 @@ impl MetaRemote {
 
 #[async_trait::async_trait]
 impl MetaApi for MetaRemote {
-    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
-        self.query_backend(move |cli| async move { cli.create_database(plan).await })
+    async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
+        self.query_backend(move |cli| async move { cli.create_database(req).await })
             .await
     }
 
-    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
-        self.query_backend(move |cli| async move { cli.drop_database(plan).await })
+    async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply> {
+        self.query_backend(move |cli| async move { cli.drop_database(req).await })
             .await
     }
 
@@ -92,14 +93,14 @@ impl MetaApi for MetaRemote {
             .await
     }
 
-    async fn create_table(&self, plan: CreateTablePlan) -> Result<CreateTableReply> {
+    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
         // TODO validate plan by table engine first
-        self.query_backend(move |cli| async move { cli.create_table(plan).await })
+        self.query_backend(move |cli| async move { cli.create_table(req).await })
             .await
     }
 
-    async fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
-        self.query_backend(move |cli| async move { cli.drop_table(plan).await })
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
+        self.query_backend(move |cli| async move { cli.drop_table(req).await })
             .await
     }
 
@@ -123,16 +124,10 @@ impl MetaApi for MetaRemote {
 
     async fn upsert_table_option(
         &self,
-        table_id: MetaId,
-        table_version: MetaVersion,
-        option_key: String,
-        option_value: String,
+        req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
-        self.query_backend(move |cli| async move {
-            cli.upsert_table_option(table_id, table_version, option_key, option_value)
-                .await
-        })
-        .await
+        self.query_backend(move |cli| async move { cli.upsert_table_option(req).await })
+            .await
     }
 
     fn name(&self) -> String {

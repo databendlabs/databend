@@ -62,8 +62,7 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
 
                     let table = self.ctx.get_table(db_name, table_name)?;
 
-                    let io_ctx = self.ctx.get_cluster_table_io_context()?;
-                    let source_plan = table.read_plan(Arc::new(io_ctx), None)?;
+                    let source_plan = table.read_plan(self.ctx.clone(), None)?;
                     let dummy_read_plan = PlanNode::ReadSource(source_plan);
 
                     let expr = Expression::create_literal(DataValue::UInt64(Some(

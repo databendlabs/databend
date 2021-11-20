@@ -141,6 +141,14 @@ pub struct DfAlterUser {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct DfDropUser {
+    pub if_exists: bool,
+    /// User name
+    pub name: String,
+    pub hostname: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct DfShowUsers;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -188,6 +196,7 @@ pub enum DfStatement {
     CreateUser(DfCreateUser),
     AlterUser(DfAlterUser),
     ShowUsers(DfShowUsers),
+    DropUser(DfDropUser),
 
     // Copy
     Copy(DfCopy),

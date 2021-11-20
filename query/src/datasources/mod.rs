@@ -15,6 +15,7 @@
 mod index;
 
 pub(crate) mod common;
+pub(crate) mod context;
 pub(crate) mod database;
 pub(crate) mod table;
 pub(crate) mod table_engine;

@@ -13,10 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
-use common_context::IOContext;
-use common_context::TableIOContext;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
@@ -32,7 +29,7 @@ use walkdir::WalkDir;
 
 use crate::catalogs::Table;
 use crate::datasources::database::system::TracingTableStream;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct TracingTable {
     table_info: TableInfo,
@@ -79,14 +76,10 @@ impl Table for TracingTable {
 
     async fn read(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let mut log_files = vec![];
-
-        let ctx: Arc<DatabendQueryContext> = io_ctx
-            .get_user_data()?
-            .expect("DatabendQueryContext should not be None");
 
         for entry in WalkDir::new(ctx.get_config().log.log_dir.as_str())
             .sort_by_key(|file| file.file_name().to_owned())

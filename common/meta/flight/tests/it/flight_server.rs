@@ -134,7 +134,6 @@ impl FlightService for FlightServiceForTestImpl {
     }
 }
 
-#[allow(dead_code)]
 pub fn start_flight_server() -> String {
     let mut rng = rand::thread_rng();
     let port = rng.gen_range(10000..20000);

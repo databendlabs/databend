@@ -24,19 +24,21 @@ use common_meta_raft_store::state_machine::TableLookupKey;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::CreateDatabaseReply;
+use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
+use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
+use common_meta_types::DropDatabaseReply;
+use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropTableReply;
+use common_meta_types::DropTableReq;
 use common_meta_types::MatchSeq;
 use common_meta_types::MetaId;
-use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateDatabasePlan;
-use common_planners::CreateTablePlan;
-use common_planners::DropDatabasePlan;
-use common_planners::DropTablePlan;
+use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 use maplit::hashmap;
 
@@ -44,9 +46,9 @@ use crate::MetaEmbedded;
 
 #[async_trait]
 impl MetaApi for MetaEmbedded {
-    async fn create_database(&self, plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
+    async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         let cmd = Cmd::CreateDatabase {
-            name: plan.db.clone(),
+            name: req.db.clone(),
         };
 
         let sm = self.inner.lock().await;
@@ -57,10 +59,10 @@ impl MetaApi for MetaEmbedded {
 
         assert!(result.is_some());
 
-        if prev.is_some() && !plan.if_not_exists {
+        if prev.is_some() && !req.if_not_exists {
             return Err(ErrorCode::DatabaseAlreadyExists(format!(
                 "{} database exists",
-                plan.db
+                req.db
             )));
         }
 
@@ -69,9 +71,9 @@ impl MetaApi for MetaEmbedded {
         })
     }
 
-    async fn drop_database(&self, plan: DropDatabasePlan) -> Result<()> {
+    async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply> {
         let cmd = Cmd::DropDatabase {
-            name: plan.db.clone(),
+            name: req.db.clone(),
         };
 
         let sm = self.inner.lock().await;
@@ -79,14 +81,14 @@ impl MetaApi for MetaEmbedded {
 
         assert!(res.result().is_none());
 
-        if res.prev().is_none() && !plan.if_exists {
+        if res.prev().is_none() && !req.if_exists {
             return Err(ErrorCode::UnknownDatabase(format!(
                 "database not found: {:}",
-                plan.db
+                req.db
             )));
         }
 
-        Ok(())
+        Ok(DropDatabaseReply {})
     }
 
     async fn get_database(&self, db: &str) -> Result<Arc<DatabaseInfo>> {
@@ -116,14 +118,14 @@ impl MetaApi for MetaEmbedded {
             .collect::<Vec<_>>())
     }
 
-    async fn create_table(&self, plan: CreateTablePlan) -> Result<CreateTableReply> {
-        let db_name = &plan.db;
-        let table_name = &plan.table;
-        let if_not_exists = plan.if_not_exists;
+    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
+        let db_name = &req.db;
+        let table_name = &req.table;
+        let if_not_exists = req.if_not_exists;
 
         tracing::info!("create table: {:}: {:?}", &db_name, &table_name);
 
-        let table_meta = plan.table_meta;
+        let table_meta = req.table_meta;
 
         let cr = Cmd::CreateTable {
             db_name: db_name.clone(),
@@ -154,10 +156,10 @@ impl MetaApi for MetaEmbedded {
         }
     }
 
-    async fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
-        let db_name = &plan.db;
-        let table_name = &plan.table;
-        let if_exists = plan.if_exists;
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
+        let db_name = &req.db;
+        let table_name = &req.table;
+        let if_exists = req.if_exists;
 
         let cr = Cmd::DropTable {
             db_name: db_name.clone(),
@@ -176,7 +178,7 @@ impl MetaApi for MetaEmbedded {
             )));
         }
 
-        Ok(())
+        Ok(DropTableReply {})
     }
 
     async fn get_table(&self, db: &str, table_name: &str) -> Result<Arc<TableInfo>> {
@@ -237,18 +239,15 @@ impl MetaApi for MetaEmbedded {
 
     async fn upsert_table_option(
         &self,
-        table_id: MetaId,
-        table_version: MetaVersion,
-        option_key: String,
-        option_value: String,
+        req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
         let sm = self.inner.lock().await;
 
         let cmd = Cmd::UpsertTableOptions {
-            table_id,
-            seq: MatchSeq::Exact(table_version),
+            table_id: req.table_id,
+            seq: MatchSeq::Exact(req.table_version),
             table_options: hashmap! {
-                option_key => Some(option_value),
+                req.option_key => Some(req.option_value),
             },
         };
 
@@ -259,11 +258,11 @@ impl MetaApi for MetaEmbedded {
 
             return Err(ErrorCode::TableVersionMissMatch(format!(
                 "targeting version {}, current version {}",
-                table_version, prev.seq,
+                req.table_version, prev.seq,
             )));
         }
 
-        Ok(())
+        Ok(UpsertTableOptionReply {})
     }
 
     fn name(&self) -> String {

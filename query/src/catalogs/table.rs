@@ -16,7 +16,6 @@ use std::any::Any;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use common_context::TableIOContext;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -31,6 +30,8 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
+
+use crate::sessions::DatabendQueryContextRef;
 
 #[async_trait::async_trait]
 pub trait Table: Sync + Send {
@@ -66,7 +67,7 @@ pub trait Table: Sync + Send {
     // defaults to generate one single part and empty statistics
     fn read_partitions(
         &self,
-        _io_ctx: Arc<TableIOContext>,
+        _ctx: DatabendQueryContextRef,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::default(), vec![Part {
@@ -82,14 +83,14 @@ pub trait Table: Sync + Send {
     // Read block data from the underling.
     async fn read(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        _ctx: DatabendQueryContextRef,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream>;
 
     // temporary added, pls feel free to rm it
     async fn append_data(
         &self,
-        _io_ctx: Arc<TableIOContext>,
+        _ctx: DatabendQueryContextRef,
         _insert_plan: InsertIntoPlan,
         _stream: SendableDataBlockStream,
     ) -> Result<()> {
@@ -101,7 +102,7 @@ pub trait Table: Sync + Send {
 
     async fn truncate(
         &self,
-        _io_ctx: Arc<TableIOContext>,
+        _ctx: DatabendQueryContextRef,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
@@ -117,7 +118,7 @@ pub trait ToReadDataSourcePlan {
     /// Real read_plan to access partitions/push_downs
     fn read_plan(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         push_downs: Option<Extras>,
     ) -> Result<ReadDataSourcePlan>;
 }
@@ -125,10 +126,10 @@ pub trait ToReadDataSourcePlan {
 impl ToReadDataSourcePlan for dyn Table {
     fn read_plan(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         push_downs: Option<Extras>,
     ) -> Result<ReadDataSourcePlan> {
-        let (statistics, parts) = self.read_partitions(io_ctx, push_downs.clone())?;
+        let (statistics, parts) = self.read_partitions(ctx, push_downs.clone())?;
         let table_info = self.get_table_info();
         let description = get_description(table_info, &statistics);
 
@@ -148,7 +149,6 @@ impl ToReadDataSourcePlan for dyn Table {
 
         Ok(ReadDataSourcePlan {
             table_info: table_info.clone(),
-
             scan_fields,
             parts,
             statistics,

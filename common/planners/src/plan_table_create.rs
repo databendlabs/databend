@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 
 use common_datavalues::DataSchemaRef;
+use common_meta_types::CreateTableReq;
 use common_meta_types::TableMeta;
 
 pub type TableOptions = HashMap<String, String>;
@@ -27,6 +28,17 @@ pub struct CreateTablePlan {
     pub table: String,
 
     pub table_meta: TableMeta,
+}
+
+impl From<CreateTablePlan> for CreateTableReq {
+    fn from(p: CreateTablePlan) -> Self {
+        CreateTableReq {
+            if_not_exists: p.if_not_exists,
+            db: p.db,
+            table: p.table,
+            table_meta: p.table_meta,
+        }
+    }
 }
 
 impl CreateTablePlan {

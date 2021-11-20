@@ -16,9 +16,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_context::DataContext;
-use common_context::IOContext;
-use common_context::TableIOContext;
 use common_dal::InMemoryData;
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
@@ -36,8 +33,9 @@ use futures::stream::StreamExt;
 
 use crate::catalogs::Table;
 use crate::datasources::common::generate_parts;
+use crate::datasources::context::TableContext;
 use crate::datasources::table::memory::memory_table_stream::MemoryTableStream;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct MemoryTable {
     table_info: TableInfo,
@@ -51,12 +49,9 @@ pub struct MemoryTable {
 }
 
 impl MemoryTable {
-    pub fn try_create(
-        table_info: TableInfo,
-        data_ctx: Arc<dyn DataContext<u64>>,
-    ) -> Result<Box<dyn Table>> {
+    pub fn try_create(table_info: TableInfo, table_ctx: TableContext) -> Result<Box<dyn Table>> {
         let table_id = &table_info.ident.table_id;
-        let in_memory_data = data_ctx.get_in_memory_data()?;
+        let in_memory_data = table_ctx.get_in_memory_data()?;
 
         let blocks = {
             let mut in_mem_data = in_memory_data.write();
@@ -93,7 +88,7 @@ impl Table for MemoryTable {
 
     fn read_partitions(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let blocks = self.blocks.read();
@@ -102,19 +97,19 @@ impl Table for MemoryTable {
         let bytes = blocks.iter().map(|block| block.memory_size()).sum();
 
         let statistics = Statistics::new_exact(rows, bytes);
-        let parts = generate_parts(0, io_ctx.get_max_threads() as u64, blocks.len() as u64);
+        let parts = generate_parts(
+            0,
+            ctx.get_settings().get_max_threads()? as u64,
+            blocks.len() as u64,
+        );
         Ok((statistics, parts))
     }
 
     async fn read(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let ctx: Arc<DatabendQueryContext> = io_ctx
-            .get_user_data()?
-            .expect("DatabendQueryContext should not be None");
-
         let blocks = self.blocks.read();
         Ok(Box::pin(MemoryTableStream::try_create(
             ctx,
@@ -124,7 +119,7 @@ impl Table for MemoryTable {
 
     async fn append_data(
         &self,
-        _io_ctx: Arc<TableIOContext>,
+        _ctx: DatabendQueryContextRef,
         insert_plan: InsertIntoPlan,
         mut stream: SendableDataBlockStream,
     ) -> Result<()> {
@@ -142,7 +137,7 @@ impl Table for MemoryTable {
 
     async fn truncate(
         &self,
-        _io_ctx: Arc<TableIOContext>,
+        _ctx: DatabendQueryContextRef,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         let mut blocks = self.blocks.write();

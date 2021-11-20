@@ -30,6 +30,7 @@ use crate::CreateUserPlan;
 use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
+use crate::DropUserPlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
 use crate::ExpressionPlan;
@@ -85,6 +86,7 @@ pub enum PlanNode {
     Kill(KillPlan),
     CreateUser(CreateUserPlan),
     AlterUser(AlterUserPlan),
+    DropUser(DropUserPlan),
     GrantPrivilege(GrantPrivilegePlan),
 }
 
@@ -122,6 +124,7 @@ impl PlanNode {
             PlanNode::Kill(v) => v.schema(),
             PlanNode::CreateUser(v) => v.schema(),
             PlanNode::AlterUser(v) => v.schema(),
+            PlanNode::DropUser(v) => v.schema(),
             PlanNode::GrantPrivilege(v) => v.schema(),
             PlanNode::Copy(v) => v.schema(),
         }
@@ -159,6 +162,7 @@ impl PlanNode {
             PlanNode::Kill(_) => "KillQuery",
             PlanNode::CreateUser(_) => "CreateUser",
             PlanNode::AlterUser(_) => "AlterUser",
+            PlanNode::DropUser(_) => "DropUser",
             PlanNode::GrantPrivilege(_) => "GrantPrivilegePlan",
             PlanNode::Copy(_) => "CopyPlan",
         }

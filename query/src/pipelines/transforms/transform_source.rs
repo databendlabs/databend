@@ -45,8 +45,7 @@ impl SourceTransform {
 
         // TODO(xp): get_cluster_table_io_context() or
         //           get_cluster_table_io_context()?
-        let io_ctx = Arc::new(self.ctx.get_cluster_table_io_context()?);
-        let table_stream = table.read(io_ctx, &self.source_plan);
+        let table_stream = table.read(self.ctx.clone(), &self.source_plan);
         let progress_stream =
             ProgressStream::try_create(table_stream.await?, self.ctx.progress_callback()?)?;
 

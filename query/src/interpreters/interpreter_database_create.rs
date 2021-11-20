@@ -51,8 +51,8 @@ impl Interpreter for CreateDatabaseInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let datasource = self.ctx.get_catalog();
-        datasource.create_database(self.plan.clone()).await?;
+        let catalog = self.ctx.get_catalog();
+        catalog.create_database(self.plan.clone().into()).await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

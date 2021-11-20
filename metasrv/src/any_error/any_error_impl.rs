@@ -79,8 +79,6 @@ impl AnyError {
     ///
     /// - If there is a `source()` in the input error, it is also converted to AnyError, recursively.
     /// - A new backtrace will be built if there is not.
-    /// TODO(xp): remove allow(dead_code)
-    #[allow(dead_code)]
     pub fn new<E>(e: &E) -> Self
     where E: Error + 'static {
         let q: &(dyn Error + 'static) = e;
@@ -123,8 +121,6 @@ impl AnyError {
         };
     }
 
-    // TODO(xp): it is useful but not yet been used.
-    #[allow(dead_code)]
     pub fn get_type(&self) -> Option<&str> {
         match &self.typ {
             Some(v) => Some(v),
@@ -132,8 +128,6 @@ impl AnyError {
         }
     }
 
-    // TODO(xp): it is useful but not yet been used.
-    #[allow(dead_code)]
     pub fn backtrace(&self) -> Option<&str> {
         self.backtrace.as_ref().map(|x| x as _)
     }

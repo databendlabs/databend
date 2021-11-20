@@ -24,7 +24,6 @@ use crate::test::Test;
 fn test_rewrite_projection_alias_plan() -> Result<()> {
     use pretty_assertions::assert_eq;
 
-    #[allow(dead_code)]
     struct RewriteTest {
         name: &'static str,
         exprs: Vec<Expression>,

@@ -39,6 +39,7 @@ use common_planners::CreateUserPlan;
 use common_planners::DescribeTablePlan;
 use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
+use common_planners::DropUserPlan;
 use common_planners::ExplainPlan;
 use common_planners::Expression;
 use common_planners::Extras;
@@ -77,6 +78,7 @@ use crate::sql::DfCreateDatabase;
 use crate::sql::DfCreateUser;
 use crate::sql::DfDescribeTable;
 use crate::sql::DfDropTable;
+use crate::sql::DfDropUser;
 use crate::sql::DfExplain;
 use crate::sql::DfGrantStatement;
 use crate::sql::DfHint;
@@ -182,6 +184,7 @@ impl PlanParser {
             }
             DfStatement::Copy(v) => self.copy_to_plan(v),
             DfStatement::AlterUser(v) => self.sql_alter_user_to_plan(v),
+            DfStatement::DropUser(v) => self.sql_drop_user_to_plan(v),
             DfStatement::GrantPrivilege(v) => self.sql_grant_privilege_to_plan(v),
         }
     }
@@ -360,6 +363,15 @@ impl PlanParser {
             new_password: Vec::from(alter.new_password.clone()),
             hostname: alter.hostname.clone(),
             new_auth_type: alter.new_auth_type.clone(),
+        }))
+    }
+
+    #[tracing::instrument(level = "info", skip(self, drop), fields(ctx.id = self.ctx.get_id().as_str()))]
+    pub fn sql_drop_user_to_plan(&self, drop: &DfDropUser) -> Result<PlanNode> {
+        Ok(PlanNode::DropUser(DropUserPlan {
+            if_exists: drop.if_exists,
+            name: drop.name.clone(),
+            hostname: drop.hostname.clone(),
         }))
     }
 
@@ -791,12 +803,7 @@ impl PlanParser {
         let table_name = "one";
 
         let table = self.ctx.get_table(db_name, table_name)?;
-
-        // TODO(xp): is it possible to use get_cluster_table_io_context() here?
-        let io_ctx = self.ctx.get_cluster_table_io_context()?;
-        let io_ctx = Arc::new(io_ctx);
-
-        let source_plan = table.read_plan(io_ctx, Some(Extras::default()))?;
+        let source_plan = table.read_plan(self.ctx.clone(), Some(Extras::default()))?;
 
         let dummy_read_plan = PlanNode::ReadSource(source_plan);
         Ok(dummy_read_plan)
@@ -851,9 +858,8 @@ impl PlanParser {
                     table = self.ctx.get_table(&db_name, &table_name)?;
                 }
 
-                let io_ctx = self.ctx.get_cluster_table_io_context()?;
                 // TODO: Move ReadSourcePlan to SelectInterpreter
-                let source_plan = table.read_plan(Arc::new(io_ctx), None)?;
+                let source_plan = table.read_plan(self.ctx.clone(), None)?;
 
                 let dummy_read_plan = PlanNode::ReadSource(source_plan);
                 Ok(dummy_read_plan)

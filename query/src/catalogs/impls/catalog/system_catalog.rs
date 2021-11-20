@@ -18,16 +18,17 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
+use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateTableReq;
+use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropTableReply;
+use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
-use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
-use common_planners::CreateDatabasePlan;
-use common_planners::CreateTablePlan;
-use common_planners::DropDatabasePlan;
-use common_planners::DropTablePlan;
+use common_meta_types::UpsertTableOptionReq;
 
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::Database;
@@ -42,6 +43,7 @@ use crate::datasources::database::system::SystemDatabase;
 /// System Catalog contains ... all the system databases (no surprise :)
 /// Currently, this is only one database here, the "system" db.
 /// "information_schema" db is supposed to held here
+#[derive(Clone)]
 pub struct SystemCatalog {
     sys_db: Arc<SystemDatabase>,
     sys_db_meta: Arc<InMemoryMetas>,
@@ -140,24 +142,21 @@ impl Catalog for SystemCatalog {
 
     async fn upsert_table_option(
         &self,
-        table_id: MetaId,
-        _table_version: MetaVersion,
-        _key: String,
-        _value: String,
-    ) -> Result<UpsertTableOptionReply> {
+        req: UpsertTableOptionReq,
+    ) -> common_exception::Result<UpsertTableOptionReply> {
         Err(ErrorCode::UnImplement(format!(
-            "commit table not allowed for system catalog {}",
-            table_id
+            "commit table not allowed for system catalog {:?}",
+            req
         )))
     }
 
-    async fn create_table(&self, _plan: CreateTablePlan) -> Result<()> {
+    async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
         unimplemented!("programming error: SystemCatalog does not support create table")
     }
 
-    async fn drop_table(&self, plan: DropTablePlan) -> Result<()> {
-        let db_name = &plan.db;
-        let table_name = &plan.table;
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
+        let db_name = &req.db;
+        let table_name = &req.table;
         if db_name == "system" {
             return Err(ErrorCode::UnImplement(
                 "Cannot drop table in system database",
@@ -169,11 +168,11 @@ impl Catalog for SystemCatalog {
         )));
     }
 
-    async fn create_database(&self, _plan: CreateDatabasePlan) -> Result<CreateDatabaseReply> {
+    async fn create_database(&self, _req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         Err(ErrorCode::UnImplement("Cannot create system database"))
     }
 
-    async fn drop_database(&self, _plan: DropDatabasePlan) -> Result<()> {
+    async fn drop_database(&self, _req: DropDatabaseReq) -> Result<()> {
         Err(ErrorCode::UnImplement("Cannot drop system database"))
     }
 
@@ -186,18 +185,5 @@ impl Catalog for SystemCatalog {
             })?;
 
         Ok(table.clone())
-    }
-
-    async fn exists_database(&self, db_name: &str) -> Result<bool> {
-        match self.get_database(db_name).await {
-            Ok(_) => Ok(true),
-            Err(err) => {
-                if err.code() == ErrorCode::UnknownDatabaseCode() {
-                    Ok(false)
-                } else {
-                    Err(err)
-                }
-            }
-        }
     }
 }

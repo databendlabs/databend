@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,11 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! `catalog` defines catalog related data types, such as table or database.
+use std::sync::Arc;
 
-pub use table_io_context::DataContext;
-pub use table_io_context::IOContext;
-pub use table_io_context::TableDataContext;
-pub use table_io_context::TableIOContext;
+use common_datavalues::DataSchema;
+use common_datavalues::DataSchemaRef;
 
-mod table_io_context;
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct DropUserPlan {
+    pub if_exists: bool,
+    pub name: String,
+    pub hostname: String,
+}
+
+impl DropUserPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}

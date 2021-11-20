@@ -13,10 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
-use common_context::IOContext;
-use common_context::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::series::Series;
 use common_datavalues::series::SeriesFrom;
@@ -33,7 +30,7 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct ColumnsTable {
     table_info: TableInfo,
@@ -65,7 +62,7 @@ impl ColumnsTable {
 
     pub async fn dump_table_columns(
         &self,
-        ctx: Arc<DatabendQueryContext>,
+        ctx: DatabendQueryContextRef,
     ) -> Result<Vec<(String, String, DataField)>> {
         let catalog = ctx.get_catalog();
         let databases = catalog.get_databases().await?;
@@ -95,13 +92,9 @@ impl Table for ColumnsTable {
 
     async fn read(
         &self,
-        io_ctx: Arc<TableIOContext>,
+        ctx: DatabendQueryContextRef,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let ctx: Arc<DatabendQueryContext> = io_ctx
-            .get_user_data()?
-            .expect("DatabendQueryContext should not be None");
-
         let rows = self.dump_table_columns(ctx).await?;
         let mut names: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut tables: Vec<Vec<u8>> = Vec::with_capacity(rows.len());

@@ -13,8 +13,6 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
-
 use common_base::tokio;
 use common_exception::Result;
 use common_planners::ReadDataSourcePlan;
@@ -33,7 +31,7 @@ async fn test_fuse_table_simple_case() -> Result<()> {
     // create test table
     let crate_table_plan = fixture.default_crate_table_plan();
     let catalog = ctx.get_catalog();
-    catalog.create_table(crate_table_plan).await?;
+    catalog.create_table(crate_table_plan.into()).await?;
 
     // get table
     let table = catalog
@@ -45,14 +43,13 @@ async fn test_fuse_table_simple_case() -> Result<()> {
 
     // insert 10 blocks
     let num_blocks = 5;
-    let io_ctx = Arc::new(ctx.get_cluster_table_io_context()?);
     let insert_into_plan = fixture.insert_plan_of_table(table.as_ref());
     let stream = Box::pin(futures::stream::iter(TestFixture::gen_block_stream(
         num_blocks,
     )));
 
     table
-        .append_data(io_ctx.clone(), insert_into_plan, stream)
+        .append_data(ctx.clone(), insert_into_plan, stream)
         .await?;
 
     // get the latest tbl
@@ -65,7 +62,7 @@ async fn test_fuse_table_simple_case() -> Result<()> {
         .await?;
     assert_ne!(prev_version, table.get_table_info().ident.version);
 
-    let (stats, parts) = table.read_partitions(io_ctx.clone(), None)?;
+    let (stats, parts) = table.read_partitions(ctx.clone(), None)?;
     assert_eq!(parts.len(), num_blocks as usize);
     assert_eq!(stats.read_rows, num_blocks as usize * 3);
 
@@ -73,7 +70,7 @@ async fn test_fuse_table_simple_case() -> Result<()> {
     ctx.try_set_partitions(parts)?;
 
     let stream = table
-        .read(io_ctx, &ReadDataSourcePlan {
+        .read(ctx, &ReadDataSourcePlan {
             table_info: Default::default(),
             scan_fields: None,
             parts: Default::default(),
@@ -120,7 +117,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     let crate_table_plan = fixture.default_crate_table_plan();
     let catalog = ctx.get_catalog();
-    catalog.create_table(crate_table_plan).await?;
+    catalog.create_table(crate_table_plan.into()).await?;
 
     let table = catalog
         .get_table(
@@ -129,7 +126,6 @@ async fn test_fuse_table_truncate() -> Result<()> {
         )
         .await?;
 
-    let io_ctx = Arc::new(ctx.get_cluster_table_io_context()?);
     let truncate_plan = TruncateTablePlan {
         db: "".to_string(),
         table: "".to_string(),
@@ -137,7 +133,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     // 1. truncate empty table
     let prev_version = table.get_table_info().ident.version;
-    let r = table.truncate(io_ctx.clone(), truncate_plan.clone()).await;
+    let r = table.truncate(ctx.clone(), truncate_plan.clone()).await;
     let table = catalog
         .get_table(
             fixture.default_db().as_str(),
@@ -156,9 +152,9 @@ async fn test_fuse_table_truncate() -> Result<()> {
     )));
 
     table
-        .append_data(io_ctx.clone(), insert_into_plan, stream)
+        .append_data(ctx.clone(), insert_into_plan, stream)
         .await?;
-    let source_plan = table.read_plan(io_ctx.clone(), None)?;
+    let source_plan = table.read_plan(ctx.clone(), None)?;
 
     // get the latest tbl
     let prev_version = table.get_table_info().ident.version;
@@ -171,12 +167,12 @@ async fn test_fuse_table_truncate() -> Result<()> {
     assert_ne!(prev_version, table.get_table_info().ident.version);
 
     // ensure data ingested
-    let (stats, parts) = table.read_partitions(io_ctx.clone(), source_plan.push_downs.clone())?;
+    let (stats, parts) = table.read_partitions(ctx.clone(), source_plan.push_downs.clone())?;
     assert_eq!(parts.len(), 10);
     assert_eq!(stats.read_rows, 10 * 3);
 
     // truncate
-    let r = table.truncate(io_ctx.clone(), truncate_plan).await;
+    let r = table.truncate(ctx.clone(), truncate_plan).await;
     assert!(r.is_ok());
 
     // get the latest tbl
@@ -188,7 +184,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
         )
         .await?;
     assert_ne!(prev_version, table.get_table_info().ident.version);
-    let (stats, parts) = table.read_partitions(io_ctx.clone(), source_plan.push_downs.clone())?;
+    let (stats, parts) = table.read_partitions(ctx.clone(), source_plan.push_downs.clone())?;
     // cleared?
     assert_eq!(parts.len(), 0);
     assert_eq!(stats.read_rows, 0);

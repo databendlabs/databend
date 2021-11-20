@@ -21,7 +21,6 @@ use common_functions::scalars::SubstringFunction;
 
 #[test]
 fn test_substring_function() -> Result<()> {
-    #[allow(dead_code)]
     struct Test {
         name: &'static str,
         display: &'static str,

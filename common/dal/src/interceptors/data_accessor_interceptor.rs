@@ -15,32 +15,28 @@
 
 use std::sync::Arc;
 
-use common_metrics::label_counter_with_val;
-use common_metrics::TenantLabel;
 use futures::Stream;
 
-use crate::metrics::stream_metrics::InputStreamWithMetric;
-use crate::metrics::METRIC_DAL_WRITE_BYTES;
 use crate::AsyncSeekableReader;
+use crate::DalContext;
 use crate::DataAccessor;
 use crate::InputStream;
+use crate::InputStreamInterceptor;
 
-pub struct DalWithMetric {
-    tenant_label: TenantLabel,
+/// A interceptor for data accessor.
+pub struct DataAccessorInterceptor {
+    ctx: Arc<DalContext>,
     inner: Arc<dyn DataAccessor>,
 }
 
-impl DalWithMetric {
-    pub fn new(tenant_label: TenantLabel, inner: Arc<dyn DataAccessor>) -> Self {
-        Self {
-            tenant_label,
-            inner,
-        }
+impl DataAccessorInterceptor {
+    pub fn new(ctx: Arc<DalContext>, inner: Arc<dyn DataAccessor>) -> Self {
+        Self { ctx, inner }
     }
 }
 
 #[async_trait::async_trait]
-impl DataAccessor for DalWithMetric {
+impl DataAccessor for DataAccessorInterceptor {
     fn get_input_stream(
         &self,
         path: &str,
@@ -49,21 +45,17 @@ impl DataAccessor for DalWithMetric {
         self.inner
             .get_input_stream(path, stream_len)
             .map(|input_stream| {
-                let r = InputStreamWithMetric::new(self.tenant_label.clone(), input_stream);
+                let r = InputStreamInterceptor::new(self.ctx.clone(), input_stream);
                 Box::new(r) as Box<dyn AsyncSeekableReader + Unpin + Send>
             })
     }
 
     async fn put(&self, path: &str, content: Vec<u8>) -> common_exception::Result<()> {
         let len = content.len();
-        self.inner.put(path, content).await.map(|_| {
-            label_counter_with_val(
-                METRIC_DAL_WRITE_BYTES,
-                len as u64,
-                self.tenant_label.tenant_id.as_str(),
-                self.tenant_label.cluster_id.as_str(),
-            )
-        })
+        self.inner
+            .put(path, content)
+            .await
+            .map(|_| self.ctx.inc_write_bytes(len as usize))
     }
 
     async fn put_stream(
@@ -77,13 +69,6 @@ impl DataAccessor for DalWithMetric {
         self.inner
             .put_stream(path, input_stream, stream_len)
             .await
-            .map(|_| {
-                label_counter_with_val(
-                    METRIC_DAL_WRITE_BYTES,
-                    stream_len as u64,
-                    self.tenant_label.tenant_id.as_str(),
-                    self.tenant_label.cluster_id.as_str(),
-                )
-            })
+            .map(|_| self.ctx.inc_write_bytes(stream_len as usize))
     }
 }

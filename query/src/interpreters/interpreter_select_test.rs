@@ -12,21 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Disabled until https://github.com/datafuselabs/databend/pull/550 finished
-/*
+use common_base::tokio;
+use common_exception::Result;
+use common_planners::*;
+use futures::TryStreamExt;
+use pretty_assertions::assert_eq;
+
+use crate::interpreters::*;
+use crate::sql::*;
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_select_interpreter() -> anyhow::Result<()> {
-    use common_planners::*;
-    use futures::TryStreamExt;
+async fn test_select_interpreter() -> Result<()> {
+    common_tracing::init_default_ut_tracing();
+    let ctx = crate::tests::try_create_context()?;
 
-    use crate::interpreters::*;
-    use crate::sql::*;
-
-    let ctx =
-        crate::tests::try_create_context()?.with_id("cf6db5fe-7595-4d85-97ee-71f051b21cbe")?;
-
-    if let PlanNode::Select(plan) = PlanParser::create(ctx.clone())
-        .build_from_sql("select number from numbers_mt(10) where (number+2)<2")?
+    if let PlanNode::Select(plan) =
+        PlanParser::create(ctx.clone()).build_from_sql("select number from numbers_mt(10)")?
     {
         let executor = SelectInterpreter::try_create(ctx.clone(), plan)?;
         assert_eq!(executor.name(), "SelectInterpreter");
@@ -36,10 +37,25 @@ async fn test_select_interpreter() -> anyhow::Result<()> {
         let block = &result[0];
         assert_eq!(block.num_columns(), 1);
 
-        let expected = vec!["++", "||", "++", "++"];
+        let expected = vec![
+            "+--------+",
+            "| number |",
+            "+--------+",
+            "| 0      |",
+            "| 1      |",
+            "| 2      |",
+            "| 3      |",
+            "| 4      |",
+            "| 5      |",
+            "| 6      |",
+            "| 7      |",
+            "| 8      |",
+            "| 9      |",
+            "+--------+",
+        ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     } else {
-        assert!(false)
+        panic!()
     }
 
     if let PlanNode::Select(plan) =
@@ -54,15 +70,13 @@ async fn test_select_interpreter() -> anyhow::Result<()> {
         assert_eq!(block.num_columns(), 4);
 
         let expected = vec![
-            "+------------+------------+----------------+----------------+",
-            "| plus(1, 1) | plus(2, 2) | multiply(3, 3) | multiply(4, 4) |",
-            "+------------+------------+----------------+----------------+",
-            "| 2          | 4          | 9              | 16             |",
-            "+------------+------------+----------------+----------------+",
+            "+---------+---------+---------+---------+",
+            "| (1 + 1) | (2 + 2) | (3 * 3) | (4 * 4) |",
+            "+---------+---------+---------+---------+",
+            "| 2       | 4       | 9       | 16      |",
+            "+---------+---------+---------+---------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
-
     Ok(())
 }
-*/

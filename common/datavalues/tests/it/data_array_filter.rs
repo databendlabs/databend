@@ -18,7 +18,6 @@ use pretty_assertions::assert_eq;
 
 #[test]
 fn filter_batch_array() -> Result<()> {
-    #[allow(dead_code)]
     struct FilterArrayTest {
         name: &'static str,
         filter: DFBooleanArray,

@@ -18,18 +18,20 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 
-use crate::interpreters::interpreter_kill::KillInterpreter;
-use crate::interpreters::interpreter_user_alter::AlterUserInterpreter;
+use crate::interpreters::KillInterpreter;
 use crate::interpreters::CopyInterpreter;
+use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreatUserInterpreter;
 use crate::interpreters::CreateDatabaseInterpreter;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DescribeTableInterpreter;
 use crate::interpreters::DropDatabaseInterpreter;
 use crate::interpreters::DropTableInterpreter;
+use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::ExplainInterpreter;
 use crate::interpreters::GrantPrivilegeInterpreter;
 use crate::interpreters::InsertIntoInterpreter;
+use crate::interpreters::InterceptorInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::interpreters::SettingInterpreter;
@@ -42,6 +44,7 @@ pub struct InterpreterFactory;
 
 impl InterpreterFactory {
     pub fn get(ctx: DatabendQueryContextRef, plan: PlanNode) -> Result<Arc<dyn Interpreter>> {
+<<<<<<< HEAD
         match plan {
             PlanNode::Select(v) => SelectInterpreter::try_create(ctx, v),
             PlanNode::Explain(v) => ExplainInterpreter::try_create(ctx, v),
@@ -60,10 +63,32 @@ impl InterpreterFactory {
             PlanNode::AlterUser(v) => AlterUserInterpreter::try_create(ctx, v),
             PlanNode::GrantPrivilege(v) => GrantPrivilegeInterpreter::try_create(ctx, v),
             PlanNode::Copy(v) => CopyInterpreter::try_create(ctx, v),
+=======
+        let ctx_clone = ctx.clone();
+        let inner = match plan {
+            PlanNode::Select(v) => SelectInterpreter::try_create(ctx_clone, v),
+            PlanNode::Explain(v) => ExplainInterpreter::try_create(ctx_clone, v),
+            PlanNode::CreateDatabase(v) => CreateDatabaseInterpreter::try_create(ctx_clone, v),
+            PlanNode::DropDatabase(v) => DropDatabaseInterpreter::try_create(ctx_clone, v),
+            PlanNode::CreateTable(v) => CreateTableInterpreter::try_create(ctx_clone, v),
+            PlanNode::DropTable(v) => DropTableInterpreter::try_create(ctx_clone, v),
+            PlanNode::DescribeTable(v) => DescribeTableInterpreter::try_create(ctx_clone, v),
+            PlanNode::TruncateTable(v) => TruncateTableInterpreter::try_create(ctx_clone, v),
+            PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx_clone, v),
+            PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx_clone, v),
+            PlanNode::InsertInto(v) => InsertIntoInterpreter::try_create(ctx_clone, v),
+            PlanNode::ShowCreateTable(v) => ShowCreateTableInterpreter::try_create(ctx_clone, v),
+            PlanNode::Kill(v) => KillInterpreter::try_create(ctx_clone, v),
+            PlanNode::CreateUser(v) => CreatUserInterpreter::try_create(ctx_clone, v),
+            PlanNode::AlterUser(v) => AlterUserInterpreter::try_create(ctx_clone, v),
+            PlanNode::DropUser(v) => DropUserInterpreter::try_create(ctx_clone, v),
+            PlanNode::GrantPrivilege(v) => GrantPrivilegeInterpreter::try_create(ctx_clone, v),
+>>>>>>> main
             _ => Result::Err(ErrorCode::UnknownTypeOfQuery(format!(
                 "Can't get the interpreter by plan:{}",
                 plan.name()
             ))),
-        }
+        }?;
+        Ok(Arc::new(InterceptorInterpreter::create(ctx, inner)))
     }
 }

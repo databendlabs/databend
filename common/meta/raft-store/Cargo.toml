@@ -21,7 +21,7 @@ common-meta-types = {path = "../types"}
 common-tracing = {path = "../../tracing"}
 
 anyhow = "1.0.45"
-async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.14" }
+async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.14.1" }
 async-trait = "0.1"
 bytes = "1"
 derive_more = "0.99.16"

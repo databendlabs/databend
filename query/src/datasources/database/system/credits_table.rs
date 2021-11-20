@@ -13,9 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
-use common_context::TableIOContext;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -27,6 +25,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
+use crate::sessions::DatabendQueryContextRef;
 
 pub struct CreditsTable {
     table_info: TableInfo,
@@ -66,7 +65,7 @@ impl Table for CreditsTable {
 
     async fn read(
         &self,
-        _io_ctx: Arc<TableIOContext>,
+        _ctx: DatabendQueryContextRef,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let metadata_command = cargo_metadata::MetadataCommand::new();
