@@ -111,8 +111,8 @@ impl DfQueryStatement {
             // Rebase expressions using aggregate expressions and group by expressions
             let mut expressions = Vec::with_capacity(analyze_state.expressions.len());
             for expression in &analyze_state.expressions {
-                let expression = rebase_expr(expression, &data.group_by_expressions)?;
-                expressions.push(rebase_expr(&expression, &data.aggregate_expressions)?);
+                let expression = rebase_expr(expression, &data.aggregate_expressions)?;
+                expressions.push(rebase_expr(&expression, &data.group_by_expressions)?);
             }
 
             analyze_state.expressions = expressions;
@@ -278,8 +278,13 @@ impl DfQueryStatement {
         }
 
         if !state.projection_expressions.is_empty() {
-            if let Err(cause) = Self::dry_run_exprs(&state.projection_expressions, &data_block) {
-                return Err(cause.add_message_back(" (while in select projection)"));
+            match Self::dry_run_exprs(&state.projection_expressions, &data_block) {
+                Ok(res) => {
+                    data_block = res;
+                }
+                Err(cause) => {
+                    return Err(cause.add_message_back(" (while in select projection)"));
+                }
             }
         }
 

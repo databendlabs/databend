@@ -97,6 +97,11 @@ async fn test_statement_select_analyze() -> Result<()> {
             query: "SELECT COUNT() AS count FROM numbers(10) GROUP BY number % 2",
             expect: "QueryAnalyzeState { before_group_by: [(number % 2)], group_by: [(number % 2)], aggregate: [COUNT()], before_projection: [COUNT()], projection: [COUNT() as count] }",
         },
+        TestCase {
+            name: "Group by query with projection 4",
+            query: "SELECT avg(number), max(number + 1) + 1 FROM numbers_mt(10000) GROUP BY 1;",
+            expect: "QueryAnalyzeState { before_group_by: [1, number, (number + 1)], group_by: [1], aggregate: [avg(number), max((number + 1))], before_projection: [avg(number), (max((number + 1)) + 1)], projection: [avg(number), (max((number + 1)) + 1)] }",
+        },
     ];
 
     for test_case in &tests {
