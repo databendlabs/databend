@@ -114,7 +114,13 @@ impl JoinedSchemaAnalyzer {
 
         let catalog = self.ctx.get_catalog();
         let table_function = catalog.get_table_function(&table_name, Some(table_args))?;
-        JoinedSchema::from_table(table_function.as_table(), Vec::new())
+        match &item.alias {
+            None => JoinedSchema::from_table(table_function.as_table(), Vec::new()),
+            Some(table_alias) => {
+                let name_prefix = vec![table_alias.name.value.clone()];
+                JoinedSchema::from_table(table_function.as_table(), name_prefix)
+            }
+        }
     }
 
     fn resolve_table(&self, name: &ObjectName) -> Result<(String, String)> {
@@ -142,6 +148,7 @@ struct DerivedRPNItem {
 struct TableFunctionRPNItem {
     name: ObjectName,
     args: Vec<FunctionArg>,
+    alias: Option<TableAlias>,
 }
 
 enum RelationRPNItem {
@@ -218,8 +225,7 @@ impl RelationRPNBuilder {
 
                 match args.is_empty() {
                     true => self.visit_table(name, alias),
-                    false if alias.is_none() => self.visit_table_function(name, args),
-                    false => Err(ErrorCode::SyntaxException("Table function cannot named.")),
+                    false => self.visit_table_function(name, args, alias),
                 }
             }
             TableFactor::Derived {
@@ -252,11 +258,17 @@ impl RelationRPNBuilder {
         Ok(())
     }
 
-    fn visit_table_function(&mut self, name: &ObjectName, args: &[FunctionArg]) -> Result<()> {
+    fn visit_table_function(
+        &mut self,
+        name: &ObjectName,
+        args: &[FunctionArg],
+        alias: &Option<TableAlias>,
+    ) -> Result<()> {
         self.rpn
             .push(RelationRPNItem::TableFunction(TableFunctionRPNItem {
                 name: name.clone(),
                 args: args.to_owned(),
+                alias: alias.clone(),
             }));
         Ok(())
     }

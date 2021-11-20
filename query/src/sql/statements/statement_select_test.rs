@@ -102,6 +102,11 @@ async fn test_statement_select_analyze() -> Result<()> {
             query: "SELECT avg(number), max(number + 1) + 1 FROM numbers_mt(10000) GROUP BY 1;",
             expect: "QueryAnalyzeState { before_group_by: [1, number, (number + 1)], group_by: [1], aggregate: [avg(number), max((number + 1))], before_projection: [avg(number), (max((number + 1)) + 1)], projection: [avg(number), (max((number + 1)) + 1)] }",
         },
+        TestCase {
+            name: "Group by query with projection 4",
+            query: "SELECT number FROM numbers_mt(10) WHERE number NOT BETWEEN 4 + 0.1 AND 8 - 0.1 ORDER BY number;",
+            expect: "QueryAnalyzeState { before_group_by: [1, number, (number + 1)], group_by: [1], aggregate: [avg(number), max((number + 1))], before_projection: [avg(number), (max((number + 1)) + 1)], projection: [avg(number), (max((number + 1)) + 1)] }",
+        },
     ];
 
     for test_case in &tests {

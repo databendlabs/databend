@@ -48,6 +48,7 @@ impl ExpressionAnalyzer {
                 ExprRPNItem::Exists(v) => self.analyze_exists(v, &mut stack).await?,
                 ExprRPNItem::Subquery(v) => self.analyze_scalar_subquery(v, &mut stack).await?,
                 ExprRPNItem::Cast(v) => self.analyze_cast(v, &mut stack)?,
+                ExprRPNItem::Between(negated) => self.analyze_between(*negated, &mut stack)?,
             }
         }
 
@@ -273,6 +274,33 @@ impl ExpressionAnalyzer {
             }
         }
     }
+
+    fn analyze_between(&self, negated: bool, args: &mut Vec<Expression>) -> Result<()> {
+        if args.len() < 3 {
+            return Err(ErrorCode::SyntaxException(
+                "Between must be a ternary expression.",
+            ));
+        }
+
+        let expression = args.remove(0);
+        let low_expression = args.remove(0);
+        let high_expression = args.remove(0);
+
+        match negated {
+            false => args.push(
+                expression
+                    .gt_eq(low_expression)
+                    .and(expression.lt_eq(high_expression)),
+            ),
+            true => args.push(
+                expression
+                    .lt(low_expression)
+                    .or(expression.gt(high_expression)),
+            ),
+        };
+
+        Ok(())
+    }
 }
 
 struct FunctionExprInfo {
@@ -293,6 +321,7 @@ enum ExprRPNItem {
     Exists(Box<Query>),
     Subquery(Box<Query>),
     Cast(common_datavalues::DataType),
+    Between(bool),
 }
 
 impl ExprRPNItem {
@@ -368,10 +397,29 @@ impl ExprRPNBuilder {
                 low,
                 high,
             } => self.visit_between(expr, negated, low, high),
+            Expr::Tuple(exprs) => self.visit_tuple(exprs),
             other => Result::Err(ErrorCode::SyntaxException(format!(
                 "Unsupported expression: {}, type: {:?}",
                 expr, other
             ))),
+        }
+    }
+
+    fn visit_tuple(&mut self, exprs: &[Expr]) -> Result<()> {
+        match exprs.len() {
+            0 => Err(ErrorCode::SyntaxException(
+                "Tuple must have at least one element.",
+            )),
+            1 => self.visit(&exprs[0]),
+            len => {
+                for expr in exprs {
+                    self.visit(expr)?;
+                }
+
+                self.rpn
+                    .push(ExprRPNItem::function(String::from("tuple"), len));
+                Ok(())
+            }
         }
     }
 
@@ -472,24 +520,8 @@ impl ExprRPNBuilder {
     ) -> Result<()> {
         self.visit(expr)?;
         self.visit(low)?;
-
-        match *negated {
-            true => {
-                self.rpn
-                    .push(ExprRPNItem::binary_operator(String::from(">=")));
-                self.visit(high)?;
-                self.rpn
-                    .push(ExprRPNItem::binary_operator(String::from("<")));
-            }
-            false => {
-                self.rpn
-                    .push(ExprRPNItem::binary_operator(String::from("<")));
-                self.visit(high)?;
-                self.rpn
-                    .push(ExprRPNItem::binary_operator(String::from(">=")));
-            }
-        }
-
+        self.visit(high)?;
+        self.rpn.push(ExprRPNItem::Between(*negated));
         Ok(())
     }
 
