@@ -11,8 +11,8 @@ GRANT ALL PRIVILEGES ON * TO 'test-grant'@'localhost';
 
 GRANT SELECT ON db01.* TO 'test-grant'@'localhost';
 GRANT SELECT ON db01.tb1 TO 'test-grant'@'localhost';
-GRANT SELECT ON db01.tbnotexists TO 'test-grant'@'localhost'; -- {ErrorCode 6}
-GRANT SELECT ON dbnotexists.* TO 'test-grant'@'localhost'; -- {ErrorCode 6}
-GRANT SELECT ON *.tb1 TO 'test-grant'@'localhost'; -- {ErrorCode 6}
+GRANT SELECT ON db01.tbnotexists TO 'test-grant'@'localhost'; -- {ErrorCode 25}
+GRANT SELECT ON dbnotexists.* TO 'test-grant'@'localhost'; -- {ErrorCode 3}
+GRANT SELECT ON *.tb1 TO 'test-grant'@'localhost'; -- {ErrorCode 25}
 
 DROP DATABASE `db01`;

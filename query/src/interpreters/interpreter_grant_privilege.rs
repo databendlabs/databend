@@ -55,7 +55,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
 
         // *.`table` is not allowed
         if plan.database_pattern == "*" && plan.table_pattern != "*" {
-            return Err(common_exception::ErrorCode::BadArguments(format!(
+            return Err(common_exception::ErrorCode::UnknownTable(format!(
                 "can not grant privilege on *.{}",
                 plan.table_pattern
             )));
@@ -69,7 +69,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
                 .exists_database(&plan.database_pattern)
                 .await?
         {
-            return Err(common_exception::ErrorCode::BadArguments(format!(
+            return Err(common_exception::ErrorCode::UnknownDatabase(format!(
                 "database {} not exists",
                 plan.database_pattern
             )));
@@ -81,7 +81,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
                 .exists_table(&plan.database_pattern, &plan.table_pattern)
                 .await?
         {
-            return Err(common_exception::ErrorCode::BadArguments(format!(
+            return Err(common_exception::ErrorCode::UnknownTable(format!(
                 "table {}.{} not exists",
                 plan.database_pattern, plan.table_pattern
             )));
