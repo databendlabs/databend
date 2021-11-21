@@ -15,7 +15,6 @@
 
 use std::sync::Arc;
 
-use common_base::BlockingWait;
 use common_dal::InMemoryData;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -72,7 +71,7 @@ impl MutableCatalog {
             tracing::info!("use embedded meta");
             // TODO(xp): This can only be used for test: data will be removed when program quit.
 
-            let meta_embedded = MetaEmbedded::new_temp().wait(None)??;
+            let meta_embedded = MetaEmbedded::new_temp().await?;
             Arc::new(meta_embedded)
         } else {
             tracing::info!("use remote meta");
