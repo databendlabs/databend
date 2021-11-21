@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
-## Note: this file is burrowed from ClickHouse repo.
+## This file is based on clickhouse-test under the Apache license here:
+## https://github.com/ClickHouse/ClickHouse/blob/master/tests/clickhouse-test
+
 import sys
 import os
 import os.path
@@ -28,7 +30,6 @@ import multiprocessing
 from contextlib import closing
 
 
-
 MESSAGES_TO_RETRY = [
 ]
 
@@ -49,8 +50,6 @@ def remove_control_characters(s):
 
 def run_single_test(args, ext, client_options, case_file, stdout_file, stderr_file, result_file):
 
-    # print(client_options)
-
     params = {
         'client': args.client_with_database,
         'options': client_options,
@@ -60,9 +59,11 @@ def run_single_test(args, ext, client_options, case_file, stdout_file, stderr_fi
         "result": result_file,
     }
 
-    pattern = "sed '/^\s*--/d' {test} | {client} {options} > {stdout} 2>&1"
+    pattern = '{test} > {stdout} 2> {stderr}'
+    if ext == '.sql':
+        pattern = "sed '/^\s*--/d' {test} | {client} {options} > {stdout} 2>{stderr}"
+
     command = pattern.format(**params)
-    # print(command)
 
     proc = Popen(command, shell=True, env=os.environ)
     start_time = datetime.now()
@@ -445,7 +446,7 @@ if __name__ == '__main__':
     parser = ArgumentParser(description='databend-query functional tests')
     parser.add_argument('-q', '--suites', help='Path to suites dir')
     parser.add_argument('-b', '--binary', default='databend-query', help='Path to databend-query binary or name of binary in PATH')
-    parser.add_argument('-c', '--client', default='mysql -uroot -h127.0.0.1 -P3307 -s ', help='Client program')
+    parser.add_argument('-c', '--client', default='mysql', help='Client program')
     parser.add_argument('-opt', '--options', default=' --comments --force ', help="Client program options")
     parser.add_argument('--tmp', help='Path to tmp dir')
     parser.add_argument('-t', '--timeout', type=int, default=600, help='Timeout for each test case in seconds')
@@ -475,6 +476,24 @@ if __name__ == '__main__':
 
     if args.tmp is None:
         args.tmp = args.suites
+
+
+    args.client += f' --user default -s'
+    tcp_host = os.getenv("QUERY_MYSQL_HANDLER_HOST")
+    if tcp_host is not None:
+        args.tcp_host = tcp_host
+        args.client += f' --host={tcp_host}'
+    else:
+        args.tcp_host = '127.0.0.1'
+        args.client += f' --host={args.tcp_host}'
+
+    tcp_port = os.getenv("QUERY_MYSQL_HANDLER_PORT")
+    if tcp_port is not None:
+        args.tcp_port = int(tcp_port)
+        args.client += f" --port={tcp_port}"
+    else:
+        args.tcp_port = 3307
+        args.client += f" --port={args.tcp_port}"
 
     args.client_with_database = args.client
     if not args.database:
