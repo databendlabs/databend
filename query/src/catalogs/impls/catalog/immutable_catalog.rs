@@ -20,6 +20,8 @@ use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::UpsertTableOptionReply;
+use common_meta_types::UpsertTableOptionReq;
 
 use crate::catalogs::catalog::Catalog1;
 use crate::catalogs::Database1;
@@ -35,7 +37,7 @@ pub struct ImmutableCatalog {
 }
 
 impl ImmutableCatalog {
-    pub fn try_create_with_config(conf: &Config) -> Result<Self> {
+    pub async fn try_create_with_config(conf: &Config) -> Result<Self> {
         // Here we only register a system database here.
         let sys_db = Arc::new(SystemDatabase1::create(conf));
         Ok(Self { sys_db })
@@ -64,5 +66,15 @@ impl Catalog1 for ImmutableCatalog {
 
     async fn drop_database(&self, _req: DropDatabaseReq) -> Result<()> {
         Err(ErrorCode::UnImplement("Cannot drop system database"))
+    }
+
+    async fn upsert_table_option(
+        &self,
+        req: UpsertTableOptionReq,
+    ) -> Result<UpsertTableOptionReply> {
+        Err(ErrorCode::UnImplement(format!(
+            "Commit table not allowed for system database {:?}",
+            req
+        )))
     }
 }

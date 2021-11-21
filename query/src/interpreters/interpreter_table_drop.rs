@@ -19,7 +19,7 @@ use common_planners::DropTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::Catalog;
+use crate::catalogs::Catalog1;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::DatabendQueryContextRef;
@@ -46,7 +46,11 @@ impl Interpreter for DropTableInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let catalog = self.ctx.get_catalog();
-        catalog.drop_table(self.plan.clone().into()).await?;
+        catalog
+            .get_database(&self.plan.db)
+            .await?
+            .drop_table(self.plan.clone().into())
+            .await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

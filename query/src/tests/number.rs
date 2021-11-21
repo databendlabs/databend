@@ -18,7 +18,7 @@ use common_exception::Result;
 use common_planners::Expression;
 use common_planners::ReadDataSourcePlan;
 
-use crate::catalogs::Catalog;
+use crate::catalogs::Catalog1;
 use crate::catalogs::ToReadDataSourcePlan;
 use crate::pipelines::transforms::SourceTransform;
 use crate::sessions::DatabendQueryContextRef;

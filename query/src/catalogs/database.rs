@@ -22,13 +22,9 @@ use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableMeta;
-use common_meta_types::UpsertTableOptionReply;
-use common_meta_types::UpsertTableOptionReq;
 use dyn_clone::DynClone;
 
 use crate::catalogs::Table;
-use crate::catalogs::TableFunction;
-use crate::datasources::table_func_engine::TableArgs;
 
 pub trait Database: Sync + Send {
     /// Database name.
@@ -64,18 +60,4 @@ pub trait Database1: DynClone + Sync + Send {
             }
         }
     }
-
-    // Get function by name.
-    fn get_table_function(
-        &self,
-        _func_name: &str,
-        _tbl_args: TableArgs,
-    ) -> Result<Arc<dyn TableFunction>> {
-        unimplemented!()
-    }
-
-    async fn upsert_table_option(
-        &self,
-        req: UpsertTableOptionReq,
-    ) -> common_exception::Result<UpsertTableOptionReply>;
 }

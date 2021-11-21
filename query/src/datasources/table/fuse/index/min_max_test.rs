@@ -29,7 +29,6 @@ use common_planners::lit;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
 
-use crate::catalogs::Catalog;
 use crate::datasources::table::fuse::index::min_max::range_filter;
 use crate::datasources::table::fuse::table_test_fixture::TestFixture;
 use crate::datasources::table::fuse::util::TBL_OPT_KEY_SNAPSHOT_LOC;

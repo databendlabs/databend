@@ -28,7 +28,7 @@ use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::Catalog;
+use crate::catalogs::Catalog1;
 use crate::catalogs::Table;
 use crate::sessions::DatabendQueryContextRef;
 
@@ -69,7 +69,7 @@ impl ColumnsTable {
 
         let mut rows: Vec<(String, String, DataField)> = vec![];
         for database in databases {
-            for table in catalog.get_tables(database.name()).await? {
+            for table in database.get_tables(database.name()).await? {
                 for field in table.schema().fields() {
                     rows.push((database.name().into(), table.name().into(), field.clone()))
                 }

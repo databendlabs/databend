@@ -20,7 +20,7 @@ use common_meta_types::DropDatabaseReq;
 use common_planners::*;
 use pretty_assertions::assert_eq;
 
-use crate::catalogs::Catalog;
+use crate::catalogs::Catalog1;
 use crate::tests::try_create_catalog;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

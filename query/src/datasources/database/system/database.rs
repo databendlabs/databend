@@ -22,8 +22,6 @@ use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableMeta;
-use common_meta_types::UpsertTableOptionReply;
-use common_meta_types::UpsertTableOptionReq;
 
 use crate::catalogs::Database1;
 use crate::catalogs::InMemoryMetas;
@@ -141,15 +139,5 @@ impl Database1 for SystemDatabase1 {
 
     async fn drop_table(&self, _req: DropTableReq) -> common_exception::Result<DropTableReply> {
         Err(ErrorCode::UnImplement("Cannot drop system database table"))
-    }
-
-    async fn upsert_table_option(
-        &self,
-        req: UpsertTableOptionReq,
-    ) -> common_exception::Result<UpsertTableOptionReply> {
-        Err(ErrorCode::UnImplement(format!(
-            "Commit table not allowed for system database {:?}",
-            req
-        )))
     }
 }

@@ -24,7 +24,7 @@ use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::Catalog;
+use crate::catalogs::Catalog1;
 use crate::catalogs::Table;
 use crate::sessions::DatabendQueryContextRef;
 

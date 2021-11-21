@@ -25,6 +25,8 @@ use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::UpsertTableOptionReply;
+use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
 use crate::catalogs::backends::MetaRemote;
@@ -141,5 +143,12 @@ impl Catalog1 for MutableCatalog {
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<()> {
         self.meta.drop_database(req).await?;
         Ok(())
+    }
+
+    async fn upsert_table_option(
+        &self,
+        req: UpsertTableOptionReq,
+    ) -> Result<UpsertTableOptionReply> {
+        self.meta.upsert_table_option(req).await
     }
 }

@@ -28,7 +28,7 @@ use common_planners::InsertIntoPlan;
 use tempfile::TempDir;
 use uuid::Uuid;
 
-use crate::catalogs::Catalog;
+use crate::catalogs::Catalog1;
 use crate::catalogs::Table;
 use crate::configs::Config;
 use crate::sessions::DatabendQueryContextRef;

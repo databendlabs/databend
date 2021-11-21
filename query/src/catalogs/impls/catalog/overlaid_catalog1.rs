@@ -21,9 +21,13 @@ use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::UpsertTableOptionReply;
+use common_meta_types::UpsertTableOptionReq;
 
 use crate::catalogs::catalog::Catalog1;
 use crate::catalogs::Database1;
+use crate::catalogs::TableFunction;
+use crate::datasources::table_func_engine::TableArgs;
 use crate::datasources::table_func_engine::TableFuncEngine;
 use crate::datasources::table_func_engine_registry::TableFuncEngineRegistry;
 
@@ -98,5 +102,27 @@ impl Catalog1 for OverlaidCatalog1 {
             )));
         }
         self.mutable_catalog.drop_database(req).await
+    }
+
+    async fn upsert_table_option(
+        &self,
+        req: UpsertTableOptionReq,
+    ) -> Result<UpsertTableOptionReply> {
+        // upsert table option in BOTTOM layer only
+        self.mutable_catalog.upsert_table_option(req).await
+    }
+
+    fn get_table_function(
+        &self,
+        func_name: &str,
+        tbl_args: TableArgs,
+    ) -> Result<Arc<dyn TableFunction>> {
+        let (id, factory) = self.func_engine_registry.get(func_name).ok_or_else(|| {
+            ErrorCode::UnknownTable(format!("Unknown table function {}", func_name))
+        })?;
+
+        // table function belongs to no/every database
+        let func = factory.try_create("", func_name, *id, tbl_args)?;
+        Ok(func)
     }
 }

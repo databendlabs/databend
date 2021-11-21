@@ -24,7 +24,7 @@ use common_planners::InsertIntoPlan;
 use common_streams::SendableDataBlockStream;
 use uuid::Uuid;
 
-use crate::catalogs::Catalog;
+use crate::catalogs::Catalog1;
 use crate::datasources::table::fuse::util;
 use crate::datasources::table::fuse::util::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::datasources::table::fuse::BlockAppender;

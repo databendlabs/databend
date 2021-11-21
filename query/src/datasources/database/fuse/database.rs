@@ -27,8 +27,6 @@ use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
-use common_meta_types::UpsertTableOptionReply;
-use common_meta_types::UpsertTableOptionReq;
 
 use crate::catalogs::Database1;
 use crate::catalogs::Table;
@@ -116,12 +114,5 @@ impl Database1 for FuseDatabase {
 
     async fn drop_table(&self, req: DropTableReq) -> common_exception::Result<DropTableReply> {
         self.meta.drop_table(req).await
-    }
-
-    async fn upsert_table_option(
-        &self,
-        req: UpsertTableOptionReq,
-    ) -> common_exception::Result<UpsertTableOptionReply> {
-        self.meta.upsert_table_option(req).await
     }
 }

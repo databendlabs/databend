@@ -135,4 +135,18 @@ pub trait Catalog1: DynClone + Send + Sync {
             }
         }
     }
+
+    async fn upsert_table_option(
+        &self,
+        req: UpsertTableOptionReq,
+    ) -> Result<UpsertTableOptionReply>;
+
+    // Get function by name.
+    fn get_table_function(
+        &self,
+        _func_name: &str,
+        _tbl_args: TableArgs,
+    ) -> Result<Arc<dyn TableFunction>> {
+        unimplemented!()
+    }
 }

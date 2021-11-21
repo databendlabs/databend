@@ -19,7 +19,7 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::TruncateTablePlan;
 use futures::TryStreamExt;
 
-use crate::catalogs::Catalog;
+use crate::catalogs::Catalog1;
 use crate::catalogs::ToReadDataSourcePlan;
 use crate::datasources::table::fuse::table_test_fixture::TestFixture;
 

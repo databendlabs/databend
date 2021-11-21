@@ -17,23 +17,23 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
-use crate::catalogs::impls::catalog::metastore_catalog::MetaStoreCatalog;
-use crate::catalogs::impls::catalog::overlaid_catalog::OverlaidCatalog;
-use crate::catalogs::impls::catalog::system_catalog::SystemCatalog;
+use crate::catalogs::impls::ImmutableCatalog;
+use crate::catalogs::impls::MutableCatalog;
+use crate::catalogs::impls::OverlaidCatalog1;
 use crate::configs::Config;
 use crate::datasources;
 
 /// DatabaseCatalog is the Catalog exports to other query components
-pub type DatabaseCatalog = OverlaidCatalog;
+pub type DatabaseCatalog = OverlaidCatalog1;
 
 impl DatabaseCatalog {
     pub async fn try_create_with_config(conf: Config) -> Result<DatabaseCatalog> {
-        let system_catalog = SystemCatalog::try_create_with_config(&conf)?;
-        let metastore_catalog = MetaStoreCatalog::try_create_with_config(conf).await?;
+        let immutable_catalog = ImmutableCatalog::try_create_with_config(&conf).await?;
+        let mutable_catalog = MutableCatalog::try_create_with_config(conf).await?;
         let func_engine_registry = datasources::table_func::prelude::prelude_func_engines();
         let res = DatabaseCatalog::create(
-            Arc::new(system_catalog),
-            Arc::new(metastore_catalog),
+            Arc::new(immutable_catalog),
+            Arc::new(mutable_catalog),
             func_engine_registry,
         );
         Ok(res)

@@ -45,7 +45,7 @@ use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::impls::DatabaseCatalog;
-use crate::catalogs::Catalog;
+use crate::catalogs::Catalog1;
 use crate::catalogs::Table;
 use crate::clusters::ClusterRef;
 use crate::configs::AzureStorageBlobConfig;
