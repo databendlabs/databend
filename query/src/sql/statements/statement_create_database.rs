@@ -29,6 +29,7 @@ use crate::sql::statements::AnalyzedResult;
 pub struct DfCreateDatabase {
     pub if_not_exists: bool,
     pub name: ObjectName,
+    pub engine: String,
     pub options: Vec<SqlOption>,
 }
 
@@ -36,12 +37,14 @@ pub struct DfCreateDatabase {
 impl AnalyzableStatement for DfCreateDatabase {
     async fn analyze(&self, _ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let db = self.database_name()?;
+        let engine = self.database_engine()?;
         let options = self.database_options();
         let if_not_exists = self.if_not_exists;
 
         Ok(AnalyzedResult::SimpleQuery(PlanNode::CreateDatabase(
             CreateDatabasePlan {
                 db,
+                engine,
                 options,
                 if_not_exists,
             },
@@ -56,6 +59,10 @@ impl DfCreateDatabase {
         }
 
         Ok(self.name.0[0].value.clone())
+    }
+
+    fn database_engine(&self) -> Result<String> {
+        Ok(self.engine.clone())
     }
 
     fn database_options(&self) -> HashMap<String, String> {

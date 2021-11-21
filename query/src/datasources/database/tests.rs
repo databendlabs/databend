@@ -43,6 +43,7 @@ async fn test_datasource() -> Result<()> {
             .create_database(CreateDatabaseReq {
                 if_not_exists: false,
                 db: "test_db".to_string(),
+                engine: "".to_string(),
                 options: Default::default(),
             })
             .await?;

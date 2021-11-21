@@ -55,6 +55,7 @@ impl MutableCatalog {
     }
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database1>> {
+        // TODO(bohu): Add the database engine match, now we set only one fuse database here.
         let db = FuseDatabase::new(
             &db_info.db,
             self.meta.clone(),

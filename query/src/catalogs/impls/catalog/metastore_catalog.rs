@@ -107,6 +107,7 @@ impl MetaStoreCatalog {
         let req = CreateDatabaseReq {
             if_not_exists: true,
             db: "default".to_string(),
+            engine: "".to_string(),
             options: Default::default(),
         };
 

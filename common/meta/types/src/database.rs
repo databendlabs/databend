@@ -25,6 +25,7 @@ pub struct DatabaseInfo {
 pub struct CreateDatabaseReq {
     pub if_not_exists: bool,
     pub db: String,
+    pub engine: String,
     pub options: HashMap<String, String>,
 }
 

@@ -56,6 +56,7 @@ impl TestFixture {
         let plan = CreateDatabasePlan {
             if_not_exists: false,
             db: db_name,
+            engine: "".to_string(),
             options: Default::default(),
         };
         ctx.get_catalog()

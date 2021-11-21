@@ -477,10 +477,12 @@ impl<'a> DfParser<'a> {
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let db_name = self.parser.parse_object_name()?;
+        let db_engine = self.parse_database_engine()?;
 
         let create = DfCreateDatabase {
             if_not_exists,
             name: db_name,
+            engine: db_engine,
             options: vec![],
         };
 
@@ -695,6 +697,16 @@ impl<'a> DfParser<'a> {
         };
 
         Ok(DfStatement::CreateTable(create))
+    }
+
+    fn parse_database_engine(&mut self) -> Result<String, ParserError> {
+        // TODO make ENGINE as a keyword
+        if !self.consume_token("ENGINE") {
+            return Ok("".to_string());
+        }
+
+        self.parser.expect_token(&Token::Eq)?;
+        Ok(self.parser.next_token().to_string())
     }
 
     /// Parses the set of valid formats
