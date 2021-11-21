@@ -94,7 +94,8 @@ impl DatabendQueryContext {
         let catalog = self.get_catalog();
 
         if plan.tbl_args.is_none() {
-            futures::executor::block_on(async move {
+            // TODO(bohu): This block_on is tricky, what can we do?
+            self.get_shared_runtime()?.block_on(async move {
                 catalog
                     .get_database(&plan.table_info.db)
                     .await?
