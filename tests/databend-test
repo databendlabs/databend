@@ -59,9 +59,9 @@ def run_single_test(args, ext, client_options, case_file, stdout_file, stderr_fi
         "result": result_file,
     }
 
-    pattern = '{test} > {stdout} 2> {stderr}'
+    pattern = '{test} > {stdout} 2>&1'
     if ext == '.sql':
-        pattern = "sed '/^\s*--/d' {test} | {client} {options} > {stdout} 2>{stderr}"
+        pattern = "sed '/^\s*--/d' {test} | {client} {options} > {stdout} 2>&1"
 
     command = pattern.format(**params)
 
