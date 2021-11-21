@@ -19,6 +19,7 @@ use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
+use crate::CopyPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
 use crate::CreateUserPlan;
@@ -118,6 +119,7 @@ pub trait PlanVisitor {
             PlanNode::Having(plan) => self.visit_having(plan),
             PlanNode::Expression(plan) => self.visit_expression(plan),
             PlanNode::InsertInto(plan) => self.visit_insert_into(plan),
+            PlanNode::Copy(plan) => self.visit_copy(plan),
             PlanNode::ShowCreateTable(plan) => self.visit_show_create_table(plan),
             PlanNode::SubQueryExpression(plan) => self.visit_sub_queries_sets(plan),
             PlanNode::Kill(plan) => self.visit_kill_query(plan),
@@ -277,6 +279,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_insert_into(&mut self, _: &InsertIntoPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_copy(&mut self, _: &CopyPlan) -> Result<()> {
         Ok(())
     }
 

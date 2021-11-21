@@ -12,16 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod source;
-mod source_csv;
-mod source_factory;
-mod source_parquet;
-mod source_values;
+use std::collections::HashMap;
 
-pub use source::FormatSettings;
-pub use source::Source;
-pub use source_csv::CsvSource;
-pub use source_factory::SourceFactory;
-pub use source_factory::SourceParams;
-pub use source_parquet::ParquetSource;
-pub use source_values::ValueSource;
+use common_datavalues::DataSchemaRef;
+use common_meta_types::MetaId;
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
+pub struct CopyPlan {
+    pub db_name: String,
+    pub tbl_name: String,
+    pub tbl_id: MetaId,
+    pub schema: DataSchemaRef,
+    pub location: String,
+    pub format: String,
+    pub options: HashMap<String, String>,
+}
+
+impl CopyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        self.schema.clone()
+    }
+}

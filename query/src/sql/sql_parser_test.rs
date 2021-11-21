@@ -19,6 +19,7 @@ use common_meta_types::UserPrivilegeType;
 use sqlparser::ast::*;
 
 use crate::sql::statements::DfAlterUser;
+use crate::sql::statements::DfCopy;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfCreateUser;
@@ -325,6 +326,36 @@ fn hint_test() -> Result<()> {
         let expected = DfHint::create_from_comment(comment, "--");
         assert_eq!(expected.error_code, None);
     }
+
+    Ok(())
+}
+
+#[test]
+fn copy_test() -> Result<()> {
+    let ident = Ident::new("test_csv");
+    let v = vec![ident];
+    let name = ObjectName(v);
+
+    expect_parse_ok(
+        "copy into test_csv from '@my_ext_stage/tutorials/sample.csv' format csv csv_header = 1 csv_delimitor = ',';",
+        DfStatement::Copy(DfCopy {
+            name,
+            columns: vec![],
+            location: "@my_ext_stage/tutorials/sample.csv".to_string(),
+            format: "csv".to_string(),
+            options:  vec![SqlOption {
+                name: Ident::new("csv_header".to_string()),
+                value: Value::Number("1".to_owned(), false),
+            },
+            SqlOption {
+                name: Ident::new("csv_delimitor".to_string()),
+                value: Value::SingleQuotedString(",".into()),
+            }],
+        }),
+
+
+
+    )?;
 
     Ok(())
 }
