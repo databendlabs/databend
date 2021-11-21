@@ -88,8 +88,8 @@ impl MetaApi for MetaRemote {
             .await
     }
 
-    async fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>> {
-        self.query_backend(move |cli| async move { cli.get_databases().await })
+    async fn list_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>> {
+        self.query_backend(move |cli| async move { cli.list_databases().await })
             .await
     }
 

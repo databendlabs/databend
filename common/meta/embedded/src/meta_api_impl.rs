@@ -103,7 +103,7 @@ impl MetaApi for MetaEmbedded {
         Ok(Arc::new(dbi))
     }
 
-    async fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>> {
+    async fn list_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>> {
         let sm = self.inner.lock().await;
         let res = sm.get_databases()?;
         Ok(res

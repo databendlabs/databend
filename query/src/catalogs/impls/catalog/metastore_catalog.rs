@@ -132,7 +132,7 @@ impl MetaStoreCatalog {
 #[async_trait::async_trait]
 impl Catalog for MetaStoreCatalog {
     async fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
-        let dbs = self.meta.get_databases().await?;
+        let dbs = self.meta.list_databases().await?;
 
         dbs.iter().try_fold(vec![], |mut acc, item| {
             let db = self.build_db_instance(item)?;

@@ -165,7 +165,7 @@ impl MetaApiTestSuite {
 
         tracing::info!("--- get_databases");
         {
-            let dbs = mt.get_databases().await?;
+            let dbs = mt.list_databases().await?;
             let want: Vec<u64> = vec![1, 2];
             let got = dbs.iter().map(|x| x.database_id).collect::<Vec<_>>();
             assert_eq!(want, got)

@@ -58,7 +58,7 @@ impl MetaApi for MetaFlightClient {
         self.do_action(FlightReq { req }).await
     }
 
-    async fn get_databases(&self) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
+    async fn list_databases(&self) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
         self.do_action(GetDatabasesAction {}).await
     }
 

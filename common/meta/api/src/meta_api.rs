@@ -43,7 +43,7 @@ pub trait MetaApi: Send + Sync {
 
     async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>>;
 
-    async fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>>;
+    async fn list_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>>;
 
     // table
 
