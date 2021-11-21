@@ -21,6 +21,7 @@ use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
+use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use dyn_clone::DynClone;
 
@@ -60,4 +61,7 @@ pub trait Database1: DynClone + Sync + Send {
             }
         }
     }
+
+    /// Build a `Arc<dyn Table>` from `TableInfo`.
+    fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
 }

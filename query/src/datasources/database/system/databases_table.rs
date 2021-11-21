@@ -39,6 +39,7 @@ impl DatabasesTable {
 
         let table_info = TableInfo {
             desc: "'system'.'databases'".to_string(),
+            db: "system".to_string(),
             name: "databases".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {

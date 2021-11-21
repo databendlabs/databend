@@ -50,6 +50,7 @@ impl ProcessesTable {
 
         let table_info = TableInfo {
             desc: "'system'.'processes'".to_string(),
+            db: "system".to_string(),
             name: "processes".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {

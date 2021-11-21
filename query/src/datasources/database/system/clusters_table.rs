@@ -41,6 +41,7 @@ impl ClustersTable {
 
         let table_info = TableInfo {
             desc: "'system'.'clusters'".to_string(),
+            db: "system".to_string(),
             name: "clusters".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {

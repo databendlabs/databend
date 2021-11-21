@@ -96,7 +96,10 @@ impl DatabendQueryContext {
         let catalog = self.get_catalog();
 
         let t = if plan.tbl_args.is_none() {
-            catalog.build_table(&plan.table_info)?
+            catalog
+                .get_database(&plan.table_info.db)
+                .await?
+                .build_table(&plan.table_info)?
         } else {
             catalog
                 .get_table_function(&plan.table_info.name, plan.tbl_args.clone())?

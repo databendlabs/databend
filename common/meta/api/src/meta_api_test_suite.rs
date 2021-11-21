@@ -226,6 +226,7 @@ impl MetaApiTestSuite {
                 let want = TableInfo {
                     ident: TableIdent::new(1, 1),
                     desc: format!("'{}'.'{}'", db_name, tbl_name),
+                    db: db_name.to_string(),
                     name: tbl_name.into(),
                     meta: TableMeta {
                         schema: schema.clone(),
@@ -246,6 +247,7 @@ impl MetaApiTestSuite {
                 let want = TableInfo {
                     ident: TableIdent::new(1, 1),
                     desc: format!("'{}'.'{}'", db_name, tbl_name),
+                    db: db_name.to_string(),
                     name: tbl_name.into(),
                     meta: TableMeta {
                         schema: schema.clone(),
@@ -276,6 +278,7 @@ impl MetaApiTestSuite {
                     ident: TableIdent::new(1, 1),
                     desc: format!("'{}'.'{}'", db_name, tbl_name),
                     name: tbl_name.into(),
+                    db: db_name.to_string(),
                     meta: TableMeta {
                         schema: schema.clone(),
                         engine: "JSON".to_owned(),

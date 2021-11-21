@@ -42,6 +42,7 @@ impl OneTable {
 
         let table_info = TableInfo {
             desc: "'system'.'one'".to_string(),
+            db: "system".to_string(),
             name: "one".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {

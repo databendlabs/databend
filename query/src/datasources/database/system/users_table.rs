@@ -42,6 +42,7 @@ impl UsersTable {
 
         let table_info = TableInfo {
             desc: "'system'.'users'".to_string(),
+            db: "system".to_string(),
             name: "users".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {

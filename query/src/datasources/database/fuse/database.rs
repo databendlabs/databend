@@ -115,4 +115,22 @@ impl Database1 for FuseDatabase {
     async fn drop_table(&self, req: DropTableReq) -> common_exception::Result<DropTableReply> {
         self.meta.drop_table(req).await
     }
+
+    fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+        let engine = table_info.engine();
+        let factory = self
+            .table_engine_registry
+            .get_table_factory(engine)
+            .ok_or_else(|| {
+                ErrorCode::UnknownTableEngine(format!("unknown table engine {}", engine))
+            })?;
+
+        let tbl: Arc<dyn Table> = factory
+            .try_create(table_info.clone(), TableContext {
+                in_memory_data: self.in_memory_data.clone(),
+            })?
+            .into();
+
+        Ok(tbl)
+    }
 }

@@ -21,6 +21,7 @@ use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
+use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 
 use crate::catalogs::Database1;
@@ -139,5 +140,16 @@ impl Database1 for SystemDatabase1 {
 
     async fn drop_table(&self, _req: DropTableReq) -> common_exception::Result<DropTableReply> {
         Err(ErrorCode::UnImplement("Cannot drop system database table"))
+    }
+
+    fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+        let table_id = table_info.ident.table_id;
+
+        let table =
+            self.sys_db_meta.id_to_table.get(&table_id).ok_or_else(|| {
+                ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id))
+            })?;
+
+        Ok(table.clone())
     }
 }

@@ -43,6 +43,7 @@ impl ConfigsTable {
 
         let table_info = TableInfo {
             desc: "'system'.'configs'".to_string(),
+            db: "system".to_string(),
             name: "configs".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {

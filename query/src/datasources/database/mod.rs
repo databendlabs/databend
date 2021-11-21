@@ -17,6 +17,5 @@
 mod tests;
 
 pub(crate) mod default;
-pub(crate) mod example;
 pub(crate) mod fuse;
 pub(crate) mod system;

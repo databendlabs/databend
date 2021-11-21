@@ -48,6 +48,7 @@ impl ColumnsTable {
 
         let table_info = TableInfo {
             desc: "'system'.'columns'".to_string(),
+            db: "system".to_string(),
             name: "columns".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
