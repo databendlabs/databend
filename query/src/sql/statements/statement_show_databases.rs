@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_tracing::tracing;
 use sqlparser::ast::Expr;
 
 use crate::sessions::DatabendQueryContextRef;
@@ -27,7 +28,7 @@ pub struct DfShowDatabases {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfShowDatabases {
-    // #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let rewritten_query = self.rewritten_query();
         let rewritten_query_plan = PlanParser::parse(rewritten_query.as_str(), ctx);

@@ -15,6 +15,7 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::ExplainType;
+use common_tracing::tracing;
 
 use crate::sessions::DatabendQueryContextRef;
 use crate::sql::statements::AnalyzableStatement;
@@ -31,6 +32,7 @@ pub struct DfExplain {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfExplain {
+    #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         match self.statement.as_ref() {
             DfStatement::Query(v) => {
