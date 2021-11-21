@@ -176,7 +176,7 @@ mod tests {
         for test in tests {
             let ctx = crate::tests::try_create_context()?;
 
-            let plan = crate::tests::parse_query(test.query)?;
+            let plan = crate::tests::parse_query(test.query, &ctx)?;
             let mut optimizer = ConstantFoldingOptimizer::create(ctx);
             let optimized = optimizer.optimize(&plan)?;
             let actual = format!("{:?}", optimized);

@@ -86,7 +86,7 @@ impl Table for MemoryTable {
         &self.table_info
     }
 
-    fn read_partitions(
+    async fn read_partitions(
         &self,
         ctx: DatabendQueryContextRef,
         _push_downs: Option<Extras>,

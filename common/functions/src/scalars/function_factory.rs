@@ -41,6 +41,7 @@ pub struct FunctionFeatures {
     pub is_deterministic: bool,
     pub negative_function_name: Option<String>,
     pub is_bool_func: bool,
+    pub is_context_func: bool,
 }
 
 impl FunctionFeatures {
@@ -49,6 +50,7 @@ impl FunctionFeatures {
             is_deterministic: false,
             negative_function_name: None,
             is_bool_func: false,
+            is_context_func: false,
         }
     }
 
@@ -64,6 +66,11 @@ impl FunctionFeatures {
 
     pub fn bool_function(mut self) -> FunctionFeatures {
         self.is_bool_func = true;
+        self
+    }
+
+    pub fn context_function(mut self) -> FunctionFeatures {
+        self.is_context_func = true;
         self
     }
 }

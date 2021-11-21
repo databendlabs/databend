@@ -63,7 +63,7 @@ async fn select_table(sessions: SessionManagerRef) -> Result<String> {
 
 async fn execute_query(ctx: DatabendQueryContextRef) -> Result<SendableDataBlockStream> {
     let tracing_table = ctx.get_table("system", "tracing")?;
-    let tracing_table_read_plan = tracing_table.read_plan(ctx.clone(), None)?;
+    let tracing_table_read_plan = tracing_table.read_plan(ctx.clone(), None).await?;
 
     tracing_table.read(ctx, &tracing_table_read_plan).await
 }

@@ -62,19 +62,21 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
 
                     let table = self.ctx.get_table(db_name, table_name)?;
 
-                    let source_plan = table.read_plan(self.ctx.clone(), None)?;
-                    let dummy_read_plan = PlanNode::ReadSource(source_plan);
+                    futures::executor::block_on(async move {
+                        let source_plan = table.read_plan(self.ctx.clone(), None).await?;
+                        let dummy_read_plan = PlanNode::ReadSource(source_plan);
 
-                    let expr = Expression::create_literal(DataValue::UInt64(Some(
-                        read_source_plan.statistics.read_rows as u64,
-                    )));
+                        let expr = Expression::create_literal(DataValue::UInt64(Some(
+                            read_source_plan.statistics.read_rows as u64,
+                        )));
 
-                    self.rewritten = true;
-                    let alias_name = plan.aggr_expr[0].column_name();
-                    PlanBuilder::from(&dummy_read_plan)
-                        .expression(&[expr.clone()], "Exact Statistics")?
-                        .project(&[expr.alias(&alias_name)])?
-                        .build()?
+                        self.rewritten = true;
+                        let alias_name = plan.aggr_expr[0].column_name();
+                        PlanBuilder::from(&dummy_read_plan)
+                            .expression(&[expr.clone()], "Exact Statistics")?
+                            .project(&[expr.alias(&alias_name)])?
+                            .build()
+                    })?
                 }
                 _ => PlanNode::AggregatorPartial(plan.clone()),
             },

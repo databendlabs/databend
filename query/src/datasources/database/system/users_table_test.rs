@@ -55,7 +55,7 @@ async fn test_users_table() -> Result<()> {
         .await?;
 
     let table: Arc<dyn Table> = Arc::new(UsersTable::create(1));
-    let source_plan = table.read_plan(ctx.clone(), None)?;
+    let source_plan = table.read_plan(ctx.clone(), None).await?;
 
     let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;

@@ -18,10 +18,20 @@ use common_meta_types::UserPrivilege;
 use common_meta_types::UserPrivilegeType;
 use sqlparser::ast::*;
 
-use crate::sql::sql_statement::DfDropDatabase;
-use crate::sql::sql_statement::DfGrantObject;
-use crate::sql::sql_statement::DfShowDatabases;
-use crate::sql::sql_statement::DfUseDatabase;
+use crate::sql::statements::DfAlterUser;
+use crate::sql::statements::DfCreateDatabase;
+use crate::sql::statements::DfCreateTable;
+use crate::sql::statements::DfCreateUser;
+use crate::sql::statements::DfDescribeTable;
+use crate::sql::statements::DfDropDatabase;
+use crate::sql::statements::DfDropTable;
+use crate::sql::statements::DfDropUser;
+use crate::sql::statements::DfGrantObject;
+use crate::sql::statements::DfGrantStatement;
+use crate::sql::statements::DfShowDatabases;
+use crate::sql::statements::DfShowTables;
+use crate::sql::statements::DfTruncateTable;
+use crate::sql::statements::DfUseDatabase;
 use crate::sql::*;
 
 fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
@@ -184,6 +194,9 @@ fn show_queries() -> Result<()> {
     use sqlparser::dialect::GenericDialect;
     use sqlparser::parser::Parser;
     use sqlparser::tokenizer::Tokenizer;
+
+    use crate::sql::statements::DfShowSettings;
+    use crate::sql::statements::DfShowTables;
 
     // positive case
     expect_parse_ok("SHOW TABLES", DfStatement::ShowTables(DfShowTables::All))?;

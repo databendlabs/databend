@@ -29,7 +29,8 @@ async fn test_metrics_table() -> Result<()> {
     init_default_metrics_recorder();
     let ctx = crate::tests::try_create_context()?;
     let table: Arc<dyn Table> = Arc::new(MetricsTable::create(1));
-    let source_plan = table.read_plan(ctx.clone(), None)?;
+    let source_plan = table.read_plan(ctx.clone(), None).await?;
+
     metrics::counter!("test.test_metrics_table_count", 1);
     metrics::histogram!("test.test_metrics_table_histogram", 1.0);
 

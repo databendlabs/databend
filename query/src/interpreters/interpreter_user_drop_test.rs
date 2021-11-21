@@ -29,9 +29,8 @@ async fn test_drop_user_interpreter() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
     {
-        if let PlanNode::DropUser(plan) =
-            PlanParser::create(ctx.clone()).build_from_sql("DROP USER 'test'@'localhost'")?
-        {
+        static TEST_QUERY: &str = "DROP USER 'test'@'localhost'";
+        if let PlanNode::DropUser(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
             let executor = DropUserInterpreter::try_create(ctx.clone(), plan.clone())?;
             assert_eq!(executor.name(), "DropUserInterpreter");
             let ret = executor.execute(None).await;
@@ -42,9 +41,8 @@ async fn test_drop_user_interpreter() -> Result<()> {
     }
 
     {
-        if let PlanNode::DropUser(plan) = PlanParser::create(ctx.clone())
-            .build_from_sql("DROP USER IF EXISTS 'test'@'localhost'")?
-        {
+        static TEST_QUERY: &str = "DROP USER IF EXISTS 'test'@'localhost'";
+        if let PlanNode::DropUser(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
             let executor = DropUserInterpreter::try_create(ctx.clone(), plan.clone())?;
             assert_eq!(executor.name(), "DropUserInterpreter");
             let ret = executor.execute(None).await;
@@ -69,9 +67,9 @@ async fn test_drop_user_interpreter() -> Result<()> {
 
         let old_user = user_mgr.get_user(name, hostname).await?;
         assert_eq!(old_user.password, Vec::from(password));
-        if let PlanNode::DropUser(plan) =
-            PlanParser::create(ctx.clone()).build_from_sql("DROP USER 'test'@'localhost'")?
-        {
+
+        static TEST_QUERY: &str = "DROP USER 'test'@'localhost'";
+        if let PlanNode::DropUser(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
             let executor = DropUserInterpreter::try_create(ctx, plan.clone())?;
             assert_eq!(executor.name(), "DropUserInterpreter");
             executor.execute(None).await?;

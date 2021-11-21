@@ -60,12 +60,12 @@ impl Table for FuseTable {
         true
     }
 
-    fn read_partitions(
+    async fn read_partitions(
         &self,
         ctx: DatabendQueryContextRef,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        self.do_read_partitions(ctx, push_downs)
+        self.do_read_partitions(ctx, push_downs).await
     }
 
     async fn read(

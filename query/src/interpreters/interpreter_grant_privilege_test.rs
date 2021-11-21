@@ -41,9 +41,9 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
     assert_eq!(user_info.privileges, UserPrivilege::empty());
     let user_mgr = ctx.get_sessions_manager().get_user_manager();
     user_mgr.add_user(user_info).await?;
-    if let PlanNode::GrantPrivilege(plan) = PlanParser::create(ctx.clone())
-        .build_from_sql(format!("GRANT ALL ON * TO '{}'@'{}'", name, hostname).as_str())?
-    {
+
+    let test_query = format!("GRANT ALL ON * TO '{}'@'{}'", name, hostname);
+    if let PlanNode::GrantPrivilege(plan) = PlanParser::parse(&test_query, ctx.clone()).await? {
         let executor = GrantPrivilegeInterpreter::try_create(ctx, plan.clone())?;
         assert_eq!(executor.name(), "GrantPrivilegeInterpreter");
         let mut stream = executor.execute(None).await?;

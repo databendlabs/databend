@@ -44,12 +44,18 @@ impl NumberTestData {
     }
 
     pub fn number_read_source_plan_for_test(&self, numbers: i64) -> Result<ReadDataSourcePlan> {
-        let catalog = try_create_catalog()?;
-        let tbl_arg = Some(vec![Expression::create_literal(DataValue::Int64(Some(
-            numbers,
-        )))]);
-        let table = catalog.get_table_function(self.table, tbl_arg)?;
-        table.clone().as_table().read_plan(self.ctx.clone(), None)
+        futures::executor::block_on(async move {
+            let catalog = try_create_catalog()?;
+            let tbl_arg = Some(vec![Expression::create_literal(DataValue::Int64(Some(
+                numbers,
+            )))]);
+            let table = catalog.get_table_function(self.table, tbl_arg)?;
+            table
+                .clone()
+                .as_table()
+                .read_plan(self.ctx.clone(), None)
+                .await
+        })
     }
 
     pub fn number_source_transform_for_test(&self, numbers: i64) -> Result<SourceTransform> {

@@ -51,7 +51,7 @@ mod tests {
         let query = "select * from numbers_mt(10) where 1 + 2 = 2";
         let ctx = crate::tests::try_create_context()?;
 
-        let plan = crate::tests::parse_query(query)?;
+        let plan = crate::tests::parse_query(query, &ctx)?;
         let mut optimizer = Optimizers::without_scatters(ctx);
         let optimized = optimizer.optimize(&plan)?;
         let actual = format!("{:?}", optimized);
@@ -105,8 +105,8 @@ mod tests {
         ];
 
         for test in tests {
-            let plan = crate::tests::parse_query(test.query)?;
             let ctx = crate::tests::try_create_context()?;
+            let plan = crate::tests::parse_query(test.query, &ctx)?;
             let mut optimizer = Optimizers::without_scatters(ctx);
 
             let optimized_plan = optimizer.optimize(&plan)?;
