@@ -222,6 +222,7 @@ pub enum SqlType {
     Decimal(u8, u8),
     Enum8(Vec<(String, i8)>),
     Enum16(Vec<(String, i16)>),
+    Tuple(Vec<&'static SqlType>),
 }
 
 lazy_static! {
@@ -302,6 +303,10 @@ impl SqlType {
                     .collect();
                 format!("Enum16({})", a.join(",")).into()
             }
+            SqlType::Tuple(types) => {
+                let a: Vec<String> = types.iter().map(|t| t.to_string()).collect();
+                format!("Tuple({})", a.join(",")).into()
+            }
         }
     }
 
@@ -309,6 +314,7 @@ impl SqlType {
         match self {
             SqlType::Nullable(inner) => 1 + inner.level(),
             SqlType::Array(inner) => 1 + inner.level(),
+            SqlType::Tuple(types) => types.iter().map(|t| t.level()).max().unwrap_or(0) + 1,
             _ => 0,
         }
     }

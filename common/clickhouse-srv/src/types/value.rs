@@ -63,6 +63,7 @@ pub enum Value {
     Decimal(Decimal),
     Enum8(Vec<(String, i8)>, Enum8),
     Enum16(Vec<(String, i16)>, Enum16),
+    Tuple(Arc<Vec<Value>>),
 }
 
 impl PartialEq for Value {
@@ -95,6 +96,7 @@ impl PartialEq for Value {
             (Value::Enum16(values_a, val_a), Value::Enum16(values_b, val_b)) => {
                 *values_a == *values_b && *val_a == *val_b
             }
+            (Value::Tuple(a), Value::Tuple(b)) => *a == *b,
             _ => false,
         }
     }
@@ -133,6 +135,12 @@ impl Value {
             SqlType::Uuid => Value::Uuid([0_u8; 16]),
             SqlType::Enum8(values) => Value::Enum8(values, Enum8(0)),
             SqlType::Enum16(values) => Value::Enum16(values, Enum16(0)),
+            SqlType::Tuple(types) => Value::Tuple(Arc::new(
+                types
+                    .into_iter()
+                    .map(|t| Value::default(t.clone()))
+                    .collect(),
+            )),
         }
     }
 }
@@ -203,6 +211,10 @@ impl fmt::Display for Value {
             }
             Value::Enum8(ref _v1, ref v2) => write!(f, "Enum8, {}", v2),
             Value::Enum16(ref _v1, ref v2) => write!(f, "Enum16, {}", v2),
+            Value::Tuple(v) => {
+                let cells: Vec<String> = v.iter().map(|v| format!("{}", v)).collect();
+                write!(f, "({})", cells.join(", "))
+            }
         }
     }
 }
@@ -240,6 +252,13 @@ impl convert::From<Value> for SqlType {
             Value::DateTime64(_, params) => {
                 let (precision, tz) = params;
                 SqlType::DateTime(DateTimeType::DateTime64(precision, tz))
+            }
+            Value::Tuple(values) => {
+                let types: Vec<&'static SqlType> = values
+                    .iter()
+                    .map(|v| SqlType::from(v.to_owned()).into())
+                    .collect();
+                SqlType::Tuple(types)
             }
         }
     }
