@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod metric_service_test;
-
 mod metric_service;
 
 pub use metric_service::MetricService;

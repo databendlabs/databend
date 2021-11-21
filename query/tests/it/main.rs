@@ -17,6 +17,7 @@ mod clusters;
 mod common;
 mod configs;
 mod functions;
+mod metrics;
 mod servers;
 mod sessions;
 mod sql;
