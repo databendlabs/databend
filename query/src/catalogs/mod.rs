@@ -22,9 +22,7 @@ mod table_id_ranges;
 pub mod backends;
 pub mod impls;
 
-pub use catalog::Catalog;
 pub use catalog::Catalog1;
-pub use database::Database;
 pub use database::Database1;
 pub use impls::in_memory_meta::InMemoryMetas;
 pub use table::Table;

@@ -125,7 +125,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
     let ctx = fixture.ctx();
 
     let create_table_plan = fixture.default_crate_table_plan();
-    let db = create_table_plan.db;
+    let db = create_table_plan.db.clone();
     let catalog = ctx.get_catalog();
     catalog
         .get_database(&db)

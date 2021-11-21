@@ -17,10 +17,6 @@ mod immutable_catalog;
 mod mutable_catalog;
 mod overlaid_catalog1;
 
-pub mod metastore_catalog;
-pub mod overlaid_catalog;
-pub mod system_catalog;
-
 pub use immutable_catalog::ImmutableCatalog;
 pub use mutable_catalog::MutableCatalog;
 pub use overlaid_catalog1::OverlaidCatalog1;

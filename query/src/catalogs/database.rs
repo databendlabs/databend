@@ -27,11 +27,6 @@ use dyn_clone::DynClone;
 
 use crate::catalogs::Table;
 
-pub trait Database: Sync + Send {
-    /// Database name.
-    fn name(&self) -> &str;
-}
-
 #[async_trait::async_trait]
 pub trait Database1: DynClone + Sync + Send {
     /// Database name.
