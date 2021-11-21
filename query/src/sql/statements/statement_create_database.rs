@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::CreateDatabasePlan;
 use common_planners::PlanNode;
+use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::SqlOption;
 
@@ -34,6 +35,7 @@ pub struct DfCreateDatabase {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfCreateDatabase {
+    #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let db = self.database_name()?;
         let options = self.database_options();

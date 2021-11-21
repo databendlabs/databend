@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_tracing::tracing;
 
 use crate::sessions::DatabendQueryContextRef;
 use crate::sql::statements::AnalyzableStatement;
@@ -24,6 +25,7 @@ pub struct DfShowProcessList;
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfShowProcessList {
+    #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let rewritten_query = "SELECT name, value FROM system.settings ORDER BY name";
         let rewritten_query_plan = PlanParser::parse(rewritten_query, ctx);

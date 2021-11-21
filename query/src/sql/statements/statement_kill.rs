@@ -15,6 +15,7 @@
 use common_exception::Result;
 use common_planners::KillPlan;
 use common_planners::PlanNode;
+use common_tracing::tracing;
 use sqlparser::ast::Ident;
 
 use crate::sessions::DatabendQueryContextRef;
@@ -29,6 +30,7 @@ pub struct DfKillStatement {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfKillStatement {
+    #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let id = self.object_id.value.clone();
         let kill_connection = !self.kill_query;
