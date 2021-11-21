@@ -29,7 +29,7 @@ async fn test_settings_table() -> Result<()> {
     ctx.get_settings().set_max_threads(2)?;
 
     let table: Arc<dyn Table> = Arc::new(SettingsTable::create(1));
-    let source_plan = table.read_plan(ctx.clone(), None)?;
+    let source_plan = table.read_plan(ctx.clone(), None).await?;
 
     let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;

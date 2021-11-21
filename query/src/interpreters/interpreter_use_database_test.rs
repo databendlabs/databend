@@ -19,19 +19,17 @@ use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
 
 use crate::interpreters::*;
-use crate::sql::*;
+use crate::tests::parse_query;
 
 #[tokio::test]
 async fn test_use_interpreter() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
-    if let PlanNode::UseDatabase(plan) =
-        PlanParser::create(ctx.clone()).build_from_sql("use default")?
-    {
-        let executor = UseDatabaseInterpreter::try_create(ctx, plan)?;
-        assert_eq!(executor.name(), "UseDatabaseInterpreter");
+    if let PlanNode::UseDatabase(plan) = parse_query("USE default", &ctx)? {
+        let interpreter = UseDatabaseInterpreter::try_create(ctx, plan)?;
+        assert_eq!(interpreter.name(), "UseDatabaseInterpreter");
 
-        let mut stream = executor.execute(None).await?;
+        let mut stream = interpreter.execute(None).await?;
         while let Some(_block) = stream.next().await {}
     } else {
         panic!()
@@ -44,10 +42,10 @@ async fn test_use_interpreter() -> Result<()> {
 async fn test_use_database_interpreter_error() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
-    if let PlanNode::UseDatabase(plan) = PlanParser::create(ctx.clone()).build_from_sql("use xx")? {
-        let executor = UseDatabaseInterpreter::try_create(ctx, plan)?;
+    if let PlanNode::UseDatabase(plan) = parse_query("USE xx", &ctx)? {
+        let interpreter = UseDatabaseInterpreter::try_create(ctx, plan)?;
 
-        if let Err(e) = executor.execute(None).await {
+        if let Err(e) = interpreter.execute(None).await {
             let expect = "Code: 3, displayText = Cannot USE 'xx', because the 'xx' doesn't exist.";
             assert_eq!(expect, format!("{}", e));
         } else {

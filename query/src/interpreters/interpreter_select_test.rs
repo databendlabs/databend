@@ -26,9 +26,8 @@ async fn test_select_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
     let ctx = crate::tests::try_create_context()?;
 
-    if let PlanNode::Select(plan) =
-        PlanParser::create(ctx.clone()).build_from_sql("select number from numbers_mt(10)")?
-    {
+    static TEST_QUERY_1: &str = "select number from numbers_mt(10)";
+    if let PlanNode::Select(plan) = PlanParser::parse(TEST_QUERY_1, ctx.clone()).await? {
         let executor = SelectInterpreter::try_create(ctx.clone(), plan)?;
         assert_eq!(executor.name(), "SelectInterpreter");
 
@@ -58,9 +57,8 @@ async fn test_select_interpreter() -> Result<()> {
         panic!()
     }
 
-    if let PlanNode::Select(plan) =
-        PlanParser::create(ctx.clone()).build_from_sql("select 1 + 1, 2 + 2, 3 * 3, 4 * 4")?
-    {
+    static TEST_QUERY_2: &str = "select 1 + 1, 2 + 2, 3 * 3, 4 * 4";
+    if let PlanNode::Select(plan) = PlanParser::parse(TEST_QUERY_2, ctx.clone()).await? {
         let executor = SelectInterpreter::try_create(ctx.clone(), plan)?;
         assert_eq!(executor.name(), "SelectInterpreter");
 

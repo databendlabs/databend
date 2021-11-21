@@ -74,7 +74,7 @@ impl Table for CsvTable {
         &self.table_info
     }
 
-    fn read_partitions(
+    async fn read_partitions(
         &self,
         _ctx: DatabendQueryContextRef,
         _push_downs: Option<Extras>,

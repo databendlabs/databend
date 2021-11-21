@@ -109,10 +109,11 @@ impl HttpQuery {
         let session = session_manager.create_session("http-statement")?;
         let ctx = session.create_context().await?;
         if self.db.is_some() && !self.db.clone().unwrap().is_empty() {
-            ctx.set_current_database(self.db.clone().unwrap())?;
+            // TODO: remove unwrap
+            ctx.set_current_database(self.db.clone().unwrap()).await?;
         }
         ctx.attach_query_str(&self.sql);
-        let plan = PlanParser::create(ctx.clone()).build_from_sql(&self.sql)?;
+        let plan = PlanParser::parse(&self.sql, ctx.clone()).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
         let data_stream = interpreter.execute(None).await?;
         let state = HttpQueryState {

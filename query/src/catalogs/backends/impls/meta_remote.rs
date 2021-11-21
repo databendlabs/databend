@@ -27,6 +27,7 @@ use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
+use common_meta_types::GetDatabaseReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -82,14 +83,13 @@ impl MetaApi for MetaRemote {
             .await
     }
 
-    async fn get_database(&self, db_name: &str) -> Result<Arc<DatabaseInfo>> {
-        let db_name = db_name.to_owned();
-        self.query_backend(move |cli| async move { cli.get_database(&db_name).await })
+    async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>> {
+        self.query_backend(move |cli| async move { cli.get_database(req).await })
             .await
     }
 
-    async fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>> {
-        self.query_backend(move |cli| async move { cli.get_databases().await })
+    async fn list_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>> {
+        self.query_backend(move |cli| async move { cli.list_databases().await })
             .await
     }
 
@@ -111,9 +111,9 @@ impl MetaApi for MetaRemote {
             .await
     }
 
-    async fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableInfo>>> {
+    async fn list_tables(&self, db_name: &str) -> Result<Vec<Arc<TableInfo>>> {
         let db_name = db_name.to_owned();
-        self.query_backend(move |cli| async move { cli.get_tables(&db_name).await })
+        self.query_backend(move |cli| async move { cli.list_tables(&db_name).await })
             .await
     }
 

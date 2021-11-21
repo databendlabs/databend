@@ -19,7 +19,9 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_datavalues::DataSchema;
+use maplit::hashmap;
 
+use crate::MatchSeq;
 use crate::MetaVersion;
 
 /// Globally unique identifier of a version of TableMeta.
@@ -178,9 +180,13 @@ pub struct DropTableReply {}
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct UpsertTableOptionReq {
     pub table_id: u64,
-    pub table_version: u64,
-    pub option_key: String,
-    pub option_value: String,
+    pub seq: MatchSeq,
+
+    /// Add or remove options
+    ///
+    /// Some(String): add or update an option.
+    /// None: delete an option.
+    pub options: HashMap<String, Option<String>>,
 }
 
 impl UpsertTableOptionReq {
@@ -191,9 +197,8 @@ impl UpsertTableOptionReq {
     ) -> UpsertTableOptionReq {
         UpsertTableOptionReq {
             table_id: table_ident.table_id,
-            table_version: table_ident.version,
-            option_key: key.into(),
-            option_value: value.into(),
+            seq: MatchSeq::Exact(table_ident.version),
+            options: hashmap! {key.into() => Some(value.into())},
         }
     }
 }

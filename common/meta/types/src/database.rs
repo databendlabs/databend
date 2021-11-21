@@ -14,6 +14,12 @@
 //
 
 use std::collections::HashMap;
+use std::ops::Deref;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct DatabaseNameIdent {
+    pub db_name: String,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseInfo {
@@ -41,3 +47,26 @@ pub struct DropDatabaseReq {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropDatabaseReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct GetDatabaseReq {
+    pub inner: DatabaseNameIdent,
+}
+
+impl Deref for GetDatabaseReq {
+    type Target = DatabaseNameIdent;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl GetDatabaseReq {
+    pub fn new(db_name: impl Into<String>) -> GetDatabaseReq {
+        GetDatabaseReq {
+            inner: DatabaseNameIdent {
+                db_name: db_name.into(),
+            },
+        }
+    }
+}

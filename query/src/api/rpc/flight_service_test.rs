@@ -33,6 +33,7 @@ use crate::api::rpc::DatabendQueryFlightService;
 use crate::api::FlightTicket;
 use crate::api::ShuffleAction;
 use crate::tests::parse_query;
+use crate::tests::try_create_context;
 use crate::tests::SessionManagerBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -161,10 +162,11 @@ fn do_get_request(query_id: &str, stage_id: &str) -> Result<Request<Ticket>> {
 }
 
 fn do_action_request(query_id: &str, stage_id: &str) -> Result<Request<Action>> {
+    let ctx = try_create_context()?;
     let flight_action = FlightAction::PrepareShuffleAction(ShuffleAction {
         query_id: String::from(query_id),
         stage_id: String::from(stage_id),
-        plan: parse_query("SELECT number FROM numbers(5)")?,
+        plan: parse_query("SELECT number FROM numbers(5)", &ctx)?,
         sinks: vec![String::from("stream_id")],
         scatters_expression: Expression::create_literal(DataValue::UInt64(Some(1))),
     });

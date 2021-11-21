@@ -39,6 +39,7 @@ use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::TableMeta;
+use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 use maplit::btreeset;
 use maplit::hashmap;
@@ -206,14 +207,14 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
     tracing::info!("--- upsert options on empty table options");
     {
         let resp = m
-            .apply_cmd(&Cmd::UpsertTableOptions {
+            .apply_cmd(&Cmd::UpsertTableOptions(UpsertTableOptionReq {
                 table_id,
                 seq: MatchSeq::Exact(version),
-                table_options: hashmap! {
+                options: hashmap! {
                     "a".to_string() => Some("A".to_string()),
                     "b".to_string() => None,
                 },
-            })
+            }))
             .await?;
 
         let ch: Change<TableMeta> = resp.try_into().unwrap();
@@ -255,11 +256,11 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
     tracing::info!("--- update with invalid table_id");
     {
         let resp = m
-            .apply_cmd(&Cmd::UpsertTableOptions {
+            .apply_cmd(&Cmd::UpsertTableOptions(UpsertTableOptionReq {
                 table_id: 0,
                 seq: MatchSeq::Exact(version - 1),
-                table_options: hashmap! {},
-            })
+                options: hashmap! {},
+            }))
             .await;
 
         let err = resp.unwrap_err();
@@ -270,11 +271,11 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
     tracing::info!("--- update with mismatched seq wont update anything");
     {
         let resp = m
-            .apply_cmd(&Cmd::UpsertTableOptions {
+            .apply_cmd(&Cmd::UpsertTableOptions(UpsertTableOptionReq {
                 table_id,
                 seq: MatchSeq::Exact(version - 1),
-                table_options: hashmap! {},
-            })
+                options: hashmap! {},
+            }))
             .await?;
 
         let ch: Change<TableMeta> = resp.try_into().unwrap();
@@ -286,14 +287,14 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
     tracing::info!("--- update OK");
     {
         let resp = m
-            .apply_cmd(&Cmd::UpsertTableOptions {
+            .apply_cmd(&Cmd::UpsertTableOptions(UpsertTableOptionReq {
                 table_id,
                 seq: MatchSeq::Exact(version),
-                table_options: hashmap! {
+                options: hashmap! {
                     "a".to_string() => None,
                     "c".to_string() => Some("C".to_string()),
                 },
-            })
+            }))
             .await?;
 
         let ch: Change<TableMeta> = resp.try_into().unwrap();

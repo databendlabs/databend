@@ -25,6 +25,7 @@ pub use database::CreateDatabaseReq;
 pub use database::DatabaseInfo;
 pub use database::DropDatabaseReply;
 pub use database::DropDatabaseReq;
+pub use database::GetDatabaseReq;
 pub use errors::ConflictSeq;
 pub use kv_message::GetKVActionReply;
 pub use kv_message::MGetKVActionReply;

@@ -35,7 +35,7 @@ impl DatabaseFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default())
+            .features(FunctionFeatures::default().context_function())
     }
 }
 

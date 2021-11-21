@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_meta_flight::FlightReq;
-use common_meta_flight::GetDatabaseAction;
 use common_meta_flight::GetDatabasesAction;
 use common_meta_flight::GetTableAction;
 use common_meta_flight::GetTableExtReq;
@@ -39,15 +38,14 @@ use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
+use common_meta_types::GetDatabaseReq;
 use common_meta_types::LogEntry;
-use common_meta_types::MatchSeq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
-use maplit::hashmap;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
@@ -94,21 +92,24 @@ impl RequestHandler<FlightReq<CreateDatabaseReq>> for ActionHandler {
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<GetDatabaseAction> for ActionHandler {
-    async fn handle(&self, act: GetDatabaseAction) -> common_exception::Result<DatabaseInfo> {
-        let db_name = act.db;
+impl RequestHandler<FlightReq<GetDatabaseReq>> for ActionHandler {
+    async fn handle(
+        &self,
+        act: FlightReq<GetDatabaseReq>,
+    ) -> common_exception::Result<Arc<DatabaseInfo>> {
+        let db_name = &act.req.db_name;
         let db = self
             .meta_node
             .get_state_machine()
             .await
-            .get_database(&db_name)?;
+            .get_database(db_name)?;
 
         match db {
-            Some(db) => Ok(DatabaseInfo {
+            Some(db) => Ok(Arc::new(DatabaseInfo {
                 database_id: db.data,
                 db: db_name.to_string(),
-            }),
-            None => Err(ErrorCode::UnknownDatabase(db_name)),
+            })),
+            None => Err(ErrorCode::UnknownDatabase(db_name.to_string())),
         }
     }
 }
@@ -331,13 +332,7 @@ impl RequestHandler<FlightReq<UpsertTableOptionReq>> for ActionHandler {
         let req = req.req;
         let cr = LogEntry {
             txid: None,
-            cmd: UpsertTableOptions {
-                table_id: req.table_id,
-                seq: MatchSeq::Exact(req.table_version),
-                table_options: hashmap! {
-                    req.option_key => Some(req.option_value),
-                },
-            },
+            cmd: UpsertTableOptions(req.clone()),
         };
 
         let res = self
@@ -351,8 +346,8 @@ impl RequestHandler<FlightReq<UpsertTableOptionReq>> for ActionHandler {
             let (prev, _result) = ch.unwrap();
 
             return Err(ErrorCode::TableVersionMissMatch(format!(
-                "targeting version {}, current version {}",
-                req.table_version, prev.seq,
+                "targeting version {:?}, current version {}",
+                req.seq, prev.seq,
             )));
         }
 

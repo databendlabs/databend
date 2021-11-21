@@ -186,6 +186,7 @@ build_exceptions! {
     BadPredicateRows(56),
     SHA1CheckFailed(57),
     InvalidSourceFormat(58),
+    UnknownColumn(59),
 
     // uncategorized
     UnexpectedResponseType(600),
@@ -393,7 +394,7 @@ impl From<serde_json::Error> for ErrorCode {
 
 impl From<sqlparser::parser::ParserError> for ErrorCode {
     fn from(error: sqlparser::parser::ParserError) -> Self {
-        ErrorCode::from_std_error(error)
+        ErrorCode::SyntaxException(format!("{}", error))
     }
 }
 
