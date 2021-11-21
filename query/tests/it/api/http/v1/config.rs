@@ -26,10 +26,9 @@ use poem::Route;
 
 #[tokio::test]
 async fn test_config() -> common_exception::Result<()> {
-    use pretty_assertions::assert_eq;
-
-    use crate::api::http::v1::config::config_handler;
-    use crate::configs::Config; // for `app.oneshot()`
+    use databend_query::api::http::v1::config::config_handler;
+    use databend_query::configs::Config;
+    use pretty_assertions::assert_eq; // for `app.oneshot()`
 
     let conf = Config::default();
     let cluster_router = Route::new()

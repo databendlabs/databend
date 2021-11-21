@@ -26,7 +26,7 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test]
 async fn test_health() -> common_exception::Result<()> {
-    use crate::api::http::v1::health::health_handler;
+    use databend_query::api::http::v1::health::health_handler;
 
     let cluster_router = Route::new().at("/v1/health", get(health_handler));
     // health check

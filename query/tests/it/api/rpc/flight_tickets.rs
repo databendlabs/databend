@@ -17,9 +17,8 @@ use std::convert::TryInto;
 use common_arrow::arrow_format::flight::data::Ticket;
 use common_base::tokio;
 use common_exception::Result;
-
-use crate::api::rpc::flight_tickets::StreamTicket;
-use crate::api::FlightTicket;
+use databend_query::api::rpc::StreamTicket;
+use databend_query::api::FlightTicket;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_stream_ticket_try_into() -> Result<()> {
