@@ -68,12 +68,7 @@ impl Function for RoundingFunction {
             .cast_with_type(&DataType::Float64)?;
 
         let column: DataColumn = if columns.len() == 1 {
-            DFFloat64Array::new_from_opt_iter(
-                x_series
-                    .f64()?
-                    .iter()
-                    .map(|x| x.map(|x| (self.rounding_func)(*x))),
-            )
+            x_series.f64()?.apply(|x| (self.rounding_func)(x))
         } else {
             let d_column: &DataColumn = &columns[1].column().cast_with_type(&DataType::Int64)?;
             match d_column {
@@ -85,39 +80,22 @@ impl Function for RoundingFunction {
                         match v.as_i64() {
                             Err(_) => {
                                 // mysql> SELECT ROUND(1.015, 'aaa'); => 1 => d == 0
-                                DFFloat64Array::new_from_opt_iter(
-                                    x_series
-                                        .f64()?
-                                        .iter()
-                                        .map(|x| x.map(|x| (self.rounding_func)(*x))),
-                                )
+                                x_series.f64()?.apply(|x| (self.rounding_func)(x))
                             }
                             Ok(v) => match v.cmp(&0) {
                                 Ordering::Greater => {
                                     let z = 10_f64.powi(if v > 30 { 30 } else { v as i32 });
-                                    DFFloat64Array::new_from_opt_iter(x_series.f64()?.iter().map(
-                                        |x| {
-                                            x.map(|x| {
-                                                x.trunc() + (self.rounding_func)(x.fract() * z) / z
-                                            })
-                                        },
-                                    ))
+                                    x_series.f64()?.apply(|x| {
+                                        x.trunc() + (self.rounding_func)(x.fract() * z) / z
+                                    })
                                 }
                                 Ordering::Less => {
                                     let z = 10_f64.powi(if v < -30 { 30 } else { -v as i32 });
-                                    DFFloat64Array::new_from_opt_iter(
-                                        x_series
-                                            .f64()?
-                                            .iter()
-                                            .map(|x| x.map(|x| (self.rounding_func)(x / z) * z)),
-                                    )
+                                    x_series.f64()?.apply(|x| (self.rounding_func)(x / z) * z)
                                 }
-                                Ordering::Equal => DFFloat64Array::new_from_opt_iter(
-                                    x_series
-                                        .f64()?
-                                        .iter()
-                                        .map(|x| x.map(|x| (self.rounding_func)(*x))),
-                                ),
+                                Ordering::Equal => {
+                                    x_series.f64()?.apply(|x| (self.rounding_func)(x))
+                                }
                             },
                         }
                     }
