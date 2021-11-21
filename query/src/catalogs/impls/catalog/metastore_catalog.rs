@@ -15,7 +15,6 @@
 
 use std::sync::Arc;
 
-use common_base::BlockingWait;
 use common_dal::InMemoryData;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -90,8 +89,7 @@ impl MetaStoreCatalog {
             tracing::info!("use embedded meta");
             // TODO(xp): This can only be used for test: data will be removed when program quit.
 
-            let meta_embedded = MetaEmbedded::new_temp().wait(None)??;
-            Arc::new(meta_embedded)
+            Arc::new(MetaEmbedded::new_temp().await?)
         } else {
             tracing::info!("use remote meta");
 
