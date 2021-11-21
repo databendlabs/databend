@@ -15,18 +15,25 @@
 
 use std::sync::Arc;
 
+use common_base::BlockingWait;
 use common_dal::InMemoryData;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_api::MetaApi;
+use common_meta_embedded::MetaEmbedded;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DropDatabaseReq;
+use common_tracing::tracing;
 
+use crate::catalogs::backends::MetaRemote;
 use crate::catalogs::catalog::Catalog1;
 use crate::catalogs::database::Database1;
+use crate::common::MetaClientProvider;
+use crate::configs::Config;
 use crate::datasources::database::fuse::database::FuseDatabase;
+use crate::datasources::table::register_prelude_tbl_engines;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
 
 /// Catalog based on MetaStore
@@ -42,20 +49,63 @@ pub struct MutableCatalog {
 }
 
 impl MutableCatalog {
-    pub fn create(
-        meta: Arc<dyn MetaApi>,
-        in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
-        table_engine_registry: Arc<TableEngineRegistry>,
-    ) -> Self {
-        MutableCatalog {
-            meta,
+    /// The component hierarchy is layered as:
+    /// ```text
+    /// Remote:
+    ///
+    ///                                        RPC
+    /// MetaRemote -------> Meta server      Meta server
+    ///                     raft <---------> raft <----..
+    ///                     MetaEmbedded     MetaEmbedded
+    ///
+    /// Embedded:
+    ///
+    /// MetaEmbedded
+    /// ```
+    pub async fn try_create_with_config(conf: Config) -> Result<Self> {
+        let local_mode = conf.meta.meta_address.is_empty();
+
+        let meta: Arc<dyn MetaApi> = if local_mode {
+            tracing::info!("use embedded meta");
+            // TODO(xp): This can only be used for test: data will be removed when program quit.
+
+            let meta_embedded = MetaEmbedded::new_temp().wait(None)??;
+            Arc::new(meta_embedded)
+        } else {
+            tracing::info!("use remote meta");
+
+            let meta_client_provider =
+                Arc::new(MetaClientProvider::new(conf.meta.to_flight_client_config()));
+            let meta_remote = MetaRemote::create(meta_client_provider);
+            Arc::new(meta_remote)
+        };
+
+        let table_engine_registry = Arc::new(TableEngineRegistry::default());
+
+        register_prelude_tbl_engines(&table_engine_registry)?;
+
+        let req = CreateDatabaseReq {
+            if_not_exists: true,
+            db: "default".to_string(),
+            engine: "".to_string(),
+            options: Default::default(),
+        };
+
+        meta.create_database(req).await?;
+
+        Ok(MutableCatalog {
             table_engine_registry,
-            in_memory_data,
-        }
+            meta,
+            in_memory_data: Default::default(),
+        })
     }
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database1>> {
-        // TODO(bohu): Add the database engine match, now we set only one fuse database here.
+        // TODO(bohu): Add the database engine match, now we set only one fuse database here, like:
+        // match db_info.engine {
+        //    "default" ->  create fuse database
+        //    "github" ->  create github database
+        // }
         let db = FuseDatabase::new(
             &db_info.db,
             self.meta.clone(),
