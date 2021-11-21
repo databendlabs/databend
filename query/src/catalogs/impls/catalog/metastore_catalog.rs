@@ -100,7 +100,7 @@ impl MetaStoreCatalog {
             Arc::new(meta_remote)
         };
 
-        let table_engine_registry = Arc::new(TableEngineRegistry::new());
+        let table_engine_registry = Arc::new(TableEngineRegistry::default());
 
         register_prelude_tbl_engines(&table_engine_registry)?;
 

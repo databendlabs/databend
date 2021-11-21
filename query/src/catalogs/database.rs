@@ -12,7 +12,70 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_meta_types::CreateTableReq;
+use common_meta_types::DropTableReply;
+use common_meta_types::DropTableReq;
+use common_meta_types::MetaId;
+use common_meta_types::TableIdent;
+use common_meta_types::TableMeta;
+use common_meta_types::UpsertTableOptionReply;
+use common_meta_types::UpsertTableOptionReq;
+use dyn_clone::DynClone;
+
+use crate::catalogs::Table;
+use crate::catalogs::TableFunction;
+use crate::datasources::table_func_engine::TableArgs;
+
 pub trait Database: Sync + Send {
     /// Database name.
     fn name(&self) -> &str;
+}
+
+#[async_trait::async_trait]
+pub trait Database1: DynClone + Sync + Send {
+    /// Database name.
+    fn name(&self) -> &str;
+
+    // Get one table by db and table name.
+    async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>>;
+
+    async fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
+
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)>;
+
+    async fn create_table(&self, req: CreateTableReq) -> Result<()>;
+
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply>;
+
+    // Check a db.table is exists or not.
+    async fn exists_table(&self, db_name: &str, table_name: &str) -> Result<bool> {
+        match self.get_table(db_name, table_name).await {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                if err.code() == ErrorCode::UnknownTableCode() {
+                    Ok(false)
+                } else {
+                    Err(err)
+                }
+            }
+        }
+    }
+
+    // Get function by name.
+    fn get_table_function(
+        &self,
+        _func_name: &str,
+        _tbl_args: TableArgs,
+    ) -> Result<Arc<dyn TableFunction>> {
+        unimplemented!()
+    }
+
+    async fn upsert_table_option(
+        &self,
+        req: UpsertTableOptionReq,
+    ) -> common_exception::Result<UpsertTableOptionReply>;
 }

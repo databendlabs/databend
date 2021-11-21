@@ -13,9 +13,4 @@
 //  limitations under the License.
 //
 
-mod meta_catalog;
-pub mod metastore_catalog;
-pub mod overlaid_catalog;
-pub mod system_catalog;
-
-pub use meta_catalog::MetaCatalog;
+pub mod database;

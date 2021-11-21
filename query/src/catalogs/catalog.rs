@@ -31,6 +31,7 @@ use common_meta_types::UpsertTableOptionReq;
 use dyn_clone::DynClone;
 
 use crate::catalogs::Database;
+use crate::catalogs::Database1;
 use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
 use crate::datasources::table_func_engine::TableArgs;
@@ -89,6 +90,33 @@ pub trait Catalog: DynClone + Send + Sync {
         &self,
         req: UpsertTableOptionReq,
     ) -> common_exception::Result<UpsertTableOptionReply>;
+
+    // Operation with database.
+    async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply>;
+
+    async fn drop_database(&self, req: DropDatabaseReq) -> Result<()>;
+
+    async fn exists_database(&self, db_name: &str) -> Result<bool> {
+        match self.get_database(db_name).await {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                if err.code() == ErrorCode::UnknownDatabaseCode() {
+                    Ok(false)
+                } else {
+                    Err(err)
+                }
+            }
+        }
+    }
+}
+
+#[async_trait::async_trait]
+pub trait Catalog1: DynClone + Send + Sync {
+    // Get all the databases.
+    async fn get_databases(&self) -> Result<Vec<Arc<dyn Database1>>>;
+
+    // Get the database by name.
+    async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database1>>;
 
     // Operation with database.
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply>;
