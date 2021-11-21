@@ -48,7 +48,7 @@ impl Interpreter for UseDatabaseInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        self.ctx.set_current_database(self.plan.db.clone())?;
+        self.ctx.set_current_database(self.plan.db.clone()).await?;
         let schema = Arc::new(DataSchema::empty());
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
     }
