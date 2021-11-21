@@ -28,6 +28,7 @@ use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
+use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MetaId;
@@ -56,7 +57,7 @@ pub struct FlightReq<T> {
 pub enum MetaFlightAction {
     CreateDatabase(FlightReq<CreateDatabaseReq>),
     DropDatabase(FlightReq<DropDatabaseReq>),
-    GetDatabase(GetDatabaseAction),
+    GetDatabase(FlightReq<GetDatabaseReq>),
     GetDatabases(GetDatabasesAction),
 
     CreateTable(FlightReq<CreateTableReq>),
@@ -151,13 +152,8 @@ impl RequestFor for FlightReq<CreateDatabaseReq> {
     type Reply = CreateDatabaseReply;
 }
 
-// - get database
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct GetDatabaseAction {
-    pub db: String,
-}
-impl RequestFor for GetDatabaseAction {
-    type Reply = DatabaseInfo;
+impl RequestFor for FlightReq<GetDatabaseReq> {
+    type Reply = Arc<DatabaseInfo>;
 }
 
 impl RequestFor for FlightReq<DropDatabaseReq> {

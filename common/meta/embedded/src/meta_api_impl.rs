@@ -32,6 +32,7 @@ use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
+use common_meta_types::GetDatabaseReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -89,20 +90,20 @@ impl MetaApi for MetaEmbedded {
         Ok(DropDatabaseReply {})
     }
 
-    async fn get_database(&self, db: &str) -> Result<Arc<DatabaseInfo>> {
+    async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>> {
         let sm = self.inner.lock().await;
         let res = sm
-            .get_database(db)?
-            .ok_or_else(|| ErrorCode::UnknownDatabase(db.to_string()))?;
+            .get_database(&req.db_name)?
+            .ok_or_else(|| ErrorCode::UnknownDatabase(req.db_name.clone()))?;
 
         let dbi = DatabaseInfo {
             database_id: res.data,
-            db: db.to_string(),
+            db: req.db_name.clone(),
         };
         Ok(Arc::new(dbi))
     }
 
-    async fn get_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>> {
+    async fn list_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>> {
         let sm = self.inner.lock().await;
         let res = sm.get_databases()?;
         Ok(res
@@ -214,7 +215,7 @@ impl MetaApi for MetaEmbedded {
         Ok(Arc::new(table_info))
     }
 
-    async fn get_tables(&self, db: &str) -> Result<Vec<Arc<TableInfo>>> {
+    async fn list_tables(&self, db: &str) -> Result<Vec<Arc<TableInfo>>> {
         let sm = self.inner.lock().await;
         let tables = sm.get_tables(db)?;
         Ok(tables
