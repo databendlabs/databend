@@ -56,7 +56,8 @@ impl Interpreter for CopyInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let table = self
             .ctx
-            .get_table(&self.plan.db_name, &self.plan.tbl_name)?;
+            .get_table(&self.plan.db_name, &self.plan.tbl_name)
+            .await?;
 
         let location = self.plan.location.clone();
         let c = extract_stage_location(location.as_str());

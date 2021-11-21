@@ -19,6 +19,7 @@ use common_meta_types::UserPrivilegeType;
 use sqlparser::ast::*;
 
 use crate::sql::statements::DfAlterUser;
+use crate::sql::statements::DfCopy;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfCreateUser;

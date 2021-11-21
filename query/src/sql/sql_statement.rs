@@ -19,6 +19,7 @@ use nom::character::complete::multispace0;
 use nom::character::complete::multispace1;
 use nom::IResult;
 
+use super::statements::DfCopy;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfCreateTable;
