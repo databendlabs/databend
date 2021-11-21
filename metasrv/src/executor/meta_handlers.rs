@@ -18,9 +18,9 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_meta_flight::FlightReq;
-use common_meta_flight::GetDatabasesAction;
 use common_meta_flight::GetTableExtReq;
-use common_meta_flight::GetTablesAction;
+use common_meta_flight::ListDatabasesAction;
+use common_meta_flight::ListTablesAction;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd::CreateDatabase;
@@ -300,10 +300,10 @@ impl RequestHandler<GetTableExtReq> for ActionHandler {
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<GetDatabasesAction> for ActionHandler {
+impl RequestHandler<ListDatabasesAction> for ActionHandler {
     async fn handle(
         &self,
-        _req: GetDatabasesAction,
+        _req: ListDatabasesAction,
     ) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
         let res = self.meta_node.get_state_machine().await.get_databases()?;
 
@@ -320,8 +320,8 @@ impl RequestHandler<GetDatabasesAction> for ActionHandler {
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<GetTablesAction> for ActionHandler {
-    async fn handle(&self, req: GetTablesAction) -> common_exception::Result<Vec<Arc<TableInfo>>> {
+impl RequestHandler<ListTablesAction> for ActionHandler {
+    async fn handle(&self, req: ListTablesAction) -> common_exception::Result<Vec<Arc<TableInfo>>> {
         let res = self.meta_node.get_tables(req.db.as_str()).await?;
         Ok(res.iter().map(|t| Arc::new(t.clone())).collect::<Vec<_>>())
     }

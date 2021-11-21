@@ -59,13 +59,13 @@ pub enum MetaFlightAction {
     CreateDatabase(FlightReq<CreateDatabaseReq>),
     DropDatabase(FlightReq<DropDatabaseReq>),
     GetDatabase(FlightReq<GetDatabaseReq>),
-    GetDatabases(GetDatabasesAction),
+    ListDatabases(ListDatabasesAction),
 
     CreateTable(FlightReq<CreateTableReq>),
     DropTable(FlightReq<DropTableReq>),
     GetTable(FlightReq<GetTableReq>),
     GetTableExt(GetTableExtReq),
-    GetTables(GetTablesAction),
+    ListTables(ListTablesAction),
     CommitTable(FlightReq<UpsertTableOptionReq>),
 
     UpsertKV(UpsertKVAction),
@@ -187,19 +187,19 @@ impl RequestFor for FlightReq<UpsertTableOptionReq> {
 
 // - get tables
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct GetTablesAction {
+pub struct ListTablesAction {
     pub db: String,
 }
 
-impl RequestFor for GetTablesAction {
+impl RequestFor for ListTablesAction {
     type Reply = Vec<Arc<TableInfo>>;
 }
 
 // -get databases
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct GetDatabasesAction;
+pub struct ListDatabasesAction;
 
-impl RequestFor for GetDatabasesAction {
+impl RequestFor for ListDatabasesAction {
     type Reply = Vec<Arc<DatabaseInfo>>;
 }

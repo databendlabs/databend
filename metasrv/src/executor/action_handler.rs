@@ -67,13 +67,13 @@ impl ActionHandler {
             MetaFlightAction::CreateDatabase(a) => s.serialize(self.handle(a).await?),
             MetaFlightAction::GetDatabase(a) => s.serialize(self.handle(a).await?),
             MetaFlightAction::DropDatabase(a) => s.serialize(self.handle(a).await?),
-            MetaFlightAction::GetDatabases(a) => s.serialize(self.handle(a).await?),
+            MetaFlightAction::ListDatabases(a) => s.serialize(self.handle(a).await?),
 
             // table
             MetaFlightAction::CreateTable(a) => s.serialize(self.handle(a).await?),
             MetaFlightAction::DropTable(a) => s.serialize(self.handle(a).await?),
             MetaFlightAction::GetTable(a) => s.serialize(self.handle(a).await?),
-            MetaFlightAction::GetTables(a) => s.serialize(self.handle(a).await?),
+            MetaFlightAction::ListTables(a) => s.serialize(self.handle(a).await?),
             MetaFlightAction::GetTableExt(a) => s.serialize(self.handle(a).await?),
             MetaFlightAction::CommitTable(a) => s.serialize(self.handle(a).await?),
         }
