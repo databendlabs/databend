@@ -35,19 +35,19 @@ use crate::datasources::table_engine_registry::TableEngineRegistry;
 /// - Instances of `Database` are created by using database factories according to the engine
 /// - Database engines are free to save table meta in metastore or not
 #[derive(Clone)]
-pub struct MetaCatalog {
+pub struct MutableCatalog {
     meta: Arc<dyn MetaApi>,
     table_engine_registry: Arc<TableEngineRegistry>,
     in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
 }
 
-impl MetaCatalog {
+impl MutableCatalog {
     pub fn create(
         meta: Arc<dyn MetaApi>,
         in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
         table_engine_registry: Arc<TableEngineRegistry>,
     ) -> Self {
-        MetaCatalog {
+        MutableCatalog {
             meta,
             table_engine_registry,
             in_memory_data,
@@ -67,7 +67,7 @@ impl MetaCatalog {
 }
 
 #[async_trait::async_trait]
-impl Catalog1 for MetaCatalog {
+impl Catalog1 for MutableCatalog {
     async fn get_databases(&self) -> Result<Vec<Arc<dyn Database1>>> {
         let dbs = self.meta.get_databases().await?;
 
