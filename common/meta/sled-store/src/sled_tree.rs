@@ -12,41 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::error::Error;
-use std::fmt;
 use std::fmt::Display;
-use std::io;
 use std::marker::PhantomData;
 use std::ops::Bound;
 use std::ops::RangeBounds;
 
-use async_trait::async_trait;
+use common_exception::exception::SledTransactionError;
+use common_exception::exception::SledUnabortableTransactionError;
 use common_exception::ErrorCode;
+use common_exception::SledConflictableTransactionError;
 use common_exception::ToErrorCode;
 use common_tracing::tracing;
-use sled::transaction::ConflictableTransactionError;
-use sled::transaction::ConflictableTransactionResult;
-use sled::transaction::TransactionError;
 use sled::transaction::TransactionalTree;
-use sled::transaction::UnabortableTransactionError;
-use sled::Transactional;
 
-use crate::sled::transaction::TransactionResult;
 use crate::SledKeySpace;
 
 /// Extract key from a value of sled tree that includes its key.
 pub trait SledValueToKey<K> {
     fn to_key(&self) -> K;
-}
-
-#[async_trait]
-pub trait TreeAPI {
-    fn get<KV: SledKeySpace>(&self, k: &KV::K) -> common_exception::Result<Option<KV::V>>;
-    async fn insert<KV: SledKeySpace>(
-        &self,
-        key: &KV::K,
-        value: &KV::V,
-    ) -> common_exception::Result<Option<KV::V>>;
 }
 
 /// SledTree is a wrapper of sled::Tree that provides access of more than one key-value
@@ -105,6 +88,16 @@ impl SledTree {
         }
     }
 
+    pub fn txn<T, E>(
+        &self,
+        f: impl Fn(TransactionSledTree<'_>) -> Result<T, SledConflictableTransactionError<E>>,
+    ) -> Result<T, SledTransactionError<E>> {
+        // use map_err_to_code
+        (&self.tree)
+            .transaction(move |tree| Ok(f(TransactionSledTree { txn_tree: tree })?))
+            .map_err(SledTransactionError::from)
+    }
+
     /// Return true if the tree contains the key.
     pub fn contains_key<KV: SledKeySpace>(&self, key: &KV::K) -> common_exception::Result<bool>
     where KV: SledKeySpace {
@@ -116,6 +109,53 @@ impl SledTree {
             })?;
 
         Ok(got)
+    }
+
+    /// Retrieve the value of key.
+    pub fn get<KV: SledKeySpace>(&self, key: &KV::K) -> common_exception::Result<Option<KV::V>> {
+        let got = self
+            .tree
+            .get(KV::serialize_key(key)?)
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+                format!("get: {}:{}", self.name, key)
+            })?;
+
+        let v = match got {
+            None => None,
+            Some(v) => Some(KV::deserialize_value(v)?),
+        };
+
+        Ok(v)
+    }
+
+    /// Insert a single kv.
+    /// Returns the last value if it is set.
+    async fn insert<KV>(
+        &self,
+        key: &KV::K,
+        value: &KV::V,
+    ) -> common_exception::Result<Option<KV::V>>
+    where
+        KV: SledKeySpace,
+    {
+        let k = KV::serialize_key(key)?;
+        let v = KV::serialize_value(value)?;
+
+        let prev = self
+            .tree
+            .insert(k, v)
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+                format!("insert_value {}", key)
+            })?;
+
+        let prev = match prev {
+            None => None,
+            Some(x) => Some(KV::deserialize_value(x)?),
+        };
+
+        self.flush_async(true).await?;
+
+        Ok(prev)
     }
 
     pub async fn update_and_fetch<KV: SledKeySpace, F>(
@@ -439,93 +479,46 @@ impl SledTree {
     }
 }
 
-#[async_trait]
-impl TreeAPI for SledTree {
-    /// Retrieve the value of key.
-    fn get<KV: SledKeySpace>(&self, key: &KV::K) -> common_exception::Result<Option<KV::V>> {
-        let got = self
-            .tree
-            .get(KV::serialize_key(key)?)
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                format!("get: {}:{}", self.name, key)
-            })?;
-
-        let v = match got {
-            None => None,
-            Some(v) => Some(KV::deserialize_value(v)?),
-        };
-
-        Ok(v)
-    }
-
-    /// Insert a single kv.
-    /// Returns the last value if it is set.
-    #[tracing::instrument(level = "debug", skip(self, value))]
-    async fn insert<KV>(
-        &self,
-        key: &KV::K,
-        value: &KV::V,
-    ) -> common_exception::Result<Option<KV::V>>
-    where
-        KV: SledKeySpace,
-    {
-        let k = KV::serialize_key(key)?;
-        let v = KV::serialize_value(value)?;
-
-        let prev = self
-            .tree
-            .insert(k, v)
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                format!("insert_value {}", key)
-            })?;
-
-        let prev = match prev {
-            None => None,
-            Some(x) => Some(KV::deserialize_value(x)?),
-        };
-
-        self.flush_async(true).await?;
-
-        Ok(prev)
-    }
-}
-
 pub struct TransactionSledTree<'a> {
     pub txn_tree: &'a TransactionalTree,
 }
 
-#[async_trait]
-impl<'a> TreeAPI for TransactionSledTree<'_> {
-    fn get<KV: SledKeySpace>(&self, key: &KV::K) -> common_exception::Result<Option<KV::V>> {
-        let got = self
-            .txn_tree
-            .get(KV::serialize_key(key)?)
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || format!("get: {}", key))?;
-        let v = match got {
-            None => None,
-            Some(v) => Some(KV::deserialize_value(v)?),
-        };
-        Ok(v)
+impl TransactionSledTree<'_> {
+    pub fn key_space<KV: SledKeySpace>(&self) -> AsTxnKeySpace<KV> {
+        AsTxnKeySpace::<KV> {
+            inner: self,
+            phantom: PhantomData,
+        }
     }
 
-    async fn insert<KV: SledKeySpace>(
+    // fn get<KV: SledKeySpace>(&self, key: &KV::K) -> common_exception::Result<Option<KV::V>> {
+    //     let got = self
+    //         .txn_tree
+    //         .get(KV::serialize_key(key)?)
+    //         .map_err_to_code(ErrorCode::MetaStoreDamaged, || format!("get: {}", key))?;
+    //     let v = match got {
+    //         None => None,
+    //         Some(v) => Some(KV::deserialize_value(v)?),
+    //     };
+    //     Ok(v)
+    // }
+
+    fn insert<KV>(
         &self,
         key: &KV::K,
         value: &KV::V,
-    ) -> common_exception::Result<Option<KV::V>> {
-        let k = KV::serialize_key(key)?;
-        let v = KV::serialize_value(value)?;
+    ) -> Result<Option<KV::V>, SledUnabortableTransactionError>
+    where
+        KV: SledKeySpace,
+    {
+        let k = KV::serialize_key(key).unwrap();
+        let v = KV::serialize_value(value).unwrap();
 
         let prev = self
             .txn_tree
             .insert(k, v)
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                format!("insert_value {}", key)
-            })?;
-        let prev = match prev {
-            None => None,
-            Some(x) => Some(KV::deserialize_value(x)?),
-        };
+            .map_err(SledUnabortableTransactionError::from)?;
+        let prev = prev.map(|x| KV::deserialize_value(x).unwrap());
 
         Ok(prev)
     }
@@ -535,6 +528,21 @@ impl<'a> TreeAPI for TransactionSledTree<'_> {
 pub struct AsKeySpace<'a, KV: SledKeySpace> {
     inner: &'a SledTree,
     phantom: PhantomData<KV>,
+}
+
+pub struct AsTxnKeySpace<'a, KV: SledKeySpace> {
+    inner: &'a TransactionSledTree<'a>,
+    phantom: PhantomData<KV>,
+}
+
+impl<'a, KV: SledKeySpace> AsTxnKeySpace<'a, KV> {
+    pub fn insert(
+        &self,
+        key: &KV::K,
+        value: &KV::V,
+    ) -> Result<Option<KV::V>, SledUnabortableTransactionError> {
+        self.inner.insert::<KV>(key, value)
+    }
 }
 
 impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
@@ -559,14 +567,6 @@ impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {
 
     pub fn last(&self) -> common_exception::Result<Option<(KV::K, KV::V)>> {
         self.inner.last::<KV>()
-    }
-
-    pub fn txn<F, T>(
-        &self,
-        f: impl Fn(TransactionSledTree<'_>) -> common_exception::Result<T>,
-    ) -> common_exception::Result<T> {
-        Ok((&self.inner.tree)
-            .transaction(move |tree| Ok(f(TransactionSledTree { txn_tree: tree })?)))
     }
 
     pub async fn remove(

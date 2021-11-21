@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::convert::Infallible;
 use std::convert::TryInto;
 use std::fmt::Debug;
 use std::time::SystemTime;
@@ -20,15 +21,15 @@ use std::time::UNIX_EPOCH;
 use async_raft::raft::Entry;
 use async_raft::raft::EntryPayload;
 use async_raft::raft::MembershipConfig;
+use common_exception::exception::SledTransactionError;
 use common_exception::prelude::ErrorCode;
+use common_exception::SledConflictableTransactionError;
 use common_exception::ToErrorCode;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledTree;
-use common_meta_sled_store::TransactionSledTree;
-use common_meta_sled_store::TreeAPI;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::DatabaseMeta;
@@ -248,15 +249,23 @@ impl StateMachine {
         let log_id = &entry.log_id;
 
         let sm_meta = self.sm_meta();
-        sm_meta.txn(move |t| {
-            t.insert(&LastApplied, &StateMachineMetaValue::LogId(*log_id))
-                .await?;
-            t.txn_tree.flush();
-            Ok(())
-        });
-        // sm_meta
-        //     .insert(&LastApplied, &StateMachineMetaValue::LogId(*log_id))
-        //     .await?;
+
+        // use `Infallible` here cause Sled make it infallible
+        // ref: https://github.com/datafuse-extras/sled/blob/43fa7250d3c6f4964167c9498b622f2923289cf3/src/transaction.rs#L235
+        let r: Result<Option<StateMachineMetaValue>, SledTransactionError<Infallible>> =
+            self.sm_tree.txn(move |t| {
+                let txn_sm_meta = t.key_space::<StateMachineMeta>();
+                txn_sm_meta
+                    .insert(&LastApplied, &StateMachineMetaValue::LogId(*log_id))
+                    .map_err(|e| {
+                        let err = SledConflictableTransactionError::from(e);
+                        err as SledConflictableTransactionError<Infallible>
+                    })
+            });
+        match r {
+            Ok(_) => (),
+            Err(e) => return Err(ErrorCode::from(e)),
+        }
 
         match entry.payload {
             EntryPayload::Blank => {}

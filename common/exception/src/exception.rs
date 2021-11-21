@@ -574,6 +574,31 @@ impl From<prost::EncodeError> for ErrorCode {
     }
 }
 
+impl<T: Display> From<SledTransactionError<T>> for ErrorCode {
+    fn from(error: SledTransactionError<T>) -> Self {
+        match error {
+            SledTransactionError::Abort(e) => {
+                ErrorCode::TransactionAbort(format!("Transaction abort, cause: {}", e))
+            }
+            SledTransactionError::Storage(e) => {
+                ErrorCode::TransactionError(format!("Transaction storage error, cause: {}", e))
+            }
+        }
+    }
+}
+
+impl From<SledUnabortableTransactionError> for ErrorCode {
+    fn from(error: SledUnabortableTransactionError) -> Self {
+        match error {
+            // todo(ariesdevil): Will this happen?
+            SledUnabortableTransactionError::Conflict => ErrorCode::TransactionError("conflict"),
+            SledUnabortableTransactionError::Storage(e) => {
+                ErrorCode::TransactionError(format!("Transaction storage error, cause: {}", e))
+            }
+        }
+    }
+}
+
 impl<T: Display> From<SledConflictableTransactionError<T>> for ErrorCode {
     fn from(error: SledConflictableTransactionError<T>) -> Self {
         match error {
@@ -584,7 +609,7 @@ impl<T: Display> From<SledConflictableTransactionError<T>> for ErrorCode {
                 ErrorCode::TransactionError(format!("Transaction storage error, cause: {}", e))
             }
 
-            _ => ErrorCode::MetaSrvError(format!("Unexpect transaction error")),
+            _ => ErrorCode::MetaSrvError("Unexpect transaction error"),
         }
     }
 }
