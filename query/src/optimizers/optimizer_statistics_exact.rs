@@ -60,9 +60,8 @@ impl PlanRewriter for StatisticsExactImpl<'_> {
                     let db_name = "system";
                     let table_name = "one";
 
-                    let table = self.ctx.get_table(db_name, table_name)?;
-
                     futures::executor::block_on(async move {
+                        let table = self.ctx.get_table(db_name, table_name).await?;
                         let source_plan = table.read_plan(self.ctx.clone(), None).await?;
                         let dummy_read_plan = PlanNode::ReadSource(source_plan);
 

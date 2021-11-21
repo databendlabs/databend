@@ -18,10 +18,8 @@ use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
-use std::time::Duration;
 
 use common_base::tokio::task::JoinHandle;
-use common_base::BlockingWait;
 use common_base::ProgressCallback;
 use common_base::ProgressValues;
 use common_base::Runtime;
@@ -192,8 +190,8 @@ impl DatabendQueryContext {
     /// ```sql
     /// SELECT * FROM (SELECT * FROM db.table_name) as subquery_1, (SELECT * FROM db.table_name) AS subquery_2
     /// ```
-    pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
-        self.shared.get_table(database, table)
+    pub async fn get_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
+        self.shared.get_table(database, table).await
     }
 
     pub fn get_id(&self) -> String {
@@ -210,19 +208,9 @@ impl DatabendQueryContext {
         self.shared.get_current_database()
     }
 
-    pub fn set_current_database(&self, new_database_name: String) -> Result<()> {
-        let rt = self.shared.try_get_runtime()?;
-        let cata = self.get_catalog();
-        let db_name = new_database_name.clone();
-
-        let res = (async move { cata.get_database(&db_name).await }).wait_in(
-            &rt,
-            Some(Duration::from_millis(
-                self.get_config().query.wait_timeout_mills,
-            )),
-        )?;
-
-        match res {
+    pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
+        let catalog = self.get_catalog();
+        match catalog.get_database(&new_database_name).await {
             Ok(_) => self.shared.set_current_database(new_database_name),
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(

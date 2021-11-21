@@ -72,9 +72,9 @@ impl Interpreter for InsertIntoInterpreter {
         &self,
         mut input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let table = self
-            .ctx
-            .get_table(&self.plan.db_name, &self.plan.tbl_name)?;
+        let database = &self.plan.db_name;
+        let table = &self.plan.tbl_name;
+        let write_table = self.ctx.get_table(database, table).await?;
 
         let input_stream = if self.plan.values_opt.is_some() {
             let values = self.plan.values_opt.clone().take().unwrap();
@@ -110,7 +110,7 @@ impl Interpreter for InsertIntoInterpreter {
                 .ok_or_else(|| ErrorCode::EmptyData("input stream not exist or consumed"))
         }?;
 
-        table
+        write_table
             .append_data(self.ctx.clone(), self.plan.clone(), input_stream)
             .await?;
         Ok(Box::pin(DataBlockStream::create(
