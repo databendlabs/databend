@@ -24,6 +24,7 @@ use common_meta_types::CreateDatabaseReq;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::GetDatabaseReq;
+use common_meta_types::ListDatabaseReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -142,7 +143,7 @@ impl Catalog for MutableCatalog {
     }
 
     async fn list_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
-        let dbs = self.ctx.meta.list_databases().await?;
+        let dbs = self.ctx.meta.list_databases(ListDatabaseReq {}).await?;
 
         dbs.iter().try_fold(vec![], |mut acc, item| {
             let db = self.build_db_instance(item)?;

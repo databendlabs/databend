@@ -47,6 +47,7 @@ pub use database::DatabaseMeta;
 pub use database::DropDatabaseReply;
 pub use database::DropDatabaseReq;
 pub use database::GetDatabaseReq;
+pub use database::ListDatabaseReq;
 pub use errors::ConflictSeq;
 pub use grant_object::GrantObject;
 pub use kv_message::GetKVActionReply;

@@ -27,6 +27,7 @@ use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetTableReq;
+use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
@@ -45,7 +46,7 @@ pub trait MetaApi: Send + Sync {
 
     async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>>;
 
-    async fn list_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>>;
+    async fn list_databases(&self, req: ListDatabaseReq) -> Result<Vec<Arc<DatabaseInfo>>>;
 
     // table
 

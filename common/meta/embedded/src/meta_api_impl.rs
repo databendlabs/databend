@@ -34,6 +34,7 @@ use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetTableReq;
+use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
@@ -110,7 +111,7 @@ impl MetaApi for MetaEmbedded {
         Ok(Arc::new(dbi))
     }
 
-    async fn list_databases(&self) -> Result<Vec<Arc<DatabaseInfo>>> {
+    async fn list_databases(&self, _req: ListDatabaseReq) -> Result<Vec<Arc<DatabaseInfo>>> {
         let sm = self.inner.lock().await;
         let res = sm.get_databases()?;
         Ok(res

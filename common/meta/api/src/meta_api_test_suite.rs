@@ -24,6 +24,7 @@ use common_meta_types::CreateTableReq;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
+use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -170,7 +171,7 @@ impl MetaApiTestSuite {
 
         tracing::info!("--- get_databases");
         {
-            let dbs = mt.list_databases().await?;
+            let dbs = mt.list_databases(ListDatabaseReq {}).await?;
             let want: Vec<u64> = vec![1, 2];
             let got = dbs.iter().map(|x| x.database_id).collect::<Vec<_>>();
             assert_eq!(want, got)
