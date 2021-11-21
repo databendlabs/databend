@@ -19,7 +19,6 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_meta_flight::FlightReq;
 use common_meta_flight::GetDatabasesAction;
-use common_meta_flight::GetTableAction;
 use common_meta_flight::GetTableExtReq;
 use common_meta_flight::GetTablesAction;
 use common_meta_raft_store::state_machine::AppliedState;
@@ -39,6 +38,7 @@ use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
+use common_meta_types::GetTableReq;
 use common_meta_types::LogEntry;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -238,10 +238,13 @@ impl RequestHandler<FlightReq<DropTableReq>> for ActionHandler {
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<GetTableAction> for ActionHandler {
-    async fn handle(&self, act: GetTableAction) -> common_exception::Result<TableInfo> {
-        let db_name = &act.db;
-        let table_name = &act.table;
+impl RequestHandler<FlightReq<GetTableReq>> for ActionHandler {
+    async fn handle(
+        &self,
+        act: FlightReq<GetTableReq>,
+    ) -> common_exception::Result<Arc<TableInfo>> {
+        let db_name = &act.req.db_name;
+        let table_name = &act.req.table_name;
 
         let x = self
             .meta_node
@@ -264,12 +267,12 @@ impl RequestHandler<GetTableAction> for ActionHandler {
         let result = self.meta_node.get_table_by_id(&table_id).await?;
 
         match result {
-            Some(table) => Ok(TableInfo::new(
+            Some(table) => Ok(Arc::new(TableInfo::new(
                 db_name,
                 table_name,
                 TableIdent::new(table_id, table.seq),
                 table.data,
-            )),
+            ))),
             None => Err(ErrorCode::UnknownTable(table_name)),
         }
     }

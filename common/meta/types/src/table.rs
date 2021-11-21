@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use common_datavalues::DataSchema;
@@ -50,6 +51,21 @@ impl TableIdent {
 impl Display for TableIdent {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "id:{}, ver:{}", self.table_id, self.version)
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+pub struct TableNameIndent {
+    pub db_name: String,
+    pub table_name: String,
+}
+
+impl TableNameIndent {
+    pub fn new(db_name: impl Into<String>, table_name: impl Into<String>) -> TableNameIndent {
+        TableNameIndent {
+            db_name: db_name.into(),
+            table_name: table_name.into(),
+        }
     }
 }
 
@@ -205,3 +221,30 @@ impl UpsertTableOptionReq {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct UpsertTableOptionReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct GetTableReq {
+    pub inner: TableNameIndent,
+}
+
+impl Deref for GetTableReq {
+    type Target = TableNameIndent;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl From<(&str, &str)> for GetTableReq {
+    fn from(db_table: (&str, &str)) -> Self {
+        Self::new(db_table.0, db_table.1)
+    }
+}
+
+impl GetTableReq {
+    pub fn new(db_name: impl Into<String>, table_name: impl Into<String>) -> GetTableReq {
+        GetTableReq {
+            inner: TableNameIndent::new(db_name, table_name),
+        }
+    }
+}

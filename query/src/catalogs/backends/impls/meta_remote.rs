@@ -28,6 +28,7 @@ use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
+use common_meta_types::GetTableReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -104,10 +105,8 @@ impl MetaApi for MetaRemote {
             .await
     }
 
-    async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<TableInfo>> {
-        let table_name = table_name.to_string();
-        let db_name = db_name.to_string();
-        self.query_backend(move |cli| async move { cli.get_table(&db_name, &table_name).await })
+    async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>> {
+        self.query_backend(move |cli| async move { cli.get_table(req).await })
             .await
     }
 

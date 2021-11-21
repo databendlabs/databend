@@ -33,6 +33,7 @@ use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
+use common_meta_types::GetTableReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -180,7 +181,9 @@ impl MetaApi for MetaEmbedded {
         Ok(DropTableReply {})
     }
 
-    async fn get_table(&self, db: &str, table_name: &str) -> Result<Arc<TableInfo>> {
+    async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>> {
+        let db = &req.db_name;
+        let table_name = &req.table_name;
         let sm = self.inner.lock().await;
 
         let seq_db = sm.get_database(db)?.ok_or_else(|| {

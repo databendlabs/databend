@@ -30,6 +30,7 @@ use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
+use common_meta_types::GetTableReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -147,7 +148,10 @@ impl Catalog for MetaStoreCatalog {
     }
 
     async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
-        let table_info = self.meta.get_table(db_name, table_name).await?;
+        let table_info = self
+            .meta
+            .get_table(GetTableReq::new(db_name, table_name))
+            .await?;
         self.build_table(table_info.as_ref())
     }
 
