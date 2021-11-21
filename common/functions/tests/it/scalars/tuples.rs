@@ -21,9 +21,9 @@ use pretty_assertions::assert_eq;
 #[test]
 fn test_tuple_function() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int32, true),
-        DataField::new("b", DataType::Int64, true),
-        DataField::new("c", DataType::Float32, true),
+        DataField::new("a", DataType::Int32, false),
+        DataField::new("b", DataType::Int64, false),
+        DataField::new("c", DataType::Float32, false),
     ]);
 
     let columns: Vec<DataColumn> = vec![
