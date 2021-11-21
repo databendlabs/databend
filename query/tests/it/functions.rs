@@ -13,8 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-
-use crate::functions::ContextFunction;
+use databend_query::functions::ContextFunction;
 
 #[test]
 fn test_context_function_build_arg_from_ctx() -> Result<()> {

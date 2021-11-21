@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod context_function_test;
-
 mod context_function;
 
 pub use context_function::ContextFunction;
