@@ -30,6 +30,7 @@ use futures::future::AbortHandle;
 use uuid::Uuid;
 
 use crate::catalogs::impls::DatabaseCatalog;
+use crate::catalogs::Catalog1;
 use crate::catalogs::Table;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
@@ -137,8 +138,14 @@ impl DatabendQueryContextShared {
                 let rt = self.try_get_runtime()?;
                 let database = database.to_string();
                 let table = table.to_string();
-                let t = (async move { catalog.get_table(&database, &table).await })
-                    .wait_in(&rt, Some(Duration::from_millis(5000)))??;
+                let t = (async move {
+                    catalog
+                        .get_database(&database)
+                        .await?
+                        .get_table(&database, &table)
+                        .await
+                })
+                .wait_in(&rt, Some(Duration::from_millis(5000)))??;
 
                 entry.insert(t).clone()
             }

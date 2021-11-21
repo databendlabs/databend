@@ -29,6 +29,7 @@ use common_planners::lit;
 use common_planners::Extras;
 use common_planners::InsertIntoPlan;
 
+use crate::catalogs::Catalog1;
 use crate::datasources::table::fuse::index::min_max::range_filter;
 use crate::datasources::table::fuse::table_test_fixture::TestFixture;
 use crate::datasources::table::fuse::util::TBL_OPT_KEY_SNAPSHOT_LOC;
@@ -57,10 +58,16 @@ async fn test_min_max_index() -> Result<()> {
     };
 
     let catalog = ctx.get_catalog();
-    catalog.create_table(crate_table_plan).await?;
+    catalog
+        .get_database(&crate_table_plan.db)
+        .await?
+        .create_table(crate_table_plan)
+        .await?;
 
     // get table
     let table = catalog
+        .get_database(fixture.default_db().as_str())
+        .await?
         .get_table(fixture.default_db().as_str(), test_tbl_name)
         .await?;
 
@@ -92,6 +99,8 @@ async fn test_min_max_index() -> Result<()> {
 
     // get the latest tbl
     let table = catalog
+        .get_database(fixture.default_db().as_str())
+        .await?
         .get_table(fixture.default_db().as_str(), test_tbl_name)
         .await?;
 

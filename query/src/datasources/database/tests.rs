@@ -30,7 +30,12 @@ async fn test_datasource() -> Result<()> {
     // Table check.
     let tbl_arg = Some(vec![Expression::create_literal(DataValue::Int64(Some(1)))]);
     catalog.get_table_function("numbers_mt", tbl_arg)?;
-    if let Err(e) = catalog.get_table("system", "numbersxx").await {
+    if let Err(e) = catalog
+        .get_database("system")
+        .await?
+        .get_table("system", "numbersxx")
+        .await
+    {
         let expect = "Code: 25, displayText = Unknown table: \'numbersxx\'.";
         let actual = format!("{}", e);
         assert_eq!(expect, actual);
