@@ -169,7 +169,7 @@ impl HttpQueryState {
 }
 
 #[poem::handler]
-pub(crate) async fn statement_handler(
+pub async fn statement_handler(
     sessions_extension: Data<&SessionManagerRef>,
     sql: String,
     Query(params): Query<HashMap<String, String>>,

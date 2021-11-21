@@ -17,6 +17,7 @@ pub(super) mod http_query;
 mod http_query_manager;
 pub(super) mod result_data_manager;
 
+pub use execute_state::ExecuteStateName;
 pub use execute_state::HttpQueryHandle;
 pub use http_query_manager::HttpQueryManager;
 pub use http_query_manager::HttpQueryManagerRef;

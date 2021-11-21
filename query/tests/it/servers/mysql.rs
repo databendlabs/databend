@@ -22,13 +22,13 @@ use common_base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use databend_query::servers::MySQLHandler;
 use mysql::prelude::FromRow;
 use mysql::prelude::Queryable;
 use mysql::Conn;
 use mysql::FromRowError;
 use mysql::Row;
 
-use crate::servers::MySQLHandler;
 use crate::tests::SessionManagerBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

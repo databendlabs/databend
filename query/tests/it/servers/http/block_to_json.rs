@@ -15,12 +15,11 @@
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use databend_query::servers::http::v1::block_to_json;
 use pretty_assertions::assert_eq;
 use serde::Serialize;
 use serde_json::to_value;
 use serde_json::Value;
-
-use super::block_to_json::block_to_json;
 
 fn val<T>(v: T) -> Value
 where T: Serialize {

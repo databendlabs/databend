@@ -12,12 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_to_json;
-
-pub mod http_query_handlers;
-pub mod query;
-pub mod statement;
-
-pub use block_to_json::block_to_json;
-pub(super) use http_query_handlers::query_route;
-pub(super) use statement::statement_router;
+mod clickhouse;
+mod http;
+mod mysql;

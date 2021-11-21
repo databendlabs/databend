@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod clickhouse_handler_test;
-
 mod writers;
 
 mod clickhouse_handler;
