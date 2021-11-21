@@ -17,10 +17,9 @@ use common_base::tokio;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session_mem_usage() {
     use common_mem_allocator::malloc_size;
-
-    use crate::configs::Config;
-    use crate::sessions::session::Session;
-    use crate::sessions::sessions::SessionManager;
+    use databend_query::configs::Config;
+    use databend_query::sessions::Session;
+    use databend_query::sessions::SessionManager;
 
     let conf = Config::load_from_args();
 
