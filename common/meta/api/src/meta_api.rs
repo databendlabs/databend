@@ -53,7 +53,7 @@ pub trait MetaApi: Send + Sync {
 
     async fn get_table(&self, db: &str, table: &str) -> Result<Arc<TableInfo>>;
 
-    async fn get_tables(&self, db: &str) -> Result<Vec<Arc<TableInfo>>>;
+    async fn list_tables(&self, db: &str) -> Result<Vec<Arc<TableInfo>>>;
 
     async fn get_table_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)>;
 

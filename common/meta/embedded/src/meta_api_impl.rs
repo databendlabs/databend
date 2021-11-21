@@ -215,7 +215,7 @@ impl MetaApi for MetaEmbedded {
         Ok(Arc::new(table_info))
     }
 
-    async fn get_tables(&self, db: &str) -> Result<Vec<Arc<TableInfo>>> {
+    async fn list_tables(&self, db: &str) -> Result<Vec<Arc<TableInfo>>> {
         let sm = self.inner.lock().await;
         let tables = sm.get_tables(db)?;
         Ok(tables

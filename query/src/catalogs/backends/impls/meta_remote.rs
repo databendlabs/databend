@@ -111,9 +111,9 @@ impl MetaApi for MetaRemote {
             .await
     }
 
-    async fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<TableInfo>>> {
+    async fn list_tables(&self, db_name: &str) -> Result<Vec<Arc<TableInfo>>> {
         let db_name = db_name.to_owned();
-        self.query_backend(move |cli| async move { cli.get_tables(&db_name).await })
+        self.query_backend(move |cli| async move { cli.list_tables(&db_name).await })
             .await
     }
 

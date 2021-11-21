@@ -152,7 +152,7 @@ impl Catalog for MetaStoreCatalog {
     }
 
     async fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
-        let table_infos = self.meta.get_tables(db_name).await?;
+        let table_infos = self.meta.list_tables(db_name).await?;
 
         table_infos.iter().try_fold(vec![], |mut acc, item| {
             let tbl = self.build_table(item.as_ref())?;

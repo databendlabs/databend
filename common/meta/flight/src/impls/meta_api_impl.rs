@@ -80,7 +80,7 @@ impl MetaApi for MetaFlightClient {
         Ok(Arc::new(x))
     }
 
-    async fn get_tables(&self, db: &str) -> common_exception::Result<Vec<Arc<TableInfo>>> {
+    async fn list_tables(&self, db: &str) -> common_exception::Result<Vec<Arc<TableInfo>>> {
         self.do_action(GetTablesAction { db: db.to_string() }).await
     }
 

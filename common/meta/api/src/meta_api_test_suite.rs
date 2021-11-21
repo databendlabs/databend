@@ -413,7 +413,7 @@ impl MetaApiTestSuite {
 
             tracing::info!("--- get_tables");
             {
-                let res = mt.get_tables(db_name).await?;
+                let res = mt.list_tables(db_name).await?;
                 assert_eq!(1, res[0].ident.table_id);
                 assert_eq!(2, res[1].ident.table_id);
             }
