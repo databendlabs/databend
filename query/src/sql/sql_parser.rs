@@ -36,12 +36,14 @@ use sqlparser::ast::Value;
 use sqlparser::dialect::keywords::Keyword;
 use sqlparser::dialect::Dialect;
 use sqlparser::dialect::GenericDialect;
+use sqlparser::parser::IsOptional;
 use sqlparser::parser::Parser;
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::Whitespace;
 
+use super::statements::DfCopy;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfCreateTable;
@@ -229,6 +231,10 @@ impl<'a> DfParser<'a> {
                     Keyword::GRANT => {
                         self.parser.next_token();
                         self.parse_grant()
+                    }
+                    Keyword::COPY => {
+                        self.parser.next_token();
+                        self.parse_copy()
                     }
                     Keyword::NoKeyword => match w.value.to_uppercase().as_str() {
                         // Use database
@@ -828,6 +834,46 @@ impl<'a> DfParser<'a> {
         self.parser
             .parse_identifier()
             .or_else(|_| self.expected("identifier or *", token))
+    }
+
+    // copy into mycsvtable
+    // from @my_ext_stage/tutorials/dataloading/contacts1.csv format CSV [options];
+    fn parse_copy(&mut self) -> Result<DfStatement, ParserError> {
+        self.parser.expect_keyword(Keyword::INTO)?;
+        let name = self.parser.parse_object_name()?;
+        let columns = self
+            .parser
+            .parse_parenthesized_column_list(IsOptional::Optional)?;
+        self.parser.expect_keyword(Keyword::FROM)?;
+        let location = self.parser.parse_literal_string()?;
+
+        self.parser.expect_keyword(Keyword::FORMAT)?;
+        let format = self.parser.next_token().to_string();
+
+        let options = self.parse_options()?;
+
+        Ok(DfStatement::Copy(DfCopy {
+            name,
+            columns,
+            location,
+            format,
+            options,
+        }))
+    }
+
+    fn parse_options(&mut self) -> Result<Vec<SqlOption>, ParserError> {
+        let mut options = vec![];
+        loop {
+            let name = self.parser.parse_identifier();
+            if name.is_err() {
+                break;
+            }
+            let name = name.unwrap();
+            self.parser.expect_token(&Token::Eq)?;
+            let value = self.parse_value()?;
+            options.push(SqlOption { name, value });
+        }
+        Ok(options)
     }
 
     fn consume_token(&mut self, expected: &str) -> bool {

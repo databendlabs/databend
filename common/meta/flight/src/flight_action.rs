@@ -28,7 +28,10 @@ use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
+use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetKVActionReply;
+use common_meta_types::GetTableReq;
+use common_meta_types::ListTableReq;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MetaId;
 use common_meta_types::PrefixListReply;
@@ -56,14 +59,14 @@ pub struct FlightReq<T> {
 pub enum MetaFlightAction {
     CreateDatabase(FlightReq<CreateDatabaseReq>),
     DropDatabase(FlightReq<DropDatabaseReq>),
-    GetDatabase(GetDatabaseAction),
-    GetDatabases(GetDatabasesAction),
+    GetDatabase(FlightReq<GetDatabaseReq>),
+    ListDatabases(ListDatabasesAction),
 
     CreateTable(FlightReq<CreateTableReq>),
     DropTable(FlightReq<DropTableReq>),
-    GetTable(GetTableAction),
+    GetTable(FlightReq<GetTableReq>),
     GetTableExt(GetTableExtReq),
-    GetTables(GetTablesAction),
+    ListTables(FlightReq<ListTableReq>),
     CommitTable(FlightReq<UpsertTableOptionReq>),
 
     UpsertKV(UpsertKVAction),
@@ -151,13 +154,8 @@ impl RequestFor for FlightReq<CreateDatabaseReq> {
     type Reply = CreateDatabaseReply;
 }
 
-// - get database
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct GetDatabaseAction {
-    pub db: String,
-}
-impl RequestFor for GetDatabaseAction {
-    type Reply = DatabaseInfo;
+impl RequestFor for FlightReq<GetDatabaseReq> {
+    type Reply = Arc<DatabaseInfo>;
 }
 
 impl RequestFor for FlightReq<DropDatabaseReq> {
@@ -172,15 +170,8 @@ impl RequestFor for FlightReq<DropTableReq> {
     type Reply = DropTableReply;
 }
 
-// - get table
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct GetTableAction {
-    pub db: String,
-    pub table: String,
-}
-
-impl RequestFor for GetTableAction {
-    type Reply = TableInfo;
+impl RequestFor for FlightReq<GetTableReq> {
+    type Reply = Arc<TableInfo>;
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -195,21 +186,15 @@ impl RequestFor for FlightReq<UpsertTableOptionReq> {
     type Reply = UpsertTableOptionReply;
 }
 
-// - get tables
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct GetTablesAction {
-    pub db: String,
-}
-
-impl RequestFor for GetTablesAction {
+impl RequestFor for FlightReq<ListTableReq> {
     type Reply = Vec<Arc<TableInfo>>;
 }
 
 // -get databases
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct GetDatabasesAction;
+pub struct ListDatabasesAction;
 
-impl RequestFor for GetDatabasesAction {
+impl RequestFor for ListDatabasesAction {
     type Reply = Vec<Arc<DatabaseInfo>>;
 }

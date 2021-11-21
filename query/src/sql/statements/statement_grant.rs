@@ -17,6 +17,7 @@ use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilege;
 use common_planners::GrantPrivilegePlan;
 use common_planners::PlanNode;
+use common_tracing::tracing;
 
 use crate::sessions::DatabendQueryContextRef;
 use crate::sql::statements::AnalyzableStatement;
@@ -39,6 +40,7 @@ pub enum DfGrantObject {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfGrantStatement {
+    #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         Ok(AnalyzedResult::SimpleQuery(PlanNode::GrantPrivilege(
             GrantPrivilegePlan {

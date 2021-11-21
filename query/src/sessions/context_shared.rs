@@ -16,12 +16,11 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
-use std::time::Duration;
 
-use common_base::BlockingWait;
 use common_base::Progress;
 use common_base::Runtime;
 use common_dal::DalContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::Mutex;
 use common_infallible::RwLock;
@@ -125,27 +124,32 @@ impl DatabendQueryContextShared {
         self.session.get_catalog()
     }
 
-    pub fn get_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
+    pub async fn get_table(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
         // Always get same table metadata in the same query
         let table_meta_key = (database.to_string(), table.to_string());
 
+        let already_in_cache = { self.tables_refs.lock().contains_key(&table_meta_key) };
+
+        match already_in_cache {
+            false => self.get_table_to_cache(database, table).await,
+            true => match self.tables_refs.lock().get(&table_meta_key) {
+                None => Err(ErrorCode::LogicalError("Logical error, it's a bug.")),
+                Some(table_ref) => Ok(table_ref.clone()),
+            },
+        }
+    }
+
+    async fn get_table_to_cache(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
+        let catalog = self.get_catalog();
+        let cache_table = catalog.get_table(database, table).await?;
+
+        let table_meta_key = (database.to_string(), table.to_string());
         let mut tables_refs = self.tables_refs.lock();
 
-        let ent = match tables_refs.entry(table_meta_key) {
-            Entry::Occupied(entry) => entry.get().clone(),
-            Entry::Vacant(entry) => {
-                let catalog = self.get_catalog();
-                let rt = self.try_get_runtime()?;
-                let database = database.to_string();
-                let table = table.to_string();
-                let t = (async move { catalog.get_table(&database, &table).await })
-                    .wait_in(&rt, Some(Duration::from_millis(5000)))??;
-
-                entry.insert(t).clone()
-            }
-        };
-
-        Ok(ent)
+        match tables_refs.entry(table_meta_key) {
+            Entry::Occupied(v) => Ok(v.get().clone()),
+            Entry::Vacant(v) => Ok(v.insert(cache_table).clone()),
+        }
     }
 
     /// Init runtime when first get

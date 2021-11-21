@@ -22,6 +22,7 @@ use common_planners::find_aggregate_exprs_in_expr;
 use common_planners::rebase_expr;
 use common_planners::Expression;
 use common_planners::Extras;
+use common_tracing::tracing;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Offset;
 use sqlparser::ast::OrderByExpr;
@@ -55,6 +56,7 @@ pub struct DfQueryStatement {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfQueryStatement {
+    #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let analyzer = JoinedSchemaAnalyzer::create(ctx.clone());
         let joined_schema = analyzer.analyze(self).await?;

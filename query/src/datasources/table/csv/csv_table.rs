@@ -15,9 +15,9 @@
 
 use std::any::Any;
 use std::fs::File;
+use std::sync::Arc;
 
 use async_stream::stream;
-use common_base::tokio;
 use common_dal::Local;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -95,13 +95,13 @@ impl Table for CsvTable {
         ctx: DatabendQueryContextRef,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let conf = ctx.get_config().storage.disk;
-        let local = Local::new(conf.temp_data_path.as_str());
-
         let ctx_clone = ctx.clone();
         let schema = plan.schema();
         let block_size = ctx.get_settings().get_max_block_size()? as usize;
         let has_header = self.has_header;
+
+        let conf = ctx.get_config().storage;
+        let dal = Arc::new(Local::new(conf.disk.temp_data_path.as_str()));
 
         let s = stream! {
             loop {
@@ -112,15 +112,8 @@ impl Table for CsvTable {
                             break;
                         }
 
-                        /// TODO use dal, but inputstream is not send which is need for csv-async reader
                         let part = partitions.get(0).unwrap();
-                        let file = part.name.clone();
-
-                        let path = local.prefix_with_root(&file)?;
-                        let std_file = std::fs::File::open(path)?;
-                        let reader = tokio::fs::File::from_std(std_file);
-
-                        let mut source = CsvSource::new(reader, schema.clone(), has_header, block_size);
+                        let mut source = CsvSource::try_create(dal.clone(), part.name.clone(), schema.clone(), has_header, block_size)?;
 
                         loop {
                             let block = source.read().await;

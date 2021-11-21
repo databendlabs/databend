@@ -18,11 +18,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_meta_flight::FlightReq;
-use common_meta_flight::GetDatabaseAction;
-use common_meta_flight::GetDatabasesAction;
-use common_meta_flight::GetTableAction;
 use common_meta_flight::GetTableExtReq;
-use common_meta_flight::GetTablesAction;
+use common_meta_flight::ListDatabasesAction;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd::CreateDatabase;
@@ -39,6 +36,9 @@ use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
+use common_meta_types::GetDatabaseReq;
+use common_meta_types::GetTableReq;
+use common_meta_types::ListTableReq;
 use common_meta_types::LogEntry;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -92,21 +92,24 @@ impl RequestHandler<FlightReq<CreateDatabaseReq>> for ActionHandler {
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<GetDatabaseAction> for ActionHandler {
-    async fn handle(&self, act: GetDatabaseAction) -> common_exception::Result<DatabaseInfo> {
-        let db_name = act.db;
+impl RequestHandler<FlightReq<GetDatabaseReq>> for ActionHandler {
+    async fn handle(
+        &self,
+        act: FlightReq<GetDatabaseReq>,
+    ) -> common_exception::Result<Arc<DatabaseInfo>> {
+        let db_name = &act.req.db_name;
         let db = self
             .meta_node
             .get_state_machine()
             .await
-            .get_database(&db_name)?;
+            .get_database(db_name)?;
 
         match db {
-            Some(db) => Ok(DatabaseInfo {
+            Some(db) => Ok(Arc::new(DatabaseInfo {
                 database_id: db.data,
                 db: db_name.to_string(),
-            }),
-            None => Err(ErrorCode::UnknownDatabase(db_name)),
+            })),
+            None => Err(ErrorCode::UnknownDatabase(db_name.to_string())),
         }
     }
 }
@@ -235,10 +238,13 @@ impl RequestHandler<FlightReq<DropTableReq>> for ActionHandler {
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<GetTableAction> for ActionHandler {
-    async fn handle(&self, act: GetTableAction) -> common_exception::Result<TableInfo> {
-        let db_name = &act.db;
-        let table_name = &act.table;
+impl RequestHandler<FlightReq<GetTableReq>> for ActionHandler {
+    async fn handle(
+        &self,
+        act: FlightReq<GetTableReq>,
+    ) -> common_exception::Result<Arc<TableInfo>> {
+        let db_name = &act.req.db_name;
+        let table_name = &act.req.table_name;
 
         let x = self
             .meta_node
@@ -261,12 +267,12 @@ impl RequestHandler<GetTableAction> for ActionHandler {
         let result = self.meta_node.get_table_by_id(&table_id).await?;
 
         match result {
-            Some(table) => Ok(TableInfo::new(
+            Some(table) => Ok(Arc::new(TableInfo::new(
                 db_name,
                 table_name,
                 TableIdent::new(table_id, table.seq),
                 table.data,
-            )),
+            ))),
             None => Err(ErrorCode::UnknownTable(table_name)),
         }
     }
@@ -294,10 +300,10 @@ impl RequestHandler<GetTableExtReq> for ActionHandler {
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<GetDatabasesAction> for ActionHandler {
+impl RequestHandler<ListDatabasesAction> for ActionHandler {
     async fn handle(
         &self,
-        _req: GetDatabasesAction,
+        _req: ListDatabasesAction,
     ) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
         let res = self.meta_node.get_state_machine().await.get_databases()?;
 
@@ -314,9 +320,12 @@ impl RequestHandler<GetDatabasesAction> for ActionHandler {
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<GetTablesAction> for ActionHandler {
-    async fn handle(&self, req: GetTablesAction) -> common_exception::Result<Vec<Arc<TableInfo>>> {
-        let res = self.meta_node.get_tables(req.db.as_str()).await?;
+impl RequestHandler<FlightReq<ListTableReq>> for ActionHandler {
+    async fn handle(
+        &self,
+        req: FlightReq<ListTableReq>,
+    ) -> common_exception::Result<Vec<Arc<TableInfo>>> {
+        let res = self.meta_node.get_tables(&req.req.db_name).await?;
         Ok(res.iter().map(|t| Arc::new(t.clone())).collect::<Vec<_>>())
     }
 }
