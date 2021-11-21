@@ -15,6 +15,7 @@
 mod api;
 mod clusters;
 mod common;
+mod configs;
 mod servers;
 mod sessions;
 mod sql;

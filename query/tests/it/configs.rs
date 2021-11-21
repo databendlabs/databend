@@ -13,13 +13,12 @@
 // limitations under the License.
 
 use common_exception::Result;
+use databend_query::configs::Config;
+use databend_query::configs::LogConfig;
+use databend_query::configs::MetaConfig;
+use databend_query::configs::QueryConfig;
+use databend_query::configs::StorageConfig;
 use pretty_assertions::assert_eq;
-
-use crate::configs::Config;
-use crate::configs::LogConfig;
-use crate::configs::MetaConfig;
-use crate::configs::QueryConfig;
-use crate::configs::StorageConfig;
 
 // Default.
 #[test]
@@ -170,7 +169,7 @@ fn test_env_config() -> Result<()> {
 
 #[test]
 fn test_fuse_commit_version() -> Result<()> {
-    let v = &crate::configs::config::DATABEND_COMMIT_VERSION;
+    let v = &databend_query::configs::DATABEND_COMMIT_VERSION;
     assert!(v.len() > 0);
     Ok(())
 }
