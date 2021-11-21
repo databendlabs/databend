@@ -23,7 +23,7 @@ use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use dyn_clone::DynClone;
 
-use crate::catalogs::Database1;
+use crate::catalogs::Database;
 use crate::catalogs::TableFunction;
 use crate::datasources::table_func_engine::TableArgs;
 
@@ -33,12 +33,12 @@ use crate::datasources::table_func_engine::TableArgs;
 /// When we create a new database, we first to get the engine from the registered engines,
 /// and use the engine to create them.
 #[async_trait::async_trait]
-pub trait Catalog1: DynClone + Send + Sync {
+pub trait Catalog: DynClone + Send + Sync {
     // Get all the databases.
-    async fn get_databases(&self) -> Result<Vec<Arc<dyn Database1>>>;
+    async fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>>;
 
     // Get the database by name.
-    async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database1>>;
+    async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>>;
 
     // Operation with database.
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply>;

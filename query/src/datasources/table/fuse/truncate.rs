@@ -18,7 +18,7 @@ use common_meta_types::UpsertTableOptionReq;
 use common_planners::TruncateTablePlan;
 use uuid::Uuid;
 
-use crate::catalogs::Catalog1;
+use crate::catalogs::Catalog;
 use crate::datasources::table::fuse::util;
 use crate::datasources::table::fuse::util::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::datasources::table::fuse::FuseTable;

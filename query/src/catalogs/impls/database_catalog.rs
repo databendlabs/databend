@@ -19,12 +19,12 @@ use common_exception::Result;
 
 use crate::catalogs::impls::ImmutableCatalog;
 use crate::catalogs::impls::MutableCatalog;
-use crate::catalogs::impls::OverlaidCatalog1;
+use crate::catalogs::impls::OverlaidCatalog;
 use crate::configs::Config;
 use crate::datasources;
 
 /// DatabaseCatalog is the Catalog exports to other query components
-pub type DatabaseCatalog = OverlaidCatalog1;
+pub type DatabaseCatalog = OverlaidCatalog;
 
 impl DatabaseCatalog {
     pub async fn try_create_with_config(conf: Config) -> Result<DatabaseCatalog> {

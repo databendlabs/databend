@@ -24,8 +24,8 @@ use common_meta_types::DropDatabaseReq;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 
-use crate::catalogs::catalog::Catalog1;
-use crate::catalogs::Database1;
+use crate::catalogs::catalog::Catalog;
+use crate::catalogs::Database;
 use crate::catalogs::TableFunction;
 use crate::datasources::table_func_engine::TableArgs;
 use crate::datasources::table_func_engine::TableFuncEngine;
@@ -36,19 +36,19 @@ use crate::datasources::table_func_engine_registry::TableFuncEngineRegistry;
 ///   upper layer first, and bottom layer later(if necessary)  
 /// - metadata are written to the bottom layer
 #[derive(Clone)]
-pub struct OverlaidCatalog1 {
+pub struct OverlaidCatalog {
     /// the upper layer, read only
-    immutable_catalog: Arc<dyn Catalog1>,
+    immutable_catalog: Arc<dyn Catalog>,
     /// bottom layer, writing goes here
-    mutable_catalog: Arc<dyn Catalog1>,
+    mutable_catalog: Arc<dyn Catalog>,
     /// table function engine factories
     func_engine_registry: TableFuncEngineRegistry,
 }
 
-impl OverlaidCatalog1 {
+impl OverlaidCatalog {
     pub fn create(
-        immutable_catalog: Arc<dyn Catalog1>,
-        mutable_catalog: Arc<dyn Catalog1>,
+        immutable_catalog: Arc<dyn Catalog>,
+        mutable_catalog: Arc<dyn Catalog>,
         func_engine_registry: HashMap<String, (u64, Arc<dyn TableFuncEngine>)>,
     ) -> Self {
         Self {
@@ -60,15 +60,15 @@ impl OverlaidCatalog1 {
 }
 
 #[async_trait::async_trait]
-impl Catalog1 for OverlaidCatalog1 {
-    async fn get_databases(&self) -> common_exception::Result<Vec<Arc<dyn Database1>>> {
+impl Catalog for OverlaidCatalog {
+    async fn get_databases(&self) -> common_exception::Result<Vec<Arc<dyn Database>>> {
         let mut dbs = self.immutable_catalog.get_databases().await?;
         let mut other = self.mutable_catalog.get_databases().await?;
         dbs.append(&mut other);
         Ok(dbs)
     }
 
-    async fn get_database(&self, db_name: &str) -> common_exception::Result<Arc<dyn Database1>> {
+    async fn get_database(&self, db_name: &str) -> common_exception::Result<Arc<dyn Database>> {
         let r = self.immutable_catalog.get_database(db_name).await;
         match r {
             Err(e) => {

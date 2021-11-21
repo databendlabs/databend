@@ -31,8 +31,8 @@ use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
 use crate::catalogs::backends::MetaRemote;
-use crate::catalogs::catalog::Catalog1;
-use crate::catalogs::database::Database1;
+use crate::catalogs::catalog::Catalog;
+use crate::catalogs::database::Database;
 use crate::common::MetaClientProvider;
 use crate::configs::Config;
 use crate::datasources::database::fuse::database::FuseDatabase;
@@ -103,7 +103,7 @@ impl MutableCatalog {
         })
     }
 
-    fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database1>> {
+    fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
         // TODO(bohu): Add the database engine match, now we set only one fuse database here, like:
         // match db_info.engine {
         //    "default" ->  create fuse database
@@ -121,8 +121,8 @@ impl MutableCatalog {
 }
 
 #[async_trait::async_trait]
-impl Catalog1 for MutableCatalog {
-    async fn get_databases(&self) -> Result<Vec<Arc<dyn Database1>>> {
+impl Catalog for MutableCatalog {
+    async fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
         let dbs = self.meta.list_databases().await?;
 
         dbs.iter().try_fold(vec![], |mut acc, item| {
@@ -132,7 +132,7 @@ impl Catalog1 for MutableCatalog {
         })
     }
 
-    async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database1>> {
+    async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
         let db_info = self.meta.get_database(GetDatabaseReq::new(db_name)).await?;
         self.build_db_instance(&db_info)
     }

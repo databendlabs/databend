@@ -23,34 +23,34 @@ use common_meta_types::DropDatabaseReq;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 
-use crate::catalogs::catalog::Catalog1;
-use crate::catalogs::Database1;
+use crate::catalogs::catalog::Catalog;
+use crate::catalogs::Database;
 use crate::configs::Config;
-use crate::datasources::database::system::SystemDatabase1;
+use crate::datasources::database::system::SystemDatabase;
 
 /// System Catalog contains ... all the system databases (no surprise :)
 /// Currently, this is only one database here, the "system" db.
 /// "information_schema" db is supposed to held here
 #[derive(Clone)]
 pub struct ImmutableCatalog {
-    sys_db: Arc<SystemDatabase1>,
+    sys_db: Arc<SystemDatabase>,
 }
 
 impl ImmutableCatalog {
     pub async fn try_create_with_config(conf: &Config) -> Result<Self> {
         // Here we only register a system database here.
-        let sys_db = Arc::new(SystemDatabase1::create(conf));
+        let sys_db = Arc::new(SystemDatabase::create(conf));
         Ok(Self { sys_db })
     }
 }
 
 #[async_trait::async_trait]
-impl Catalog1 for ImmutableCatalog {
-    async fn get_databases(&self) -> Result<Vec<Arc<dyn Database1>>> {
+impl Catalog for ImmutableCatalog {
+    async fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
         Ok(vec![self.sys_db.clone()])
     }
 
-    async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database1>> {
+    async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
         if db_name == "system" {
             return Ok(self.sys_db.clone());
         }

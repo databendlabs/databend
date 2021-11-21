@@ -59,7 +59,7 @@ pub use columns_table::ColumnsTable;
 pub use configs_table::ConfigsTable;
 pub use contributors_table::ContributorsTable;
 pub use credits_table::CreditsTable;
-pub use database::SystemDatabase1;
+pub use database::SystemDatabase;
 pub use databases_table::DatabasesTable;
 pub use functions_table::FunctionsTable;
 pub use metrics_table::MetricsTable;

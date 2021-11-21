@@ -25,7 +25,7 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 
-use crate::catalogs::Database1;
+use crate::catalogs::Database;
 use crate::catalogs::InMemoryMetas;
 use crate::catalogs::Table;
 use crate::catalogs::SYS_TBL_ID_BEGIN;
@@ -34,11 +34,11 @@ use crate::configs::Config;
 use crate::datasources::database::system;
 
 #[derive(Clone)]
-pub struct SystemDatabase1 {
+pub struct SystemDatabase {
     sys_db_meta: Arc<InMemoryMetas>,
 }
 
-impl SystemDatabase1 {
+impl SystemDatabase {
     pub fn create(_config: &Config) -> Self {
         let mut id = SYS_TBL_ID_BEGIN;
         let mut next_id = || -> u64 {
@@ -83,7 +83,7 @@ impl SystemDatabase1 {
 }
 
 #[async_trait::async_trait]
-impl Database1 for SystemDatabase1 {
+impl Database for SystemDatabase {
     fn name(&self) -> &str {
         "system"
     }

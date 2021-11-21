@@ -23,7 +23,7 @@ use sqlparser::ast::TableAlias;
 use sqlparser::ast::TableFactor;
 use sqlparser::ast::TableWithJoins;
 
-use crate::catalogs::Catalog1;
+use crate::catalogs::Catalog;
 use crate::sessions::DatabendQueryContextRef;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::query::query_schema_joined::JoinedSchema;

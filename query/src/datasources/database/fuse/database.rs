@@ -28,7 +28,7 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 
-use crate::catalogs::Database1;
+use crate::catalogs::Database;
 use crate::catalogs::Table;
 use crate::datasources::context::TableContext;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
@@ -76,7 +76,7 @@ impl FuseDatabase {
 }
 
 #[async_trait::async_trait]
-impl Database1 for FuseDatabase {
+impl Database for FuseDatabase {
     fn name(&self) -> &str {
         &self.db_name
     }

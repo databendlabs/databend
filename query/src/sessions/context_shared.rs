@@ -29,7 +29,7 @@ use futures::future::AbortHandle;
 use uuid::Uuid;
 
 use crate::catalogs::impls::DatabaseCatalog;
-use crate::catalogs::Catalog1;
+use crate::catalogs::Catalog;
 use crate::catalogs::Table;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;

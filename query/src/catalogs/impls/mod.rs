@@ -19,7 +19,7 @@ pub mod in_memory_meta;
 
 pub use catalog::ImmutableCatalog;
 pub use catalog::MutableCatalog;
-pub use catalog::OverlaidCatalog1;
+pub use catalog::OverlaidCatalog;
 pub use database_catalog::DatabaseCatalog;
 
 pub use crate::catalogs::table_id_ranges::LOCAL_TBL_ID_BEGIN;
