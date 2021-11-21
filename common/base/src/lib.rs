@@ -30,7 +30,6 @@ pub use profiling::Profiling;
 pub use progress::Progress;
 pub use progress::ProgressCallback;
 pub use progress::ProgressValues;
-pub use runtime::BlockingWait;
 pub use runtime::Dropper;
 pub use runtime::Runtime;
 pub use runtime::TrySpawn;
