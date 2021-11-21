@@ -27,6 +27,8 @@ use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
+use common_meta_types::GetTableReq;
+use common_meta_types::ListTableReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -35,10 +37,8 @@ use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 
 use crate::FlightReq;
-use crate::GetDatabasesAction;
-use crate::GetTableAction;
 use crate::GetTableExtReq;
-use crate::GetTablesAction;
+use crate::ListDatabasesAction;
 use crate::MetaFlightClient;
 
 #[async_trait::async_trait]
@@ -59,7 +59,7 @@ impl MetaApi for MetaFlightClient {
     }
 
     async fn list_databases(&self) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
-        self.do_action(GetDatabasesAction {}).await
+        self.do_action(ListDatabasesAction {}).await
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, ErrorCode> {
@@ -70,18 +70,15 @@ impl MetaApi for MetaFlightClient {
         self.do_action(FlightReq { req }).await
     }
 
-    async fn get_table(&self, db: &str, table: &str) -> common_exception::Result<Arc<TableInfo>> {
-        let x = self
-            .do_action(GetTableAction {
-                db: db.to_string(),
-                table: table.to_string(),
-            })
-            .await?;
-        Ok(Arc::new(x))
+    async fn get_table(&self, req: GetTableReq) -> common_exception::Result<Arc<TableInfo>> {
+        self.do_action(FlightReq { req }).await
     }
 
-    async fn list_tables(&self, db: &str) -> common_exception::Result<Vec<Arc<TableInfo>>> {
-        self.do_action(GetTablesAction { db: db.to_string() }).await
+    async fn list_tables(
+        &self,
+        req: ListTableReq,
+    ) -> common_exception::Result<Vec<Arc<TableInfo>>> {
+        self.do_action(FlightReq { req }).await
     }
 
     async fn get_table_by_id(

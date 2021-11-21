@@ -23,6 +23,8 @@ use common_meta_api::MetaApi;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
+use common_meta_types::GetTableReq;
+use common_meta_types::ListTableReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -86,12 +88,15 @@ impl Database for FuseDatabase {
         db_name: &str,
         table_name: &str,
     ) -> common_exception::Result<Arc<dyn Table>> {
-        let table_info = self.meta.get_table(db_name, table_name).await?;
+        let table_info = self
+            .meta
+            .get_table(GetTableReq::new(db_name, table_name))
+            .await?;
         self.build_table(table_info.as_ref())
     }
 
-    async fn get_tables(&self, db_name: &str) -> common_exception::Result<Vec<Arc<dyn Table>>> {
-        let table_infos = self.meta.list_tables(db_name).await?;
+    async fn list_tables(&self, db_name: &str) -> common_exception::Result<Vec<Arc<dyn Table>>> {
+        let table_infos = self.meta.list_tables(ListTableReq::new(db_name)).await?;
 
         table_infos.iter().try_fold(vec![], |mut acc, item| {
             let tbl = self.build_table(item.as_ref())?;

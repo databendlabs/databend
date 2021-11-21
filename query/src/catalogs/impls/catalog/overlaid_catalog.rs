@@ -61,9 +61,9 @@ impl OverlaidCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for OverlaidCatalog {
-    async fn get_databases(&self) -> common_exception::Result<Vec<Arc<dyn Database>>> {
-        let mut dbs = self.immutable_catalog.get_databases().await?;
-        let mut other = self.mutable_catalog.get_databases().await?;
+    async fn list_databases(&self) -> common_exception::Result<Vec<Arc<dyn Database>>> {
+        let mut dbs = self.immutable_catalog.list_databases().await?;
+        let mut other = self.mutable_catalog.list_databases().await?;
         dbs.append(&mut other);
         Ok(dbs)
     }

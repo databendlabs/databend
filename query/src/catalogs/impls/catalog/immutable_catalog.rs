@@ -46,7 +46,7 @@ impl ImmutableCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for ImmutableCatalog {
-    async fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
+    async fn list_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
         Ok(vec![self.sys_db.clone()])
     }
 

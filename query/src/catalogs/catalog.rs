@@ -35,7 +35,7 @@ use crate::datasources::table_func_engine::TableArgs;
 #[async_trait::async_trait]
 pub trait Catalog: DynClone + Send + Sync {
     // Get all the databases.
-    async fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>>;
+    async fn list_databases(&self) -> Result<Vec<Arc<dyn Database>>>;
 
     // Get the database by name.
     async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>>;

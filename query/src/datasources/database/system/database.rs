@@ -106,14 +106,15 @@ impl Database for SystemDatabase {
         Ok(table.clone())
     }
 
-    async fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
-        // Check the database.
+    async fn list_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+        // ensure db exists
         if db_name != self.name() {
             return Err(ErrorCode::UnknownDatabase(format!(
                 "Unknown database {}",
                 db_name
             )));
         }
+
         Ok(self.sys_db_meta.name_to_table.values().cloned().collect())
     }
 

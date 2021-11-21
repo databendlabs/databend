@@ -122,7 +122,7 @@ impl MutableCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for MutableCatalog {
-    async fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
+    async fn list_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
         let dbs = self.meta.list_databases().await?;
 
         dbs.iter().try_fold(vec![], |mut acc, item| {
