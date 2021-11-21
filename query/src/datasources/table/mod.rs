@@ -17,7 +17,6 @@ pub mod fuse;
 mod prelude;
 
 mod csv;
-mod github;
 mod memory;
 mod null;
 mod parquet;
