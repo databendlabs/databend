@@ -68,9 +68,9 @@ impl OverlaidCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for OverlaidCatalog {
-    async fn get_databases(&self) -> common_exception::Result<Vec<Arc<dyn Database>>> {
-        let mut dbs = self.read_only.get_databases().await?;
-        let mut other = self.bottom.get_databases().await?;
+    async fn list_databases(&self) -> common_exception::Result<Vec<Arc<dyn Database>>> {
+        let mut dbs = self.read_only.list_databases().await?;
+        let mut other = self.bottom.list_databases().await?;
         dbs.append(&mut other);
         Ok(dbs)
     }
@@ -107,13 +107,13 @@ impl Catalog for OverlaidCatalog {
         }
     }
 
-    async fn get_tables(&self, db_name: &str) -> common_exception::Result<Vec<Arc<dyn Table>>> {
-        let r = self.read_only.get_tables(db_name).await;
+    async fn list_tables(&self, db_name: &str) -> common_exception::Result<Vec<Arc<dyn Table>>> {
+        let r = self.read_only.list_tables(db_name).await;
         match r {
             Ok(x) => Ok(x),
             Err(e) => {
                 if e.code() == ErrorCode::UnknownDatabase("").code() {
-                    self.bottom.get_tables(db_name).await
+                    self.bottom.list_tables(db_name).await
                 } else {
                     Err(e)
                 }
