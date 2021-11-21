@@ -29,6 +29,7 @@ use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetTableReq;
+use common_meta_types::ListTableReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -110,9 +111,8 @@ impl MetaApi for MetaRemote {
             .await
     }
 
-    async fn list_tables(&self, db_name: &str) -> Result<Vec<Arc<TableInfo>>> {
-        let db_name = db_name.to_owned();
-        self.query_backend(move |cli| async move { cli.list_tables(&db_name).await })
+    async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>> {
+        self.query_backend(move |cli| async move { cli.list_tables(req).await })
             .await
     }
 

@@ -28,6 +28,7 @@ use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetTableReq;
+use common_meta_types::ListTableReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -38,7 +39,6 @@ use common_meta_types::UpsertTableOptionReq;
 use crate::FlightReq;
 use crate::GetTableExtReq;
 use crate::ListDatabasesAction;
-use crate::ListTablesAction;
 use crate::MetaFlightClient;
 
 #[async_trait::async_trait]
@@ -74,9 +74,11 @@ impl MetaApi for MetaFlightClient {
         self.do_action(FlightReq { req }).await
     }
 
-    async fn list_tables(&self, db: &str) -> common_exception::Result<Vec<Arc<TableInfo>>> {
-        self.do_action(ListTablesAction { db: db.to_string() })
-            .await
+    async fn list_tables(
+        &self,
+        req: ListTableReq,
+    ) -> common_exception::Result<Vec<Arc<TableInfo>>> {
+        self.do_action(FlightReq { req }).await
     }
 
     async fn get_table_by_id(

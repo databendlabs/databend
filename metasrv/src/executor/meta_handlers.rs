@@ -20,7 +20,6 @@ use common_exception::ErrorCode;
 use common_meta_flight::FlightReq;
 use common_meta_flight::GetTableExtReq;
 use common_meta_flight::ListDatabasesAction;
-use common_meta_flight::ListTablesAction;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd::CreateDatabase;
@@ -39,6 +38,7 @@ use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetTableReq;
+use common_meta_types::ListTableReq;
 use common_meta_types::LogEntry;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -320,9 +320,12 @@ impl RequestHandler<ListDatabasesAction> for ActionHandler {
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<ListTablesAction> for ActionHandler {
-    async fn handle(&self, req: ListTablesAction) -> common_exception::Result<Vec<Arc<TableInfo>>> {
-        let res = self.meta_node.get_tables(req.db.as_str()).await?;
+impl RequestHandler<FlightReq<ListTableReq>> for ActionHandler {
+    async fn handle(
+        &self,
+        req: FlightReq<ListTableReq>,
+    ) -> common_exception::Result<Vec<Arc<TableInfo>>> {
+        let res = self.meta_node.get_tables(&req.req.db_name).await?;
         Ok(res.iter().map(|t| Arc::new(t.clone())).collect::<Vec<_>>())
     }
 }

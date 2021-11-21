@@ -22,6 +22,7 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use maplit::hashmap;
 
+use crate::database::DatabaseNameIdent;
 use crate::MatchSeq;
 use crate::MetaVersion;
 
@@ -245,6 +246,29 @@ impl GetTableReq {
     pub fn new(db_name: impl Into<String>, table_name: impl Into<String>) -> GetTableReq {
         GetTableReq {
             inner: TableNameIndent::new(db_name, table_name),
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct ListTableReq {
+    pub inner: DatabaseNameIdent,
+}
+
+impl Deref for ListTableReq {
+    type Target = DatabaseNameIdent;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl ListTableReq {
+    pub fn new(db_name: impl Into<String>) -> ListTableReq {
+        ListTableReq {
+            inner: DatabaseNameIdent {
+                db_name: db_name.into(),
+            },
         }
     }
 }

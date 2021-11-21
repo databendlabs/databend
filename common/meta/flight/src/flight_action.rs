@@ -31,6 +31,7 @@ use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::GetTableReq;
+use common_meta_types::ListTableReq;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MetaId;
 use common_meta_types::PrefixListReply;
@@ -65,7 +66,7 @@ pub enum MetaFlightAction {
     DropTable(FlightReq<DropTableReq>),
     GetTable(FlightReq<GetTableReq>),
     GetTableExt(GetTableExtReq),
-    ListTables(ListTablesAction),
+    ListTables(FlightReq<ListTableReq>),
     CommitTable(FlightReq<UpsertTableOptionReq>),
 
     UpsertKV(UpsertKVAction),
@@ -185,13 +186,7 @@ impl RequestFor for FlightReq<UpsertTableOptionReq> {
     type Reply = UpsertTableOptionReply;
 }
 
-// - get tables
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct ListTablesAction {
-    pub db: String,
-}
-
-impl RequestFor for ListTablesAction {
+impl RequestFor for FlightReq<ListTableReq> {
     type Reply = Vec<Arc<TableInfo>>;
 }
 
