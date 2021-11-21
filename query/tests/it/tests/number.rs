@@ -17,11 +17,11 @@ use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
 use common_planners::ReadDataSourcePlan;
+use databend_query::catalogs::Catalog;
+use databend_query::catalogs::ToReadDataSourcePlan;
+use databend_query::pipelines::transforms::SourceTransform;
+use databend_query::sessions::DatabendQueryContextRef;
 
-use crate::catalogs::Catalog;
-use crate::catalogs::ToReadDataSourcePlan;
-use crate::pipelines::transforms::SourceTransform;
-use crate::sessions::DatabendQueryContextRef;
 use crate::tests::try_create_catalog;
 
 pub struct NumberTestData {

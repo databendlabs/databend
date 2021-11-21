@@ -16,12 +16,12 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_types::NodeInfo;
+use databend_query::clusters::Cluster;
+use databend_query::configs::Config;
+use databend_query::sessions::DatabendQueryContext;
+use databend_query::sessions::DatabendQueryContextRef;
+use databend_query::sessions::DatabendQueryContextShared;
 
-use crate::clusters::Cluster;
-use crate::configs::Config;
-use crate::sessions::DatabendQueryContext;
-use crate::sessions::DatabendQueryContextRef;
-use crate::sessions::DatabendQueryContextShared;
 use crate::tests::SessionManagerBuilder;
 
 pub fn try_create_context() -> Result<DatabendQueryContextRef> {

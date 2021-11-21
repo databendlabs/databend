@@ -12,16 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::BlockingWait;
-use common_base::Runtime;
 use common_exception::Result;
+use common_planners::PlanNode;
+use databend_query::sessions::DatabendQueryContextRef;
+use databend_query::sql::PlanParser;
 
-use crate::catalogs::impls::DatabaseCatalog;
-use crate::configs::Config;
-
-pub fn try_create_catalog() -> Result<DatabaseCatalog> {
-    let conf = Config::default();
-    let rt = Runtime::with_worker_threads(1).unwrap();
-    let catalog = DatabaseCatalog::try_create_with_config(conf).wait_in(&rt, None)??;
-    Ok(catalog)
+pub fn parse_query(query: impl ToString, ctx: &DatabendQueryContextRef) -> Result<PlanNode> {
+    let query = query.to_string();
+    futures::executor::block_on(PlanParser::parse(&query, ctx.clone()))
 }

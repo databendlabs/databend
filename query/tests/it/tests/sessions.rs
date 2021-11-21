@@ -17,10 +17,9 @@ use std::env;
 use common_base::tokio::runtime::Runtime;
 use common_base::Thread;
 use common_exception::Result;
-
-use crate::configs::Config;
-use crate::sessions::SessionManager;
-use crate::sessions::SessionManagerRef;
+use databend_query::configs::Config;
+use databend_query::sessions::SessionManager;
+use databend_query::sessions::SessionManagerRef;
 
 async fn async_try_create_sessions(config: Config) -> Result<SessionManagerRef> {
     let sessions = SessionManager::from_conf(config.clone()).await?;
