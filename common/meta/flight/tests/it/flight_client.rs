@@ -17,6 +17,7 @@ use std::time::Duration;
 use common_base::tokio;
 use common_meta_api::MetaApi;
 use common_meta_flight::MetaFlightClient;
+use common_meta_types::GetDatabaseReq;
 
 use crate::start_flight_server;
 
@@ -29,7 +30,7 @@ async fn test_flight_client_action_timeout() {
         .await
         .unwrap();
 
-    let res = client.get_database("xx").await;
+    let res = client.get_database(GetDatabaseReq::new("xx")).await;
     let actual = res.unwrap_err().message();
     let expect = "status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} }";
     assert_eq!(actual, expect);

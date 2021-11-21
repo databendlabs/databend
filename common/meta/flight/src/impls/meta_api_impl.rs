@@ -26,6 +26,7 @@ use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
+use common_meta_types::GetDatabaseReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -34,7 +35,6 @@ use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 
 use crate::FlightReq;
-use crate::GetDatabaseAction;
 use crate::GetDatabasesAction;
 use crate::GetTableAction;
 use crate::GetTableExtReq;
@@ -50,34 +50,26 @@ impl MetaApi for MetaFlightClient {
         self.do_action(FlightReq { req }).await
     }
 
-    /// Drop database call.
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, ErrorCode> {
         self.do_action(FlightReq { req }).await
     }
 
-    async fn get_database(&self, db: &str) -> common_exception::Result<Arc<DatabaseInfo>> {
-        let x = self
-            .do_action(GetDatabaseAction { db: db.to_string() })
-            .await?;
-
-        Ok(Arc::new(x))
+    async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, ErrorCode> {
+        self.do_action(FlightReq { req }).await
     }
 
     async fn get_databases(&self) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
         self.do_action(GetDatabasesAction {}).await
     }
 
-    /// Create table call.
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, ErrorCode> {
         self.do_action(FlightReq { req }).await
     }
 
-    /// Drop table call.
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, ErrorCode> {
         self.do_action(FlightReq { req }).await
     }
 
-    /// Get table.
     async fn get_table(&self, db: &str, table: &str) -> common_exception::Result<Arc<TableInfo>> {
         let x = self
             .do_action(GetTableAction {
@@ -88,7 +80,6 @@ impl MetaApi for MetaFlightClient {
         Ok(Arc::new(x))
     }
 
-    /// Get tables.
     async fn get_tables(&self, db: &str) -> common_exception::Result<Vec<Arc<TableInfo>>> {
         self.do_action(GetTablesAction { db: db.to_string() }).await
     }

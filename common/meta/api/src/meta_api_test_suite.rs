@@ -23,6 +23,7 @@ use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReq;
+use common_meta_types::GetDatabaseReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
@@ -84,7 +85,7 @@ impl MetaApiTestSuite {
 
         tracing::info!("--- get db1");
         {
-            let res = mt.get_database("db1").await;
+            let res = mt.get_database(GetDatabaseReq::new("db1")).await;
             tracing::debug!("get present database res: {:?}", res);
             let res = res?;
             assert_eq!(1, res.database_id, "db1 id is 1");
@@ -110,13 +111,13 @@ impl MetaApiTestSuite {
 
         tracing::info!("--- get db2");
         {
-            let res = mt.get_database("db2").await?;
+            let res = mt.get_database(GetDatabaseReq::new("db2")).await?;
             assert_eq!("db2".to_string(), res.db, "db1.db is db1");
         }
 
         tracing::info!("--- get absent db");
         {
-            let res = mt.get_database("absent").await;
+            let res = mt.get_database(GetDatabaseReq::new("absent")).await;
             tracing::debug!("=== get absent database res: {:?}", res);
             assert!(res.is_err());
             let res = res.unwrap_err();
@@ -135,7 +136,7 @@ impl MetaApiTestSuite {
 
         tracing::info!("--- get db2 should not found");
         {
-            let res = mt.get_database("db2").await;
+            let res = mt.get_database(GetDatabaseReq::new("db2")).await;
             let err = res.unwrap_err();
             assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
         }
