@@ -17,11 +17,10 @@ use common_exception::Result;
 use common_meta_types::AuthType;
 use common_meta_types::UserPrivilege;
 use common_meta_types::UserPrivilegeType;
+use databend_query::configs::Config;
+use databend_query::users::User;
+use databend_query::users::UserManager;
 use pretty_assertions::assert_eq;
-
-use crate::configs::Config;
-use crate::users::User;
-use crate::users::UserManager;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_manager() -> Result<()> {

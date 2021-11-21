@@ -14,3 +14,4 @@
 
 #[allow(dead_code)]
 mod tests;
+mod users;
