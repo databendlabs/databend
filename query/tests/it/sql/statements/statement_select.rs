@@ -15,11 +15,11 @@
 use common_base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use databend_query::sql::statements::AnalyzableStatement;
+use databend_query::sql::statements::AnalyzedResult;
+use databend_query::sql::DfParser;
+use databend_query::sql::DfStatement;
 
-use crate::sql::statements::AnalyzableStatement;
-use crate::sql::statements::AnalyzedResult;
-use crate::sql::DfParser;
-use crate::sql::DfStatement;
 use crate::tests::try_create_context;
 
 #[tokio::test]

@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod statement_select_test;
-
-mod query;
+pub mod query;
 
 mod analyzer_expr;
 mod analyzer_statement;

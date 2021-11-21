@@ -14,9 +14,6 @@
 
 mod transform_sqlparser;
 
-#[cfg(test)]
-mod transform_sqlparser_test;
-
 use common_exception::Result;
 
 use crate::sql::parser::ast::Statement;
