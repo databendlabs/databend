@@ -13,9 +13,12 @@
 //  limitations under the License.
 //
 
-pub mod metastore_catalog;
+mod immutable_catalog;
 mod mutable_catalog;
+
+pub mod metastore_catalog;
 pub mod overlaid_catalog;
 pub mod system_catalog;
 
+pub use immutable_catalog::ImmutableCatalog;
 pub use mutable_catalog::MutableCatalog;
