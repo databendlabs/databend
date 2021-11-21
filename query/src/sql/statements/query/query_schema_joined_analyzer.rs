@@ -94,7 +94,7 @@ impl JoinedSchemaAnalyzer {
     async fn table(&self, item: &TableRPNItem) -> Result<JoinedSchema> {
         // TODO(Winter): await query_context.get_table
         let (database, table) = self.resolve_table(&item.name)?;
-        let read_table = self.ctx.get_table(&database, &table)?;
+        let read_table = self.ctx.get_table(&database, &table).await?;
 
         match &item.alias {
             None => {

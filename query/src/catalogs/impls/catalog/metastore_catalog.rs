@@ -15,7 +15,6 @@
 
 use std::sync::Arc;
 
-use common_base::BlockingWait;
 use common_dal::InMemoryData;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -29,6 +28,7 @@ use common_meta_types::DatabaseInfo;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
+use common_meta_types::GetDatabaseReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -89,8 +89,7 @@ impl MetaStoreCatalog {
             tracing::info!("use embedded meta");
             // TODO(xp): This can only be used for test: data will be removed when program quit.
 
-            let meta_embedded = MetaEmbedded::new_temp().wait(None)??;
-            Arc::new(meta_embedded)
+            Arc::new(MetaEmbedded::new_temp().await?)
         } else {
             tracing::info!("use remote meta");
 
@@ -132,7 +131,7 @@ impl MetaStoreCatalog {
 #[async_trait::async_trait]
 impl Catalog for MetaStoreCatalog {
     async fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
-        let dbs = self.meta.get_databases().await?;
+        let dbs = self.meta.list_databases().await?;
 
         dbs.iter().try_fold(vec![], |mut acc, item| {
             let db = self.build_db_instance(item)?;
@@ -142,7 +141,7 @@ impl Catalog for MetaStoreCatalog {
     }
 
     async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
-        let db_info = self.meta.get_database(db_name).await?;
+        let db_info = self.meta.get_database(GetDatabaseReq::new(db_name)).await?;
         self.build_db_instance(&db_info)
     }
 
@@ -152,7 +151,7 @@ impl Catalog for MetaStoreCatalog {
     }
 
     async fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
-        let table_infos = self.meta.get_tables(db_name).await?;
+        let table_infos = self.meta.list_tables(db_name).await?;
 
         table_infos.iter().try_fold(vec![], |mut acc, item| {
             let tbl = self.build_table(item.as_ref())?;

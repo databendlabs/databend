@@ -43,3 +43,6 @@ tests/perfs/*-result.json
 
 # python
 venv/
+*.pyc
+__pycache__/*
+

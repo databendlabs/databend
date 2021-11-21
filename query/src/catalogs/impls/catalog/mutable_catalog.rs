@@ -25,6 +25,7 @@ use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::GetDatabaseReq;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
@@ -122,7 +123,7 @@ impl MutableCatalog {
 #[async_trait::async_trait]
 impl Catalog1 for MutableCatalog {
     async fn get_databases(&self) -> Result<Vec<Arc<dyn Database1>>> {
-        let dbs = self.meta.get_databases().await?;
+        let dbs = self.meta.list_databases().await?;
 
         dbs.iter().try_fold(vec![], |mut acc, item| {
             let db = self.build_db_instance(item)?;
@@ -132,7 +133,7 @@ impl Catalog1 for MutableCatalog {
     }
 
     async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database1>> {
-        let db_info = self.meta.get_database(db_name).await?;
+        let db_info = self.meta.get_database(GetDatabaseReq::new(db_name)).await?;
         self.build_db_instance(&db_info)
     }
 

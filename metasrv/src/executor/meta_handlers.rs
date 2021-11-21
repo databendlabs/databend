@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_meta_flight::FlightReq;
-use common_meta_flight::GetDatabaseAction;
 use common_meta_flight::GetDatabasesAction;
 use common_meta_flight::GetTableAction;
 use common_meta_flight::GetTableExtReq;
@@ -39,6 +38,7 @@ use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
+use common_meta_types::GetDatabaseReq;
 use common_meta_types::LogEntry;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -92,21 +92,24 @@ impl RequestHandler<FlightReq<CreateDatabaseReq>> for ActionHandler {
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<GetDatabaseAction> for ActionHandler {
-    async fn handle(&self, act: GetDatabaseAction) -> common_exception::Result<DatabaseInfo> {
-        let db_name = act.db;
+impl RequestHandler<FlightReq<GetDatabaseReq>> for ActionHandler {
+    async fn handle(
+        &self,
+        act: FlightReq<GetDatabaseReq>,
+    ) -> common_exception::Result<Arc<DatabaseInfo>> {
+        let db_name = &act.req.db_name;
         let db = self
             .meta_node
             .get_state_machine()
             .await
-            .get_database(&db_name)?;
+            .get_database(db_name)?;
 
         match db {
-            Some(db) => Ok(DatabaseInfo {
+            Some(db) => Ok(Arc::new(DatabaseInfo {
                 database_id: db.data,
                 db: db_name.to_string(),
-            }),
-            None => Err(ErrorCode::UnknownDatabase(db_name)),
+            })),
+            None => Err(ErrorCode::UnknownDatabase(db_name.to_string())),
         }
     }
 }

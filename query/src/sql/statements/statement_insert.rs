@@ -67,7 +67,7 @@ impl AnalyzableStatement for DfInsertStatement {
         match &self.source {
             None => self.analyze_insert_without_source(&ctx).await,
             Some(source) => match &source.body {
-                SetExpr::Values(v) => self.analyze_insert_values(&ctx, v),
+                SetExpr::Values(v) => self.analyze_insert_values(&ctx, v).await,
                 SetExpr::Select(_) => self.analyze_insert_select(&ctx, source).await,
                 _ => Err(ErrorCode::SyntaxException(
                     "Insert must be have values or select.",
@@ -117,7 +117,7 @@ impl DfInsertStatement {
         Ok(())
     }
 
-    fn analyze_insert_values(
+    async fn analyze_insert_values(
         &self,
         ctx: &DatabendQueryContext,
         values: &Values,
@@ -125,7 +125,7 @@ impl DfInsertStatement {
         tracing::debug!("{:?}", values);
 
         let (db, table) = self.resolve_table(ctx)?;
-        let write_table = ctx.get_table(&db, &table)?;
+        let write_table = ctx.get_table(&db, &table).await?;
         let table_meta_id = write_table.get_id();
         let schema = self.insert_schema(write_table)?;
 
@@ -141,7 +141,7 @@ impl DfInsertStatement {
         ctx: &DatabendQueryContextRef,
     ) -> Result<AnalyzedResult> {
         let (db, table) = self.resolve_table(ctx)?;
-        let write_table = ctx.get_table(&db, &table)?;
+        let write_table = ctx.get_table(&db, &table).await?;
         let table_meta_id = write_table.get_id();
         let table_schema = self.insert_schema(write_table)?;
 
@@ -156,7 +156,7 @@ impl DfInsertStatement {
         source: &Query,
     ) -> Result<AnalyzedResult> {
         let (db, table) = self.resolve_table(ctx)?;
-        let write_table = ctx.get_table(&db, &table)?;
+        let write_table = ctx.get_table(&db, &table).await?;
         let table_meta_id = write_table.get_id();
         let table_schema = self.insert_schema(write_table)?;
 

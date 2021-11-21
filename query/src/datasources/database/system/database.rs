@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
+use common_exception::Result;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
@@ -87,11 +88,7 @@ impl Database1 for SystemDatabase1 {
         "system"
     }
 
-    async fn get_table(
-        &self,
-        db_name: &str,
-        table_name: &str,
-    ) -> common_exception::Result<Arc<dyn Table>> {
+    async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
         // Check the database.
         if db_name != self.name() {
             return Err(ErrorCode::UnknownDatabase(format!(
@@ -109,7 +106,7 @@ impl Database1 for SystemDatabase1 {
         Ok(table.clone())
     }
 
-    async fn get_tables(&self, db_name: &str) -> common_exception::Result<Vec<Arc<dyn Table>>> {
+    async fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         // Check the database.
         if db_name != self.name() {
             return Err(ErrorCode::UnknownDatabase(format!(
@@ -120,10 +117,7 @@ impl Database1 for SystemDatabase1 {
         Ok(self.sys_db_meta.name_to_table.values().cloned().collect())
     }
 
-    async fn get_table_meta_by_id(
-        &self,
-        table_id: MetaId,
-    ) -> common_exception::Result<(TableIdent, Arc<TableMeta>)> {
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
         let table =
             self.sys_db_meta.id_to_table.get(&table_id).ok_or_else(|| {
                 ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id))
@@ -132,13 +126,13 @@ impl Database1 for SystemDatabase1 {
         Ok((ti.ident.clone(), Arc::new(ti.meta.clone())))
     }
 
-    async fn create_table(&self, _req: CreateTableReq) -> common_exception::Result<()> {
+    async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
         Err(ErrorCode::UnImplement(
             "Cannot create system database table",
         ))
     }
 
-    async fn drop_table(&self, _req: DropTableReq) -> common_exception::Result<DropTableReply> {
+    async fn drop_table(&self, _req: DropTableReq) -> Result<DropTableReply> {
         Err(ErrorCode::UnImplement("Cannot drop system database table"))
     }
 

@@ -44,8 +44,8 @@ impl NumberTestData {
     }
 
     pub fn number_read_source_plan_for_test(&self, numbers: i64) -> Result<ReadDataSourcePlan> {
+        let catalog = try_create_catalog()?;
         futures::executor::block_on(async move {
-            let catalog = try_create_catalog()?;
             let tbl_arg = Some(vec![Expression::create_literal(DataValue::Int64(Some(
                 numbers,
             )))]);
