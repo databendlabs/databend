@@ -12,21 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod tests {
-    use common_exception::Result;
+use common_exception::Result;
+use databend_query::optimizers::*;
 
-    use crate::optimizers::*;
+#[test]
+fn test_expression_transform_optimizer() -> Result<()> {
+    struct Test {
+        name: &'static str,
+        query: &'static str,
+        expect: &'static str,
+    }
 
-    #[test]
-    fn test_expression_transform_optimizer() -> Result<()> {
-        struct Test {
-            name: &'static str,
-            query: &'static str,
-            expect: &'static str,
-        }
-
-        let tests: Vec<Test> = vec![
+    let tests: Vec<Test> = vec![
             Test {
                 name: "And expression",
                 query: "select number from numbers_mt(10) where not(number>1 and number<=3)",
@@ -118,15 +115,14 @@ mod tests {
             },
         ];
 
-        for test in tests {
-            let ctx = crate::tests::try_create_context()?;
+    for test in tests {
+        let ctx = crate::tests::try_create_context()?;
 
-            let plan = crate::tests::parse_query(test.query, &ctx)?;
-            let mut optimizer = ExprTransformOptimizer::create(ctx);
-            let optimized = optimizer.optimize(&plan)?;
-            let actual = format!("{:?}", optimized);
-            assert_eq!(test.expect, actual, "{:#?}", test.name);
-        }
-        Ok(())
+        let plan = crate::tests::parse_query(test.query, &ctx)?;
+        let mut optimizer = ExprTransformOptimizer::create(ctx);
+        let optimized = optimizer.optimize(&plan)?;
+        let actual = format!("{:?}", optimized);
+        assert_eq!(test.expect, actual, "{:#?}", test.name);
     }
+    Ok(())
 }

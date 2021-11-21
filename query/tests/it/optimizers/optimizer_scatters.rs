@@ -14,9 +14,9 @@
 
 use common_base::tokio;
 use common_exception::Result;
+use databend_query::optimizers::Optimizer;
+use databend_query::optimizers::ScattersOptimizer;
 
-use crate::optimizers::optimizer_scatters::ScattersOptimizer;
-use crate::optimizers::Optimizer;
 use crate::tests::parse_query;
 use crate::tests::try_create_cluster_context;
 use crate::tests::ClusterDescriptor;

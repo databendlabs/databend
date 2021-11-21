@@ -13,8 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-
-use crate::optimizers::*;
+use databend_query::optimizers::*;
 
 #[test]
 fn test_simple() -> Result<()> {

@@ -18,6 +18,7 @@ mod common;
 mod configs;
 mod functions;
 mod metrics;
+mod optimizers;
 mod servers;
 mod sessions;
 mod sql;

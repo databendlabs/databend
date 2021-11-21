@@ -19,10 +19,10 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::*;
+use databend_query::optimizers::*;
 use pretty_assertions::assert_eq;
 
-use crate::optimizers::optimizer_test::*;
-use crate::optimizers::*;
+use crate::optimizers::optimizer::*;
 use crate::tests::parse_query;
 
 #[test]
