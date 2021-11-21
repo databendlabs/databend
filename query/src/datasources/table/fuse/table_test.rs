@@ -30,16 +30,17 @@ async fn test_fuse_table_simple_case() -> Result<()> {
 
     // create test table
     let create_table_plan = fixture.default_crate_table_plan();
+    let db = create_table_plan.db.clone();
     let catalog = ctx.get_catalog();
     catalog
-        .get_database(&create_table_plan.db)
+        .get_database(&db)
         .await?
         .create_table(create_table_plan.into())
         .await?;
 
     // get table
     let table = catalog
-        .get_database(&create_table_plan.db)
+        .get_database(&db)
         .await?
         .get_table(
             fixture.default_db().as_str(),
@@ -124,15 +125,16 @@ async fn test_fuse_table_truncate() -> Result<()> {
     let ctx = fixture.ctx();
 
     let create_table_plan = fixture.default_crate_table_plan();
+    let db = create_table_plan.db;
     let catalog = ctx.get_catalog();
     catalog
-        .get_database(&create_table_plan.table)
+        .get_database(&db)
         .await?
         .create_table(create_table_plan.into())
         .await?;
 
     let table = catalog
-        .get_database(&create_table_plan.db)
+        .get_database(&db)
         .await?
         .get_table(
             fixture.default_db().as_str(),

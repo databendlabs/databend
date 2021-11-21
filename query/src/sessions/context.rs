@@ -93,18 +93,18 @@ impl DatabendQueryContext {
     ) -> Result<Arc<dyn Table>> {
         let catalog = self.get_catalog();
 
-        let t = if plan.tbl_args.is_none() {
-            catalog
-                .get_database(&plan.table_info.db)
-                .await?
-                .build_table(&plan.table_info)?
+        if plan.tbl_args.is_none() {
+            futures::executor::block_on(async move {
+                catalog
+                    .get_database(&plan.table_info.db)
+                    .await?
+                    .build_table(&plan.table_info)
+            })
         } else {
-            catalog
+            Ok(catalog
                 .get_table_function(&plan.table_info.name, plan.tbl_args.clone())?
-                .as_table()
-        };
-
-        Ok(t)
+                .as_table())
+        }
     }
 
     /// Set progress callback to context.
