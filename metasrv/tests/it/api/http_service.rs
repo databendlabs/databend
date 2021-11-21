@@ -20,7 +20,9 @@ use common_base::Stoppable;
 use common_exception::Result;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
+use databend_meta::meta_service::MetaNode;
 
+use crate::tests::service::new_test_context;
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;
@@ -35,8 +37,10 @@ async fn test_http_service_tls_server() -> Result<()> {
     conf.admin_tls_server_key = TEST_SERVER_KEY.to_owned();
     conf.admin_tls_server_cert = TEST_SERVER_CERT.to_owned();
     conf.admin_api_address = addr_str.to_owned();
+    let tc = new_test_context(0);
+    let meta_node = MetaNode::start(&tc.config.raft_config).await?;
 
-    let mut srv = HttpService::create(conf);
+    let mut srv = HttpService::create(conf, meta_node);
 
     // test cert is issued for "localhost"
     let url = format!("https://{}:0/v1/health", TEST_CN_NAME);

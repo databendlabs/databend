@@ -934,6 +934,11 @@ impl StateMachine {
         sm_nodes.get(node_id)
     }
 
+    pub fn get_nodes(&self) -> common_exception::Result<Vec<Node>> {
+        let sm_nodes = self.nodes();
+        sm_nodes.range_values(..)
+    }
+
     pub fn get_database_meta_by_id(
         &self,
         db_id: &u64,
