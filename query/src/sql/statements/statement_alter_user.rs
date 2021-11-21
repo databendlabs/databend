@@ -16,6 +16,7 @@ use common_exception::Result;
 use common_meta_types::AuthType;
 use common_planners::AlterUserPlan;
 use common_planners::PlanNode;
+use common_tracing::tracing;
 
 use crate::sessions::DatabendQueryContextRef;
 use crate::sql::statements::AnalyzableStatement;
@@ -33,7 +34,8 @@ pub struct DfAlterUser {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfAlterUser {
-    async fn analyze(&self, _: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
+    async fn analyze(&self, _ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         Ok(AnalyzedResult::SimpleQuery(PlanNode::AlterUser(
             AlterUserPlan {
                 if_current_user: self.if_current_user,

@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::DescribeTablePlan;
 use common_planners::PlanNode;
+use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
 use crate::sessions::DatabendQueryContextRef;
@@ -33,6 +34,7 @@ pub struct DfDescribeTable {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfDescribeTable {
+    #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let schema = Self::schema();
         let (db, table) = self.resolve_table(ctx)?;

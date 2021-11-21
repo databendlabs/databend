@@ -17,6 +17,7 @@ use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::SettingPlan;
 use common_planners::VarValue;
+use common_tracing::tracing;
 use sqlparser::ast::Ident;
 use sqlparser::ast::SetVariableValue;
 
@@ -34,7 +35,8 @@ pub struct DfSetVariable {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfSetVariable {
-    async fn analyze(&self, _: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
+    async fn analyze(&self, _ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         if self.hivevar {
             return Err(ErrorCode::SyntaxException(
                 "Unsupport hive style set varible",

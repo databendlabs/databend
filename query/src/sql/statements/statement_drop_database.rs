@@ -16,6 +16,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::DropDatabasePlan;
 use common_planners::PlanNode;
+use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
 use crate::sessions::DatabendQueryContextRef;
@@ -30,6 +31,7 @@ pub struct DfDropDatabase {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfDropDatabase {
+    #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let db = self.database_name()?;
         let if_exists = self.if_exists;

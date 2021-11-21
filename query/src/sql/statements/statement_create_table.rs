@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_meta_types::TableMeta;
 use common_planners::CreateTablePlan;
 use common_planners::PlanNode;
+use common_tracing::tracing;
 use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::SqlOption;
@@ -43,6 +44,7 @@ pub struct DfCreateTable {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfCreateTable {
+    #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         let table_meta = self.table_meta()?;
         let if_not_exists = self.if_not_exists;

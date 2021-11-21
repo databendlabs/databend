@@ -61,6 +61,7 @@ pub struct DfInsertStatement {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfInsertStatement {
+    #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         self.is_supported()?;
 

@@ -1540,6 +1540,7 @@ dependencies = [
  "futures",
  "pin-project-lite",
  "pretty_assertions",
+ "tempfile",
  "tokio-stream",
 ]
 
@@ -1886,8 +1887,7 @@ dependencies = [
 [[package]]
 name = "csv-async"
 version = "1.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d72072931ebe0a6f5127359bd5cf3d4ab81e79616ed9d8c438db4dfa65ddbb77"
+source = "git+https://github.com/datafuse-extras/csv-async?rev=cb521c7#cb521c73cf5996687985f83aba19afc1e49b3b8c"
 dependencies = [
  "bstr",
  "cfg-if 1.0.0",
@@ -1896,8 +1896,6 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
- "tokio",
- "tokio-stream",
 ]
 
 [[package]]

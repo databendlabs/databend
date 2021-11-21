@@ -19,6 +19,7 @@ use nom::character::complete::multispace0;
 use nom::character::complete::multispace1;
 use nom::IResult;
 
+use super::statements::DfCopy;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfCreateTable;
@@ -87,6 +88,9 @@ pub enum DfStatement {
     AlterUser(DfAlterUser),
     ShowUsers(DfShowUsers),
     DropUser(DfDropUser),
+
+    // Copy
+    Copy(DfCopy),
 
     // Grant
     GrantPrivilege(DfGrantStatement),
