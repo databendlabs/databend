@@ -101,31 +101,17 @@ impl Function for RoundingFunction {
                     }
                 }
                 DataColumn::Array(d_series) => {
-                    let round = |x: &f64, d: &i64| {
-                        let v = *d;
-                        match v.cmp(&0) {
-                            Ordering::Greater => Some({
-                                let z = 10_f64.powi(if v > 30 { 30 } else { v as i32 });
-                                x.trunc() + (self.rounding_func)(x.fract() * z) / z
-                            }),
-                            Ordering::Less => Some({
-                                let z = 10_f64.powi(if v < -30 { 30 } else { -v as i32 });
-                                (self.rounding_func)(x / z) * z
-                            }),
-                            Ordering::Equal => Some((self.rounding_func)(*x)),
+                    binary(x_series.f64()?, d_series.i64()?, |x, d| match d.cmp(&0) {
+                        Ordering::Greater => {
+                            let z = 10_f64.powi(if d > 30 { 30 } else { d as i32 });
+                            x.trunc() + (self.rounding_func)(x.fract() * z) / z
                         }
-                    };
-
-                    let opt_iter = x_series
-                        .f64()?
-                        .into_iter()
-                        .zip(d_series.i64()?.into_iter())
-                        .map(|(x, d)| match (x, d) {
-                            (Some(x), Some(d)) => round(x, d),
-                            _ => None,
-                        });
-
-                    DFFloat64Array::new_from_opt_iter(opt_iter)
+                        Ordering::Less => {
+                            let z = 10_f64.powi(if d < -30 { 30 } else { -d as i32 });
+                            (self.rounding_func)(x / z) * z
+                        }
+                        Ordering::Equal => (self.rounding_func)(x),
+                    })
                 }
             }
         }
