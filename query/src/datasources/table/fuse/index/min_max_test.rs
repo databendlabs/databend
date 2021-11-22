@@ -27,6 +27,7 @@ use common_meta_types::TableMeta;
 use common_planners::col;
 use common_planners::lit;
 use common_planners::Extras;
+use futures::TryStreamExt;
 
 use crate::catalogs::Catalog;
 use crate::datasources::table::fuse::index::min_max::range_filter;
@@ -84,7 +85,8 @@ async fn test_min_max_index() -> Result<()> {
 
     let da = ctx.get_data_accessor()?;
     let stream = Box::pin(futures::stream::iter(blocks));
-    table.append_data(ctx.clone(), stream).await?;
+    let r = table.append_data(ctx.clone(), stream).await?;
+    table.commit(ctx.clone(), r.try_collect().await?).await?;
 
     // get the latest tbl
     let table = catalog
