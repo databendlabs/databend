@@ -53,6 +53,7 @@ use crate::sql::statements::DfDropDatabase;
 use crate::sql::statements::DfDropTable;
 use crate::sql::statements::DfDropUser;
 use crate::sql::statements::DfExplain;
+use crate::sql::statements::DfGrantObject;
 use crate::sql::statements::DfGrantStatement;
 use crate::sql::statements::DfInsertStatement;
 use crate::sql::statements::DfKillStatement;
@@ -776,13 +777,7 @@ impl<'a> DfParser<'a> {
         if !self.parser.parse_keyword(Keyword::ON) {
             return self.expected("keyword ON", self.parser.peek_token());
         }
-        // TODO: Support `db_name.tbl_name` privilege level.
-        if !self.parser.consume_token(&Token::Mul) {
-            return self.expected("*", self.parser.peek_token());
-        }
-        if self.parser.consume_token(&Token::Period) && !self.parser.consume_token(&Token::Mul) {
-            return self.expected("*.*", self.parser.peek_token());
-        }
+        let on = self.parse_grant_object()?;
         if !self.parser.parse_keyword(Keyword::TO) {
             return self.expected("keyword TO", self.parser.peek_token());
         }
@@ -795,9 +790,50 @@ impl<'a> DfParser<'a> {
         let grant = DfGrantStatement {
             name,
             hostname,
+            on,
             priv_types: privileges,
         };
         Ok(DfStatement::GrantPrivilege(grant))
+    }
+
+    /// Parse a possibly qualified, possibly quoted identifier or wild card, e.g.
+    /// `*` or `myschema`.*. The sub string pattern like "db0%" is not in planned.
+    fn parse_grant_object(&mut self) -> Result<DfGrantObject, ParserError> {
+        let chunk0 = self.parse_grant_object_pattern_chunk()?;
+        // "*" as current db or "table" with current db
+        if !self.consume_token(".") {
+            if chunk0.value == "*" {
+                return Ok(DfGrantObject::Database(None));
+            }
+            return Ok(DfGrantObject::Table(None, chunk0.value));
+        }
+        let chunk1 = self.parse_grant_object_pattern_chunk()?;
+
+        // *.* means global
+        if chunk1.value == "*" && chunk0.value == "*" {
+            return Ok(DfGrantObject::Global);
+        }
+        // *.table is not allowed
+        if chunk0.value == "*" {
+            return self.expected("whitespace", Token::Period);
+        }
+        // db.*
+        if chunk1.value == "*" {
+            return Ok(DfGrantObject::Database(Some(chunk0.value)));
+        }
+        // db.table
+        Ok(DfGrantObject::Table(Some(chunk0.value), chunk1.value))
+    }
+
+    /// Parse a chunk from the object pattern, it might be * or an identifier
+    pub fn parse_grant_object_pattern_chunk(&mut self) -> Result<Ident, ParserError> {
+        if self.consume_token("*") {
+            return Ok(Ident::new("*"));
+        }
+        let token = self.parser.peek_token();
+        self.parser
+            .parse_identifier()
+            .or_else(|_| self.expected("identifier or *", token))
     }
 
     // copy into mycsvtable
