@@ -25,10 +25,7 @@ use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListTableReq;
-use common_meta_types::MetaId;
-use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
 
 use crate::catalogs::Database;
 use crate::catalogs::Table;
@@ -105,13 +102,6 @@ impl Database for FuseDatabase {
         })
     }
 
-    async fn get_table_meta_by_id(
-        &self,
-        table_id: MetaId,
-    ) -> common_exception::Result<(TableIdent, Arc<TableMeta>)> {
-        self.meta.get_table_by_id(table_id).await
-    }
-
     async fn create_table(&self, req: CreateTableReq) -> common_exception::Result<()> {
         self.meta.create_table(req).await?;
         Ok(())
@@ -119,23 +109,5 @@ impl Database for FuseDatabase {
 
     async fn drop_table(&self, req: DropTableReq) -> common_exception::Result<DropTableReply> {
         self.meta.drop_table(req).await
-    }
-
-    fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        let engine = table_info.engine();
-        let factory = self
-            .table_engine_registry
-            .get_table_factory(engine)
-            .ok_or_else(|| {
-                ErrorCode::UnknownTableEngine(format!("unknown table engine {}", engine))
-            })?;
-
-        let tbl: Arc<dyn Table> = factory
-            .try_create(table_info.clone(), TableContext {
-                in_memory_data: self.in_memory_data.clone(),
-            })?
-            .into();
-
-        Ok(tbl)
     }
 }

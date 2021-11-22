@@ -19,10 +19,6 @@ use common_exception::Result;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
-use common_meta_types::MetaId;
-use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
 use dyn_clone::DynClone;
 
 use crate::catalogs::Table;
@@ -36,8 +32,6 @@ pub trait Database: DynClone + Sync + Send {
     async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>>;
 
     async fn list_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
-
-    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)>;
 
     async fn create_table(&self, req: CreateTableReq) -> Result<()>;
 
@@ -56,7 +50,4 @@ pub trait Database: DynClone + Sync + Send {
             }
         }
     }
-
-    /// Build a `Arc<dyn Table>` from `TableInfo`.
-    fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
 }

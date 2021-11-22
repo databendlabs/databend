@@ -36,7 +36,6 @@ async fn test_null_table() -> Result<()> {
     let table = NullTable::try_create(
         TableInfo {
             desc: "'default'.'a'".into(),
-            db: "default".to_string(),
             name: "a".into(),
             ident: Default::default(),
 

@@ -42,7 +42,6 @@ impl SettingsTable {
 
         let table_info = TableInfo {
             desc: "'system'.'settings'".to_string(),
-            db: "system".to_string(),
             name: "settings".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {

@@ -51,7 +51,6 @@ impl TracingTable {
 
         let table_info = TableInfo {
             desc: "'system'.'tracing'".to_string(),
-            db: "system".to_string(),
             name: "tracing".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {

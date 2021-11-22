@@ -45,7 +45,6 @@ async fn test_csv_table() -> Result<()> {
     let table = CsvTable::try_create(
         TableInfo {
             desc: "'default'.'test_csv'".into(),
-            db: "default".to_string(),
             name: "test_csv".into(),
             ident: Default::default(),
             meta: TableMeta {
@@ -106,7 +105,6 @@ async fn test_csv_table_parse_error() -> Result<()> {
     let table = CsvTable::try_create(
         TableInfo {
             desc: "'default'.'test_csv'".into(),
-            db: "default".to_string(),
             name: "test_csv".into(),
             ident: Default::default(),
             meta: TableMeta {

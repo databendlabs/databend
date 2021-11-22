@@ -50,7 +50,6 @@ impl MetricsTable {
 
         let table_info = TableInfo {
             desc: "'system'.'metrics'".to_string(),
-            db: "system".to_string(),
             name: "metrics".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {

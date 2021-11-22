@@ -78,9 +78,6 @@ pub struct TableInfo {
     /// For a table function, it is `table_name(args)`
     pub desc: String,
 
-    /// Database name of this table.
-    pub db: String,
-
     /// `name` is meant to be used with table-function.
     /// Table-function is identified by `name`.
     /// A table in the contrast, can only be identified by table-id.
@@ -108,7 +105,6 @@ impl TableInfo {
     pub fn simple(db: &str, table: &str, schema: Arc<DataSchema>) -> TableInfo {
         TableInfo {
             desc: format!("'{}'.'{}'", db, table),
-            db: db.to_string(),
             name: table.to_string(),
             meta: TableMeta {
                 schema,
@@ -122,7 +118,6 @@ impl TableInfo {
         TableInfo {
             ident,
             desc: format!("'{}'.'{}'", db_name, table_name),
-            db: db_name.to_string(),
             name: table_name.to_string(),
             meta,
         }

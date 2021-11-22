@@ -21,11 +21,16 @@ use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::MetaId;
+use common_meta_types::TableIdent;
+use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::Database;
+use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
 use crate::datasources::table_func_engine::TableArgs;
 use crate::datasources::table_func_engine::TableFuncEngine;
@@ -61,13 +66,6 @@ impl OverlaidCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for OverlaidCatalog {
-    async fn list_databases(&self) -> common_exception::Result<Vec<Arc<dyn Database>>> {
-        let mut dbs = self.immutable_catalog.list_databases().await?;
-        let mut other = self.mutable_catalog.list_databases().await?;
-        dbs.append(&mut other);
-        Ok(dbs)
-    }
-
     async fn get_database(&self, db_name: &str) -> common_exception::Result<Arc<dyn Database>> {
         let r = self.immutable_catalog.get_database(db_name).await;
         match r {
@@ -80,6 +78,13 @@ impl Catalog for OverlaidCatalog {
             }
             Ok(db) => Ok(db),
         }
+    }
+
+    async fn list_databases(&self) -> common_exception::Result<Vec<Arc<dyn Database>>> {
+        let mut dbs = self.immutable_catalog.list_databases().await?;
+        let mut other = self.mutable_catalog.list_databases().await?;
+        dbs.append(&mut other);
+        Ok(dbs)
     }
 
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
@@ -104,6 +109,20 @@ impl Catalog for OverlaidCatalog {
         self.mutable_catalog.drop_database(req).await
     }
 
+    fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+        let res = self.immutable_catalog.build_table(table_info);
+        match res {
+            Ok(t) => Ok(t),
+            Err(e) => {
+                if e.code() == ErrorCode::UnknownTable("").code() {
+                    self.mutable_catalog.build_table(table_info)
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
     async fn upsert_table_option(
         &self,
         req: UpsertTableOptionReq,
@@ -124,5 +143,18 @@ impl Catalog for OverlaidCatalog {
         // table function belongs to no/every database
         let func = factory.try_create("", func_name, *id, tbl_args)?;
         Ok(func)
+    }
+
+    async fn get_table_meta_by_id(
+        &self,
+        table_id: MetaId,
+    ) -> common_exception::Result<(TableIdent, Arc<TableMeta>)> {
+        let res = self.immutable_catalog.get_table_meta_by_id(table_id).await;
+
+        if let Ok(x) = res {
+            Ok(x)
+        } else {
+            self.mutable_catalog.get_table_meta_by_id(table_id).await
+        }
     }
 }

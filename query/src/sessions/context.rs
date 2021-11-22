@@ -94,13 +94,7 @@ impl DatabendQueryContext {
         let catalog = self.get_catalog();
 
         if plan.tbl_args.is_none() {
-            // TODO(bohu): This block_on is tricky, what can we do?
-            futures::executor::block_on(async move {
-                catalog
-                    .get_database(&plan.table_info.db)
-                    .await?
-                    .build_table(&plan.table_info)
-            })
+            catalog.build_table(&plan.table_info)
         } else {
             Ok(catalog
                 .get_table_function(&plan.table_info.name, plan.tbl_args.clone())?

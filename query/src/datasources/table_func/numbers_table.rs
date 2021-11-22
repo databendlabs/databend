@@ -80,7 +80,6 @@ impl NumbersTable {
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
             desc: format!("'{}'.'{}'", database_name, table_func_name),
-            db: database_name.to_string(),
             name: table_func_name.to_string(),
             meta: TableMeta {
                 schema: DataSchemaRefExt::create(vec![DataField::new(

@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use common_dal::InMemoryData;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_api::MetaApi;
@@ -25,6 +26,10 @@ use common_meta_types::CreateDatabaseReq;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::GetDatabaseReq;
+use common_meta_types::MetaId;
+use common_meta_types::TableIdent;
+use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
@@ -32,8 +37,10 @@ use common_tracing::tracing;
 use crate::catalogs::backends::MetaRemote;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::database::Database;
+use crate::catalogs::Table;
 use crate::common::MetaClientProvider;
 use crate::configs::Config;
+use crate::datasources::context::TableContext;
 use crate::datasources::database::fuse::database::FuseDatabase;
 use crate::datasources::table::register_prelude_tbl_engines;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
@@ -121,6 +128,11 @@ impl MutableCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for MutableCatalog {
+    async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
+        let db_info = self.meta.get_database(GetDatabaseReq::new(db_name)).await?;
+        self.build_db_instance(&db_info)
+    }
+
     async fn list_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
         let dbs = self.meta.list_databases().await?;
 
@@ -129,11 +141,6 @@ impl Catalog for MutableCatalog {
             acc.push(db);
             Ok(acc)
         })
-    }
-
-    async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
-        let db_info = self.meta.get_database(GetDatabaseReq::new(db_name)).await?;
-        self.build_db_instance(&db_info)
     }
 
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
@@ -145,10 +152,35 @@ impl Catalog for MutableCatalog {
         Ok(())
     }
 
+    fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+        let engine = table_info.engine();
+        let factory = self
+            .table_engine_registry
+            .get_table_factory(engine)
+            .ok_or_else(|| {
+                ErrorCode::UnknownTableEngine(format!("unknown table engine {}", engine))
+            })?;
+
+        let tbl: Arc<dyn Table> = factory
+            .try_create(table_info.clone(), TableContext {
+                in_memory_data: self.in_memory_data.clone(),
+            })?
+            .into();
+
+        Ok(tbl)
+    }
+
     async fn upsert_table_option(
         &self,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
         self.meta.upsert_table_option(req).await
+    }
+
+    async fn get_table_meta_by_id(
+        &self,
+        table_id: MetaId,
+    ) -> common_exception::Result<(TableIdent, Arc<TableMeta>)> {
+        self.meta.get_table_by_id(table_id).await
     }
 }

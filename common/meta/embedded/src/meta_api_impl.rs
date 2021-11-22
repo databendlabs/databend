@@ -212,7 +212,6 @@ impl MetaApi for MetaEmbedded {
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, version),
             desc: format!("'{}'.'{}'", db, table_name),
-            db: db.to_string(),
             name: table_name.to_string(),
             meta: table_meta,
         };

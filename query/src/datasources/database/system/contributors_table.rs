@@ -38,7 +38,6 @@ impl ContributorsTable {
 
         let table_info = TableInfo {
             desc: "'system'.'contributors'".to_string(),
-            db: "system".to_string(),
             name: "contributors".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {

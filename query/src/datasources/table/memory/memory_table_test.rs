@@ -37,7 +37,6 @@ async fn test_memorytable() -> Result<()> {
     let table = MemoryTable::try_create(
         TableInfo {
             desc: "'default'.'a'".into(),
-            db: "default".to_string(),
             name: "a".into(),
             ident: Default::default(),
             meta: TableMeta {

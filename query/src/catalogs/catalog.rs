@@ -19,11 +19,16 @@ use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::MetaId;
+use common_meta_types::TableIdent;
+use common_meta_types::TableInfo;
+use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use dyn_clone::DynClone;
 
 use crate::catalogs::Database;
+use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
 use crate::datasources::table_func_engine::TableArgs;
 
@@ -34,11 +39,11 @@ use crate::datasources::table_func_engine::TableArgs;
 /// and use the engine to create them.
 #[async_trait::async_trait]
 pub trait Catalog: DynClone + Send + Sync {
-    // Get all the databases.
-    async fn list_databases(&self) -> Result<Vec<Arc<dyn Database>>>;
-
     // Get the database by name.
     async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>>;
+
+    // Get all the databases.
+    async fn list_databases(&self) -> Result<Vec<Arc<dyn Database>>>;
 
     // Operation with database.
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply>;
@@ -58,6 +63,9 @@ pub trait Catalog: DynClone + Send + Sync {
         }
     }
 
+    // Build a `Arc<dyn Table>` from `TableInfo`.
+    fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
+
     async fn upsert_table_option(
         &self,
         req: UpsertTableOptionReq,
@@ -71,4 +79,7 @@ pub trait Catalog: DynClone + Send + Sync {
     ) -> Result<Arc<dyn TableFunction>> {
         unimplemented!()
     }
+
+    // Get the table meta by meta id.
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)>;
 }
