@@ -214,6 +214,7 @@ nav:
               - CEIL: sqlstatement/numeric-functions/ceil.md
               - CEILING: sqlstatement/numeric-functions/ceiling.md
               - FLOOR: sqlstatement/numeric-functions/floor.md
+              - SQRT: sqlstatement/numeric-functions/sqrt.md
               - EXP: sqlstatement/numeric-functions/exp.md
           - String Functions:
               - SUBSTRING: sqlstatement/string-functions/substring.md
