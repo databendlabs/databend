@@ -21,9 +21,7 @@ use std::time::UNIX_EPOCH;
 use async_raft::raft::Entry;
 use async_raft::raft::EntryPayload;
 use async_raft::raft::MembershipConfig;
-use common_exception::exception::SledTransactionError;
 use common_exception::prelude::ErrorCode;
-use common_exception::SledConflictableTransactionError;
 use common_exception::ToErrorCode;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::sled;
@@ -46,6 +44,8 @@ use common_meta_types::TableMeta;
 use common_tracing::tracing;
 use serde::Deserialize;
 use serde::Serialize;
+use sled::transaction::ConflictableTransactionError;
+use sled::transaction::TransactionError;
 use sled::IVec;
 
 use crate::config::RaftConfig;
@@ -252,14 +252,15 @@ impl StateMachine {
 
         // use `Infallible` here cause Sled make it infallible
         // ref: https://github.com/datafuse-extras/sled/blob/43fa7250d3c6f4964167c9498b622f2923289cf3/src/transaction.rs#L235
-        let r: Result<Option<StateMachineMetaValue>, SledTransactionError<Infallible>> =
-            self.sm_tree.txn(move |t| {
+        let r: Result<Option<StateMachineMetaValue>, TransactionError<Infallible>> =
+            self.sm_tree.txn(true, move |t| {
                 let txn_sm_meta = t.key_space::<StateMachineMeta>();
                 txn_sm_meta
                     .insert(&LastApplied, &StateMachineMetaValue::LogId(*log_id))
                     .map_err(|e| {
-                        let err = SledConflictableTransactionError::from(e);
-                        err as SledConflictableTransactionError<Infallible>
+                        let err: ConflictableTransactionError<Infallible> =
+                            ConflictableTransactionError::from(e);
+                        err
                     })
             });
         match r {

@@ -17,13 +17,13 @@ use std::marker::PhantomData;
 use std::ops::Bound;
 use std::ops::RangeBounds;
 
-use common_exception::exception::SledTransactionError;
-use common_exception::exception::SledUnabortableTransactionError;
 use common_exception::ErrorCode;
-use common_exception::SledConflictableTransactionError;
 use common_exception::ToErrorCode;
 use common_tracing::tracing;
+use sled::transaction::ConflictableTransactionError;
+use sled::transaction::TransactionError;
 use sled::transaction::TransactionalTree;
+use sled::transaction::UnabortableTransactionError;
 
 use crate::SledKeySpace;
 
@@ -90,12 +90,18 @@ impl SledTree {
 
     pub fn txn<T, E>(
         &self,
-        f: impl Fn(TransactionSledTree<'_>) -> Result<T, SledConflictableTransactionError<E>>,
-    ) -> Result<T, SledTransactionError<E>> {
+        sync: bool,
+        f: impl Fn(TransactionSledTree<'_>) -> Result<T, ConflictableTransactionError<E>>,
+    ) -> Result<T, TransactionError<E>> {
         // use map_err_to_code
-        (&self.tree)
-            .transaction(move |tree| Ok(f(TransactionSledTree { txn_tree: tree })?))
-            .map_err(SledTransactionError::from)
+        (&self.tree).transaction(move |tree| {
+            let txn_sled_tree = TransactionSledTree { txn_tree: tree };
+            let r = f(txn_sled_tree.clone())?;
+            if sync {
+                txn_sled_tree.txn_tree.flush();
+            }
+            Ok(r)
+        })
     }
 
     /// Return true if the tree contains the key.
@@ -479,6 +485,7 @@ impl SledTree {
     }
 }
 
+#[derive(Clone)]
 pub struct TransactionSledTree<'a> {
     pub txn_tree: &'a TransactionalTree,
 }
@@ -507,17 +514,14 @@ impl TransactionSledTree<'_> {
         &self,
         key: &KV::K,
         value: &KV::V,
-    ) -> Result<Option<KV::V>, SledUnabortableTransactionError>
+    ) -> Result<Option<KV::V>, UnabortableTransactionError>
     where
         KV: SledKeySpace,
     {
         let k = KV::serialize_key(key).unwrap();
         let v = KV::serialize_value(value).unwrap();
 
-        let prev = self
-            .txn_tree
-            .insert(k, v)
-            .map_err(SledUnabortableTransactionError::from)?;
+        let prev = self.txn_tree.insert(k, v)?;
         let prev = prev.map(|x| KV::deserialize_value(x).unwrap());
 
         Ok(prev)
@@ -540,7 +544,7 @@ impl<'a, KV: SledKeySpace> AsTxnKeySpace<'a, KV> {
         &self,
         key: &KV::K,
         value: &KV::V,
-    ) -> Result<Option<KV::V>, SledUnabortableTransactionError> {
+    ) -> Result<Option<KV::V>, UnabortableTransactionError> {
         self.inner.insert::<KV>(key, value)
     }
 }
