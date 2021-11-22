@@ -23,7 +23,7 @@ use crate::PlanNode;
 pub struct SinkPlan {
     pub table_info: TableInfo,
     pub input: Arc<PlanNode>,
-    pub upstream_schema: Option<DataSchemaRef>,
+    pub cast_needed: bool,
 }
 
 impl SinkPlan {

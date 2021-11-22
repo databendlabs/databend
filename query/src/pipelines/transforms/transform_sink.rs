@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
 use common_meta_types::TableInfo;
@@ -32,20 +31,16 @@ pub struct SinkTransform {
     ctx: DatabendQueryContextRef,
     table_info: TableInfo,
     input: Arc<dyn Processor>,
-    upstream_schema: Option<DataSchemaRef>,
+    cast_needed: bool,
 }
 
 impl SinkTransform {
-    pub fn create(
-        ctx: DatabendQueryContextRef,
-        table_info: TableInfo,
-        upstream_schema: Option<DataSchemaRef>,
-    ) -> Self {
+    pub fn create(ctx: DatabendQueryContextRef, table_info: TableInfo, cast_needed: bool) -> Self {
         Self {
             ctx,
             table_info,
             input: Arc::new(EmptyProcessor::create()),
-            upstream_schema,
+            cast_needed,
         }
     }
     fn table_info(&self) -> &TableInfo {
@@ -76,21 +71,15 @@ impl Processor for SinkTransform {
         tracing::debug!("executing sink transform");
         let tbl = self.ctx.get_catalog().build_table(self.table_info())?;
         let mut upstream = self.input.execute().await?;
-
-        // cast if necessary
-        // NOTE: in insert interpreter, we have already check if the length of schemas match
-        if let Some(upstream_schema) = &self.upstream_schema {
-            let mut functions = Vec::with_capacity(upstream_schema.fields().len());
-            for field in upstream_schema.fields() {
+        let output_schema = self.table_info.schema();
+        if self.cast_needed {
+            let mut functions = Vec::with_capacity(output_schema.fields().len());
+            for field in output_schema.fields() {
                 let cast_function =
                     CastFunction::create("cast".to_string(), field.data_type().clone())?;
                 functions.push(cast_function);
             }
-            upstream = Box::pin(CastStream::try_create(
-                upstream,
-                self.table_info.schema(),
-                functions,
-            )?);
+            upstream = Box::pin(CastStream::try_create(upstream, output_schema, functions)?);
         };
 
         tbl.append_data(self.ctx.clone(), upstream).await

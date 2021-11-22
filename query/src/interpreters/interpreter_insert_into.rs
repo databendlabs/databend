@@ -16,7 +16,6 @@ use std::io::Cursor;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
@@ -67,14 +66,10 @@ impl InsertIntoInterpreter {
                     "Fields in select statement is less than expected",
                 ));
             }
-            let upstream_schema = if select_schema == output_schema {
-                None
-            } else {
-                Some(select_schema)
-            };
+            let cast_needed = select_schema != output_schema;
 
             let mut scheduled = Scheduled::new();
-            self.schedule_query(&mut scheduled, sel, table.get_table_info(), upstream_schema)
+            self.schedule_query(&mut scheduled, sel, table.get_table_info(), cast_needed)
                 .await
         } else {
             Err(ErrorCode::UnknownTypeOfQuery(format!(
@@ -140,7 +135,7 @@ impl InsertIntoInterpreter {
         scheduled: &mut Scheduled,
         select_plan: &SelectPlan,
         table_info: &TableInfo,
-        upstream_schema: Option<DataSchemaRef>,
+        cast_needed: bool,
     ) -> Result<Vec<DataBlock>> {
         // This is almost the same of SelectInterpreter::schedule_query, with some slight tweaks
 
@@ -156,7 +151,7 @@ impl InsertIntoInterpreter {
         let sink_plan = PlanNode::Sink(SinkPlan {
             table_info: table_info.clone(),
             input: Arc::new(optimized_plan.clone()),
-            upstream_schema,
+            cast_needed,
         });
 
         // it might be better, if the above logics could be encapsulated in PipelineBuilder
