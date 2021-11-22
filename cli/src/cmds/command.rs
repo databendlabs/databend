@@ -62,15 +62,8 @@ pub trait Command: DynClone + Send + Sync {
             )));
         }
 
-        let matches = match matches {
-            None => {
-                return Err(CliError::Unknown(format!(
-                    "expected args in {}",
-                    self.name()
-                )))
-            }
-            Some(m) => m,
-        };
+        let matches = matches
+            .ok_or_else(|| CliError::Unknown(format!("expected args in {}", self.name())))?;
 
         for subcommand in subcommands.into_iter() {
             if matches.subcommand_name() == Some(subcommand.name()) {

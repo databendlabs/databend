@@ -252,10 +252,9 @@ where
 
     fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
         let state = place.get::<AggregateCovarianceState>();
-        match R::apply(state) {
-            Some(val) => Ok(DataValue::Float64(Some(val))),
-            None => Ok(DataValue::Float64(None)),
-        }
+        Ok(R::apply(state).map_or(DataValue::Float64(None), |val| {
+            DataValue::Float64(Some(val))
+        }))
     }
 }
 

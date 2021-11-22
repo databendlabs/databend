@@ -475,15 +475,9 @@ impl StateMachine {
                 let prev = self.tables().get(&req.table_id)?;
 
                 // Unlike other Cmd, prev to be None is not allowed for upsert-options.
-                let prev = match prev {
-                    None => {
-                        return Err(ErrorCode::UnknownTableId(format!(
-                            "table_id:{}",
-                            req.table_id
-                        )))
-                    }
-                    Some(x) => x,
-                };
+                let prev = prev.ok_or_else(|| {
+                    ErrorCode::UnknownTableId(format!("table_id:{}", req.table_id))
+                })?;
 
                 if req.seq.match_seq(&prev).is_err() {
                     let res = AppliedState::TableMeta(Change::new(Some(prev.clone()), Some(prev)));
@@ -748,10 +742,7 @@ impl StateMachine {
     }
 
     pub fn unexpired_opt<V: Debug>(seq_value: Option<SeqV<V>>) -> Option<SeqV<V>> {
-        match seq_value {
-            None => None,
-            Some(sv) => Self::unexpired(sv),
-        }
+        seq_value.and_then(Self::unexpired)
     }
 
     pub fn unexpired<V: Debug>(seq_value: SeqV<V>) -> Option<SeqV<V>> {

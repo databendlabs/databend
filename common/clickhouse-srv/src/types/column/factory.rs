@@ -323,16 +323,12 @@ pub enum EnumSize {
 }
 
 pub fn parse_enum8(input: &str) -> Option<Vec<(String, i8)>> {
-    match parse_enum(EnumSize::Enum8, input) {
-        Some(result) => {
-            let res: Vec<(String, i8)> = result
-                .iter()
-                .map(|(key, val)| (key.clone(), *val as i8))
-                .collect();
-            Some(res)
-        }
-        None => None,
-    }
+    parse_enum(EnumSize::Enum8, input).map(|result| {
+        result
+            .iter()
+            .map(|(key, val)| (key.clone(), *val as i8))
+            .collect::<Vec<(String, i8)>>()
+    })
 }
 pub fn parse_enum16(input: &str) -> Option<Vec<(String, i16)>> {
     parse_enum(EnumSize::Enum16, input)

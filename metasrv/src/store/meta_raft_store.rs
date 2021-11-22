@@ -231,10 +231,7 @@ impl MetaRaftStore {
         &self,
         upto_index: Option<u64>,
     ) -> anyhow::Result<MembershipConfig> {
-        let right_bound = match upto_index {
-            Some(upto) => Bound::Included(upto),
-            None => Bound::Unbounded,
-        };
+        let right_bound = upto_index.map_or(Bound::Unbounded, Bound::Included);
 
         let it = self.log.range((Bound::Included(0), right_bound))?.rev();
 

@@ -222,10 +222,7 @@ where
         let path = self.rel_to_abs_path(rel_path);
         fs::create_dir_all(path.parent().expect("Bad path?"))?;
         by(&path)?;
-        let size = match size {
-            Some(size) => size,
-            None => fs::metadata(path)?.len(),
-        };
+        let size = size.unwrap_or(fs::metadata(path)?.len());
         self.add_file(AddFile::RelPath(rel_path), size)
             .map_err(|e| {
                 error!(
