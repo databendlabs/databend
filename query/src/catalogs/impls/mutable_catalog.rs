@@ -91,7 +91,7 @@ impl MutableCatalog {
         let database_engine_registry = Arc::new(DatabaseEngineRegistry::default());
         register_database_engines(&database_engine_registry)?;
         let table_engine_registry = Arc::new(TableEngineRegistry::default());
-        register_prelude_tbl_engines(&table_engine_registry)?;
+        register_prelude_tbl_engines(&table_engine_registry, conf)?;
 
         // Create default database.
         let req = CreateDatabaseReq {

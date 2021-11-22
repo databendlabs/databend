@@ -39,6 +39,7 @@ async fn test_configs_table() -> Result<()> {
     let block = &result[0];
     assert_eq!(block.num_columns(), 4);
     assert_eq!(block.num_rows(), 30);
+    assert_eq!(block.num_rows(), 32);
 
     let expected = vec![
         "+-----------------------------------+------------------+-------+-------------+",
@@ -74,6 +75,45 @@ async fn test_configs_table() -> Result<()> {
         "| rpc_tls_server_key                |                  | query |             |",
         "| tenant_id                         |                  | query |             |",
         "| wait_timeout_mills                | 5000             | query |             |",
+        "+-----------------------------------+------------------+-------+-------------+",
+    ];
+    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+    let expected = vec![
+        "+-----------------------------------+------------------+-------+-------------+",
+        "| name                              | value            | group | description |",
+        "+-----------------------------------+------------------+-------+-------------+",
+        "| api_tls_server_cert               |                  | query |             |",
+        "| api_tls_server_key                |                  | query |             |",
+        "| api_tls_server_root_ca_cert       |                  | query |             |",
+        "| clickhouse_handler_host           | 127.0.0.1        | query |             |",
+        "| clickhouse_handler_port           | 9000             | query |             |",
+        "| cluster_id                        |                  | query |             |",
+        "| flight_api_address                | 127.0.0.1:9090   | query |             |",
+        "| http_api_address                  | 127.0.0.1:8080   | query |             |",
+        "| http_handler_host                 | 127.0.0.1        | query |             |",
+        "| http_handler_port                 | 8000             | query |             |",
+        "| log_dir                           | ./_logs          | log   |             |",
+        "| log_level                         | INFO             | log   |             |",
+        "| max_active_sessions               | 256              | query |             |",
+        "| meta_address                      |                  | meta  |             |",
+        "| meta_client_timeout_in_second     | 10               | meta  |             |",
+        "| meta_embedded_dir                 | ./_meta_embedded | meta  |             |",
+        "| meta_password                     |                  | meta  |             |",
+        "| meta_username                     | root             | meta  |             |",
+        "| metric_api_address                | 127.0.0.1:7070   | query |             |",
+        "| mysql_handler_host                | 127.0.0.1        | query |             |",
+        "| mysql_handler_port                | 3307             | query |             |",
+        "| num_cpus                          | 8                | query |             |",
+        "| rpc_tls_meta_server_root_ca_cert  |                  | meta  |             |",
+        "| rpc_tls_meta_service_domain_name  | localhost        | meta  |             |",
+        "| rpc_tls_query_server_root_ca_cert |                  | query |             |",
+        "| rpc_tls_query_service_domain_name | localhost        | query |             |",
+        "| rpc_tls_server_cert               |                  | query |             |",
+        "| rpc_tls_server_key                |                  | query |             |",
+        "| table_engine_csv_enabled          | false            | query |             |",
+        "| table_engine_memory_enabled       | false            | query |             |",
+        "| table_engine_parquet_enabled      | false            | query |             |",
+        "| tenant_id                         |                  | query |             |",
         "+-----------------------------------+------------------+-------+-------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
