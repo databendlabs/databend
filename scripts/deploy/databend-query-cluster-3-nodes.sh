@@ -15,6 +15,14 @@ sleep 3
 killall databend-meta
 sleep 3
 
+for bin in databend-query databend-meta
+do
+  if test -n "$(pgrep $bin)"; then
+      echo "The $bin is not killed. force killing."
+      killall -9 $bin
+  fi
+done
+
 # Temp debugging config:
 # Set `mode` to open to test restarting a metasrv cluster.
 # TODO(xp): remove this and there should be a standard test for this.
