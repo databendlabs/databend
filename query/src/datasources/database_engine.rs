@@ -13,34 +13,21 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
-
 use common_exception::Result;
-use common_meta_api::MetaApi;
 
 use crate::catalogs::Database;
-use crate::datasources::table_engine_registry::TableEngineRegistry;
+use crate::datasources::context::DataSourceContext;
 
 pub trait DatabaseEngine: Send + Sync {
-    fn try_create(
-        &self,
-        db_name: &str,
-        meta: Arc<dyn MetaApi>,
-        table_engine_register: Arc<TableEngineRegistry>,
-    ) -> Result<Box<dyn Database>>;
+    fn try_create(&self, db_name: &str, ctx: DataSourceContext) -> Result<Box<dyn Database>>;
 }
 
 impl<T> DatabaseEngine for T
 where
-    T: Fn(&str, Arc<dyn MetaApi>, Arc<TableEngineRegistry>) -> Result<Box<dyn Database>>,
+    T: Fn(&str, DataSourceContext) -> Result<Box<dyn Database>>,
     T: Send + Sync,
 {
-    fn try_create(
-        &self,
-        db_name: &str,
-        meta: Arc<dyn MetaApi>,
-        table_engine_register: Arc<TableEngineRegistry>,
-    ) -> Result<Box<dyn Database>> {
-        self(db_name, meta, table_engine_register)
+    fn try_create(&self, db_name: &str, ctx: DataSourceContext) -> Result<Box<dyn Database>> {
+        self(db_name, ctx)
     }
 }

@@ -39,7 +39,8 @@ use crate::catalogs::Table;
 use crate::common::MetaClientProvider;
 use crate::configs::Config;
 use crate::datasources::context::DataSourceContext;
-use crate::datasources::database::fuse::database::FuseDatabase;
+use crate::datasources::database::register_database_engines;
+use crate::datasources::database_engine_registry::DatabaseEngineRegistry;
 use crate::datasources::table::register_prelude_tbl_engines;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
 
@@ -85,9 +86,13 @@ impl MutableCatalog {
             Arc::new(meta_remote)
         };
 
+        // Register database and table engine.
+        let database_engine_registry = Arc::new(DatabaseEngineRegistry::default());
+        register_database_engines(&database_engine_registry)?;
         let table_engine_registry = Arc::new(TableEngineRegistry::default());
         register_prelude_tbl_engines(&table_engine_registry)?;
 
+        // Create default database.
         let req = CreateDatabaseReq {
             if_not_exists: true,
             db: "default".to_string(),
@@ -98,8 +103,9 @@ impl MutableCatalog {
 
         let ctx = DataSourceContext {
             meta,
-            in_memory_data: Arc::new(Default::default()),
             table_engine_registry,
+            database_engine_registry,
+            in_memory_data: Arc::new(Default::default()),
         };
         Ok(MutableCatalog { ctx })
     }
@@ -110,7 +116,16 @@ impl MutableCatalog {
         //    "default" ->  create fuse database
         //    "github" ->  create github database
         // }
-        let db = Arc::new(FuseDatabase::new(&db_info.db, self.ctx.clone()));
+        let engine = "DEFAULT";
+        let factory = self
+            .ctx
+            .database_engine_registry
+            .get_database_factory(engine)
+            .ok_or_else(|| {
+                ErrorCode::UnknownDatabaseEngine(format!("unknown database engine {}", engine))
+            })?;
+
+        let db: Arc<dyn Database> = factory.try_create(&db_info.db, self.ctx.clone())?.into();
         Ok(db)
     }
 }

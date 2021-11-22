@@ -18,12 +18,14 @@ use common_dal::InMemoryData;
 use common_infallible::RwLock;
 use common_meta_api::MetaApi;
 
+use crate::datasources::database_engine_registry::DatabaseEngineRegistry;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
 
-/// Datasource Table Context.
+/// Datasource Context.
 #[derive(Clone)]
 pub struct DataSourceContext {
     pub meta: Arc<dyn MetaApi>,
     pub in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
     pub table_engine_registry: Arc<TableEngineRegistry>,
+    pub database_engine_registry: Arc<DatabaseEngineRegistry>,
 }

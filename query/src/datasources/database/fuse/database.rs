@@ -35,11 +35,11 @@ pub struct FuseDatabase {
 }
 
 impl FuseDatabase {
-    pub fn new(db_name: impl Into<String>, ctx: DataSourceContext) -> Self {
-        Self {
-            db_name: db_name.into(),
+    pub fn try_create(db_name: &str, ctx: DataSourceContext) -> Result<Box<dyn Database>> {
+        Ok(Box::new(Self {
+            db_name: db_name.to_string(),
             ctx,
-        }
+        }))
     }
 
     fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
@@ -79,7 +79,7 @@ impl Database for FuseDatabase {
         self.build_table(table_info.as_ref())
     }
 
-    async fn list_tables(&self, db_name: &str) -> common_exception::Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let table_infos = self
             .ctx
             .meta
@@ -93,12 +93,12 @@ impl Database for FuseDatabase {
         })
     }
 
-    async fn create_table(&self, req: CreateTableReq) -> common_exception::Result<()> {
+    async fn create_table(&self, req: CreateTableReq) -> Result<()> {
         self.ctx.meta.create_table(req).await?;
         Ok(())
     }
 
-    async fn drop_table(&self, req: DropTableReq) -> common_exception::Result<DropTableReply> {
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
         self.ctx.meta.drop_table(req).await
     }
 }

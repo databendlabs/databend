@@ -17,4 +17,7 @@
 mod tests;
 
 pub(crate) mod fuse;
+pub(crate) mod prelude;
 pub(crate) mod system;
+
+pub use prelude::register_database_engines;
