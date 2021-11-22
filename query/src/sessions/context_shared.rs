@@ -132,10 +132,12 @@ impl DatabendQueryContextShared {
 
         match already_in_cache {
             false => self.get_table_to_cache(database, table).await,
-            true => match self.tables_refs.lock().get(&table_meta_key) {
-                None => Err(ErrorCode::LogicalError("Logical error, it's a bug.")),
-                Some(table_ref) => Ok(table_ref.clone()),
-            },
+            true => Ok(self
+                .tables_refs
+                .lock()
+                .get(&table_meta_key)
+                .ok_or_else(|| ErrorCode::LogicalError("Logical error, it's a bug."))?
+                .clone()),
         }
     }
 

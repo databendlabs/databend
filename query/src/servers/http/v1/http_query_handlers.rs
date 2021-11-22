@@ -110,10 +110,7 @@ impl QueryResponse {
                     ),
                     None => (Arc::new(vec![]), None),
                 };
-                let columns = match &r.initial_state {
-                    Some(v) => v.schema.clone(),
-                    None => None,
-                };
+                let columns = r.initial_state.as_ref().and_then(|v| v.schema.clone());
                 let stats = QueryStats {
                     progress: r.state.progress.clone(),
                 };

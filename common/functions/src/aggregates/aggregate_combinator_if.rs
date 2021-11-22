@@ -194,10 +194,7 @@ impl AggregateIfCombinator {
                     // now we only have a boolean mask to deal with
                     let boolean_bm = arrow_filter_array.validity();
                     let res = combine_validities(Some(&bitmap.clone()), boolean_bm);
-                    match res {
-                        Some(v) => v.len() - v.null_count(),
-                        None => 0,
-                    }
+                    res.map_or(0, |v| v.len() - v.null_count())
                 } else {
                     bitmap.len() - bitmap.null_count()
                 }

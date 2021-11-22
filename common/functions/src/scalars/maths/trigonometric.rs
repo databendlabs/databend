@@ -103,8 +103,8 @@ impl Function for TrigonometricFunction {
                 .column()
                 .to_minimal_array()?
                 .cast_with_type(&DataType::Float64)?;
-            let opt_iter = opt_iter.f64()?.into_iter().map(|v| match v {
-                Some(&v) => match self.t {
+            let opt_iter = opt_iter.f64()?.into_iter().map(|v| {
+                v.and_then(|&v| match self.t {
                     Trigonometric::COS => Some(v.cos()),
                     Trigonometric::SIN => Some(v.sin()),
                     Trigonometric::COT => Some(1.0 / v.tan()),
@@ -125,8 +125,7 @@ impl Function for TrigonometricFunction {
                     }
                     Trigonometric::ATAN => Some(v.atan()),
                     _ => unreachable!(),
-                },
-                None => None,
+                })
             });
             DFFloat64Array::new_from_opt_iter(opt_iter)
         } else {

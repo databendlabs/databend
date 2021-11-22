@@ -111,20 +111,12 @@ impl ResultDataManager {
         use Wait::*;
         match tp {
             Async => block_rx.try_recv(),
-            Sync => match block_rx.recv().await {
-                Some(block) => Ok(block),
-                None => Err(TryRecvError::Disconnected),
-            },
+            Sync => block_rx.recv().await.ok_or(TryRecvError::Disconnected),
             Deadline(t) => {
                 let sleep = tokio::time::sleep_until(tokio::time::Instant::from_std(*t));
                 tokio::select! {
                     biased;
-                    block = block_rx.recv() => {
-                         match block {
-                            Some(block) => Ok(block),
-                            None => Err(TryRecvError::Disconnected)
-                        }
-                    }
+                    block = block_rx.recv() => block.ok_or(TryRecvError::Disconnected),
                     _ = sleep => Err(TryRecvError::Empty)
                 }
             }

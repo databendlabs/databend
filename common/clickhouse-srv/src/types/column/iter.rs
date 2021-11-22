@@ -956,10 +956,7 @@ where T: Iterable<'a, Simple>
             self.current_index += 1;
         }
 
-        let ret = match self.current {
-            None => None,
-            Some(ref mut iter) => iter.next(),
-        };
+        let ret = self.current.as_mut().and_then(|iter| iter.next());
 
         match ret {
             None => {

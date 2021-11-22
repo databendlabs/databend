@@ -499,10 +499,7 @@ impl MetaNode {
             return Err(MetaError::ForwardToLeader(e));
         }
 
-        let leader_id = match e.leader {
-            Some(leader_id) => leader_id,
-            None => return Err(MetaError::ForwardToLeader(e)),
-        };
+        let leader_id = e.leader.ok_or(MetaError::ForwardToLeader(e))?;
 
         let mut r2 = req.clone();
         // Avoid infinite forward

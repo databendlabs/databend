@@ -41,10 +41,7 @@ impl Pipeline {
 
     /// The number of pipes.
     pub fn nums(&self) -> usize {
-        match self.pipes.last() {
-            None => 0,
-            Some(v) => v.nums(),
-        }
+        self.pipes.last().map_or(0, |v| v.nums())
     }
 
     pub fn pipes(&self) -> Vec<Pipe> {

@@ -93,10 +93,9 @@ impl ErrorCode {
     }
 
     pub fn backtrace_str(&self) -> String {
-        match self.backtrace.as_ref() {
-            None => "".to_string(),
-            Some(backtrace) => backtrace.to_string(),
-        }
+        self.backtrace
+            .as_ref()
+            .map_or("".to_string(), |x| x.to_string())
     }
 }
 

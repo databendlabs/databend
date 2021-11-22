@@ -151,10 +151,7 @@ impl RaftState {
     pub fn read_state_machine_id(&self) -> common_exception::Result<(u64, u64)> {
         let state = self.state();
         let smid = state.get(&RaftStateKey::StateMachineId)?;
-        let smid: (u64, u64) = match smid {
-            Some(v) => v.into(),
-            None => (0, 0),
-        };
+        let smid: (u64, u64) = smid.map_or((0, 0), |v| v.into());
         Ok(smid)
     }
 
