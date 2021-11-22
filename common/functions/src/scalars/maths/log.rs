@@ -88,20 +88,30 @@ impl Function for GenericLogFunction {
             // Log(base, num) if two args
             let base_column: &DataColumn =
                 &columns[0].column().cast_with_type(&DataType::Float64)?;
-            let num_series = columns[1]
-                .column()
-                .to_minimal_array()?
-                .cast_with_type(&DataType::Float64)?;
-            match base_column {
-                DataColumn::Constant(v, _) => {
+            let num_column: &DataColumn =
+                &columns[1].column().cast_with_type(&DataType::Float64)?;
+
+            match (base_column, num_column) {
+                (DataColumn::Array(base_series), DataColumn::Constant(v, _)) => {
                     if v.is_null() {
                         DFFloat64Array::full_null(input_rows)
                     } else {
-                        let base = DFTryFrom::try_from(v.clone())?;
+                        let v: f64 = DFTryFrom::try_from(v.clone())?;
+                        base_series.f64()?.apply_cast_numeric(|base| v.log(base))
+                    }
+                }
+                (DataColumn::Constant(base, _), DataColumn::Array(num_series)) => {
+                    if base.is_null() {
+                        DFFloat64Array::full_null(input_rows)
+                    } else {
+                        let base = DFTryFrom::try_from(base.clone())?;
                         num_series.f64()?.apply_cast_numeric(|v| v.log(base))
                     }
                 }
-                DataColumn::Array(base_series) => {
+                _ => {
+                    let base_series = base_column.to_minimal_array()?;
+                    let num_series = num_column.to_minimal_array()?;
+
                     binary(num_series.f64()?, base_series.f64()?, |num, base| {
                         num.log(base)
                     })
