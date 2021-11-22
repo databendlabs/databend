@@ -25,6 +25,7 @@ use crate::scalars::Log10Function;
 use crate::scalars::Log2Function;
 use crate::scalars::LogFunction;
 use crate::scalars::PiFunction;
+use crate::scalars::PowFunction;
 use crate::scalars::RadiansFunction;
 use crate::scalars::SignFunction;
 use crate::scalars::SqrtFunction;
@@ -65,5 +66,7 @@ impl MathsFunction {
         factory.register("atan2", TrigonometricAtan2Function::desc());
         factory.register("sign", SignFunction::desc());
         factory.register("sqrt", SqrtFunction::desc());
+        factory.register("pow", PowFunction::desc());
+        factory.register("power", PowFunction::desc());
     }
 }

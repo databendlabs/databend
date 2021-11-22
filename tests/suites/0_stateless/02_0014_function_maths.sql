@@ -26,13 +26,22 @@ SELECT ln(1, 2); -- {ErrorCode 28}
 SELECT log10(NULL);
 SELECT log10(100);
 SELECT log2(2);
+
+SELECT '===mod===';
+
 SELECT mod(234, 10);
 SELECT mod(29, 9);
 SELECT mod(34.5, 3);
+
+SELECT '===exp===';
+
 SELECT exp(NULL);
 SELECT exp(2);
 SELECT exp('2');
 SELECT exp('a');
+
+SELECT '===trigonometric===';
+
 SELECT sin(0);
 SELECT sin('0');
 SELECT sin('foo');
@@ -55,9 +64,24 @@ SELECT atan2(NULL, 2);
 SELECT atan2(NULL, NULL);
 SELECT atan2(NULL, number) from numbers(2);
 SELECT atan2(number, NULL) from numbers(2);
+
+SELECT '===sqrt===';
+
 SELECT sqrt(4);
 SELECT sqrt(0);
 SELECT sqrt(-4);
 SELECT sqrt('a');
+
+SELECT '===pow===';
+
+SELECT pow(2, 2);
+SELECT pow(-2, 2);
+SELECT pow(2, -2);
+SELECT pow(NULL, 2);
+SELECT pow(2, NULL);
+SELECT pow(NULL, number) from numbers(2);
+SELECT pow(number, NULL) from numbers(2);
+SELECT pow('a', 2);
+SELECT pow(2, 'a');
 
 DROP TABLE math_sample_numbers;

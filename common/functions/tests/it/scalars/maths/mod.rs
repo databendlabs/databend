@@ -20,6 +20,7 @@ mod exp;
 mod floor;
 mod log;
 mod pi;
+mod pow;
 mod sign;
 mod sqrt;
 mod trigonometric;

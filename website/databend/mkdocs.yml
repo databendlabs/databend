@@ -215,6 +215,7 @@ nav:
               - CEILING: sqlstatement/numeric-functions/ceiling.md
               - FLOOR: sqlstatement/numeric-functions/floor.md
               - EXP: sqlstatement/numeric-functions/exp.md
+              - POW: sqlstatement/numeric-functions/pow.md
           - String Functions:
               - SUBSTRING: sqlstatement/string-functions/substring.md
           - Test Functions:
