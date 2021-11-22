@@ -58,6 +58,7 @@ pub use statement_drop_database::DfDropDatabase;
 pub use statement_drop_table::DfDropTable;
 pub use statement_drop_user::DfDropUser;
 pub use statement_explain::DfExplain;
+pub use statement_grant::DfGrantObject;
 pub use statement_grant::DfGrantStatement;
 pub use statement_insert::DfInsertStatement;
 pub use statement_kill::DfKillStatement;

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilege;
 use common_planners::GrantPrivilegePlan;
 use common_planners::PlanNode;
@@ -27,16 +28,39 @@ pub struct DfGrantStatement {
     pub name: String,
     pub hostname: String,
     pub priv_types: UserPrivilege,
+    pub on: DfGrantObject,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DfGrantObject {
+    Global,
+    Database(Option<String>),
+    Table(Option<String>, String),
 }
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfGrantStatement {
-    #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
-    async fn analyze(&self, _ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
         Ok(AnalyzedResult::SimpleQuery(PlanNode::GrantPrivilege(
             GrantPrivilegePlan {
                 name: self.name.clone(),
                 hostname: self.hostname.clone(),
+                on: match &self.on {
+                    DfGrantObject::Global => GrantObject::Global,
+                    DfGrantObject::Table(database_name, table_name) => {
+                        let database_name = database_name
+                            .clone()
+                            .unwrap_or_else(|| ctx.get_current_database());
+                        GrantObject::Table(database_name, table_name.clone())
+                    }
+                    DfGrantObject::Database(database_name) => {
+                        let database_name = database_name
+                            .clone()
+                            .unwrap_or_else(|| ctx.get_current_database());
+                        GrantObject::Database(database_name)
+                    }
+                },
                 priv_types: self.priv_types,
             },
         )))

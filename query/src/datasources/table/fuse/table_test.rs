@@ -29,12 +29,19 @@ async fn test_fuse_table_simple_case() -> Result<()> {
     let ctx = fixture.ctx();
 
     // create test table
-    let crate_table_plan = fixture.default_crate_table_plan();
+    let create_table_plan = fixture.default_crate_table_plan();
+    let db = create_table_plan.db.clone();
     let catalog = ctx.get_catalog();
-    catalog.create_table(crate_table_plan.into()).await?;
+    catalog
+        .get_database(&db)
+        .await?
+        .create_table(create_table_plan.into())
+        .await?;
 
     // get table
     let table = catalog
+        .get_database(&db)
+        .await?
         .get_table(
             fixture.default_db().as_str(),
             fixture.default_table().as_str(),
@@ -55,6 +62,8 @@ async fn test_fuse_table_simple_case() -> Result<()> {
     // get the latest tbl
     let prev_version = table.get_table_info().ident.version;
     let table = catalog
+        .get_database(fixture.default_db().as_str())
+        .await?
         .get_table(
             fixture.default_db().as_str(),
             fixture.default_table().as_str(),
@@ -115,11 +124,18 @@ async fn test_fuse_table_truncate() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
 
-    let crate_table_plan = fixture.default_crate_table_plan();
+    let create_table_plan = fixture.default_crate_table_plan();
+    let db = create_table_plan.db.clone();
     let catalog = ctx.get_catalog();
-    catalog.create_table(crate_table_plan.into()).await?;
+    catalog
+        .get_database(&db)
+        .await?
+        .create_table(create_table_plan.into())
+        .await?;
 
     let table = catalog
+        .get_database(&db)
+        .await?
         .get_table(
             fixture.default_db().as_str(),
             fixture.default_table().as_str(),
@@ -135,6 +151,8 @@ async fn test_fuse_table_truncate() -> Result<()> {
     let prev_version = table.get_table_info().ident.version;
     let r = table.truncate(ctx.clone(), truncate_plan.clone()).await;
     let table = catalog
+        .get_database(fixture.default_db().as_str())
+        .await?
         .get_table(
             fixture.default_db().as_str(),
             fixture.default_table().as_str(),
@@ -159,6 +177,8 @@ async fn test_fuse_table_truncate() -> Result<()> {
     // get the latest tbl
     let prev_version = table.get_table_info().ident.version;
     let table = catalog
+        .get_database(fixture.default_db().as_str())
+        .await?
         .get_table(
             fixture.default_db().as_str(),
             fixture.default_table().as_str(),
@@ -180,6 +200,8 @@ async fn test_fuse_table_truncate() -> Result<()> {
     // get the latest tbl
     let prev_version = table.get_table_info().ident.version;
     let table = catalog
+        .get_database(fixture.default_db().as_str())
+        .await?
         .get_table(
             fixture.default_db().as_str(),
             fixture.default_table().as_str(),

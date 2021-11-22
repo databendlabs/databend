@@ -25,6 +25,7 @@ use databend_query::sql::statements::DfDescribeTable;
 use databend_query::sql::statements::DfDropDatabase;
 use databend_query::sql::statements::DfDropTable;
 use databend_query::sql::statements::DfDropUser;
+use databend_query::sql::statements::DfGrantObject;
 use databend_query::sql::statements::DfGrantStatement;
 use databend_query::sql::statements::DfShowDatabases;
 use databend_query::sql::statements::DfShowTables;
@@ -69,6 +70,18 @@ fn create_database() -> Result<()> {
         let expected = DfStatement::CreateDatabase(DfCreateDatabase {
             if_not_exists: false,
             name: ObjectName(vec![Ident::new("db1")]),
+            engine: "".to_string(),
+            options: vec![],
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        let sql = "CREATE DATABASE db1 engine = github";
+        let expected = DfStatement::CreateDatabase(DfCreateDatabase {
+            if_not_exists: false,
+            name: ObjectName(vec![Ident::new("db1")]),
+            engine: "github".to_string(),
             options: vec![],
         });
         expect_parse_ok(sql, expected)?;
@@ -79,6 +92,7 @@ fn create_database() -> Result<()> {
         let expected = DfStatement::CreateDatabase(DfCreateDatabase {
             if_not_exists: true,
             name: ObjectName(vec![Ident::new("db1")]),
+            engine: "".to_string(),
             options: vec![],
         });
         expect_parse_ok(sql, expected)?;
@@ -738,6 +752,7 @@ fn grant_privilege_test() -> Result<()> {
         DfStatement::GrantPrivilege(DfGrantStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
+            on: DfGrantObject::Database(None),
             priv_types: {
                 let mut user_priv = UserPrivilege::empty();
                 user_priv.set_all_privileges();
@@ -751,6 +766,7 @@ fn grant_privilege_test() -> Result<()> {
         DfStatement::GrantPrivilege(DfGrantStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
+            on: DfGrantObject::Database(None),
             priv_types: {
                 let mut user_priv = UserPrivilege::empty();
                 user_priv.set_all_privileges();
@@ -760,10 +776,39 @@ fn grant_privilege_test() -> Result<()> {
     )?;
 
     expect_parse_ok(
-        "GRANT INSERT ON * TO 'test'@'localhost'",
+        "GRANT INSERT ON `db1`.`tb1` TO 'test'@'localhost'",
         DfStatement::GrantPrivilege(DfGrantStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
+            on: DfGrantObject::Table(Some("db1".into()), "tb1".into()),
+            priv_types: {
+                let mut user_priv = UserPrivilege::empty();
+                user_priv.set_privilege(UserPrivilegeType::Insert);
+                user_priv
+            },
+        }),
+    )?;
+
+    expect_parse_ok(
+        "GRANT INSERT ON `tb1` TO 'test'@'localhost'",
+        DfStatement::GrantPrivilege(DfGrantStatement {
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            on: DfGrantObject::Table(None, "tb1".into()),
+            priv_types: {
+                let mut user_priv = UserPrivilege::empty();
+                user_priv.set_privilege(UserPrivilegeType::Insert);
+                user_priv
+            },
+        }),
+    )?;
+
+    expect_parse_ok(
+        "GRANT INSERT ON `db1`.'*' TO 'test'@'localhost'",
+        DfStatement::GrantPrivilege(DfGrantStatement {
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            on: DfGrantObject::Database(Some("db1".into())),
             priv_types: {
                 let mut user_priv = UserPrivilege::empty();
                 user_priv.set_privilege(UserPrivilegeType::Insert);
@@ -777,6 +822,7 @@ fn grant_privilege_test() -> Result<()> {
         DfStatement::GrantPrivilege(DfGrantStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
+            on: DfGrantObject::Database(None),
             priv_types: {
                 let mut user_priv = UserPrivilege::empty();
                 user_priv.set_privilege(UserPrivilegeType::Select);
@@ -804,6 +850,11 @@ fn grant_privilege_test() -> Result<()> {
     expect_parse_err(
         "GRANT SELECT ON * 'test'@'localhost'",
         String::from("sql parser error: Expected keyword TO, found: 'test'"),
+    )?;
+
+    expect_parse_err(
+        "GRANT INSERT ON *.`tb1` TO 'test'@'localhost'",
+        String::from("sql parser error: Expected whitespace, found: ."),
     )?;
 
     Ok(())

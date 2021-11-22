@@ -77,7 +77,7 @@ impl Table for TablesTable {
         let mut database_tables = vec![];
         for database in databases {
             let name = database.name();
-            for table in catalog.list_tables(name).await? {
+            for table in catalog.get_database(name).await?.list_tables(name).await? {
                 database_tables.push((name.to_string(), table));
             }
         }

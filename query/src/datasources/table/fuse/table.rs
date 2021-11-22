@@ -28,7 +28,7 @@ use common_streams::SendableDataBlockStream;
 
 use super::util;
 use crate::catalogs::Table;
-use crate::datasources::context::TableContext;
+use crate::datasources::context::DataSourceContext;
 use crate::datasources::table::fuse::TableSnapshot;
 use crate::sessions::DatabendQueryContextRef;
 
@@ -37,7 +37,7 @@ pub struct FuseTable {
 }
 
 impl FuseTable {
-    pub fn try_create(table_info: TableInfo, _table_ctx: TableContext) -> Result<Box<dyn Table>> {
+    pub fn try_create(table_info: TableInfo, _ctx: DataSourceContext) -> Result<Box<dyn Table>> {
         Ok(Box::new(FuseTable { table_info }))
     }
 }

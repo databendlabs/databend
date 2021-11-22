@@ -80,7 +80,7 @@ async fn test_bad_sql() -> Result<()> {
 async fn test_async() -> Result<()> {
     let sessions = SessionManagerBuilder::create().build()?;
     let route = Route::new().nest("/v1/query", query_route()).data(sessions);
-    let sql = "select sum(number+1) from numbers(1000000) where number>0 group by number%3";
+    let sql = "select sleep(0.1)";
     let json = serde_json::json!({"sql": sql.to_string()});
 
     let (status, result) = post_json_to_router(&route, &json, 0).await?;
@@ -95,12 +95,12 @@ async fn test_async() -> Result<()> {
     assert_eq!(result.state, ExecuteStateName::Running,);
 
     // get page, support retry
-    for _ in 1..2 {
+    for _ in 1..3 {
         let uri = get_page_uri(&query_id, 0, 3);
 
         let (status, result) = get_uri_checked(&route, &uri).await?;
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(result.data.len(), 3);
+        assert_eq!(result.data.len(), 1);
         assert!(result.next_uri.is_none());
         assert!(result.columns.is_none());
         assert!(result.error.is_none());

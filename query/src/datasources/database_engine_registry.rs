@@ -21,19 +21,19 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 
-use crate::datasources::table_engine::TableEngine;
+use crate::datasources::database_engine::DatabaseEngine;
 
-/// Registry of Table Providers
+/// Registry of Database Providers
 #[derive(Default)]
-pub struct TableEngineRegistry {
-    engines: RwLock<HashMap<String, Arc<dyn TableEngine>>>,
+pub struct DatabaseEngineRegistry {
+    engines: RwLock<HashMap<String, Arc<dyn DatabaseEngine>>>,
 }
 
-impl TableEngineRegistry {
+impl DatabaseEngineRegistry {
     pub fn register(
         &self,
         engine: impl Into<String>,
-        provider: Arc<dyn TableEngine>,
+        provider: Arc<dyn DatabaseEngine>,
     ) -> Result<()> {
         let engine_name = engine.into().to_uppercase();
         let mut w = self.engines.write();
@@ -43,14 +43,14 @@ impl TableEngineRegistry {
             Ok(())
         } else {
             Err(ErrorCode::DuplicatedTableEngineProvider(format!(
-                "table engine provider {} already exist",
+                "Database engine provider {} already exist",
                 engine_name
             )))
         }
     }
 
-    pub fn get_table_factory(&self, table_engine: impl AsRef<str>) -> Option<Arc<dyn TableEngine>> {
-        let name = table_engine.as_ref().to_uppercase();
+    pub fn get_database_factory(&self, engine: impl AsRef<str>) -> Option<Arc<dyn DatabaseEngine>> {
+        let name = engine.as_ref().to_uppercase();
         self.engines.read().get(&name).cloned()
     }
 }

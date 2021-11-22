@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::catalogs::Database;
-
-pub struct SystemDatabase {
-    name: String,
-}
-
-impl SystemDatabase {
-    pub fn create(name: impl Into<String>) -> Self {
-        let name = name.into();
-        SystemDatabase { name }
-    }
-}
-
-impl Database for SystemDatabase {
-    fn name(&self) -> &str {
-        &self.name
-    }
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum GrantObject {
+    Global,
+    Database(String),
+    Table(String, String),
 }

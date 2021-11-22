@@ -47,6 +47,7 @@ impl MetaApiTestSuite {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 db: "db1".to_string(),
+                engine: "github".to_string(),
                 options: Default::default(),
             };
 
@@ -61,6 +62,7 @@ impl MetaApiTestSuite {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 db: "db1".to_string(),
+                engine: "".to_string(),
                 options: Default::default(),
             };
 
@@ -75,6 +77,7 @@ impl MetaApiTestSuite {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 db: "db1".to_string(),
+                engine: "".to_string(),
                 options: Default::default(),
             };
 
@@ -98,6 +101,7 @@ impl MetaApiTestSuite {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 db: "db2".to_string(),
+                engine: "".to_string(),
                 options: Default::default(),
             };
 
@@ -183,6 +187,7 @@ impl MetaApiTestSuite {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
                 db: db_name.to_string(),
+                engine: "".to_string(),
                 options: Default::default(),
             };
 
@@ -435,6 +440,7 @@ impl MetaApiTestSuite {
         let req = CreateDatabaseReq {
             if_not_exists: false,
             db: db_name.to_string(),
+            engine: "".to_string(),
             options: Default::default(),
         };
 

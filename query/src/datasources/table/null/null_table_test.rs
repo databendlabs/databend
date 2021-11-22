@@ -23,7 +23,6 @@ use common_planners::*;
 use futures::TryStreamExt;
 
 use crate::catalogs::ToReadDataSourcePlan;
-use crate::datasources::context::TableContext;
 use crate::datasources::table::null::null_table::NullTable;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -49,7 +48,7 @@ async fn test_null_table() -> Result<()> {
                 options: TableOptions::default(),
             },
         },
-        TableContext::default(),
+        crate::tests::try_create_datasource_context()?,
     )?;
 
     // append data.
