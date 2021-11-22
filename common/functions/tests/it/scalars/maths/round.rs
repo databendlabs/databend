@@ -407,84 +407,28 @@ fn test_trunc_number_function() -> Result<()> {
     }
     let tests = vec![
         Test {
-            name: "no second arg",
-            display: "trunc",
-            args: vec![DataColumnWithField::new(
-                Series::new([1.999]).into(),
-                DataField::new("x", DataType::Float64, false),
-            )],
-            input_rows: 1,
-            expect: Series::new([1.0]).into(),
-            error: "",
-        },
-        Test {
-            name: "no second arg with null x",
-            display: "trunc",
-            args: vec![DataColumnWithField::new(
-                Series::new([Some(1.99), None, Some(2.77)]).into(),
-                DataField::new("x", DataType::Float64, false),
-            )],
-            input_rows: 3,
-            expect: Series::new([Some(1.0), None, Some(2.0)]).into(),
-            error: "",
-        },
-        Test {
-            name: "second arg is 0",
+            name: "first arg is series, second arg is NULL",
             display: "trunc",
             args: vec![
                 DataColumnWithField::new(
-                    Series::new([3.6789]).into(),
+                    Series::new([Some(11.11), None, Some(33.33)]).into(),
                     DataField::new("x", DataType::Float64, false),
                 ),
                 DataColumnWithField::new(
-                    Series::new([0]).into(),
+                    DataColumn::Constant(DataValue::Int64(None), 1),
                     DataField::new("d", DataType::Int64, false),
                 ),
             ],
             input_rows: 1,
-            expect: Series::new([3.0]).into(),
+            expect: Series::new([None::<f64>, None, None]).into(),
             error: "",
         },
         Test {
-            name: "second arg is 2",
+            name: "first arg is series, second arg is 0 const",
             display: "trunc",
             args: vec![
                 DataColumnWithField::new(
-                    Series::new([12345.6789]).into(),
-                    DataField::new("x", DataType::Float64, false),
-                ),
-                DataColumnWithField::new(
-                    Series::new([2]).into(),
-                    DataField::new("d", DataType::Int64, false),
-                ),
-            ],
-            input_rows: 1,
-            expect: Series::new([12345.67]).into(),
-            error: "",
-        },
-        Test {
-            name: "second arg is -2",
-            display: "trunc",
-            args: vec![
-                DataColumnWithField::new(
-                    Series::new([6789.1234]).into(),
-                    DataField::new("x", DataType::Float64, false),
-                ),
-                DataColumnWithField::new(
-                    Series::new([-2]).into(),
-                    DataField::new("d", DataType::Int64, false),
-                ),
-            ],
-            input_rows: 1,
-            expect: Series::new([6700.0]).into(),
-            error: "",
-        },
-        Test {
-            name: "second arg is const 0",
-            display: "trunc",
-            args: vec![
-                DataColumnWithField::new(
-                    Series::new([12345.6789]).into(),
+                    Series::new([Some(11.11), None, Some(33.33)]).into(),
                     DataField::new("x", DataType::Float64, false),
                 ),
                 DataColumnWithField::new(
@@ -493,41 +437,83 @@ fn test_trunc_number_function() -> Result<()> {
                 ),
             ],
             input_rows: 1,
-            expect: Series::new([12345.0]).into(),
+            expect: Series::new([Some(11.0), None, Some(33.0)]).into(),
             error: "",
         },
         Test {
-            name: "second arg is const 2",
+            name: "first arg is series, second arg is positive const",
             display: "trunc",
             args: vec![
                 DataColumnWithField::new(
-                    Series::new([12345.6789]).into(),
+                    Series::new([Some(11.11), None, Some(33.33)]).into(),
                     DataField::new("x", DataType::Float64, false),
                 ),
                 DataColumnWithField::new(
-                    DataColumn::Constant(DataValue::Int64(Some(2)), 1),
+                    DataColumn::Constant(DataValue::Int64(Some(1)), 1),
                     DataField::new("d", DataType::Int64, false),
                 ),
             ],
             input_rows: 1,
-            expect: Series::new([12345.67]).into(),
+            expect: Series::new([Some(11.1), None, Some(33.3)]).into(),
             error: "",
         },
         Test {
-            name: "second arg is const -2",
+            name: "first arg is series, second arg is negative const",
             display: "trunc",
             args: vec![
                 DataColumnWithField::new(
-                    Series::new([6789.1234]).into(),
+                    Series::new([Some(11.11), None, Some(33.33)]).into(),
                     DataField::new("x", DataType::Float64, false),
                 ),
                 DataColumnWithField::new(
-                    DataColumn::Constant(DataValue::Int64(Some(-2)), 1),
+                    DataColumn::Constant(DataValue::Int64(Some(-1)), 1),
                     DataField::new("d", DataType::Int64, false),
                 ),
             ],
             input_rows: 1,
-            expect: Series::new([6700.0]).into(),
+            expect: Series::new([Some(10.0), None, Some(30.0)]).into(),
+            error: "",
+        },
+        Test {
+            name: "first arg is const, second is series",
+            display: "trunc",
+            args: vec![
+                DataColumnWithField::new(
+                    DataColumn::Constant(DataValue::Float64(Some(11.11)), 1),
+                    DataField::new("x", DataType::Float64, false),
+                ),
+                DataColumnWithField::new(
+                    Series::new([None, Some(-1), Some(0), Some(1)]).into(),
+                    DataField::new("d", DataType::Int64, false),
+                ),
+            ],
+            input_rows: 1,
+            expect: Series::new([None, Some(10.0), Some(11.0), Some(11.1)]).into(),
+            error: "",
+        },
+        Test {
+            name: "both arg are series",
+            display: "trunc",
+            args: vec![
+                DataColumnWithField::new(
+                    Series::new([
+                        None,
+                        None,
+                        Some(11.11),
+                        Some(22.22),
+                        Some(33.33),
+                        Some(44.44),
+                    ])
+                    .into(),
+                    DataField::new("x", DataType::Float64, false),
+                ),
+                DataColumnWithField::new(
+                    Series::new([None, Some(1), None, Some(0), Some(-1), Some(1)]).into(),
+                    DataField::new("d", DataType::Int64, false),
+                ),
+            ],
+            input_rows: 1,
+            expect: Series::new([None, None, None, Some(22.0), Some(30.0), Some(44.4)]).into(),
             error: "",
         },
     ];
