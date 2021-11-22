@@ -68,7 +68,7 @@ impl Function for AbsFunction {
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if is_numeric(&args[0]) || args[0] == DataType::String {
+        if is_numeric(&args[0]) || args[0] == DataType::String || args[0] == DataType::Null {
             Ok(match &args[0] {
                 DataType::Int8 => DataType::UInt8,
                 DataType::Int16 => DataType::UInt16,
@@ -101,6 +101,7 @@ impl Function for AbsFunction {
             DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64 => {
                 Ok(columns[0].column().clone())
             }
+            DataType::Null => Ok(columns[0].column().clone()),
             _ => unreachable!(),
         }
     }

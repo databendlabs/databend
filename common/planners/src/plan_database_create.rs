@@ -25,6 +25,7 @@ pub type DatabaseOptions = HashMap<String, String>;
 pub struct CreateDatabasePlan {
     pub if_not_exists: bool,
     pub db: String,
+    pub engine: String,
     pub options: DatabaseOptions,
 }
 
@@ -33,6 +34,7 @@ impl From<CreateDatabasePlan> for CreateDatabaseReq {
         CreateDatabaseReq {
             if_not_exists: p.if_not_exists,
             db: p.db.clone(),
+            engine: "".to_string(),
             options: p.options,
         }
     }
@@ -43,6 +45,7 @@ impl From<&CreateDatabasePlan> for CreateDatabaseReq {
         CreateDatabaseReq {
             if_not_exists: p.if_not_exists,
             db: p.db.clone(),
+            engine: p.db.clone(),
             options: p.options.clone(),
         }
     }

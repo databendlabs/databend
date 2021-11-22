@@ -15,8 +15,6 @@
 use std::f64::consts::E;
 use std::fmt;
 
-use common_arrow::arrow::array::PrimitiveArray;
-use common_arrow::arrow::buffer::Buffer;
 use common_datavalues::prelude::*;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
@@ -76,7 +74,7 @@ impl Function for GenericLogFunction {
         Ok(true)
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let result = if columns.len() == 1 {
             // Log(num) with default_base if one arg
             let num_series = columns[0]
@@ -96,27 +94,17 @@ impl Function for GenericLogFunction {
                 .cast_with_type(&DataType::Float64)?;
             match base_column {
                 DataColumn::Constant(v, _) => {
-                    let base = DFTryFrom::try_from(v.clone())?;
-                    num_series.f64()?.apply_cast_numeric(|v| v.log(base))
+                    if v.is_null() {
+                        DFFloat64Array::full_null(input_rows)
+                    } else {
+                        let base = DFTryFrom::try_from(v.clone())?;
+                        num_series.f64()?.apply_cast_numeric(|v| v.log(base))
+                    }
                 }
                 DataColumn::Array(base_series) => {
-                    let validity = combine_validities(
-                        num_series.get_array_ref().validity(),
-                        base_series.get_array_ref().validity(),
-                    );
-                    let values = Buffer::from_trusted_len_iter(
-                        num_series
-                            .f64()?
-                            .into_no_null_iter()
-                            .zip(base_series.f64()?.into_no_null_iter())
-                            .map::<f64, _>(|(num, base)| num.log(*base)),
-                    );
-                    let array = PrimitiveArray::<f64>::from_data(
-                        DataType::Float64.to_arrow(),
-                        values,
-                        validity,
-                    );
-                    DFFloat64Array::from_arrow_array(&array)
+                    binary(num_series.f64()?, base_series.f64()?, |num, base| {
+                        num.log(base)
+                    })
                 }
             }
         };

@@ -26,7 +26,7 @@ use common_tracing::tracing::info;
 use futures::stream::StreamExt;
 
 use crate::catalogs::Table;
-use crate::datasources::context::TableContext;
+use crate::datasources::context::DataSourceContext;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct NullTable {
@@ -34,7 +34,7 @@ pub struct NullTable {
 }
 
 impl NullTable {
-    pub fn try_create(table_info: TableInfo, _table_ctx: TableContext) -> Result<Box<dyn Table>> {
+    pub fn try_create(table_info: TableInfo, _ctx: DataSourceContext) -> Result<Box<dyn Table>> {
         Ok(Box::new(Self { table_info }))
     }
 }

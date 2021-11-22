@@ -33,7 +33,7 @@ use common_streams::Source;
 
 use crate::catalogs::Table;
 use crate::datasources::common::count_lines;
-use crate::datasources::context::TableContext;
+use crate::datasources::context::DataSourceContext;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct CsvTable {
@@ -44,7 +44,7 @@ pub struct CsvTable {
 }
 
 impl CsvTable {
-    pub fn try_create(table_info: TableInfo, _table_ctx: TableContext) -> Result<Box<dyn Table>> {
+    pub fn try_create(table_info: TableInfo, _ctx: DataSourceContext) -> Result<Box<dyn Table>> {
         let options = table_info.options();
         let has_header = options.get("has_header").is_some();
         let file = match options.get("location") {

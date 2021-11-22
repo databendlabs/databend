@@ -24,7 +24,6 @@ use common_planners::*;
 use futures::TryStreamExt;
 
 use crate::catalogs::ToReadDataSourcePlan;
-use crate::datasources::context::TableContext;
 use crate::datasources::table::parquet::parquet_table::ParquetTable;
 
 #[tokio::test]
@@ -45,14 +44,14 @@ async fn test_parquet_table() -> Result<()> {
         desc: "'default'.'test_parquet_table'".to_string(),
         ident: Default::default(),
         name: "test_parquet".to_string(),
-
         meta: TableMeta {
             schema: DataSchemaRefExt::create(vec![DataField::new("id", DataType::Int32, false)]),
             engine: "test_parquet".into(),
             options,
         },
     };
-    let table = ParquetTable::try_create(table_info, TableContext::default())?;
+    let table =
+        ParquetTable::try_create(table_info, crate::tests::try_create_datasource_context()?)?;
 
     let source_plan = table.read_plan(ctx.clone(), None).await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;

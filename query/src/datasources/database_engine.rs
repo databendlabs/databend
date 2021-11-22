@@ -13,4 +13,21 @@
 //  limitations under the License.
 //
 
-pub mod default_database;
+use common_exception::Result;
+
+use crate::catalogs::Database;
+use crate::datasources::context::DataSourceContext;
+
+pub trait DatabaseEngine: Send + Sync {
+    fn try_create(&self, db_name: &str, ctx: DataSourceContext) -> Result<Box<dyn Database>>;
+}
+
+impl<T> DatabaseEngine for T
+where
+    T: Fn(&str, DataSourceContext) -> Result<Box<dyn Database>>,
+    T: Send + Sync,
+{
+    fn try_create(&self, db_name: &str, ctx: DataSourceContext) -> Result<Box<dyn Database>> {
+        self(db_name, ctx)
+    }
+}

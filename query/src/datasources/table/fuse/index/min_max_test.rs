@@ -57,10 +57,16 @@ async fn test_min_max_index() -> Result<()> {
     };
 
     let catalog = ctx.get_catalog();
-    catalog.create_table(crate_table_plan).await?;
+    catalog
+        .get_database(&crate_table_plan.db)
+        .await?
+        .create_table(crate_table_plan)
+        .await?;
 
     // get table
     let table = catalog
+        .get_database(fixture.default_db().as_str())
+        .await?
         .get_table(fixture.default_db().as_str(), test_tbl_name)
         .await?;
 
@@ -82,6 +88,8 @@ async fn test_min_max_index() -> Result<()> {
 
     // get the latest tbl
     let table = catalog
+        .get_database(fixture.default_db().as_str())
+        .await?
         .get_table(fixture.default_db().as_str(), test_tbl_name)
         .await?;
 

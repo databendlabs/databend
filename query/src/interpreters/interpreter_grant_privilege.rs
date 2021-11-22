@@ -15,11 +15,13 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_types::GrantObject;
 use common_planners::GrantPrivilegePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
+use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::DatabendQueryContextRef;
@@ -51,6 +53,35 @@ impl Interpreter for GrantPrivilegeInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
+        let catalog = self.ctx.get_catalog();
+
+        match &plan.on {
+            GrantObject::Table(database_name, table_name) => {
+                if !catalog
+                    .get_database(database_name)
+                    .await?
+                    .exists_table(database_name, table_name)
+                    .await?
+                {
+                    return Err(common_exception::ErrorCode::UnknownTable(format!(
+                        "table {}.{} not exists",
+                        database_name, table_name,
+                    )));
+                }
+            }
+            GrantObject::Database(database_name) => {
+                if !catalog.as_ref().exists_database(database_name).await? {
+                    return Err(common_exception::ErrorCode::UnknownDatabase(format!(
+                        "database {} not exists",
+                        database_name,
+                    )));
+                }
+            }
+            GrantObject::Global => (),
+        }
+
+        // TODO: actually add grant inside to the user
+
         let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
         user_mgr
             .set_user_privileges(&plan.name, &plan.hostname, plan.priv_types)

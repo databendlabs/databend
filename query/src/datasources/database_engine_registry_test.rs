@@ -13,10 +13,23 @@
 //  limitations under the License.
 //
 
-mod immutable_catalog;
-mod mutable_catalog;
-mod overlaid_catalog;
+use std::sync::Arc;
 
-pub use immutable_catalog::ImmutableCatalog;
-pub use mutable_catalog::MutableCatalog;
-pub use overlaid_catalog::OverlaidCatalog;
+use common_exception::Result;
+
+use crate::datasources::database::fuse::database::FuseDatabase;
+use crate::datasources::database_engine_registry::DatabaseEngineRegistry;
+
+#[test]
+fn test_database_engine_registry() -> Result<()> {
+    let registry = DatabaseEngineRegistry::default();
+    registry.register("DEFAULT", Arc::new(FuseDatabase::try_create))?;
+
+    let engine = registry.get_database_factory("default");
+    assert!(engine.is_some());
+
+    let engine = registry.get_database_factory("xx");
+    assert!(engine.is_none());
+
+    Ok(())
+}

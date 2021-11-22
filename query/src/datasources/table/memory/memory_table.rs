@@ -16,7 +16,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_dal::InMemoryData;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
 use common_exception::Result;
@@ -33,29 +32,20 @@ use futures::stream::StreamExt;
 
 use crate::catalogs::Table;
 use crate::datasources::common::generate_parts;
-use crate::datasources::context::TableContext;
+use crate::datasources::context::DataSourceContext;
 use crate::datasources::table::memory::memory_table_stream::MemoryTableStream;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct MemoryTable {
     table_info: TableInfo,
-
-    // TODO(xp): When table is dropped, remove the entry in `in_memory_data`.
-    //           This requires another trait method Table::drop to customize the drop process.
-    #[allow(dead_code)]
-    in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
-
     blocks: Arc<RwLock<Vec<DataBlock>>>,
 }
 
 impl MemoryTable {
-    pub fn try_create(table_info: TableInfo, table_ctx: TableContext) -> Result<Box<dyn Table>> {
+    pub fn try_create(table_info: TableInfo, ctx: DataSourceContext) -> Result<Box<dyn Table>> {
         let table_id = &table_info.ident.table_id;
-        let in_memory_data = table_ctx.get_in_memory_data()?;
-
         let blocks = {
-            let mut in_mem_data = in_memory_data.write();
-
+            let mut in_mem_data = ctx.in_memory_data.write();
             let x = in_mem_data.get(table_id);
             match x {
                 None => {
@@ -67,11 +57,7 @@ impl MemoryTable {
             }
         };
 
-        let table = Self {
-            table_info,
-            in_memory_data,
-            blocks,
-        };
+        let table = Self { table_info, blocks };
         Ok(Box::new(table))
     }
 }

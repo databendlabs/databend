@@ -15,10 +15,14 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_embedded::MetaEmbedded;
 use common_meta_types::NodeInfo;
 
 use crate::clusters::Cluster;
 use crate::configs::Config;
+use crate::datasources::context::DataSourceContext;
+use crate::datasources::database_engine_registry::DatabaseEngineRegistry;
+use crate::datasources::table_engine_registry::TableEngineRegistry;
 use crate::sessions::DatabendQueryContext;
 use crate::sessions::DatabendQueryContextRef;
 use crate::sessions::DatabendQueryContextShared;
@@ -103,4 +107,18 @@ pub fn try_create_cluster_context(desc: ClusterDescriptor) -> Result<DatabendQue
 
     context.get_settings().set_max_threads(8)?;
     Ok(context)
+}
+
+pub fn try_create_datasource_context() -> Result<DataSourceContext> {
+    let meta_embedded = MetaEmbedded::sync_new_temp().unwrap();
+    let meta = Arc::new(meta_embedded);
+    let table_engine_registry = Arc::new(TableEngineRegistry::default());
+    let database_engine_registry = Arc::new(DatabaseEngineRegistry::default());
+
+    Ok(DataSourceContext {
+        meta,
+        table_engine_registry,
+        database_engine_registry,
+        in_memory_data: Arc::new(Default::default()),
+    })
 }

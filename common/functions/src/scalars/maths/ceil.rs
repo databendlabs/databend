@@ -68,6 +68,7 @@ impl Function for CeilFunction {
                 | DataType::Float32
                 | DataType::Float64
                 | DataType::String
+                | DataType::Null
         ) {
             Ok(DataType::Float64)
         } else {
