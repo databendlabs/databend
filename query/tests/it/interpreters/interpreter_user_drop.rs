@@ -17,10 +17,9 @@ use common_exception::Result;
 use common_management::UserInfo;
 use common_meta_types::AuthType;
 use common_planners::*;
+use databend_query::interpreters::*;
+use databend_query::sql::*;
 use pretty_assertions::assert_eq;
-
-use crate::interpreters::*;
-use crate::sql::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_drop_user_interpreter() -> Result<()> {

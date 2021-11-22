@@ -12,17 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod api;
-mod clusters;
-mod common;
-mod configs;
-mod functions;
-mod interpreters;
-mod metrics;
-mod optimizers;
-mod servers;
-mod sessions;
-mod sql;
-#[allow(dead_code)]
-mod tests;
-mod users;
+mod interpreter_database_create;
+mod interpreter_database_drop;
+mod interpreter_describe_table;
+mod interpreter_explain;
+mod interpreter_grant_privilege;
+mod interpreter_insert_into;
+mod interpreter_interceptor;
+mod interpreter_select;
+mod interpreter_setting;
+mod interpreter_show_create_table;
+mod interpreter_table_create;
+mod interpreter_table_drop;
+mod interpreter_truncate_table;
+mod interpreter_use_database;
+mod interpreter_user_alter;
+mod interpreter_user_create;
+mod interpreter_user_drop;
+mod plan_scheduler;

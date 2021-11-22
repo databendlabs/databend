@@ -15,10 +15,10 @@
 use common_base::tokio;
 use common_exception::Result;
 use common_planners::*;
+use databend_query::interpreters::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
-use crate::interpreters::*;
 use crate::tests::parse_query;
 
 #[tokio::test]

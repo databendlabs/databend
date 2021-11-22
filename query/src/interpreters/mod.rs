@@ -12,43 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod interpreter_database_create_test;
-#[cfg(test)]
-mod interpreter_database_drop_test;
-#[cfg(test)]
-mod interpreter_describe_table_test;
-#[cfg(test)]
-mod interpreter_explain_test;
-#[cfg(test)]
-mod interpreter_grant_privilege_test;
-#[cfg(test)]
-mod interpreter_insert_into_test;
-#[cfg(test)]
-mod interpreter_interceptor_test;
-#[cfg(test)]
-mod interpreter_select_test;
-#[cfg(test)]
-mod interpreter_setting_test;
-#[cfg(test)]
-mod interpreter_show_create_table_test;
-#[cfg(test)]
-mod interpreter_table_create_test;
-#[cfg(test)]
-mod interpreter_table_drop_test;
-#[cfg(test)]
-mod interpreter_truncate_table_test;
-#[cfg(test)]
-mod interpreter_use_database_test;
-#[cfg(test)]
-mod interpreter_user_alter_test;
-#[cfg(test)]
-mod interpreter_user_create_test;
-#[cfg(test)]
-mod interpreter_user_drop_test;
-#[cfg(test)]
-mod plan_scheduler_test;
-
 mod interpreter;
 mod interpreter_database_create;
 mod interpreter_database_drop;
@@ -94,3 +57,4 @@ pub use interpreter_use_database::UseDatabaseInterpreter;
 pub use interpreter_user_alter::AlterUserInterpreter;
 pub use interpreter_user_create::CreatUserInterpreter;
 pub use interpreter_user_drop::DropUserInterpreter;
+pub use plan_scheduler::PlanScheduler;

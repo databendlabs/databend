@@ -15,27 +15,42 @@
 use common_base::tokio;
 use common_exception::Result;
 use common_planners::*;
+use databend_query::interpreters::*;
 use futures::stream::StreamExt;
+use pretty_assertions::assert_eq;
 
-use crate::interpreters::*;
 use crate::tests::parse_query;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_create_table_interpreter() -> Result<()> {
+#[tokio::test]
+async fn test_use_interpreter() -> Result<()> {
     let ctx = crate::tests::try_create_context()?;
 
-    static TEST_CREATE_QUERY: &str = "\
-        CREATE TABLE default.a(\
-            a bigint, b int, c varchar(255), d smallint, e Date\
-        ) Engine = Null\
-    ";
+    if let PlanNode::UseDatabase(plan) = parse_query("USE default", &ctx)? {
+        let interpreter = UseDatabaseInterpreter::try_create(ctx, plan)?;
+        assert_eq!(interpreter.name(), "UseDatabaseInterpreter");
 
-    if let PlanNode::CreateTable(plan) = parse_query(TEST_CREATE_QUERY, &ctx)? {
-        let interpreter = CreateTableInterpreter::try_create(ctx, plan.clone())?;
         let mut stream = interpreter.execute(None).await?;
         while let Some(_block) = stream.next().await {}
     } else {
         panic!()
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_use_database_interpreter_error() -> Result<()> {
+    let ctx = crate::tests::try_create_context()?;
+
+    if let PlanNode::UseDatabase(plan) = parse_query("USE xx", &ctx)? {
+        let interpreter = UseDatabaseInterpreter::try_create(ctx, plan)?;
+
+        if let Err(e) = interpreter.execute(None).await {
+            let expect = "Code: 3, displayText = Cannot USE 'xx', because the 'xx' doesn't exist.";
+            assert_eq!(expect, format!("{}", e));
+        } else {
+            panic!();
+        }
     }
 
     Ok(())

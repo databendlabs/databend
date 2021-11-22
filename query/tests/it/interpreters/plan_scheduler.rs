@@ -18,10 +18,10 @@ use common_base::tokio;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::*;
+use databend_query::api::FlightAction;
+use databend_query::interpreters::PlanScheduler;
+use databend_query::sessions::DatabendQueryContextRef;
 
-use crate::api::FlightAction;
-use crate::interpreters::plan_scheduler::PlanScheduler;
-use crate::sessions::DatabendQueryContextRef;
 use crate::tests::try_create_cluster_context;
 use crate::tests::ClusterDescriptor;
 
