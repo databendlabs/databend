@@ -20,8 +20,6 @@ use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticFunction;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
-use crate::scalars::MonotonicityNode;
-use crate::scalars::Range;
 
 pub struct ArithmeticDivFunction;
 
@@ -35,11 +33,8 @@ impl ArithmeticDivFunction {
             .features(FunctionFeatures::default().deterministic())
     }
 
-    pub fn get_monotonicity(_args: &[MonotonicityNode]) -> Result<MonotonicityNode> {
-        //TODO: implement
-        Ok(MonotonicityNode::Function(Monotonicity::default(), Range {
-            begin: None,
-            end: None,
-        }))
+    pub fn get_monotonicity(_args: &[Monotonicity]) -> Result<Monotonicity> {
+        // TODO
+        Ok(Monotonicity::default())
     }
 }

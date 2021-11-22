@@ -21,7 +21,7 @@ use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
 use crate::scalars::dates::IntervalFunctionFactory;
-use crate::scalars::function::MonotonicityNode;
+use crate::scalars::function::Monotonicity;
 use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::ArithmeticDivFunction;
 use crate::scalars::ArithmeticMinusFunction;
@@ -55,32 +55,6 @@ impl ArithmeticFunction {
 
     pub fn new(op: DataValueArithmeticOperator) -> Self {
         ArithmeticFunction { op }
-    }
-
-    pub fn eval_range_boundary(
-        &self,
-        args: &[Option<DataColumnWithField>],
-    ) -> Result<Option<DataColumnWithField>> {
-        // if any argument is None, the new boundary will be unknown thus return None.
-        if args.iter().any(|arg| arg.is_none()) {
-            return Ok(None);
-        }
-
-        let input = args
-            .iter()
-            .map(|arg_opt| arg_opt.clone().unwrap())
-            .collect::<Vec<_>>();
-        let new_data_column = self.eval(&input, 1)?;
-
-        let input_types = input
-            .iter()
-            .map(|arg| arg.data_type().clone())
-            .collect::<Vec<_>>();
-        let new_data_column_field = DataColumnWithField::new(
-            new_data_column,
-            DataField::new("", self.return_type(&input_types)?, false),
-        );
-        Ok(Some(new_data_column_field))
     }
 }
 
@@ -144,7 +118,7 @@ impl Function for ArithmeticFunction {
         Some((1, 2))
     }
 
-    fn get_monotonicity(&self, args: &[MonotonicityNode]) -> Result<MonotonicityNode> {
+    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
         match self.op {
             Plus => ArithmeticPlusFunction::get_monotonicity(args),
             Minus => ArithmeticMinusFunction::get_monotonicity(args),

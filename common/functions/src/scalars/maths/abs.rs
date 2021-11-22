@@ -21,9 +21,9 @@ use common_exception::Result;
 use crate::scalars::function::Function;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::ComparisonGtEqFunction;
+use crate::scalars::ComparisonLtEqFunction;
 use crate::scalars::Monotonicity;
-use crate::scalars::MonotonicityNode;
-use crate::scalars::Range;
 
 #[derive(Clone)]
 pub struct AbsFunction {
@@ -108,83 +108,62 @@ impl Function for AbsFunction {
         }
     }
 
-    fn get_monotonicity(&self, args: &[MonotonicityNode]) -> Result<MonotonicityNode> {
-        let eval_single_row = |input: DataColumnWithField| -> Result<DataColumnWithField> {
-            let nullable = input.field().is_nullable();
-            let data_type = input.data_type().clone();
-            let output_data_column = self.eval(&[input], 1)?;
-            let output_data_type = self.return_type(&[data_type])?;
-            let output_data_column_field = DataColumnWithField::new(
-                output_data_column,
-                DataField::new("", output_data_type, nullable),
-            );
-            Ok(output_data_column_field)
+    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
+        // for constant value, just return clone
+        if args[0].is_constant {
+            return Ok(args[0].clone());
+        }
+
+        // if either left boundary or right boundary is unknown, we don't known the monotonicity
+        if args[0].left.is_none() || args[0].right.is_none() {
+            return Ok(Monotonicity::default());
+        }
+
+        let left = args[0].left.clone().unwrap();
+        let right = args[0].right.clone().unwrap();
+
+        let gt_eq_zero = |data: &DataColumnWithField| -> Result<bool> {
+            let zero = DataColumn::Constant(DataValue::Int8(Some(0)), 1);
+            let zero_column_field =
+                DataColumnWithField::new(zero, DataField::new("", DataType::Int8, false));
+
+            let f = ComparisonGtEqFunction::try_create_func("")?;
+            let res = f.eval(&[data.clone(), zero_column_field], 1)?;
+            let res_value = res.try_get(0)?;
+            res_value.as_bool()
         };
 
-        let eval_optional_single_row =
-            |input_opt: Option<DataColumnWithField>| -> Result<Option<DataColumnWithField>> {
-                match input_opt {
-                    None => Ok(None),
-                    Some(val) => Ok(Some(eval_single_row(val)?)),
-                }
-            };
+        let lt_eq_zero = |data: &DataColumnWithField| -> Result<bool> {
+            let zero = DataColumn::Constant(DataValue::Int8(Some(0)), 1);
+            let zero_column_field =
+                DataColumnWithField::new(zero, DataField::new("", DataType::Int8, false));
 
-        let flip_monotonicity =
-            |current_is_positive: bool, current_range: Range| -> Result<MonotonicityNode> {
-                // the range is <= 0, abs function is same as '-'
-                let new_begin = eval_optional_single_row(current_range.end)?;
-                let new_end = eval_optional_single_row(current_range.begin)?;
-                Ok(MonotonicityNode::Function(
-                    Monotonicity {
-                        is_monotonic: true,
-                        is_positive: !current_is_positive,
-                    },
-                    Range {
-                        begin: new_begin,
-                        end: new_end,
-                    },
-                ))
-            };
+            let f = ComparisonLtEqFunction::try_create_func("")?;
+            let res = f.eval(&[data.clone(), zero_column_field], 1)?;
+            let res_value = res.try_get(0)?;
+            res_value.as_bool()
+        };
 
-        match &args[0] {
-            MonotonicityNode::Function(mono, range) => {
-                if !mono.is_monotonic {
-                    return Ok(args[0].clone());
-                }
-
-                if range.gt_eq_zero()? {
-                    // the range is >= 0, abs function does nothing
-                    Ok(args[0].clone())
-                } else if range.lt_eq_zero()? {
-                    // the range is <= 0, abs function does the same thing as '-'
-                    flip_monotonicity(mono.is_positive, range.clone())
-                } else {
-                    // the range covers zero, then the function is no longer monotonic any more
-                    Ok(MonotonicityNode::Function(Monotonicity::default(), Range {
-                        begin: None,
-                        end: None,
-                    }))
-                }
-            }
-            MonotonicityNode::Constant(val) => {
-                let output = eval_single_row(val.clone())?;
-                Ok(MonotonicityNode::Constant(output))
-            }
-            MonotonicityNode::Variable(_column_name, range) => {
-                if range.gt_eq_zero()? {
-                    // the range is >= 0, abs function does nothing
-                    Ok(args[0].clone())
-                } else if range.lt_eq_zero()? {
-                    // the range is <= 0, abs function does the same thing as '-'
-                    flip_monotonicity(true, range.clone())
-                } else {
-                    // the range covers zero, then the function is no longer monotonic any more
-                    Ok(MonotonicityNode::Function(Monotonicity::default(), Range {
-                        begin: None,
-                        end: None,
-                    }))
-                }
-            }
+        if gt_eq_zero(&left)? && gt_eq_zero(&right)? {
+            // both left and right are >= 0, we keep the current is_positive
+            Ok(Monotonicity {
+                is_monotonic: true,
+                is_positive: args[0].is_positive,
+                is_constant: false,
+                left: None,
+                right: None,
+            })
+        } else if lt_eq_zero(&left)? && lt_eq_zero(&right)? {
+            // both left and right are <= 0, we flip the current is_positive
+            Ok(Monotonicity {
+                is_monotonic: true,
+                is_positive: !args[0].is_positive,
+                is_constant: false,
+                left: None,
+                right: None,
+            })
+        } else {
+            Ok(Monotonicity::default())
         }
     }
 }

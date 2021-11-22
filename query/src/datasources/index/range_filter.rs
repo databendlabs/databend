@@ -20,14 +20,12 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::Monotonicity;
 use common_planners::lit;
 use common_planners::Expression;
 use common_planners::Expressions;
 use common_planners::RewriteHelper;
 
 use crate::datasources::table::fuse::util::BlockStats;
-use crate::optimizers::MonotonicityCheckVisitor;
 use crate::optimizers::RequireColumnsVisitor;
 use crate::pipelines::transforms::ExpressionExecutor;
 
@@ -131,6 +129,39 @@ pub(crate) fn build_verifiable_expr(
     .map_or(unhandled.clone(), |mut v| v.build().unwrap_or(unhandled))
 }
 
+struct Monotonic {
+    is_monotonic: bool,
+    is_positive: bool,
+}
+
+// TODO: need add monotonic check for the expression, will move to FunctionFeatures.
+// ISSUE-2343: https://github.com/datafuselabs/databend/issues/2343
+fn is_monotonic_expression(expr: &Expression) -> Monotonic {
+    match expr {
+        Expression::Column(_) => Monotonic {
+            is_monotonic: true,
+            is_positive: true,
+        },
+        Expression::UnaryExpression { op, expr } => match op.as_str() {
+            "-" => {
+                let mut monotonic = is_monotonic_expression(expr);
+                if monotonic.is_monotonic {
+                    monotonic.is_positive = !monotonic.is_positive;
+                }
+                monotonic
+            }
+            _ => Monotonic {
+                is_monotonic: false,
+                is_positive: true,
+            },
+        },
+        _ => Monotonic {
+            is_monotonic: false,
+            is_positive: true,
+        },
+    }
+}
+
 fn inverse_operator(op: &str) -> Result<&str> {
     match op {
         "<" => Ok(">"),
@@ -194,7 +225,7 @@ struct VerifiableExprBuilder<'a> {
     op: &'a str,
     column_name: String,
     column_id: u32,
-    monotonic: Monotonicity,
+    monotonic: Monotonic,
     field: &'a DataField,
     stat_columns: &'a mut StatColumns,
 }
@@ -241,8 +272,7 @@ impl<'a> VerifiableExprBuilder<'a> {
             }
         };
 
-        // TODO: maybe pass in the range with block stats MIN and MAX
-        let (monotonic, _column) = MonotonicityCheckVisitor::check_expression(&args[0], None)?;
+        let monotonic = is_monotonic_expression(&args[0]);
 
         if !monotonic.is_monotonic {
             return Err(ErrorCode::UnknownException(
