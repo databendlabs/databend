@@ -26,13 +26,7 @@ pub fn apply_plan_rewrite(
     plan: &PlanNode,
 ) -> Result<PlanNode> {
     let mut optimizer = optimizer;
-    eprintln!("DDD apply_plan_rewrite before optimize: {:?}", plan);
     let plan = optimizer.optimize(plan)?;
-    eprintln!("DDD apply_plan_rewrite after optimize: {:?}", plan);
     let plan = PlanDoReadSource::create(context).rewrite_plan_node(&plan)?;
-    eprintln!(
-        "DDD apply_plan_rewrite after plan do read source rewrite: {:?}",
-        plan
-    );
     Ok(plan)
 }
