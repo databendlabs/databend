@@ -14,7 +14,10 @@
 
 use std::sync::Arc;
 
+use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataType;
 use common_meta_types::TableInfo;
 
 use crate::PlanNode;
@@ -27,8 +30,12 @@ pub struct SinkPlan {
 }
 
 impl SinkPlan {
-    /// Return schema after the projection
+    /// Return sink schema
     pub fn schema(&self) -> DataSchemaRef {
-        self.table_info.schema()
+        // TODO pass this guy in
+        DataSchemaRefExt::create(vec![
+            DataField::new("seg_loc", DataType::String, false),
+            DataField::new("seg_info", DataType::String, false),
+        ])
     }
 }
