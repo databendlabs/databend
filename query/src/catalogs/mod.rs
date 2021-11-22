@@ -18,15 +18,16 @@ mod database;
 mod table;
 mod table_function;
 mod table_id_ranges;
+mod table_memory_meta;
 
 pub mod backends;
 pub mod impls;
 
 pub use catalog::Catalog;
 pub use database::Database;
-pub use impls::in_memory_meta::InMemoryMetas;
 pub use table::Table;
 pub use table::TablePtr;
 pub use table::ToReadDataSourcePlan;
 pub use table_function::TableFunction;
 pub use table_id_ranges::*;
+pub use table_memory_meta::InMemoryMetas;

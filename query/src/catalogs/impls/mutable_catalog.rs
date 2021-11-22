@@ -40,9 +40,9 @@ use crate::common::MetaClientProvider;
 use crate::configs::Config;
 use crate::datasources::context::DataSourceContext;
 use crate::datasources::database::register_database_engines;
-use crate::datasources::database_engine_registry::DatabaseEngineRegistry;
 use crate::datasources::table::register_prelude_tbl_engines;
-use crate::datasources::table_engine_registry::TableEngineRegistry;
+use crate::datasources::DatabaseEngineRegistry;
+use crate::datasources::TableEngineRegistry;
 
 /// Catalog based on MetaStore
 /// - System Database NOT included
