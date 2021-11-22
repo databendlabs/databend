@@ -14,7 +14,6 @@
 
 mod plan_aggregator_final;
 mod plan_aggregator_partial;
-mod plan_append_data;
 mod plan_broadcast;
 mod plan_builder;
 mod plan_copy;
@@ -53,6 +52,7 @@ mod plan_rewriter;
 mod plan_select;
 mod plan_setting;
 mod plan_show_table_create;
+mod plan_sink;
 mod plan_sort;
 mod plan_stage;
 mod plan_statistics;
@@ -68,7 +68,6 @@ mod plan_visitor;
 
 pub use plan_aggregator_final::AggregatorFinalPlan;
 pub use plan_aggregator_partial::AggregatorPartialPlan;
-pub use plan_append_data::SinkPlan;
 pub use plan_broadcast::BroadcastPlan;
 pub use plan_builder::PlanBuilder;
 pub use plan_copy::CopyPlan;
@@ -129,6 +128,7 @@ pub use plan_select::SelectPlan;
 pub use plan_setting::SettingPlan;
 pub use plan_setting::VarValue;
 pub use plan_show_table_create::ShowCreateTablePlan;
+pub use plan_sink::SinkPlan;
 pub use plan_sort::SortPlan;
 pub use plan_stage::StageKind;
 pub use plan_stage::StagePlan;
