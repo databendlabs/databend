@@ -20,7 +20,7 @@ use crate::datasources::table::fuse::FuseTable;
 use crate::datasources::table::memory::memory_table::MemoryTable;
 use crate::datasources::table::null::null_table::NullTable;
 use crate::datasources::table::parquet::parquet_table::ParquetTable;
-use crate::datasources::table_engine_registry::TableEngineRegistry;
+use crate::datasources::TableEngineRegistry;
 
 pub fn register_prelude_tbl_engines(registry: &TableEngineRegistry) -> Result<()> {
     registry.register("CSV", std::sync::Arc::new(CsvTable::try_create))?;

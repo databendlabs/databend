@@ -20,4 +20,6 @@ pub(crate) mod fuse;
 pub(crate) mod prelude;
 pub(crate) mod system;
 
+pub use fuse::FuseDatabase;
 pub use prelude::register_database_engines;
+pub use system::SystemDatabase;

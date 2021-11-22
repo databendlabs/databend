@@ -13,15 +13,10 @@
 // limitations under the License.
 //
 
-mod catalog;
 mod database_catalog;
-pub mod in_memory_meta;
+mod immutable_catalog;
+mod mutable_catalog;
 
-pub use catalog::ImmutableCatalog;
-pub use catalog::MutableCatalog;
-pub use catalog::OverlaidCatalog;
 pub use database_catalog::DatabaseCatalog;
-
-pub use crate::catalogs::table_id_ranges::LOCAL_TBL_ID_BEGIN;
-pub use crate::catalogs::table_id_ranges::SYS_TBL_ID_BEGIN;
-pub use crate::catalogs::table_id_ranges::SYS_TBL_ID_END;
+pub use immutable_catalog::ImmutableCatalog;
+pub use mutable_catalog::MutableCatalog;

@@ -18,6 +18,6 @@ use std::sync::Arc;
 
 use common_meta_types::MetaId;
 
-use crate::datasources::table_func_engine::TableFuncEngine;
+use crate::datasources::TableFuncEngine;
 
 pub type TableFuncEngineRegistry = HashMap<String, (MetaId, Arc<dyn TableFuncEngine>)>;
