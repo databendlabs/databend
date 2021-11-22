@@ -67,10 +67,6 @@ impl Processor for SinkTransform {
         tracing::debug!("executing sink transform");
         let tbl = self.ctx.get_catalog().build_table(self.table_info())?;
         let input_stream = self.input.execute().await?;
-
-        // TODO append_data should return a description of the append operation's result
-        tbl.append_data(self.ctx.clone(), input_stream).await?;
-        // return the above result, downstream processor will handle it
-        todo!()
+        tbl.append_data(self.ctx.clone(), input_stream).await
     }
 }

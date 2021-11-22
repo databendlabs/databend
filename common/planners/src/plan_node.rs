@@ -194,34 +194,4 @@ impl PlanNode {
     pub fn input(&self, n: usize) -> Arc<PlanNode> {
         self.inputs()[n].clone()
     }
-
-    // pub fn set_inputs(&mut self, inputs: Vec<&PlanNode>) -> Result<()> {
-    //     if inputs.is_empty() {
-    //         return Result::Err(ErrorCode::BadPlanInputs("Inputs must not be empty"));
-    //     }
-    //
-    //     match self {
-    //         PlanNode::Stage(v) => v.set_input(inputs[0]),
-    //         PlanNode::Broadcast(v) => v.set_input(inputs[0]),
-    //         PlanNode::Projection(v) => v.set_input(inputs[0]),
-    //         PlanNode::Expression(v) => v.set_input(inputs[0]),
-    //         PlanNode::AggregatorPartial(v) => v.set_input(inputs[0]),
-    //         PlanNode::AggregatorFinal(v) => v.set_input(inputs[0]),
-    //         PlanNode::Filter(v) => v.set_input(inputs[0]),
-    //         PlanNode::Having(v) => v.set_input(inputs[0]),
-    //         PlanNode::Limit(v) => v.set_input(inputs[0]),
-    //         PlanNode::Explain(v) => v.set_input(inputs[0]),
-    //         PlanNode::Select(v) => v.set_input(inputs[0]),
-    //         PlanNode::Sort(v) => v.set_input(inputs[0]),
-    //         PlanNode::SubQueryExpression(v) => v.set_inputs(inputs),
-    //         _ => {
-    //             return Err(ErrorCode::UnImplement(format!(
-    //                 "UnImplement set_inputs for {:?}",
-    //                 self
-    //             )));
-    //         }
-    //     }
-    //
-    //     Ok(())
-    // }
 }
