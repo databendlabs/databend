@@ -16,6 +16,7 @@ use std::io::Cursor;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
@@ -29,6 +30,7 @@ use common_streams::SourceStream;
 use common_streams::ValueSource;
 use futures::TryStreamExt;
 
+use crate::catalogs::Table;
 use crate::interpreters::interpreter_select::Scheduled;
 use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::interpreters::utils::apply_plan_rewrite;
@@ -50,6 +52,35 @@ impl InsertIntoInterpreter {
     ) -> Result<InterpreterPtr> {
         Ok(Arc::new(InsertIntoInterpreter { ctx, plan }))
     }
+
+    async fn insert_with_select_plan(&self, table: &dyn Table) -> Result<Vec<DataBlock>> {
+        if let Some(plan_node) = &self.plan.select_plan {
+            if let PlanNode::Select(sel) = plan_node.as_ref() {
+                // check if schema match
+                let output_schema = self.plan.schema();
+                let select_schema = sel.schema();
+                if select_schema.fields().len() < output_schema.fields().len() {
+                    return Err(ErrorCode::BadArguments(
+                        "Fields in select statement is less than expected",
+                    ));
+                }
+                let upstream_schema = if select_schema == output_schema {
+                    None
+                } else {
+                    Some(select_schema)
+                };
+
+                let mut scheduled = Scheduled::new();
+                let r = self
+                    .schedule_query(&mut scheduled, sel, table.get_table_info(), upstream_schema)
+                    .await?;
+                return Ok(r);
+            }
+        };
+        Err(ErrorCode::UnknownTypeOfQuery(format!(
+            "Unsupported select query plan for insert_into interpreter",
+        )))
+    }
 }
 
 #[async_trait::async_trait]
@@ -66,17 +97,10 @@ impl Interpreter for InsertIntoInterpreter {
         let table = &self.plan.tbl_name;
         let table = self.ctx.get_table(database, table).await?;
 
-        let append_operations = if let Some(plan_node) = &self.plan.select_plan {
-            if let PlanNode::Select(sel) = plan_node.as_ref() {
-                let mut scheduled = Scheduled::new();
-                self.schedule_query(&mut scheduled, sel, table.get_table_info())
-                    .await?
-            } else {
-                return Err(ErrorCode::UnknownTypeOfQuery(format!(
-                    "Unsupported select query plan for insert_into interpreter:{}",
-                    plan_node.as_ref().name()
-                )));
-            }
+        let has_select_plan = self.plan.select_plan.is_some();
+
+        let append_operations = if has_select_plan {
+            self.insert_with_select_plan(table.as_ref()).await?
         } else {
             let input_stream = if self.plan.values_opt.is_some() {
                 let values = self.plan.values_opt.clone().take().unwrap();
@@ -113,6 +137,7 @@ impl InsertIntoInterpreter {
         scheduled: &mut Scheduled,
         select_plan: &SelectPlan,
         table_info: &TableInfo,
+        upstream_schema: Option<DataSchemaRef>,
     ) -> Result<Vec<DataBlock>> {
         // This is almost the same of SelectInterpreter::schedule_query, with some slight tweaks
 
@@ -128,6 +153,7 @@ impl InsertIntoInterpreter {
         let sink_plan = PlanNode::Sink(SinkPlan {
             table_info: table_info.clone(),
             input: Arc::new(optimized_plan.clone()),
+            upstream_schema,
         });
 
         // it might be better, if the above logics could be encapsulated in PipelineBuilder

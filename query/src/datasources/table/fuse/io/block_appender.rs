@@ -43,6 +43,7 @@ impl BlockAppender {
         let mut stats_acc = util::StatisticsAccumulator::new();
         let mut block_meta_acc = util::BlockMetaAccumulator::new();
 
+        // TODO handle empty stream scenario
         // accumulate the stats and save the blocks
         while let Some(block) = stream.next().await {
             let block = block?;

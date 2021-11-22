@@ -328,13 +328,14 @@ impl PipelineBuilder {
     }
 
     fn visit_sink(&mut self, plan: &SinkPlan) -> Result<Pipeline> {
-        let mut pipeline = Pipeline::create(self.ctx.clone());
-        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
-        let workers = std::cmp::max(max_threads, 1);
-        for _i in 0..workers {
-            let source = SinkTransform::try_create(self.ctx.clone(), plan.table_info.clone())?;
-            pipeline.add_source(Arc::new(source))?;
-        }
+        let mut pipeline = self.visit(&plan.input)?;
+        pipeline.add_simple_transform(|| {
+            Ok(Box::new(SinkTransform::create(
+                self.ctx.clone(),
+                plan.table_info.clone(),
+                plan.upstream_schema.clone(),
+            )))
+        })?;
         Ok(pipeline)
     }
 

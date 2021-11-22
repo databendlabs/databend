@@ -15,8 +15,11 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_datavalues::DataSchemaRef;
 use common_exception::Result;
+use common_functions::scalars::CastFunction;
 use common_meta_types::TableInfo;
+use common_streams::CastStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
@@ -29,15 +32,21 @@ pub struct SinkTransform {
     ctx: DatabendQueryContextRef,
     table_info: TableInfo,
     input: Arc<dyn Processor>,
+    upstream_schema: Option<DataSchemaRef>,
 }
 
 impl SinkTransform {
-    pub fn try_create(ctx: DatabendQueryContextRef, table_info: TableInfo) -> Result<Self> {
-        Ok(Self {
+    pub fn create(
+        ctx: DatabendQueryContextRef,
+        table_info: TableInfo,
+        upstream_schema: Option<DataSchemaRef>,
+    ) -> Self {
+        Self {
             ctx,
             table_info,
             input: Arc::new(EmptyProcessor::create()),
-        })
+            upstream_schema,
+        }
     }
     fn table_info(&self) -> &TableInfo {
         &self.table_info
@@ -66,7 +75,24 @@ impl Processor for SinkTransform {
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!("executing sink transform");
         let tbl = self.ctx.get_catalog().build_table(self.table_info())?;
-        let input_stream = self.input.execute().await?;
-        tbl.append_data(self.ctx.clone(), input_stream).await
+        let mut upstream = self.input.execute().await?;
+
+        // cast if necessary
+        // NOTE: in insert interpreter, we have already check if the length of schemas match
+        if let Some(upstream_schema) = &self.upstream_schema {
+            let mut functions = Vec::with_capacity(upstream_schema.fields().len());
+            for field in upstream_schema.fields() {
+                let cast_function =
+                    CastFunction::create("cast".to_string(), field.data_type().clone())?;
+                functions.push(cast_function);
+            }
+            upstream = Box::pin(CastStream::try_create(
+                upstream,
+                self.table_info.schema(),
+                functions,
+            )?);
+        };
+
+        tbl.append_data(self.ctx.clone(), upstream).await
     }
 }
