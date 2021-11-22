@@ -14,25 +14,20 @@
 //
 
 use common_exception::Result;
-use common_meta_types::TableInfo;
 
-use crate::catalogs::Table;
+use crate::catalogs::Database;
 use crate::datasources::context::DataSourceContext;
 
-// TODO maybe we should introduce a
-// `Session::store_provider(...) -> Result<StoreApiProvider>`
-// such that, we no longer need to pass store_provider to Table's constructor
-// instead, table could access apis on demand in method read_plan  and read
-pub trait TableEngine: Send + Sync {
-    fn try_create(&self, table_info: TableInfo, ctx: DataSourceContext) -> Result<Box<dyn Table>>;
+pub trait DatabaseEngine: Send + Sync {
+    fn try_create(&self, db_name: &str, ctx: DataSourceContext) -> Result<Box<dyn Database>>;
 }
 
-impl<T> TableEngine for T
+impl<T> DatabaseEngine for T
 where
-    T: Fn(TableInfo, DataSourceContext) -> Result<Box<dyn Table>>,
+    T: Fn(&str, DataSourceContext) -> Result<Box<dyn Database>>,
     T: Send + Sync,
 {
-    fn try_create(&self, table_info: TableInfo, ctx: DataSourceContext) -> Result<Box<dyn Table>> {
-        self(table_info, ctx)
+    fn try_create(&self, db_name: &str, ctx: DataSourceContext) -> Result<Box<dyn Database>> {
+        self(db_name, ctx)
     }
 }
