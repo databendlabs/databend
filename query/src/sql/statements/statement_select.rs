@@ -36,8 +36,8 @@ use crate::sql::statements::query::JoinedSchema;
 use crate::sql::statements::query::JoinedSchemaAnalyzer;
 use crate::sql::statements::query::JoinedTableDesc;
 use crate::sql::statements::query::QualifiedRewriter;
+use crate::sql::statements::query::QueryASTIR;
 use crate::sql::statements::query::QueryNormalizer;
-use crate::sql::statements::query::QueryNormalizerData;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::QueryRelation;
@@ -75,28 +75,28 @@ impl AnalyzableStatement for DfQueryStatement {
 }
 
 impl DfQueryStatement {
-    async fn analyze_query(&self, data: QueryNormalizerData) -> Result<QueryAnalyzeState> {
-        let limit = data.limit;
-        let offset = data.offset;
+    async fn analyze_query(&self, ir: QueryASTIR) -> Result<QueryAnalyzeState> {
+        let limit = ir.limit;
+        let offset = ir.offset;
         let mut analyze_state = QueryAnalyzeState {
             limit,
             offset,
             ..Default::default()
         };
 
-        if let Some(predicate) = &data.filter_predicate {
+        if let Some(predicate) = &ir.filter_predicate {
             Self::verify_no_aggregate(predicate, "filter")?;
             analyze_state.filter = Some(predicate.clone());
         }
 
-        Self::analyze_projection(&data.projection_expressions, &mut analyze_state)?;
+        Self::analyze_projection(&ir.projection_expressions, &mut analyze_state)?;
 
         // Allow `SELECT name FROM system.databases HAVING name = 'xxx'`
-        if let Some(predicate) = &data.having_predicate {
+        if let Some(predicate) = &ir.having_predicate {
             analyze_state.having = Some(rebase_expr(predicate, &analyze_state.expressions)?);
         }
 
-        for item in &data.order_by_expressions {
+        for item in &ir.order_by_expressions {
             match item {
                 Expression::Sort {
                     expr,
@@ -123,17 +123,17 @@ impl DfQueryStatement {
             }
         }
 
-        if !data.aggregate_expressions.is_empty() || !data.group_by_expressions.is_empty() {
+        if !ir.aggregate_expressions.is_empty() || !ir.group_by_expressions.is_empty() {
             // Rebase expressions using aggregate expressions and group by expressions
             let mut expressions = Vec::with_capacity(analyze_state.expressions.len());
             for expression in &analyze_state.expressions {
-                let expression = rebase_expr(expression, &data.aggregate_expressions)?;
-                expressions.push(rebase_expr(&expression, &data.group_by_expressions)?);
+                let expression = rebase_expr(expression, &ir.aggregate_expressions)?;
+                expressions.push(rebase_expr(&expression, &ir.group_by_expressions)?);
             }
 
             analyze_state.expressions = expressions;
 
-            for group_expression in &data.group_by_expressions {
+            for group_expression in &ir.group_by_expressions {
                 analyze_state.add_before_group_expression(group_expression);
                 let base_exprs = &analyze_state.before_group_by_expressions;
                 analyze_state
@@ -141,7 +141,7 @@ impl DfQueryStatement {
                     .push(rebase_expr(group_expression, base_exprs)?);
             }
 
-            Self::analyze_aggregate(&data.aggregate_expressions, &mut analyze_state)?;
+            Self::analyze_aggregate(&ir.aggregate_expressions, &mut analyze_state)?;
         }
 
         Ok(analyze_state)

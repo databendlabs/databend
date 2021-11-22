@@ -50,7 +50,7 @@ pub use analyzer_statement::AnalyzableStatement;
 pub use analyzer_statement::AnalyzedResult;
 pub use analyzer_statement::QueryAnalyzeState;
 pub use analyzer_statement::QueryRelation;
-pub use query::QueryNormalizerData;
+pub use query::QueryASTIR;
 pub use statement_alter_user::DfAlterUser;
 pub use statement_copy::DfCopy;
 pub use statement_create_database::DfCreateDatabase;
