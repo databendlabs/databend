@@ -186,6 +186,7 @@ build_exceptions! {
     BadPredicateRows(56),
     SHA1CheckFailed(57),
     UnknownColumn(58),
+    InvalidSourceFormat(59),
 
     // uncategorized
     UnexpectedResponseType(600),

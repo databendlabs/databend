@@ -67,7 +67,7 @@ impl Table for DatabasesTable {
         ctx: DatabendQueryContextRef,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let dbs = ctx.get_catalog().get_databases().await?;
+        let dbs = ctx.get_catalog().list_databases().await?;
 
         let db_names: Vec<&[u8]> = dbs
             .iter()

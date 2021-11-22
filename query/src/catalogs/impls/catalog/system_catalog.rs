@@ -97,7 +97,7 @@ impl SystemCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for SystemCatalog {
-    async fn get_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
+    async fn list_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
         Ok(vec![self.sys_db.clone()])
     }
 
@@ -124,7 +124,7 @@ impl Catalog for SystemCatalog {
         Ok(table.clone())
     }
 
-    async fn get_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         // ensure db exists
         let _db = self.get_database(db_name).await?;
 

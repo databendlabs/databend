@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::BlockingWait;
-use common_base::Runtime;
 use common_exception::Result;
 use databend_query::catalogs::impls::DatabaseCatalog;
 use databend_query::configs::Config;
 
 pub fn try_create_catalog() -> Result<DatabaseCatalog> {
-    let conf = Config::default();
-    let rt = Runtime::with_worker_threads(1).unwrap();
-    let catalog = DatabaseCatalog::try_create_with_config(conf).wait_in(&rt, None)??;
-    Ok(catalog)
+    futures::executor::block_on(async move {
+        let conf = Config::default();
+        DatabaseCatalog::try_create_with_config(conf).await
+    })
 }

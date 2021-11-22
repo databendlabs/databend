@@ -9,7 +9,7 @@ function run_tests()
 {
   cd tests
   mkdir -p test_output
-  ./databend-test --print-time  --jobs 4 --skip '^09_*'
+  ./databend-test --print-time   --run-dir 0_stateless --jobs 4 --skip '^09_*'
 }
 
 export -f run_tests

@@ -21,4 +21,5 @@ mod floor;
 mod log;
 mod pi;
 mod sign;
+mod sqrt;
 mod trigonometric;

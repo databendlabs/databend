@@ -23,6 +23,7 @@ use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
+use crate::CopyPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
 use crate::CreateUserPlan;
@@ -79,6 +80,7 @@ pub enum PlanNode {
     UseDatabase(UseDatabasePlan),
     SetVariable(SettingPlan),
     InsertInto(InsertIntoPlan),
+    Copy(CopyPlan),
     ShowCreateTable(ShowCreateTablePlan),
     SubQueryExpression(SubQueriesSetPlan),
     Kill(KillPlan),
@@ -124,6 +126,7 @@ impl PlanNode {
             PlanNode::AlterUser(v) => v.schema(),
             PlanNode::DropUser(v) => v.schema(),
             PlanNode::GrantPrivilege(v) => v.schema(),
+            PlanNode::Copy(v) => v.schema(),
         }
     }
 
@@ -161,6 +164,7 @@ impl PlanNode {
             PlanNode::AlterUser(_) => "AlterUser",
             PlanNode::DropUser(_) => "DropUser",
             PlanNode::GrantPrivilege(_) => "GrantPrivilegePlan",
+            PlanNode::Copy(_) => "CopyPlan",
         }
     }
 

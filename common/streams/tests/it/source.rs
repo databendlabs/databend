@@ -12,7 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fs::File;
+use std::io::Write;
+use std::sync::Arc;
+
 use common_base::tokio;
+use common_dal::Local;
 use common_datablocks::assert_blocks_eq;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
@@ -53,14 +58,21 @@ async fn test_parse_values() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_parse_csvs() {
-    let buffer = "1,\"1\",1.11\n2,\"2\",2\n3,\"3-'3'-3\",3\n";
+    let dir = tempfile::tempdir().unwrap();
+    let name = "my-temporary-note.txt";
+    let file_path = dir.path().join(name);
+    let mut file = File::create(file_path).unwrap();
+    writeln!(file, "1,\"1\",1.11\n2,\"2\",2\n3,\"3-'3'-3\",3\"").unwrap();
 
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", DataType::Int8, false),
         DataField::new("b", DataType::String, false),
         DataField::new("c", DataType::Float64, false),
     ]);
-    let mut csv_source = CsvSource::new(buffer.as_bytes(), schema, false, 10);
+
+    let local = Local::with_path(dir.path().to_path_buf());
+    let mut csv_source =
+        CsvSource::try_create(Arc::new(local), name.to_string(), schema, false, 10).unwrap();
     let block = csv_source.read().await.unwrap().unwrap();
     assert_blocks_eq(
         vec![
@@ -77,4 +89,7 @@ async fn test_parse_csvs() {
 
     let block = csv_source.read().await.unwrap();
     assert!(block.is_none());
+
+    drop(file);
+    dir.close().unwrap();
 }

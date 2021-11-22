@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
-use common_base::tokio;
+use common_dal::DataAccessor;
+use common_dal::InputStream;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -21,38 +24,41 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use csv_async::AsyncReader;
 use csv_async::AsyncReaderBuilder;
-use tokio_stream::StreamExt;
+use futures::stream::StreamExt;
 
 use crate::Source;
 
-pub struct CsvSource<R> {
-    reader: AsyncReader<R>,
+pub struct CsvSource {
+    reader: AsyncReader<InputStream>,
     schema: DataSchemaRef,
     block_size: usize,
     rows: usize,
 }
 
-impl<R> CsvSource<R>
-where R: tokio::io::AsyncRead + Unpin + Send + Sync
-{
-    pub fn new(reader: R, schema: DataSchemaRef, header: bool, block_size: usize) -> Self {
+impl CsvSource {
+    pub fn try_create(
+        data_accessor: Arc<dyn DataAccessor>,
+        path: String,
+        schema: DataSchemaRef,
+        header: bool,
+        block_size: usize,
+    ) -> Result<Self> {
+        let reader = data_accessor.get_input_stream(&path, None)?;
         let reader = AsyncReaderBuilder::new()
             .has_headers(header)
             .create_reader(reader);
 
-        Self {
+        Ok(Self {
             reader,
             block_size,
             schema,
             rows: 0,
-        }
+        })
     }
 }
 
 #[async_trait]
-impl<R> Source for CsvSource<R>
-where R: tokio::io::AsyncRead + Unpin + Send + Sync
-{
+impl Source for CsvSource {
     async fn read(&mut self) -> Result<Option<DataBlock>> {
         let mut desers = self
             .schema

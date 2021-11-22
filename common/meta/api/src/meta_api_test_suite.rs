@@ -23,6 +23,8 @@ use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReq;
+use common_meta_types::GetDatabaseReq;
+use common_meta_types::ListTableReq;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
@@ -84,7 +86,7 @@ impl MetaApiTestSuite {
 
         tracing::info!("--- get db1");
         {
-            let res = mt.get_database("db1").await;
+            let res = mt.get_database(GetDatabaseReq::new("db1")).await;
             tracing::debug!("get present database res: {:?}", res);
             let res = res?;
             assert_eq!(1, res.database_id, "db1 id is 1");
@@ -110,13 +112,13 @@ impl MetaApiTestSuite {
 
         tracing::info!("--- get db2");
         {
-            let res = mt.get_database("db2").await?;
+            let res = mt.get_database(GetDatabaseReq::new("db2")).await?;
             assert_eq!("db2".to_string(), res.db, "db1.db is db1");
         }
 
         tracing::info!("--- get absent db");
         {
-            let res = mt.get_database("absent").await;
+            let res = mt.get_database(GetDatabaseReq::new("absent")).await;
             tracing::debug!("=== get absent database res: {:?}", res);
             assert!(res.is_err());
             let res = res.unwrap_err();
@@ -135,7 +137,7 @@ impl MetaApiTestSuite {
 
         tracing::info!("--- get db2 should not found");
         {
-            let res = mt.get_database("db2").await;
+            let res = mt.get_database(GetDatabaseReq::new("db2")).await;
             let err = res.unwrap_err();
             assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
         }
@@ -164,7 +166,7 @@ impl MetaApiTestSuite {
 
         tracing::info!("--- get_databases");
         {
-            let dbs = mt.get_databases().await?;
+            let dbs = mt.list_databases().await?;
             let want: Vec<u64> = vec![1, 2];
             let got = dbs.iter().map(|x| x.database_id).collect::<Vec<_>>();
             assert_eq!(want, got)
@@ -216,7 +218,7 @@ impl MetaApiTestSuite {
                 let res = mt.create_table(req.clone()).await?;
                 assert_eq!(1, res.table_id, "table id is 1");
 
-                let got = mt.get_table(db_name, tbl_name).await?;
+                let got = mt.get_table((db_name, tbl_name).into()).await?;
 
                 let want = TableInfo {
                     ident: TableIdent::new(1, 1),
@@ -237,7 +239,7 @@ impl MetaApiTestSuite {
                 let res = mt.create_table(req.clone()).await?;
                 assert_eq!(1, res.table_id, "new table id");
 
-                let got = mt.get_table(db_name, tbl_name).await?;
+                let got = mt.get_table((db_name, tbl_name).into()).await?;
                 let want = TableInfo {
                     ident: TableIdent::new(1, 1),
                     desc: format!("'{}'.'{}'", db_name, tbl_name),
@@ -266,7 +268,7 @@ impl MetaApiTestSuite {
 
                 // get_table returns the old table
 
-                let got = mt.get_table("db1", "tb2").await.unwrap();
+                let got = mt.get_table(("db1", "tb2").into()).await.unwrap();
                 let want = TableInfo {
                     ident: TableIdent::new(1, 1),
                     desc: format!("'{}'.'{}'", db_name, tbl_name),
@@ -284,18 +286,18 @@ impl MetaApiTestSuite {
             {
                 tracing::info!("--- upsert table options with key1=val1");
                 {
-                    let table = mt.get_table("db1", "tb2").await.unwrap();
+                    let table = mt.get_table(("db1", "tb2").into()).await.unwrap();
 
                     mt.upsert_table_option(UpsertTableOptionReq::new(&table.ident, "key1", "val1"))
                         .await?;
 
-                    let table = mt.get_table("db1", "tb2").await.unwrap();
+                    let table = mt.get_table(("db1", "tb2").into()).await.unwrap();
                     assert_eq!(table.options().get("key1"), Some(&"val1".into()));
                 }
 
                 tracing::info!("--- upsert table options with key1=val1");
                 {
-                    let table = mt.get_table("db1", "tb2").await.unwrap();
+                    let table = mt.get_table(("db1", "tb2").into()).await.unwrap();
 
                     let got = mt
                         .upsert_table_option(UpsertTableOptionReq::new(
@@ -312,7 +314,7 @@ impl MetaApiTestSuite {
                     assert_eq!(ErrorCode::TableVersionMissMatch("").code(), got.code());
 
                     // table is not affected.
-                    let table = mt.get_table("db1", "tb2").await.unwrap();
+                    let table = mt.get_table(("db1", "tb2").into()).await.unwrap();
                     assert_eq!(table.options().get("key1"), Some(&"val1".into()));
                 }
             }
@@ -328,7 +330,7 @@ impl MetaApiTestSuite {
 
                 tracing::info!("--- get table after drop");
                 {
-                    let res = mt.get_table(db_name, tbl_name).await;
+                    let res = mt.get_table((db_name, tbl_name).into()).await;
                     let status = res.err().unwrap();
                     assert_eq!(
                         format!("Code: 25, displayText = Unknown table: '{:}'.", tbl_name),
@@ -412,7 +414,7 @@ impl MetaApiTestSuite {
 
             tracing::info!("--- get_tables");
             {
-                let res = mt.get_tables(db_name).await?;
+                let res = mt.list_tables(ListTableReq::new(db_name)).await?;
                 assert_eq!(1, res[0].ident.table_id);
                 assert_eq!(2, res[1].ident.table_id);
             }

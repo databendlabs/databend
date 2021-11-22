@@ -22,6 +22,7 @@ mod log;
 mod math;
 mod pi;
 mod sign;
+mod sqrt;
 mod trigonometric;
 
 pub use abs::AbsFunction;
@@ -38,6 +39,7 @@ pub use log::LogFunction;
 pub use math::MathsFunction;
 pub use pi::PiFunction;
 pub use sign::SignFunction;
+pub use sqrt::SqrtFunction;
 pub use trigonometric::Trigonometric;
 pub use trigonometric::TrigonometricAcosFunction;
 pub use trigonometric::TrigonometricAsinFunction;
