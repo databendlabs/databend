@@ -42,14 +42,12 @@ impl IntoResponse for ClusterTemplate {
 }
 
 // GET /v1/cluster/nodes
-// list all nodes in current databend-query cluster
+// list all nodes in current databend-metasrv cluster
 // request: None
-// cluster_state: the shared in memory state which store all nodes known to current node
 // return: return a list of cluster node information
 #[poem::handler]
 pub async fn nodes_handler(meta_node: Data<&Arc<MetaNode>>) -> ClusterTemplate {
     let nodes = meta_node.get_nodes().await.unwrap();
-    // let nodes = meta_node.get_nodes().await.expect("Failed to fetch cluster nodes list");
     let nodes_list = serde_json::to_string(&nodes).unwrap();
     ClusterTemplate {
         result: Ok(nodes_list),

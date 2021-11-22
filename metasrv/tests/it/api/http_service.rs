@@ -22,6 +22,7 @@ use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
 use databend_meta::meta_service::MetaNode;
 
+use crate::init_meta_ut;
 use crate::tests::service::new_test_context;
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
@@ -31,6 +32,9 @@ use crate::tests::tls_constants::TEST_SERVER_KEY;
 // TODO(zhihanz) add tls fail case
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_http_service_tls_server() -> Result<()> {
+    let (_log_guards, ut_span) = init_meta_ut!();
+    let _ent = ut_span.enter();
+
     let mut conf = Config::empty();
     let addr_str = "127.0.0.1:0";
 
