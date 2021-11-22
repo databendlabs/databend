@@ -24,6 +24,7 @@ use common_streams::SendableDataBlockStream;
 use common_streams::SourceFactory;
 use common_streams::SourceParams;
 use common_streams::SourceStream;
+use futures::TryStreamExt;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take_until;
 use nom::IResult;
@@ -81,7 +82,13 @@ impl Interpreter for CopyInterpreter {
         let source_stream = SourceStream::new(SourceFactory::try_get(source_params)?);
         let input_stream = source_stream.execute().await?;
 
-        table.append_data(self.ctx.clone(), input_stream).await?;
+        let r = table
+            .append_data(self.ctx.clone(), input_stream)
+            .await?
+            .try_collect()
+            .await?;
+        table.commit(self.ctx.clone(), r).await?;
+
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
             None,
