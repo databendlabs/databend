@@ -15,10 +15,8 @@
 
 use std::sync::Arc;
 
-use common_dal::InMemoryData;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::RwLock;
 use common_meta_api::MetaApi;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_types::CreateDatabaseReply;
@@ -40,7 +38,7 @@ use crate::catalogs::database::Database;
 use crate::catalogs::Table;
 use crate::common::MetaClientProvider;
 use crate::configs::Config;
-use crate::datasources::context::TableContext;
+use crate::datasources::context::DataSourceContext;
 use crate::datasources::database::fuse::database::FuseDatabase;
 use crate::datasources::table::register_prelude_tbl_engines;
 use crate::datasources::table_engine_registry::TableEngineRegistry;
@@ -52,9 +50,7 @@ use crate::datasources::table_engine_registry::TableEngineRegistry;
 /// - Database engines are free to save table meta in metastore or not
 #[derive(Clone)]
 pub struct MutableCatalog {
-    meta: Arc<dyn MetaApi>,
-    table_engine_registry: Arc<TableEngineRegistry>,
-    in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
+    ctx: DataSourceContext,
 }
 
 impl MutableCatalog {
@@ -90,7 +86,6 @@ impl MutableCatalog {
         };
 
         let table_engine_registry = Arc::new(TableEngineRegistry::default());
-
         register_prelude_tbl_engines(&table_engine_registry)?;
 
         let req = CreateDatabaseReq {
@@ -99,14 +94,14 @@ impl MutableCatalog {
             engine: "".to_string(),
             options: Default::default(),
         };
-
         meta.create_database(req).await?;
 
-        Ok(MutableCatalog {
-            table_engine_registry,
+        let ctx = DataSourceContext {
             meta,
-            in_memory_data: Default::default(),
-        })
+            in_memory_data: Arc::new(Default::default()),
+            table_engine_registry,
+        };
+        Ok(MutableCatalog { ctx })
     }
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
@@ -115,13 +110,7 @@ impl MutableCatalog {
         //    "default" ->  create fuse database
         //    "github" ->  create github database
         // }
-        let db = FuseDatabase::new(
-            &db_info.db,
-            self.meta.clone(),
-            self.in_memory_data.clone(),
-            self.table_engine_registry.clone(),
-        );
-        let db = Arc::new(db);
+        let db = Arc::new(FuseDatabase::new(&db_info.db, self.ctx.clone()));
         Ok(db)
     }
 }
@@ -129,12 +118,16 @@ impl MutableCatalog {
 #[async_trait::async_trait]
 impl Catalog for MutableCatalog {
     async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
-        let db_info = self.meta.get_database(GetDatabaseReq::new(db_name)).await?;
+        let db_info = self
+            .ctx
+            .meta
+            .get_database(GetDatabaseReq::new(db_name))
+            .await?;
         self.build_db_instance(&db_info)
     }
 
     async fn list_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
-        let dbs = self.meta.list_databases().await?;
+        let dbs = self.ctx.meta.list_databases().await?;
 
         dbs.iter().try_fold(vec![], |mut acc, item| {
             let db = self.build_db_instance(item)?;
@@ -144,17 +137,18 @@ impl Catalog for MutableCatalog {
     }
 
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
-        self.meta.create_database(req).await
+        self.ctx.meta.create_database(req).await
     }
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<()> {
-        self.meta.drop_database(req).await?;
+        self.ctx.meta.drop_database(req).await?;
         Ok(())
     }
 
     fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         let engine = table_info.engine();
         let factory = self
+            .ctx
             .table_engine_registry
             .get_table_factory(engine)
             .ok_or_else(|| {
@@ -162,9 +156,7 @@ impl Catalog for MutableCatalog {
             })?;
 
         let tbl: Arc<dyn Table> = factory
-            .try_create(table_info.clone(), TableContext {
-                in_memory_data: self.in_memory_data.clone(),
-            })?
+            .try_create(table_info.clone(), self.ctx.clone())?
             .into();
 
         Ok(tbl)
@@ -174,13 +166,13 @@ impl Catalog for MutableCatalog {
         &self,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
-        self.meta.upsert_table_option(req).await
+        self.ctx.meta.upsert_table_option(req).await
     }
 
     async fn get_table_meta_by_id(
         &self,
         table_id: MetaId,
     ) -> common_exception::Result<(TableIdent, Arc<TableMeta>)> {
-        self.meta.get_table_by_id(table_id).await
+        self.ctx.meta.get_table_by_id(table_id).await
     }
 }

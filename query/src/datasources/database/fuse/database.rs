@@ -15,11 +15,8 @@
 
 use std::sync::Arc;
 
-use common_dal::InMemoryData;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::RwLock;
-use common_meta_api::MetaApi;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
@@ -29,35 +26,26 @@ use common_meta_types::TableInfo;
 
 use crate::catalogs::Database;
 use crate::catalogs::Table;
-use crate::datasources::context::TableContext;
-use crate::datasources::table_engine_registry::TableEngineRegistry;
+use crate::datasources::context::DataSourceContext;
 
 #[derive(Clone)]
 pub struct FuseDatabase {
     db_name: String,
-    meta: Arc<dyn MetaApi>,
-    in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
-    table_engine_registry: Arc<TableEngineRegistry>,
+    ctx: DataSourceContext,
 }
 
 impl FuseDatabase {
-    pub fn new(
-        db_name: impl Into<String>,
-        meta: Arc<dyn MetaApi>,
-        in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
-        table_engine_registry: Arc<TableEngineRegistry>,
-    ) -> Self {
+    pub fn new(db_name: impl Into<String>, ctx: DataSourceContext) -> Self {
         Self {
             db_name: db_name.into(),
-            meta,
-            in_memory_data,
-            table_engine_registry,
+            ctx,
         }
     }
 
     fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         let engine = table_info.engine();
         let factory = self
+            .ctx
             .table_engine_registry
             .get_table_factory(engine)
             .ok_or_else(|| {
@@ -65,9 +53,7 @@ impl FuseDatabase {
             })?;
 
         let tbl: Arc<dyn Table> = factory
-            .try_create(table_info.clone(), TableContext {
-                in_memory_data: self.in_memory_data.clone(),
-            })?
+            .try_create(table_info.clone(), self.ctx.clone())?
             .into();
 
         Ok(tbl)
@@ -86,6 +72,7 @@ impl Database for FuseDatabase {
         table_name: &str,
     ) -> common_exception::Result<Arc<dyn Table>> {
         let table_info = self
+            .ctx
             .meta
             .get_table(GetTableReq::new(db_name, table_name))
             .await?;
@@ -93,7 +80,11 @@ impl Database for FuseDatabase {
     }
 
     async fn list_tables(&self, db_name: &str) -> common_exception::Result<Vec<Arc<dyn Table>>> {
-        let table_infos = self.meta.list_tables(ListTableReq::new(db_name)).await?;
+        let table_infos = self
+            .ctx
+            .meta
+            .list_tables(ListTableReq::new(db_name))
+            .await?;
 
         table_infos.iter().try_fold(vec![], |mut acc, item| {
             let tbl = self.build_table(item.as_ref())?;
@@ -103,11 +94,11 @@ impl Database for FuseDatabase {
     }
 
     async fn create_table(&self, req: CreateTableReq) -> common_exception::Result<()> {
-        self.meta.create_table(req).await?;
+        self.ctx.meta.create_table(req).await?;
         Ok(())
     }
 
     async fn drop_table(&self, req: DropTableReq) -> common_exception::Result<DropTableReply> {
-        self.meta.drop_table(req).await
+        self.ctx.meta.drop_table(req).await
     }
 }

@@ -24,7 +24,6 @@ use common_planners::*;
 use futures::TryStreamExt;
 
 use crate::catalogs::ToReadDataSourcePlan;
-use crate::datasources::context::TableContext;
 use crate::datasources::table::parquet::parquet_table::ParquetTable;
 
 #[tokio::test]
@@ -51,7 +50,8 @@ async fn test_parquet_table() -> Result<()> {
             options,
         },
     };
-    let table = ParquetTable::try_create(table_info, TableContext::default())?;
+    let table =
+        ParquetTable::try_create(table_info, crate::tests::try_create_datasource_context()?)?;
 
     let source_plan = table.read_plan(ctx.clone(), None).await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;

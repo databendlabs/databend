@@ -12,21 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
 use std::sync::Arc;
 
 use common_dal::InMemoryData;
-use common_exception::Result;
 use common_infallible::RwLock;
+use common_meta_api::MetaApi;
+
+use crate::datasources::table_engine_registry::TableEngineRegistry;
 
 /// Datasource Table Context.
-#[derive(Clone, Debug, Default)]
-pub struct TableContext {
+#[derive(Clone)]
+pub struct DataSourceContext {
+    pub meta: Arc<dyn MetaApi>,
     pub in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
-}
-
-impl TableContext {
-    pub fn get_in_memory_data(&self) -> Result<Arc<RwLock<InMemoryData<u64>>>> {
-        Ok(self.in_memory_data.clone())
-    }
+    pub table_engine_registry: Arc<TableEngineRegistry>,
 }
