@@ -54,6 +54,7 @@ use crate::RemotePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateTablePlan;
+use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
 use crate::TruncateTablePlan;
@@ -114,6 +115,7 @@ pub trait PlanRewriter {
             PlanNode::AlterUser(plan) => self.alter_user(plan),
             PlanNode::DropUser(plan) => self.drop_user(plan),
             PlanNode::GrantPrivilege(plan) => self.grant_privilege(plan),
+            PlanNode::Sink(plan) => self.rewrite_append_data(plan),
         }
     }
 
@@ -366,6 +368,10 @@ pub trait PlanRewriter {
 
     fn grant_privilege(&mut self, plan: &GrantPrivilegePlan) -> Result<PlanNode> {
         Ok(PlanNode::GrantPrivilege(plan.clone()))
+    }
+
+    fn rewrite_append_data(&mut self, plan: &SinkPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Sink(plan.clone()))
     }
 }
 

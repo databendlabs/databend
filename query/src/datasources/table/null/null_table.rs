@@ -17,7 +17,6 @@ use std::any::Any;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_meta_types::TableInfo;
-use common_planners::InsertIntoPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::TruncateTablePlan;
 use common_streams::DataBlockStream;
@@ -66,7 +65,6 @@ impl Table for NullTable {
     async fn append_data(
         &self,
         _ctx: DatabendQueryContextRef,
-        _insert_plan: InsertIntoPlan,
         mut stream: SendableDataBlockStream,
     ) -> Result<()> {
         while let Some(block) = stream.next().await {

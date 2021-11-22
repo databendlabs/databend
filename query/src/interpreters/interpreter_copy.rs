@@ -19,7 +19,6 @@ use common_dal::S3;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::CopyPlan;
-use common_planners::InsertIntoPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_streams::SourceFactory;
@@ -82,19 +81,7 @@ impl Interpreter for CopyInterpreter {
         let source_stream = SourceStream::new(SourceFactory::try_get(source_params)?);
         let input_stream = source_stream.execute().await?;
 
-        // convert the copy plan into insert plan
-        let insert_plan = InsertIntoPlan {
-            db_name: self.plan.db_name.clone(),
-            tbl_name: self.plan.tbl_name.clone(),
-            tbl_id: self.plan.tbl_id,
-            schema: self.plan.schema.clone(),
-            values_opt: None,
-            select_plan: None,
-        };
-
-        table
-            .append_data(self.ctx.clone(), insert_plan, input_stream)
-            .await?;
+        table.append_data(self.ctx.clone(), input_stream).await?;
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
             None,

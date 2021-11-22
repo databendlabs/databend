@@ -43,14 +43,11 @@ async fn test_fuse_table_simple_case() -> Result<()> {
 
     // insert 10 blocks
     let num_blocks = 5;
-    let insert_into_plan = fixture.insert_plan_of_table(table.as_ref());
     let stream = Box::pin(futures::stream::iter(TestFixture::gen_block_stream(
         num_blocks,
     )));
 
-    table
-        .append_data(ctx.clone(), insert_into_plan, stream)
-        .await?;
+    table.append_data(ctx.clone(), stream).await?;
 
     // get the latest tbl
     let prev_version = table.get_table_info().ident.version;
@@ -146,14 +143,11 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     // 2. truncate table which has data
     let num_blocks = 10;
-    let insert_into_plan = fixture.insert_plan_of_table(table.as_ref());
     let stream = Box::pin(futures::stream::iter(TestFixture::gen_block_stream(
         num_blocks,
     )));
 
-    table
-        .append_data(ctx.clone(), insert_into_plan, stream)
-        .await?;
+    table.append_data(ctx.clone(), stream).await?;
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
     // get the latest tbl

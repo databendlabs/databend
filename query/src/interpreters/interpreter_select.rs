@@ -79,7 +79,7 @@ impl Interpreter for SelectInterpreter {
     }
 }
 
-type Scheduled = HashMap<String, Arc<NodeInfo>>;
+pub type Scheduled = HashMap<String, Arc<NodeInfo>>;
 
 impl SelectInterpreter {
     async fn schedule_query(&self, scheduled: &mut Scheduled) -> Result<SendableDataBlockStream> {

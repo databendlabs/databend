@@ -16,10 +16,10 @@
 use std::any::Any;
 
 use common_dal::read_obj;
+use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
-use common_planners::InsertIntoPlan;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
@@ -79,10 +79,17 @@ impl Table for FuseTable {
     async fn append_data(
         &self,
         ctx: DatabendQueryContextRef,
-        insert_plan: InsertIntoPlan,
         stream: SendableDataBlockStream,
     ) -> Result<()> {
-        self.do_append(ctx, insert_plan, stream).await
+        self.do_append(ctx, stream).await
+    }
+
+    async fn commit(
+        &self,
+        _ctx: DatabendQueryContextRef,
+        _operations: Vec<DataBlock>,
+    ) -> Result<()> {
+        todo!()
     }
 
     async fn truncate(

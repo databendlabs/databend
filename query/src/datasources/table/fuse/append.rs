@@ -20,7 +20,6 @@ use common_meta_types::MetaVersion;
 use common_meta_types::TableIdent;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
-use common_planners::InsertIntoPlan;
 use common_streams::SendableDataBlockStream;
 use uuid::Uuid;
 
@@ -38,7 +37,6 @@ impl FuseTable {
     pub async fn do_append(
         &self,
         ctx: DatabendQueryContextRef,
-        insert_plan: InsertIntoPlan,
         stream: SendableDataBlockStream,
     ) -> Result<()> {
         // 1. get da
@@ -72,7 +70,7 @@ impl FuseTable {
             da.put(&snapshot_loc, bytes).await?;
 
             // 5. commit
-            let table_id = insert_plan.tbl_id;
+            let table_id = self.table_info.ident.table_id;
             commit(ctx, table_id, self.table_info.ident.version, snapshot_loc).await?;
         }
         Ok(())

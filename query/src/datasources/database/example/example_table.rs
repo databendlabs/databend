@@ -20,7 +20,6 @@ use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
-use common_planners::InsertIntoPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::TableOptions;
 use common_planners::TruncateTablePlan;
@@ -86,7 +85,6 @@ impl Table for ExampleTable {
     async fn append_data(
         &self,
         _ctx: DatabendQueryContextRef,
-        _insert_plan: InsertIntoPlan,
         _stream: SendableDataBlockStream,
     ) -> Result<()> {
         Ok(())

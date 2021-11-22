@@ -24,12 +24,10 @@ use common_exception::Result;
 use common_meta_types::TableMeta;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
-use common_planners::InsertIntoPlan;
 use tempfile::TempDir;
 use uuid::Uuid;
 
 use crate::catalogs::Catalog;
-use crate::catalogs::Table;
 use crate::configs::Config;
 use crate::sessions::DatabendQueryContextRef;
 
@@ -96,17 +94,6 @@ impl TestFixture {
                 engine: "FUSE".to_string(),
                 options: Default::default(),
             },
-        }
-    }
-
-    pub fn insert_plan_of_table(&self, table: &dyn Table) -> InsertIntoPlan {
-        InsertIntoPlan {
-            db_name: self.default_db(),
-            tbl_name: self.default_table(),
-            tbl_id: table.get_id(),
-            schema: TestFixture::default_schema(),
-            select_plan: None,
-            values_opt: None,
         }
     }
 

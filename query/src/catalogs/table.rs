@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -23,7 +24,6 @@ use common_meta_types::MetaId;
 use common_meta_types::TableInfo;
 use common_planners::Expression;
 use common_planners::Extras;
-use common_planners::InsertIntoPlan;
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
@@ -87,17 +87,23 @@ pub trait Table: Sync + Send {
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream>;
 
-    // temporary added, pls feel free to rm it
     async fn append_data(
         &self,
         _ctx: DatabendQueryContextRef,
-        _insert_plan: InsertIntoPlan,
         _stream: SendableDataBlockStream,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
             "append data for local table {} is not implemented",
             self.name()
         )))
+    }
+
+    async fn commit(
+        &self,
+        _ctx: DatabendQueryContextRef,
+        _operations: Vec<DataBlock>,
+    ) -> Result<()> {
+        Ok(())
     }
 
     async fn truncate(

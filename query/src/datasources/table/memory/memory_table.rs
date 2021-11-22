@@ -18,12 +18,10 @@ use std::sync::Arc;
 
 use common_dal::InMemoryData;
 use common_datablocks::DataBlock;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
-use common_planners::InsertIntoPlan;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
@@ -120,13 +118,8 @@ impl Table for MemoryTable {
     async fn append_data(
         &self,
         _ctx: DatabendQueryContextRef,
-        insert_plan: InsertIntoPlan,
         mut stream: SendableDataBlockStream,
     ) -> Result<()> {
-        if insert_plan.schema().as_ref().fields() != self.table_info.schema().as_ref().fields() {
-            return Err(ErrorCode::BadArguments("DataBlock schema mismatch"));
-        }
-
         while let Some(block) = stream.next().await {
             let block = block?;
             let mut blocks = self.blocks.write();
