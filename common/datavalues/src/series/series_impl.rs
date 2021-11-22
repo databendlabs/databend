@@ -175,6 +175,14 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
         )))
     }
 
+    /// Unpack to DFArray of data_type struct
+    fn tuple(&self) -> Result<&DFStructArray> {
+        Err(ErrorCode::IllegalDataType(format!(
+            "{:?} != struct",
+            self.data_type()
+        )))
+    }
+
     /// Take by index from an iterator. This operation clones the data.
     ///
     /// # Safety

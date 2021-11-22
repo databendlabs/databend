@@ -64,7 +64,7 @@ impl Function for TupleFunction {
         let fields = args
             .iter()
             .enumerate()
-            .map(|(i, x)| DataField::new(format!("item_{}", i).as_str(), x.clone(), true))
+            .map(|(i, x)| DataField::new(format!("item_{}", i).as_str(), x.clone(), false))
             .collect::<Vec<_>>();
         Ok(DataType::Struct(fields))
     }

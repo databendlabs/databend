@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use chrono::prelude::*;
 use chrono_tz::Tz::UTC;
 use chrono_tz::Tz::{self};
@@ -24,6 +26,12 @@ fn test_push_row() {
     let date_time_value: DateTime<Tz> = UTC.ymd(2014, 7, 8).and_hms(14, 0, 0);
 
     let decimal = Decimal::of(2.0_f64, 4);
+
+    let tuple = Value::Tuple(Arc::new(vec![
+        Value::Int32(1),
+        Value::String(Arc::new(b"text".to_vec())),
+        Value::Float64(2.3),
+    ]));
 
     let mut block = Block::<Simple>::new();
     block
@@ -48,7 +56,9 @@ fn test_push_row() {
             date_field: date_value,
             date_time_field: date_time_value,
 
-            decimal_field: decimal
+            decimal_field: decimal,
+
+            tuple_field: tuple,
         })
         .unwrap();
 
@@ -83,4 +93,13 @@ fn test_push_row() {
         SqlType::DateTime(DateTimeType::DateTime32)
     );
     assert_eq!(block.columns()[15].sql_type(), SqlType::Decimal(18, 4));
+
+    assert_eq!(
+        block.columns()[16].sql_type(),
+        SqlType::Tuple(vec![
+            SqlType::Int32.into(),
+            SqlType::String.into(),
+            SqlType::Float64.into()
+        ])
+    );
 }

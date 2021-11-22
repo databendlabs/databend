@@ -193,6 +193,18 @@ fn test_display() {
             )
         )
     );
+
+    assert_eq!(
+        "(1, text, 2.3)".to_string(),
+        format!(
+            "{}",
+            Value::Tuple(Arc::new(vec![
+                Value::Int32(1),
+                Value::String(Arc::new(b"text".to_vec())),
+                Value::Float64(2.3)
+            ]))
+        )
+    );
 }
 
 #[test]

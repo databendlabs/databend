@@ -61,6 +61,7 @@ pub enum ValueRef<'a> {
     Uuid([u8; 16]),
     Enum16(Vec<(String, i16)>, Enum16),
     Enum8(Vec<(String, i8)>, Enum8),
+    Tuple(Arc<Vec<ValueRef<'a>>>),
 }
 
 impl<'a> PartialEq for ValueRef<'a> {
@@ -172,6 +173,10 @@ impl<'a> fmt::Display for ValueRef<'a> {
             }
             ValueRef::Enum8(_, v) => fmt::Display::fmt(v, f),
             ValueRef::Enum16(_, v) => fmt::Display::fmt(v, f),
+            ValueRef::Tuple(v) => {
+                let cells: Vec<String> = v.iter().map(|v| format!("{}", v)).collect();
+                write!(f, "({})", cells.join(", "))
+            }
         }
     }
 }
@@ -207,6 +212,12 @@ impl<'a> convert::From<ValueRef<'a>> for SqlType {
                 let (precision, tz) = params;
                 SqlType::DateTime(DateTimeType::DateTime64(*precision, *tz))
             }
+            ValueRef::Tuple(values) => SqlType::Tuple(
+                values
+                    .iter()
+                    .map(|v| SqlType::from(v.clone()).into())
+                    .collect(),
+            ),
         }
     }
 }
@@ -278,6 +289,14 @@ impl<'a> From<ValueRef<'a>> for Value {
             ValueRef::Ipv6(v) => Value::Ipv6(v),
             ValueRef::Uuid(v) => Value::Uuid(v),
             ValueRef::DateTime64(v, params) => Value::DateTime64(v, *params),
+            ValueRef::Tuple(v) => {
+                let mut value_list: Vec<Value> = Vec::with_capacity(v.len());
+                for v in v.iter() {
+                    let value: Value = v.clone().into();
+                    value_list.push(value);
+                }
+                Value::Tuple(Arc::new(value_list))
+            }
         }
     }
 }
@@ -359,6 +378,14 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
             Value::Ipv4(v) => ValueRef::Ipv4(*v),
             Value::Ipv6(v) => ValueRef::Ipv6(*v),
             Value::Uuid(v) => ValueRef::Uuid(*v),
+            Value::Tuple(v) => {
+                let mut ref_vec = Vec::with_capacity(v.len());
+                for v in v.iter() {
+                    let value_ref: ValueRef<'a> = From::from(v);
+                    ref_vec.push(value_ref)
+                }
+                ValueRef::Tuple(Arc::new(ref_vec))
+            }
         }
     }
 }
