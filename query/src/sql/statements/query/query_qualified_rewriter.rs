@@ -19,7 +19,7 @@ use common_planners::Expression;
 use crate::sessions::DatabendQueryContextRef;
 use crate::sql::statements::query::query_schema_joined::JoinedTableDesc;
 use crate::sql::statements::query::JoinedSchema;
-use crate::sql::statements::ASTIR;
+use crate::sql::statements::QueryASTIR;
 
 pub struct QualifiedRewriter {
     tables_schema: JoinedSchema,
@@ -31,7 +31,7 @@ impl QualifiedRewriter {
         QualifiedRewriter { tables_schema, ctx }
     }
 
-    pub async fn rewrite(&self, mut ir: ASTIR) -> Result<ASTIR> {
+    pub async fn rewrite(&self, mut ir: QueryASTIR) -> Result<QueryASTIR> {
         self.rewrite_group(&mut ir)?;
         self.rewrite_order(&mut ir)?;
         self.rewrite_aggregate(&mut ir)?;
@@ -68,7 +68,7 @@ impl QualifiedRewriter {
         Ok(ir)
     }
 
-    fn rewrite_group(&self, mut ir: &mut ASTIR) -> Result<()> {
+    fn rewrite_group(&self, mut ir: &mut QueryASTIR) -> Result<()> {
         let mut group_expressions = Vec::with_capacity(ir.group_by_expressions.len());
 
         for group_by_expression in &ir.group_by_expressions {
@@ -89,7 +89,7 @@ impl QualifiedRewriter {
         Ok(())
     }
 
-    fn rewrite_aggregate(&self, mut ir: &mut ASTIR) -> Result<()> {
+    fn rewrite_aggregate(&self, mut ir: &mut QueryASTIR) -> Result<()> {
         let mut aggregate_expressions = Vec::with_capacity(ir.aggregate_expressions.len());
 
         for aggregate_expression in &ir.aggregate_expressions {
@@ -110,7 +110,7 @@ impl QualifiedRewriter {
         Ok(())
     }
 
-    fn rewrite_order(&self, mut ir: &mut ASTIR) -> Result<()> {
+    fn rewrite_order(&self, mut ir: &mut QueryASTIR) -> Result<()> {
         let mut order_expressions = Vec::with_capacity(ir.order_by_expressions.len());
 
         for order_by_expression in &ir.order_by_expressions {
@@ -131,7 +131,7 @@ impl QualifiedRewriter {
         Ok(())
     }
 
-    fn rewrite_projection(&self, mut ir: &mut ASTIR) -> Result<()> {
+    fn rewrite_projection(&self, mut ir: &mut QueryASTIR) -> Result<()> {
         let mut projection_expressions = Vec::with_capacity(ir.projection_expressions.len());
 
         // TODO: alias.*

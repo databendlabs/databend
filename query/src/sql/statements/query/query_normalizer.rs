@@ -30,9 +30,8 @@ use crate::sessions::DatabendQueryContextRef;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::DfQueryStatement;
 
-// Intermediate representation for AST(after normalize)
-#[allow(clippy::upper_case_acronyms)]
-pub struct ASTIR {
+// Intermediate representation for query AST(after normalize)
+pub struct QueryASTIR {
     pub filter_predicate: Option<Expression>,
     pub group_by_expressions: Vec<Expression>,
     pub having_predicate: Option<Expression>,
@@ -44,7 +43,7 @@ pub struct ASTIR {
 }
 
 pub struct QueryNormalizer {
-    ast_ir: ASTIR,
+    query_ast_ir: QueryASTIR,
     expression_analyzer: ExpressionAnalyzer,
     aliases_map: HashMap<String, Expression>,
 }
@@ -55,7 +54,7 @@ impl QueryNormalizer {
         QueryNormalizer {
             expression_analyzer: ExpressionAnalyzer::create(ctx),
             aliases_map: HashMap::new(),
-            ast_ir: ASTIR {
+            query_ast_ir: QueryASTIR {
                 filter_predicate: None,
                 group_by_expressions: vec![],
                 having_predicate: None,
@@ -68,7 +67,7 @@ impl QueryNormalizer {
         }
     }
 
-    pub async fn transform(mut self, query: &DfQueryStatement) -> Result<ASTIR> {
+    pub async fn transform(mut self, query: &DfQueryStatement) -> Result<QueryASTIR> {
         if let Err(cause) = self.visit_filter(query).await {
             return Err(cause.add_message_back(" (while in analyze select filter)"));
         }
@@ -93,13 +92,13 @@ impl QueryNormalizer {
             return Err(cause.add_message_back(" (while in analyze select limit)"));
         }
 
-        Ok(self.ast_ir)
+        Ok(self.query_ast_ir)
     }
 
     async fn visit_filter(&mut self, query: &DfQueryStatement) -> Result<()> {
         if let Some(predicate) = &query.selection {
             let analyzer = &self.expression_analyzer;
-            self.ast_ir.filter_predicate = Some(analyzer.analyze(predicate).await?);
+            self.query_ast_ir.filter_predicate = Some(analyzer.analyze(predicate).await?);
         }
 
         Ok(())
@@ -113,14 +112,14 @@ impl QueryNormalizer {
             self.add_aggregate_function(projection_expression)?;
         }
 
-        self.ast_ir.projection_expressions = projection_expressions;
+        self.query_ast_ir.projection_expressions = projection_expressions;
         Ok(())
     }
 
     async fn analyze_group_by(&mut self, query: &DfQueryStatement) -> Result<()> {
         for group_by_expr in &query.group_by {
             let expression = self.resolve_aliases(group_by_expr).await?;
-            self.ast_ir.group_by_expressions.push(expression);
+            self.query_ast_ir.group_by_expressions.push(expression);
         }
 
         Ok(())
@@ -131,7 +130,7 @@ impl QueryNormalizer {
             let expression = self.resolve_aliases(predicate).await?;
 
             self.add_aggregate_function(&expression)?;
-            self.ast_ir.having_predicate = Some(expression);
+            self.query_ast_ir.having_predicate = Some(expression);
         }
         Ok(())
     }
@@ -141,12 +140,14 @@ impl QueryNormalizer {
             let expression = self.resolve_aliases(&order_by_expr.expr).await?;
 
             self.add_aggregate_function(&expression)?;
-            self.ast_ir.order_by_expressions.push(Expression::Sort {
-                expr: Box::new(expression.clone()),
-                asc: order_by_expr.asc.unwrap_or(true),
-                nulls_first: order_by_expr.asc.unwrap_or(true),
-                origin_expr: Box::new(expression),
-            });
+            self.query_ast_ir
+                .order_by_expressions
+                .push(Expression::Sort {
+                    expr: Box::new(expression.clone()),
+                    asc: order_by_expr.asc.unwrap_or(true),
+                    nulls_first: order_by_expr.asc.unwrap_or(true),
+                    origin_expr: Box::new(expression),
+                });
         }
 
         Ok(())
@@ -162,7 +163,7 @@ impl QueryNormalizer {
                     limit
                 ))),
             }?;
-            self.ast_ir.limit = Some(limit_literal);
+            self.query_ast_ir.limit = Some(limit_literal);
         }
 
         if let Some(offset) = &query.offset {
@@ -178,7 +179,7 @@ impl QueryNormalizer {
                     offset
                 ))),
             }?;
-            self.ast_ir.offset = Some(offset_literal);
+            self.query_ast_ir.offset = Some(offset_literal);
         }
 
         Ok(())
@@ -221,8 +222,12 @@ impl QueryNormalizer {
 
     fn add_aggregate_function(&mut self, expr: &Expression) -> Result<()> {
         for aggregate_expr in find_aggregate_exprs_in_expr(expr) {
-            if !self.ast_ir.aggregate_expressions.contains(&aggregate_expr) {
-                self.ast_ir.aggregate_expressions.push(aggregate_expr);
+            if !self
+                .query_ast_ir
+                .aggregate_expressions
+                .contains(&aggregate_expr)
+            {
+                self.query_ast_ir.aggregate_expressions.push(aggregate_expr);
             }
         }
 
@@ -230,7 +235,7 @@ impl QueryNormalizer {
     }
 }
 
-impl Debug for ASTIR {
+impl Debug for QueryASTIR {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         let mut debug_struct = f.debug_struct("NormalQuery");
 
