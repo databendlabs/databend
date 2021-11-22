@@ -455,8 +455,8 @@ pub fn parse_tuple_type(source: &str) -> Option<Vec<&str>> {
             ')' => diff -= 1,
             ',' => {
                 if diff == 0 {
-                    inner_types.push(&types[last..i]);
-                    last = i + 2;
+                    inner_types.push(types[last..i].trim());
+                    last = i + 1;
                 }
             }
             _ => {}
@@ -464,7 +464,7 @@ pub fn parse_tuple_type(source: &str) -> Option<Vec<&str>> {
     }
 
     if last < types.len() {
-        inner_types.push(&types[last..]);
+        inner_types.push(types[last..].trim());
     }
 
     if inner_types.is_empty() {

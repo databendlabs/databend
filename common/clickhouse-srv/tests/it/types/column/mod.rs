@@ -20,3 +20,4 @@ mod factory;
 mod iter;
 mod list;
 mod string_pool;
+mod tuple;
