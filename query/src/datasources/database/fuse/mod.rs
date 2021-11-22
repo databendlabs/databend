@@ -13,4 +13,4 @@
 //  limitations under the License.
 //
 
-pub mod default_database;
+pub mod database;

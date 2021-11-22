@@ -14,36 +14,52 @@
 //
 
 use std::collections::HashMap;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use common_exception::Result;
+use common_infallible::RwLock;
 use common_meta_types::MetaId;
 
 use crate::catalogs::Table;
 
 pub struct InMemoryMetas {
-    pub(crate) name_to_table: HashMap<String, Arc<dyn Table>>,
-    pub(crate) id_to_table: HashMap<MetaId, Arc<dyn Table>>,
+    next_id: AtomicU64,
+    name_to_table: RwLock<HashMap<String, Arc<dyn Table>>>,
+    id_to_table: RwLock<HashMap<MetaId, Arc<dyn Table>>>,
 }
 
 impl InMemoryMetas {
-    pub fn create() -> Self {
+    pub fn create(next_id: u64) -> Self {
         InMemoryMetas {
-            name_to_table: HashMap::default(),
-            id_to_table: HashMap::default(),
+            next_id: AtomicU64::new(next_id),
+            name_to_table: RwLock::new(HashMap::default()),
+            id_to_table: RwLock::new(HashMap::default()),
         }
     }
 
-    pub fn insert(&mut self, tbl_ref: Arc<dyn Table>) {
+    /// Get the next id.
+    pub fn next_id(&self) -> u64 {
+        self.next_id.fetch_add(1, Ordering::Relaxed);
+        self.next_id.load(Ordering::Relaxed) as u64
+    }
+
+    pub fn insert(&self, tbl_ref: Arc<dyn Table>) {
         let name = tbl_ref.name().to_owned();
-        self.name_to_table.insert(name, tbl_ref.clone());
-        self.id_to_table.insert(tbl_ref.get_id(), tbl_ref);
+        self.name_to_table.write().insert(name, tbl_ref.clone());
+        self.id_to_table.write().insert(tbl_ref.get_id(), tbl_ref);
     }
 
     pub fn get_by_name(&self, name: &str) -> Option<Arc<dyn Table>> {
-        self.name_to_table.get(name).cloned()
+        self.name_to_table.read().get(name).cloned()
     }
 
     pub fn get_by_id(&self, id: &MetaId) -> Option<Arc<dyn Table>> {
-        self.id_to_table.get(id).cloned()
+        self.id_to_table.read().get(id).cloned()
+    }
+
+    pub fn get_all_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
+        Ok(self.name_to_table.read().values().cloned().collect())
     }
 }

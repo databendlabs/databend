@@ -45,7 +45,6 @@ async fn test_parquet_table() -> Result<()> {
         desc: "'default'.'test_parquet_table'".to_string(),
         ident: Default::default(),
         name: "test_parquet".to_string(),
-
         meta: TableMeta {
             schema: DataSchemaRefExt::create(vec![DataField::new("id", DataType::Int32, false)]),
             engine: "test_parquet".into(),

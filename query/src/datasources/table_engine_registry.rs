@@ -24,17 +24,12 @@ use common_infallible::RwLock;
 use crate::datasources::table_engine::TableEngine;
 
 /// Registry of Table Providers
+#[derive(Default)]
 pub struct TableEngineRegistry {
     engines: RwLock<HashMap<String, Arc<dyn TableEngine>>>,
 }
 
 impl TableEngineRegistry {
-    pub fn new() -> Self {
-        Self {
-            engines: Default::default(),
-        }
-    }
-
     pub fn register(
         &self,
         engine: impl Into<String>,

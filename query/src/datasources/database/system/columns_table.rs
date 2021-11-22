@@ -69,7 +69,7 @@ impl ColumnsTable {
 
         let mut rows: Vec<(String, String, DataField)> = vec![];
         for database in databases {
-            for table in catalog.list_tables(database.name()).await? {
+            for table in database.list_tables(database.name()).await? {
                 for field in table.schema().fields() {
                     rows.push((database.name().into(), table.name().into(), field.clone()))
                 }
