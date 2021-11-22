@@ -17,12 +17,14 @@ mod append;
 pub(crate) mod index;
 pub(crate) mod io;
 mod meta;
+mod operations;
 mod read;
 mod read_plan;
 mod table;
 mod truncate;
 pub(crate) mod util;
 
+mod commit;
 #[cfg(test)]
 mod read_plan_test;
 #[cfg(test)]

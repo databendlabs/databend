@@ -15,6 +15,7 @@
 use std::any::Any;
 
 use common_datablocks::DataBlock;
+use common_datavalues::DataSchema;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::ReadDataSourcePlan;
@@ -66,12 +67,16 @@ impl Table for NullTable {
         &self,
         _ctx: DatabendQueryContextRef,
         mut stream: SendableDataBlockStream,
-    ) -> Result<()> {
+    ) -> Result<SendableDataBlockStream> {
         while let Some(block) = stream.next().await {
             let block = block?;
             info!("Ignore one block rows: {}", block.num_rows())
         }
-        Ok(())
+        Ok(Box::pin(DataBlockStream::create(
+            std::sync::Arc::new(DataSchema::empty()),
+            None,
+            vec![],
+        )))
     }
 
     async fn truncate(

@@ -91,7 +91,7 @@ pub trait Table: Sync + Send {
         &self,
         _ctx: DatabendQueryContextRef,
         _stream: SendableDataBlockStream,
-    ) -> Result<()> {
+    ) -> Result<SendableDataBlockStream> {
         Err(ErrorCode::UnImplement(format!(
             "append data for local table {} is not implemented",
             self.name()

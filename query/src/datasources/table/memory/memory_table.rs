@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_dal::InMemoryData;
 use common_datablocks::DataBlock;
+use common_datavalues::DataSchema;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::TableInfo;
@@ -26,6 +27,7 @@ use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
+use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::stream::StreamExt;
 
@@ -119,13 +121,17 @@ impl Table for MemoryTable {
         &self,
         _ctx: DatabendQueryContextRef,
         mut stream: SendableDataBlockStream,
-    ) -> Result<()> {
+    ) -> Result<SendableDataBlockStream> {
         while let Some(block) = stream.next().await {
             let block = block?;
             let mut blocks = self.blocks.write();
             blocks.push(block);
         }
-        Ok(())
+        Ok(Box::pin(DataBlockStream::create(
+            std::sync::Arc::new(DataSchema::empty()),
+            None,
+            vec![],
+        )))
     }
 
     async fn truncate(

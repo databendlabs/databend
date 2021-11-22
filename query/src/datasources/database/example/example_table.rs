@@ -15,6 +15,7 @@
 use std::any::Any;
 
 use common_datablocks::DataBlock;
+use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_meta_types::TableIdent;
@@ -86,8 +87,12 @@ impl Table for ExampleTable {
         &self,
         _ctx: DatabendQueryContextRef,
         _stream: SendableDataBlockStream,
-    ) -> Result<()> {
-        Ok(())
+    ) -> Result<SendableDataBlockStream> {
+        Ok(Box::pin(DataBlockStream::create(
+            std::sync::Arc::new(DataSchema::empty()),
+            None,
+            vec![],
+        )))
     }
 
     async fn truncate(

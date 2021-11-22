@@ -66,13 +66,11 @@ impl Interpreter for InsertIntoInterpreter {
         let table = &self.plan.tbl_name;
         let table = self.ctx.get_table(database, table).await?;
 
-        if let Some(plan_node) = &self.plan.select_plan {
+        let append_operations = if let Some(plan_node) = &self.plan.select_plan {
             if let PlanNode::Select(sel) = plan_node.as_ref() {
                 let mut scheduled = Scheduled::new();
-                let r = self
-                    .schedule_query(&mut scheduled, sel, table.get_table_info())
-                    .await?;
-                table.commit(self.ctx.clone(), r).await?;
+                self.schedule_query(&mut scheduled, sel, table.get_table_info())
+                    .await?
             } else {
                 return Err(ErrorCode::UnknownTypeOfQuery(format!(
                     "Unsupported select query plan for insert_into interpreter:{}",
@@ -92,8 +90,13 @@ impl Interpreter for InsertIntoInterpreter {
                     .take()
                     .ok_or_else(|| ErrorCode::EmptyData("input stream not exist or consumed"))
             }?;
-            table.append_data(self.ctx.clone(), input_stream).await?;
-        }
+            table
+                .append_data(self.ctx.clone(), input_stream)
+                .await?
+                .try_collect()
+                .await?
+        };
+        table.commit(self.ctx.clone(), append_operations).await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
