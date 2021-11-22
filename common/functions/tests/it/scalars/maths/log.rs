@@ -26,7 +26,6 @@ fn test_log_function() -> Result<()> {
         args: Vec<DataColumnWithField>,
         expect: DataColumn,
         error: &'static str,
-        input_rows: usize,
         func: Box<dyn Function>,
     }
     let tests = vec![
@@ -43,7 +42,6 @@ fn test_log_function() -> Result<()> {
                     DataField::new("num", DataType::String, false),
                 ),
             ],
-            input_rows: 1,
             func: LogFunction::try_create("log")?,
             expect: DataColumn::Constant(2_f64.into(), 1),
             error: "",
@@ -61,7 +59,6 @@ fn test_log_function() -> Result<()> {
                     DataField::new("num", DataType::String, false),
                 ),
             ],
-            input_rows: 3,
             func: LogFunction::try_create("log")?,
             expect: Series::new([2_f64, 2.9999999999999996, 4_f64]).into(),
             error: "",
@@ -73,7 +70,6 @@ fn test_log_function() -> Result<()> {
                 Series::new([E, E, E]).into(),
                 DataField::new("num", DataType::Float64, false),
             )],
-            input_rows: 3,
             func: LogFunction::try_create("log")?,
             expect: Series::new([1_f64, 1_f64, 1_f64]).into(),
             error: "",
@@ -84,16 +80,32 @@ fn test_log_function() -> Result<()> {
             args: vec![
                 DataColumnWithField::new(
                     Series::new([None, Some(10_f64), Some(10_f64)]).into(),
-                    DataField::new("base", DataType::Float64, false),
+                    DataField::new("base", DataType::Float64, true),
                 ),
                 DataColumnWithField::new(
                     Series::new([Some(10_f64), None, Some(10_f64)]).into(),
-                    DataField::new("num", DataType::Float64, false),
+                    DataField::new("num", DataType::Float64, true),
                 ),
             ],
-            input_rows: 1,
             func: LogFunction::try_create("log")?,
             expect: Series::new([None, None, Some(1_f64)]).into(),
+            error: "",
+        },
+        Test {
+            name: "log-with-null2",
+            display: "LOG",
+            args: vec![
+                DataColumnWithField::new(
+                    DataColumn::Constant(DataValue::Float64(None), 3),
+                    DataField::new("base", DataType::Float64, true),
+                ),
+                DataColumnWithField::new(
+                    Series::new([Some(10_f64), None, Some(10_f64)]).into(),
+                    DataField::new("num", DataType::Float64, true),
+                ),
+            ],
+            func: LogFunction::try_create("log")?,
+            expect: DFFloat64Array::new_from_opt_slice(&[None, None, None]).into(),
             error: "",
         },
         Test {
@@ -103,7 +115,6 @@ fn test_log_function() -> Result<()> {
                 Series::new([Some(E), None]).into(),
                 DataField::new("num", DataType::Float64, false),
             )],
-            input_rows: 1,
             func: LnFunction::try_create("ln")?,
             expect: Series::new([Some(1_f64), None]).into(),
             error: "",
@@ -115,7 +126,6 @@ fn test_log_function() -> Result<()> {
                 Series::new([E]).into(),
                 DataField::new("num", DataType::Float64, false),
             )],
-            input_rows: 1,
             func: LnFunction::try_create("ln")?,
             expect: DataColumn::Constant(1_f64.into(), 1),
             error: "",
@@ -127,7 +137,6 @@ fn test_log_function() -> Result<()> {
                 Series::new([2_f64]).into(),
                 DataField::new("num", DataType::Float64, false),
             )],
-            input_rows: 1,
             func: Log2Function::try_create("log2")?,
             expect: DataColumn::Constant(1_f64.into(), 1),
             error: "",
@@ -139,7 +148,6 @@ fn test_log_function() -> Result<()> {
                 Series::new([10_f64]).into(),
                 DataField::new("num", DataType::Float64, false),
             )],
-            input_rows: 1,
             func: Log10Function::try_create("log10")?,
             expect: DataColumn::Constant(1_f64.into(), 1),
             error: "",
@@ -148,7 +156,7 @@ fn test_log_function() -> Result<()> {
     for t in tests {
         let func = t.func;
 
-        if let Err(e) = func.eval(&t.args, t.input_rows) {
+        if let Err(e) = func.eval(&t.args, t.args[0].column().len()) {
             assert_eq!(t.error, e.to_string(), "{}", t.name);
         }
 
@@ -157,8 +165,8 @@ fn test_log_function() -> Result<()> {
         let actual_display = format!("{}", func);
         assert_eq!(expect_display, actual_display);
 
-        let v = &(func.eval(&t.args, t.input_rows)?);
-        assert_eq!(v.to_values()?, t.expect.to_values()?, "case: {}", t.name);
+        let v = &(func.eval(&t.args, t.args[0].column().len())?);
+        assert_eq!(v, &t.expect, "case: {}", t.name);
     }
     Ok(())
 }

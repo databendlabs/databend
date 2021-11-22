@@ -29,7 +29,6 @@ fn test_trigonometic_function() -> Result<()> {
         nullable: bool,
         args: Vec<DataColumnWithField>,
         expect: DataColumn,
-        input_rows: usize,
         error: &'static str,
         func: Box<dyn Function>,
     }
@@ -43,7 +42,6 @@ fn test_trigonometic_function() -> Result<()> {
                 Series::new(vec![0_u8, 1, 3]).into(),
                 DataField::new("dummy", DataType::UInt8, false),
             )],
-            input_rows: 3,
             func: TrigonometricSinFunction::try_create_func("sin")?,
             expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
             error: "",
@@ -56,7 +54,6 @@ fn test_trigonometic_function() -> Result<()> {
                 Series::new(vec![0_u16, 1, 3]).into(),
                 DataField::new("dummy", DataType::UInt16, false),
             )],
-            input_rows: 3,
             func: TrigonometricSinFunction::try_create_func("sin")?,
             expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
             error: "",
@@ -69,7 +66,6 @@ fn test_trigonometic_function() -> Result<()> {
                 Series::new(vec![0_u32, 1, 3]).into(),
                 DataField::new("dummy", DataType::UInt32, false),
             )],
-            input_rows: 3,
             func: TrigonometricSinFunction::try_create_func("sin")?,
             expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
             error: "",
@@ -82,7 +78,6 @@ fn test_trigonometic_function() -> Result<()> {
                 Series::new(vec![0_u64, 1, 3]).into(),
                 DataField::new("dummy", DataType::UInt64, false),
             )],
-            input_rows: 3,
             func: TrigonometricSinFunction::try_create_func("sin")?,
             expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
             error: "",
@@ -95,7 +90,6 @@ fn test_trigonometic_function() -> Result<()> {
                 Series::new(vec!["0", "1", "3"]).into(),
                 DataField::new("dummy", DataType::String, false),
             )],
-            input_rows: 3,
             func: TrigonometricSinFunction::try_create_func("sin")?,
             expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
             error: "",
@@ -108,7 +102,6 @@ fn test_trigonometic_function() -> Result<()> {
                 Series::new(vec![0_f64, 1.0, 3.0]).into(),
                 DataField::new("dummy", DataType::Float64, false),
             )],
-            input_rows: 3,
             func: TrigonometricSinFunction::try_create_func("sin")?,
             expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
             error: "",
@@ -121,7 +114,6 @@ fn test_trigonometic_function() -> Result<()> {
                 Series::new(vec![0_f64, 1.0, 3.0]).into(),
                 DataField::new("dummy", DataType::Float64, false),
             )],
-            input_rows: 3,
             func: TrigonometricCosFunction::try_create_func("cos")?,
             expect: Series::new(vec![1f64, 0.5403023058681398, -0.9899924966004454]).into(),
             error: "",
@@ -134,7 +126,6 @@ fn test_trigonometic_function() -> Result<()> {
                 Series::new(vec![0_f64, PI / 4.0]).into(),
                 DataField::new("dummy", DataType::Float64, false),
             )],
-            input_rows: 2,
             func: TrigonometricTanFunction::try_create_func("tan")?,
             expect: Series::new(vec![0f64, 0.9999999999999999]).into(),
             error: "",
@@ -147,7 +138,6 @@ fn test_trigonometic_function() -> Result<()> {
                 Series::new(vec![PI / 4.0]).into(),
                 DataField::new("dummy", DataType::Float64, false),
             )],
-            input_rows: 1,
             func: TrigonometricCotFunction::try_create_func("cot")?,
             expect: Series::new(vec![1.0000000000000002]).into(),
             error: "",
@@ -160,7 +150,6 @@ fn test_trigonometic_function() -> Result<()> {
                 Series::new(vec![0_f64]).into(),
                 DataField::new("dummy", DataType::Float64, false),
             )],
-            input_rows: 1,
             func: TrigonometricCotFunction::try_create_func("cot")?,
             expect: Series::new(vec![f64::INFINITY]).into(),
             error: "",
@@ -173,7 +162,6 @@ fn test_trigonometic_function() -> Result<()> {
                 Series::new(vec![0.2_f64]).into(),
                 DataField::new("dummy", DataType::Float64, false),
             )],
-            input_rows: 1,
             func: TrigonometricAsinFunction::try_create_func("asin")?,
             expect: DataColumn::Constant(0.2013579207903308_f64.into(), 1),
             error: "",
@@ -186,7 +174,6 @@ fn test_trigonometic_function() -> Result<()> {
                 Series::new(vec![1]).into(),
                 DataField::new("dummy", DataType::Float64, false),
             )],
-            input_rows: 1,
             func: TrigonometricAcosFunction::try_create_func("acos")?,
             expect: DataColumn::Constant(0_f64.into(), 1),
             error: "",
@@ -199,7 +186,6 @@ fn test_trigonometic_function() -> Result<()> {
                 Series::new(vec![1, -1]).into(),
                 DataField::new("dummy", DataType::Float64, false),
             )],
-            input_rows: 2,
             func: TrigonometricAtanFunction::try_create_func("atan")?,
             expect: Series::new(vec![FRAC_PI_4, -FRAC_PI_4]).into(),
             error: "",
@@ -218,7 +204,6 @@ fn test_trigonometic_function() -> Result<()> {
                     DataField::new("x", DataType::Float64, false),
                 ),
             ],
-            input_rows: 2,
             func: TrigonometricAtanFunction::try_create_func("atan")?,
             expect: Series::new(vec![-FRAC_PI_4, FRAC_PI_2]).into(),
             error: "",
@@ -237,7 +222,6 @@ fn test_trigonometic_function() -> Result<()> {
                     DataField::new("x", DataType::Float64, false),
                 ),
             ],
-            input_rows: 2,
             func: TrigonometricAtan2Function::try_create_func("atan2")?,
             expect: Series::new(vec![-FRAC_PI_4, FRAC_PI_2]).into(),
             error: "",
@@ -256,7 +240,6 @@ fn test_trigonometic_function() -> Result<()> {
                     DataField::new("x", DataType::Float64, false),
                 ),
             ],
-            input_rows: 2,
             func: TrigonometricAtan2Function::try_create_func("atan2")?,
             expect: Series::new(vec![FRAC_PI_2, FRAC_PI_4]).into(),
             error: "",
@@ -275,7 +258,6 @@ fn test_trigonometic_function() -> Result<()> {
                     DataField::new("x", DataType::Float64, false),
                 ),
             ],
-            input_rows: 2,
             func: TrigonometricAtan2Function::try_create_func("atan2")?,
             expect: Series::new(vec![-FRAC_PI_4, FRAC_PI_4]).into(),
             error: "",
@@ -285,7 +267,7 @@ fn test_trigonometic_function() -> Result<()> {
     for t in tests {
         let func = t.func;
 
-        if let Err(e) = func.eval(&t.args, t.input_rows) {
+        if let Err(e) = func.eval(&t.args, t.args[0].column().len()) {
             assert_eq!(t.error, e.to_string(), "{}", t.name);
         }
 
@@ -294,7 +276,7 @@ fn test_trigonometic_function() -> Result<()> {
         let actual_display = format!("{}", func);
         assert_eq!(expect_display, actual_display);
 
-        let v = &(func.eval(&t.args, t.input_rows)?);
+        let v = &(func.eval(&t.args, t.args[0].column().len())?);
         assert_eq!(v, &t.expect, "{}", t.name);
     }
     Ok(())
