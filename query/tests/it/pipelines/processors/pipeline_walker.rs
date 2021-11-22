@@ -14,9 +14,9 @@
 
 use common_base::tokio;
 use common_exception::Result;
+use databend_query::pipelines::processors::*;
 use pretty_assertions::assert_eq;
 
-use crate::pipelines::processors::*;
 use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

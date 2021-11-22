@@ -16,10 +16,9 @@ use std::sync::Arc;
 
 use common_base::tokio;
 use common_exception::Result;
+use databend_query::pipelines::processors::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
-
-use crate::pipelines::processors::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn transform_source_test() -> Result<()> {

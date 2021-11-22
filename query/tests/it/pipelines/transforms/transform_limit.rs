@@ -22,8 +22,8 @@ use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_limit() -> Result<()> {
-    use crate::pipelines::processors::*;
-    use crate::pipelines::transforms::*;
+    use databend_query::pipelines::processors::*;
+    use databend_query::pipelines::transforms::*;
 
     let testcases = vec![
         ((Some(2), 0), vec![

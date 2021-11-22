@@ -18,11 +18,10 @@ use common_base::tokio;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
 use common_planners::*;
+use databend_query::pipelines::processors::*;
+use databend_query::pipelines::transforms::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
-
-use crate::pipelines::processors::*;
-use crate::pipelines::transforms::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_limit_by() -> Result<()> {
