@@ -53,33 +53,35 @@ impl InsertIntoInterpreter {
         Ok(Arc::new(InsertIntoInterpreter { ctx, plan }))
     }
 
-    async fn insert_with_select_plan(&self, table: &dyn Table) -> Result<Vec<DataBlock>> {
-        if let Some(plan_node) = &self.plan.select_plan {
-            if let PlanNode::Select(sel) = plan_node.as_ref() {
-                // check if schema match
-                let output_schema = self.plan.schema();
-                let select_schema = sel.schema();
-                if select_schema.fields().len() < output_schema.fields().len() {
-                    return Err(ErrorCode::BadArguments(
-                        "Fields in select statement is less than expected",
-                    ));
-                }
-                let upstream_schema = if select_schema == output_schema {
-                    None
-                } else {
-                    Some(select_schema)
-                };
-
-                let mut scheduled = Scheduled::new();
-                let r = self
-                    .schedule_query(&mut scheduled, sel, table.get_table_info(), upstream_schema)
-                    .await?;
-                return Ok(r);
+    async fn insert_with_select_plan(
+        &self,
+        plan_node: &PlanNode,
+        table: &dyn Table,
+    ) -> Result<Vec<DataBlock>> {
+        if let PlanNode::Select(sel) = plan_node {
+            // check if schema match
+            let output_schema = self.plan.schema();
+            let select_schema = sel.schema();
+            if select_schema.fields().len() < output_schema.fields().len() {
+                return Err(ErrorCode::BadArguments(
+                    "Fields in select statement is less than expected",
+                ));
             }
-        };
-        Err(ErrorCode::UnknownTypeOfQuery(format!(
-            "Unsupported select query plan for insert_into interpreter",
-        )))
+            let upstream_schema = if select_schema == output_schema {
+                None
+            } else {
+                Some(select_schema)
+            };
+
+            let mut scheduled = Scheduled::new();
+            self.schedule_query(&mut scheduled, sel, table.get_table_info(), upstream_schema)
+                .await
+        } else {
+            Err(ErrorCode::UnknownTypeOfQuery(format!(
+                "Unsupported select query plan for insert_into interpreter, {}",
+                plan_node.name()
+            )))
+        }
     }
 }
 
@@ -97,13 +99,14 @@ impl Interpreter for InsertIntoInterpreter {
         let table = &self.plan.tbl_name;
         let table = self.ctx.get_table(database, table).await?;
 
-        let has_select_plan = self.plan.select_plan.is_some();
-
-        let append_operations = if has_select_plan {
-            self.insert_with_select_plan(table.as_ref()).await?
+        let append_operations = if let Some(plan_node) = &self.plan.select_plan {
+            self.insert_with_select_plan(plan_node.as_ref(), table.as_ref())
+                .await?
         } else {
             let input_stream = if self.plan.values_opt.is_some() {
-                let values = self.plan.values_opt.clone().take().unwrap();
+                let values = self.plan.values_opt.clone().take().ok_or_else(|| {
+                    ErrorCode::EmptyData("values of insert plan not exist or consumed")
+                })?;
                 let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
                 let values_source =
                     ValueSource::new(Cursor::new(values), self.plan.schema(), block_size);
