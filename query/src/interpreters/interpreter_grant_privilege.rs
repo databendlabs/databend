@@ -58,7 +58,8 @@ impl Interpreter for GrantPrivilegeInterpreter {
         match &plan.on {
             GrantObject::Table(database_name, table_name) => {
                 if !catalog
-                    .as_ref()
+                    .get_database(database_name)
+                    .await?
                     .exists_table(database_name, table_name)
                     .await?
                 {
