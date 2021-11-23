@@ -17,7 +17,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_macros::MallocSizeOf;
