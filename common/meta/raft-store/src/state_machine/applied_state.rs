@@ -14,6 +14,7 @@
 
 use async_raft::AppDataResponse;
 use common_meta_types::Change;
+use common_meta_types::DatabaseMeta;
 use common_meta_types::Node;
 use common_meta_types::TableIdent;
 use common_meta_types::TableMeta;
@@ -37,6 +38,8 @@ pub enum AppliedState {
     },
 
     DatabaseId(Change<u64>),
+
+    DatabaseMeta(Change<DatabaseMeta>),
 
     TableMeta(Change<TableMeta>),
 
@@ -88,6 +91,7 @@ impl AppliedState {
                 ref result,
             } => prev != result,
             AppliedState::DatabaseId(ref ch) => ch.changed(),
+            AppliedState::DatabaseMeta(ref ch) => ch.changed(),
             AppliedState::TableMeta(ref ch) => ch.changed(),
             AppliedState::TableIdent { prev, result } => prev != result,
             AppliedState::KV(ref ch) => ch.changed(),
@@ -116,6 +120,7 @@ impl AppliedState {
             AppliedState::Seq { .. } => false,
             AppliedState::Node { ref prev, .. } => prev.is_none(),
             AppliedState::DatabaseId(Change { ref prev, .. }) => prev.is_none(),
+            AppliedState::DatabaseMeta(Change { ref prev, .. }) => prev.is_none(),
             AppliedState::TableMeta(Change { ref prev, .. }) => prev.is_none(),
             AppliedState::TableIdent { ref prev, .. } => prev.is_none(),
             AppliedState::KV(Change { ref prev, .. }) => prev.is_none(),
@@ -128,6 +133,7 @@ impl AppliedState {
             AppliedState::Seq { .. } => false,
             AppliedState::Node { ref result, .. } => result.is_none(),
             AppliedState::DatabaseId(Change { ref result, .. }) => result.is_none(),
+            AppliedState::DatabaseMeta(Change { ref result, .. }) => result.is_none(),
             AppliedState::TableMeta(Change { ref result, .. }) => result.is_none(),
             AppliedState::TableIdent { ref result, .. } => result.is_none(),
             AppliedState::KV(Change { ref result, .. }) => result.is_none(),

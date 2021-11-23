@@ -23,6 +23,7 @@ pub use cmd::Cmd;
 pub use database::CreateDatabaseReply;
 pub use database::CreateDatabaseReq;
 pub use database::DatabaseInfo;
+pub use database::DatabaseMeta;
 pub use database::DropDatabaseReply;
 pub use database::DropDatabaseReq;
 pub use database::GetDatabaseReq;
