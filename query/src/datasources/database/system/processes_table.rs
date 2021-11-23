@@ -42,6 +42,7 @@ impl ProcessesTable {
             DataField::new("id", DataType::String, false),
             DataField::new("type", DataType::String, false),
             DataField::new("host", DataType::String, true),
+            DataField::new("user", DataType::String, true),
             DataField::new("state", DataType::String, false),
             DataField::new("database", DataType::String, false),
             DataField::new("extra_info", DataType::String, true),
@@ -96,6 +97,7 @@ impl Table for ProcessesTable {
         let mut processes_id = Vec::with_capacity(processes_info.len());
         let mut processes_type = Vec::with_capacity(processes_info.len());
         let mut processes_host = Vec::with_capacity(processes_info.len());
+        let mut processes_user = Vec::with_capacity(processes_info.len());
         let mut processes_state = Vec::with_capacity(processes_info.len());
         let mut processes_database = Vec::with_capacity(processes_info.len());
         let mut processes_extra_info = Vec::with_capacity(processes_info.len());
@@ -107,6 +109,7 @@ impl Table for ProcessesTable {
             processes_state.push(process_info.state.clone().into_bytes());
             processes_database.push(process_info.database.clone().into_bytes());
             processes_host.push(ProcessesTable::process_host(process_info));
+            processes_user.push(process_info.user.clone().into_bytes());
             processes_extra_info.push(ProcessesTable::process_extra_info(process_info));
             processes_memory_usage.push(process_info.memory_usage);
         }
@@ -116,6 +119,7 @@ impl Table for ProcessesTable {
             Series::new(processes_id),
             Series::new(processes_type),
             Series::new(processes_host),
+            Series::new(processes_user),
             Series::new(processes_state),
             Series::new(processes_database),
             Series::new(processes_extra_info),
