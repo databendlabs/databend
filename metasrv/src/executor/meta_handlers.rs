@@ -59,12 +59,14 @@ impl RequestHandler<FlightReq<CreateDatabaseReq>> for ActionHandler {
     ) -> common_exception::Result<CreateDatabaseReply> {
         let req = act.req;
         let db_name = &req.db;
+        let engine = &req.engine;
         let if_not_exists = req.if_not_exists;
 
         let cr = LogEntry {
             txid: None,
             cmd: CreateDatabase {
                 name: db_name.clone(),
+                engine: engine.clone(),
             },
         };
 

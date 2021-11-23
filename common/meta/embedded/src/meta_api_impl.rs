@@ -50,6 +50,7 @@ impl MetaApi for MetaEmbedded {
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         let cmd = Cmd::CreateDatabase {
             name: req.db.clone(),
+            engine: req.engine.clone(),
         };
 
         let sm = self.inner.lock().await;

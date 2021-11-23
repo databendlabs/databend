@@ -27,6 +27,11 @@ pub struct DatabaseInfo {
     pub db: String,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct DatabaseMeta {
+    pub engine: String,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateDatabaseReq {
     pub if_not_exists: bool,

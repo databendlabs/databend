@@ -28,6 +28,7 @@ use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledTree;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
+use common_meta_types::DatabaseMeta;
 use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
@@ -47,6 +48,7 @@ use sled::IVec;
 
 use crate::config::RaftConfig;
 use crate::sled_key_spaces::ClientLastResps;
+use crate::sled_key_spaces::DatabaseLookup;
 use crate::sled_key_spaces::Databases;
 use crate::sled_key_spaces::GenericKV;
 use crate::sled_key_spaces::Nodes;
@@ -314,14 +316,17 @@ impl StateMachine {
                 }
             }
 
-            Cmd::CreateDatabase { ref name } => {
+            Cmd::CreateDatabase {
+                ref name,
+                ref engine,
+            } => {
                 let db_id = self.incr_seq(SEQ_DATABASE_ID).await?;
 
-                let dbs = self.databases();
+                let db_lookup_tree = self.database_lookup();
 
                 let (prev, result) = self
                     .sub_tree_upsert(
-                        dbs,
+                        db_lookup_tree,
                         name,
                         &MatchSeq::Exact(0),
                         Operation::Update(db_id),
@@ -335,12 +340,34 @@ impl StateMachine {
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
                 }
 
-                tracing::debug!("applied create Database: {} {:?}", name, result);
+                let dbs = self.databases();
+                let (prev_meta, result_meta) = self
+                    .sub_tree_upsert(
+                        dbs,
+                        &db_id,
+                        &MatchSeq::Exact(0),
+                        Operation::Update(DatabaseMeta {
+                            engine: engine.clone(),
+                        }),
+                        None,
+                    )
+                    .await?;
+
+                if prev_meta.is_none() && result_meta.is_some() {
+                    self.incr_seq(SEQ_DATABASE_META_ID).await?;
+                }
+
+                tracing::debug!(
+                    "applied create Database: {}, db_id: {}, meta: {:?}",
+                    name,
+                    db_id,
+                    result
+                );
                 Ok(Change::new(prev, result).into())
             }
 
             Cmd::DropDatabase { ref name } => {
-                let dbs = self.databases();
+                let dbs = self.database_lookup();
 
                 let (prev, result) = self
                     .sub_tree_upsert(dbs, name, &MatchSeq::Any, Operation::Delete, None)
@@ -584,7 +611,7 @@ impl StateMachine {
     #[allow(clippy::ptr_arg)]
     async fn get_db_id(&self, db_name: &String) -> common_exception::Result<u64> {
         let seq_dbi = self
-            .databases()
+            .database_lookup()
             .get(db_name)?
             .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
 
@@ -652,7 +679,7 @@ impl StateMachine {
 
     #[tracing::instrument(level = "debug", skip(self))]
     pub fn get_database(&self, name: &str) -> Result<Option<SeqV<u64>>, ErrorCode> {
-        let dbs = self.databases();
+        let dbs = self.database_lookup();
         let x = dbs.get(&name.to_string())?;
         Ok(x)
     }
@@ -660,7 +687,7 @@ impl StateMachine {
     pub fn get_databases(&self) -> Result<Vec<(String, u64)>, ErrorCode> {
         let mut res = vec![];
 
-        let it = self.databases().range(..)?;
+        let it = self.database_lookup().range(..)?;
         for r in it {
             let (a, b) = r?;
             res.push((a, b.data));
@@ -806,6 +833,10 @@ impl StateMachine {
     }
 
     pub fn databases(&self) -> AsKeySpace<Databases> {
+        self.sm_tree.key_space()
+    }
+
+    pub fn database_lookup(&self) -> AsKeySpace<DatabaseLookup> {
         self.sm_tree.key_space()
     }
 

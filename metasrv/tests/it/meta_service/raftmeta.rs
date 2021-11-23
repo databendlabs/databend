@@ -241,6 +241,7 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
                     txid: None,
                     cmd: Cmd::CreateDatabase {
                         name: name.to_string(),
+                        engine: "default".to_string(),
                     },
                 })
                 .await;
