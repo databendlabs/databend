@@ -21,6 +21,7 @@ mod metrics;
 mod session;
 mod session_info;
 mod session_ref;
+mod session_status;
 mod session_test;
 #[allow(clippy::module_inception)]
 mod sessions;
