@@ -16,3 +16,4 @@ mod cluster;
 mod match_seq;
 mod user_privilege;
 mod user_quota;
+mod user_stage;

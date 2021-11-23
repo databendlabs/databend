@@ -52,6 +52,10 @@ mock! {
         }
 }
 
+fn format_user_key(username: &str, hostname: &str) -> String {
+    format!("'{}'@'{}'", username, hostname)
+}
+
 mod add {
     use common_meta_types::AuthType;
     use common_meta_types::Operation;

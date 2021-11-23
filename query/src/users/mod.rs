@@ -14,9 +14,12 @@
 
 #[cfg(test)]
 mod user_mgr_test;
+#[cfg(test)]
+mod user_stage_test;
 
 mod user;
 mod user_mgr;
+mod user_stage;
 
 pub use user::User;
 pub use user_mgr::CertifiedInfo;
