@@ -16,6 +16,7 @@ use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_macros::MallocSizeOf;
 use common_mem_allocator::malloc_size;
@@ -147,6 +148,16 @@ impl Session {
 
     pub fn get_current_database(self: &Arc<Self>) -> String {
         self.mutable_state.get_current_database()
+    }
+
+    pub fn get_current_user(self: &Arc<Self>) -> Result<String> {
+        self.mutable_state
+            .get_current_user()
+            .ok_or_else(|| ErrorCode::AuthenticateFailure("unauthenticated"))
+    }
+
+    pub fn set_current_user(self: &Arc<Self>, user: String) -> Result<()> {
+        self.mutable_state.set_current_user(user)
     }
 
     pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {
