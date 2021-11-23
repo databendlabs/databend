@@ -94,7 +94,7 @@ pub struct QueryResponse {
 }
 
 impl QueryResponse {
-    fn from_internal(id: String, r: HttpQueryResponseInternal) -> QueryResponse {
+    pub(crate) fn from_internal(id: String, r: HttpQueryResponseInternal) -> QueryResponse {
         let (data, next_url) = match &r.data {
             Some(d) => (
                 d.page.data.clone(),
@@ -106,7 +106,6 @@ impl QueryResponse {
         let stats = QueryStats {
             progress: r.state.progress.clone(),
         };
-
         QueryResponse {
             data,
             state: r.state.state,
@@ -124,7 +123,7 @@ impl QueryResponse {
         }
     }
 
-    fn fail_to_start_sql(id: String, err: &ErrorCode) -> QueryResponse {
+    pub(crate) fn fail_to_start_sql(id: String, err: &ErrorCode) -> QueryResponse {
         let stats = QueryStats { progress: None };
         QueryResponse {
             id,
