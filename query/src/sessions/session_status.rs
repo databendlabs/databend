@@ -22,7 +22,7 @@ use crate::sessions::context_shared::DatabendQueryContextShared;
 use crate::sessions::Settings;
 
 #[derive(MallocSizeOf)]
-pub(in crate::sessions) struct MutableStatus {
+pub struct MutableStatus {
     pub(in crate::sessions) abort: bool,
     pub(in crate::sessions) current_database: String,
     pub(in crate::sessions) session_settings: Arc<Settings>,

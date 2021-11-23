@@ -34,6 +34,7 @@ pub use context_shared::DatabendQueryContextShared;
 pub use session::Session;
 pub use session_info::ProcessInfo;
 pub use session_ref::SessionRef;
+pub use session_status::MutableStatus;
 pub use sessions::SessionManager;
 pub use sessions::SessionManagerRef;
 pub use settings::Settings;

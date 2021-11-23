@@ -15,7 +15,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use crate::sessions::session::MutableStatus;
+use crate::sessions::MutableStatus;
 use crate::sessions::Session;
 use crate::sessions::Settings;
 
