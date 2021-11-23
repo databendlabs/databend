@@ -105,7 +105,7 @@ impl Command for RootCommand {
                     .takes_value(true),
             )
             .arg(
-                Arg::new("log-level")
+                Arg::new("log_level")
                     .long("log-level")
                     .about("Sets the log-level for current settings")
                     .env("BEND_LOG_LEVEL")
