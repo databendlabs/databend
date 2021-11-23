@@ -217,6 +217,9 @@ nav:
               - SQRT: sqlstatement/numeric-functions/sqrt.md
               - EXP: sqlstatement/numeric-functions/exp.md
               - POW: sqlstatement/numeric-functions/pow.md
+              - SIGN: sqlstatement/numeric-functions/sign.md
+              - ROUND: sqlstatement/numeric-functions/round.md
+              - TRUNCATE: sqlstatement/numeric-functions/truncate.md
           - String Functions:
               - SUBSTRING: sqlstatement/string-functions/substring.md
           - Test Functions:
