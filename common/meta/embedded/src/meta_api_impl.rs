@@ -96,12 +96,16 @@ impl MetaApi for MetaEmbedded {
     async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>> {
         let sm = self.inner.lock().await;
         let res = sm
-            .get_database(&req.db_name)?
+            .get_database_id(&req.db_name)?
             .ok_or_else(|| ErrorCode::UnknownDatabase(req.db_name.clone()))?;
+        let db_meta = sm
+            .get_database_by_id(&res.data)?
+            .ok_or_else(|| ErrorCode::UnknownDatabaseId(format!("database_id: {}", res.data)))?;
 
         let dbi = DatabaseInfo {
             database_id: res.data,
             db: req.db_name.clone(),
+            meta: db_meta.data,
         };
         Ok(Arc::new(dbi))
     }
@@ -111,10 +115,11 @@ impl MetaApi for MetaEmbedded {
         let res = sm.get_databases()?;
         Ok(res
             .iter()
-            .map(|(name, db)| {
+            .map(|(name, db, meta)| {
                 Arc::new(DatabaseInfo {
                     database_id: *db,
                     db: name.to_string(),
+                    meta: meta.clone(),
                 })
             })
             .collect::<Vec<_>>())
@@ -188,7 +193,7 @@ impl MetaApi for MetaEmbedded {
         let table_name = &req.table_name;
         let sm = self.inner.lock().await;
 
-        let seq_db = sm.get_database(db)?.ok_or_else(|| {
+        let seq_db = sm.get_database_id(db)?.ok_or_else(|| {
             ErrorCode::UnknownDatabase(format!("get table: database not found {:}", db))
         })?;
 

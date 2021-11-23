@@ -252,7 +252,7 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
             assert_applied_index(all.clone(), last_applied + 1).await?;
 
             for (i, mn) in all.iter().enumerate() {
-                let got = mn.get_state_machine().await.get_database(name)?;
+                let got = mn.get_state_machine().await.get_database_id(name)?;
 
                 assert_eq!(*want_id, got.unwrap().data, "n{} applied AddDatabase", i);
             }

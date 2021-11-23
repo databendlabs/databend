@@ -171,7 +171,7 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
         };
 
         let got = m
-            .get_database(c.name)?
+            .get_database_id(c.name)?
             .ok_or_else(|| anyhow::anyhow!("db not found: {}", c.name))?;
         assert_eq!(*want, got.data);
     }

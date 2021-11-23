@@ -678,19 +678,27 @@ impl StateMachine {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub fn get_database(&self, name: &str) -> Result<Option<SeqV<u64>>, ErrorCode> {
+    pub fn get_database_id(&self, name: &str) -> Result<Option<SeqV<u64>>, ErrorCode> {
         let dbs = self.database_lookup();
         let x = dbs.get(&name.to_string())?;
         Ok(x)
     }
 
-    pub fn get_databases(&self) -> Result<Vec<(String, u64)>, ErrorCode> {
+    pub fn get_database_by_id(&self, did: &u64) -> Result<Option<SeqV<DatabaseMeta>>, ErrorCode> {
+        let x = self.databases().get(did)?;
+        Ok(x)
+    }
+
+    pub fn get_databases(&self) -> Result<Vec<(String, u64, DatabaseMeta)>, ErrorCode> {
         let mut res = vec![];
 
         let it = self.database_lookup().range(..)?;
         for r in it {
             let (a, b) = r?;
-            res.push((a, b.data));
+            let meta = self
+                .get_database_by_id(&b.data)?
+                .ok_or_else(|| ErrorCode::UnknownDatabaseId(format!("database_id: {}", b.data)))?;
+            res.push((a, b.data, meta.data));
         }
 
         Ok(res)
@@ -722,7 +730,7 @@ impl StateMachine {
     }
 
     pub fn get_tables(&self, db_name: &str) -> Result<Vec<TableInfo>, ErrorCode> {
-        let db = self.get_database(db_name)?;
+        let db = self.get_database_id(db_name)?;
         let db = match db {
             Some(x) => x,
             None => {

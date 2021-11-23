@@ -227,6 +227,7 @@ build_exceptions! {
     IllegalSnapshot(2405),
     UnknownTableId(2406),
     TableVersionMissMatch(2407),
+    UnknownDatabaseId(2408),
 
     // KVSrv server error
 
