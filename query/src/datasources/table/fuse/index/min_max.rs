@@ -17,10 +17,7 @@ use std::sync::Arc;
 
 use common_dal::DataAccessor;
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCode;
 use common_planners::Extras;
-use futures::StreamExt;
-use futures::TryStreamExt;
 
 use crate::datasources::index::RangeFilter;
 use crate::datasources::table::fuse::util;

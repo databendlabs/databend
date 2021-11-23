@@ -16,23 +16,19 @@ use std::io::Cursor;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
-use common_planners::Expression;
 use common_planners::InsertIntoPlan;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_planners::SinkPlan;
-use common_planners::StageKind;
 use common_planners::StagePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_streams::SourceStream;
 use common_streams::ValueSource;
 use futures::TryStreamExt;
-use PlanNode::Stage;
 
 use crate::catalogs::Table;
 use crate::interpreters::interpreter_select::Scheduled;
@@ -164,14 +160,11 @@ impl InsertIntoInterpreter {
                     scatters_expr: r.scatters_expr,
                 })
             }
-            node => {
-                let sink = PlanNode::Sink(SinkPlan {
-                    table_info: table_info.clone(),
-                    input: Arc::new(node),
-                    cast_needed,
-                });
-                sink
-            }
+            node => PlanNode::Sink(SinkPlan {
+                table_info: table_info.clone(),
+                input: Arc::new(node),
+                cast_needed,
+            }),
         };
 
         // following logics are the same
