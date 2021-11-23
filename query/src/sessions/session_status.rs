@@ -44,10 +44,10 @@ impl MutableStatus {
     pub fn try_create() -> Result<Self> {
         Ok(MutableStatus {
             abort: Default::default(),
-            current_user: RwLock::new(None),
+            current_user: Default::default(),
+            client_host: Default::default(),
             current_database: RwLock::new("default".to_string()),
             session_settings: RwLock::new(Settings::try_create()?.as_ref().clone()),
-            client_host: Default::default(),
             io_shutdown_tx: Default::default(),
             context_shared: Default::default(),
         })
@@ -77,13 +77,13 @@ impl MutableStatus {
 
     // Set the current user after authentication
     pub fn set_current_user(&self, user: String) -> Result<()> {
-        let mut lock = self.currrent_user.write();
+        let mut lock = self.current_user.write();
         if lock.is_some() {
             return Err(ErrorCode::UnexpectedError(
                 "can not change user after authentication during a session",
             ));
         }
-        *lock = user;
+        *lock = Some(user);
         Ok(())
     }
 

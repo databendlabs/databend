@@ -208,19 +208,24 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let address = &info.user_client_address;
 
         let user_manager = self.session.get_user_manager();
-        // TODO: use get_users and check client address
+        // TODO: list user's grant list and check client address
         let user_info = user_manager.get_user(user_name, "%").await?;
 
         let input = &info.user_password;
         let saved = &user_info.password;
         let encode_password = Self::encoding_password(auth_plugin, salt, input, saved)?;
 
-        user_manager
+        let authed = user_manager
             .auth_user(
                 user_info,
                 CertifiedInfo::create(user_name, encode_password, address),
             )
-            .await
+            .await?;
+        if authed {
+            self.session.set_current_user(user_name.clone());
+        }
+
+        Ok(authed)
     }
 
     fn encoding_password(
