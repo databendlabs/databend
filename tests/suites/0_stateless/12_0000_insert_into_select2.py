@@ -30,3 +30,7 @@ DROP DATABASE db1;
 """
 
 client1.run(sqls)
+stdout, stderr = client1.run_with_output("select * from system.metrics")
+assert stdout is not None
+assert stderr is None
+
