@@ -39,6 +39,11 @@ class client(object):
         p = Popen(self.client, shell=True, stdin=PIPE, universal_newlines=True)
         p.communicate(input=sqls)[0]
 
+    def run_with_output(self, sqls):
+        p = Popen(self.client, shell=True, stdin=PIPE, stdout=PIPE, universal_newlines=True)
+        return p.communicate(input=sqls)
+
+
 
 if __name__ == '__main__':
     client = client("e")
