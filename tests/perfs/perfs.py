@@ -44,7 +44,11 @@ def build_COSclient(secretID, secretKey, Region, Endpoint):
     region = Region
     token = None  # TODO(zhihanz) support token for client
     scheme = 'http'
-    config = CosConfig(Region=region, SecretId=secret_id, SecretKey=secret_key, Token=token, Scheme=scheme,
+    config = CosConfig(Region=region,
+                       SecretId=secret_id,
+                       SecretKey=secret_key,
+                       Token=token,
+                       Scheme=scheme,
                        Domain=Endpoint)
     client = CosS3Client(config)
     return client
@@ -54,13 +58,11 @@ def save_json(client, bucket, path, output, file):
     with open(os.path.join(output, "index.json"), 'w') as outfile:
         json.dump(file, outfile)
     with open(os.path.join(output, "index.json"), 'rb') as fp:
-        response = client.put_object(
-            Bucket=bucket,
-            Body=fp,
-            Key=os.path.join(path, "index.json"),
-            StorageClass='STANDARD',
-            EnableMD5=False
-        )
+        response = client.put_object(Bucket=bucket,
+                                     Body=fp,
+                                     Key=os.path.join(path, "index.json"),
+                                     StorageClass='STANDARD',
+                                     EnableMD5=False)
         logging.warning(response['ETag'])
 
 
@@ -92,15 +94,17 @@ def update_index(client, bucket, path, key, file_name, output):
         save_json(client, bucket, path, output, new_index)
 
 
-def execute(suit, bin_path, host, port, concurrency, iterations, output_dir, type, region, bucket, S3path, secretID,
-            secretKey, endpoint, rerun):
+def execute(suit, bin_path, host, port, concurrency, iterations, output_dir,
+            type, region, bucket, S3path, secretID, secretKey, endpoint,
+            rerun):
     base_cfg = conf['config']
     if iterations == "":
         iterations = suit.get("iterations", base_cfg['iterations'])
     if concurrency == "":
         concurrency = suit.get("concurrency", base_cfg['concurrency'])
     if bin_path == "":
-        logging.warning("you should specific path for databend-benchmark binary file")
+        logging.warning(
+            "you should specific path for databend-benchmark binary file")
         return
     suit_name = re.sub(r"\s+", '-', suit['name'])
     file_name = "{}-result.json".format(suit_name)
@@ -121,7 +125,8 @@ def execute(suit, bin_path, host, port, concurrency, iterations, output_dir, typ
                 elif e.get_error_code() == 'NoSuchKey':
                     logging.info("continue on test")
                 else:
-                    logging.info("other issue occured, {}".format(e.get_error_code()))
+                    logging.info("other issue occured, {}".format(
+                        e.get_error_code()))
             except ConnectionError as ce:
                 logging.info("timeout for {}".format(S3key))
             else:
@@ -130,10 +135,13 @@ def execute(suit, bin_path, host, port, concurrency, iterations, output_dir, typ
                 file_dict = {}
                 for elem in index['Contents']:
                     if elem['path'] == S3key:
-                        logging.info("S3 key {} found in bucket and not continue on it".format(S3key))
+                        logging.info(
+                            "S3 key {} found in bucket and not continue on it".
+                            format(S3key))
                         return
-    command = '{} -c {} -i {} -h {} -p {} --query "{}" --json "{}" '.format(bin_path, concurrency, iterations, host,
-                                                                            port, suit['query'], json_path)
+    command = '{} -c {} -i {} -h {} -p {} --query "{}" --json "{}" '.format(
+        bin_path, concurrency, iterations, host, port, suit['query'],
+        json_path)
     logging.warning("perf {}, query: {} \n".format(suit_name, suit['query']))
 
     proc = Popen(command, shell=True, env=os.environ)
@@ -144,13 +152,11 @@ def execute(suit, bin_path, host, port, concurrency, iterations, output_dir, typ
     if type == "COS":
         COScli = build_COSclient(secretID, secretKey, region, endpoint)
         with open(json_path, 'rb') as fp:
-            response = COScli.put_object(
-                Bucket=bucket,
-                Body=fp,
-                Key=S3key,
-                StorageClass='STANDARD',
-                EnableMD5=False
-            )
+            response = COScli.put_object(Bucket=bucket,
+                                         Body=fp,
+                                         Key=S3key,
+                                         StorageClass='STANDARD',
+                                         EnableMD5=False)
             logging.warning(response['ETag'])
             update_index(COScli, bucket, S3path, S3key, file_name, output_dir)
 
@@ -173,26 +179,67 @@ def execute(suit, bin_path, host, port, concurrency, iterations, output_dir, typ
 
 if __name__ == '__main__':
     parser = configargparse.ArgParser()
-    parser.add_argument('-o', '--output', default=".", help='Perf results directory')
-    parser.add_argument('-b', '--bin', default="databend-benchmark", help='Databend benchmark binary')
-    parser.add_argument('--host', default="127.0.0.1", help='Clickhouse handler Server host')
-    parser.add_argument('-p', '--port', default="9001", help='Clickhouse handler Server port')
-    parser.add_argument('-c', '--concurrency', default="", help='Set default concurrency for all perf tests')
-    parser.add_argument('-i', '--iteration', default="",
-                        help='Set default iteration number for each performance tests to run')
-    parser.add_argument('-t', '--type', default="local",
-                        help='Set storage endpoint for performance testing, support local and COS')
-    parser.add_argument('--region', default="", help='Set storage region', env_var='REGION')
-    parser.add_argument('--bucket', default="", help='Set storage bucket', env_var='BUCKET')
-    parser.add_argument('--path', default="", help='Set absolute path to store objects')
-    parser.add_argument('--secretID', default="", help='Set storage secret ID', env_var='SECRET_ID')
-    parser.add_argument('--secretKey', default="", help='Set storage secret Key', env_var='SECRET_KEY')
-    parser.add_argument('--endpoint', default="", help='Set storage endpoint', env_var='ENDPOINT')
-    parser.add_argument('--rerun', default="False",
-                        help='if rerun set as true, it will rerun all perfs.yaml completely')
+    parser.add_argument('-o',
+                        '--output',
+                        default=".",
+                        help='Perf results directory')
+    parser.add_argument('-b',
+                        '--bin',
+                        default="databend-benchmark",
+                        help='Databend benchmark binary')
+    parser.add_argument('--host',
+                        default="127.0.0.1",
+                        help='Clickhouse handler Server host')
+    parser.add_argument('-p',
+                        '--port',
+                        default="9001",
+                        help='Clickhouse handler Server port')
+    parser.add_argument('-c',
+                        '--concurrency',
+                        default="",
+                        help='Set default concurrency for all perf tests')
+    parser.add_argument(
+        '-i',
+        '--iteration',
+        default="",
+        help='Set default iteration number for each performance tests to run')
+    parser.add_argument(
+        '-t',
+        '--type',
+        default="local",
+        help=
+        'Set storage endpoint for performance testing, support local and COS')
+    parser.add_argument('--region',
+                        default="",
+                        help='Set storage region',
+                        env_var='REGION')
+    parser.add_argument('--bucket',
+                        default="",
+                        help='Set storage bucket',
+                        env_var='BUCKET')
+    parser.add_argument('--path',
+                        default="",
+                        help='Set absolute path to store objects')
+    parser.add_argument('--secretID',
+                        default="",
+                        help='Set storage secret ID',
+                        env_var='SECRET_ID')
+    parser.add_argument('--secretKey',
+                        default="",
+                        help='Set storage secret Key',
+                        env_var='SECRET_KEY')
+    parser.add_argument('--endpoint',
+                        default="",
+                        help='Set storage endpoint',
+                        env_var='ENDPOINT')
+    parser.add_argument(
+        '--rerun',
+        default="False",
+        help='if rerun set as true, it will rerun all perfs.yaml completely')
     args = parser.parse_args()
 
     for suit in conf['perfs']:
-        execute(suit, args.bin, args.host, args.port, args.concurrency, args.iteration, args.output,
-                args.type, args.region, args.bucket, args.path, args.secretID, args.secretKey, args.endpoint,
-                args.rerun)
+        execute(suit, args.bin, args.host, args.port, args.concurrency,
+                args.iteration, args.output, args.type, args.region,
+                args.bucket, args.path, args.secretID, args.secretKey,
+                args.endpoint, args.rerun)
