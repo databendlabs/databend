@@ -138,8 +138,7 @@ impl Function for TrigonometricFunction {
                         DFFloat64Array::full_null(input_rows)
                     } else {
                         let x = DFTryFrom::try_from(x.clone())?;
-                        let opt_iter = y_series.f64()?.into_iter().map(|y| y.map(|y| y.atan2(x)));
-                        DFFloat64Array::new_from_opt_iter(opt_iter)
+                        y_series.f64()?.apply_cast_numeric(|y| y.atan2(x))
                     }
                 }
                 (DataColumn::Constant(y, _), DataColumn::Array(x_series)) => {
@@ -147,22 +146,13 @@ impl Function for TrigonometricFunction {
                         DFFloat64Array::full_null(input_rows)
                     } else {
                         let y: f64 = DFTryFrom::try_from(y.clone())?;
-                        let opt_iter = x_series.f64()?.into_iter().map(|x| x.map(|x| y.atan2(*x)));
-                        DFFloat64Array::new_from_opt_iter(opt_iter)
+                        x_series.f64()?.apply_cast_numeric(|x| y.atan2(x))
                     }
                 }
                 _ => {
                     let y_series = y_column.to_minimal_array()?;
                     let x_series = x_column.to_minimal_array()?;
-                    let opt_iter = y_series
-                        .f64()?
-                        .into_iter()
-                        .zip(x_series.f64()?.into_iter())
-                        .map(|(y, x)| match (y, x) {
-                            (Some(y), Some(x)) => Some(y.atan2(*x)),
-                            _ => None,
-                        });
-                    DFFloat64Array::new_from_opt_iter(opt_iter)
+                    binary(y_series.f64()?, x_series.f64()?, |y, x| y.atan2(x))
                 }
             }
         };
