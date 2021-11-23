@@ -44,7 +44,7 @@ fn test_session_status() -> Result<()> {
     // Settings.
     {
         let val = mutable_status.get_settings();
-        assert_eq!(val.get_max_threads()?, 16);
+        assert!(val.get_max_threads()? > 0);
     }
 
     // Client host.
