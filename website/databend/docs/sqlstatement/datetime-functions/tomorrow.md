@@ -8,7 +8,7 @@ Returns tomorrow date, same as `today() + 1`.
 ## Syntax
 
 ```sql
-YESTERDAY()
+TOMORROW()
 ```
 
 ## Return Type
