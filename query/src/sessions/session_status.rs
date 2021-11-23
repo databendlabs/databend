@@ -76,15 +76,9 @@ impl MutableStatus {
     }
 
     // Set the current user after authentication
-    pub fn set_current_user(&self, user: String) -> Result<()> {
+    pub fn set_current_user(&self, user: String) {
         let mut lock = self.current_user.write();
-        if lock.is_some() {
-            return Err(ErrorCode::UnexpectedError(
-                "can not change user after authentication during a session",
-            ));
-        }
         *lock = Some(user);
-        Ok(())
     }
 
     // Get current user

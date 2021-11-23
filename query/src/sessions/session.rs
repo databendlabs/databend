@@ -156,7 +156,7 @@ impl Session {
             .ok_or_else(|| ErrorCode::AuthenticateFailure("unauthenticated"))
     }
 
-    pub fn set_current_user(self: &Arc<Self>, user: String) -> Result<()> {
+    pub fn set_current_user(self: &Arc<Self>, user: String) {
         self.mutable_state.set_current_user(user)
     }
 
