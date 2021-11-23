@@ -68,9 +68,10 @@ impl TryFrom<&DataBlock> for AppendOperation {
     fn try_from(value: &DataBlock) -> std::result::Result<Self, Self::Error> {
         // check schema
         if value.schema() != &AppendOperation::schema() {
-            return Err(ErrorCode::LogicalError(
-                "invalid datablock of AppendOperation log",
-            ));
+            return Err(ErrorCode::LogicalError(format!(
+                "invalid data block of AppendOperation log, {:?}",
+                value.schema()
+            )));
         }
 
         let string_value_of = |idx, val: &DataBlock| {

@@ -816,18 +816,25 @@ impl PlanScheduler {
             true => self.visit_local_sink(plan),
             false => self.visit_cluster_sink(plan),
         }
-    }
-
-    fn visit_local_sink(&mut self, plan: &SinkPlan) -> Result<()> {
-        self.nodes_plan[self.local_pos] = PlanNode::Sink(plan.clone());
         Ok(())
     }
 
-    fn visit_cluster_sink(&mut self, plan: &SinkPlan) -> Result<()> {
+    fn visit_local_sink(&mut self, plan: &SinkPlan) {
+        self.nodes_plan[self.local_pos] = PlanNode::Sink(SinkPlan {
+            table_info: plan.table_info.clone(),
+            input: Arc::new(self.nodes_plan[self.local_pos].clone()),
+            cast_needed: plan.cast_needed,
+        })
+    }
+
+    fn visit_cluster_sink(&mut self, plan: &SinkPlan) {
         for index in 0..self.nodes_plan.len() {
-            self.nodes_plan[index] = PlanNode::Sink(plan.clone());
+            self.nodes_plan[index] = PlanNode::Sink(SinkPlan {
+                table_info: plan.table_info.clone(),
+                input: Arc::new(self.nodes_plan[index].clone()),
+                cast_needed: plan.cast_needed,
+            })
         }
-        Ok(())
     }
 
     fn visit_select(&mut self, plan: &SelectPlan, tasks: &mut Tasks) -> Result<()> {

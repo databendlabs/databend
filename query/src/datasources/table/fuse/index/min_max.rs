@@ -69,36 +69,21 @@ impl MinMaxIndex {
         let snapshot =
             common_dal::read_obj::<TableSnapshot>(self.da.clone(), self.table_snapshot_loc.clone())
                 .await?;
-        let segment_num = snapshot.segments.len();
         let segment_locs = snapshot.segments;
-        if segment_locs.is_empty() {
-            return Ok(vec![]);
-        };
-        let res = futures::stream::iter(segment_locs)
-            .map(|seg_loc| async {
-                let segment_info =
-                    common_dal::read_obj::<SegmentInfo>(self.da.clone(), seg_loc).await?;
-                let r = if block_pred(&segment_info.summary.col_stats)? {
-                    segment_info.blocks.into_iter().try_fold(
-                        Vec::new(),
-                        |mut acc, block_meta| {
-                            if block_pred(&block_meta.col_stats)? {
-                                acc.push(block_meta)
-                            }
-                            Ok::<_, ErrorCode>(acc)
-                        },
-                    )?
-                } else {
-                    vec![]
-                };
-                Ok::<_, ErrorCode>(r)
-            })
-            // configuration of the max size of buffered futures
-            .buffered(std::cmp::min(10, segment_num))
-            .try_collect::<Vec<_>>()
-            .await?;
 
-        Ok(res.into_iter().flatten().collect())
+        let mut res = vec![];
+        for seg_loc in segment_locs {
+            let segment_info =
+                common_dal::read_obj::<SegmentInfo>(self.da.clone(), seg_loc).await?;
+            if block_pred(&segment_info.summary.col_stats)? {
+                for block_meta in segment_info.blocks {
+                    if block_pred(&block_meta.col_stats)? {
+                        res.push(block_meta)
+                    }
+                }
+            }
+        }
+        Ok(res)
     }
 }
 

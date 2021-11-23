@@ -115,7 +115,7 @@ pub trait PlanRewriter {
             PlanNode::AlterUser(plan) => self.alter_user(plan),
             PlanNode::DropUser(plan) => self.drop_user(plan),
             PlanNode::GrantPrivilege(plan) => self.grant_privilege(plan),
-            PlanNode::Sink(plan) => self.rewrite_append_data(plan),
+            PlanNode::Sink(plan) => self.rewrite_sink(plan),
         }
     }
 
@@ -370,7 +370,7 @@ pub trait PlanRewriter {
         Ok(PlanNode::GrantPrivilege(plan.clone()))
     }
 
-    fn rewrite_append_data(&mut self, plan: &SinkPlan) -> Result<PlanNode> {
+    fn rewrite_sink(&mut self, plan: &SinkPlan) -> Result<PlanNode> {
         Ok(PlanNode::Sink(plan.clone()))
     }
 }

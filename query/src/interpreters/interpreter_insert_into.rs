@@ -16,18 +16,23 @@ use std::io::Cursor;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
+use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
+use common_planners::Expression;
 use common_planners::InsertIntoPlan;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
 use common_planners::SinkPlan;
+use common_planners::StageKind;
+use common_planners::StagePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_streams::SourceStream;
 use common_streams::ValueSource;
 use futures::TryStreamExt;
+use PlanNode::Stage;
 
 use crate::catalogs::Table;
 use crate::interpreters::interpreter_select::Scheduled;
@@ -139,26 +144,39 @@ impl InsertIntoInterpreter {
     ) -> Result<Vec<DataBlock>> {
         // This is almost the same of SelectInterpreter::schedule_query, with some slight tweaks
 
-        // As select interpreter does
-        // we optimize and rewrite the select_plan.input first
-        let optimized_plan = apply_plan_rewrite(
+        let optimized_select_plan = apply_plan_rewrite(
             self.ctx.clone(),
             Optimizers::create(self.ctx.clone()),
-            select_plan.input.as_ref(),
+            &select_plan.input,
         )?;
 
-        // here, we wrapped the optimized/rewritten plan in a SinkPlan
-        let sink_plan = PlanNode::Sink(SinkPlan {
-            table_info: table_info.clone(),
-            input: Arc::new(optimized_plan.clone()),
-            cast_needed,
-        });
-
-        // it might be better, if the above logics could be encapsulated in PipelineBuilder
+        let rewritten_plan = match optimized_select_plan {
+            PlanNode::Stage(r) => {
+                let prev_input = r.input.clone();
+                let sink = PlanNode::Sink(SinkPlan {
+                    table_info: table_info.clone(),
+                    input: prev_input,
+                    cast_needed,
+                });
+                PlanNode::Stage(StagePlan {
+                    kind: r.kind,
+                    input: Arc::new(sink),
+                    scatters_expr: r.scatters_expr,
+                })
+            }
+            node => {
+                let sink = PlanNode::Sink(SinkPlan {
+                    table_info: table_info.clone(),
+                    input: Arc::new(node),
+                    cast_needed,
+                });
+                sink
+            }
+        };
 
         // following logics are the same
         let scheduler = PlanScheduler::try_create(self.ctx.clone())?;
-        let scheduled_tasks = scheduler.reschedule(&sink_plan)?;
+        let scheduled_tasks = scheduler.reschedule(&rewritten_plan)?;
         let remote_stage_actions = scheduled_tasks.get_tasks()?;
 
         let config = self.ctx.get_config();

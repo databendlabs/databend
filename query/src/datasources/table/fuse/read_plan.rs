@@ -41,7 +41,6 @@ impl FuseTable {
             let push_downs_c = push_downs.clone();
             let snapshot = read_obj(da.clone(), loc).await?;
             let block_metas = index::range_filter(&snapshot, schema, push_downs_c, da).await?;
-
             let (statistics, parts) = to_partitions(&block_metas, push_downs);
             Ok((statistics, parts))
         } else {
