@@ -71,13 +71,13 @@ tonic = { version = "0.6.0", features = ["tls"]}
 
 sha2 = "0.9.8"
 uuid = { version = "0.8", features = ["serde", "v4"] }
-poem = { version = "1.0.27", features = ["rustls"] }
+poem = { version = "1.0.29", features = ["rustls"] }
 
 [dev-dependencies]
 common-meta-api = {path = "../common/meta/api" }
 
 pretty_assertions = "1.0"
-test-env-log = "0.2.7"
+test-env-log = "0.2.8"
 flaky_test = "0.1"
 reqwest = { version = "0.11", features = ["json"] }
 
