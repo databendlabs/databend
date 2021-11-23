@@ -117,53 +117,6 @@ impl SledTree {
         Ok(got)
     }
 
-    /// Retrieve the value of key.
-    pub fn get<KV: SledKeySpace>(&self, key: &KV::K) -> common_exception::Result<Option<KV::V>> {
-        let got = self
-            .tree
-            .get(KV::serialize_key(key)?)
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                format!("get: {}:{}", self.name, key)
-            })?;
-
-        let v = match got {
-            None => None,
-            Some(v) => Some(KV::deserialize_value(v)?),
-        };
-
-        Ok(v)
-    }
-
-    /// Insert a single kv.
-    /// Returns the last value if it is set.
-    async fn insert<KV>(
-        &self,
-        key: &KV::K,
-        value: &KV::V,
-    ) -> common_exception::Result<Option<KV::V>>
-    where
-        KV: SledKeySpace,
-    {
-        let k = KV::serialize_key(key)?;
-        let v = KV::serialize_value(value)?;
-
-        let prev = self
-            .tree
-            .insert(k, v)
-            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
-                format!("insert_value {}", key)
-            })?;
-
-        let prev = match prev {
-            None => None,
-            Some(x) => Some(KV::deserialize_value(x)?),
-        };
-
-        self.flush_async(true).await?;
-
-        Ok(prev)
-    }
-
     pub async fn update_and_fetch<KV: SledKeySpace, F>(
         &self,
         key: &KV::K,
@@ -194,6 +147,23 @@ impl SledTree {
         };
 
         Ok(value)
+    }
+
+    /// Retrieve the value of key.
+    pub fn get<KV: SledKeySpace>(&self, key: &KV::K) -> common_exception::Result<Option<KV::V>> {
+        let got = self
+            .tree
+            .get(KV::serialize_key(key)?)
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+                format!("get: {}:{}", self.name, key)
+            })?;
+
+        let v = match got {
+            None => None,
+            Some(v) => Some(KV::deserialize_value(v)?),
+        };
+
+        Ok(v)
     }
 
     /// Retrieve the last key value pair.
@@ -445,6 +415,36 @@ impl SledTree {
         self.flush_async(true).await?;
 
         Ok(())
+    }
+
+    /// Insert a single kv.
+    /// Returns the last value if it is set.
+    async fn insert<KV>(
+        &self,
+        key: &KV::K,
+        value: &KV::V,
+    ) -> common_exception::Result<Option<KV::V>>
+    where
+        KV: SledKeySpace,
+    {
+        let k = KV::serialize_key(key)?;
+        let v = KV::serialize_value(value)?;
+
+        let prev = self
+            .tree
+            .insert(k, v)
+            .map_err_to_code(ErrorCode::MetaStoreDamaged, || {
+                format!("insert_value {}", key)
+            })?;
+
+        let prev = match prev {
+            None => None,
+            Some(x) => Some(KV::deserialize_value(x)?),
+        };
+
+        self.flush_async(true).await?;
+
+        Ok(prev)
     }
 
     /// Insert a single kv, Retrieve the key from value.
