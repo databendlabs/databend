@@ -32,7 +32,7 @@ use common_meta_types::UserPrivilege;
 use crate::user::user_api::UserInfo;
 use crate::user::user_api::UserMgrApi;
 
-pub static USER_API_KEY_PREFIX: &str = "__fd_users";
+static USER_API_KEY_PREFIX: &str = "__fd_users";
 
 pub struct UserMgr {
     kv_api: Arc<dyn KVApi>,
@@ -227,6 +227,6 @@ impl UserMgrApi for UserMgr {
     }
 }
 
-pub fn format_user_key(username: &str, hostname: &str) -> String {
+fn format_user_key(username: &str, hostname: &str) -> String {
     format!("'{}'@'{}'", username, hostname)
 }

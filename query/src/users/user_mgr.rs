@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use common_exception::exception::UNKNOWN_USER;
 use common_exception::Result;
+use common_management::StageMgr;
+use common_management::StageMgrApi;
 use common_management::UserInfo;
 use common_management::UserMgr;
 use common_management::UserMgrApi;
@@ -31,7 +33,8 @@ use crate::users::User;
 pub type UserManagerRef = Arc<UserManager>;
 
 pub struct UserManager {
-    api_provider: Arc<dyn UserMgrApi>,
+    user_api_provider: Arc<dyn UserMgrApi>,
+    stage_api_provider: Arc<dyn StageMgrApi>,
 }
 
 impl UserManager {
@@ -47,11 +50,16 @@ impl UserManager {
 
     pub async fn create_global(cfg: Config) -> Result<UserManagerRef> {
         let tenant_id = &cfg.query.tenant_id;
-        let kv_client = UserManager::create_kv_client(&cfg).await?;
+        let client = UserManager::create_kv_client(&cfg).await?;
 
         Ok(Arc::new(UserManager {
-            api_provider: Arc::new(UserMgr::new(kv_client, tenant_id)),
+            user_api_provider: Arc::new(UserMgr::new(client.clone(), tenant_id)),
+            stage_api_provider: Arc::new(StageMgr::new(client, tenant_id)),
         }))
+    }
+
+    pub fn get_stage_api_client(&self) -> Arc<dyn StageMgrApi> {
+        self.stage_api_provider.clone()
     }
 
     // Get one user from by tenant.
@@ -64,7 +72,7 @@ impl UserManager {
             }
             _ => {
                 let get_user =
-                    self.api_provider
+                    self.user_api_provider
                         .get_user(user.to_string(), hostname.to_string(), None);
                 Ok(get_user.await?.data)
             }
@@ -97,7 +105,7 @@ impl UserManager {
 
     // Get the tenant all users list.
     pub async fn get_users(&self) -> Result<Vec<UserInfo>> {
-        let get_users = self.api_provider.get_users();
+        let get_users = self.user_api_provider.get_users();
 
         let mut res = vec![];
         match get_users.await {
@@ -114,7 +122,7 @@ impl UserManager {
 
     // Add a new user info.
     pub async fn add_user(&self, user_info: UserInfo) -> Result<u64> {
-        let add_user = self.api_provider.add_user(user_info);
+        let add_user = self.user_api_provider.add_user(user_info);
         match add_user.await {
             Ok(res) => Ok(res),
             Err(failure) => Err(failure.add_message_back("(while add user).")),
@@ -127,7 +135,7 @@ impl UserManager {
         hostname: &str,
         privileges: UserPrivilege,
     ) -> Result<Option<u64>> {
-        let set_user_privileges = self.api_provider.set_user_privileges(
+        let set_user_privileges = self.user_api_provider.set_user_privileges(
             username.to_string(),
             hostname.to_string(),
             privileges,
@@ -142,7 +150,7 @@ impl UserManager {
     // Drop a user by name and hostname.
     pub async fn drop_user(&self, username: &str, hostname: &str, if_exist: bool) -> Result<()> {
         let drop_user =
-            self.api_provider
+            self.user_api_provider
                 .drop_user(username.to_string(), hostname.to_string(), None);
         match drop_user.await {
             Ok(res) => Ok(res),
@@ -150,7 +158,7 @@ impl UserManager {
                 if if_exist && failure.code() == UNKNOWN_USER {
                     Ok(())
                 } else {
-                    Err(failure.add_message_back("(while set user privileges)"))
+                    Err(failure.add_message_back("(while set drop user)"))
                 }
             }
         }
@@ -164,7 +172,7 @@ impl UserManager {
         new_auth_type: Option<AuthType>,
         new_password: Option<Vec<u8>>,
     ) -> Result<Option<u64>> {
-        let update_user = self.api_provider.update_user(
+        let update_user = self.user_api_provider.update_user(
             username.to_string(),
             hostname.to_string(),
             new_password,

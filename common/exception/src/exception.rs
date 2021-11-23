@@ -264,6 +264,11 @@ build_exceptions! {
     ClusterUnknownNode(4058),
     ClusterNodeAlreadyExists(4059),
 
+    // stage error.
+    UnknownStage(4060),
+    StageAlreadyExists(4061),
+    IllegalStageInfoFormat(4062),
+
     // storage-api error codes
     ReadFileError(5001),
     BrokenChannel(5002),
