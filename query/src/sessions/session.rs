@@ -56,7 +56,7 @@ impl Session {
             config,
             sessions,
             ref_count: Arc::new(AtomicUsize::new(0)),
-            mutable_state: Arc::new(MutableStatus::default()),
+            mutable_state: Arc::new(MutableStatus::try_create()?),
         }))
     }
 

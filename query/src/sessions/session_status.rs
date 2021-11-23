@@ -17,6 +17,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use common_exception::Result;
 use common_infallible::RwLock;
 use common_macros::MallocSizeOf;
 use futures::channel::oneshot::Sender;
@@ -24,7 +25,7 @@ use futures::channel::oneshot::Sender;
 use crate::sessions::context_shared::DatabendQueryContextShared;
 use crate::sessions::Settings;
 
-#[derive(MallocSizeOf, Default)]
+#[derive(MallocSizeOf)]
 pub struct MutableStatus {
     abort: AtomicBool,
     current_database: RwLock<String>,
@@ -38,19 +39,34 @@ pub struct MutableStatus {
 }
 
 impl MutableStatus {
+    pub fn try_create() -> Result<Self> {
+        Ok(MutableStatus {
+            abort: Default::default(),
+            current_database: RwLock::new("default".to_string()),
+            session_settings: RwLock::new(Settings::try_create()?.as_ref().clone()),
+            client_host: Default::default(),
+            io_shutdown_tx: Default::default(),
+            context_shared: Default::default(),
+        })
+    }
+
+    // Get abort status.
     pub fn get_abort(&self) -> bool {
         self.abort.load(Ordering::Relaxed) as bool
     }
 
+    // Set abort status.
     pub fn set_abort(&self, v: bool) {
-        self.abort.fetch_and(v, Ordering::Relaxed);
+        self.abort.store(v, Ordering::Relaxed);
     }
 
+    // Get current database.
     pub fn get_current_database(&self) -> String {
         let lock = self.current_database.read();
         lock.clone()
     }
 
+    // Set current database.
     pub fn set_current_database(&self, db: String) {
         let mut lock = self.current_database.write();
         *lock = db
@@ -76,7 +92,7 @@ impl MutableStatus {
         *lock = tx
     }
 
-    //  Take the io_shutdown_tx.
+    //  Take the io_shutdown_tx and the self.io_shuttdown_tx is None.
     pub fn take_io_shutdown_tx(&self) -> Option<Sender<Sender<()>>> {
         let mut lock = self.io_shutdown_tx.write();
         lock.take()
