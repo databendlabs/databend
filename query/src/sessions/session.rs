@@ -17,7 +17,6 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_infallible::Mutex;
 use common_macros::MallocSizeOf;
 use common_mem_allocator::malloc_size;
 use futures::channel::*;
@@ -41,7 +40,7 @@ pub struct Session {
     #[ignore_malloc_size_of = "insignificant"]
     pub(in crate::sessions) sessions: SessionManagerRef,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
-    pub(in crate::sessions) mutable_state: Arc<Mutex<MutableStatus>>,
+    pub(in crate::sessions) mutable_state: Arc<MutableStatus>,
 }
 
 impl Session {
@@ -57,14 +56,7 @@ impl Session {
             config,
             sessions,
             ref_count: Arc::new(AtomicUsize::new(0)),
-            mutable_state: Arc::new(Mutex::new(MutableStatus {
-                abort: false,
-                current_database: String::from("default"),
-                session_settings: Settings::try_create()?,
-                client_host: None,
-                io_shutdown_tx: None,
-                context_shared: None,
-            })),
+            mutable_state: Arc::new(MutableStatus::default()),
         }))
     }
 
@@ -77,15 +69,14 @@ impl Session {
     }
 
     pub fn is_aborting(self: &Arc<Self>) -> bool {
-        self.mutable_state.lock().abort
+        self.mutable_state.get_abort()
     }
 
     pub fn kill(self: &Arc<Self>) {
-        let mut mutable_state = self.mutable_state.lock();
-
-        mutable_state.abort = true;
-        if mutable_state.context_shared.is_none() {
-            if let Some(io_shutdown) = mutable_state.io_shutdown_tx.take() {
+        let mutable_state = self.mutable_state.clone();
+        mutable_state.set_abort(true);
+        if mutable_state.context_shared_is_none() {
+            if let Some(io_shutdown) = mutable_state.take_io_shutdown_tx() {
                 let (tx, rx) = oneshot::channel();
                 if io_shutdown.send(tx).is_ok() {
                     // We ignore this error because the receiver is return cancelled error.
@@ -101,9 +92,9 @@ impl Session {
     }
 
     pub fn force_kill_query(self: &Arc<Self>) {
-        let mut mutable_state = self.mutable_state.lock();
+        let mutable_state = self.mutable_state.clone();
 
-        if let Some(context_shared) = mutable_state.context_shared.take() {
+        if let Some(context_shared) = mutable_state.take_context_shared() {
             context_shared.kill(/* shutdown executing query */);
         }
     }
@@ -112,10 +103,7 @@ impl Session {
     /// For a query, execution environment(e.g cluster) should be immutable.
     /// We can bind the environment to the context in create_context method.
     pub async fn create_context(self: &Arc<Self>) -> Result<DatabendQueryContextRef> {
-        let context_shared = {
-            let mutable_state = self.mutable_state.lock();
-            mutable_state.context_shared.as_ref().map(Clone::clone)
-        };
+        let context_shared = self.mutable_state.get_context_shared();
 
         Ok(match context_shared.as_ref() {
             Some(shared) => DatabendQueryContext::from_shared(shared.clone()),
@@ -127,12 +115,11 @@ impl Session {
                 let cluster = discovery.discover().await?;
                 let shared = DatabendQueryContextShared::try_create(config, session, cluster);
 
-                let mut mutable_state = self.mutable_state.lock();
-
-                match mutable_state.context_shared.as_ref() {
+                let ctx_shared = self.mutable_state.get_context_shared();
+                match ctx_shared.as_ref() {
                     Some(shared) => DatabendQueryContext::from_shared(shared.clone()),
                     None => {
-                        mutable_state.context_shared = Some(shared.clone());
+                        self.mutable_state.set_context_shared(Some(shared.clone()));
                         DatabendQueryContext::from_shared(shared)
                     }
                 }
@@ -143,9 +130,8 @@ impl Session {
     pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
     where F: FnOnce() + Send + 'static {
         let (tx, rx) = futures::channel::oneshot::channel();
-        let mut inner = self.mutable_state.lock();
-        inner.client_host = host;
-        inner.io_shutdown_tx = Some(tx);
+        self.mutable_state.set_client_host(host);
+        self.mutable_state.set_io_shutdown_tx(Some(tx));
 
         common_base::tokio::spawn(async move {
             if let Ok(tx) = rx.await {
@@ -156,17 +142,15 @@ impl Session {
     }
 
     pub fn set_current_database(self: &Arc<Self>, database_name: String) {
-        let mut inner = self.mutable_state.lock();
-        inner.current_database = database_name;
+        self.mutable_state.set_current_database(database_name);
     }
 
     pub fn get_current_database(self: &Arc<Self>) -> String {
-        let inner = self.mutable_state.lock();
-        inner.current_database.clone()
+        self.mutable_state.get_current_database()
     }
 
     pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {
-        self.mutable_state.lock().session_settings.clone()
+        self.mutable_state.get_settings()
     }
 
     pub fn get_sessions_manager(self: &Arc<Self>) -> SessionManagerRef {

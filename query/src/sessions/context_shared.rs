@@ -196,7 +196,6 @@ impl DatabendQueryContextShared {
 
 impl Session {
     pub(in crate::sessions) fn destroy_context_shared(&self) {
-        let mut mutable_state = self.mutable_state.lock();
-        mutable_state.context_shared.take();
+        self.mutable_state.take_context_shared();
     }
 }
