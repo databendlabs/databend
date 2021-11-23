@@ -220,6 +220,7 @@ nav:
               - SIGN: sqlstatement/numeric-functions/sign.md
               - ROUND: sqlstatement/numeric-functions/round.md
               - TRUNCATE: sqlstatement/numeric-functions/truncate.md
+              - RAND: sqlstatement/numeric-functions/rand.md
           - String Functions:
               - SUBSTRING: sqlstatement/string-functions/substring.md
           - Test Functions:
