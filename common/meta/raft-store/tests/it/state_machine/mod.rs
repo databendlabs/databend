@@ -33,6 +33,7 @@ use common_meta_raft_store::state_machine::SerializableSnapshot;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
+use common_meta_types::DatabaseMeta;
 use common_meta_types::KVMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
@@ -152,27 +153,19 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
             })
             .await?;
 
-        let (prev, result) = match resp {
-            AppliedState::DatabaseId(ch) => ch.map(|x| x.data),
-            _ => {
-                panic!("expect AppliedState::Database")
-            }
-        };
-        assert_eq!(c.prev, prev, "{}-th", i);
+        let mut ch: Change<DatabaseMeta> = resp.try_into().expect("DatabaseMeta");
+        let result = ch.ident.take();
+        let prev = ch.prev;
+
+        assert_eq!(c.prev.is_none(), prev.is_none(), "{}-th", i);
         assert_eq!(c.result, result, "{}-th", i);
 
         // get
 
-        let want = match (&prev, &result) {
-            (Some(ref a), _) => a,
-            (_, Some(ref b)) => b,
-            _ => {
-                panic!("both none");
-            }
-        };
+        let want = result.expect("Some(db_id)");
 
         let got = m.get_database_id(&c.name.to_string())?;
-        assert_eq!(*want, got);
+        assert_eq!(want, got);
     }
 
     Ok(())
