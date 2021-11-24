@@ -109,7 +109,10 @@ impl ClickHouseSession for InteractiveWorker {
                 Err(err) => Err(err),
             };
             match res {
-                Ok(res) => res,
+                Ok(res) => {
+                    self.session.set_current_user(user.to_string());
+                    res
+                }
                 Err(failure) => {
                     log::error!(
                         "ClickHouse handler authenticate failed, \

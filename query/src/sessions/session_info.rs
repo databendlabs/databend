@@ -24,6 +24,7 @@ pub struct ProcessInfo {
     pub typ: String,
     pub state: String,
     pub database: String,
+    pub user: String,
     #[allow(unused)]
     pub settings: Arc<Settings>,
     pub client_address: Option<SocketAddr>,
@@ -53,6 +54,7 @@ impl Session {
             typ: self.typ.clone(),
             state: self.process_state(status),
             database: status.get_current_database(),
+            user: status.get_current_user().unwrap_or_else(|| "".into()),
             settings: status.get_settings(),
             client_address: status.get_client_host(),
             session_extra_info: self.process_extra_info(status),

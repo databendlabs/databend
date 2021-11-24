@@ -30,6 +30,7 @@ pub struct MutableStatus {
     abort: AtomicBool,
     current_database: RwLock<String>,
     session_settings: RwLock<Settings>,
+    current_user: RwLock<Option<String>>,
     #[ignore_malloc_size_of = "insignificant"]
     client_host: RwLock<Option<SocketAddr>>,
     #[ignore_malloc_size_of = "insignificant"]
@@ -42,9 +43,10 @@ impl MutableStatus {
     pub fn try_create() -> Result<Self> {
         Ok(MutableStatus {
             abort: Default::default(),
+            current_user: Default::default(),
+            client_host: Default::default(),
             current_database: RwLock::new("default".to_string()),
             session_settings: RwLock::new(Settings::try_create()?.as_ref().clone()),
-            client_host: Default::default(),
             io_shutdown_tx: Default::default(),
             context_shared: Default::default(),
         })
@@ -70,6 +72,18 @@ impl MutableStatus {
     pub fn set_current_database(&self, db: String) {
         let mut lock = self.current_database.write();
         *lock = db
+    }
+
+    // Set the current user after authentication
+    pub fn set_current_user(&self, user: String) {
+        let mut lock = self.current_user.write();
+        *lock = Some(user);
+    }
+
+    // Get current user
+    pub fn get_current_user(&self) -> Option<String> {
+        let lock = self.current_user.read();
+        lock.clone()
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {
