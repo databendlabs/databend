@@ -31,7 +31,7 @@ impl ArithmeticMinusFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create_func))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().monotonicity())
     }
 
     pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
