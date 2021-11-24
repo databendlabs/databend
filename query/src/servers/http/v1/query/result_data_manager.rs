@@ -27,6 +27,8 @@ use crate::servers::http::v1::block_to_json::block_to_json;
 use crate::servers::http::v1::block_to_json::JsonBlock;
 use crate::servers::http::v1::block_to_json::JsonBlockRef;
 
+const TARGET_ROWS_PER_PAGE: usize = 10000;
+
 #[derive(Debug)]
 pub enum Wait {
     Async,
@@ -125,12 +127,20 @@ impl ResultDataManager {
 
     pub async fn collect_new_page(&mut self, tp: &Wait) -> (JsonBlock, bool) {
         let mut results: Vec<JsonBlock> = Vec::new();
+        let mut rows = 0;
         let block_rx = &mut self.block_rx;
 
         let mut end = false;
         loop {
             match ResultDataManager::receive(block_rx, tp).await {
-                Ok(block) => results.push(block_to_json(&block).unwrap()),
+                Ok(block) => {
+                    rows += block.num_rows();
+                    results.push(block_to_json(&block).unwrap());
+                    // TODO(youngsofun):  set it in post if needed
+                    if rows >= TARGET_ROWS_PER_PAGE {
+                        break;
+                    }
+                }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     log::debug!("no more data");
