@@ -12,22 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 use crate::sql::statements::query::query_schema_joined::JoinedTableDesc;
 use crate::sql::statements::query::JoinedSchema;
 use crate::sql::statements::QueryASTIR;
 
 pub struct QualifiedRewriter {
     tables_schema: JoinedSchema,
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<DatabendQueryContext>,
 }
 
 impl QualifiedRewriter {
-    pub fn create(tables_schema: JoinedSchema, ctx: DatabendQueryContextRef) -> QualifiedRewriter {
+    pub fn create(
+        tables_schema: JoinedSchema,
+        ctx: Arc<DatabendQueryContext>,
+    ) -> QualifiedRewriter {
         QualifiedRewriter { tables_schema, ctx }
     }
 

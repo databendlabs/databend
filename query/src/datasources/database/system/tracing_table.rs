@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
@@ -29,7 +30,7 @@ use walkdir::WalkDir;
 
 use crate::catalogs::Table;
 use crate::datasources::database::system::TracingTableStream;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 pub struct TracingTable {
     table_info: TableInfo,
@@ -76,7 +77,7 @@ impl Table for TracingTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<DatabendQueryContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let mut log_files = vec![];

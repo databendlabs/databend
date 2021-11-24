@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
@@ -34,7 +35,7 @@ use common_planners::SortPlan;
 
 use crate::optimizers::Optimizer;
 use crate::optimizers::RequireColumnsVisitor;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 pub struct ProjectionPushDownOptimizer {}
 
@@ -209,7 +210,7 @@ impl Optimizer for ProjectionPushDownOptimizer {
 }
 
 impl ProjectionPushDownOptimizer {
-    pub fn create(_ctx: DatabendQueryContextRef) -> ProjectionPushDownOptimizer {
+    pub fn create(_ctx: Arc<DatabendQueryContext>) -> ProjectionPushDownOptimizer {
         ProjectionPushDownOptimizer {}
     }
 }

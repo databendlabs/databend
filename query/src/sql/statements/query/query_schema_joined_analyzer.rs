@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use sqlparser::ast::FunctionArg;
@@ -24,7 +26,7 @@ use sqlparser::ast::TableFactor;
 use sqlparser::ast::TableWithJoins;
 
 use crate::catalogs::Catalog;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::query::query_schema_joined::JoinedSchema;
 use crate::sql::statements::AnalyzableStatement;
@@ -32,11 +34,11 @@ use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
 
 pub struct JoinedSchemaAnalyzer {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<DatabendQueryContext>,
 }
 
 impl JoinedSchemaAnalyzer {
-    pub fn create(ctx: DatabendQueryContextRef) -> JoinedSchemaAnalyzer {
+    pub fn create(ctx: Arc<DatabendQueryContext>) -> JoinedSchemaAnalyzer {
         JoinedSchemaAnalyzer { ctx }
     }
 

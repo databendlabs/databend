@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -26,7 +27,7 @@ use common_streams::SendableDataBlockStream;
 use serde_json::Value;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 pub struct ConfigsTable {
     table_info: TableInfo,
@@ -87,7 +88,7 @@ impl Table for ConfigsTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<DatabendQueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let config = ctx.get_config();

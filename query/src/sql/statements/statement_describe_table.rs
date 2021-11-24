@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
@@ -23,7 +25,7 @@ use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
@@ -35,7 +37,7 @@ pub struct DfDescribeTable {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfDescribeTable {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: Arc<DatabendQueryContext>) -> Result<AnalyzedResult> {
         let schema = Self::schema();
         let (db, table) = self.resolve_table(ctx)?;
 
@@ -46,7 +48,7 @@ impl AnalyzableStatement for DfDescribeTable {
 }
 
 impl DfDescribeTable {
-    fn resolve_table(&self, ctx: DatabendQueryContextRef) -> Result<(String, String)> {
+    fn resolve_table(&self, ctx: Arc<DatabendQueryContext>) -> Result<(String, String)> {
         let DfDescribeTable {
             name: ObjectName(idents),
             ..

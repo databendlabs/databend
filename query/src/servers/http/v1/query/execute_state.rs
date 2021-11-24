@@ -28,7 +28,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::interpreters::InterpreterFactory;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
@@ -101,7 +101,7 @@ pub(crate) struct ExecuteRunning {
     // used to kill query
     session: SessionRef,
     // mainly used to get progress for now
-    context: DatabendQueryContextRef,
+    context: Arc<DatabendQueryContext>,
 }
 
 impl ExecuteState {

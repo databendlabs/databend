@@ -29,17 +29,17 @@ use common_streams::ValueSource;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 pub struct InsertIntoInterpreter {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<DatabendQueryContext>,
     plan: InsertIntoPlan,
     select: Option<Arc<dyn Interpreter>>,
 }
 
 impl InsertIntoInterpreter {
     pub fn try_create(
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<DatabendQueryContext>,
         plan: InsertIntoPlan,
     ) -> Result<InterpreterPtr> {
         let select = match plan.select_plan.clone().take() {

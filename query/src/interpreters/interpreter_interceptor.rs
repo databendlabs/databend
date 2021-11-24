@@ -23,16 +23,16 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 pub struct InterceptorInterpreter {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<DatabendQueryContext>,
     inner: InterpreterPtr,
     result_metric: Arc<Progress>,
 }
 
 impl InterceptorInterpreter {
-    pub fn create(ctx: DatabendQueryContextRef, inner: InterpreterPtr) -> Self {
+    pub fn create(ctx: Arc<DatabendQueryContext>, inner: InterpreterPtr) -> Self {
         InterceptorInterpreter {
             ctx,
             inner,

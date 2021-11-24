@@ -51,17 +51,17 @@ use crate::pipelines::transforms::SortPartialTransform;
 use crate::pipelines::transforms::SourceTransform;
 use crate::pipelines::transforms::SubQueriesPuller;
 use crate::pipelines::transforms::WhereTransform;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 pub struct PipelineBuilder {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<DatabendQueryContext>,
 
     limit: Option<usize>,
     offset: usize,
 }
 
 impl PipelineBuilder {
-    pub fn create(ctx: DatabendQueryContextRef) -> PipelineBuilder {
+    pub fn create(ctx: Arc<DatabendQueryContext>) -> PipelineBuilder {
         PipelineBuilder {
             ctx,
             limit: None,

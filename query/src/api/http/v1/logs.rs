@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
@@ -23,7 +25,7 @@ use poem::Response;
 use tokio_stream::StreamExt;
 
 use crate::catalogs::ToReadDataSourcePlan;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 use crate::sessions::SessionManagerRef;
 
 pub struct LogTemplate {
@@ -61,7 +63,7 @@ async fn select_table(sessions: SessionManagerRef) -> Result<String> {
     Ok(format!("{:?}", tracing_logs))
 }
 
-async fn execute_query(ctx: DatabendQueryContextRef) -> Result<SendableDataBlockStream> {
+async fn execute_query(ctx: Arc<DatabendQueryContext>) -> Result<SendableDataBlockStream> {
     let tracing_table = ctx.get_table("system", "tracing").await?;
     let tracing_table_read_plan = tracing_table.read_plan(ctx.clone(), None).await?;
 

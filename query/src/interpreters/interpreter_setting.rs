@@ -24,15 +24,15 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 pub struct SettingInterpreter {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<DatabendQueryContext>,
     set: SettingPlan,
 }
 
 impl SettingInterpreter {
-    pub fn try_create(ctx: DatabendQueryContextRef, set: SettingPlan) -> Result<InterpreterPtr> {
+    pub fn try_create(ctx: Arc<DatabendQueryContext>, set: SettingPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(SettingInterpreter { ctx, set }))
     }
 }

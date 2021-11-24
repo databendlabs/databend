@@ -38,10 +38,9 @@ use crate::pipelines::processors::Pipeline;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::pipelines::processors::Processor;
 use crate::sessions::DatabendQueryContext;
-use crate::sessions::DatabendQueryContextRef;
 
 pub struct CreateSetsTransform {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<DatabendQueryContext>,
     schema: DataSchemaRef,
     input: Arc<dyn Processor>,
     sub_queries_puller: Arc<Mutex<SubQueriesPuller<'static>>>,
@@ -49,7 +48,7 @@ pub struct CreateSetsTransform {
 
 impl CreateSetsTransform {
     pub fn try_create(
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<DatabendQueryContext>,
         schema: DataSchemaRef,
         sub_queries_puller: Arc<Mutex<SubQueriesPuller<'static>>>,
     ) -> Result<CreateSetsTransform> {
@@ -134,14 +133,14 @@ type SubqueryData = Result<DataValue>;
 type SharedFuture<'a> = Shared<BoxFuture<'a, SubqueryData>>;
 
 pub struct SubQueriesPuller<'a> {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<DatabendQueryContext>,
     expressions: Vec<Expression>,
     sub_queries: Vec<SharedFuture<'a>>,
 }
 
 impl<'a> SubQueriesPuller<'a> {
     pub fn create(
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<DatabendQueryContext>,
         expressions: Vec<Expression>,
     ) -> Arc<Mutex<SubQueriesPuller<'a>>> {
         let expression_len = expressions.len();

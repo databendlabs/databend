@@ -29,16 +29,16 @@ use log::debug;
 use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 pub struct ShowCreateTableInterpreter {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<DatabendQueryContext>,
     plan: ShowCreateTablePlan,
 }
 
 impl ShowCreateTableInterpreter {
     pub fn try_create(
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<DatabendQueryContext>,
         plan: ShowCreateTablePlan,
     ) -> Result<InterpreterPtr> {
         Ok(Arc::new(ShowCreateTableInterpreter { ctx, plan }))

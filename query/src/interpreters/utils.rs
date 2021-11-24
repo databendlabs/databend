@@ -12,16 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
 
 use super::plan_do_readsource::PlanDoReadSource;
 use crate::optimizers::Optimizers;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 pub fn apply_plan_rewrite(
-    context: DatabendQueryContextRef,
+    context: Arc<DatabendQueryContext>,
     optimizer: Optimizers,
     plan: &PlanNode,
 ) -> Result<PlanNode> {

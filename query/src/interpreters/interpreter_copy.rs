@@ -31,15 +31,15 @@ use nom::IResult;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 pub struct CopyInterpreter {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<DatabendQueryContext>,
     plan: CopyPlan,
 }
 
 impl CopyInterpreter {
-    pub fn try_create(ctx: DatabendQueryContextRef, plan: CopyPlan) -> Result<InterpreterPtr> {
+    pub fn try_create(ctx: Arc<DatabendQueryContext>, plan: CopyPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(CopyInterpreter { ctx, plan }))
     }
 }
@@ -113,7 +113,7 @@ fn extract_stage_location(path: &str) -> IResult<&str, &str> {
 //  this is mock implementation from env
 //  todo: support get the stage config from metadata
 fn get_dal_by_stage(
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<DatabendQueryContext>,
     _stage_name: &str,
 ) -> Result<Arc<dyn DataAccessor>> {
     let conf = ctx.get_config().storage.s3;

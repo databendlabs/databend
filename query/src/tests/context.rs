@@ -24,11 +24,10 @@ use crate::datasources::context::DataSourceContext;
 use crate::datasources::DatabaseEngineRegistry;
 use crate::datasources::TableEngineRegistry;
 use crate::sessions::DatabendQueryContext;
-use crate::sessions::DatabendQueryContextRef;
 use crate::sessions::DatabendQueryContextShared;
 use crate::tests::SessionManagerBuilder;
 
-pub fn try_create_context() -> Result<DatabendQueryContextRef> {
+pub fn try_create_context() -> Result<Arc<DatabendQueryContext>> {
     let sessions = SessionManagerBuilder::create().build()?;
     let dummy_session = sessions.create_session("TestSession")?;
 
@@ -42,7 +41,7 @@ pub fn try_create_context() -> Result<DatabendQueryContextRef> {
     Ok(context)
 }
 
-pub fn try_create_context_with_config(config: Config) -> Result<DatabendQueryContextRef> {
+pub fn try_create_context_with_config(config: Config) -> Result<Arc<DatabendQueryContext>> {
     let sessions = SessionManagerBuilder::create().build()?;
     let dummy_session = sessions.create_session("TestSession")?;
 
@@ -92,7 +91,7 @@ impl Default for ClusterDescriptor {
     }
 }
 
-pub fn try_create_cluster_context(desc: ClusterDescriptor) -> Result<DatabendQueryContextRef> {
+pub fn try_create_cluster_context(desc: ClusterDescriptor) -> Result<Arc<DatabendQueryContext>> {
     let sessions = SessionManagerBuilder::create().build()?;
     let dummy_session = sessions.create_session("TestSession")?;
 

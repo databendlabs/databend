@@ -60,14 +60,12 @@ pub struct DatabendQueryContext {
     shared: Arc<DatabendQueryContextShared>,
 }
 
-pub type DatabendQueryContextRef = Arc<DatabendQueryContext>;
-
 impl DatabendQueryContext {
-    pub fn new(other: DatabendQueryContextRef) -> DatabendQueryContextRef {
+    pub fn new(other: Arc<DatabendQueryContext>) -> Arc<DatabendQueryContext> {
         DatabendQueryContext::from_shared(other.shared.clone())
     }
 
-    pub fn from_shared(shared: Arc<DatabendQueryContextShared>) -> DatabendQueryContextRef {
+    pub fn from_shared(shared: Arc<DatabendQueryContextShared>) -> Arc<DatabendQueryContext> {
         shared.increment_ref_count();
 
         log::info!("Create DatabendQueryContext");

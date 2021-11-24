@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 use common_meta_types::AuthType;
 use common_planners::AlterUserPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
@@ -35,7 +37,7 @@ pub struct DfAlterUser {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfAlterUser {
     #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
-    async fn analyze(&self, _ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, _ctx: Arc<DatabendQueryContext>) -> Result<AnalyzedResult> {
         Ok(AnalyzedResult::SimpleQuery(PlanNode::AlterUser(
             AlterUserPlan {
                 if_current_user: self.if_current_user,

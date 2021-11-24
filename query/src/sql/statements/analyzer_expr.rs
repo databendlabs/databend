@@ -31,7 +31,6 @@ use sqlparser::ast::Value;
 
 use crate::functions::ContextFunction;
 use crate::sessions::DatabendQueryContext;
-use crate::sessions::DatabendQueryContextRef;
 use crate::sql::statements::analyzer_value_expr::ValueExprAnalyzer;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
@@ -40,11 +39,11 @@ use crate::sql::PlanParser;
 use crate::sql::SQLCommon;
 
 pub struct ExpressionAnalyzer {
-    context: DatabendQueryContextRef,
+    context: Arc<DatabendQueryContext>,
 }
 
 impl ExpressionAnalyzer {
-    pub fn create(context: DatabendQueryContextRef) -> ExpressionAnalyzer {
+    pub fn create(context: Arc<DatabendQueryContext>) -> ExpressionAnalyzer {
         ExpressionAnalyzer { context }
     }
 

@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::ExplainType;
 use common_tracing::tracing;
 
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
@@ -33,7 +35,7 @@ pub struct DfExplain {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfExplain {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: Arc<DatabendQueryContext>) -> Result<AnalyzedResult> {
         match self.statement.as_ref() {
             DfStatement::Query(v) => {
                 let explain_type = self.typ;
@@ -50,7 +52,7 @@ impl AnalyzableStatement for DfExplain {
 
 impl DfExplain {
     async fn analyze_explain(
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<DatabendQueryContext>,
         v: &DfQueryStatement,
     ) -> Result<Box<QueryAnalyzeState>> {
         match v.analyze(ctx).await? {

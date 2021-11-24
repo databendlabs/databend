@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilege;
@@ -19,7 +21,7 @@ use common_planners::GrantPrivilegePlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
@@ -41,7 +43,7 @@ pub enum DfGrantObject {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfGrantStatement {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: Arc<DatabendQueryContext>) -> Result<AnalyzedResult> {
         Ok(AnalyzedResult::SimpleQuery(PlanNode::GrantPrivilege(
             GrantPrivilegePlan {
                 name: self.name.clone(),

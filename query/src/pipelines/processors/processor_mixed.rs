@@ -31,11 +31,11 @@ use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::processor_merge::MergeProcessor;
 use crate::pipelines::processors::Processor;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 // M inputs--> N outputs Mixed processor
 struct MixedWorker {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<DatabendQueryContext>,
     n: usize,
     shared_num: AtomicUsize,
     started: AtomicBool,
@@ -82,7 +82,7 @@ pub struct MixedProcessor {
 }
 
 impl MixedProcessor {
-    pub fn create(ctx: DatabendQueryContextRef, n: usize) -> Self {
+    pub fn create(ctx: Arc<DatabendQueryContext>, n: usize) -> Self {
         let worker = MixedWorker {
             ctx: ctx.clone(),
             n,

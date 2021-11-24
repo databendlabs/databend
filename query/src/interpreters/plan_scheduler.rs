@@ -47,7 +47,6 @@ use crate::api::BroadcastAction;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;
 use crate::sessions::DatabendQueryContext;
-use crate::sessions::DatabendQueryContextRef;
 
 enum RunningMode {
     Cluster,
@@ -56,7 +55,7 @@ enum RunningMode {
 
 pub struct Tasks {
     plan: PlanNode,
-    context: DatabendQueryContextRef,
+    context: Arc<DatabendQueryContext>,
     actions: HashMap<String, VecDeque<FlightAction>>,
 }
 
@@ -67,12 +66,12 @@ pub struct PlanScheduler {
     local_pos: usize,
     nodes_plan: Vec<PlanNode>,
     running_mode: RunningMode,
-    query_context: DatabendQueryContextRef,
+    query_context: Arc<DatabendQueryContext>,
     subqueries_expressions: Vec<Expressions>,
 }
 
 impl PlanScheduler {
-    pub fn try_create(context: DatabendQueryContextRef) -> Result<PlanScheduler> {
+    pub fn try_create(context: Arc<DatabendQueryContext>) -> Result<PlanScheduler> {
         let cluster = context.get_cluster();
         let cluster_nodes = cluster.get_nodes();
 
@@ -117,7 +116,7 @@ impl PlanScheduler {
 }
 
 impl Tasks {
-    pub fn create(context: DatabendQueryContextRef) -> Tasks {
+    pub fn create(context: Arc<DatabendQueryContext>) -> Tasks {
         Tasks {
             context,
             actions: HashMap::new(),

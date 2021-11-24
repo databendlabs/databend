@@ -23,17 +23,17 @@ use common_tracing::tracing;
 use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 #[derive(Debug)]
 pub struct CreateDatabaseInterpreter {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<DatabendQueryContext>,
     plan: CreateDatabasePlan,
 }
 
 impl CreateDatabaseInterpreter {
     pub fn try_create(
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<DatabendQueryContext>,
         plan: CreateDatabasePlan,
     ) -> Result<InterpreterPtr> {
         Ok(Arc::new(CreateDatabaseInterpreter { ctx, plan }))

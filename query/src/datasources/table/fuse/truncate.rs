@@ -13,6 +13,8 @@
 //  limitations under the License.
 //
 
+use std::sync::Arc;
+
 use common_exception::Result;
 use common_meta_types::UpsertTableOptionReq;
 use common_planners::TruncateTablePlan;
@@ -22,13 +24,13 @@ use crate::catalogs::Catalog;
 use crate::datasources::table::fuse::util;
 use crate::datasources::table::fuse::util::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::datasources::table::fuse::FuseTable;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 impl FuseTable {
     #[inline]
     pub async fn do_truncate(
         &self,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<DatabendQueryContext>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         if let Some(prev_snapshot) = self.table_snapshot(ctx.clone()).await? {

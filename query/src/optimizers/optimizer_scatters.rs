@@ -34,10 +34,9 @@ use common_planners::StagePlan;
 
 use crate::optimizers::Optimizer;
 use crate::sessions::DatabendQueryContext;
-use crate::sessions::DatabendQueryContextRef;
 
 pub struct ScattersOptimizer {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<DatabendQueryContext>,
 }
 
 #[derive(Clone, Debug)]
@@ -47,7 +46,7 @@ enum RunningMode {
 }
 
 struct ScattersOptimizerImpl {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<DatabendQueryContext>,
     running_mode: RunningMode,
     before_group_by_schema: Option<DataSchemaRef>,
 
@@ -56,7 +55,7 @@ struct ScattersOptimizerImpl {
 }
 
 impl ScattersOptimizerImpl {
-    pub fn create(ctx: DatabendQueryContextRef) -> ScattersOptimizerImpl {
+    pub fn create(ctx: Arc<DatabendQueryContext>) -> ScattersOptimizerImpl {
         ScattersOptimizerImpl {
             ctx,
             running_mode: RunningMode::Standalone,
@@ -292,7 +291,7 @@ impl PlanRewriter for ScattersOptimizerImpl {
 }
 
 impl ScattersOptimizer {
-    pub fn create(ctx: DatabendQueryContextRef) -> ScattersOptimizer {
+    pub fn create(ctx: Arc<DatabendQueryContext>) -> ScattersOptimizer {
         ScattersOptimizer { ctx }
     }
 }

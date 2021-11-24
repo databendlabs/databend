@@ -21,16 +21,16 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 pub struct TruncateTableInterpreter {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<DatabendQueryContext>,
     plan: TruncateTablePlan,
 }
 
 impl TruncateTableInterpreter {
     pub fn try_create(
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<DatabendQueryContext>,
         plan: TruncateTablePlan,
     ) -> Result<InterpreterPtr> {
         Ok(Arc::new(TruncateTableInterpreter { ctx, plan }))

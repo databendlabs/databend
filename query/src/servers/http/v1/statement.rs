@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_base::ProgressValues;
 use common_datavalues::DataSchemaRef;
@@ -36,7 +37,7 @@ use uuid;
 
 use super::block_to_json::block_to_json;
 use crate::interpreters::InterpreterFactory;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
@@ -89,7 +90,7 @@ struct HttpQuery {
 struct HttpQueryState {
     #[allow(dead_code)]
     session: SessionRef,
-    context: DatabendQueryContextRef,
+    context: Arc<DatabendQueryContext>,
     data_stream: SendableDataBlockStream,
     schema: DataSchemaRef,
 }

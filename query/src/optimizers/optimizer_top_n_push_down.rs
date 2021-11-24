@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -24,7 +25,7 @@ use common_tracing::tracing;
 use super::MonotonicityCheckVisitor;
 use super::RequireColumnsVisitor;
 use crate::optimizers::Optimizer;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 pub struct TopNPushDownOptimizer {}
 
@@ -200,7 +201,7 @@ impl Optimizer for TopNPushDownOptimizer {
 }
 
 impl TopNPushDownOptimizer {
-    pub fn create(_ctx: DatabendQueryContextRef) -> TopNPushDownOptimizer {
+    pub fn create(_ctx: Arc<DatabendQueryContext>) -> TopNPushDownOptimizer {
         TopNPushDownOptimizer {}
     }
 }

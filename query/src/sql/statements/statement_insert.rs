@@ -31,7 +31,6 @@ use sqlparser::ast::Values;
 
 use crate::catalogs::Table;
 use crate::sessions::DatabendQueryContext;
-use crate::sessions::DatabendQueryContextRef;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
@@ -62,7 +61,7 @@ pub struct DfInsertStatement {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfInsertStatement {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: Arc<DatabendQueryContext>) -> Result<AnalyzedResult> {
         self.is_supported()?;
 
         match &self.source {
@@ -139,7 +138,7 @@ impl DfInsertStatement {
 
     async fn analyze_insert_without_source(
         &self,
-        ctx: &DatabendQueryContextRef,
+        ctx: &Arc<DatabendQueryContext>,
     ) -> Result<AnalyzedResult> {
         let (db, table) = self.resolve_table(ctx)?;
         let write_table = ctx.get_table(&db, &table).await?;
@@ -153,7 +152,7 @@ impl DfInsertStatement {
 
     async fn analyze_insert_select(
         &self,
-        ctx: &DatabendQueryContextRef,
+        ctx: &Arc<DatabendQueryContext>,
         source: &Query,
     ) -> Result<AnalyzedResult> {
         let (db, table) = self.resolve_table(ctx)?;

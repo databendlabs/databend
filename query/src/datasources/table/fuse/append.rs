@@ -13,6 +13,8 @@
 //  limitations under the License.
 //
 
+use std::sync::Arc;
+
 use common_datavalues::DataSchema;
 use common_exception::Result;
 use common_meta_types::MetaId;
@@ -31,13 +33,13 @@ use crate::datasources::table::fuse::BlockAppender;
 use crate::datasources::table::fuse::FuseTable;
 use crate::datasources::table::fuse::SegmentInfo;
 use crate::datasources::table::fuse::TableSnapshot;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 impl FuseTable {
     #[inline]
     pub async fn do_append(
         &self,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<DatabendQueryContext>,
         insert_plan: InsertIntoPlan,
         stream: SendableDataBlockStream,
     ) -> Result<()> {
@@ -101,7 +103,7 @@ fn merge_snapshot(
 }
 
 async fn commit(
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<DatabendQueryContext>,
     table_id: MetaId,
     table_version: MetaVersion,
     new_snapshot_location: String,

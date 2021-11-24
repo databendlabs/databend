@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -19,7 +21,7 @@ use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::scalars::FunctionFactory;
 use common_planners::Expression;
 
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::DatabendQueryContext;
 
 pub struct ContextFunction;
 
@@ -28,7 +30,7 @@ impl ContextFunction {
     // such as `SELECT database()`, the arg is ctx.get_default_db()
     pub fn build_args_from_ctx(
         name: &str,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<DatabendQueryContext>,
     ) -> Result<Vec<Expression>> {
         // Check the function is supported in common functions.
         let function_factory = FunctionFactory::instance();
