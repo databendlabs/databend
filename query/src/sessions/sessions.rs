@@ -49,10 +49,8 @@ pub struct SessionManager {
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
 }
 
-pub type SessionManagerRef = Arc<SessionManager>;
-
 impl SessionManager {
-    pub async fn from_conf(conf: Config) -> Result<SessionManagerRef> {
+    pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
         let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
 
         // Cluster discovery.

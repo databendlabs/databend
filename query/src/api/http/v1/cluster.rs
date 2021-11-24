@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 use poem::http::StatusCode;
 use poem::web::Data;
@@ -19,7 +21,7 @@ use poem::web::Html;
 use poem::web::IntoResponse;
 use poem::Response;
 
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionManager;
 
 pub struct ClusterTemplate {
     result: Result<String>,
@@ -45,14 +47,14 @@ impl IntoResponse for ClusterTemplate {
 // cluster_state: the shared in memory state which store all nodes known to current node
 // return: return a list of cluster node information
 #[poem::handler]
-pub async fn cluster_list_handler(sessions: Data<&SessionManagerRef>) -> ClusterTemplate {
+pub async fn cluster_list_handler(sessions: Data<&Arc<SessionManager>>) -> ClusterTemplate {
     let sessions = sessions.0;
     ClusterTemplate {
         result: list_nodes(sessions.clone()).await,
     }
 }
 
-async fn list_nodes(sessions: SessionManagerRef) -> Result<String> {
+async fn list_nodes(sessions: Arc<SessionManager>) -> Result<String> {
     let watch_cluster_session = sessions.create_session("WatchCluster")?;
     let watch_cluster_context = watch_cluster_session.create_context().await?;
 

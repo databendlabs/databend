@@ -28,7 +28,7 @@ use crate::servers::http::v1::query::execute_state::HttpQueryRequest;
 use crate::servers::http::v1::query::result_data_manager::ResponseData;
 use crate::servers::http::v1::query::result_data_manager::ResultDataManager;
 use crate::servers::http::v1::query::result_data_manager::Wait;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionManager;
 
 pub struct ResponseInitialState {
     pub schema: Option<DataSchemaRef>,
@@ -60,7 +60,7 @@ impl HttpQuery {
     pub(crate) async fn try_create(
         id: String,
         request: HttpQueryRequest,
-        session_manager: &SessionManagerRef,
+        session_manager: &Arc<SessionManager>,
     ) -> Result<HttpQueryRef> {
         //TODO(youngsofun): support config/set channel size
         let (block_tx, block_rx) = mpsc::channel(10);

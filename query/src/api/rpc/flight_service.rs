@@ -41,20 +41,20 @@ use crate::api::rpc::flight_dispatcher::DatabendQueryFlightDispatcher;
 use crate::api::rpc::flight_dispatcher::DatabendQueryFlightDispatcherRef;
 use crate::api::rpc::flight_service_stream::FlightDataStream;
 use crate::api::rpc::flight_tickets::FlightTicket;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionManager;
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
 pub struct DatabendQueryFlightService {
-    sessions: SessionManagerRef,
+    sessions: Arc<SessionManager>,
     dispatcher: Arc<DatabendQueryFlightDispatcher>,
 }
 
 impl DatabendQueryFlightService {
     pub fn create(
         dispatcher: DatabendQueryFlightDispatcherRef,
-        sessions: SessionManagerRef,
+        sessions: Arc<SessionManager>,
     ) -> Self {
         DatabendQueryFlightService {
             sessions,

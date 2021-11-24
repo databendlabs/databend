@@ -26,7 +26,7 @@ use crate::configs::Config;
 use crate::sessions::context_shared::DatabendQueryContextShared;
 use crate::sessions::DatabendQueryContext;
 use crate::sessions::MutableStatus;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionManager;
 use crate::sessions::Settings;
 use crate::users::UserApiProvider;
 
@@ -37,7 +37,7 @@ pub struct Session {
     #[ignore_malloc_size_of = "insignificant"]
     pub(in crate::sessions) config: Config,
     #[ignore_malloc_size_of = "insignificant"]
-    pub(in crate::sessions) sessions: SessionManagerRef,
+    pub(in crate::sessions) sessions: Arc<SessionManager>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) mutable_state: Arc<MutableStatus>,
 }
@@ -47,7 +47,7 @@ impl Session {
         config: Config,
         id: String,
         typ: String,
-        sessions: SessionManagerRef,
+        sessions: Arc<SessionManager>,
     ) -> Result<Arc<Session>> {
         Ok(Arc::new(Session {
             id,
@@ -152,7 +152,7 @@ impl Session {
         self.mutable_state.get_settings()
     }
 
-    pub fn get_sessions_manager(self: &Arc<Self>) -> SessionManagerRef {
+    pub fn get_sessions_manager(self: &Arc<Self>) -> Arc<SessionManager> {
         self.sessions.clone()
     }
 

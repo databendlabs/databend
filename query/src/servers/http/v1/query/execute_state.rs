@@ -29,7 +29,7 @@ use serde::Serialize;
 
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::DatabendQueryContext;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionManager;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
 
@@ -107,7 +107,7 @@ pub(crate) struct ExecuteRunning {
 impl ExecuteState {
     pub(crate) async fn try_create(
         request: &HttpQueryRequest,
-        session_manager: &SessionManagerRef,
+        session_manager: &Arc<SessionManager>,
         block_tx: mpsc::Sender<DataBlock>,
     ) -> Result<(ExecuteStateRef, DataSchemaRef)> {
         let sql = &request.sql;

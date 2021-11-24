@@ -38,7 +38,7 @@ use uuid;
 use super::block_to_json::block_to_json;
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::DatabendQueryContext;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionManager;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
 
@@ -106,7 +106,7 @@ impl HttpQuery {
         }
     }
 
-    async fn start(&mut self, session_manager: SessionManagerRef) -> Result<HttpQueryState> {
+    async fn start(&mut self, session_manager: Arc<SessionManager>) -> Result<HttpQueryState> {
         let session = session_manager.create_session("http-statement")?;
         let ctx = session.create_context().await?;
         if self.db.is_some() && !self.db.clone().unwrap().is_empty() {
@@ -126,7 +126,7 @@ impl HttpQuery {
         Ok(state)
     }
 
-    async fn initial_result(&mut self, session_manager: SessionManagerRef) -> HttpQueryResult {
+    async fn initial_result(&mut self, session_manager: Arc<SessionManager>) -> HttpQueryResult {
         let state = self.start(session_manager).await;
         let mut result = HttpQueryResult::create(self.id.clone());
         match state {
@@ -172,7 +172,7 @@ impl HttpQueryState {
 
 #[poem::handler]
 pub(crate) async fn statement_handler(
-    sessions_extension: Data<&SessionManagerRef>,
+    sessions_extension: Data<&Arc<SessionManager>>,
     sql: String,
     Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {

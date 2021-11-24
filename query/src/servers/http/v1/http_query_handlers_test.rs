@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_base::tokio;
 use common_exception::Result;
 use hyper::header;
@@ -32,7 +34,7 @@ use crate::servers::http::v1::http_query_handlers::make_state_uri;
 use crate::servers::http::v1::http_query_handlers::query_route;
 use crate::servers::http::v1::http_query_handlers::QueryResponse;
 use crate::servers::http::v1::query::execute_state::ExecuteStateName;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionManager;
 use crate::tests::SessionManagerBuilder;
 
 // TODO(youngsofun): add test for
@@ -48,7 +50,7 @@ pub fn get_page_uri(query_id: &str, page_no: usize, wait_time: u32) -> String {
     )
 }
 
-type RouteWithData = AddDataEndpoint<Route, SessionManagerRef>;
+type RouteWithData = AddDataEndpoint<Route, Arc<SessionManager>>;
 
 #[tokio::test]
 async fn test_simple_sql() -> Result<()> {

@@ -50,7 +50,7 @@ use crate::configs::AzureStorageBlobConfig;
 use crate::configs::Config;
 use crate::servers::http::v1::query::HttpQueryHandle;
 use crate::sessions::DatabendQueryContextShared;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionManager;
 use crate::sessions::Settings;
 
 pub struct DatabendQueryContext {
@@ -236,7 +236,7 @@ impl DatabendQueryContext {
         format!("_subquery_{}", index)
     }
 
-    pub fn get_sessions_manager(self: &Arc<Self>) -> SessionManagerRef {
+    pub fn get_sessions_manager(self: &Arc<Self>) -> Arc<SessionManager> {
         self.shared.session.get_sessions_manager()
     }
 

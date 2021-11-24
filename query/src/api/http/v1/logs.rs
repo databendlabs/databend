@@ -26,7 +26,7 @@ use tokio_stream::StreamExt;
 
 use crate::catalogs::ToReadDataSourcePlan;
 use crate::sessions::DatabendQueryContext;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionManager;
 
 pub struct LogTemplate {
     result: Result<String>,
@@ -45,14 +45,14 @@ impl IntoResponse for LogTemplate {
 
 // read log files from cfg.log.log_dir
 #[poem::handler]
-pub async fn logs_handler(sessions_extension: Data<&SessionManagerRef>) -> LogTemplate {
+pub async fn logs_handler(sessions_extension: Data<&Arc<SessionManager>>) -> LogTemplate {
     let sessions = sessions_extension.0;
     LogTemplate {
         result: select_table(sessions.clone()).await,
     }
 }
 
-async fn select_table(sessions: SessionManagerRef) -> Result<String> {
+async fn select_table(sessions: Arc<SessionManager>) -> Result<String> {
     let session = sessions.create_session("WatchLogs")?;
     let query_context = session.create_context().await?;
 
