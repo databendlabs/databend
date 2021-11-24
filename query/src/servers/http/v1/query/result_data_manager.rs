@@ -27,6 +27,8 @@ use crate::servers::http::v1::block_to_json::block_to_json;
 use crate::servers::http::v1::block_to_json::JsonBlock;
 use crate::servers::http::v1::block_to_json::JsonBlockRef;
 
+const TARGET_ROWS_PER_PAGE: usize = 10000;
+
 #[derive(Debug)]
 pub enum Wait {
     Async,
@@ -135,7 +137,7 @@ impl ResultDataManager {
                     rows += block.num_rows();
                     results.push(block_to_json(&block).unwrap());
                     // TODO(youngsofun):  set it in post if needed
-                    if rows >= 10000 {
+                    if rows >= TARGET_ROWS_PER_PAGE {
                         break;
                     }
                 }
