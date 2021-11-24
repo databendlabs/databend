@@ -20,8 +20,6 @@ use std::time::Instant;
 use common_base::ProgressValues;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
-use common_exception::Result;
-use hyper::http::header;
 use poem::error::Error as PoemError;
 use poem::error::NotFound;
 use poem::error::Result as PoemResult;
@@ -33,7 +31,6 @@ use poem::web::Json;
 use poem::web::Path;
 use poem::web::Query;
 use poem::IntoResponse;
-use poem::Response;
 use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
@@ -97,42 +94,33 @@ pub struct QueryResponse {
 }
 
 impl QueryResponse {
-    fn from_internal(
-        id: String,
-        result: &Result<HttpQueryResponseInternal>,
-    ) -> PoemResult<QueryResponse> {
-        match result {
-            Ok(r) => {
-                let (data, next_url) = match &r.data {
-                    Some(d) => (
-                        d.page.data.clone(),
-                        d.next_page_no.map(|n| make_page_uri(&id, n)),
-                    ),
-                    None => (Arc::new(vec![]), None),
-                };
-                let columns = r.initial_state.as_ref().and_then(|v| v.schema.clone());
-                let stats = QueryStats {
-                    progress: r.state.progress.clone(),
-                };
+    fn from_internal(id: String, r: HttpQueryResponseInternal) -> QueryResponse {
+        let (data, next_url) = match &r.data {
+            Some(d) => (
+                d.page.data.clone(),
+                d.next_page_no.map(|n| make_page_uri(&id, n)),
+            ),
+            None => (Arc::new(vec![]), None),
+        };
+        let columns = r.initial_state.as_ref().and_then(|v| v.schema.clone());
+        let stats = QueryStats {
+            progress: r.state.progress.clone(),
+        };
 
-                let resp = QueryResponse {
-                    data,
-                    state: r.state.state,
-                    columns,
-                    stats,
-                    id: id.clone(),
-                    next_uri: next_url,
-                    stats_uri: Some(make_state_uri(&id)),
-                    final_uri: Some(make_final_uri(&id)),
-                    error: r
-                        .state
-                        .error
-                        .as_ref()
-                        .map(|e| QueryError::from_error_code(e)),
-                };
-                Ok(resp)
-            }
-            Err(e) => Err(NotFound(e.message())),
+        QueryResponse {
+            data,
+            state: r.state.state,
+            columns,
+            stats,
+            id: id.clone(),
+            next_uri: next_url,
+            stats_uri: Some(make_state_uri(&id)),
+            final_uri: Some(make_final_uri(&id)),
+            error: r
+                .state
+                .error
+                .as_ref()
+                .map(|e| QueryError::from_error_code(e)),
         }
     }
 
@@ -149,23 +137,6 @@ impl QueryResponse {
             final_uri: None,
             error: Some(QueryError::from_error_code(err)),
         }
-    }
-
-    fn query_id_not_found(query_id: String) -> PoemError {
-        NotFound(format!("query id not found {}", query_id))
-    }
-}
-
-impl IntoResponse for QueryResponse {
-    fn into_response(self) -> Response {
-        let body = serde_json::to_vec(&self).unwrap();
-        // TODO(youngsofun): when should we return other status code here?
-        let status = StatusCode::OK;
-        let content_type = "application/json";
-        Response::builder()
-            .status(status)
-            .header(header::CONTENT_TYPE, content_type)
-            .body(body)
     }
 }
 
@@ -198,15 +169,15 @@ async fn query_cancel_handler(
 async fn query_state_handler(
     sessions_extension: Data<&Arc<SessionManager>>,
     Path(query_id): Path<String>,
-) -> PoemResult<QueryResponse> {
+) -> PoemResult<Json<QueryResponse>> {
     let session_manager = sessions_extension.0;
     let http_query_manager = session_manager.get_http_query_manager();
     match http_query_manager.get_query_by_id(&query_id).await {
         Some(query) => {
             let response = query.get_response_state_only().await;
-            QueryResponse::from_internal(query_id, &Ok(response))
+            Ok(Json(QueryResponse::from_internal(query_id, response)))
         }
-        None => Err(QueryResponse::query_id_not_found(query_id)),
+        None => Err(query_id_not_found(query_id)),
     }
 }
 
@@ -232,16 +203,19 @@ async fn query_page_handler(
     sessions_extension: Data<&Arc<SessionManager>>,
     Query(params): Query<PageParams>,
     Path((query_id, page_no)): Path<(String, usize)>,
-) -> PoemResult<QueryResponse> {
+) -> PoemResult<Json<QueryResponse>> {
     let session_manager = sessions_extension.0;
     let http_query_manager = session_manager.get_http_query_manager();
     match http_query_manager.get_query_by_id(&query_id).await {
         Some(query) => {
             let wait_type = params.get_wait_type();
-            let result = query.get_response_page(page_no, &wait_type, false).await;
-            QueryResponse::from_internal(query_id, &result)
+            let resp = query
+                .get_response_page(page_no, &wait_type, false)
+                .await
+                .map_err(|err| NotFound(err.message()))?;
+            Ok(Json(QueryResponse::from_internal(query_id, resp)))
         }
-        None => Err(QueryResponse::query_id_not_found(query_id)),
+        None => Err(query_id_not_found(query_id)),
     }
 }
 
@@ -250,7 +224,7 @@ pub(crate) async fn query_handler(
     sessions_extension: Data<&Arc<SessionManager>>,
     Query(params): Query<PageParams>,
     Json(req): Json<HttpQueryRequest>,
-) -> PoemResult<QueryResponse> {
+) -> PoemResult<Json<QueryResponse>> {
     log::info!("receive http query: {:?} {:?}", req, params);
     let session_manager = sessions_extension.0;
     let http_query_manager = session_manager.get_http_query_manager();
@@ -266,10 +240,16 @@ pub(crate) async fn query_handler(
                 .insert(query_id.clone(), query.clone());
 
             let wait_type = params.get_wait_type();
-            let result = query.get_response_page(0, &wait_type, true).await;
-            QueryResponse::from_internal(query.id.to_string(), &result)
+            let resp = query
+                .get_response_page(0, &wait_type, true)
+                .await
+                .map_err(|err| NotFound(err.message()))?;
+            Ok(Json(QueryResponse::from_internal(
+                query.id.to_string(),
+                resp,
+            )))
         }
-        Err(e) => Ok(QueryResponse::fail_to_start_sql(query_id, &e)),
+        Err(e) => Ok(Json(QueryResponse::fail_to_start_sql(query_id, &e))),
     }
 }
 
@@ -280,4 +260,8 @@ pub fn query_route() -> Route {
         .at("/:id", get(query_state_handler))
         .at("/:id/page/:page_no", get(query_page_handler))
         .at("/:id/kill", get(query_cancel_handler))
+}
+
+fn query_id_not_found(query_id: String) -> PoemError {
+    NotFound(format!("query id not found {}", query_id))
 }

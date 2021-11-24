@@ -37,9 +37,8 @@ impl PProfRequest {
 // return home page for default pprof results
 #[poem::handler]
 pub async fn debug_home_handler() -> impl IntoResponse {
-    return Html(format!(
+    Html(format!(
         r#"<a href="/debug/pprof/profile?seconds={}">pprof/profile</a>"#,
         PProfRequest::default_seconds()
     ))
-    .into_response();
 }

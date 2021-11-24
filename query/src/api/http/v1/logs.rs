@@ -19,40 +19,26 @@ use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 use poem::http::StatusCode;
 use poem::web::Data;
-use poem::web::Html;
 use poem::IntoResponse;
-use poem::Response;
 use tokio_stream::StreamExt;
 
 use crate::catalogs::ToReadDataSourcePlan;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 
-pub struct LogTemplate {
-    result: Result<String>,
-}
-
-impl IntoResponse for LogTemplate {
-    fn into_response(self) -> Response {
-        match self.result {
-            Ok(log) => Html(log).into_response(),
-            Err(err) => Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(format!("Failed to fetch log. Error: {}", err)),
-        }
-    }
-}
-
 // read log files from cfg.log.log_dir
 #[poem::handler]
-pub async fn logs_handler(sessions_extension: Data<&Arc<SessionManager>>) -> LogTemplate {
-    let sessions = sessions_extension.0;
-    LogTemplate {
-        result: select_table(sessions.clone()).await,
-    }
+pub async fn logs_handler(
+    sessions_extension: Data<&Arc<SessionManager>>,
+) -> poem::Result<impl IntoResponse> {
+    let data = select_table(sessions_extension.0).await.map_err(|err| {
+        poem::Error::new(StatusCode::INTERNAL_SERVER_ERROR)
+            .with_reason(format!("Failed to fetch log. Error: {}", err))
+    })?;
+    Ok(data)
 }
 
-async fn select_table(sessions: Arc<SessionManager>) -> Result<String> {
+async fn select_table(sessions: &Arc<SessionManager>) -> Result<String> {
     let session = sessions.create_session("WatchLogs")?;
     let query_context = session.create_context().await?;
 

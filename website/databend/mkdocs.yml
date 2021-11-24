@@ -241,6 +241,7 @@ nav:
       - Profling: development/profiling.md
       - Roadmap: development/roadmap.md
       - Databend release channels: development/release-channels.md
+      - How to write scalar functions: development/how-to-write-scalar-functions.md
       - How to write aggregate functions: development/how-to-write-aggregate-functions.md
       - How to get server logs: development/how-to-get-server-logs.md
       - RFCs:

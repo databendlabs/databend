@@ -15,31 +15,13 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_types::NodeInfo;
 use poem::http::StatusCode;
 use poem::web::Data;
-use poem::web::Html;
 use poem::web::IntoResponse;
-use poem::Response;
+use poem::web::Json;
 
 use crate::sessions::SessionManager;
-
-pub struct ClusterTemplate {
-    result: Result<String>,
-}
-
-impl IntoResponse for ClusterTemplate {
-    fn into_response(self) -> Response {
-        match self.result {
-            Ok(nodes) => Html(nodes).into_response(),
-            Err(cause) => Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(format!(
-                    "Failed to fetch cluster nodes list. cause: {}",
-                    cause
-                )),
-        }
-    }
-}
 
 // GET /v1/cluster/list
 // list all nodes in current databend-query cluster
@@ -47,17 +29,20 @@ impl IntoResponse for ClusterTemplate {
 // cluster_state: the shared in memory state which store all nodes known to current node
 // return: return a list of cluster node information
 #[poem::handler]
-pub async fn cluster_list_handler(sessions: Data<&Arc<SessionManager>>) -> ClusterTemplate {
-    let sessions = sessions.0;
-    ClusterTemplate {
-        result: list_nodes(sessions.clone()).await,
-    }
+pub async fn cluster_list_handler(
+    sessions: Data<&Arc<SessionManager>>,
+) -> poem::Result<impl IntoResponse> {
+    let nodes = list_nodes(sessions.0).await.map_err(|cause| {
+        poem::Error::new(StatusCode::INTERNAL_SERVER_ERROR).with_reason(format!(
+            "Failed to fetch cluster nodes list. cause: {}",
+            cause
+        ))
+    })?;
+    Ok(Json(nodes))
 }
 
-async fn list_nodes(sessions: Arc<SessionManager>) -> Result<String> {
+async fn list_nodes(sessions: &Arc<SessionManager>) -> Result<Vec<Arc<NodeInfo>>> {
     let watch_cluster_session = sessions.create_session("WatchCluster")?;
     let watch_cluster_context = watch_cluster_session.create_context().await?;
-
-    let nodes_list = watch_cluster_context.get_cluster().get_nodes();
-    Ok(serde_json::to_string(&nodes_list)?)
+    Ok(watch_cluster_context.get_cluster().get_nodes())
 }

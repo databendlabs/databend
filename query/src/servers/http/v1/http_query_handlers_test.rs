@@ -139,6 +139,61 @@ async fn test_async() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn test_multi_page() -> Result<()> {
+    let sessions = SessionManagerBuilder::create().build()?;
+    let route = Route::new().nest("/v1/query", query_route()).data(sessions);
+
+    let max_block_size = 10000;
+    let num_parts = num_cpus::get();
+    let sql = format!("select * from numbers({})", max_block_size * num_parts);
+
+    let json = serde_json::json!({"sql": sql.to_string()});
+    let (status, result) = post_json_to_router(&route, &json, 3).await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(result.data.len(), max_block_size);
+    let query_id = result.id;
+    let mut next_uri = get_page_uri(&query_id, 1, 3);
+
+    for p in 1..(num_parts + 1) {
+        let (status, result) = get_uri_checked(&route, &next_uri).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert!(result.error.is_none());
+        assert!(result.stats.progress.is_some());
+        if p == num_parts {
+            assert_eq!(result.data.len(), 0);
+            assert_eq!(result.next_uri, None);
+            assert_eq!(result.state, ExecuteStateName::Succeeded);
+        } else {
+            assert_eq!(result.data.len(), 10000);
+            assert_eq!(result.next_uri, Some(make_page_uri(&query_id, p + 1)));
+            next_uri = get_page_uri(&query_id, p + 1, 3);
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_insert() -> Result<()> {
+    let sessions = SessionManagerBuilder::create().build()?;
+    let route = Route::new().nest("/v1/query", query_route()).data(sessions);
+
+    let sqls = vec![
+        ("create table t(a int) engine=fuse", 0),
+        ("insert into t(a) values (1),(2)", 0),
+        ("select * from t", 2),
+    ];
+
+    for (sql, data_len) in sqls {
+        let json = serde_json::json!({"sql": sql.to_string()});
+        let (status, result) = post_json_to_router(&route, &json, 3).await?;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(result.data.len(), data_len);
+        assert_eq!(result.state, ExecuteStateName::Succeeded);
+    }
+    Ok(())
+}
+
 async fn delete_query(route: &RouteWithData, query_id: String) -> StatusCode {
     let uri = make_final_uri(&query_id);
     let resp = get_uri(route, &uri).await;
