@@ -94,11 +94,7 @@ impl Table for FuseTable {
         )))
     }
 
-    async fn commit(
-        &self,
-        _ctx: DatabendQueryContextRef,
-        operations: Vec<DataBlock>,
-    ) -> Result<()> {
+    async fn commit(&self, _ctx: Arc<QueryContext>, operations: Vec<DataBlock>) -> Result<()> {
         // only append operation supported currently
         let append_log_entries = operations
             .iter()

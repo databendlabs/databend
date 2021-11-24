@@ -25,17 +25,17 @@ use common_tracing::tracing;
 use crate::catalogs::Catalog;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct SinkTransform {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<QueryContext>,
     table_info: TableInfo,
     input: Arc<dyn Processor>,
     cast_needed: bool,
 }
 
 impl SinkTransform {
-    pub fn create(ctx: DatabendQueryContextRef, table_info: TableInfo, cast_needed: bool) -> Self {
+    pub fn create(ctx: Arc<QueryContext>, table_info: TableInfo, cast_needed: bool) -> Self {
         Self {
             ctx,
             table_info,

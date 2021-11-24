@@ -33,12 +33,12 @@ use crate::api::CancelAction;
 use crate::api::FlightAction;
 use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::pipelines::processors::PipelineBuilder;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub type Scheduled = HashMap<String, Arc<NodeInfo>>;
 
 pub async fn schedule_query(
-    ctx: &DatabendQueryContextRef,
+    ctx: &Arc<QueryContext>,
     plan: &PlanNode,
 ) -> Result<SendableDataBlockStream> {
     let scheduler = PlanScheduler::try_create(ctx.clone())?;
@@ -71,7 +71,7 @@ pub async fn schedule_query(
 pub struct ScheduledStream {
     scheduled: Scheduled,
     is_success: AtomicBool,
-    context: DatabendQueryContextRef,
+    context: Arc<QueryContext>,
     inner: SendableDataBlockStream,
 }
 
@@ -79,7 +79,7 @@ impl ScheduledStream {
     pub fn create(
         scheduled: Scheduled,
         inner: SendableDataBlockStream,
-        context: DatabendQueryContextRef,
+        context: Arc<QueryContext>,
     ) -> SendableDataBlockStream {
         Box::pin(ScheduledStream {
             inner,
@@ -122,7 +122,7 @@ impl Stream for ScheduledStream {
     }
 }
 
-async fn error_handler(scheduled: Scheduled, context: &DatabendQueryContextRef, timeout: u64) {
+async fn error_handler(scheduled: Scheduled, context: &Arc<QueryContext>, timeout: u64) {
     let query_id = context.get_id();
     let config = context.get_config();
     let cluster = context.get_cluster();

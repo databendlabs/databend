@@ -13,6 +13,8 @@
 //  limitations under the License.
 //
 
+use std::sync::Arc;
+
 use common_datavalues::DataSchema;
 use common_exception::Result;
 use common_meta_types::TableIdent;
@@ -26,13 +28,13 @@ use crate::datasources::table::fuse::util;
 use crate::datasources::table::fuse::util::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::datasources::table::fuse::FuseTable;
 use crate::datasources::table::fuse::TableSnapshot;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 impl FuseTable {
     #[inline]
     pub async fn do_commit(
         &self,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
         operation_log: TableOperationLog,
     ) -> Result<()> {
         // TODO OCC retry & resolves conflicts if applicable
@@ -87,7 +89,7 @@ impl FuseTable {
 
     async fn commit_to_meta_server(
         &self,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
         new_snapshot_location: String,
     ) -> Result<UpsertTableOptionReply> {
         let table_id = self.table_info.ident.table_id;

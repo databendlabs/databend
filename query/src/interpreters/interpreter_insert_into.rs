@@ -43,10 +43,7 @@ pub struct InsertIntoInterpreter {
 }
 
 impl InsertIntoInterpreter {
-    pub fn try_create(
-        ctx: DatabendQueryContextRef,
-        plan: InsertIntoPlan,
-    ) -> Result<InterpreterPtr> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: InsertIntoPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(InsertIntoInterpreter { ctx, plan }))
     }
 }

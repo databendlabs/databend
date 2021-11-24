@@ -15,7 +15,6 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchema;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 
@@ -23,9 +22,6 @@ use crate::datasources::table::fuse::operations::AppendOperation;
 use crate::datasources::table::fuse::util;
 use crate::datasources::table::fuse::BlockAppender;
 use crate::datasources::table::fuse::FuseTable;
-use crate::datasources::table::fuse::SegmentInfo;
-use crate::datasources::table::fuse::TableSnapshot;
-use crate::sessions::DatabendQueryContextRef;
 use crate::sessions::QueryContext;
 
 impl FuseTable {
