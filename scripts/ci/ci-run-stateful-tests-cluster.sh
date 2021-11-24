@@ -2,6 +2,7 @@
 # Copyright 2020-2021 The Databend Authors.
 # SPDX-License-Identifier: Apache-2.0.
 export DATASET_SHA256=429c47cdd49b7d75eec9b9244c8b1288edd132506203e37d2d1e70e1ac1eccc7
+export BENDCTL=./target/release/bendctl
 
 echo "Starting 3 nodes databend cluster through bendctl"
 killall databend-query
@@ -30,14 +31,14 @@ else
     exit 1
 fi
 
-./target/debug/bendctl --databend_dir ./.databend --group local query ./tests/suites/0_stateful/ddl/create_table.sql
+$BENDCTL --databend_dir ./.databend --group local query ./tests/suites/0_stateful/ddl/create_table.sql
 if [ $? -eq 0 ]; then
     echo "dataset table DDL passed"
 else
     echo "cannot create DDL"
     exit 1
 fi
-./target/debug/bendctl --databend_dir ./.databend --group local load $HOME/dataset/ontime.csv --table ontime
+$BENDCTL --databend_dir ./.databend --group local load $HOME/dataset/ontime.csv --table ontime
 if [ $? -eq 0 ]; then
     echo "successfull loaded ontime dataset"
 else
@@ -47,7 +48,7 @@ echo "Starting stateful databend-test"
 # Create table
 # shellcheck disable=SC2044
 for i in `find ./tests/suites/0_stateful/sql -name "*.sql" -type f`; do
-  ./target/debug/bendctl --databend_dir ./.databend --group local query $i 2>$i.error > $i.out
+  $BENDCTL --databend_dir ./.databend --group local query $i 2>$i.error > $i.out
   # shellcheck disable=SC2046
   if [ $(cat $i.error | wc -l ) -ne 0 ]; then
       cat $i.error
