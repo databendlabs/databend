@@ -30,7 +30,6 @@ use futures::StreamExt;
 
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
-use crate::clusters::ClusterDiscoveryRef;
 use crate::configs::Config;
 use crate::servers::http::v1::query::HttpQueryManager;
 use crate::servers::http::v1::query::HttpQueryManagerRef;
@@ -40,7 +39,7 @@ use crate::users::UserApiProvider;
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
-    pub(in crate::sessions) discovery: ClusterDiscoveryRef,
+    pub(in crate::sessions) discovery: Arc<ClusterDiscovery>,
     pub(in crate::sessions) catalog: Arc<DatabaseCatalog>,
     pub(in crate::sessions) user: Arc<UserApiProvider>,
     pub(in crate::sessions) http_query_manager: HttpQueryManagerRef,
@@ -77,7 +76,7 @@ impl SessionManager {
         &self.conf
     }
 
-    pub fn get_cluster_discovery(self: &Arc<Self>) -> ClusterDiscoveryRef {
+    pub fn get_cluster_discovery(self: &Arc<Self>) -> Arc<ClusterDiscovery> {
         self.discovery.clone()
     }
 

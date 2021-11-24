@@ -31,7 +31,7 @@ use uuid::Uuid;
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::Catalog;
 use crate::catalogs::Table;
-use crate::clusters::ClusterRef;
+use crate::clusters::Cluster;
 use crate::configs::Config;
 use crate::servers::http::v1::query::HttpQueryHandle;
 use crate::sessions::Session;
@@ -54,7 +54,7 @@ pub struct DatabendQueryContextShared {
     pub(in crate::sessions) session: Arc<Session>,
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
-    pub(in crate::sessions) cluster_cache: ClusterRef,
+    pub(in crate::sessions) cluster_cache: Arc<Cluster>,
     pub(in crate::sessions) sources_abort_handle: Arc<RwLock<Vec<AbortHandle>>>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) subquery_index: Arc<AtomicUsize>,
@@ -69,7 +69,7 @@ impl DatabendQueryContextShared {
     pub fn try_create(
         conf: Config,
         session: Arc<Session>,
-        cluster_cache: ClusterRef,
+        cluster_cache: Arc<Cluster>,
     ) -> Arc<DatabendQueryContextShared> {
         Arc::new(DatabendQueryContextShared {
             conf,
@@ -104,7 +104,7 @@ impl DatabendQueryContextShared {
         // TODO: Wait for the query to be processed (write out the last error)
     }
 
-    pub fn get_cluster(&self) -> ClusterRef {
+    pub fn get_cluster(&self) -> Arc<Cluster> {
         self.cluster_cache.clone()
     }
 

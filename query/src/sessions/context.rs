@@ -45,7 +45,7 @@ use common_streams::SendableDataBlockStream;
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::Catalog;
 use crate::catalogs::Table;
-use crate::clusters::ClusterRef;
+use crate::clusters::Cluster;
 use crate::configs::AzureStorageBlobConfig;
 use crate::configs::Config;
 use crate::servers::http::v1::query::HttpQueryHandle;
@@ -171,7 +171,7 @@ impl DatabendQueryContext {
         self.shared.attach_query_plan(query_plan);
     }
 
-    pub fn get_cluster(&self) -> ClusterRef {
+    pub fn get_cluster(&self) -> Arc<Cluster> {
         self.shared.get_cluster()
     }
 
