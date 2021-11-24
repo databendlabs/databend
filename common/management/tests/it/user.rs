@@ -59,6 +59,7 @@ fn format_user_key(username: &str, hostname: &str) -> String {
 mod add {
     use common_meta_types::AuthType;
     use common_meta_types::Operation;
+    use common_meta_types::UserInfo;
 
     use super::*;
 
@@ -176,6 +177,7 @@ mod add {
 
 mod get {
     use common_meta_types::AuthType;
+    use common_meta_types::UserInfo;
 
     use super::*;
 
@@ -327,6 +329,7 @@ mod get {
 
 mod get_users {
     use common_meta_types::AuthType;
+    use common_meta_types::UserInfo;
 
     use super::*;
 
@@ -469,6 +472,7 @@ mod drop {
 
 mod update {
     use common_meta_types::AuthType;
+    use common_meta_types::UserInfo;
 
     use super::*;
 
@@ -722,6 +726,7 @@ mod update {
 
 mod set_user_privileges {
     use common_meta_types::AuthType;
+    use common_meta_types::UserInfo;
     use common_meta_types::UserPrivilege;
     use common_meta_types::UserPrivilegeType;
 

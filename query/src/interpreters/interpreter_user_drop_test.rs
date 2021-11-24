@@ -14,8 +14,8 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_management::UserInfo;
 use common_meta_types::AuthType;
+use common_meta_types::UserInfo;
 use common_planners::*;
 use pretty_assertions::assert_eq;
 
