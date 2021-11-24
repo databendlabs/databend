@@ -36,14 +36,13 @@ use crate::servers::http::v1::query::HttpQueryManager;
 use crate::servers::http::v1::query::HttpQueryManagerRef;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
-use crate::users::UserManager;
-use crate::users::UserManagerRef;
+use crate::users::UserApiProvider;
 
 pub struct SessionManager {
     pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) discovery: ClusterDiscoveryRef,
     pub(in crate::sessions) catalog: Arc<DatabaseCatalog>,
-    pub(in crate::sessions) user: UserManagerRef,
+    pub(in crate::sessions) user: Arc<UserApiProvider>,
     pub(in crate::sessions) http_query_manager: HttpQueryManagerRef,
 
     pub(in crate::sessions) max_sessions: usize,
@@ -60,7 +59,7 @@ impl SessionManager {
         let discovery = ClusterDiscovery::create_global(conf.clone()).await?;
 
         // User manager and init the default users.
-        let user = UserManager::create_global(conf.clone()).await?;
+        let user = UserApiProvider::create_global(conf.clone()).await?;
 
         let http_query_manager = HttpQueryManager::create_global(conf.clone()).await?;
 
@@ -89,7 +88,7 @@ impl SessionManager {
     }
 
     // Get the user api provider.
-    pub fn get_user_manager(self: &Arc<Self>) -> UserManagerRef {
+    pub fn get_user_manager(self: &Arc<Self>) -> Arc<UserApiProvider> {
         self.user.clone()
     }
 

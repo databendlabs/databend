@@ -21,7 +21,7 @@ use pretty_assertions::assert_eq;
 
 use crate::configs::Config;
 use crate::users::User;
-use crate::users::UserManager;
+use crate::users::UserApiProvider;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_manager() -> Result<()> {
@@ -32,7 +32,7 @@ async fn test_user_manager() -> Result<()> {
     let hostname = "localhost";
     let hostname2 = "%";
     let pwd = "test-pwd";
-    let user_mgr = UserManager::create_global(config).await?;
+    let user_mgr = UserApiProvider::create_global(config).await?;
 
     // add user hostname.
     {

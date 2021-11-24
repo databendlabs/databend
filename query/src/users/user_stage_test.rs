@@ -18,7 +18,7 @@ use common_meta_types::UserStageInfo;
 use pretty_assertions::assert_eq;
 
 use crate::configs::Config;
-use crate::users::UserManager;
+use crate::users::UserApiProvider;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_stage() -> Result<()> {
@@ -28,7 +28,7 @@ async fn test_user_stage() -> Result<()> {
     let comments = "this is a comment";
     let stage_name1 = "stage1";
     let stage_name2 = "stage2";
-    let user_mgr = UserManager::create_global(config).await?;
+    let user_mgr = UserApiProvider::create_global(config).await?;
 
     // add 1.
     {

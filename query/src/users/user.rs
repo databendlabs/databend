@@ -63,3 +63,19 @@ impl From<User> for UserInfo {
         UserInfo::from(&user)
     }
 }
+
+pub struct CertifiedInfo {
+    pub user_name: String,
+    pub user_password: Vec<u8>,
+    pub user_client_address: String,
+}
+
+impl CertifiedInfo {
+    pub fn create(user: &str, password: impl AsRef<[u8]>, address: &str) -> CertifiedInfo {
+        CertifiedInfo {
+            user_name: user.to_string(),
+            user_password: password.as_ref().to_vec(),
+            user_client_address: address.to_string(),
+        }
+    }
+}
