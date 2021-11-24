@@ -112,11 +112,10 @@ impl MutableCatalog {
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
         // TODO(bohu): Add the database engine match, now we set only one fuse database here, like:
-        // match db_info.engine {
-        //    "default" ->  create fuse database
-        //    "github" ->  create github database
-        // }
-        let engine = "DEFAULT";
+        let mut engine = db_info.meta.engine.as_str();
+        if engine == "" {
+            engine = "DEFAULT";
+        }
         let factory = self
             .ctx
             .database_engine_registry
@@ -152,7 +151,25 @@ impl Catalog for MutableCatalog {
     }
 
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
-        self.ctx.meta.create_database(req).await
+        let mut engine = req.engine.clone();
+        if engine == "" {
+            engine = "DEFAULT".to_string();
+        }
+        let res = self.ctx.meta.create_database(req.clone()).await?;
+
+        let factory = self
+            .ctx
+            .database_engine_registry
+            .get_database_factory(&engine)
+            .ok_or_else(|| {
+                ErrorCode::UnknownDatabaseEngine(format!("unknown database engine {}", &req.engine))
+            })?;
+        tracing::error!("db name: {}, engine: {}", &req.db, &req.engine);
+        let db: Arc<dyn Database> = factory.try_create(&req.db, self.ctx.clone())?.into();
+        // if database created successfully, then init database
+        db.init().await?;
+
+        Ok(res)
     }
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<()> {

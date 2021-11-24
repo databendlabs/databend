@@ -34,7 +34,7 @@ impl From<CreateDatabasePlan> for CreateDatabaseReq {
         CreateDatabaseReq {
             if_not_exists: p.if_not_exists,
             db: p.db.clone(),
-            engine: "".to_string(),
+            engine: p.engine.to_string(),
             options: p.options,
         }
     }
@@ -45,7 +45,7 @@ impl From<&CreateDatabasePlan> for CreateDatabaseReq {
         CreateDatabaseReq {
             if_not_exists: p.if_not_exists,
             db: p.db.clone(),
-            engine: p.db.clone(),
+            engine: p.engine.clone(),
             options: p.options.clone(),
         }
     }

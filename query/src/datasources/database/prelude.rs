@@ -24,6 +24,6 @@ use crate::datasources::DatabaseEngineRegistry;
 pub fn register_database_engines(registry: &DatabaseEngineRegistry) -> Result<()> {
     // Register a DEFAULT database engine.
     registry.register("DEFAULT", Arc::new(FuseDatabase::try_create))?;
-    registry.register("GITHUB", Arc::new(FuseDatabase::try_create))?;
+    registry.register("GITHUB", Arc::new(GithubDatabase::try_create))?;
     Ok(())
 }

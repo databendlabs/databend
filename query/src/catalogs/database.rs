@@ -28,6 +28,10 @@ pub trait Database: DynClone + Sync + Send {
     /// Database name.
     fn name(&self) -> &str;
 
+    async fn init(&self) -> Result<()> {
+        Ok(())
+    }
+
     // Get one table by db and table name.
     async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>>;
 

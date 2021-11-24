@@ -14,5 +14,13 @@
 //
 
 mod database;
+mod repo_comments_table;
+mod repo_info_table;
+mod repo_issues_table;
+mod repo_prs_table;
 
 pub use database::GithubDatabase;
+pub use repo_comments_table::RepoCommentsTable;
+pub use repo_info_table::RepoInfoTable;
+pub use repo_issues_table::RepoIssuesTable;
+pub use repo_prs_table::RepoPrsTable;
