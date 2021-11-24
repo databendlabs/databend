@@ -100,24 +100,8 @@ impl RequestHandler<FlightReq<GetDatabaseReq>> for ActionHandler {
         &self,
         act: FlightReq<GetDatabaseReq>,
     ) -> common_exception::Result<Arc<DatabaseInfo>> {
-        let db_name = &act.req.db_name;
-        let db_id = self
-            .meta_node
-            .get_state_machine()
-            .await
-            .get_database_id(db_name)?;
-
-        let seq_meta = self
-            .meta_node
-            .get_state_machine()
-            .await
-            .get_database_meta_by_id(&db_id)?;
-
-        Ok(Arc::new(DatabaseInfo {
-            database_id: db_id,
-            db: db_name.to_string(),
-            meta: seq_meta.data,
-        }))
+        let sm = self.meta_node.get_state_machine().await;
+        sm.get_database(act.req).await
     }
 }
 
@@ -250,33 +234,8 @@ impl RequestHandler<FlightReq<GetTableReq>> for ActionHandler {
         &self,
         act: FlightReq<GetTableReq>,
     ) -> common_exception::Result<Arc<TableInfo>> {
-        let db_name = &act.req.db_name;
-        let table_name = &act.req.table_name;
-
-        let db_id = self
-            .meta_node
-            .get_state_machine()
-            .await
-            .get_database_id(db_name)?;
-
-        let seq_table_id = self
-            .meta_node
-            .lookup_table_id(db_id, table_name)
-            .await?
-            .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table: '{:}'", table_name)))?;
-
-        let table_id = seq_table_id.data.0;
-        let result = self.meta_node.get_table_by_id(&table_id).await?;
-
-        match result {
-            Some(table) => Ok(Arc::new(TableInfo::new(
-                db_name,
-                table_name,
-                TableIdent::new(table_id, table.seq),
-                table.data,
-            ))),
-            None => Err(ErrorCode::UnknownTable(table_name)),
-        }
+        let sm = self.meta_node.get_state_machine().await;
+        sm.get_table(act.req).await
     }
 }
 
@@ -307,11 +266,8 @@ impl RequestHandler<FlightReq<ListDatabaseReq>> for ActionHandler {
         &self,
         req: FlightReq<ListDatabaseReq>,
     ) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
-        self.meta_node
-            .get_state_machine()
-            .await
-            .list_databases(req.req)
-            .await
+        let sm = self.meta_node.get_state_machine().await;
+        sm.list_databases(req.req).await
     }
 }
 
@@ -321,7 +277,8 @@ impl RequestHandler<FlightReq<ListTableReq>> for ActionHandler {
         &self,
         req: FlightReq<ListTableReq>,
     ) -> common_exception::Result<Vec<Arc<TableInfo>>> {
-        self.meta_node.list_tables(req.req).await
+        let sm = self.meta_node.get_state_machine().await;
+        sm.list_tables(req.req).await
     }
 }
 #[async_trait::async_trait]
