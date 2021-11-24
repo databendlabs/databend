@@ -16,7 +16,6 @@
 use common_base::tokio;
 use common_dal::DataAccessor;
 use common_dal::Local;
-use common_exception::ErrorCode;
 use tempfile::TempDir;
 
 async fn local_read(loops: u32) -> common_exception::Result<()> {

@@ -73,6 +73,7 @@ mod interpreter_user_drop;
 mod plan_do_readsource;
 #[allow(clippy::needless_range_loop)]
 mod plan_scheduler;
+mod schedule;
 mod utils;
 
 pub use interpreter::Interpreter;

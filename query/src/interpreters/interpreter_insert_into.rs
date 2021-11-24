@@ -31,8 +31,8 @@ use common_streams::ValueSource;
 use futures::TryStreamExt;
 
 use crate::catalogs::Table;
-use crate::interpreters::interpreter_select::Scheduled;
 use crate::interpreters::plan_scheduler::PlanScheduler;
+use crate::interpreters::schedule::Scheduled;
 use crate::interpreters::utils::apply_plan_rewrite;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -67,6 +67,8 @@ impl InsertIntoInterpreter {
                     "Fields in select statement is less than expected",
                 ));
             }
+
+            // check if cast needed
             let cast_needed = select_schema != output_schema;
 
             let mut scheduled = Scheduled::new();
@@ -130,7 +132,6 @@ impl Interpreter for InsertIntoInterpreter {
 }
 
 impl InsertIntoInterpreter {
-    // TODO duplicated code!
     async fn schedule_query(
         &self,
         scheduled: &mut Scheduled,
