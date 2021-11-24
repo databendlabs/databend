@@ -17,6 +17,7 @@ use std::convert::TryInto;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
+use common_meta_api::MetaApi;
 use common_meta_flight::FlightReq;
 use common_meta_flight::GetTableExtReq;
 use common_meta_raft_store::state_machine::AppliedState;
@@ -106,17 +107,16 @@ impl RequestHandler<FlightReq<GetDatabaseReq>> for ActionHandler {
             .await
             .get_database_id(db_name)?;
 
-        let db_meta = self
+        let seq_meta = self
             .meta_node
             .get_state_machine()
             .await
-            .get_database_by_id(&db_id)?
-            .ok_or_else(|| ErrorCode::UnknownDatabaseId(format!("database_id: {}", db_id)))?;
+            .get_database_meta_by_id(&db_id)?;
 
         Ok(Arc::new(DatabaseInfo {
             database_id: db_id,
             db: db_name.to_string(),
-            meta: db_meta.data,
+            meta: seq_meta.data,
         }))
     }
 }
@@ -305,20 +305,13 @@ impl RequestHandler<GetTableExtReq> for ActionHandler {
 impl RequestHandler<FlightReq<ListDatabaseReq>> for ActionHandler {
     async fn handle(
         &self,
-        _req: FlightReq<ListDatabaseReq>,
+        req: FlightReq<ListDatabaseReq>,
     ) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
-        let res = self.meta_node.get_state_machine().await.get_databases()?;
-
-        Ok(res
-            .iter()
-            .map(|(name, db, meta)| {
-                Arc::new(DatabaseInfo {
-                    database_id: *db,
-                    db: name.to_string(),
-                    meta: meta.clone(),
-                })
-            })
-            .collect::<Vec<_>>())
+        self.meta_node
+            .get_state_machine()
+            .await
+            .list_databases(req.req)
+            .await
     }
 }
 

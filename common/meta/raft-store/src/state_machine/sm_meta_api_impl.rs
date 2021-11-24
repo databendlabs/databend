@@ -95,15 +95,12 @@ impl MetaApi for StateMachine {
 
     async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, ErrorCode> {
         let db_id = self.get_database_id(&req.db_name)?;
-
-        let db_meta = self
-            .get_database_by_id(&db_id)?
-            .ok_or_else(|| ErrorCode::UnknownDatabaseId(format!("database_id: {}", db_id)))?;
+        let seq_meta = self.get_database_meta_by_id(&db_id)?;
 
         let dbi = DatabaseInfo {
             database_id: db_id,
             db: req.db_name.clone(),
-            meta: db_meta.data,
+            meta: seq_meta.data,
         };
         Ok(Arc::new(dbi))
     }
@@ -112,17 +109,22 @@ impl MetaApi for StateMachine {
         &self,
         _req: ListDatabaseReq,
     ) -> Result<Vec<Arc<DatabaseInfo>>, ErrorCode> {
-        let res = self.get_databases()?;
-        Ok(res
-            .iter()
-            .map(|(name, db, meta)| {
-                Arc::new(DatabaseInfo {
-                    database_id: *db,
-                    db: name.to_string(),
-                    meta: meta.clone(),
-                })
-            })
-            .collect::<Vec<_>>())
+        let mut res = vec![];
+
+        let it = self.database_lookup().range(..)?;
+        for r in it {
+            let (db_name, seq_id) = r?;
+            let seq_meta = self.get_database_meta_by_id(&seq_id.data)?;
+
+            let db_info = DatabaseInfo {
+                database_id: seq_id.data,
+                db: db_name,
+                meta: seq_meta.data,
+            };
+            res.push(Arc::new(db_info));
+        }
+
+        Ok(res)
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, ErrorCode> {

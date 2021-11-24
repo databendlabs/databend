@@ -23,6 +23,7 @@ pub struct DatabaseNameIdent {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseInfo {
+    // TODO(xp): store the seq AKA version for CAS update
     pub database_id: u64,
     pub db: String,
     pub meta: DatabaseMeta,

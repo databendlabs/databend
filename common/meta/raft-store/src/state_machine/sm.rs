@@ -674,24 +674,12 @@ impl StateMachine {
         sm_nodes.get(node_id)
     }
 
-    pub fn get_database_by_id(&self, did: &u64) -> Result<Option<SeqV<DatabaseMeta>>, ErrorCode> {
-        let x = self.databases().get(did)?;
+    pub fn get_database_meta_by_id(&self, db_id: &u64) -> Result<SeqV<DatabaseMeta>, ErrorCode> {
+        let x = self
+            .databases()
+            .get(db_id)?
+            .ok_or_else(|| ErrorCode::UnknownDatabaseId(format!("database_id: {}", db_id)))?;
         Ok(x)
-    }
-
-    pub fn get_databases(&self) -> Result<Vec<(String, u64, DatabaseMeta)>, ErrorCode> {
-        let mut res = vec![];
-
-        let it = self.database_lookup().range(..)?;
-        for r in it {
-            let (a, b) = r?;
-            let meta = self
-                .get_database_by_id(&b.data)?
-                .ok_or_else(|| ErrorCode::UnknownDatabaseId(format!("database_id: {}", b.data)))?;
-            res.push((a, b.data, meta.data));
-        }
-
-        Ok(res)
     }
 
     pub fn get_database_meta_ver(&self) -> common_exception::Result<Option<u64>> {
