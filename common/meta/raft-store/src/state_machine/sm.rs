@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::convert::TryInto;
 use std::fmt::Debug;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -241,10 +242,7 @@ impl StateMachine {
     /// will be made and the previous resp is returned. In this way a client is able to re-send a
     /// command safely in case of network failure etc.
     #[tracing::instrument(level = "trace", skip(self))]
-    pub async fn apply(
-        &mut self,
-        entry: &Entry<LogEntry>,
-    ) -> common_exception::Result<AppliedState> {
+    pub async fn apply(&self, entry: &Entry<LogEntry>) -> common_exception::Result<AppliedState> {
         // TODO(xp): all update need to be done in a tx.
 
         let log_id = &entry.log_id;
@@ -401,7 +399,7 @@ impl StateMachine {
                 if let Some(u) = seq_table_id {
                     let table_id = u.data.0;
 
-                    let prev = self.get_table_by_id(&table_id)?;
+                    let prev = self.get_table_meta_by_id(&table_id)?;
                     let prev = prev.map(|x| TableIdent::new(table_id, x.seq));
                     return Ok((prev.clone(), prev).into());
                 }
@@ -710,7 +708,8 @@ impl StateMachine {
         Ok(res.map(|x| x.0))
     }
 
-    pub fn get_table_by_id(&self, tid: &u64) -> Result<Option<SeqV<TableMeta>>, ErrorCode> {
+    // TODO(xp): need a better name.
+    pub fn get_table_meta_by_id(&self, tid: &u64) -> Result<Option<SeqV<TableMeta>>, ErrorCode> {
         let x = self.tables().get(tid)?;
         Ok(x)
     }
@@ -810,6 +809,20 @@ impl StateMachine {
         } else {
             Some(seq_value)
         }
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn lookup_table_id(
+        &self,
+        db_id: u64,
+        name: &str,
+    ) -> Result<Option<SeqV<TableLookupValue>>, ErrorCode> {
+        self.table_lookup().get(
+            &(TableLookupKey {
+                database_id: db_id,
+                table_name: name.to_string(),
+            }),
+        )
     }
 }
 
