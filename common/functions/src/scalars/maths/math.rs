@@ -27,6 +27,7 @@ use crate::scalars::LogFunction;
 use crate::scalars::PiFunction;
 use crate::scalars::PowFunction;
 use crate::scalars::RadiansFunction;
+use crate::scalars::RandomFunction;
 use crate::scalars::RoundNumberFunction;
 use crate::scalars::SignFunction;
 use crate::scalars::SqrtFunction;
@@ -70,6 +71,7 @@ impl MathsFunction {
         factory.register("sqrt", SqrtFunction::desc());
         factory.register("pow", PowFunction::desc());
         factory.register("power", PowFunction::desc());
+        factory.register("rand", RandomFunction::desc());
         factory.register("round", RoundNumberFunction::desc());
         factory.register("truncate", TruncNumberFunction::desc());
     }
