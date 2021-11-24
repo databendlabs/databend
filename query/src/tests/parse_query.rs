@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 use common_planners::PlanNode;
 
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 use crate::sql::PlanParser;
 
-pub fn parse_query(query: impl ToString, ctx: &DatabendQueryContextRef) -> Result<PlanNode> {
+pub fn parse_query(query: impl ToString, ctx: &Arc<QueryContext>) -> Result<PlanNode> {
     let query = query.to_string();
     futures::executor::block_on(PlanParser::parse(&query, ctx.clone()))
 }

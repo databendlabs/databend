@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::marker::PhantomData;
+use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::tokio;
@@ -34,7 +35,7 @@ use tokio_stream::StreamExt;
 use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
 use crate::users::CertifiedInfo;
@@ -310,7 +311,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
     async fn exec_query(
         plan: Result<PlanNode>,
-        context: &DatabendQueryContextRef,
+        context: &Arc<QueryContext>,
     ) -> Result<(Vec<DataBlock>, String)> {
         let instant = Instant::now();
 
@@ -326,7 +327,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         query_result.map(|data| (data, Self::extra_info(context, instant)))
     }
 
-    fn extra_info(context: &DatabendQueryContextRef, instant: Instant) -> String {
+    fn extra_info(context: &Arc<QueryContext>, instant: Instant) -> String {
         let progress = context.get_progress_value();
         let seconds = instant.elapsed().as_nanos() as f64 / 1e9f64;
         format!(

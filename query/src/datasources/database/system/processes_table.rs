@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::series::Series;
@@ -29,8 +30,8 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContextRef;
 use crate::sessions::ProcessInfo;
+use crate::sessions::QueryContext;
 
 pub struct ProcessesTable {
     table_info: TableInfo,
@@ -87,7 +88,7 @@ impl Table for ProcessesTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let sessions_manager = ctx.get_sessions_manager();

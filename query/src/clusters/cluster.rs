@@ -46,9 +46,6 @@ use crate::api::FlightClient;
 use crate::common::MetaClientProvider;
 use crate::configs::Config;
 
-pub type ClusterRef = Arc<Cluster>;
-pub type ClusterDiscoveryRef = Arc<ClusterDiscovery>;
-
 pub struct ClusterDiscovery {
     local_id: String,
     heartbeat: Mutex<ClusterHeartbeat>,
@@ -64,7 +61,7 @@ impl ClusterDiscovery {
         }
     }
 
-    pub async fn create_global(cfg: Config) -> Result<ClusterDiscoveryRef> {
+    pub async fn create_global(cfg: Config) -> Result<Arc<ClusterDiscovery>> {
         let local_id = GlobalUniqName::unique();
         let meta_client = ClusterDiscovery::create_meta_client(&cfg).await?;
         let (lift_time, provider) = Self::create_provider(&cfg, meta_client)?;
@@ -89,7 +86,7 @@ impl ClusterDiscovery {
         Ok((lift_time, Arc::new(cluster_manager)))
     }
 
-    pub async fn discover(&self) -> Result<ClusterRef> {
+    pub async fn discover(&self) -> Result<Arc<Cluster>> {
         match self.api_provider.get_nodes().await {
             Err(cause) => Err(cause.add_message_back("(while cluster api get_nodes).")),
             Ok(cluster_nodes) => {
@@ -183,11 +180,11 @@ pub struct Cluster {
 }
 
 impl Cluster {
-    pub fn create(nodes: Vec<Arc<NodeInfo>>, local_id: String) -> ClusterRef {
+    pub fn create(nodes: Vec<Arc<NodeInfo>>, local_id: String) -> Arc<Cluster> {
         Arc::new(Cluster { local_id, nodes })
     }
 
-    pub fn empty() -> ClusterRef {
+    pub fn empty() -> Arc<Cluster> {
         Arc::new(Cluster {
             local_id: String::from(""),
             nodes: Vec::new(),

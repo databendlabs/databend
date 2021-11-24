@@ -41,7 +41,7 @@ use crate::servers::http::v1::query::execute_state::HttpQueryRequest;
 use crate::servers::http::v1::query::http_query::HttpQuery;
 use crate::servers::http::v1::query::http_query::HttpQueryResponseInternal;
 use crate::servers::http::v1::query::result_data_manager::Wait;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionManager;
 
 pub fn make_page_uri(query_id: &str, page_no: usize) -> String {
     format!("/v1/query/{}/page/{}", query_id, page_no)
@@ -147,7 +147,7 @@ pub(crate) struct CancelParams {
 
 #[poem::handler]
 async fn query_cancel_handler(
-    sessions_extension: Data<&SessionManagerRef>,
+    sessions_extension: Data<&Arc<SessionManager>>,
     Query(params): Query<CancelParams>,
     Path(query_id): Path<String>,
 ) -> impl IntoResponse {
@@ -167,7 +167,7 @@ async fn query_cancel_handler(
 
 #[poem::handler]
 async fn query_state_handler(
-    sessions_extension: Data<&SessionManagerRef>,
+    sessions_extension: Data<&Arc<SessionManager>>,
     Path(query_id): Path<String>,
 ) -> PoemResult<Json<QueryResponse>> {
     let session_manager = sessions_extension.0;
@@ -200,7 +200,7 @@ impl PageParams {
 
 #[poem::handler]
 async fn query_page_handler(
-    sessions_extension: Data<&SessionManagerRef>,
+    sessions_extension: Data<&Arc<SessionManager>>,
     Query(params): Query<PageParams>,
     Path((query_id, page_no)): Path<(String, usize)>,
 ) -> PoemResult<Json<QueryResponse>> {
@@ -221,7 +221,7 @@ async fn query_page_handler(
 
 #[poem::handler]
 pub(crate) async fn query_handler(
-    sessions_extension: Data<&SessionManagerRef>,
+    sessions_extension: Data<&Arc<SessionManager>>,
     Query(params): Query<PageParams>,
     Json(req): Json<HttpQueryRequest>,
 ) -> PoemResult<Json<QueryResponse>> {

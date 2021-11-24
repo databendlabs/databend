@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -23,7 +24,7 @@ use poem::IntoResponse;
 
 use crate::common::service::HttpShutdownHandler;
 use crate::servers::Server;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionManager;
 
 pub struct MetricService {
     shutdown_handler: HttpShutdownHandler,
@@ -36,7 +37,7 @@ pub async fn metric_handler(prom_extension: Data<&PrometheusHandle>) -> impl Int
 
 impl MetricService {
     // TODO add session tls handler
-    pub fn create(_sessions: SessionManagerRef) -> Box<MetricService> {
+    pub fn create(_sessions: Arc<SessionManager>) -> Box<MetricService> {
         Box::new(MetricService {
             shutdown_handler: HttpShutdownHandler::create("metric api".to_string()),
         })

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use common_exception::Result;
 use poem::get;
@@ -24,15 +25,15 @@ use crate::common::service::HttpShutdownHandler;
 use crate::servers::http::v1::query_route;
 use crate::servers::http::v1::statement_router;
 use crate::servers::Server;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionManager;
 
 pub struct HttpHandler {
-    session_manager: SessionManagerRef,
+    session_manager: Arc<SessionManager>,
     shutdown_handler: HttpShutdownHandler,
 }
 
 impl HttpHandler {
-    pub fn create(session_manager: SessionManagerRef) -> Box<dyn Server> {
+    pub fn create(session_manager: Arc<SessionManager>) -> Box<dyn Server> {
         Box::new(HttpHandler {
             session_manager,
             shutdown_handler: HttpShutdownHandler::create("http handler".to_string()),

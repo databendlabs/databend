@@ -29,19 +29,16 @@ use common_streams::ValueSource;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct InsertIntoInterpreter {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<QueryContext>,
     plan: InsertIntoPlan,
     select: Option<Arc<dyn Interpreter>>,
 }
 
 impl InsertIntoInterpreter {
-    pub fn try_create(
-        ctx: DatabendQueryContextRef,
-        plan: InsertIntoPlan,
-    ) -> Result<InterpreterPtr> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: InsertIntoPlan) -> Result<InterpreterPtr> {
         let select = match plan.select_plan.clone().take() {
             Some(select_plan) => {
                 if let PlanNode::Select(select_plan_node) = *select_plan {

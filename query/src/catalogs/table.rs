@@ -31,7 +31,7 @@ use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
 use common_streams::SendableDataBlockStream;
 
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 #[async_trait::async_trait]
 pub trait Table: Sync + Send {
@@ -67,7 +67,7 @@ pub trait Table: Sync + Send {
     // defaults to generate one single part and empty statistics
     async fn read_partitions(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _ctx: Arc<QueryContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         Ok((Statistics::default(), vec![Part {
@@ -83,14 +83,14 @@ pub trait Table: Sync + Send {
     // Read block data from the underling.
     async fn read(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream>;
 
     // temporary added, pls feel free to rm it
     async fn append_data(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _ctx: Arc<QueryContext>,
         _insert_plan: InsertIntoPlan,
         _stream: SendableDataBlockStream,
     ) -> Result<()> {
@@ -102,7 +102,7 @@ pub trait Table: Sync + Send {
 
     async fn truncate(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _ctx: Arc<QueryContext>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
@@ -119,7 +119,7 @@ pub trait ToReadDataSourcePlan {
     /// Real read_plan to access partitions/push_downs
     async fn read_plan(
         &self,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
         push_downs: Option<Extras>,
     ) -> Result<ReadDataSourcePlan>;
 }
@@ -128,7 +128,7 @@ pub trait ToReadDataSourcePlan {
 impl ToReadDataSourcePlan for dyn Table {
     async fn read_plan(
         &self,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
         push_downs: Option<Extras>,
     ) -> Result<ReadDataSourcePlan> {
         let (statistics, parts) = self.read_partitions(ctx, push_downs.clone()).await?;

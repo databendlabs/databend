@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -23,15 +25,15 @@ use common_planners::PlanRewriter;
 use common_planners::ReadDataSourcePlan;
 
 use crate::catalogs::ToReadDataSourcePlan;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct PlanDoReadSource {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<QueryContext>,
     before_group_by_schema: Option<DataSchemaRef>,
 }
 
 impl PlanDoReadSource {
-    pub fn create(ctx: DatabendQueryContextRef) -> PlanDoReadSource {
+    pub fn create(ctx: Arc<QueryContext>) -> PlanDoReadSource {
         PlanDoReadSource {
             ctx,
             before_group_by_schema: None,

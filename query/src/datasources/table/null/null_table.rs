@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_exception::Result;
@@ -27,7 +28,7 @@ use futures::stream::StreamExt;
 
 use crate::catalogs::Table;
 use crate::datasources::context::DataSourceContext;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct NullTable {
     table_info: TableInfo,
@@ -51,7 +52,7 @@ impl Table for NullTable {
 
     async fn read(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let block = DataBlock::empty_with_schema(self.table_info.schema());
@@ -65,7 +66,7 @@ impl Table for NullTable {
 
     async fn append_data(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _ctx: Arc<QueryContext>,
         _insert_plan: InsertIntoPlan,
         mut stream: SendableDataBlockStream,
     ) -> Result<()> {
@@ -78,7 +79,7 @@ impl Table for NullTable {
 
     async fn truncate(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _ctx: Arc<QueryContext>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Ok(())

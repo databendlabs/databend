@@ -26,15 +26,15 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::Processor;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct MergeProcessor {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<QueryContext>,
     inputs: Vec<Arc<dyn Processor>>,
 }
 
 impl MergeProcessor {
-    pub fn create(ctx: DatabendQueryContextRef) -> Self {
+    pub fn create(ctx: Arc<QueryContext>) -> Self {
         MergeProcessor {
             ctx,
             inputs: vec![],

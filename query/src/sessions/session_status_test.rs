@@ -19,8 +19,8 @@ use std::sync::Arc;
 use common_exception::Result;
 
 use crate::clusters::Cluster;
-use crate::sessions::DatabendQueryContextShared;
 use crate::sessions::MutableStatus;
+use crate::sessions::QueryContextShared;
 use crate::tests::SessionManagerBuilder;
 
 #[test]
@@ -73,7 +73,7 @@ fn test_session_status() -> Result<()> {
     {
         let sessions = SessionManagerBuilder::create().build()?;
         let dummy_session = sessions.create_session("TestSession")?;
-        let shared = DatabendQueryContextShared::try_create(
+        let shared = QueryContextShared::try_create(
             sessions.get_conf().clone(),
             Arc::new(dummy_session.as_ref().clone()),
             Cluster::empty(),

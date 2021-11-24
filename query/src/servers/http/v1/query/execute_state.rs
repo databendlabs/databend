@@ -28,8 +28,8 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::interpreters::InterpreterFactory;
-use crate::sessions::DatabendQueryContextRef;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::QueryContext;
+use crate::sessions::SessionManager;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
 
@@ -101,13 +101,13 @@ pub(crate) struct ExecuteRunning {
     // used to kill query
     session: SessionRef,
     // mainly used to get progress for now
-    context: DatabendQueryContextRef,
+    context: Arc<QueryContext>,
 }
 
 impl ExecuteState {
     pub(crate) async fn try_create(
         request: &HttpQueryRequest,
-        session_manager: &SessionManagerRef,
+        session_manager: &Arc<SessionManager>,
         block_tx: mpsc::Sender<DataBlock>,
     ) -> Result<(ExecuteStateRef, DataSchemaRef)> {
         let sql = &request.sql;

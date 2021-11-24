@@ -26,7 +26,7 @@ use futures::stream::Abortable;
 use futures::StreamExt;
 use tokio_stream::wrappers::TcpListenerStream;
 
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionManager;
 
 pub type ListeningStream = Abortable<TcpListenerStream>;
 
@@ -38,12 +38,12 @@ pub trait Server: Send {
 
 pub struct ShutdownHandle {
     shutdown: Arc<AtomicBool>,
-    sessions: SessionManagerRef,
+    sessions: Arc<SessionManager>,
     services: Vec<Box<dyn Server>>,
 }
 
 impl ShutdownHandle {
-    pub fn create(sessions: SessionManagerRef) -> ShutdownHandle {
+    pub fn create(sessions: Arc<SessionManager>) -> ShutdownHandle {
         ShutdownHandle {
             sessions,
             services: vec![],

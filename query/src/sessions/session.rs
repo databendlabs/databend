@@ -23,11 +23,10 @@ use futures::channel::*;
 
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::configs::Config;
-use crate::sessions::context_shared::DatabendQueryContextShared;
-use crate::sessions::DatabendQueryContext;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::context_shared::QueryContextShared;
 use crate::sessions::MutableStatus;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::QueryContext;
+use crate::sessions::SessionManager;
 use crate::sessions::Settings;
 use crate::users::UserApiProvider;
 
@@ -38,7 +37,7 @@ pub struct Session {
     #[ignore_malloc_size_of = "insignificant"]
     pub(in crate::sessions) config: Config,
     #[ignore_malloc_size_of = "insignificant"]
-    pub(in crate::sessions) sessions: SessionManagerRef,
+    pub(in crate::sessions) sessions: Arc<SessionManager>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) mutable_state: Arc<MutableStatus>,
 }
@@ -48,7 +47,7 @@ impl Session {
         config: Config,
         id: String,
         typ: String,
-        sessions: SessionManagerRef,
+        sessions: Arc<SessionManager>,
     ) -> Result<Arc<Session>> {
         Ok(Arc::new(Session {
             id,
@@ -102,25 +101,25 @@ impl Session {
     /// Create a query context for query.
     /// For a query, execution environment(e.g cluster) should be immutable.
     /// We can bind the environment to the context in create_context method.
-    pub async fn create_context(self: &Arc<Self>) -> Result<DatabendQueryContextRef> {
+    pub async fn create_context(self: &Arc<Self>) -> Result<Arc<QueryContext>> {
         let context_shared = self.mutable_state.get_context_shared();
 
         Ok(match context_shared.as_ref() {
-            Some(shared) => DatabendQueryContext::from_shared(shared.clone()),
+            Some(shared) => QueryContext::from_shared(shared.clone()),
             None => {
                 let config = self.config.clone();
                 let discovery = self.sessions.get_cluster_discovery();
 
                 let session = self.clone();
                 let cluster = discovery.discover().await?;
-                let shared = DatabendQueryContextShared::try_create(config, session, cluster);
+                let shared = QueryContextShared::try_create(config, session, cluster);
 
                 let ctx_shared = self.mutable_state.get_context_shared();
                 match ctx_shared.as_ref() {
-                    Some(shared) => DatabendQueryContext::from_shared(shared.clone()),
+                    Some(shared) => QueryContext::from_shared(shared.clone()),
                     None => {
                         self.mutable_state.set_context_shared(Some(shared.clone()));
-                        DatabendQueryContext::from_shared(shared)
+                        QueryContext::from_shared(shared)
                     }
                 }
             }
@@ -153,7 +152,7 @@ impl Session {
         self.mutable_state.get_settings()
     }
 
-    pub fn get_sessions_manager(self: &Arc<Self>) -> SessionManagerRef {
+    pub fn get_sessions_manager(self: &Arc<Self>) -> Arc<SessionManager> {
         self.sessions.clone()
     }
 
