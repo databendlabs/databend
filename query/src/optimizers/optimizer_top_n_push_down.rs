@@ -15,10 +15,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_datavalues::prelude::DataColumnWithField;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::Range;
 use common_planners::*;
 use common_tracing::tracing;
 
@@ -36,7 +36,7 @@ struct TopNPushDownImpl {
     before_group_by_schema: Option<DataSchemaRef>,
     limit: Option<usize>,
     order_by: Vec<Expression>,
-    variables_range: HashMap<String, Range>,
+    variables_range: HashMap<String, (Option<DataColumnWithField>, Option<DataColumnWithField>)>,
 }
 
 impl PlanRewriter for TopNPushDownImpl {
@@ -168,12 +168,12 @@ impl TopNPushDownImpl {
 
                 let column_name = columns.iter().next().unwrap();
 
-                let monotonic_checker = match self.variables_range.get(column_name) {
-                    None => MonotonicityCheckVisitor::new(None),
-                    Some(range) => MonotonicityCheckVisitor::new(Some(range.clone())),
+                let (left, right) = match self.variables_range.get(column_name) {
+                    None => (None, None),
+                    Some((l, r)) => (l.clone(), r.clone()),
                 };
 
-                match monotonic_checker.extract_sort_column(expr) {
+                match MonotonicityCheckVisitor::extract_sort_column(expr, left, right) {
                     Ok(new_expr) => Ok(new_expr),
                     Err(error) => {
                         tracing::error!(
