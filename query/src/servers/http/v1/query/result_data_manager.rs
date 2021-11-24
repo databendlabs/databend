@@ -125,12 +125,20 @@ impl ResultDataManager {
 
     pub async fn collect_new_page(&mut self, tp: &Wait) -> (JsonBlock, bool) {
         let mut results: Vec<JsonBlock> = Vec::new();
+        let mut rows = 0;
         let block_rx = &mut self.block_rx;
 
         let mut end = false;
         loop {
             match ResultDataManager::receive(block_rx, tp).await {
-                Ok(block) => results.push(block_to_json(&block).unwrap()),
+                Ok(block) => {
+                    rows += block.num_rows();
+                    results.push(block_to_json(&block).unwrap());
+                    // TODO(youngsofun):  set it in post if needed
+                    if rows >= 10000 {
+                        break;
+                    }
+                }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     log::debug!("no more data");
