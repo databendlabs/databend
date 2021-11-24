@@ -24,19 +24,16 @@ use common_tracing::tracing;
 use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 #[derive(Debug)]
 pub struct GrantPrivilegeInterpreter {
-    ctx: Arc<DatabendQueryContext>,
+    ctx: Arc<QueryContext>,
     plan: GrantPrivilegePlan,
 }
 
 impl GrantPrivilegeInterpreter {
-    pub fn try_create(
-        ctx: Arc<DatabendQueryContext>,
-        plan: GrantPrivilegePlan,
-    ) -> Result<InterpreterPtr> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: GrantPrivilegePlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(GrantPrivilegeInterpreter { ctx, plan }))
     }
 }

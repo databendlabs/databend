@@ -21,7 +21,7 @@ use common_planners::GrantPrivilegePlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
@@ -43,7 +43,7 @@ pub enum DfGrantObject {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfGrantStatement {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn analyze(&self, ctx: Arc<DatabendQueryContext>) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         Ok(AnalyzedResult::SimpleQuery(PlanNode::GrantPrivilege(
             GrantPrivilegePlan {
                 name: self.name.clone(),

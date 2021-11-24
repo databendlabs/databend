@@ -18,21 +18,18 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 use crate::sql::statements::query::query_schema_joined::JoinedTableDesc;
 use crate::sql::statements::query::JoinedSchema;
 use crate::sql::statements::QueryASTIR;
 
 pub struct QualifiedRewriter {
     tables_schema: JoinedSchema,
-    ctx: Arc<DatabendQueryContext>,
+    ctx: Arc<QueryContext>,
 }
 
 impl QualifiedRewriter {
-    pub fn create(
-        tables_schema: JoinedSchema,
-        ctx: Arc<DatabendQueryContext>,
-    ) -> QualifiedRewriter {
+    pub fn create(tables_schema: JoinedSchema, ctx: Arc<QueryContext>) -> QualifiedRewriter {
         QualifiedRewriter { tables_schema, ctx }
     }
 

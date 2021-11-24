@@ -30,7 +30,7 @@ use walkdir::WalkDir;
 
 use crate::catalogs::Table;
 use crate::datasources::database::system::TracingTableStream;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 pub struct TracingTable {
     table_info: TableInfo,
@@ -77,7 +77,7 @@ impl Table for TracingTable {
 
     async fn read(
         &self,
-        ctx: Arc<DatabendQueryContext>,
+        ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let mut log_files = vec![];

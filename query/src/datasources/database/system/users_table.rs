@@ -26,7 +26,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 pub struct UsersTable {
     table_info: TableInfo,
@@ -67,7 +67,7 @@ impl Table for UsersTable {
 
     async fn read(
         &self,
-        ctx: Arc<DatabendQueryContext>,
+        ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let users = ctx

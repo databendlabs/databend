@@ -21,7 +21,7 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 use futures::stream::Stream;
 
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 #[derive(Debug, Clone)]
 struct BlockRange {
@@ -30,14 +30,14 @@ struct BlockRange {
 }
 
 pub struct MemoryTableStream {
-    ctx: Arc<DatabendQueryContext>,
+    ctx: Arc<QueryContext>,
     block_index: usize,
     block_ranges: Vec<usize>,
     blocks: Vec<DataBlock>,
 }
 
 impl MemoryTableStream {
-    pub fn try_create(ctx: Arc<DatabendQueryContext>, blocks: Vec<DataBlock>) -> Result<Self> {
+    pub fn try_create(ctx: Arc<QueryContext>, blocks: Vec<DataBlock>) -> Result<Self> {
         Ok(Self {
             ctx,
             block_index: 0,

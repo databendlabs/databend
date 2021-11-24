@@ -25,7 +25,7 @@ use common_tracing::tracing;
 use super::MonotonicityCheckVisitor;
 use super::RequireColumnsVisitor;
 use crate::optimizers::Optimizer;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 pub struct TopNPushDownOptimizer {}
 
@@ -201,7 +201,7 @@ impl Optimizer for TopNPushDownOptimizer {
 }
 
 impl TopNPushDownOptimizer {
-    pub fn create(_ctx: Arc<DatabendQueryContext>) -> TopNPushDownOptimizer {
+    pub fn create(_ctx: Arc<QueryContext>) -> TopNPushDownOptimizer {
         TopNPushDownOptimizer {}
     }
 }

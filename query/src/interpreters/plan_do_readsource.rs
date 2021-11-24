@@ -25,15 +25,15 @@ use common_planners::PlanRewriter;
 use common_planners::ReadDataSourcePlan;
 
 use crate::catalogs::ToReadDataSourcePlan;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 pub struct PlanDoReadSource {
-    ctx: Arc<DatabendQueryContext>,
+    ctx: Arc<QueryContext>,
     before_group_by_schema: Option<DataSchemaRef>,
 }
 
 impl PlanDoReadSource {
-    pub fn create(ctx: Arc<DatabendQueryContext>) -> PlanDoReadSource {
+    pub fn create(ctx: Arc<QueryContext>) -> PlanDoReadSource {
         PlanDoReadSource {
             ctx,
             before_group_by_schema: None,

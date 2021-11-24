@@ -33,10 +33,10 @@ use common_planners::StageKind;
 use common_planners::StagePlan;
 
 use crate::optimizers::Optimizer;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 pub struct ScattersOptimizer {
-    ctx: Arc<DatabendQueryContext>,
+    ctx: Arc<QueryContext>,
 }
 
 #[derive(Clone, Debug)]
@@ -46,7 +46,7 @@ enum RunningMode {
 }
 
 struct ScattersOptimizerImpl {
-    ctx: Arc<DatabendQueryContext>,
+    ctx: Arc<QueryContext>,
     running_mode: RunningMode,
     before_group_by_schema: Option<DataSchemaRef>,
 
@@ -55,7 +55,7 @@ struct ScattersOptimizerImpl {
 }
 
 impl ScattersOptimizerImpl {
-    pub fn create(ctx: Arc<DatabendQueryContext>) -> ScattersOptimizerImpl {
+    pub fn create(ctx: Arc<QueryContext>) -> ScattersOptimizerImpl {
         ScattersOptimizerImpl {
             ctx,
             running_mode: RunningMode::Standalone,
@@ -206,7 +206,7 @@ impl ScattersOptimizerImpl {
 
 impl PlanRewriter for ScattersOptimizerImpl {
     fn rewrite_subquery_plan(&mut self, subquery_plan: &PlanNode) -> Result<PlanNode> {
-        let subquery_ctx = DatabendQueryContext::new(self.ctx.clone());
+        let subquery_ctx = QueryContext::new(self.ctx.clone());
         let mut subquery_optimizer = ScattersOptimizerImpl::create(subquery_ctx);
         let rewritten_subquery = subquery_optimizer.rewrite_plan_node(subquery_plan)?;
 
@@ -291,7 +291,7 @@ impl PlanRewriter for ScattersOptimizerImpl {
 }
 
 impl ScattersOptimizer {
-    pub fn create(ctx: Arc<DatabendQueryContext>) -> ScattersOptimizer {
+    pub fn create(ctx: Arc<QueryContext>) -> ScattersOptimizer {
         ScattersOptimizer { ctx }
     }
 }

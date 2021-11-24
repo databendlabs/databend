@@ -27,7 +27,7 @@ use sqlparser::ast::Expr;
 use sqlparser::ast::OffsetRows;
 use sqlparser::ast::SelectItem;
 
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::DfQueryStatement;
 
@@ -51,7 +51,7 @@ pub struct QueryNormalizer {
 
 /// Replace alias in query and collect aggregate functions
 impl QueryNormalizer {
-    pub fn create(ctx: Arc<DatabendQueryContext>) -> QueryNormalizer {
+    pub fn create(ctx: Arc<QueryContext>) -> QueryNormalizer {
         QueryNormalizer {
             expression_analyzer: ExpressionAnalyzer::create(ctx),
             aliases_map: HashMap::new(),

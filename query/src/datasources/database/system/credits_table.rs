@@ -26,7 +26,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 pub struct CreditsTable {
     table_info: TableInfo,
@@ -66,7 +66,7 @@ impl Table for CreditsTable {
 
     async fn read(
         &self,
-        _ctx: Arc<DatabendQueryContext>,
+        _ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let metadata_command = cargo_metadata::MetadataCommand::new();

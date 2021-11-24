@@ -21,7 +21,7 @@ use common_planners::TruncateTablePlan;
 use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
@@ -33,7 +33,7 @@ pub struct DfTruncateTable {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfTruncateTable {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn analyze(&self, ctx: Arc<DatabendQueryContext>) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let (db, table) = self.resolve_table(ctx)?;
         Ok(AnalyzedResult::SimpleQuery(PlanNode::TruncateTable(
             TruncateTablePlan { db, table },
@@ -42,7 +42,7 @@ impl AnalyzableStatement for DfTruncateTable {
 }
 
 impl DfTruncateTable {
-    fn resolve_table(&self, ctx: Arc<DatabendQueryContext>) -> Result<(String, String)> {
+    fn resolve_table(&self, ctx: Arc<QueryContext>) -> Result<(String, String)> {
         let DfTruncateTable {
             name: ObjectName(idents),
             ..

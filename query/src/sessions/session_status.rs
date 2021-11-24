@@ -22,7 +22,7 @@ use common_infallible::RwLock;
 use common_macros::MallocSizeOf;
 use futures::channel::oneshot::Sender;
 
-use crate::sessions::context_shared::DatabendQueryContextShared;
+use crate::sessions::context_shared::QueryContextShared;
 use crate::sessions::Settings;
 
 #[derive(MallocSizeOf)]
@@ -35,7 +35,7 @@ pub struct MutableStatus {
     #[ignore_malloc_size_of = "insignificant"]
     io_shutdown_tx: RwLock<Option<Sender<Sender<()>>>>,
     #[ignore_malloc_size_of = "insignificant"]
-    context_shared: RwLock<Option<Arc<DatabendQueryContextShared>>>,
+    context_shared: RwLock<Option<Arc<QueryContextShared>>>,
 }
 
 impl MutableStatus {
@@ -103,18 +103,18 @@ impl MutableStatus {
         lock.is_none()
     }
 
-    pub fn get_context_shared(&self) -> Option<Arc<DatabendQueryContextShared>> {
+    pub fn get_context_shared(&self) -> Option<Arc<QueryContextShared>> {
         let lock = self.context_shared.read();
         lock.clone()
     }
 
-    pub fn set_context_shared(&self, ctx: Option<Arc<DatabendQueryContextShared>>) {
+    pub fn set_context_shared(&self, ctx: Option<Arc<QueryContextShared>>) {
         let mut lock = self.context_shared.write();
         *lock = ctx
     }
 
     //  Take the context_shared.
-    pub fn take_context_shared(&self) -> Option<Arc<DatabendQueryContextShared>> {
+    pub fn take_context_shared(&self) -> Option<Arc<QueryContextShared>> {
         let mut lock = self.context_shared.write();
         lock.take()
     }

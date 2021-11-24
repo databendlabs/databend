@@ -20,10 +20,10 @@ use common_planners::PlanRewriter;
 
 use super::plan_do_readsource::PlanDoReadSource;
 use crate::optimizers::Optimizers;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 pub fn apply_plan_rewrite(
-    context: Arc<DatabendQueryContext>,
+    context: Arc<QueryContext>,
     optimizer: Optimizers,
     plan: &PlanNode,
 ) -> Result<PlanNode> {

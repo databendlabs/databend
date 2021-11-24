@@ -23,7 +23,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use futures::stream::Stream;
 
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 #[derive(Debug, Clone)]
 struct BlockRange {
@@ -32,7 +32,7 @@ struct BlockRange {
 }
 
 pub struct NumbersStream {
-    ctx: Arc<DatabendQueryContext>,
+    ctx: Arc<QueryContext>,
     schema: DataSchemaRef,
     block_index: usize,
     blocks: Vec<BlockRange>,
@@ -42,7 +42,7 @@ pub struct NumbersStream {
 
 impl NumbersStream {
     pub fn try_create(
-        ctx: Arc<DatabendQueryContext>,
+        ctx: Arc<QueryContext>,
         schema: DataSchemaRef,
         sort_columns_descriptions: Vec<SortColumnDescription>,
         limit: Option<usize>,

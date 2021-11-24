@@ -35,7 +35,7 @@ use common_planners::SortPlan;
 
 use crate::optimizers::Optimizer;
 use crate::optimizers::RequireColumnsVisitor;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 pub struct ProjectionPushDownOptimizer {}
 
@@ -210,7 +210,7 @@ impl Optimizer for ProjectionPushDownOptimizer {
 }
 
 impl ProjectionPushDownOptimizer {
-    pub fn create(_ctx: Arc<DatabendQueryContext>) -> ProjectionPushDownOptimizer {
+    pub fn create(_ctx: Arc<QueryContext>) -> ProjectionPushDownOptimizer {
         ProjectionPushDownOptimizer {}
     }
 }

@@ -23,15 +23,15 @@ use crate::configs::Config;
 use crate::datasources::context::DataSourceContext;
 use crate::datasources::DatabaseEngineRegistry;
 use crate::datasources::TableEngineRegistry;
-use crate::sessions::DatabendQueryContext;
-use crate::sessions::DatabendQueryContextShared;
+use crate::sessions::QueryContext;
+use crate::sessions::QueryContextShared;
 use crate::tests::SessionManagerBuilder;
 
-pub fn try_create_context() -> Result<Arc<DatabendQueryContext>> {
+pub fn try_create_context() -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create().build()?;
     let dummy_session = sessions.create_session("TestSession")?;
 
-    let context = DatabendQueryContext::from_shared(DatabendQueryContextShared::try_create(
+    let context = QueryContext::from_shared(QueryContextShared::try_create(
         sessions.get_conf().clone(),
         Arc::new(dummy_session.as_ref().clone()),
         Cluster::empty(),
@@ -41,11 +41,11 @@ pub fn try_create_context() -> Result<Arc<DatabendQueryContext>> {
     Ok(context)
 }
 
-pub fn try_create_context_with_config(config: Config) -> Result<Arc<DatabendQueryContext>> {
+pub fn try_create_context_with_config(config: Config) -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create().build()?;
     let dummy_session = sessions.create_session("TestSession")?;
 
-    let context = DatabendQueryContext::from_shared(DatabendQueryContextShared::try_create(
+    let context = QueryContext::from_shared(QueryContextShared::try_create(
         config,
         Arc::new(dummy_session.as_ref().clone()),
         Cluster::empty(),
@@ -91,14 +91,14 @@ impl Default for ClusterDescriptor {
     }
 }
 
-pub fn try_create_cluster_context(desc: ClusterDescriptor) -> Result<Arc<DatabendQueryContext>> {
+pub fn try_create_cluster_context(desc: ClusterDescriptor) -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create().build()?;
     let dummy_session = sessions.create_session("TestSession")?;
 
     let local_id = desc.local_node_id;
     let nodes = desc.cluster_nodes_list;
 
-    let context = DatabendQueryContext::from_shared(DatabendQueryContextShared::try_create(
+    let context = QueryContext::from_shared(QueryContextShared::try_create(
         sessions.get_conf().clone(),
         Arc::new(dummy_session.as_ref().clone()),
         Cluster::create(nodes, local_id),

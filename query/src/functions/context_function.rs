@@ -21,17 +21,14 @@ use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::scalars::FunctionFactory;
 use common_planners::Expression;
 
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 pub struct ContextFunction;
 
 impl ContextFunction {
     // Some function args need from context
     // such as `SELECT database()`, the arg is ctx.get_default_db()
-    pub fn build_args_from_ctx(
-        name: &str,
-        ctx: Arc<DatabendQueryContext>,
-    ) -> Result<Vec<Expression>> {
+    pub fn build_args_from_ctx(name: &str, ctx: Arc<QueryContext>) -> Result<Vec<Expression>> {
         // Check the function is supported in common functions.
         let function_factory = FunctionFactory::instance();
         let aggregate_function_factory = AggregateFunctionFactory::instance();

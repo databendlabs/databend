@@ -19,7 +19,7 @@ use common_planners::DropUserPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
@@ -34,7 +34,7 @@ pub struct DfDropUser {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfDropUser {
     #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
-    async fn analyze(&self, _ctx: Arc<DatabendQueryContext>) -> Result<AnalyzedResult> {
+    async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         Ok(AnalyzedResult::SimpleQuery(PlanNode::DropUser(
             DropUserPlan {
                 if_exists: self.if_exists,

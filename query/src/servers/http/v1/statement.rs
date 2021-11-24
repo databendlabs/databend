@@ -37,7 +37,7 @@ use uuid;
 
 use super::block_to_json::block_to_json;
 use crate::interpreters::InterpreterFactory;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
@@ -90,7 +90,7 @@ struct HttpQuery {
 struct HttpQueryState {
     #[allow(dead_code)]
     session: SessionRef,
-    context: Arc<DatabendQueryContext>,
+    context: Arc<QueryContext>,
     data_stream: SendableDataBlockStream,
     schema: DataSchemaRef,
 }

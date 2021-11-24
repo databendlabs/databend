@@ -21,7 +21,7 @@ use common_functions::scalars::FunctionFactory;
 use common_planners::*;
 
 use crate::optimizers::Optimizer;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 pub struct ExprTransformOptimizer {}
 
@@ -292,7 +292,7 @@ impl Optimizer for ExprTransformOptimizer {
 }
 
 impl ExprTransformOptimizer {
-    pub fn create(_ctx: Arc<DatabendQueryContext>) -> Self {
+    pub fn create(_ctx: Arc<QueryContext>) -> Self {
         ExprTransformOptimizer {}
     }
 }

@@ -33,13 +33,13 @@ use crate::datasources::table::fuse::BlockAppender;
 use crate::datasources::table::fuse::FuseTable;
 use crate::datasources::table::fuse::SegmentInfo;
 use crate::datasources::table::fuse::TableSnapshot;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 impl FuseTable {
     #[inline]
     pub async fn do_append(
         &self,
-        ctx: Arc<DatabendQueryContext>,
+        ctx: Arc<QueryContext>,
         insert_plan: InsertIntoPlan,
         stream: SendableDataBlockStream,
     ) -> Result<()> {
@@ -103,7 +103,7 @@ fn merge_snapshot(
 }
 
 async fn commit(
-    ctx: Arc<DatabendQueryContext>,
+    ctx: Arc<QueryContext>,
     table_id: MetaId,
     table_version: MetaVersion,
     new_snapshot_location: String,

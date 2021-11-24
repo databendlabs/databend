@@ -21,7 +21,7 @@ use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
@@ -34,7 +34,7 @@ pub struct DfDropTable {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfDropTable {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn analyze(&self, ctx: Arc<DatabendQueryContext>) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let if_exists = self.if_exists;
         let (db, table) = self.resolve_table(ctx)?;
 
@@ -49,7 +49,7 @@ impl AnalyzableStatement for DfDropTable {
 }
 
 impl DfDropTable {
-    fn resolve_table(&self, ctx: Arc<DatabendQueryContext>) -> Result<(String, String)> {
+    fn resolve_table(&self, ctx: Arc<QueryContext>) -> Result<(String, String)> {
         let DfDropTable {
             name: ObjectName(idents),
             ..

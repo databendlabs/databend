@@ -26,15 +26,15 @@ use common_planners::PlanRewriter;
 
 use crate::catalogs::ToReadDataSourcePlan;
 use crate::optimizers::Optimizer;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 struct StatisticsExactImpl<'a> {
-    ctx: &'a Arc<DatabendQueryContext>,
+    ctx: &'a Arc<QueryContext>,
     rewritten: bool,
 }
 
 pub struct StatisticsExactOptimizer {
-    ctx: Arc<DatabendQueryContext>,
+    ctx: Arc<QueryContext>,
 }
 
 impl PlanRewriter for StatisticsExactImpl<'_> {
@@ -125,7 +125,7 @@ impl Optimizer for StatisticsExactOptimizer {
 }
 
 impl StatisticsExactOptimizer {
-    pub fn create(ctx: Arc<DatabendQueryContext>) -> Self {
+    pub fn create(ctx: Arc<QueryContext>) -> Self {
         StatisticsExactOptimizer { ctx }
     }
 }

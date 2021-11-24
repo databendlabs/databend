@@ -24,13 +24,13 @@ use crate::catalogs::Catalog;
 use crate::datasources::table::fuse::util;
 use crate::datasources::table::fuse::util::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::datasources::table::fuse::FuseTable;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 impl FuseTable {
     #[inline]
     pub async fn do_truncate(
         &self,
-        ctx: Arc<DatabendQueryContext>,
+        ctx: Arc<QueryContext>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         if let Some(prev_snapshot) = self.table_snapshot(ctx.clone()).await? {

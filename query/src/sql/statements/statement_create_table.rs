@@ -28,7 +28,7 @@ use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::SqlOption;
 
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::SQLCommon;
@@ -46,7 +46,7 @@ pub struct DfCreateTable {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfCreateTable {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn analyze(&self, ctx: Arc<DatabendQueryContext>) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let table_meta = self.table_meta()?;
         let if_not_exists = self.if_not_exists;
         let (db, table) = self.resolve_table(ctx)?;
@@ -63,7 +63,7 @@ impl AnalyzableStatement for DfCreateTable {
 }
 
 impl DfCreateTable {
-    fn resolve_table(&self, ctx: Arc<DatabendQueryContext>) -> Result<(String, String)> {
+    fn resolve_table(&self, ctx: Arc<QueryContext>) -> Result<(String, String)> {
         let DfCreateTable {
             name: ObjectName(idents),
             ..

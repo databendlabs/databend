@@ -17,10 +17,10 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_planners::PlanNode;
 
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 use crate::sql::PlanParser;
 
-pub fn parse_query(query: impl ToString, ctx: &Arc<DatabendQueryContext>) -> Result<PlanNode> {
+pub fn parse_query(query: impl ToString, ctx: &Arc<QueryContext>) -> Result<PlanNode> {
     let query = query.to_string();
     futures::executor::block_on(PlanParser::parse(&query, ctx.clone()))
 }

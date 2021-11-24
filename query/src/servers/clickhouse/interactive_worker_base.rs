@@ -40,7 +40,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use super::writers::from_clickhouse_block;
 use crate::interpreters::InterpreterFactory;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
 
@@ -111,7 +111,7 @@ impl InteractiveWorkerBase {
     pub async fn process_insert_query(
         insert: InsertIntoPlan,
         ch_ctx: &mut CHContext,
-        ctx: Arc<DatabendQueryContext>,
+        ctx: Arc<QueryContext>,
     ) -> Result<Receiver<BlockItem>> {
         let sample_block = DataBlock::empty_with_schema(insert.schema());
         let (sender, rec) = channel(4);

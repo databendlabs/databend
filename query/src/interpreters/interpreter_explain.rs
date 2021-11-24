@@ -27,10 +27,10 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
 use crate::pipelines::processors::PipelineBuilder;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 pub struct ExplainInterpreter {
-    ctx: Arc<DatabendQueryContext>,
+    ctx: Arc<QueryContext>,
     explain: ExplainPlan,
 }
 
@@ -61,10 +61,7 @@ impl Interpreter for ExplainInterpreter {
 }
 
 impl ExplainInterpreter {
-    pub fn try_create(
-        ctx: Arc<DatabendQueryContext>,
-        explain: ExplainPlan,
-    ) -> Result<InterpreterPtr> {
+    pub fn try_create(ctx: Arc<QueryContext>, explain: ExplainPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(ExplainInterpreter { ctx, explain }))
     }
 

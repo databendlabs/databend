@@ -28,7 +28,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 pub struct FunctionsTable {
     table_info: TableInfo,
@@ -68,7 +68,7 @@ impl Table for FunctionsTable {
 
     async fn read(
         &self,
-        _ctx: Arc<DatabendQueryContext>,
+        _ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let function_factory = FunctionFactory::instance();

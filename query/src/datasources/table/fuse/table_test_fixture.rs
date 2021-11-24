@@ -33,11 +33,11 @@ use uuid::Uuid;
 use crate::catalogs::Catalog;
 use crate::catalogs::Table;
 use crate::configs::Config;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 pub struct TestFixture {
     _tmp_dir: TempDir,
-    ctx: Arc<DatabendQueryContext>,
+    ctx: Arc<QueryContext>,
     prefix: String,
 }
 
@@ -73,7 +73,7 @@ impl TestFixture {
         }
     }
 
-    pub fn ctx(&self) -> Arc<DatabendQueryContext> {
+    pub fn ctx(&self) -> Arc<QueryContext> {
         self.ctx.clone()
     }
 

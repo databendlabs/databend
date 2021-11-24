@@ -25,7 +25,7 @@ use crate::optimizers::ExprTransformOptimizer;
 use crate::optimizers::ProjectionPushDownOptimizer;
 use crate::optimizers::StatisticsExactOptimizer;
 use crate::optimizers::TopNPushDownOptimizer;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 pub trait Optimizer {
     fn name(&self) -> &str;
@@ -37,7 +37,7 @@ pub struct Optimizers {
 }
 
 impl Optimizers {
-    pub fn create(ctx: Arc<DatabendQueryContext>) -> Self {
+    pub fn create(ctx: Arc<QueryContext>) -> Self {
         let mut optimizers = Self::without_scatters(ctx.clone());
         optimizers
             .inner
@@ -45,7 +45,7 @@ impl Optimizers {
         optimizers
     }
 
-    pub fn without_scatters(ctx: Arc<DatabendQueryContext>) -> Self {
+    pub fn without_scatters(ctx: Arc<QueryContext>) -> Self {
         Optimizers {
             inner: vec![
                 Box::new(ConstantFoldingOptimizer::create(ctx.clone())),

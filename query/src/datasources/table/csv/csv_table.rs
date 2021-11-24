@@ -34,7 +34,7 @@ use common_streams::Source;
 use crate::catalogs::Table;
 use crate::datasources::common::count_lines;
 use crate::datasources::context::DataSourceContext;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 pub struct CsvTable {
     table_info: TableInfo,
@@ -76,7 +76,7 @@ impl Table for CsvTable {
 
     async fn read_partitions(
         &self,
-        _ctx: Arc<DatabendQueryContext>,
+        _ctx: Arc<QueryContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let file = &self.file;
@@ -92,7 +92,7 @@ impl Table for CsvTable {
 
     async fn read(
         &self,
-        ctx: Arc<DatabendQueryContext>,
+        ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let ctx_clone = ctx.clone();

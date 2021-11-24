@@ -26,7 +26,7 @@ use sqlparser::ast::TableFactor;
 use sqlparser::ast::TableWithJoins;
 
 use crate::catalogs::Catalog;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::query::query_schema_joined::JoinedSchema;
 use crate::sql::statements::AnalyzableStatement;
@@ -34,11 +34,11 @@ use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
 
 pub struct JoinedSchemaAnalyzer {
-    ctx: Arc<DatabendQueryContext>,
+    ctx: Arc<QueryContext>,
 }
 
 impl JoinedSchemaAnalyzer {
-    pub fn create(ctx: Arc<DatabendQueryContext>) -> JoinedSchemaAnalyzer {
+    pub fn create(ctx: Arc<QueryContext>) -> JoinedSchemaAnalyzer {
         JoinedSchemaAnalyzer { ctx }
     }
 

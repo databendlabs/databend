@@ -25,7 +25,7 @@ use poem::Response;
 use tokio_stream::StreamExt;
 
 use crate::catalogs::ToReadDataSourcePlan;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 
 pub struct LogTemplate {
@@ -63,7 +63,7 @@ async fn select_table(sessions: Arc<SessionManager>) -> Result<String> {
     Ok(format!("{:?}", tracing_logs))
 }
 
-async fn execute_query(ctx: Arc<DatabendQueryContext>) -> Result<SendableDataBlockStream> {
+async fn execute_query(ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
     let tracing_table = ctx.get_table("system", "tracing").await?;
     let tracing_table_read_plan = tracing_table.read_plan(ctx.clone(), None).await?;
 

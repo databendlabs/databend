@@ -23,16 +23,16 @@ use common_planners::ReadDataSourcePlan;
 use crate::catalogs::Catalog;
 use crate::catalogs::ToReadDataSourcePlan;
 use crate::pipelines::transforms::SourceTransform;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 use crate::tests::try_create_catalog;
 
 pub struct NumberTestData {
-    ctx: Arc<DatabendQueryContext>,
+    ctx: Arc<QueryContext>,
     table: &'static str,
 }
 
 impl NumberTestData {
-    pub fn create(ctx: Arc<DatabendQueryContext>) -> Self {
+    pub fn create(ctx: Arc<QueryContext>) -> Self {
         NumberTestData {
             ctx,
             table: "numbers_mt",

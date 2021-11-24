@@ -39,7 +39,7 @@ use crate::catalogs::TableFunction;
 use crate::datasources::common::generate_parts;
 use crate::datasources::table_func_engine::TableArgs;
 use crate::pipelines::transforms::get_sort_descriptions;
-use crate::sessions::DatabendQueryContext;
+use crate::sessions::QueryContext;
 
 pub struct NumbersTable {
     table_info: TableInfo,
@@ -112,7 +112,7 @@ impl Table for NumbersTable {
 
     async fn read_partitions(
         &self,
-        ctx: Arc<DatabendQueryContext>,
+        ctx: Arc<QueryContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let statistics = Statistics::new_exact(
@@ -132,7 +132,7 @@ impl Table for NumbersTable {
 
     async fn read(
         &self,
-        ctx: Arc<DatabendQueryContext>,
+        ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         // If we have order-by and limit push-downs, try the best to only generate top n rows.

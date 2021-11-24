@@ -48,7 +48,7 @@ type DatabaseAndTable = (String, String);
 ///         (SELECT scalar FROM table_name_3) AS scalar_3
 ///     FROM table_name_4;
 /// For each subquery, they will share a runtime, session, progress, init_query_id
-pub struct DatabendQueryContextShared {
+pub struct QueryContextShared {
     pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) progress: Arc<Progress>,
     pub(in crate::sessions) session: Arc<Session>,
@@ -65,13 +65,13 @@ pub struct DatabendQueryContextShared {
     pub(in crate::sessions) dal_ctx: Arc<DalContext>,
 }
 
-impl DatabendQueryContextShared {
+impl QueryContextShared {
     pub fn try_create(
         conf: Config,
         session: Arc<Session>,
         cluster_cache: Arc<Cluster>,
-    ) -> Arc<DatabendQueryContextShared> {
-        Arc::new(DatabendQueryContextShared {
+    ) -> Arc<QueryContextShared> {
+        Arc::new(QueryContextShared {
             conf,
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             progress: Arc::new(Progress::create()),
