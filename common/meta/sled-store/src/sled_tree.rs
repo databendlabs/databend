@@ -20,6 +20,10 @@ use std::ops::RangeBounds;
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
 use common_tracing::tracing;
+use sled::transaction::ConflictableTransactionError;
+use sled::transaction::TransactionError;
+use sled::transaction::TransactionalTree;
+use sled::transaction::UnabortableTransactionError;
 
 use crate::SledKeySpace;
 
@@ -84,6 +88,22 @@ impl SledTree {
         }
     }
 
+    pub fn txn<T, E>(
+        &self,
+        sync: bool,
+        f: impl Fn(TransactionSledTree<'_>) -> Result<T, ConflictableTransactionError<E>>,
+    ) -> Result<T, TransactionError<E>> {
+        // use map_err_to_code
+        (&self.tree).transaction(move |tree| {
+            let txn_sled_tree = TransactionSledTree { txn_tree: tree };
+            let r = f(txn_sled_tree.clone())?;
+            if sync {
+                txn_sled_tree.txn_tree.flush();
+            }
+            Ok(r)
+        })
+    }
+
     /// Return true if the tree contains the key.
     pub fn contains_key<KV: SledKeySpace>(&self, key: &KV::K) -> common_exception::Result<bool>
     where KV: SledKeySpace {
@@ -130,8 +150,7 @@ impl SledTree {
     }
 
     /// Retrieve the value of key.
-    pub fn get<KV: SledKeySpace>(&self, key: &KV::K) -> common_exception::Result<Option<KV::V>>
-    where KV: SledKeySpace {
+    pub fn get<KV: SledKeySpace>(&self, key: &KV::K) -> common_exception::Result<Option<KV::V>> {
         let got = self
             .tree
             .get(KV::serialize_key(key)?)
@@ -400,8 +419,7 @@ impl SledTree {
 
     /// Insert a single kv.
     /// Returns the last value if it is set.
-    #[tracing::instrument(level = "debug", skip(self, value))]
-    pub async fn insert<KV>(
+    async fn insert<KV>(
         &self,
         key: &KV::K,
         value: &KV::V,
@@ -467,10 +485,68 @@ impl SledTree {
     }
 }
 
+#[derive(Clone)]
+pub struct TransactionSledTree<'a> {
+    pub txn_tree: &'a TransactionalTree,
+}
+
+impl TransactionSledTree<'_> {
+    pub fn key_space<KV: SledKeySpace>(&self) -> AsTxnKeySpace<KV> {
+        AsTxnKeySpace::<KV> {
+            inner: self,
+            phantom: PhantomData,
+        }
+    }
+
+    // fn get<KV: SledKeySpace>(&self, key: &KV::K) -> common_exception::Result<Option<KV::V>> {
+    //     let got = self
+    //         .txn_tree
+    //         .get(KV::serialize_key(key)?)
+    //         .map_err_to_code(ErrorCode::MetaStoreDamaged, || format!("get: {}", key))?;
+    //     let v = match got {
+    //         None => None,
+    //         Some(v) => Some(KV::deserialize_value(v)?),
+    //     };
+    //     Ok(v)
+    // }
+
+    fn insert<KV>(
+        &self,
+        key: &KV::K,
+        value: &KV::V,
+    ) -> Result<Option<KV::V>, UnabortableTransactionError>
+    where
+        KV: SledKeySpace,
+    {
+        let k = KV::serialize_key(key).unwrap();
+        let v = KV::serialize_value(value).unwrap();
+
+        let prev = self.txn_tree.insert(k, v)?;
+        let prev = prev.map(|x| KV::deserialize_value(x).unwrap());
+
+        Ok(prev)
+    }
+}
+
 /// It borrows the internal SledTree with access limited to a specified namespace `KV`.
 pub struct AsKeySpace<'a, KV: SledKeySpace> {
     inner: &'a SledTree,
     phantom: PhantomData<KV>,
+}
+
+pub struct AsTxnKeySpace<'a, KV: SledKeySpace> {
+    inner: &'a TransactionSledTree<'a>,
+    phantom: PhantomData<KV>,
+}
+
+impl<'a, KV: SledKeySpace> AsTxnKeySpace<'a, KV> {
+    pub fn insert(
+        &self,
+        key: &KV::K,
+        value: &KV::V,
+    ) -> Result<Option<KV::V>, UnabortableTransactionError> {
+        self.inner.insert::<KV>(key, value)
+    }
 }
 
 impl<'a, KV: SledKeySpace> AsKeySpace<'a, KV> {

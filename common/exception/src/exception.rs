@@ -22,6 +22,8 @@ use std::string::FromUtf8Error;
 use std::sync::Arc;
 
 use backtrace::Backtrace;
+use sled::transaction::ConflictableTransactionError;
+use sled::transaction::TransactionError;
 use thiserror::Error;
 use tonic::Code;
 use tonic::Status;
@@ -232,6 +234,8 @@ build_exceptions! {
     // KVSrv server error
 
     MetaSrvError(2501),
+    TransactionAbort(2502),
+    TransactionError(2503),
 
     // FS error
 
@@ -430,6 +434,33 @@ impl From<prost::EncodeError> for ErrorCode {
             "Bad bytes, cannot parse bytes with prost, cause: {}",
             error
         ))
+    }
+}
+
+impl<T: Display> From<ConflictableTransactionError<T>> for ErrorCode {
+    fn from(error: ConflictableTransactionError<T>) -> Self {
+        match error {
+            ConflictableTransactionError::Abort(e) => {
+                ErrorCode::TransactionAbort(format!("Transaction abort, cause: {}", e))
+            }
+            ConflictableTransactionError::Storage(e) => {
+                ErrorCode::TransactionError(format!("Transaction storage error, cause: {}", e))
+            }
+            _ => ErrorCode::MetaSrvError("Unexpect transaction error"),
+        }
+    }
+}
+
+impl<E: Display> From<TransactionError<E>> for ErrorCode {
+    fn from(error: TransactionError<E>) -> Self {
+        match error {
+            TransactionError::Abort(e) => {
+                ErrorCode::TransactionAbort(format!("Transaction abort, cause: {}", e))
+            }
+            TransactionError::Storage(e) => {
+                ErrorCode::TransactionError(format!("Transaction storage error, cause :{}", e))
+            }
+        }
     }
 }
 
