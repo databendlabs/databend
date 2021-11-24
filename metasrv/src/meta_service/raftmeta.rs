@@ -26,12 +26,14 @@ use common_base::tokio::sync::RwLockReadGuard;
 use common_base::tokio::task::JoinHandle;
 use common_exception::prelude::ErrorCode;
 use common_exception::prelude::ToErrorCode;
+use common_meta_api::MetaApi;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_raft_store::state_machine::TableLookupKey;
 use common_meta_raft_store::state_machine::TableLookupValue;
 use common_meta_types::Cmd;
+use common_meta_types::ListTableReq;
 use common_meta_types::LogEntry;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
@@ -570,11 +572,11 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_tables(&self, db_name: &str) -> Result<Vec<TableInfo>, ErrorCode> {
+    pub async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, ErrorCode> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
-        sm.get_tables(db_name)
+        sm.list_tables(req).await
     }
 
     #[tracing::instrument(level = "debug", skip(self))]

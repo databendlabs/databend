@@ -40,7 +40,6 @@ use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_tracing::tracing;
 use serde::Deserialize;
@@ -386,7 +385,7 @@ impl StateMachine {
                 ref table_name,
                 ref table_meta,
             } => {
-                let db_id = self.get_db_id(db_name).await?;
+                let db_id = self.get_database_id(db_name)?;
 
                 let lookup_key = TableLookupKey {
                     database_id: db_id,
@@ -442,7 +441,7 @@ impl StateMachine {
                 ref db_name,
                 ref table_name,
             } => {
-                let db_id = self.get_db_id(db_name).await?;
+                let db_id = self.get_database_id(db_name)?;
 
                 let lookup_key = TableLookupKey {
                     database_id: db_id,
@@ -607,7 +606,7 @@ impl StateMachine {
     }
 
     #[allow(clippy::ptr_arg)]
-    async fn get_db_id(&self, db_name: &String) -> common_exception::Result<u64> {
+    pub fn get_database_id(&self, db_name: &String) -> common_exception::Result<u64> {
         let seq_dbi = self
             .database_lookup()
             .get(db_name)?
@@ -675,31 +674,12 @@ impl StateMachine {
         sm_nodes.get(node_id)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub fn get_database_id(&self, name: &str) -> Result<Option<SeqV<u64>>, ErrorCode> {
-        let dbs = self.database_lookup();
-        let x = dbs.get(&name.to_string())?;
+    pub fn get_database_meta_by_id(&self, db_id: &u64) -> Result<SeqV<DatabaseMeta>, ErrorCode> {
+        let x = self
+            .databases()
+            .get(db_id)?
+            .ok_or_else(|| ErrorCode::UnknownDatabaseId(format!("database_id: {}", db_id)))?;
         Ok(x)
-    }
-
-    pub fn get_database_by_id(&self, did: &u64) -> Result<Option<SeqV<DatabaseMeta>>, ErrorCode> {
-        let x = self.databases().get(did)?;
-        Ok(x)
-    }
-
-    pub fn get_databases(&self) -> Result<Vec<(String, u64, DatabaseMeta)>, ErrorCode> {
-        let mut res = vec![];
-
-        let it = self.database_lookup().range(..)?;
-        for r in it {
-            let (a, b) = r?;
-            let meta = self
-                .get_database_by_id(&b.data)?
-                .ok_or_else(|| ErrorCode::UnknownDatabaseId(format!("database_id: {}", b.data)))?;
-            res.push((a, b.data, meta.data));
-        }
-
-        Ok(res)
     }
 
     pub fn get_database_meta_ver(&self) -> common_exception::Result<Option<u64>> {
@@ -726,53 +706,6 @@ impl StateMachine {
             .await?;
         self.incr_seq(SEQ_DATABASE_META_ID).await?; // need this?
         Ok(result)
-    }
-
-    pub fn get_tables(&self, db_name: &str) -> Result<Vec<TableInfo>, ErrorCode> {
-        let db = self.get_database_id(db_name)?;
-        let db = match db {
-            Some(x) => x,
-            None => {
-                return Err(ErrorCode::UnknownDatabase(format!(
-                    "unknown database {}",
-                    db_name
-                )));
-            }
-        };
-
-        let db_id = db.data;
-
-        let mut tbls = vec![];
-        let tables = self.tables();
-        let tables_iter = self.table_lookup().range(..)?;
-        for r in tables_iter {
-            let (k, seq_table_id) = r?;
-
-            let got_db_id = k.database_id;
-            let table_name = k.table_name;
-
-            if got_db_id == db_id {
-                let table_id = seq_table_id.data.0;
-
-                let seq_table_meta = tables.get(&table_id)?.ok_or_else(|| {
-                    ErrorCode::IllegalMetaState(format!(" table of id {}, not found", table_id))
-                })?;
-
-                let version = seq_table_meta.seq;
-                let table_meta = seq_table_meta.data;
-
-                let table_info = TableInfo::new(
-                    db_name,
-                    &table_name,
-                    TableIdent::new(table_id, version),
-                    table_meta,
-                );
-
-                tbls.push(table_info);
-            }
-        }
-
-        Ok(tbls)
     }
 
     pub fn unexpired_opt<V: Debug>(seq_value: Option<SeqV<V>>) -> Option<SeqV<V>> {
