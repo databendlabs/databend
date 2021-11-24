@@ -24,6 +24,7 @@ use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
+use common_meta_types::DatabaseMeta;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
@@ -56,7 +57,8 @@ impl MetaApi for StateMachine {
 
         let res = self.apply_cmd(&cmd).await?;
 
-        let ch: Change<u64> = res.try_into().unwrap();
+        let mut ch: Change<DatabaseMeta> = res.try_into().unwrap();
+        let db_id = ch.ident.take().expect("Some(db_id)");
         let (prev, result) = ch.unpack_data();
 
         assert!(result.is_some());
@@ -68,9 +70,7 @@ impl MetaApi for StateMachine {
             )));
         }
 
-        Ok(CreateDatabaseReply {
-            database_id: result.unwrap(),
-        })
+        Ok(CreateDatabaseReply { database_id: db_id })
     }
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, ErrorCode> {

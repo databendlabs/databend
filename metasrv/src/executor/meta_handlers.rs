@@ -32,6 +32,7 @@ use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
+use common_meta_types::DatabaseMeta;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
@@ -77,8 +78,9 @@ impl RequestHandler<FlightReq<CreateDatabaseReq>> for ActionHandler {
             .await
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
-        let ch: Change<u64> = res.try_into().unwrap();
-        let (prev, result) = ch.unpack_data();
+        let mut ch: Change<DatabaseMeta> = res.try_into().unwrap();
+        let db_id = ch.ident.take().expect("Some(db_id)");
+        let (prev, _result) = ch.unpack_data();
 
         if prev.is_some() && !if_not_exists {
             return Err(ErrorCode::DatabaseAlreadyExists(format!(
@@ -89,7 +91,7 @@ impl RequestHandler<FlightReq<CreateDatabaseReq>> for ActionHandler {
 
         Ok(CreateDatabaseReply {
             // TODO(xp): return DatabaseInfo?
-            database_id: result.unwrap(),
+            database_id: db_id,
         })
     }
 }

@@ -352,6 +352,14 @@ impl StateMachine {
                 if prev.is_none() && result.is_some() {
                     // TODO(xp): reconsider this impl. it may not be required.
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
+                } else {
+                    // exist
+                    let db_id = prev.unwrap().data;
+                    let prev = self.get_database_meta_by_id(&db_id)?;
+                    return Ok(AppliedState::DatabaseMeta(Change::nochange_with_id(
+                        db_id,
+                        Some(prev),
+                    )));
                 }
 
                 let dbs = self.databases();
@@ -377,7 +385,12 @@ impl StateMachine {
                     db_id,
                     result
                 );
-                Ok(Change::new(prev, result).into())
+
+                Ok(AppliedState::DatabaseMeta(Change::new_with_id(
+                    db_id,
+                    prev_meta,
+                    result_meta,
+                )))
             }
 
             Cmd::DropDatabase { ref name } => {
