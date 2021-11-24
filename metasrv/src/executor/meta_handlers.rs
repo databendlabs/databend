@@ -19,7 +19,6 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_meta_flight::FlightReq;
 use common_meta_flight::GetTableExtReq;
-use common_meta_flight::ListDatabasesAction;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd::CreateDatabase;
@@ -38,6 +37,7 @@ use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetTableReq;
+use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
 use common_meta_types::LogEntry;
 use common_meta_types::TableIdent;
@@ -307,10 +307,10 @@ impl RequestHandler<GetTableExtReq> for ActionHandler {
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<ListDatabasesAction> for ActionHandler {
+impl RequestHandler<FlightReq<ListDatabaseReq>> for ActionHandler {
     async fn handle(
         &self,
-        _req: ListDatabasesAction,
+        _req: FlightReq<ListDatabaseReq>,
     ) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
         let res = self.meta_node.get_state_machine().await.get_databases()?;
 
