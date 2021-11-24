@@ -46,10 +46,10 @@ pub struct GithubDatabase {
     ctx: DataSourceContext,
 }
 
-pub const RepoInfoEngine: &str = "REPO_INFO_ENGINE";
-pub const RepoIssuesEngine: &str = "REPO_ISSUES_ENGINE";
-pub const RepoPrsEngine: &str = "REPO_PRS_ENGINE";
-pub const RepoCommentsEngine: &str = "REPO_COMMENTS_ENGINE";
+pub const REPO_INFO_ENGINE: &str = "REPO_INFO_ENGINE";
+pub const REPO_ISSUES_ENGINE: &str = "REPO_ISSUES_ENGINE";
+pub const REPO_PRS_ENGINE: &str = "REPO_PRS_ENGINE";
+pub const REPO_COMMENTS_ENGINE: &str = "REPO_COMMENTS_ENGINE";
 
 impl GithubDatabase {
     pub fn try_create(db_name: &str, ctx: DataSourceContext) -> Result<Box<dyn Database>> {
@@ -62,19 +62,19 @@ impl GithubDatabase {
     fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         let engine = table_info.engine();
         match engine {
-            RepoInfoEngine => {
+            REPO_INFO_ENGINE => {
                 let tbl: Arc<dyn Table> = RepoInfoTable::build_table(table_info).into();
                 Ok(tbl)
             }
-            RepoIssuesEngine => {
+            REPO_ISSUES_ENGINE => {
                 let tbl: Arc<dyn Table> = RepoIssuesTable::build_table(table_info).into();
                 Ok(tbl)
             }
-            RepoPrsEngine => {
+            REPO_PRS_ENGINE => {
                 let tbl: Arc<dyn Table> = RepoPrsTable::build_table(table_info).into();
                 Ok(tbl)
             }
-            RepoCommentsEngine => {
+            REPO_COMMENTS_ENGINE => {
                 let tbl: Arc<dyn Table> = RepoCommentsTable::build_table(table_info).into();
                 Ok(tbl)
             }
@@ -129,7 +129,12 @@ impl Database for GithubDatabase {
         db_name: &str,
         table_name: &str,
     ) -> common_exception::Result<Arc<dyn Table>> {
-        unimplemented!()
+        let table_info = self
+            .ctx
+            .meta
+            .get_table(GetTableReq::new(db_name, table_name))
+            .await?;
+        self.build_table(table_info.as_ref())
     }
 
     async fn list_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
@@ -147,10 +152,12 @@ impl Database for GithubDatabase {
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<()> {
-        unimplemented!()
+        Err(ErrorCode::UnImplement(
+            "Cannot create GITHUB database table",
+        ))
     }
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
-        unimplemented!()
+        Err(ErrorCode::UnImplement("Cannot drop GITHUB database table"))
     }
 }

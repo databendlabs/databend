@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -28,8 +29,17 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
 use crate::datasources::context::DataSourceContext;
-use crate::datasources::database::github::database::RepoInfoEngine;
+use crate::datasources::database::github::database::REPO_INFO_ENGINE;
 use crate::sessions::DatabendQueryContextRef;
+
+const REPOSITORY: &str = "reposiroty";
+const LANGUAGE: &str = "language";
+const LICENSE: &str = "license";
+const STAR_COUNT: &str = "star_count";
+const FORKS_COUNT: &str = "forks_count";
+const WATCHERS_COUNT: &str = "watchers_count";
+const OPEN_ISSUES_COUNT: &str = "open_issues_count";
+const SUBSCRIBERS_COUNT: &str = "subscribers_count";
 
 pub struct RepoInfoTable {
     table_info: TableInfo,
@@ -37,12 +47,6 @@ pub struct RepoInfoTable {
 
 impl RepoInfoTable {
     pub async fn create(ctx: DataSourceContext, owner: String, repo: String) -> Result<()> {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", DataType::String, false),
-            DataField::new("host", DataType::String, false),
-            DataField::new("port", DataType::UInt16, false),
-        ]);
-
         let mut options = HashMap::new();
         options.insert("owner".to_string(), owner.clone());
         options.insert("repo".to_string(), repo.clone());
@@ -52,13 +56,28 @@ impl RepoInfoTable {
             db: owner.clone(),
             table: repo.clone(),
             table_meta: TableMeta {
-                schema: schema,
-                engine: RepoInfoEngine.into(),
+                schema: RepoInfoTable::schema(),
+                engine: REPO_INFO_ENGINE.into(),
                 options: options,
             },
         };
         ctx.meta.create_table(req).await?;
         Ok(())
+    }
+
+    fn schema() -> Arc<DataSchema> {
+        let fields = vec![
+            DataField::new(REPOSITORY, DataType::String, false),
+            DataField::new(LANGUAGE, DataType::String, true),
+            DataField::new(LICENSE, DataType::String, true),
+            DataField::new(STAR_COUNT, DataType::UInt32, true),
+            DataField::new(FORKS_COUNT, DataType::UInt32, true),
+            DataField::new(WATCHERS_COUNT, DataType::UInt32, true),
+            DataField::new(OPEN_ISSUES_COUNT, DataType::UInt32, true),
+            DataField::new(SUBSCRIBERS_COUNT, DataType::UInt32, true),
+        ];
+
+        Arc::new(DataSchema::new(fields))
     }
 
     pub fn build_table(table_info: &TableInfo) -> Box<dyn Table> {

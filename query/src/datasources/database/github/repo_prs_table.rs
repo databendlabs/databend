@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
@@ -28,8 +29,16 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
 use crate::datasources::context::DataSourceContext;
-use crate::datasources::database::github::database::RepoPrsEngine;
+use crate::datasources::database::github::database::REPO_PRS_ENGINE;
 use crate::sessions::DatabendQueryContextRef;
+
+const NUMBER: &str = "number";
+const TITLE: &str = "title";
+const STATE: &str = "state";
+const USER: &str = "user";
+const LABELS: &str = "labels";
+const ASSIGNESS: &str = "assigness";
+const COMMENTS: &str = "comments";
 
 pub struct RepoPrsTable {
     table_info: TableInfo,
@@ -37,12 +46,6 @@ pub struct RepoPrsTable {
 
 impl RepoPrsTable {
     pub async fn create(ctx: DataSourceContext, owner: String, repo: String) -> Result<()> {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", DataType::String, false),
-            DataField::new("host", DataType::String, false),
-            DataField::new("port", DataType::UInt16, false),
-        ]);
-
         let mut options = HashMap::new();
         options.insert("owner".to_string(), owner.clone());
         options.insert("repo".to_string(), repo.clone());
@@ -52,13 +55,27 @@ impl RepoPrsTable {
             db: owner.clone(),
             table: repo.clone() + "_prs",
             table_meta: TableMeta {
-                schema: schema,
-                engine: RepoPrsEngine.into(),
+                schema: RepoPrsTable::schema(),
+                engine: REPO_PRS_ENGINE.into(),
                 options: options,
             },
         };
         ctx.meta.create_table(req).await?;
         Ok(())
+    }
+
+    fn schema() -> Arc<DataSchema> {
+        let fields = vec![
+            DataField::new(NUMBER, DataType::UInt32, false),
+            DataField::new(TITLE, DataType::String, true),
+            DataField::new(STATE, DataType::String, true),
+            DataField::new(USER, DataType::String, true),
+            DataField::new(LABELS, DataType::String, true),
+            DataField::new(ASSIGNESS, DataType::String, true),
+            DataField::new(COMMENTS, DataType::UInt32, true),
+        ];
+
+        Arc::new(DataSchema::new(fields))
     }
 
     pub fn build_table(table_info: &TableInfo) -> Box<dyn Table> {
