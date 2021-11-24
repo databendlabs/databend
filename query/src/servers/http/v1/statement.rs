@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::ProgressValues;
@@ -170,16 +169,20 @@ impl HttpQueryState {
     }
 }
 
+#[derive(Deserialize)]
+pub(crate) struct StatementHandlerParams {
+    db: Option<String>,
+}
+
 #[poem::handler]
 pub(crate) async fn statement_handler(
     sessions_extension: Data<&Arc<SessionManager>>,
     sql: String,
-    Query(params): Query<HashMap<String, String>>,
+    Query(params): Query<StatementHandlerParams>,
 ) -> impl IntoResponse {
     let session_manager = sessions_extension.0.clone();
     let query_id = uuid::Uuid::new_v4().to_string();
-    let db = params.get("db");
-    let mut query = HttpQuery::new(query_id, sql, db.cloned());
+    let mut query = HttpQuery::new(query_id, sql, params.db);
     query.initial_result(session_manager).await
 }
 
