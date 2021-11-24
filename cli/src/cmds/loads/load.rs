@@ -30,7 +30,6 @@ use itertools::Itertools;
 use lexical_util::num::AsPrimitive;
 use num_format::Locale;
 use num_format::ToFormattedString;
-use rayon::prelude::*;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::command::Command;
@@ -207,9 +206,8 @@ impl LoadCommand {
                     if batch.is_empty() {
                         break;
                     }
-                    let values = batch
+                    let values: Vec<String> = batch
                         .into_iter()
-                        .par_bridge()
                         .map(|s| {
                             s.iter()
                                 .map(|i| {
@@ -223,18 +221,16 @@ impl LoadCommand {
                         })
                         .map(|e| format!("({})", e.trim()))
                         .filter(|e| !e.trim().is_empty())
-                        .reduce_with(|a, b| format!("{}, {}", a, b));
-                    if let Some(values) = values {
-                        let query = format!("INSERT INTO {} VALUES {}", table_format, values);
-                        if let Err(e) = execute_query_json(&cli, &url, query.clone()).await {
-                            writer.write_err(format!(
-                                "cannot insert data into {} with query {}, error: {:?}",
-                                table, query, e
-                            ))
-                        }
+                        .collect();
+                    let values = values.join(",");
+                    let query = format!("INSERT INTO {} VALUES {}", table_format, values);
+                    if let Err(e) = execute_query_json(&cli, &url, query.clone()).await {
+                        writer.write_err(format!(
+                            "cannot insert data into {} with query {}, error: {:?}",
+                            table, query, e
+                        ))
                     }
                 }
-
                 let elapsed = start.elapsed();
                 let time = elapsed.as_millis() as f64 / 1000f64;
                 writer.write_ok(format!(

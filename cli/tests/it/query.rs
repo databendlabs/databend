@@ -79,7 +79,10 @@ fn test_generate_query_probe() -> Result<()> {
         build_status!(conf.clone(), 8888);
         let status = Status::read(conf).unwrap();
         let (_, query_url) = build_query_endpoint(&status).unwrap();
-        assert_eq!(query_url, "http://0.0.0.0:8888/v1/query".to_string());
+        assert_eq!(
+            query_url,
+            "http://0.0.0.0:8888/v1/query?wait_time=-1".to_string()
+        );
     }
     Ok(())
 }
