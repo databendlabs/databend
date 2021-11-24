@@ -122,10 +122,7 @@ impl AnyError {
     }
 
     pub fn get_type(&self) -> Option<&str> {
-        match &self.typ {
-            Some(v) => Some(v),
-            None => None,
-        }
+        self.typ.as_ref().map(|x| x as _)
     }
 
     pub fn backtrace(&self) -> Option<&str> {

@@ -9,6 +9,14 @@ killall databend-query
 killall databend-meta
 sleep 1
 
+for bin in databend-query databend-meta
+do
+  if test -n "$(pgrep $bin)"; then
+      echo "The $bin is not killed. force killing."
+      killall -9 $bin
+  fi
+done
+
 BIN=${1:-debug}
 
 echo 'Start DatabendStore...'

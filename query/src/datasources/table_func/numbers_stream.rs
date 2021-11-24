@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 use std::usize;
@@ -22,7 +23,7 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use futures::stream::Stream;
 
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 #[derive(Debug, Clone)]
 struct BlockRange {
@@ -31,7 +32,7 @@ struct BlockRange {
 }
 
 pub struct NumbersStream {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<QueryContext>,
     schema: DataSchemaRef,
     block_index: usize,
     blocks: Vec<BlockRange>,
@@ -41,7 +42,7 @@ pub struct NumbersStream {
 
 impl NumbersStream {
     pub fn try_create(
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
         schema: DataSchemaRef,
         sort_columns_descriptions: Vec<SortColumnDescription>,
         limit: Option<usize>,

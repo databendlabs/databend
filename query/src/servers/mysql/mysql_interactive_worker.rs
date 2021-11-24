@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::marker::PhantomData;
+use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::tokio;
@@ -34,7 +35,7 @@ use tokio_stream::StreamExt;
 use crate::interpreters::InterpreterFactory;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
 use crate::users::CertifiedInfo;
@@ -208,19 +209,24 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let address = &info.user_client_address;
 
         let user_manager = self.session.get_user_manager();
-        // TODO: use get_users and check client address
+        // TODO: list user's grant list and check client address
         let user_info = user_manager.get_user(user_name, "%").await?;
 
         let input = &info.user_password;
         let saved = &user_info.password;
         let encode_password = Self::encoding_password(auth_plugin, salt, input, saved)?;
 
-        user_manager
+        let authed = user_manager
             .auth_user(
                 user_info,
                 CertifiedInfo::create(user_name, encode_password, address),
             )
-            .await
+            .await?;
+        if authed {
+            self.session.set_current_user(user_name.clone());
+        }
+
+        Ok(authed)
     }
 
     fn encoding_password(
@@ -310,7 +316,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
     async fn exec_query(
         plan: Result<PlanNode>,
-        context: &DatabendQueryContextRef,
+        context: &Arc<QueryContext>,
     ) -> Result<(Vec<DataBlock>, String)> {
         let instant = Instant::now();
 
@@ -326,7 +332,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         query_result.map(|data| (data, Self::extra_info(context, instant)))
     }
 
-    fn extra_info(context: &DatabendQueryContextRef, instant: Instant) -> String {
+    fn extra_info(context: &Arc<QueryContext>, instant: Instant) -> String {
         let progress = context.get_progress_value();
         let seconds = instant.elapsed().as_nanos() as f64 / 1e9f64;
         format!(

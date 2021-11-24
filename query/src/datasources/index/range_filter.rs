@@ -39,20 +39,20 @@ pub struct RangeFilter {
 impl RangeFilter {
     pub fn try_create(expr: &Expression, schema: DataSchemaRef) -> Result<Self> {
         let mut stat_columns: StatColumns = Vec::new();
-        let varifiable_expr = build_verifiable_expr(expr, schema, &mut stat_columns);
+        let verifiable_expr = build_verifiable_expr(expr, schema, &mut stat_columns);
         let input_fields = stat_columns
             .iter()
             .map(|c| c.stat_field.clone())
             .collect::<Vec<_>>();
         let input_schema = Arc::new(DataSchema::new(input_fields));
 
-        let output_fields = vec![varifiable_expr.to_data_field(&input_schema)?];
+        let output_fields = vec![verifiable_expr.to_data_field(&input_schema)?];
         let output_schema = DataSchemaRefExt::create(output_fields);
         let expr_executor = ExpressionExecutor::try_create(
-            "variable expression executor in RangeFilter",
+            "verifiable expression executor in RangeFilter",
             input_schema.clone(),
             output_schema,
-            vec![varifiable_expr],
+            vec![verifiable_expr],
             false,
         )?;
 
@@ -273,6 +273,7 @@ impl<'a> VerifiableExprBuilder<'a> {
         };
 
         let monotonic = is_monotonic_expression(&args[0]);
+
         if !monotonic.is_monotonic {
             return Err(ErrorCode::UnknownException(
                 "Only support the monotonic expression",

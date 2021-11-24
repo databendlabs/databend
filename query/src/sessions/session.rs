@@ -16,34 +16,20 @@ use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::Mutex;
 use common_macros::MallocSizeOf;
 use common_mem_allocator::malloc_size;
-use futures::channel::oneshot::Sender;
 use futures::channel::*;
 
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::configs::Config;
-use crate::sessions::context_shared::DatabendQueryContextShared;
-use crate::sessions::DatabendQueryContext;
-use crate::sessions::DatabendQueryContextRef;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::context_shared::QueryContextShared;
+use crate::sessions::MutableStatus;
+use crate::sessions::QueryContext;
+use crate::sessions::SessionManager;
 use crate::sessions::Settings;
-use crate::users::UserManagerRef;
-
-#[derive(MallocSizeOf)]
-pub(in crate::sessions) struct MutableStatus {
-    pub(in crate::sessions) abort: bool,
-    pub(in crate::sessions) current_database: String,
-    pub(in crate::sessions) session_settings: Arc<Settings>,
-    #[ignore_malloc_size_of = "insignificant"]
-    pub(in crate::sessions) client_host: Option<SocketAddr>,
-    #[ignore_malloc_size_of = "insignificant"]
-    pub(in crate::sessions) io_shutdown_tx: Option<Sender<Sender<()>>>,
-    #[ignore_malloc_size_of = "insignificant"]
-    pub(in crate::sessions) context_shared: Option<Arc<DatabendQueryContextShared>>,
-}
+use crate::users::UserApiProvider;
 
 #[derive(Clone, MallocSizeOf)]
 pub struct Session {
@@ -52,9 +38,9 @@ pub struct Session {
     #[ignore_malloc_size_of = "insignificant"]
     pub(in crate::sessions) config: Config,
     #[ignore_malloc_size_of = "insignificant"]
-    pub(in crate::sessions) sessions: SessionManagerRef,
+    pub(in crate::sessions) sessions: Arc<SessionManager>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
-    pub(in crate::sessions) mutable_state: Arc<Mutex<MutableStatus>>,
+    pub(in crate::sessions) mutable_state: Arc<MutableStatus>,
 }
 
 impl Session {
@@ -62,7 +48,7 @@ impl Session {
         config: Config,
         id: String,
         typ: String,
-        sessions: SessionManagerRef,
+        sessions: Arc<SessionManager>,
     ) -> Result<Arc<Session>> {
         Ok(Arc::new(Session {
             id,
@@ -70,14 +56,7 @@ impl Session {
             config,
             sessions,
             ref_count: Arc::new(AtomicUsize::new(0)),
-            mutable_state: Arc::new(Mutex::new(MutableStatus {
-                abort: false,
-                current_database: String::from("default"),
-                session_settings: Settings::try_create()?,
-                client_host: None,
-                io_shutdown_tx: None,
-                context_shared: None,
-            })),
+            mutable_state: Arc::new(MutableStatus::try_create()?),
         }))
     }
 
@@ -90,15 +69,14 @@ impl Session {
     }
 
     pub fn is_aborting(self: &Arc<Self>) -> bool {
-        self.mutable_state.lock().abort
+        self.mutable_state.get_abort()
     }
 
     pub fn kill(self: &Arc<Self>) {
-        let mut mutable_state = self.mutable_state.lock();
-
-        mutable_state.abort = true;
-        if mutable_state.context_shared.is_none() {
-            if let Some(io_shutdown) = mutable_state.io_shutdown_tx.take() {
+        let mutable_state = self.mutable_state.clone();
+        mutable_state.set_abort(true);
+        if mutable_state.context_shared_is_none() {
+            if let Some(io_shutdown) = mutable_state.take_io_shutdown_tx() {
                 let (tx, rx) = oneshot::channel();
                 if io_shutdown.send(tx).is_ok() {
                     // We ignore this error because the receiver is return cancelled error.
@@ -114,9 +92,9 @@ impl Session {
     }
 
     pub fn force_kill_query(self: &Arc<Self>) {
-        let mut mutable_state = self.mutable_state.lock();
+        let mutable_state = self.mutable_state.clone();
 
-        if let Some(context_shared) = mutable_state.context_shared.take() {
+        if let Some(context_shared) = mutable_state.take_context_shared() {
             context_shared.kill(/* shutdown executing query */);
         }
     }
@@ -124,29 +102,25 @@ impl Session {
     /// Create a query context for query.
     /// For a query, execution environment(e.g cluster) should be immutable.
     /// We can bind the environment to the context in create_context method.
-    pub async fn create_context(self: &Arc<Self>) -> Result<DatabendQueryContextRef> {
-        let context_shared = {
-            let mutable_state = self.mutable_state.lock();
-            mutable_state.context_shared.as_ref().map(Clone::clone)
-        };
+    pub async fn create_context(self: &Arc<Self>) -> Result<Arc<QueryContext>> {
+        let context_shared = self.mutable_state.get_context_shared();
 
         Ok(match context_shared.as_ref() {
-            Some(shared) => DatabendQueryContext::from_shared(shared.clone()),
+            Some(shared) => QueryContext::from_shared(shared.clone()),
             None => {
                 let config = self.config.clone();
                 let discovery = self.sessions.get_cluster_discovery();
 
                 let session = self.clone();
                 let cluster = discovery.discover().await?;
-                let shared = DatabendQueryContextShared::try_create(config, session, cluster);
+                let shared = QueryContextShared::try_create(config, session, cluster);
 
-                let mut mutable_state = self.mutable_state.lock();
-
-                match mutable_state.context_shared.as_ref() {
-                    Some(shared) => DatabendQueryContext::from_shared(shared.clone()),
+                let ctx_shared = self.mutable_state.get_context_shared();
+                match ctx_shared.as_ref() {
+                    Some(shared) => QueryContext::from_shared(shared.clone()),
                     None => {
-                        mutable_state.context_shared = Some(shared.clone());
-                        DatabendQueryContext::from_shared(shared)
+                        self.mutable_state.set_context_shared(Some(shared.clone()));
+                        QueryContext::from_shared(shared)
                     }
                 }
             }
@@ -156,9 +130,8 @@ impl Session {
     pub fn attach<F>(self: &Arc<Self>, host: Option<SocketAddr>, io_shutdown: F)
     where F: FnOnce() + Send + 'static {
         let (tx, rx) = futures::channel::oneshot::channel();
-        let mut inner = self.mutable_state.lock();
-        inner.client_host = host;
-        inner.io_shutdown_tx = Some(tx);
+        self.mutable_state.set_client_host(host);
+        self.mutable_state.set_io_shutdown_tx(Some(tx));
 
         common_base::tokio::spawn(async move {
             if let Ok(tx) = rx.await {
@@ -169,20 +142,28 @@ impl Session {
     }
 
     pub fn set_current_database(self: &Arc<Self>, database_name: String) {
-        let mut inner = self.mutable_state.lock();
-        inner.current_database = database_name;
+        self.mutable_state.set_current_database(database_name);
     }
 
     pub fn get_current_database(self: &Arc<Self>) -> String {
-        let inner = self.mutable_state.lock();
-        inner.current_database.clone()
+        self.mutable_state.get_current_database()
+    }
+
+    pub fn get_current_user(self: &Arc<Self>) -> Result<String> {
+        self.mutable_state
+            .get_current_user()
+            .ok_or_else(|| ErrorCode::AuthenticateFailure("unauthenticated"))
+    }
+
+    pub fn set_current_user(self: &Arc<Self>, user: String) {
+        self.mutable_state.set_current_user(user)
     }
 
     pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {
-        self.mutable_state.lock().session_settings.clone()
+        self.mutable_state.get_settings()
     }
 
-    pub fn get_sessions_manager(self: &Arc<Self>) -> SessionManagerRef {
+    pub fn get_sessions_manager(self: &Arc<Self>) -> Arc<SessionManager> {
         self.sessions.clone()
     }
 
@@ -190,7 +171,7 @@ impl Session {
         self.sessions.get_catalog()
     }
 
-    pub fn get_user_manager(self: &Arc<Self>) -> UserManagerRef {
+    pub fn get_user_manager(self: &Arc<Self>) -> Arc<UserApiProvider> {
         self.sessions.get_user_manager()
     }
 

@@ -300,6 +300,18 @@ macro_rules! impl_dyn_array {
                 }
             }
 
+            /// Unpack to DFArray of data_type struct
+            fn tuple(&self) -> Result<&DFStructArray> {
+                if matches!(self.0.data_type(), &DataType::Struct(_)) {
+                    unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFStructArray)) }
+                } else {
+                    Err(ErrorCode::IllegalDataType(format!(
+                        "cannot unpack Series of type {:?} into struct",
+                        self.data_type(),
+                    )))
+                }
+            }
+
             fn take_iter(&self, iter: &mut dyn Iterator<Item = usize>) -> Result<Series> {
                 Ok(ArrayTake::take(&self.0, iter.into())?.into_series())
             }

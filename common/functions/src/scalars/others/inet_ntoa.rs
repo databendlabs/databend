@@ -77,15 +77,14 @@ impl Function for InetNtoaFunction {
             .column()
             .to_minimal_array()?
             .cast_with_type(&DataType::Float64)?;
-        let opt_iter = opt_iter.f64()?.iter().map(|val_opt| match val_opt {
-            Some(&val) => {
+        let opt_iter = opt_iter.f64()?.iter().map(|val_opt| {
+            val_opt.and_then(|&val| {
                 if val.is_nan() || val < 0.0 || val > u32::MAX as f64 {
                     None
                 } else {
                     Some(std::net::Ipv4Addr::from((val as u32).to_be_bytes()).to_string())
                 }
-            }
-            None => None,
+            })
         });
         let result = DFStringArray::new_from_opt_iter(opt_iter);
         let column: DataColumn = result.into();

@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 use common_tracing::tracing;
 
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::PlanParser;
@@ -26,7 +28,7 @@ pub struct DfShowMetrics;
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfShowMetrics {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let rewritten_query = "SELECT * FROM system.metrics";
         let rewritten_query_plan = PlanParser::parse(rewritten_query, ctx);
         Ok(AnalyzedResult::SimpleQuery(rewritten_query_plan.await?))

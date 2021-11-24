@@ -25,13 +25,13 @@ use common_streams::Source;
 use futures::StreamExt;
 
 use crate::datasources::table::fuse::FuseTable;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 impl FuseTable {
     #[inline]
     pub async fn do_read(
         &self,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
         push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
         let default_proj = || {

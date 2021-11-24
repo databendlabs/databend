@@ -44,6 +44,7 @@ use crate::types::column::list::List;
 use crate::types::column::nullable::NullableColumnData;
 use crate::types::column::numeric::VectorColumnData;
 use crate::types::column::string::StringColumnData;
+use crate::types::column::tuple::TupleColumnData;
 use crate::types::column::ArcColumnWrapper;
 use crate::types::column::BoxColumnWrapper;
 use crate::types::column::ColumnWrapper;
@@ -99,7 +100,9 @@ impl dyn ColumnData {
                     W::wrap(FixedStringColumnData::load(reader, size, str_len)?)
                 } else if let Some(inner_type) = parse_array_type(type_name) {
                     W::wrap(ArrayColumnData::load(reader, inner_type, size, tz)?)
-                } else if let Some((precision, scale, nobits)) = parse_decimal(type_name) {
+                } else if let Some(inner_types) = parse_tuple_type(type_name) {
+                    W::wrap(TupleColumnData::load(reader, inner_types, size, tz)?)
+                }  else if let Some((precision, scale, nobits)) = parse_decimal(type_name) {
                     W::wrap(DecimalColumnData::load(
                         reader, precision, scale, nobits, size, tz,
                     )?)
@@ -198,6 +201,18 @@ impl dyn ColumnData {
                     timezone,
                     capacity,
                 )?,
+            }),
+            SqlType::Tuple(types) => W::wrap(TupleColumnData {
+                inner: types
+                    .into_iter()
+                    .map(|t| {
+                        <dyn ColumnData>::from_type::<ArcColumnWrapper>(
+                            t.clone(),
+                            timezone,
+                            capacity,
+                        )
+                    })
+                    .collect::<Result<Vec<_>>>()?,
             }),
         })
     }
@@ -323,16 +338,12 @@ pub enum EnumSize {
 }
 
 pub fn parse_enum8(input: &str) -> Option<Vec<(String, i8)>> {
-    match parse_enum(EnumSize::Enum8, input) {
-        Some(result) => {
-            let res: Vec<(String, i8)> = result
-                .iter()
-                .map(|(key, val)| (key.clone(), *val as i8))
-                .collect();
-            Some(res)
-        }
-        None => None,
-    }
+    parse_enum(EnumSize::Enum8, input).map(|result| {
+        result
+            .iter()
+            .map(|(key, val)| (key.clone(), *val as i8))
+            .collect::<Vec<(String, i8)>>()
+    })
 }
 pub fn parse_enum16(input: &str) -> Option<Vec<(String, i16)>> {
     parse_enum(EnumSize::Enum16, input)
@@ -425,4 +436,40 @@ pub fn get_timezone(timezone: &Option<String>, tz: Tz) -> Result<Tz> {
         None => Ok(tz),
         Some(t) => Ok(t.parse()?),
     }
+}
+
+pub fn parse_tuple_type(source: &str) -> Option<Vec<&str>> {
+    if !source.starts_with("Tuple") {
+        return None;
+    }
+
+    let types = &source[6..source.len() - 1];
+
+    let mut inner_types = Vec::new();
+    let chars = types.char_indices();
+    let mut diff = 0;
+    let mut last = 0;
+    for (i, c) in chars {
+        match c {
+            '(' => diff += 1,
+            ')' => diff -= 1,
+            ',' => {
+                if diff == 0 {
+                    inner_types.push(types[last..i].trim());
+                    last = i + 1;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if last < types.len() {
+        inner_types.push(types[last..].trim());
+    }
+
+    if inner_types.is_empty() {
+        return None;
+    }
+
+    Some(inner_types)
 }

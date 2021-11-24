@@ -97,10 +97,7 @@ where
         // sum is faster in auto vectorized than manual simd
         let null_count = self.null_count();
         if null_count > 0 && (T::SIZE == <T::LargestType as DFPrimitiveType>::SIZE) {
-            return Ok(match sum_primitive(array) {
-                Some(x) => x.into(),
-                None => DataValue::from(self.data_type()),
-            });
+            return Ok(sum_primitive(array).map_or(DataValue::from(self.data_type()), |x| x.into()));
         }
 
         if self.is_empty() {
@@ -141,15 +138,10 @@ where
                 .as_slice()
                 .iter()
                 .reduce(|a, b| if a < b { a } else { b });
-            return Ok(match c {
-                Some(x) => (*x).into(),
-                None => DataValue::from(self.data_type()),
-            });
+            return Ok(c.map_or(DataValue::from(self.data_type()), |x| (*x).into()));
         }
-        Ok(match aggregate::min_primitive(self.inner()) {
-            Some(x) => x.into(),
-            None => DataValue::from(self.data_type()),
-        })
+        Ok(aggregate::min_primitive(self.inner())
+            .map_or(DataValue::from(self.data_type()), |x| x.into()))
     }
 
     fn max(&self) -> Result<DataValue> {
@@ -165,16 +157,11 @@ where
                 .as_slice()
                 .iter()
                 .reduce(|a, b| if a > b { a } else { b });
-            return Ok(match c {
-                Some(x) => (*x).into(),
-                None => DataValue::from(self.data_type()),
-            });
+            return Ok(c.map_or(DataValue::from(self.data_type()), |x| (*x).into()));
         }
 
-        Ok(match aggregate::max_primitive(self.inner()) {
-            Some(x) => x.into(),
-            None => DataValue::from(self.data_type()),
-        })
+        Ok(aggregate::max_primitive(self.inner())
+            .map_or(DataValue::from(self.data_type()), |x| x.into()))
     }
 
     fn arg_min(&self) -> Result<DataValue> {
@@ -219,10 +206,9 @@ impl ArrayAgg for DFBooleanArray {
         if self.all_is_null() {
             return Ok(DataValue::Boolean(None));
         }
-        let sum = self.into_iter().fold(0, |acc: u64, x| match x {
-            Some(v) => acc + v as u64,
-            None => acc,
-        });
+        let sum = self
+            .into_iter()
+            .fold(0, |acc: u64, x| x.map_or(acc, |v| acc + v as u64));
 
         Ok(sum.into())
     }
@@ -232,10 +218,8 @@ impl ArrayAgg for DFBooleanArray {
             return Ok(DataValue::Boolean(None));
         }
 
-        Ok(match aggregate::min_boolean(self.inner()) {
-            Some(x) => x.into(),
-            None => DataValue::from(self.data_type()),
-        })
+        Ok(aggregate::min_boolean(self.inner())
+            .map_or(DataValue::from(self.data_type()), |x| x.into()))
     }
 
     fn max(&self) -> Result<DataValue> {
@@ -243,10 +227,8 @@ impl ArrayAgg for DFBooleanArray {
             return Ok(DataValue::Boolean(None));
         }
 
-        Ok(match aggregate::max_boolean(self.inner()) {
-            Some(x) => x.into(),
-            None => DataValue::from(self.data_type()),
-        })
+        Ok(aggregate::max_boolean(self.inner())
+            .map_or(DataValue::from(self.data_type()), |x| x.into()))
     }
 
     fn arg_min(&self) -> Result<DataValue> {
@@ -304,10 +286,8 @@ impl ArrayAgg for DFStringArray {
             return Ok(DataValue::String(None));
         }
 
-        Ok(match aggregate::min_binary(self.inner()) {
-            Some(x) => x.into(),
-            None => DataValue::from(self.data_type()),
-        })
+        Ok(aggregate::min_binary(self.inner())
+            .map_or(DataValue::from(self.data_type()), |x| x.into()))
     }
 
     fn max(&self) -> Result<DataValue> {
@@ -315,10 +295,8 @@ impl ArrayAgg for DFStringArray {
             return Ok(DataValue::String(None));
         }
 
-        Ok(match aggregate::max_binary(self.inner()) {
-            Some(x) => x.into(),
-            None => DataValue::from(self.data_type()),
-        })
+        Ok(aggregate::max_binary(self.inner())
+            .map_or(DataValue::from(self.data_type()), |x| x.into()))
     }
 
     fn arg_max(&self) -> Result<DataValue> {

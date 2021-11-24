@@ -499,10 +499,7 @@ impl MetaNode {
             return Err(MetaError::ForwardToLeader(e));
         }
 
-        let leader_id = match e.leader {
-            Some(leader_id) => leader_id,
-            None => return Err(MetaError::ForwardToLeader(e)),
-        };
+        let leader_id = e.leader.ok_or(MetaError::ForwardToLeader(e))?;
 
         let mut r2 = req.clone();
         // Avoid infinite forward
@@ -585,7 +582,7 @@ impl MetaNode {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
-        sm.get_table_by_id(tid)
+        sm.get_table_meta_by_id(tid)
     }
 
     /// Submit a write request to the known leader. Returns the response after applying the request.

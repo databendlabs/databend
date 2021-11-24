@@ -25,7 +25,10 @@ use crate::scalars::Log10Function;
 use crate::scalars::Log2Function;
 use crate::scalars::LogFunction;
 use crate::scalars::PiFunction;
+use crate::scalars::PowFunction;
 use crate::scalars::RadiansFunction;
+use crate::scalars::RandomFunction;
+use crate::scalars::RoundNumberFunction;
 use crate::scalars::SignFunction;
 use crate::scalars::SqrtFunction;
 use crate::scalars::TrigonometricAcosFunction;
@@ -36,6 +39,7 @@ use crate::scalars::TrigonometricCosFunction;
 use crate::scalars::TrigonometricCotFunction;
 use crate::scalars::TrigonometricSinFunction;
 use crate::scalars::TrigonometricTanFunction;
+use crate::scalars::TruncNumberFunction;
 
 pub struct MathsFunction;
 
@@ -65,5 +69,10 @@ impl MathsFunction {
         factory.register("atan2", TrigonometricAtan2Function::desc());
         factory.register("sign", SignFunction::desc());
         factory.register("sqrt", SqrtFunction::desc());
+        factory.register("pow", PowFunction::desc());
+        factory.register("power", PowFunction::desc());
+        factory.register("rand", RandomFunction::desc());
+        factory.register("round", RoundNumberFunction::desc());
+        factory.register("truncate", TruncNumberFunction::desc());
     }
 }

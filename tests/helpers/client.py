@@ -12,8 +12,9 @@ CURDIR = os.path.dirname(os.path.realpath(__file__))
 
 sys.path.insert(0, os.path.join(CURDIR))
 
+
 class client(object):
-    def __init__(self, name = '', log=None):
+    def __init__(self, name='', log=None):
         self.name = name
         self.log = log
         self.client = f'mysql --user default -s'
@@ -39,8 +40,15 @@ class client(object):
         p = Popen(self.client, shell=True, stdin=PIPE, universal_newlines=True)
         p.communicate(input=sqls)[0]
 
+    def run_with_output(self, sqls):
+        p = Popen(self.client,
+                  shell=True,
+                  stdin=PIPE,
+                  stdout=PIPE,
+                  universal_newlines=True)
+        return p.communicate(input=sqls)
+
 
 if __name__ == '__main__':
     client = client("e")
     client.run("create table test2(a int);")
-

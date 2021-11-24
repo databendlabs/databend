@@ -53,17 +53,17 @@ use crate::pipelines::transforms::SortPartialTransform;
 use crate::pipelines::transforms::SourceTransform;
 use crate::pipelines::transforms::SubQueriesPuller;
 use crate::pipelines::transforms::WhereTransform;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct PipelineBuilder {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<QueryContext>,
 
     limit: Option<usize>,
     offset: usize,
 }
 
 impl PipelineBuilder {
-    pub fn create(ctx: DatabendQueryContextRef) -> PipelineBuilder {
+    pub fn create(ctx: Arc<QueryContext>) -> PipelineBuilder {
         PipelineBuilder {
             ctx,
             limit: None,
@@ -242,10 +242,7 @@ impl PipelineBuilder {
         // The number of rows should be limit + offset. For example, for the query
         // 'select * from numbers(100) order by number desc limit 10 offset 5', the
         // sort pipeline should return at least 15 rows.
-        let rows_limit = match self.limit {
-            None => None,
-            Some(limit) => Some(limit + self.offset),
-        };
+        let rows_limit = self.limit.map(|limit| limit + self.offset);
 
         // processor 1: block ---> sort_stream
         // processor 2: block ---> sort_stream

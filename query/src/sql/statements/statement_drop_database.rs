@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::DropDatabasePlan;
@@ -19,7 +21,7 @@ use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
@@ -32,7 +34,7 @@ pub struct DfDropDatabase {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfDropDatabase {
     #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
-    async fn analyze(&self, _ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let db = self.database_name()?;
         let if_exists = self.if_exists;
 

@@ -13,4 +13,6 @@
 //  limitations under the License.
 //
 
-pub mod database;
+mod database;
+
+pub use database::FuseDatabase;

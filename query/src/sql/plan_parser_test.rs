@@ -209,6 +209,14 @@ fn test_plan_parser() -> Result<()> {
             \n  ReadDataSource: scan partitions: [1], scan schema: [metric:String, kind:String, labels:String, value:String], statistics: [read_rows: 0, read_bytes: 0]",
             error: "",
         },
+        Test {
+            name: "show-processlist",
+            sql: "show processlist",
+            expect: "\
+            Projection: id:String, type:String, host:String, user:String, state:String, database:String, extra_info:String, memory_usage:UInt64\
+            \n  ReadDataSource: scan partitions: [1], scan schema: [id:String, type:String, host:String;N, user:String;N, state:String, database:String, extra_info:String;N, memory_usage:UInt64;N], statistics: [read_rows: 0, read_bytes: 0]",
+            error: "",
+        },
     ];
 
     let ctx = crate::tests::try_create_context()?;

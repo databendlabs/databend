@@ -31,6 +31,7 @@ use common_datavalues::prelude::*;
 use lexical_util::num::AsPrimitive;
 use num_format::Locale;
 use num_format::ToFormattedString;
+use serde_json::json;
 use serde_json::Value;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
@@ -219,7 +220,7 @@ pub fn build_query_endpoint(status: &Status) -> Result<(reqwest::Client, String)
             )
             .parse::<SocketAddr>()
             .expect("cannot build query socket address");
-            format!("http://{}:{}/v1/statement", address.ip(), address.port())
+            format!("http://{}:{}/v1/query", address.ip(), address.port())
         } else {
             todo!()
         }
@@ -233,16 +234,16 @@ pub async fn execute_query_json(
     query: String,
 ) -> Result<(
     Option<DataSchemaRef>,
-    Option<Vec<Vec<Value>>>,
-    Option<ProgressValues>,
+    Arc<Vec<Vec<Value>>>,
+    databend_query::servers::http::v1::http_query_handlers::QueryStats,
 )> {
     let ans = cli
         .post(url)
-        .body(query.clone())
+        .json(&json!({"sql": query.clone()}))
         .send()
         .await
         .expect("cannot post to http handler")
-        .json::<databend_query::servers::http::v1::statement::HttpQueryResult>()
+        .json::<databend_query::servers::http::v1::http_query_handlers::QueryResponse>()
         .await;
     if let Err(e) = ans {
         return Err(CliError::Unknown(format!(
@@ -277,17 +278,14 @@ async fn execute_query(
                 .map(|field| Cell::new(field.name().as_str()).fg(Color::Green)),
         );
     }
-    if let Some(rows) = data {
-        if rows.is_empty() {
-            return Ok(("".to_string(), stats));
-        } else {
-            for row in rows {
-                table.add_row(row.iter().map(|elem| Cell::new(elem.to_string())));
-            }
-            return Ok((table.trim_fmt(), stats));
+    if data.is_empty() {
+        Ok(("".to_string(), stats.progress))
+    } else {
+        for row in data.as_ref() {
+            table.add_row(row.iter().map(|elem| Cell::new(elem.to_string())));
         }
+        Ok((table.trim_fmt(), stats.progress))
     }
-    Ok(("".to_string(), stats))
 }
 
 #[async_trait]

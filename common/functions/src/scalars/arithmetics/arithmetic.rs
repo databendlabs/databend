@@ -21,7 +21,7 @@ use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
 use crate::scalars::dates::IntervalFunctionFactory;
-use crate::scalars::function::MonotonicityNode;
+use crate::scalars::function::Monotonicity;
 use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::ArithmeticDivFunction;
 use crate::scalars::ArithmeticMinusFunction;
@@ -50,7 +50,11 @@ impl ArithmeticFunction {
     }
 
     pub fn try_create_func(op: DataValueArithmeticOperator) -> Result<Box<dyn Function>> {
-        Ok(Box::new(ArithmeticFunction { op }))
+        Ok(Box::new(ArithmeticFunction::new(op)))
+    }
+
+    pub fn new(op: DataValueArithmeticOperator) -> Self {
+        ArithmeticFunction { op }
     }
 }
 
@@ -114,7 +118,7 @@ impl Function for ArithmeticFunction {
         Some((1, 2))
     }
 
-    fn get_monotonicity(&self, args: &[MonotonicityNode]) -> Result<MonotonicityNode> {
+    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
         match self.op {
             Plus => ArithmeticPlusFunction::get_monotonicity(args),
             Minus => ArithmeticMinusFunction::get_monotonicity(args),

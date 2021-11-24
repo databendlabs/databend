@@ -25,6 +25,8 @@ fmt:
 lint:
 	cargo fmt
 	cargo clippy --tests -- -D warnings
+	# Python file formatter(make setup to install)
+	yapf -ri tests/
 
 lint-yaml: $(YAML_FILES)
 	$(YAMLLINT_DOCKER) -f parsable -c $(YAMLLINT_CONFIG) $(YAMLLINT_ARGS) -- $?

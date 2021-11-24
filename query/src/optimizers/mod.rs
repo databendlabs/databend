@@ -24,6 +24,8 @@ mod optimizer_scatters_test;
 mod optimizer_statistics_exact_test;
 #[cfg(test)]
 mod optimizer_test;
+#[cfg(test)]
+mod utils_test;
 
 #[cfg(test)]
 mod optimizer_top_n_push_down_test;

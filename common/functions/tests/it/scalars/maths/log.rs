@@ -109,6 +109,40 @@ fn test_log_function() -> Result<()> {
             error: "",
         },
         Test {
+            name: "log-with-base-constant",
+            display: "LOG",
+            args: vec![
+                DataColumnWithField::new(
+                    DataColumn::Constant(2.into(), 2),
+                    DataField::new("base", DataType::Float64, true),
+                ),
+                DataColumnWithField::new(
+                    Series::new([1, 2, 4]).into(),
+                    DataField::new("num", DataType::Float64, true),
+                ),
+            ],
+            func: LogFunction::try_create("log")?,
+            expect: Series::new([0_f64, 1_f64, 2.0]).into(),
+            error: "",
+        },
+        Test {
+            name: "log-with-num-constant",
+            display: "LOG",
+            args: vec![
+                DataColumnWithField::new(
+                    Series::new([2, 4]).into(),
+                    DataField::new("base", DataType::Float64, true),
+                ),
+                DataColumnWithField::new(
+                    DataColumn::Constant(2.into(), 2),
+                    DataField::new("num", DataType::Float64, true),
+                ),
+            ],
+            func: LogFunction::try_create("log")?,
+            expect: Series::new([1_f64, 0.5]).into(),
+            error: "",
+        },
+        Test {
             name: "ln on series",
             display: "LN",
             args: vec![DataColumnWithField::new(

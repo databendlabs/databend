@@ -47,8 +47,7 @@ use common_tracing::tracing;
 use crate::api::BroadcastAction;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;
-use crate::sessions::DatabendQueryContext;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 #[derive(PartialEq)]
 enum RunningMode {
@@ -58,7 +57,7 @@ enum RunningMode {
 
 pub struct Tasks {
     plan: PlanNode,
-    context: DatabendQueryContextRef,
+    context: Arc<QueryContext>,
     actions: HashMap<String, VecDeque<FlightAction>>,
 }
 
@@ -69,12 +68,12 @@ pub struct PlanScheduler {
     local_pos: usize,
     nodes_plan: Vec<PlanNode>,
     running_mode: RunningMode,
-    query_context: DatabendQueryContextRef,
+    query_context: Arc<QueryContext>,
     subqueries_expressions: Vec<Expressions>,
 }
 
 impl PlanScheduler {
-    pub fn try_create(context: DatabendQueryContextRef) -> Result<PlanScheduler> {
+    pub fn try_create(context: Arc<QueryContext>) -> Result<PlanScheduler> {
         let cluster = context.get_cluster();
         let cluster_nodes = cluster.get_nodes();
 
@@ -119,7 +118,7 @@ impl PlanScheduler {
 }
 
 impl Tasks {
-    pub fn create(context: DatabendQueryContextRef) -> Tasks {
+    pub fn create(context: Arc<QueryContext>) -> Tasks {
         Tasks {
             context,
             actions: HashMap::new(),
@@ -640,7 +639,7 @@ impl PlanScheduler {
     }
 
     fn visit_subquery(&mut self, plan: &PlanNode, tasks: &mut Tasks) -> Result<Vec<PlanNode>> {
-        let subquery_context = DatabendQueryContext::new(self.query_context.clone());
+        let subquery_context = QueryContext::new(self.query_context.clone());
         let mut subquery_scheduler = PlanScheduler::try_create(subquery_context)?;
         subquery_scheduler.visit_plan_node(plan, tasks)?;
         Ok(subquery_scheduler.nodes_plan)

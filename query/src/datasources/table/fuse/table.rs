@@ -16,6 +16,7 @@
 use std::any::Any;
 use std::convert::TryFrom;
 use std::convert::TryInto;
+use std::sync::Arc;
 
 use common_dal::read_obj;
 use common_datablocks::DataBlock;
@@ -34,7 +35,7 @@ use super::util;
 use crate::catalogs::Table;
 use crate::datasources::context::DataSourceContext;
 use crate::datasources::table::fuse::TableSnapshot;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct FuseTable {
     pub(crate) table_info: TableInfo,
@@ -66,7 +67,7 @@ impl Table for FuseTable {
 
     async fn read_partitions(
         &self,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         self.do_read_partitions(ctx, push_downs).await
@@ -74,7 +75,7 @@ impl Table for FuseTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         self.do_read(ctx, &plan.push_downs).await
@@ -82,7 +83,7 @@ impl Table for FuseTable {
 
     async fn append_data(
         &self,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
         stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
         let log = self.append_trunks(ctx, stream).await?;
@@ -108,7 +109,7 @@ impl Table for FuseTable {
 
     async fn truncate(
         &self,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
         truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         self.do_truncate(ctx, truncate_plan).await
@@ -125,7 +126,7 @@ impl FuseTable {
 
     pub(crate) async fn table_snapshot(
         &self,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
     ) -> Result<Option<TableSnapshot>> {
         if let Some(loc) = self.snapshot_loc() {
             let da = ctx.get_data_accessor()?;

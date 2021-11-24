@@ -15,6 +15,7 @@
 use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::udfs::exists::ExistsFunction;
 use crate::scalars::CrashMeFunction;
+use crate::scalars::CurrentUserFunction;
 use crate::scalars::DatabaseFunction;
 use crate::scalars::SleepFunction;
 use crate::scalars::ToTypeNameFunction;
@@ -30,6 +31,7 @@ impl UdfFunction {
         factory.register("totypename", ToTypeNameFunction::desc());
         factory.register("database", DatabaseFunction::desc());
         factory.register("version", VersionFunction::desc());
+        factory.register("current_user", CurrentUserFunction::desc());
         factory.register("sleep", SleepFunction::desc());
         factory.register("crashme", CrashMeFunction::desc());
         factory.register("exists", ExistsFunction::desc());

@@ -71,16 +71,10 @@ impl Function for SqrtFunction {
             .column()
             .to_minimal_array()?
             .cast_with_type(&DataType::Float64)?;
-        let opt_iter = opt_iter.f64()?.into_iter().map(|v| match v {
-            Some(&v) => {
-                if v >= 0_f64 {
-                    Some(v.sqrt())
-                } else {
-                    None
-                }
-            }
-            None => None,
-        });
+        let opt_iter = opt_iter
+            .f64()?
+            .into_iter()
+            .map(|v| v.and_then(|&v| if v >= 0_f64 { Some(v.sqrt()) } else { None }));
         let result = DFFloat64Array::new_from_opt_iter(opt_iter);
         let column: DataColumn = result.into();
         Ok(column.resize_constant(columns[0].column().len()))

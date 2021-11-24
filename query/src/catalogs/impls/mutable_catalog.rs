@@ -24,6 +24,7 @@ use common_meta_types::CreateDatabaseReq;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::GetDatabaseReq;
+use common_meta_types::ListDatabaseReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -40,9 +41,9 @@ use crate::common::MetaClientProvider;
 use crate::configs::Config;
 use crate::datasources::context::DataSourceContext;
 use crate::datasources::database::register_database_engines;
-use crate::datasources::database_engine_registry::DatabaseEngineRegistry;
 use crate::datasources::table::register_prelude_tbl_engines;
-use crate::datasources::table_engine_registry::TableEngineRegistry;
+use crate::datasources::DatabaseEngineRegistry;
+use crate::datasources::TableEngineRegistry;
 
 /// Catalog based on MetaStore
 /// - System Database NOT included
@@ -142,7 +143,7 @@ impl Catalog for MutableCatalog {
     }
 
     async fn list_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
-        let dbs = self.ctx.meta.list_databases().await?;
+        let dbs = self.ctx.meta.list_databases(ListDatabaseReq {}).await?;
 
         dbs.iter().try_fold(vec![], |mut acc, item| {
             let db = self.build_db_instance(item)?;

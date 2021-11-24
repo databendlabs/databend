@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
-use crate::datasources::database::fuse::database::FuseDatabase;
-use crate::datasources::database_engine_registry::DatabaseEngineRegistry;
+use crate::datasources::database::FuseDatabase;
+use crate::datasources::DatabaseEngineRegistry;
 
 #[test]
 fn test_database_engine_registry() -> Result<()> {

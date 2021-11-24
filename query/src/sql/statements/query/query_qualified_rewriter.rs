@@ -12,35 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 use crate::sql::statements::query::query_schema_joined::JoinedTableDesc;
 use crate::sql::statements::query::JoinedSchema;
-use crate::sql::statements::QueryNormalizerData;
+use crate::sql::statements::QueryASTIR;
 
 pub struct QualifiedRewriter {
     tables_schema: JoinedSchema,
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<QueryContext>,
 }
 
 impl QualifiedRewriter {
-    pub fn create(tables_schema: JoinedSchema, ctx: DatabendQueryContextRef) -> QualifiedRewriter {
+    pub fn create(tables_schema: JoinedSchema, ctx: Arc<QueryContext>) -> QualifiedRewriter {
         QualifiedRewriter { tables_schema, ctx }
     }
 
-    pub async fn rewrite(&self, mut data: QueryNormalizerData) -> Result<QueryNormalizerData> {
-        self.rewrite_group(&mut data)?;
-        self.rewrite_order(&mut data)?;
-        self.rewrite_aggregate(&mut data)?;
-        self.rewrite_projection(&mut data)?;
+    pub async fn rewrite(&self, mut ir: QueryASTIR) -> Result<QueryASTIR> {
+        self.rewrite_group(&mut ir)?;
+        self.rewrite_order(&mut ir)?;
+        self.rewrite_aggregate(&mut ir)?;
+        self.rewrite_projection(&mut ir)?;
 
-        if let Some(predicate) = &data.filter_predicate {
+        if let Some(predicate) = &ir.filter_predicate {
             match self.rewrite_expr(predicate) {
                 Ok(predicate) => {
-                    data.filter_predicate = Some(predicate);
+                    ir.filter_predicate = Some(predicate);
                 }
                 Err(cause) => {
                     return Err(cause.add_message_back(format!(
@@ -51,10 +53,10 @@ impl QualifiedRewriter {
             }
         }
 
-        if let Some(predicate) = &data.having_predicate {
+        if let Some(predicate) = &ir.having_predicate {
             match self.rewrite_expr(predicate) {
                 Ok(predicate) => {
-                    data.having_predicate = Some(predicate);
+                    ir.having_predicate = Some(predicate);
                 }
                 Err(cause) => {
                     return Err(cause.add_message_back(format!(
@@ -65,13 +67,13 @@ impl QualifiedRewriter {
             }
         }
 
-        Ok(data)
+        Ok(ir)
     }
 
-    fn rewrite_group(&self, mut data: &mut QueryNormalizerData) -> Result<()> {
-        let mut group_expressions = Vec::with_capacity(data.group_by_expressions.len());
+    fn rewrite_group(&self, mut ir: &mut QueryASTIR) -> Result<()> {
+        let mut group_expressions = Vec::with_capacity(ir.group_by_expressions.len());
 
-        for group_by_expression in &data.group_by_expressions {
+        for group_by_expression in &ir.group_by_expressions {
             match self.rewrite_expr(group_by_expression) {
                 Ok(expr) => {
                     group_expressions.push(expr);
@@ -85,14 +87,14 @@ impl QualifiedRewriter {
             }
         }
 
-        data.group_by_expressions = group_expressions;
+        ir.group_by_expressions = group_expressions;
         Ok(())
     }
 
-    fn rewrite_aggregate(&self, mut data: &mut QueryNormalizerData) -> Result<()> {
-        let mut aggregate_expressions = Vec::with_capacity(data.aggregate_expressions.len());
+    fn rewrite_aggregate(&self, mut ir: &mut QueryASTIR) -> Result<()> {
+        let mut aggregate_expressions = Vec::with_capacity(ir.aggregate_expressions.len());
 
-        for aggregate_expression in &data.aggregate_expressions {
+        for aggregate_expression in &ir.aggregate_expressions {
             match self.rewrite_expr(aggregate_expression) {
                 Ok(expr) => {
                     aggregate_expressions.push(expr);
@@ -106,14 +108,14 @@ impl QualifiedRewriter {
             }
         }
 
-        data.aggregate_expressions = aggregate_expressions;
+        ir.aggregate_expressions = aggregate_expressions;
         Ok(())
     }
 
-    fn rewrite_order(&self, mut data: &mut QueryNormalizerData) -> Result<()> {
-        let mut order_expressions = Vec::with_capacity(data.order_by_expressions.len());
+    fn rewrite_order(&self, mut ir: &mut QueryASTIR) -> Result<()> {
+        let mut order_expressions = Vec::with_capacity(ir.order_by_expressions.len());
 
-        for order_by_expression in &data.order_by_expressions {
+        for order_by_expression in &ir.order_by_expressions {
             match self.rewrite_expr(order_by_expression) {
                 Ok(expr) => {
                     order_expressions.push(expr);
@@ -127,15 +129,15 @@ impl QualifiedRewriter {
             }
         }
 
-        data.order_by_expressions = order_expressions;
+        ir.order_by_expressions = order_expressions;
         Ok(())
     }
 
-    fn rewrite_projection(&self, mut data: &mut QueryNormalizerData) -> Result<()> {
-        let mut projection_expressions = Vec::with_capacity(data.projection_expressions.len());
+    fn rewrite_projection(&self, mut ir: &mut QueryASTIR) -> Result<()> {
+        let mut projection_expressions = Vec::with_capacity(ir.projection_expressions.len());
 
         // TODO: alias.*
-        for projection_expression in &data.projection_expressions {
+        for projection_expression in &ir.projection_expressions {
             if let Expression::Alias(_, x) = projection_expression {
                 if let Expression::Wildcard = x.as_ref() {
                     return Err(ErrorCode::SyntaxException("* AS alias is wrong syntax"));
@@ -158,7 +160,7 @@ impl QualifiedRewriter {
             }
         }
 
-        data.projection_expressions = projection_expressions;
+        ir.projection_expressions = projection_expressions;
         Ok(())
     }
 

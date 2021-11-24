@@ -45,34 +45,32 @@ use common_streams::SendableDataBlockStream;
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::Catalog;
 use crate::catalogs::Table;
-use crate::clusters::ClusterRef;
+use crate::clusters::Cluster;
 use crate::configs::AzureStorageBlobConfig;
 use crate::configs::Config;
 use crate::servers::http::v1::query::HttpQueryHandle;
-use crate::sessions::DatabendQueryContextShared;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::QueryContextShared;
+use crate::sessions::SessionManager;
 use crate::sessions::Settings;
 
-pub struct DatabendQueryContext {
+pub struct QueryContext {
     version: String,
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<Part>>>,
-    shared: Arc<DatabendQueryContextShared>,
+    shared: Arc<QueryContextShared>,
 }
 
-pub type DatabendQueryContextRef = Arc<DatabendQueryContext>;
-
-impl DatabendQueryContext {
-    pub fn new(other: DatabendQueryContextRef) -> DatabendQueryContextRef {
-        DatabendQueryContext::from_shared(other.shared.clone())
+impl QueryContext {
+    pub fn new(other: Arc<QueryContext>) -> Arc<QueryContext> {
+        QueryContext::from_shared(other.shared.clone())
     }
 
-    pub fn from_shared(shared: Arc<DatabendQueryContextShared>) -> DatabendQueryContextRef {
+    pub fn from_shared(shared: Arc<QueryContextShared>) -> Arc<QueryContext> {
         shared.increment_ref_count();
 
         log::info!("Create DatabendQueryContext");
 
-        Arc::new(DatabendQueryContext {
+        Arc::new(QueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             version: format!(
@@ -173,7 +171,7 @@ impl DatabendQueryContext {
         self.shared.attach_query_plan(query_plan);
     }
 
-    pub fn get_cluster(&self) -> ClusterRef {
+    pub fn get_cluster(&self) -> Arc<Cluster> {
         self.shared.get_cluster()
     }
 
@@ -204,6 +202,10 @@ impl DatabendQueryContext {
 
     pub fn get_current_database(&self) -> String {
         self.shared.get_current_database()
+    }
+
+    pub fn get_current_user(&self) -> Result<String> {
+        self.shared.get_current_user()
     }
 
     pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
@@ -238,7 +240,7 @@ impl DatabendQueryContext {
         format!("_subquery_{}", index)
     }
 
-    pub fn get_sessions_manager(self: &Arc<Self>) -> SessionManagerRef {
+    pub fn get_sessions_manager(self: &Arc<Self>) -> Arc<SessionManager> {
         self.shared.session.get_sessions_manager()
     }
 
@@ -284,7 +286,7 @@ impl DatabendQueryContext {
     }
 }
 
-impl TrySpawn for DatabendQueryContext {
+impl TrySpawn for QueryContext {
     /// Spawns a new asynchronous task, returning a tokio::JoinHandle for it.
     /// The task will run in the current context thread_pool not the global.
     fn try_spawn<T>(&self, task: T) -> Result<JoinHandle<T::Output>>
@@ -296,19 +298,19 @@ impl TrySpawn for DatabendQueryContext {
     }
 }
 
-impl std::fmt::Debug for DatabendQueryContext {
+impl std::fmt::Debug for QueryContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.get_settings())
     }
 }
 
-impl Drop for DatabendQueryContext {
+impl Drop for QueryContext {
     fn drop(&mut self) {
         self.shared.destroy_context_ref()
     }
 }
 
-impl DatabendQueryContextShared {
+impl QueryContextShared {
     pub(in crate::sessions) fn destroy_context_ref(&self) {
         if self.ref_count.fetch_sub(1, Ordering::Release) == 1 {
             std::sync::atomic::fence(Acquire);

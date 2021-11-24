@@ -231,10 +231,7 @@ impl MetaRaftStore {
         &self,
         upto_index: Option<u64>,
     ) -> anyhow::Result<MembershipConfig> {
-        let right_bound = match upto_index {
-            Some(upto) => Bound::Included(upto),
-            None => Bound::Unbounded,
-        };
+        let right_bound = upto_index.map_or(Bound::Unbounded, Bound::Included);
 
         let it = self.log.range((Bound::Included(0), right_bound))?.rev();
 
@@ -359,14 +356,14 @@ impl RaftStorage<LogEntry, AppliedState> for MetaRaftStore {
         &self,
         entry: &Entry<LogEntry>,
     ) -> anyhow::Result<AppliedState> {
-        let mut sm = self.state_machine.write().await;
+        let sm = self.state_machine.write().await;
         let resp = sm.apply(entry).await?;
         Ok(resp)
     }
 
     #[tracing::instrument(level = "info", skip(self, entries), fields(id=self.id))]
     async fn replicate_to_state_machine(&self, entries: &[&Entry<LogEntry>]) -> anyhow::Result<()> {
-        let mut sm = self.state_machine.write().await;
+        let sm = self.state_machine.write().await;
         for entry in entries {
             sm.apply(*entry).await?;
         }

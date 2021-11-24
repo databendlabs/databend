@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(test)]
+mod session_status_test;
+
 #[macro_use]
 mod macros;
 
@@ -21,18 +24,18 @@ mod metrics;
 mod session;
 mod session_info;
 mod session_ref;
+mod session_status;
 mod session_test;
 #[allow(clippy::module_inception)]
 mod sessions;
 mod sessions_info;
 mod settings;
 
-pub use context::DatabendQueryContext;
-pub use context::DatabendQueryContextRef;
-pub use context_shared::DatabendQueryContextShared;
+pub use context::QueryContext;
+pub use context_shared::QueryContextShared;
 pub use session::Session;
 pub use session_info::ProcessInfo;
 pub use session_ref::SessionRef;
+pub use session_status::MutableStatus;
 pub use sessions::SessionManager;
-pub use sessions::SessionManagerRef;
 pub use settings::Settings;

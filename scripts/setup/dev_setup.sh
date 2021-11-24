@@ -295,8 +295,8 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
   install_pkg clang "$PACKAGE_MANAGER"
   install_pkg llvm "$PACKAGE_MANAGER"
   install_pkg python3 "$PACKAGE_MANAGER"
-  python3 -m pip install boto3 "moto[all]"
   install_pkg_config "$PACKAGE_MANAGER"
+  python3 -m pip install boto3 "moto[all]" yapf
 
   case "$PACKAGE_MANAGER" in
       apt-get)

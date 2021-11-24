@@ -4,18 +4,18 @@ import os
 import sys
 import signal
 
-
 CURDIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, os.path.join(CURDIR, '../../helpers'))
 
 from client import client
+
 log = None
 # uncomment the line below for debugging
-log=sys.stdout
+log = sys.stdout
 
 client1 = client(name='client1>', log=log)
 
-sqls="""
+sqls = """
 DROP DATABASE IF EXISTS db1;
 CREATE DATABASE db1;
 USE db1;
@@ -30,3 +30,6 @@ DROP DATABASE db1;
 """
 
 client1.run(sqls)
+stdout, stderr = client1.run_with_output("select * from system.metrics")
+assert stdout is not None
+assert stderr is None

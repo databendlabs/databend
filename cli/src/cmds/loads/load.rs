@@ -330,7 +330,7 @@ async fn table_exists(status: &Status, table: Option<&str>) -> Result<()> {
             let (cli, url) = build_query_endpoint(status)?;
             let query = format!("SHOW TABLES LIKE '{}';", t);
             let (col, data, _) = execute_query_json(&cli, &url, query).await?;
-            if col.is_none() || data.is_none() || data.unwrap().is_empty() {
+            if col.is_none() || data.is_empty() {
                 return Err(CliError::Unknown(format!("table {} not found", t)));
             }
         }

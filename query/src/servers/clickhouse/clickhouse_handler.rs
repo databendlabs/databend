@@ -34,10 +34,9 @@ use crate::servers::clickhouse::reject_connection::RejectCHConnection;
 use crate::servers::server::ListeningStream;
 use crate::servers::server::Server;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionManagerRef;
 
 pub struct ClickHouseHandler {
-    sessions: SessionManagerRef,
+    sessions: Arc<SessionManager>,
 
     abort_handle: AbortHandle,
     abort_registration: Option<AbortRegistration>,
@@ -45,7 +44,7 @@ pub struct ClickHouseHandler {
 }
 
 impl ClickHouseHandler {
-    pub fn create(sessions: SessionManagerRef) -> Box<dyn Server> {
+    pub fn create(sessions: Arc<SessionManager>) -> Box<dyn Server> {
         let (abort_handle, registration) = AbortHandle::new_pair();
         Box::new(ClickHouseHandler {
             sessions,

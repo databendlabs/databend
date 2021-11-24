@@ -53,10 +53,8 @@ impl DataArrayFilter {
     fn remove_null_filter(filter: &DFBooleanArray) -> DFBooleanArray {
         let array = filter.inner();
         let filter_mask = array.values();
-
-        match array.validity() {
-            None => filter.clone(),
-            Some(v) => DFBooleanArray::from_arrow_data(filter_mask.bitand(v), None),
-        }
+        array.validity().map_or(filter.clone(), |v| {
+            DFBooleanArray::from_arrow_data(filter_mask.bitand(v), None)
+        })
     }
 }

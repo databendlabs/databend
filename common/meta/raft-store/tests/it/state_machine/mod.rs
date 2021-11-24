@@ -48,6 +48,7 @@ use pretty_assertions::assert_eq;
 use crate::init_raft_store_ut;
 use crate::testing::new_raft_test_context;
 
+mod meta_api_impl;
 mod placement;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -87,7 +88,7 @@ async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let tc = new_raft_test_context();
-    let mut sm = StateMachine::open(&tc.raft_config, 1).await?;
+    let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
     let cases = common_meta_raft_store::state_machine::testing::cases_incr_seq();
 
@@ -119,20 +120,26 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
 
     struct T {
         name: &'static str,
+        engine: &'static str,
         prev: Option<u64>,
         result: Option<u64>,
     }
 
-    fn case(name: &'static str, prev: Option<u64>, result: Option<u64>) -> T {
-        T { name, prev, result }
+    fn case(name: &'static str, engine: &'static str, prev: Option<u64>, result: Option<u64>) -> T {
+        T {
+            name,
+            engine,
+            prev,
+            result,
+        }
     }
 
     let cases: Vec<T> = vec![
-        case("foo", None, Some(1)),
-        case("foo", Some(1), Some(1)),
-        case("bar", None, Some(3)),
-        case("bar", Some(3), Some(3)),
-        case("wow", None, Some(5)),
+        case("foo", "default", None, Some(1)),
+        case("foo", "default", Some(1), Some(1)),
+        case("bar", "default", None, Some(3)),
+        case("bar", "default", Some(3), Some(3)),
+        case("wow", "default", None, Some(5)),
     ];
 
     for (i, c) in cases.iter().enumerate() {
@@ -141,6 +148,7 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
         let resp = m
             .apply_cmd(&Cmd::CreateDatabase {
                 name: c.name.to_string(),
+                engine: c.engine.to_string(),
             })
             .await?;
 
@@ -164,7 +172,7 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
         };
 
         let got = m
-            .get_database(c.name)?
+            .get_database_id(c.name)?
             .ok_or_else(|| anyhow::anyhow!("db not found: {}", c.name))?;
         assert_eq!(*want, got.data);
     }
@@ -183,6 +191,7 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
     tracing::info!("--- prepare a table");
     m.apply_cmd(&Cmd::CreateDatabase {
         name: "db1".to_string(),
+        engine: "default".to_string(),
     })
     .await?;
 
@@ -240,7 +249,7 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
 
     tracing::info!("--- check table is updated");
     {
-        let got = m.get_table_by_id(&table_id)?.unwrap();
+        let got = m.get_table_meta_by_id(&table_id)?.unwrap();
         assert!(got.seq > version);
         assert_eq!(
             hashmap! {
@@ -320,7 +329,7 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
 
         tracing::info!("--- check table is updated");
         {
-            let got = m.get_table_by_id(&table_id)?.unwrap();
+            let got = m.get_table_meta_by_id(&table_id)?.unwrap();
             assert!(got.seq > version);
             assert_eq!(
                 hashmap! {
@@ -642,7 +651,7 @@ async fn test_state_machine_snapshot() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let tc = new_raft_test_context();
-    let mut sm = StateMachine::open(&tc.raft_config, 0).await?;
+    let sm = StateMachine::open(&tc.raft_config, 0).await?;
 
     let (logs, want) = snapshot_logs();
     // TODO(xp): following logs are not saving to sled yet:

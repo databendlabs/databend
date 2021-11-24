@@ -15,7 +15,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use crate::sessions::session::MutableStatus;
+use crate::sessions::MutableStatus;
 use crate::sessions::Session;
 use crate::sessions::Settings;
 
@@ -24,6 +24,7 @@ pub struct ProcessInfo {
     pub typ: String,
     pub state: String,
     pub database: String,
+    pub user: String,
     #[allow(unused)]
     pub settings: Arc<Settings>,
     pub client_address: Option<SocketAddr>,
@@ -33,14 +34,14 @@ pub struct ProcessInfo {
 
 impl Session {
     pub fn process_info(self: &Arc<Self>) -> ProcessInfo {
-        let session_mutable_state = self.mutable_state.lock();
+        let session_mutable_state = self.mutable_state.clone();
         self.to_process_info(&session_mutable_state)
     }
 
     fn to_process_info(self: &Arc<Self>, status: &MutableStatus) -> ProcessInfo {
         let mut memory_usage = 0;
 
-        if let Some(shared) = &status.context_shared {
+        if let Some(shared) = &status.get_context_shared() {
             if let Ok(runtime) = shared.try_get_runtime() {
                 let runtime_tracker = runtime.get_tracker();
                 let runtime_memory_tracker = runtime_tracker.get_memory_tracker();
@@ -52,17 +53,18 @@ impl Session {
             id: self.id.clone(),
             typ: self.typ.clone(),
             state: self.process_state(status),
-            database: status.current_database.clone(),
-            settings: status.session_settings.clone(),
-            client_address: status.client_host,
+            database: status.get_current_database(),
+            user: status.get_current_user().unwrap_or_else(|| "".into()),
+            settings: status.get_settings(),
+            client_address: status.get_client_host(),
             session_extra_info: self.process_extra_info(status),
             memory_usage,
         }
     }
 
     fn process_state(self: &Arc<Self>, status: &MutableStatus) -> String {
-        match status.context_shared {
-            _ if status.abort => String::from("Aborting"),
+        match status.get_context_shared() {
+            _ if status.get_abort() => String::from("Aborting"),
             None => String::from("Idle"),
             Some(_) => String::from("Query"),
         }
@@ -76,17 +78,21 @@ impl Session {
     }
 
     fn rpc_extra_info(status: &MutableStatus) -> Option<String> {
-        let context_shared = status.context_shared.as_ref();
-        context_shared.map(|_| String::from("Partial cluster query stage"))
+        status
+            .get_context_shared()
+            .map(|_| String::from("Partial cluster query stage"))
     }
 
     fn query_extra_info(status: &MutableStatus) -> Option<String> {
-        status.context_shared.as_ref().and_then(|context_shared| {
-            context_shared
-                .running_query
-                .read()
-                .as_ref()
-                .map(Clone::clone)
-        })
+        status
+            .get_context_shared()
+            .as_ref()
+            .and_then(|context_shared| {
+                context_shared
+                    .running_query
+                    .read()
+                    .as_ref()
+                    .map(Clone::clone)
+            })
     }
 }

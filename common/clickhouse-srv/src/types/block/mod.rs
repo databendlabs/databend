@@ -205,10 +205,7 @@ impl Block {
 impl<K: ColumnType> Block<K> {
     /// Return the number of rows in the current block.
     pub fn row_count(&self) -> usize {
-        match self.columns.first() {
-            None => 0,
-            Some(column) => column.len(),
-        }
+        self.columns.first().map_or(0, |column| column.len())
     }
 
     /// Return the number of columns in the current block.
@@ -222,7 +219,7 @@ impl<K: ColumnType> Block<K> {
         &self.columns
     }
 
-    fn append_column(&mut self, column: Column<K>) {
+    pub fn append_column(&mut self, column: Column<K>) {
         let column_len = column.len();
 
         if !self.columns.is_empty() && self.row_count() != column_len {

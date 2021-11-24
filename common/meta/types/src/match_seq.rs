@@ -77,10 +77,7 @@ pub trait MatchSeqExt<T> {
 
 impl<U> MatchSeqExt<&Option<SeqV<U>>> for MatchSeq {
     fn match_seq(&self, sv: &Option<SeqV<U>>) -> Result<(), ConflictSeq> {
-        let seq = match sv {
-            Some(sv) => sv.seq,
-            None => 0,
-        };
+        let seq = sv.as_ref().map_or(0, |sv| sv.seq);
         self.match_seq(seq)
     }
 }

@@ -19,3 +19,9 @@ pub enum AuthType {
     DoubleSha1 = 2,
     Sha256 = 3,
 }
+
+impl Default for AuthType {
+    fn default() -> Self {
+        AuthType::None
+    }
+}

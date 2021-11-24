@@ -26,15 +26,17 @@ use crate::interpreters::plan_scheduler_ext;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
+use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct SelectInterpreter {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<QueryContext>,
     select: SelectPlan,
 }
 
 impl SelectInterpreter {
-    pub fn try_create(ctx: DatabendQueryContextRef, select: SelectPlan) -> Result<InterpreterPtr> {
+    pub fn try_create(ctx: Arc<QueryContext>, select: SelectPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(SelectInterpreter { ctx, select }))
     }
 

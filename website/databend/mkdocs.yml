@@ -182,12 +182,12 @@ nav:
               - NOW: sqlstatement/datetime-functions/now.md
               - TODAY: sqlstatement/datetime-functions/today.md
               - TOMORROW: sqlstatement/datetime-functions/tomorrow.md
+              - YESTERDAY: sqlstatement/datetime-functions/yesterday.md
               - toYYYYMM: sqlstatement/datetime-functions/toyyyymm.md
               - toYYYYMMDD: sqlstatement/datetime-functions/toyyyymmdd.md
               - toYYYYMMDDhhmmss: sqlstatement/datetime-functions/toyyyymmddhhmmss.md
               - toStartOfYear: sqlstatement/datetime-functions/tostartofyear.md
               - toStartOfISOYear: sqlstatement/datetime-functions/tostartofisoyear.md
-              - YESTERDAY: sqlstatement/datetime-functions/yesterday.md
               - addYEARS/MONTHS/DAYS/HOURS/MINUTES/SECONDS: sqlstatement/datetime-functions/addinterval.md
               - subtractYEARS/MONTHS/DAYS/HOURS/MINUTES/SECONDS: sqlstatement/datetime-functions/subtractinterval.md
           - Hash Functions:
@@ -216,6 +216,11 @@ nav:
               - FLOOR: sqlstatement/numeric-functions/floor.md
               - SQRT: sqlstatement/numeric-functions/sqrt.md
               - EXP: sqlstatement/numeric-functions/exp.md
+              - POW: sqlstatement/numeric-functions/pow.md
+              - SIGN: sqlstatement/numeric-functions/sign.md
+              - ROUND: sqlstatement/numeric-functions/round.md
+              - TRUNCATE: sqlstatement/numeric-functions/truncate.md
+              - RAND: sqlstatement/numeric-functions/rand.md
           - String Functions:
               - SUBSTRING: sqlstatement/string-functions/substring.md
           - Test Functions:
@@ -237,6 +242,7 @@ nav:
       - Profling: development/profiling.md
       - Roadmap: development/roadmap.md
       - Databend release channels: development/release-channels.md
+      - How to write scalar functions: development/how-to-write-scalar-functions.md
       - How to write aggregate functions: development/how-to-write-aggregate-functions.md
       - How to get server logs: development/how-to-get-server-logs.md
       - RFCs:

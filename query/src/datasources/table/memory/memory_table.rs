@@ -34,7 +34,7 @@ use crate::catalogs::Table;
 use crate::datasources::common::generate_parts;
 use crate::datasources::context::DataSourceContext;
 use crate::datasources::table::memory::memory_table_stream::MemoryTableStream;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct MemoryTable {
     table_info: TableInfo,
@@ -74,7 +74,7 @@ impl Table for MemoryTable {
 
     async fn read_partitions(
         &self,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let blocks = self.blocks.read();
@@ -93,7 +93,7 @@ impl Table for MemoryTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let blocks = self.blocks.read();
@@ -105,7 +105,7 @@ impl Table for MemoryTable {
 
     async fn append_data(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _ctx: Arc<QueryContext>,
         mut stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
         while let Some(block) = stream.next().await {
@@ -122,7 +122,7 @@ impl Table for MemoryTable {
 
     async fn truncate(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _ctx: Arc<QueryContext>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         let mut blocks = self.blocks.write();

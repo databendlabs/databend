@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -22,7 +23,7 @@ use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::SqlOption;
 
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
@@ -37,7 +38,7 @@ pub struct DfCreateDatabase {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfCreateDatabase {
     #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
-    async fn analyze(&self, _ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let db = self.database_name()?;
         let engine = self.database_engine()?;
         let options = self.database_options();

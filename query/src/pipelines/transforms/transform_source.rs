@@ -25,18 +25,15 @@ use common_tracing::tracing;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct SourceTransform {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<QueryContext>,
     source_plan: ReadDataSourcePlan,
 }
 
 impl SourceTransform {
-    pub fn try_create(
-        ctx: DatabendQueryContextRef,
-        source_plan: ReadDataSourcePlan,
-    ) -> Result<Self> {
+    pub fn try_create(ctx: Arc<QueryContext>, source_plan: ReadDataSourcePlan) -> Result<Self> {
         Ok(SourceTransform { ctx, source_plan })
     }
 

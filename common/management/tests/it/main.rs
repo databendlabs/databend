@@ -13,4 +13,5 @@
 // limitations under the License.
 
 mod cluster;
+mod stage;
 mod user;
