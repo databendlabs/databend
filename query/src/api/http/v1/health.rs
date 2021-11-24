@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use poem::http::StatusCode;
 use poem::web::Json;
 use poem::IntoResponse;
 
@@ -29,9 +28,7 @@ pub enum HealthCheckStatus {
 
 #[poem::handler]
 pub async fn health_handler() -> impl IntoResponse {
-    let check = HealthCheckResponse {
+    Json(HealthCheckResponse {
         status: HealthCheckStatus::Pass,
-    };
-
-    (StatusCode::OK, Json(check))
+    })
 }
