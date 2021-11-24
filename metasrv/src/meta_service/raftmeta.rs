@@ -569,8 +569,9 @@ impl MetaNode {
         )
     }
 
+    #[allow(clippy::ptr_arg)]
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_tables(&self, db_name: &str) -> Result<Vec<TableInfo>, ErrorCode> {
+    pub async fn get_tables(&self, db_name: &String) -> Result<Vec<TableInfo>, ErrorCode> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;

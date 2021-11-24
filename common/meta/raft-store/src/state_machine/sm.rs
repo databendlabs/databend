@@ -386,7 +386,7 @@ impl StateMachine {
                 ref table_name,
                 ref table_meta,
             } => {
-                let db_id = self.get_db_id(db_name).await?;
+                let db_id = self.get_database_id(db_name)?;
 
                 let lookup_key = TableLookupKey {
                     database_id: db_id,
@@ -442,7 +442,7 @@ impl StateMachine {
                 ref db_name,
                 ref table_name,
             } => {
-                let db_id = self.get_db_id(db_name).await?;
+                let db_id = self.get_database_id(db_name)?;
 
                 let lookup_key = TableLookupKey {
                     database_id: db_id,
@@ -607,7 +607,7 @@ impl StateMachine {
     }
 
     #[allow(clippy::ptr_arg)]
-    async fn get_db_id(&self, db_name: &String) -> common_exception::Result<u64> {
+    pub fn get_database_id(&self, db_name: &String) -> common_exception::Result<u64> {
         let seq_dbi = self
             .database_lookup()
             .get(db_name)?
@@ -675,13 +675,6 @@ impl StateMachine {
         sm_nodes.get(node_id)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub fn get_database_id(&self, name: &str) -> Result<Option<SeqV<u64>>, ErrorCode> {
-        let dbs = self.database_lookup();
-        let x = dbs.get(&name.to_string())?;
-        Ok(x)
-    }
-
     pub fn get_database_by_id(&self, did: &u64) -> Result<Option<SeqV<DatabaseMeta>>, ErrorCode> {
         let x = self.databases().get(did)?;
         Ok(x)
@@ -728,19 +721,9 @@ impl StateMachine {
         Ok(result)
     }
 
-    pub fn get_tables(&self, db_name: &str) -> Result<Vec<TableInfo>, ErrorCode> {
-        let db = self.get_database_id(db_name)?;
-        let db = match db {
-            Some(x) => x,
-            None => {
-                return Err(ErrorCode::UnknownDatabase(format!(
-                    "unknown database {}",
-                    db_name
-                )));
-            }
-        };
-
-        let db_id = db.data;
+    #[allow(clippy::ptr_arg)]
+    pub fn get_tables(&self, db_name: &String) -> Result<Vec<TableInfo>, ErrorCode> {
+        let db_id = self.get_database_id(db_name)?;
 
         let mut tbls = vec![];
         let tables = self.tables();

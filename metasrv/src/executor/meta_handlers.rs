@@ -104,17 +104,17 @@ impl RequestHandler<FlightReq<GetDatabaseReq>> for ActionHandler {
             .meta_node
             .get_state_machine()
             .await
-            .get_database_id(db_name)?
-            .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.clone()))?;
+            .get_database_id(db_name)?;
+
         let db_meta = self
             .meta_node
             .get_state_machine()
             .await
-            .get_database_by_id(&db_id.data)?
-            .ok_or_else(|| ErrorCode::UnknownDatabaseId(format!("database_id: {}", db_id.data)))?;
+            .get_database_by_id(&db_id)?
+            .ok_or_else(|| ErrorCode::UnknownDatabaseId(format!("database_id: {}", db_id)))?;
 
         Ok(Arc::new(DatabaseInfo {
-            database_id: db_id.data,
+            database_id: db_id,
             db: db_name.to_string(),
             meta: db_meta.data,
         }))
@@ -253,16 +253,11 @@ impl RequestHandler<FlightReq<GetTableReq>> for ActionHandler {
         let db_name = &act.req.db_name;
         let table_name = &act.req.table_name;
 
-        let x = self
+        let db_id = self
             .meta_node
             .get_state_machine()
             .await
             .get_database_id(db_name)?;
-        let db = x.ok_or_else(|| {
-            ErrorCode::UnknownDatabase(format!("get table: database not found {:}", db_name))
-        })?;
-
-        let db_id = db.data;
 
         let seq_table_id = self
             .meta_node

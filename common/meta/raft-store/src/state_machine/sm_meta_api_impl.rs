@@ -94,15 +94,14 @@ impl MetaApi for StateMachine {
     }
 
     async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, ErrorCode> {
-        let res = self
-            .get_database_id(&req.db_name)?
-            .ok_or_else(|| ErrorCode::UnknownDatabase(req.db_name.clone()))?;
+        let db_id = self.get_database_id(&req.db_name)?;
+
         let db_meta = self
-            .get_database_by_id(&res.data)?
-            .ok_or_else(|| ErrorCode::UnknownDatabaseId(format!("database_id: {}", res.data)))?;
+            .get_database_by_id(&db_id)?
+            .ok_or_else(|| ErrorCode::UnknownDatabaseId(format!("database_id: {}", db_id)))?;
 
         let dbi = DatabaseInfo {
-            database_id: res.data,
+            database_id: db_id,
             db: req.db_name.clone(),
             meta: db_meta.data,
         };
@@ -191,11 +190,7 @@ impl MetaApi for StateMachine {
         let db = &req.db_name;
         let table_name = &req.table_name;
 
-        let seq_db = self.get_database_id(db)?.ok_or_else(|| {
-            ErrorCode::UnknownDatabase(format!("get table: database not found {:}", db))
-        })?;
-
-        let db_id = seq_db.data;
+        let db_id = self.get_database_id(db)?;
 
         let table_id = self
             .table_lookup()
