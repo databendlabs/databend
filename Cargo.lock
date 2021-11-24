@@ -538,6 +538,7 @@ dependencies = [
  "fs_extra",
  "futures",
  "handlebars",
+ "http",
  "httpmock",
  "indicatif",
  "itertools",
