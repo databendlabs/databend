@@ -582,7 +582,7 @@ impl MetaNode {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
-        sm.get_table_by_id(tid)
+        sm.get_table_meta_by_id(tid)
     }
 
     /// Submit a write request to the known leader. Returns the response after applying the request.

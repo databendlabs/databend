@@ -48,6 +48,7 @@ use pretty_assertions::assert_eq;
 use crate::init_raft_store_ut;
 use crate::testing::new_raft_test_context;
 
+mod meta_api_impl;
 mod placement;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -87,7 +88,7 @@ async fn test_state_machine_apply_incr_seq() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let tc = new_raft_test_context();
-    let mut sm = StateMachine::open(&tc.raft_config, 1).await?;
+    let sm = StateMachine::open(&tc.raft_config, 1).await?;
 
     let cases = common_meta_raft_store::state_machine::testing::cases_incr_seq();
 
@@ -248,7 +249,7 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
 
     tracing::info!("--- check table is updated");
     {
-        let got = m.get_table_by_id(&table_id)?.unwrap();
+        let got = m.get_table_meta_by_id(&table_id)?.unwrap();
         assert!(got.seq > version);
         assert_eq!(
             hashmap! {
@@ -328,7 +329,7 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
 
         tracing::info!("--- check table is updated");
         {
-            let got = m.get_table_by_id(&table_id)?.unwrap();
+            let got = m.get_table_meta_by_id(&table_id)?.unwrap();
             assert!(got.seq > version);
             assert_eq!(
                 hashmap! {
@@ -650,7 +651,7 @@ async fn test_state_machine_snapshot() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let tc = new_raft_test_context();
-    let mut sm = StateMachine::open(&tc.raft_config, 0).await?;
+    let sm = StateMachine::open(&tc.raft_config, 0).await?;
 
     let (logs, want) = snapshot_logs();
     // TODO(xp): following logs are not saving to sled yet:
