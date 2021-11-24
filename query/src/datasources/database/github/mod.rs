@@ -13,17 +13,6 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
+mod database;
 
-use common_exception::Result;
-
-use crate::datasources::database::FuseDatabase;
-use crate::datasources::database::GithubDatabase;
-use crate::datasources::DatabaseEngineRegistry;
-
-pub fn register_database_engines(registry: &DatabaseEngineRegistry) -> Result<()> {
-    // Register a DEFAULT database engine.
-    registry.register("DEFAULT", Arc::new(FuseDatabase::try_create))?;
-    registry.register("GITHUB", Arc::new(FuseDatabase::try_create))?;
-    Ok(())
-}
+pub use database::GithubDatabase;
