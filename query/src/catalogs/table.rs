@@ -93,8 +93,9 @@ pub trait Table: Sync + Send {
         _stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
         Err(ErrorCode::UnImplement(format!(
-            "append data for local table {} is not implemented",
-            self.name()
+            "append operation for table {} is not implemented, table engine is {}",
+            self.name(),
+            self.get_table_info().meta.engine
         )))
     }
 

@@ -15,7 +15,6 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
@@ -31,13 +30,11 @@ use common_streams::ValueSource;
 use futures::TryStreamExt;
 
 use crate::catalogs::Table;
-use crate::interpreters::plan_scheduler::PlanScheduler;
-use crate::interpreters::schedule::Scheduled;
+use crate::interpreters::schedule;
 use crate::interpreters::utils::apply_plan_rewrite;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
-use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::DatabendQueryContextRef;
 
 pub struct InsertIntoInterpreter {
@@ -51,35 +48,6 @@ impl InsertIntoInterpreter {
         plan: InsertIntoPlan,
     ) -> Result<InterpreterPtr> {
         Ok(Arc::new(InsertIntoInterpreter { ctx, plan }))
-    }
-
-    async fn insert_with_select_plan(
-        &self,
-        plan_node: &PlanNode,
-        table: &dyn Table,
-    ) -> Result<Vec<DataBlock>> {
-        if let PlanNode::Select(sel) = plan_node {
-            // check if schema match
-            let output_schema = self.plan.schema();
-            let select_schema = sel.schema();
-            if select_schema.fields().len() < output_schema.fields().len() {
-                return Err(ErrorCode::BadArguments(
-                    "Fields in select statement is less than expected",
-                ));
-            }
-
-            // check if cast needed
-            let cast_needed = select_schema != output_schema;
-
-            let mut scheduled = Scheduled::new();
-            self.schedule_query(&mut scheduled, sel, table.get_table_info(), cast_needed)
-                .await
-        } else {
-            Err(ErrorCode::UnknownTypeOfQuery(format!(
-                "Unsupported select query plan for insert_into interpreter, {}",
-                plan_node.name()
-            )))
-        }
     }
 }
 
@@ -97,11 +65,15 @@ impl Interpreter for InsertIntoInterpreter {
         let table = &self.plan.tbl_name;
         let table = self.ctx.get_table(database, table).await?;
 
-        let append_operations = if let Some(plan_node) = &self.plan.select_plan {
+        let append_op_logs = if let Some(plan_node) = &self.plan.select_plan {
+            // if there is a PlanNode that provides values
+            // e.g. `insert into ... as select ...`
             self.insert_with_select_plan(plan_node.as_ref(), table.as_ref())
                 .await?
         } else {
             let input_stream = if self.plan.values_opt.is_some() {
+                // if values are provided in SQL
+                // e.g. `insert into ... value(...), ...`
                 let values = self.plan.values_opt.clone().take().ok_or_else(|| {
                     ErrorCode::EmptyData("values of insert plan not exist or consumed")
                 })?;
@@ -111,17 +83,19 @@ impl Interpreter for InsertIntoInterpreter {
                 let stream_source = SourceStream::new(Box::new(values_source));
                 stream_source.execute().await
             } else {
+                // if values are provided as a block stream
+                // e.g. using clickhouse client
                 input_stream
                     .take()
                     .ok_or_else(|| ErrorCode::EmptyData("input stream not exist or consumed"))
             }?;
-            table
-                .append_data(self.ctx.clone(), input_stream)
-                .await?
-                .try_collect()
-                .await?
+            table.append_data(self.ctx.clone(), input_stream).await?
         };
-        table.commit(self.ctx.clone(), append_operations).await?;
+
+        // feed back the append operation logs to table
+        table
+            .commit(self.ctx.clone(), append_op_logs.try_collect().await?)
+            .await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
@@ -130,24 +104,49 @@ impl Interpreter for InsertIntoInterpreter {
         )))
     }
 }
-
 impl InsertIntoInterpreter {
-    async fn schedule_query(
+    async fn insert_with_select_plan(
         &self,
-        scheduled: &mut Scheduled,
-        select_plan: &SelectPlan,
-        table_info: &TableInfo,
-        cast_needed: bool,
-    ) -> Result<Vec<DataBlock>> {
-        // This is almost the same of SelectInterpreter::schedule_query, with some slight tweaks
+        plan_node: &PlanNode,
+        table: &dyn Table,
+    ) -> Result<SendableDataBlockStream> {
+        if let PlanNode::Select(sel) = plan_node {
+            let optimized_plan = self.rewrite_plan(sel, table.get_table_info())?;
+            schedule::schedule_query(&self.ctx, &optimized_plan).await
+        } else {
+            Err(ErrorCode::UnknownTypeOfQuery(format!(
+                "Unsupported select query plan for insert_into interpreter, {}",
+                plan_node.name()
+            )))
+        }
+    }
 
-        let optimized_select_plan = apply_plan_rewrite(
+    fn rewrite_plan(&self, select_plan: &SelectPlan, table_info: &TableInfo) -> Result<PlanNode> {
+        let output_schema = self.plan.schema();
+        let select_schema = select_plan.schema();
+
+        // validate schema
+        if select_schema.fields().len() < output_schema.fields().len() {
+            return Err(ErrorCode::BadArguments(
+                "Fields in select statement is less than expected",
+            ));
+        }
+
+        // check if cast needed
+        let cast_needed = select_schema != output_schema;
+
+        // optimize and rewrite the SelectPlan.input
+        let optimized_plan = apply_plan_rewrite(
             self.ctx.clone(),
             Optimizers::create(self.ctx.clone()),
             &select_plan.input,
         )?;
 
-        let rewritten_plan = match optimized_select_plan {
+        // rewrite the optimized the plan
+        let rewritten_plan = match optimized_plan {
+            // if it is a StagePlan Node, we insert the a SinkPlan in between the Stage and Stage.input
+            // i.e.
+            //    StagePlan <~ PlanNodeA  => StagePlan <~ Sink <~ PlanNodeA
             PlanNode::Stage(r) => {
                 let prev_input = r.input.clone();
                 let sink = PlanNode::Sink(SinkPlan {
@@ -161,32 +160,15 @@ impl InsertIntoInterpreter {
                     scatters_expr: r.scatters_expr,
                 })
             }
+            // otherwise, we just prepend a SinkPlan
+            // i.e.
+            //    node <~ PlanNodeA  => Sink<~ node <~ PlanNodeA
             node => PlanNode::Sink(SinkPlan {
                 table_info: table_info.clone(),
                 input: Arc::new(node),
                 cast_needed,
             }),
         };
-
-        // following logics are the same
-        let scheduler = PlanScheduler::try_create(self.ctx.clone())?;
-        let scheduled_tasks = scheduler.reschedule(&rewritten_plan)?;
-        let remote_stage_actions = scheduled_tasks.get_tasks()?;
-
-        let config = self.ctx.get_config();
-        let cluster = self.ctx.get_cluster();
-        let timeout = self.ctx.get_settings().get_flight_client_timeout()?;
-        for (node, action) in remote_stage_actions {
-            let mut flight_client = cluster.create_node_conn(&node.id, &config).await?;
-            let executing_action = flight_client.execute_action(action.clone(), timeout);
-
-            executing_action.await?;
-            scheduled.insert(node.id.clone(), node.clone());
-        }
-
-        let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
-        let mut in_local_pipeline = pipeline_builder.build(&scheduled_tasks.get_local_task())?;
-        let inserts = in_local_pipeline.execute().await?;
-        inserts.try_collect::<Vec<_>>().await
+        Ok(rewritten_plan)
     }
 }

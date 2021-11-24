@@ -38,7 +38,7 @@ impl SelectInterpreter {
         Ok(Arc::new(SelectInterpreter { ctx, select }))
     }
 
-    fn optimize_plan(&self) -> Result<PlanNode> {
+    fn rewrite_plan(&self) -> Result<PlanNode> {
         apply_plan_rewrite(
             self.ctx.clone(),
             Optimizers::create(self.ctx.clone()),
@@ -59,7 +59,7 @@ impl Interpreter for SelectInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         // TODO: maybe panic?
-        let optimized_plan = self.optimize_plan()?;
+        let optimized_plan = self.rewrite_plan()?;
         schedule::schedule_query(&self.ctx, &optimized_plan).await
     }
 
