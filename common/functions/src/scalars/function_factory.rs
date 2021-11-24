@@ -42,6 +42,7 @@ pub struct FunctionFeatures {
     pub negative_function_name: Option<String>,
     pub is_bool_func: bool,
     pub is_context_func: bool,
+    pub maybe_monotonic: bool,
 }
 
 impl FunctionFeatures {
@@ -51,6 +52,7 @@ impl FunctionFeatures {
             negative_function_name: None,
             is_bool_func: false,
             is_context_func: false,
+            maybe_monotonic: false,
         }
     }
 
@@ -71,6 +73,11 @@ impl FunctionFeatures {
 
     pub fn context_function(mut self) -> FunctionFeatures {
         self.is_context_func = true;
+        self
+    }
+
+    pub fn monotonicity(mut self) -> FunctionFeatures {
+        self.maybe_monotonic = true;
         self
     }
 }

@@ -53,7 +53,8 @@ impl DateFunction {
             RoundFunction::try_create(display_name, round)
         });
 
-        FunctionDescription::creator(creator).features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(creator)
+            .features(FunctionFeatures::default().deterministic().monotonicity())
     }
 
     fn month_arithmetic_function_creator(factor: i64) -> FunctionDescription {
