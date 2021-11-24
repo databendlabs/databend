@@ -204,6 +204,10 @@ impl QueryContext {
         self.shared.get_current_database()
     }
 
+    pub fn get_current_user(&self) -> Result<String> {
+        self.shared.get_current_user()
+    }
+
     pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
         let catalog = self.get_catalog();
         match catalog.get_database(&new_database_name).await {

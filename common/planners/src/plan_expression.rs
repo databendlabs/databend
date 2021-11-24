@@ -30,7 +30,10 @@ use lazy_static::lazy_static;
 use crate::PlanNode;
 
 lazy_static! {
-    static ref OP_SET: HashSet<&'static str> = ["database", "version",].iter().copied().collect();
+    static ref OP_SET: HashSet<&'static str> = ["database", "version", "current_user"]
+        .iter()
+        .copied()
+        .collect();
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]

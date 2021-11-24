@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod crash_me;
+mod current_user;
 mod database;
 mod exists;
 mod sleep;
@@ -22,6 +23,7 @@ mod udf_example;
 mod version;
 
 pub use crash_me::CrashMeFunction;
+pub use current_user::CurrentUserFunction;
 pub use database::DatabaseFunction;
 pub use sleep::SleepFunction;
 pub use to_type_name::ToTypeNameFunction;
