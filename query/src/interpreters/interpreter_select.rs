@@ -22,7 +22,7 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
 use super::utils::apply_plan_rewrite;
-use crate::interpreters::schedule;
+use crate::interpreters::plan_scheduler_ext;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
@@ -60,7 +60,7 @@ impl Interpreter for SelectInterpreter {
     ) -> Result<SendableDataBlockStream> {
         // TODO: maybe panic?
         let optimized_plan = self.rewrite_plan()?;
-        schedule::schedule_query(&self.ctx, &optimized_plan).await
+        plan_scheduler_ext::schedule_query(&self.ctx, &optimized_plan).await
     }
 
     fn schema(&self) -> DataSchemaRef {

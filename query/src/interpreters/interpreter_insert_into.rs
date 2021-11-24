@@ -30,7 +30,7 @@ use common_streams::ValueSource;
 use futures::TryStreamExt;
 
 use crate::catalogs::Table;
-use crate::interpreters::schedule;
+use crate::interpreters::plan_scheduler_ext;
 use crate::interpreters::utils::apply_plan_rewrite;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -112,7 +112,7 @@ impl InsertIntoInterpreter {
     ) -> Result<SendableDataBlockStream> {
         if let PlanNode::Select(sel) = plan_node {
             let optimized_plan = self.rewrite_plan(sel, table.get_table_info())?;
-            schedule::schedule_query(&self.ctx, &optimized_plan).await
+            plan_scheduler_ext::schedule_query(&self.ctx, &optimized_plan).await
         } else {
             Err(ErrorCode::UnknownTypeOfQuery(format!(
                 "Unsupported select query plan for insert_into interpreter, {}",

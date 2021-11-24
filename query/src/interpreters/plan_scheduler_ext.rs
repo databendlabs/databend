@@ -29,8 +29,9 @@ use common_streams::SendableDataBlockStream;
 use futures::Stream;
 use futures::StreamExt;
 
+use crate::api::CancelAction;
+use crate::api::FlightAction;
 use crate::interpreters::plan_scheduler::PlanScheduler;
-use crate::interpreters::utils::error_handler;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::DatabendQueryContextRef;
 
@@ -91,8 +92,8 @@ impl ScheduledStream {
     fn cancel_scheduled_action(&self) -> Result<()> {
         let scheduled = self.scheduled.clone();
         let timeout = self.context.get_settings().get_flight_client_timeout()?;
-        let error_handler = error_handler(scheduled, &self.context, timeout);
-        futures::executor::block_on(error_handler);
+        let handler = error_handler(scheduled, &self.context, timeout);
+        futures::executor::block_on(handler);
         Ok(())
     }
 }
@@ -118,5 +119,36 @@ impl Stream for ScheduledStream {
             }
             other => other,
         })
+    }
+}
+
+async fn error_handler(scheduled: Scheduled, context: &DatabendQueryContextRef, timeout: u64) {
+    let query_id = context.get_id();
+    let config = context.get_config();
+    let cluster = context.get_cluster();
+
+    for (_stream_name, scheduled_node) in scheduled {
+        match cluster.create_node_conn(&scheduled_node.id, &config).await {
+            Err(cause) => {
+                log::error!(
+                    "Cannot cancel action for {}, cause: {}",
+                    scheduled_node.id,
+                    cause
+                );
+            }
+            Ok(mut flight_client) => {
+                let cancel_action = FlightAction::CancelAction(CancelAction {
+                    query_id: query_id.clone(),
+                });
+                let executing_action = flight_client.execute_action(cancel_action, timeout);
+                if let Err(cause) = executing_action.await {
+                    log::error!(
+                        "Cannot cancel action for {}, cause:{}",
+                        scheduled_node.id,
+                        cause
+                    );
+                }
+            }
+        };
     }
 }
