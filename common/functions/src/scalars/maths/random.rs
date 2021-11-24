@@ -64,6 +64,13 @@ impl Function for RandomFunction {
                     | DataType::UInt16
                     | DataType::UInt32
                     | DataType::UInt64
+                    | DataType::Int8
+                    | DataType::Int16
+                    | DataType::Int32
+                    | DataType::Int64
+                    | DataType::Float32
+                    | DataType::Float64
+                    | DataType::String
                     | DataType::Null
             )
         {
@@ -83,34 +90,26 @@ impl Function for RandomFunction {
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let r_column: DataColumn = match columns.len() {
             1 => {
-                let d_column: &DataColumn =
+                let seed_column: &DataColumn =
                     &columns[0].column().cast_with_type(&DataType::UInt64)?;
 
-                match d_column {
-                    DataColumn::Constant(d, _) => {
-                        if d.is_null() {
-                            let mut rng = rand::thread_rng();
-                            DFFloat64Array::new_from_iter(
-                                (0..input_rows).into_iter().map(|_| rng.gen::<f64>()),
-                            )
+                match seed_column {
+                    DataColumn::Constant(seed, _) => {
+                        let s: u64 = if seed.is_null() {
+                            0
                         } else {
-                            let s: u64 = DFTryFrom::try_from(d.clone())?;
-                            let mut rng = rand::rngs::StdRng::seed_from_u64(s);
-                            DFFloat64Array::new_from_iter(
-                                (0..input_rows).into_iter().map(|_| rng.gen::<f64>()),
-                            )
-                        }
+                            DFTryFrom::try_from(seed.clone())?
+                        };
+                        let mut rng = rand::rngs::StdRng::seed_from_u64(s);
+                        DFFloat64Array::new_from_iter(
+                            (0..input_rows).into_iter().map(|_| rng.gen::<f64>()),
+                        )
                     }
-                    DataColumn::Array(d_series) => binary(
-                        &DFUInt64Array::new_from_iter(
-                            (0..input_rows).into_iter().map(|r| r as u64),
-                        ),
-                        d_series.u64()?,
-                        |_, s| {
-                            let mut rng = rand::rngs::StdRng::seed_from_u64(s);
-                            rng.gen::<f64>()
-                        },
-                    ),
+
+                    DataColumn::Array(seed_series) => seed_series.u64()?.apply_cast_numeric(|s| {
+                        let mut rng = StdRng::seed_from_u64(s);
+                        rng.gen::<f64>()
+                    }),
                 }
             }
             _ => {
