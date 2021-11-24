@@ -16,10 +16,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::UserStageInfo;
 
-use crate::users::UserManager;
+use crate::users::UserApiProvider;
 
 /// user stage operations.
-impl UserManager {
+impl UserApiProvider {
     // Add a new stage.
     pub async fn add_stage(&self, info: UserStageInfo) -> Result<u64> {
         let stage_api_provider = self.get_stage_api_client();
