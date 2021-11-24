@@ -17,6 +17,7 @@ use std::fmt;
 use common_datavalues::prelude::*;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use rand::prelude::*;
 
@@ -51,18 +52,74 @@ impl Function for RandomFunction {
         0
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
-        Ok(DataType::Float64)
+    fn variadic_arguments(&self) -> Option<(usize, usize)> {
+        Some((0, 1))
+    }
+
+    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+        if args.is_empty()
+            || matches!(
+                args[0],
+                DataType::UInt8
+                    | DataType::UInt16
+                    | DataType::UInt32
+                    | DataType::UInt64
+                    | DataType::Null
+            )
+        {
+            Ok(DataType::Float64)
+        } else {
+            Err(ErrorCode::IllegalDataType(format!(
+                "Expected numeric types, but got {}",
+                args[0]
+            )))
+        }
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(false)
     }
 
-    fn eval(&self, _columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let arr = DFFloat64Array::full(-1.0, input_rows).apply(|_| rand::thread_rng().gen::<f64>());
-        let column: DataColumn = arr.into();
-        Ok(column.resize_constant(input_rows))
+    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
+        let r_column: DataColumn = match columns.len() {
+            1 => {
+                let d_column: &DataColumn =
+                    &columns[0].column().cast_with_type(&DataType::UInt64)?;
+
+                match d_column {
+                    DataColumn::Constant(d, _) => {
+                        if d.is_null() {
+                            let mut rng = rand::thread_rng();
+                            DFFloat64Array::new_from_iter(
+                                (0..input_rows).into_iter().map(|_| rng.gen::<f64>()),
+                            )
+                        } else {
+                            let s: u64 = DFTryFrom::try_from(d.clone())?;
+                            let mut rng = rand::rngs::StdRng::seed_from_u64(s);
+                            DFFloat64Array::new_from_iter(
+                                (0..input_rows).into_iter().map(|_| rng.gen::<f64>()),
+                            )
+                        }
+                    }
+                    DataColumn::Array(d_series) => binary(
+                        &DFUInt64Array::new_from_iter(
+                            (0..input_rows).into_iter().map(|r| r as u64),
+                        ),
+                        d_series.u64()?,
+                        |_, s| {
+                            let mut rng = rand::rngs::StdRng::seed_from_u64(s);
+                            rng.gen::<f64>()
+                        },
+                    ),
+                }
+            }
+            _ => {
+                let mut rng = rand::thread_rng();
+                DFFloat64Array::new_from_iter((0..input_rows).into_iter().map(|_| rng.gen::<f64>()))
+            }
+        }
+        .into();
+        Ok(r_column.resize_constant(input_rows))
     }
 }
 
