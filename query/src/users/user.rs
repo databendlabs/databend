@@ -13,8 +13,8 @@
 // limitations under the License.
 //
 
-use common_management::UserInfo;
 use common_meta_types::AuthType;
+use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilege;
 use common_meta_types::UserQuota;
 

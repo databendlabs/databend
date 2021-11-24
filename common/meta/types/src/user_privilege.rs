@@ -41,7 +41,7 @@ const ALL_PRIVILEGES: BitFlags<UserPrivilegeType> = make_bitflags!(
         | Set}
 );
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Default, Debug, Eq, PartialEq)]
 pub struct UserPrivilege {
     privileges: BitFlags<UserPrivilegeType>,
 }
