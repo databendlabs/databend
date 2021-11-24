@@ -201,15 +201,10 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
         })
         .await?;
 
-    let (table_id, mut version) = match resp {
-        AppliedState::TableIdent { result, .. } => {
-            let r = result.unwrap();
-            (r.table_id, r.version)
-        }
-        _ => {
-            panic!("expect AppliedState::TableIdent")
-        }
-    };
+    let mut ch: Change<TableMeta, u64> = resp.try_into().unwrap();
+    let table_id = ch.ident.take().unwrap();
+    let result = ch.result.unwrap();
+    let mut version = result.seq;
 
     tracing::info!("--- upsert options on empty table options");
     {

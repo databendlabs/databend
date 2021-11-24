@@ -39,7 +39,6 @@ use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_meta_types::TableIdent;
 use common_meta_types::TableMeta;
 use common_tracing::tracing;
 use serde::Deserialize;
@@ -399,8 +398,10 @@ impl StateMachine {
                     let table_id = u.data.0;
 
                     let prev = self.get_table_meta_by_id(&table_id)?;
-                    let prev = prev.map(|x| TableIdent::new(table_id, x.seq));
-                    return Ok((prev.clone(), prev).into());
+
+                    return Ok(AppliedState::TableMeta(Change::nochange_with_id(
+                        table_id, prev,
+                    )));
                 }
 
                 let table_meta = table_meta.clone();
@@ -431,10 +432,9 @@ impl StateMachine {
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
                 }
 
-                Ok(AppliedState::TableIdent {
-                    prev: prev.map(|x| TableIdent::new(table_id, x.seq)),
-                    result: result.map(|x| TableIdent::new(table_id, x.seq)),
-                })
+                Ok(AppliedState::TableMeta(Change::new_with_id(
+                    table_id, prev, result,
+                )))
             }
 
             Cmd::DropTable {

@@ -127,7 +127,7 @@ impl RequestHandler<FlightReq<DropDatabaseReq>> for ActionHandler {
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
         let (prev, _result) = match rst {
-            AppliedState::DatabaseId(Change { prev, result }) => (prev, result),
+            AppliedState::DatabaseId(Change { prev, result, .. }) => (prev, result),
             _ => return Err(ErrorCode::MetaNodeInternalError("not a Database result")),
         };
 
@@ -173,10 +173,10 @@ impl RequestHandler<FlightReq<CreateTableReq>> for ActionHandler {
             .await
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
-        let (prev, result) = match rst {
-            AppliedState::TableIdent { prev, result } => (prev, result),
-            _ => return Err(ErrorCode::MetaNodeInternalError("not a Table result")),
-        };
+        let mut ch: Change<TableMeta, u64> = rst.try_into().expect("TableId");
+        let table_id = ch.ident.take().unwrap();
+        let (prev, _) = ch.unpack_data();
+
         if prev.is_some() && !if_not_exists {
             return Err(ErrorCode::TableAlreadyExists(format!(
                 "table exists: {}",
@@ -184,9 +184,7 @@ impl RequestHandler<FlightReq<CreateTableReq>> for ActionHandler {
             )));
         }
 
-        Ok(CreateTableReply {
-            table_id: result.unwrap().table_id,
-        })
+        Ok(CreateTableReply { table_id })
     }
 }
 
