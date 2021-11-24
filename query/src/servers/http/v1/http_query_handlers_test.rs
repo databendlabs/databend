@@ -38,9 +38,7 @@ use crate::sessions::SessionManager;
 use crate::tests::SessionManagerBuilder;
 
 // TODO(youngsofun): add test for
-// 1. kill without delete
-// 2. query fail after started
-// 3. get old page other than the last
+// 1. query fail after started
 
 pub fn get_page_uri(query_id: &str, page_no: usize, wait_time: u32) -> String {
     format!(

@@ -14,160 +14,22 @@
 
 use std::sync::Arc;
 
-use common_base::ProgressValues;
-use common_datavalues::DataSchemaRef;
-use common_exception::Result;
-use common_streams::SendableDataBlockStream;
-use futures::StreamExt;
-use hyper::http::header;
-use poem::http::StatusCode;
+use poem::error::NotFound;
+use poem::error::Result as PoemResult;
 use poem::post;
 use poem::web::Data;
+use poem::web::Json;
 use poem::web::Query;
 use poem::Endpoint;
-use poem::IntoResponse;
-use poem::Response;
 use poem::Route;
 use serde::Deserialize;
-use serde::Serialize;
-use serde_json;
-use serde_json::Value as JsonValue;
-use uuid;
 
-use super::block_to_json::block_to_json;
-use crate::interpreters::InterpreterFactory;
-use crate::sessions::QueryContext;
+use crate::servers::http::v1::http_query_handlers::QueryResponse;
+use crate::servers::http::v1::query::execute_state::HttpQueryRequest;
+use crate::servers::http::v1::query::execute_state::SessionConf;
+use crate::servers::http::v1::query::http_query::HttpQuery;
+use crate::servers::http::v1::query::result_data_manager::Wait;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionRef;
-use crate::sql::PlanParser;
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct HttpQueryResult {
-    id: String,
-    pub next_uri: Option<String>,
-    pub data: Option<Vec<Vec<JsonValue>>>,
-    pub columns: Option<DataSchemaRef>,
-    // TODO(youngsofun): add more info in error (ErrorCode does not support Serialize)
-    pub error: Option<String>,
-    pub stats: Option<ProgressValues>,
-}
-
-impl HttpQueryResult {
-    fn create(id: String) -> HttpQueryResult {
-        HttpQueryResult {
-            id,
-            next_uri: None,
-            error: None,
-            data: None,
-            columns: None,
-            stats: None,
-        }
-    }
-}
-
-impl IntoResponse for HttpQueryResult {
-    fn into_response(self) -> Response {
-        let body = serde_json::to_vec(&self).unwrap();
-        // TODO(youngsofun): when should we return other status code here?
-        let status = StatusCode::OK;
-        let content_type = "application/javascript";
-        //let content_type = header::HeaderValue::from_str("application/javascript").unwrap();
-        Response::builder()
-            .status(status)
-            .header(header::CONTENT_TYPE, content_type)
-            .body(body)
-    }
-}
-
-struct HttpQuery {
-    id: String,
-    sql: String,
-    state: Option<HttpQueryState>,
-    db: Option<String>,
-}
-
-struct HttpQueryState {
-    #[allow(dead_code)]
-    session: SessionRef,
-    context: Arc<QueryContext>,
-    data_stream: SendableDataBlockStream,
-    schema: DataSchemaRef,
-}
-
-// TODO(youngsofun): add a HttpQueryManager in SessionManger to support async query.
-impl HttpQuery {
-    fn new(id: String, sql: String, db: Option<String>) -> HttpQuery {
-        HttpQuery {
-            id,
-            sql,
-            state: None,
-            db,
-        }
-    }
-
-    async fn start(&mut self, session_manager: Arc<SessionManager>) -> Result<HttpQueryState> {
-        let session = session_manager.create_session("http-statement")?;
-        let ctx = session.create_context().await?;
-        if self.db.is_some() && !self.db.clone().unwrap().is_empty() {
-            // TODO: remove unwrap
-            ctx.set_current_database(self.db.clone().unwrap()).await?;
-        }
-        ctx.attach_query_str(&self.sql);
-        let plan = PlanParser::parse(&self.sql, ctx.clone()).await?;
-        let interpreter = InterpreterFactory::get(ctx.clone(), plan.clone())?;
-        let data_stream = interpreter.execute(None).await?;
-        let state = HttpQueryState {
-            session,
-            data_stream,
-            context: ctx.clone(),
-            schema: plan.schema(),
-        };
-        Ok(state)
-    }
-
-    async fn initial_result(&mut self, session_manager: Arc<SessionManager>) -> HttpQueryResult {
-        let state = self.start(session_manager).await;
-        let mut result = HttpQueryResult::create(self.id.clone());
-        match state {
-            Ok(st) => {
-                self.state = Some(st);
-                result = self.state.as_mut().unwrap().fill_result_sync(result).await;
-            }
-            Err(err) => {
-                result.error = Some(err.message());
-            }
-        }
-        result
-    }
-
-    #[allow(dead_code)]
-    fn kill(&self) {
-        self.state.as_ref().unwrap().kill()
-    }
-}
-
-impl HttpQueryState {
-    async fn collect_all(&mut self) -> Result<Vec<Vec<JsonValue>>> {
-        let mut results: Vec<Vec<Vec<JsonValue>>> = Vec::new();
-        while let Some(block) = self.data_stream.next().await {
-            results.push(block_to_json(&block.unwrap())?);
-        }
-        Ok(results.concat())
-    }
-
-    async fn fill_result_sync(&mut self, mut result: HttpQueryResult) -> HttpQueryResult {
-        let data = self.collect_all().await.unwrap();
-        result.data = Some(data);
-        result.columns = Some(self.schema.clone());
-        result.stats = Some(self.context.get_and_reset_progress_value());
-        result
-    }
-
-    #[allow(dead_code)]
-    fn kill(&self) {
-        self.session.force_kill_session();
-    }
-}
 
 #[derive(Deserialize)]
 pub(crate) struct StatementHandlerParams {
@@ -179,11 +41,26 @@ pub(crate) async fn statement_handler(
     sessions_extension: Data<&Arc<SessionManager>>,
     sql: String,
     Query(params): Query<StatementHandlerParams>,
-) -> impl IntoResponse {
-    let session_manager = sessions_extension.0.clone();
-    let query_id = uuid::Uuid::new_v4().to_string();
-    let mut query = HttpQuery::new(query_id, sql, params.db);
-    query.initial_result(session_manager).await
+) -> PoemResult<Json<QueryResponse>> {
+    let session_manager = sessions_extension.0;
+    let http_query_manager = session_manager.get_http_query_manager();
+    let query_id = http_query_manager.next_query_id();
+    let session = SessionConf {
+        database: params.db.filter(|x| !x.is_empty()),
+    };
+    let req = HttpQueryRequest { sql, session };
+    let query = HttpQuery::try_create(query_id.clone(), req, session_manager).await;
+
+    match query {
+        Ok(query) => {
+            let resp = query
+                .get_response_page(0, &Wait::Sync, true)
+                .await
+                .map_err(|err| NotFound(err.message()))?;
+            Ok(Json(QueryResponse::from_internal(query_id, resp)))
+        }
+        Err(e) => Ok(Json(QueryResponse::fail_to_start_sql(query_id, &e))),
+    }
 }
 
 pub fn statement_router() -> impl Endpoint {

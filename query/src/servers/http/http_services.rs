@@ -27,6 +27,11 @@ use crate::servers::http::v1::statement_router;
 use crate::servers::Server;
 use crate::sessions::SessionManager;
 
+// TODO(younsofun): add doc url after it`s ready
+pub const HTTP_HANDLER_USAGE: &str = r#" examples:
+curl --request POST '127.0.0.1:8001/v1/statement/' --header 'Content-Type: text/plain' --data-raw 'SELECT avg(number) FROM numbers(100000000)'
+curl --request POST '127.0.0.1:8001/v1/query/' --header 'Content-Type: application/json' --data-raw '{"sql": "SELECT avg(number) FROM numbers(100000000)"}'"#;
+
 pub struct HttpHandler {
     session_manager: Arc<SessionManager>,
     shutdown_handler: HttpShutdownHandler,
@@ -41,10 +46,7 @@ impl HttpHandler {
     }
     fn build_router(&self) -> impl Endpoint {
         Route::new()
-            .at(
-                "/",
-                get(poem::endpoint::make_sync(|_| "This is http handler.")),
-            )
+            .at("/", get(poem::endpoint::make_sync(|_| HTTP_HANDLER_USAGE)))
             .nest("/v1/statement", statement_router())
             .nest("/v1/query", query_route())
             .data(self.session_manager.clone())

@@ -35,7 +35,14 @@ use crate::sql::PlanParser;
 
 #[derive(Deserialize, Debug)]
 pub struct HttpQueryRequest {
+    #[serde(default)]
+    pub session: SessionConf,
     pub sql: String,
+}
+
+#[derive(Deserialize, Debug, Default)]
+pub struct SessionConf {
+    pub database: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
@@ -113,6 +120,9 @@ impl ExecuteState {
         let sql = &request.sql;
         let session = session_manager.create_session("http-statement")?;
         let context = session.create_context().await?;
+        if let Some(db) = &request.session.database {
+            context.set_current_database(db.clone()).await?;
+        };
         context.attach_query_str(sql);
 
         let plan = PlanParser::parse(sql, context.clone()).await?;
