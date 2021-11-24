@@ -57,6 +57,14 @@ fn test_session_status() -> Result<()> {
         assert_eq!(Some(server), val);
     }
 
+    // Current user.
+    {
+        mutable_status.set_current_user("user1".to_string());
+
+        let val = mutable_status.get_current_user();
+        assert_eq!(Some("user1".to_string()), val);
+    }
+
     // io shutdown tx.
     {
         let (tx, _) = futures::channel::oneshot::channel();
