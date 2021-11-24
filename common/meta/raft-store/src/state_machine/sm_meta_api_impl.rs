@@ -219,11 +219,40 @@ impl MetaApi for StateMachine {
     }
 
     async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, ErrorCode> {
-        let tables = self.get_tables(&req.db_name)?;
-        Ok(tables
-            .iter()
-            .map(|t| Arc::new(t.clone()))
-            .collect::<Vec<_>>())
+        let db_name = &req.db_name;
+        let db_id = self.get_database_id(db_name)?;
+
+        let mut tbls = vec![];
+        let tables = self.tables();
+        let tables_iter = self.table_lookup().range(..)?;
+        for r in tables_iter {
+            let (k, seq_table_id) = r?;
+
+            let got_db_id = k.database_id;
+            let table_name = k.table_name;
+
+            if got_db_id == db_id {
+                let table_id = seq_table_id.data.0;
+
+                let seq_table_meta = tables.get(&table_id)?.ok_or_else(|| {
+                    ErrorCode::IllegalMetaState(format!(" table of id {}, not found", table_id))
+                })?;
+
+                let version = seq_table_meta.seq;
+                let table_meta = seq_table_meta.data;
+
+                let table_info = TableInfo::new(
+                    db_name,
+                    &table_name,
+                    TableIdent::new(table_id, version),
+                    table_meta,
+                );
+
+                tbls.push(Arc::new(table_info));
+            }
+        }
+
+        Ok(tbls)
     }
 
     async fn get_table_by_id(

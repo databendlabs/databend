@@ -40,7 +40,6 @@ use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_tracing::tracing;
 use serde::Deserialize;
@@ -719,43 +718,6 @@ impl StateMachine {
             .await?;
         self.incr_seq(SEQ_DATABASE_META_ID).await?; // need this?
         Ok(result)
-    }
-
-    #[allow(clippy::ptr_arg)]
-    pub fn get_tables(&self, db_name: &String) -> Result<Vec<TableInfo>, ErrorCode> {
-        let db_id = self.get_database_id(db_name)?;
-
-        let mut tbls = vec![];
-        let tables = self.tables();
-        let tables_iter = self.table_lookup().range(..)?;
-        for r in tables_iter {
-            let (k, seq_table_id) = r?;
-
-            let got_db_id = k.database_id;
-            let table_name = k.table_name;
-
-            if got_db_id == db_id {
-                let table_id = seq_table_id.data.0;
-
-                let seq_table_meta = tables.get(&table_id)?.ok_or_else(|| {
-                    ErrorCode::IllegalMetaState(format!(" table of id {}, not found", table_id))
-                })?;
-
-                let version = seq_table_meta.seq;
-                let table_meta = seq_table_meta.data;
-
-                let table_info = TableInfo::new(
-                    db_name,
-                    &table_name,
-                    TableIdent::new(table_id, version),
-                    table_meta,
-                );
-
-                tbls.push(table_info);
-            }
-        }
-
-        Ok(tbls)
     }
 
     pub fn unexpired_opt<V: Debug>(seq_value: Option<SeqV<V>>) -> Option<SeqV<V>> {

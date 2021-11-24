@@ -328,8 +328,7 @@ impl RequestHandler<FlightReq<ListTableReq>> for ActionHandler {
         &self,
         req: FlightReq<ListTableReq>,
     ) -> common_exception::Result<Vec<Arc<TableInfo>>> {
-        let res = self.meta_node.get_tables(&req.req.db_name).await?;
-        Ok(res.iter().map(|t| Arc::new(t.clone())).collect::<Vec<_>>())
+        self.meta_node.list_tables(req.req).await
     }
 }
 #[async_trait::async_trait]
