@@ -119,20 +119,26 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
 
     struct T {
         name: &'static str,
+        engine: &'static str,
         prev: Option<u64>,
         result: Option<u64>,
     }
 
-    fn case(name: &'static str, prev: Option<u64>, result: Option<u64>) -> T {
-        T { name, prev, result }
+    fn case(name: &'static str, engine: &'static str, prev: Option<u64>, result: Option<u64>) -> T {
+        T {
+            name,
+            engine,
+            prev,
+            result,
+        }
     }
 
     let cases: Vec<T> = vec![
-        case("foo", None, Some(1)),
-        case("foo", Some(1), Some(1)),
-        case("bar", None, Some(3)),
-        case("bar", Some(3), Some(3)),
-        case("wow", None, Some(5)),
+        case("foo", "default", None, Some(1)),
+        case("foo", "default", Some(1), Some(1)),
+        case("bar", "default", None, Some(3)),
+        case("bar", "default", Some(3), Some(3)),
+        case("wow", "default", None, Some(5)),
     ];
 
     for (i, c) in cases.iter().enumerate() {
@@ -141,6 +147,7 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
         let resp = m
             .apply_cmd(&Cmd::CreateDatabase {
                 name: c.name.to_string(),
+                engine: c.engine.to_string(),
             })
             .await?;
 
@@ -164,7 +171,7 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
         };
 
         let got = m
-            .get_database(c.name)?
+            .get_database_id(c.name)?
             .ok_or_else(|| anyhow::anyhow!("db not found: {}", c.name))?;
         assert_eq!(*want, got.data);
     }
@@ -183,6 +190,7 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
     tracing::info!("--- prepare a table");
     m.apply_cmd(&Cmd::CreateDatabase {
         name: "db1".to_string(),
+        engine: "default".to_string(),
     })
     .await?;
 

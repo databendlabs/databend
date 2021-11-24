@@ -25,6 +25,12 @@ pub struct DatabaseNameIdent {
 pub struct DatabaseInfo {
     pub database_id: u64,
     pub db: String,
+    pub meta: DatabaseMeta,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct DatabaseMeta {
+    pub engine: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]

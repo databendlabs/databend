@@ -14,11 +14,13 @@
 //
 
 mod cluster;
+mod stage;
 mod user;
 
 pub use cluster::ClusterApi;
 pub use cluster::ClusterMgr;
+pub use stage::StageMgr;
+pub use stage::StageMgrApi;
 pub use user::user_api::UserInfo;
 pub use user::user_api::UserMgrApi;
-pub use user::user_mgr::format_user_key;
 pub use user::user_mgr::UserMgr;

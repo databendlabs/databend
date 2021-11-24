@@ -227,6 +227,7 @@ build_exceptions! {
     IllegalSnapshot(2405),
     UnknownTableId(2406),
     TableVersionMissMatch(2407),
+    UnknownDatabaseId(2408),
 
     // KVSrv server error
 
@@ -263,6 +264,11 @@ build_exceptions! {
     // cluster error.
     ClusterUnknownNode(4058),
     ClusterNodeAlreadyExists(4059),
+
+    // stage error.
+    UnknownStage(4060),
+    StageAlreadyExists(4061),
+    IllegalStageInfoFormat(4062),
 
     // storage-api error codes
     ReadFileError(5001),

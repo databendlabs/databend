@@ -30,7 +30,7 @@ use crate::sessions::DatabendQueryContextRef;
 use crate::sessions::MutableStatus;
 use crate::sessions::SessionManagerRef;
 use crate::sessions::Settings;
-use crate::users::UserManagerRef;
+use crate::users::UserApiProvider;
 
 #[derive(Clone, MallocSizeOf)]
 pub struct Session {
@@ -172,7 +172,7 @@ impl Session {
         self.sessions.get_catalog()
     }
 
-    pub fn get_user_manager(self: &Arc<Self>) -> UserManagerRef {
+    pub fn get_user_manager(self: &Arc<Self>) -> Arc<UserApiProvider> {
         self.sessions.get_user_manager()
     }
 

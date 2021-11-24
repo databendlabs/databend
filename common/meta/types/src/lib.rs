@@ -14,6 +14,26 @@
 
 //! This crate defines data types used in meta data storage service.
 
+mod change;
+mod cluster;
+mod cmd;
+mod database;
+mod errors;
+mod grant_object;
+mod kv_message;
+mod log_entry;
+mod match_seq;
+mod operation;
+mod raft_txid;
+mod raft_types;
+mod seq_num;
+mod seq_value;
+mod table;
+mod user_auth;
+mod user_privilege;
+mod user_quota;
+mod user_stage;
+
 pub use change::AddResult;
 pub use change::Change;
 pub use cluster::Node;
@@ -23,6 +43,7 @@ pub use cmd::Cmd;
 pub use database::CreateDatabaseReply;
 pub use database::CreateDatabaseReq;
 pub use database::DatabaseInfo;
+pub use database::DatabaseMeta;
 pub use database::DropDatabaseReply;
 pub use database::DropDatabaseReq;
 pub use database::GetDatabaseReq;
@@ -64,22 +85,4 @@ pub use user_auth::AuthType;
 pub use user_privilege::UserPrivilege;
 pub use user_privilege::UserPrivilegeType;
 pub use user_quota::UserQuota;
-
-mod change;
-mod cluster;
-mod cmd;
-mod database;
-mod errors;
-mod grant_object;
-mod kv_message;
-mod log_entry;
-mod match_seq;
-mod operation;
-mod raft_txid;
-mod raft_types;
-mod seq_num;
-mod seq_value;
-mod table;
-mod user_auth;
-mod user_privilege;
-mod user_quota;
+pub use user_stage::UserStageInfo;

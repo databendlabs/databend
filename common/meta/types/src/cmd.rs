@@ -37,7 +37,7 @@ pub enum Cmd {
     AddNode { node_id: NodeId, node: Node },
 
     /// Add a database if absent
-    CreateDatabase { name: String },
+    CreateDatabase { name: String, engine: String },
 
     /// Drop a database if absent
     DropDatabase { name: String },
@@ -88,8 +88,8 @@ impl fmt::Display for Cmd {
             Cmd::AddNode { node_id, node } => {
                 write!(f, "add_node:{}={}", node_id, node)
             }
-            Cmd::CreateDatabase { name } => {
-                write!(f, "create_db:{}", name)
+            Cmd::CreateDatabase { name, engine } => {
+                write!(f, "create_db:{} engine: {}", name, engine)
             }
             Cmd::DropDatabase { name } => {
                 write!(f, "drop_db:{}", name)

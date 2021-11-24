@@ -14,6 +14,7 @@
 
 use async_raft::raft::Entry;
 use common_meta_sled_store::SledKeySpace;
+use common_meta_types::DatabaseMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::LogIndex;
 use common_meta_types::Node;
@@ -95,6 +96,14 @@ pub struct Databases {}
 impl SledKeySpace for Databases {
     const PREFIX: u8 = 8;
     const NAME: &'static str = "databases";
+    type K = u64;
+    type V = SeqV<DatabaseMeta>;
+}
+
+pub struct DatabaseLookup {}
+impl SledKeySpace for DatabaseLookup {
+    const PREFIX: u8 = 12;
+    const NAME: &'static str = "database-lookup";
     type K = String;
     type V = SeqV<u64>;
 }
