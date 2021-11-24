@@ -47,6 +47,11 @@ impl ContextFunction {
             "version" => vec![Expression::create_literal(DataValue::String(Some(
                 ctx.get_fuse_version().into_bytes(),
             )))],
+            "current_user" => vec![Expression::create_literal(DataValue::String(Some(
+                ctx.get_current_user()
+                    .unwrap_or_else(|_| "".to_string())
+                    .into_bytes(),
+            )))],
             _ => vec![],
         })
     }

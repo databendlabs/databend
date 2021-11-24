@@ -27,6 +27,12 @@ fn test_context_function_build_arg_from_ctx() -> Result<()> {
         assert_eq!("default", format!("{:?}", args[0]));
     }
 
+    // Ok.
+    {
+        let args = ContextFunction::build_args_from_ctx("current_user", ctx.clone())?;
+        assert_eq!("", format!("{:?}", args[0]));
+    }
+
     // Error.
     {
         let result = ContextFunction::build_args_from_ctx("databasexx", ctx).is_err();
