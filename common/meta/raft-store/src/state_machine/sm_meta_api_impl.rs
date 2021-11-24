@@ -40,7 +40,6 @@ use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
-use crate::state_machine::AppliedState;
 use crate::state_machine::StateMachine;
 use crate::state_machine::TableLookupKey;
 
@@ -143,12 +142,9 @@ impl MetaApi for StateMachine {
         };
 
         let res = self.apply_cmd(&cr).await?;
-        let (prev, result) = match res {
-            AppliedState::TableIdent { prev, result } => (prev, result),
-            _ => {
-                panic!("not TableIdent result");
-            }
-        };
+        let mut ch: Change<TableMeta, u64> = res.try_into().unwrap();
+        let table_id = ch.ident.take().unwrap();
+        let (prev, result) = ch.unpack_data();
 
         assert!(result.is_some());
 
@@ -158,9 +154,7 @@ impl MetaApi for StateMachine {
                 table_name
             )))
         } else {
-            Ok(CreateTableReply {
-                table_id: result.unwrap().table_id,
-            })
+            Ok(CreateTableReply { table_id })
         }
     }
 

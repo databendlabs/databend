@@ -187,6 +187,7 @@ impl ClusterApi for ClusterMgr {
 
         match upsert_node.await? {
             UpsertKVActionReply {
+                ident: None,
                 prev: Some(_),
                 result: None,
             } => Ok(()),
@@ -215,6 +216,7 @@ impl ClusterApi for ClusterMgr {
 
         match upsert_meta.await? {
             UpsertKVActionReply {
+                ident: None,
                 prev: Some(_),
                 result: Some(SeqV { seq: s, .. }),
             } => Ok(s),
