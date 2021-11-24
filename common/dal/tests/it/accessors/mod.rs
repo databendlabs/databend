@@ -14,3 +14,4 @@
 
 mod aws_s3;
 mod azure_blob;
+mod local;
