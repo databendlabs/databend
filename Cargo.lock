@@ -550,7 +550,6 @@ dependencies = [
  "portpicker",
  "predicates 2.0.3",
  "pretty_assertions",
- "rayon",
  "reqwest",
  "run_script",
  "rustyline",
