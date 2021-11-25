@@ -12,15 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::task::Context;
 
-use common_base::tokio::macros::support::Pin;
-use common_base::tokio::macros::support::Poll;
-use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planners::PlanNode;
@@ -46,7 +39,7 @@ impl SelectInterpreter {
     }
 
     fn rewrite_plan(&self) -> Result<PlanNode> {
-        apply_plan_rewrite(self.ctx.clone(), &self.select.input)
+        apply_plan_rewrite(Optimizers::create(self.ctx.clone()), &self.select.input)
     }
 }
 

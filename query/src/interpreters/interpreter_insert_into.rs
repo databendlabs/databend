@@ -23,6 +23,7 @@ use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
+use common_planners::Expression;
 use common_planners::InsertIntoPlan;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
@@ -30,8 +31,6 @@ use common_planners::SinkPlan;
 use common_planners::StagePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_streams::SourceStream;
-use common_streams::ValueSource;
 use futures::TryStreamExt;
 
 use crate::catalogs::Table;
@@ -39,7 +38,6 @@ use crate::interpreters::plan_scheduler_ext;
 use crate::interpreters::utils::apply_plan_rewrite;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::interpreters::SelectInterpreter;
 use crate::optimizers::Optimizers;
 use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
@@ -79,25 +77,7 @@ impl Interpreter for InsertIntoInterpreter {
                 // if values are provided in SQL
                 // e.g. `insert into ... value(...), ...`
                 let values_exprs = self.plan.value_exprs_opt.clone().take().unwrap();
-                let dummy =
-                    DataSchemaRefExt::create(vec![DataField::new("dummy", DataType::UInt8, false)]);
-                let one_row_block =
-                    DataBlock::create_by_array(dummy.clone(), vec![Series::new(vec![1u8])]);
-
-                let blocks = values_exprs
-                    .iter()
-                    .map(|exprs| {
-                        let executor = ExpressionExecutor::try_create(
-                            "Insert into from values",
-                            dummy.clone(),
-                            self.plan.schema(),
-                            exprs.clone(),
-                            true,
-                        )?;
-                        executor.execute(&one_row_block)
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                // merge into one block in sync mode
+                let blocks = self.block_from_values_exprs(values_exprs)?;
                 let stream: SendableDataBlockStream =
                     Box::pin(futures::stream::iter(vec![DataBlock::concat_blocks(
                         &blocks,
@@ -158,11 +138,8 @@ impl InsertIntoInterpreter {
         let cast_needed = select_schema != output_schema;
 
         // optimize and rewrite the SelectPlan.input
-        let optimized_plan = apply_plan_rewrite(
-            self.ctx.clone(),
-            Optimizers::create(self.ctx.clone()),
-            &select_plan.input,
-        )?;
+        let optimized_plan =
+            apply_plan_rewrite(Optimizers::create(self.ctx.clone()), &select_plan.input)?;
 
         // rewrite the optimized the plan
         let rewritten_plan = match optimized_plan {
@@ -192,5 +169,27 @@ impl InsertIntoInterpreter {
             }),
         };
         Ok(rewritten_plan)
+    }
+
+    fn block_from_values_exprs(
+        &self,
+        values_exprs: Vec<Vec<Expression>>,
+    ) -> Result<Vec<DataBlock>> {
+        let dummy = DataSchemaRefExt::create(vec![DataField::new("dummy", DataType::UInt8, false)]);
+        let one_row_block = DataBlock::create_by_array(dummy.clone(), vec![Series::new(vec![1u8])]);
+
+        values_exprs
+            .iter()
+            .map(|exprs| {
+                let executor = ExpressionExecutor::try_create(
+                    "Insert into from values",
+                    dummy.clone(),
+                    self.plan.schema(),
+                    exprs.clone(),
+                    true,
+                )?;
+                executor.execute(&one_row_block)
+            })
+            .collect::<Result<Vec<_>>>()
     }
 }

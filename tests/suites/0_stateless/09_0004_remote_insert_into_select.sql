@@ -16,12 +16,12 @@ select sum(a) from n1;
 
 CREATE TABLE n2(a UInt64, b UInt64);
 insert into n2 select number, number + 1 from numbers(10000);
-select count(*) from n2;
+select count(a) from n2;
 select sum(a), sum(b) from n2;
 
 -- "self reference"
 insert into n2 select * from n2;
-select count(*) from n2;
+select count(a) from n2;
 select sum(a), sum(b) from n2;
 
 -- aggregation
