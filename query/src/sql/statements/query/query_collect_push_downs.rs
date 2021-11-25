@@ -27,7 +27,7 @@ pub struct QueryCollectPushDowns {
     require_columns: HashSet<String>,
 }
 
-///
+/// Collect the query need to push downs parts .
 impl QueryASTIRVisitor<QueryCollectPushDowns> for QueryCollectPushDowns {
     fn visit_expr(expr: &mut Expression, data: &mut QueryCollectPushDowns) -> Result<()> {
         if let Expression::Column(name) = expr {

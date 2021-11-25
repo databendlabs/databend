@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Debug;
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
+use std::fmt::Debug;
+use std::fmt::Formatter;
+
 use common_exception::Result;
 use common_planners::Expression;
 
