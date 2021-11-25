@@ -2815,9 +2815,9 @@ dependencies = [
 
 [[package]]
 name = "futures-sink"
-version = "0.3.17"
+version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36ea153c13024fe480590b3e3d4cad89a0cfacecc24577b68f86c6ced9c2bc11"
+checksum = "996c6442437b62d21a32cd9906f9c41e7dc1e19a9579843fad948696769305af"
 
 [[package]]
 name = "futures-task"
@@ -4858,9 +4858,9 @@ dependencies = [
 
 [[package]]
 name = "poem"
-version = "1.0.29"
+version = "1.0.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "799316536f7b7dc4c6aba0048c08b93d2359afa1ee3fdc7e9e80f23380d88904"
+checksum = "647cd21681126a66c634486d973f452379681cc6a690874aa50f855cac9a3385"
 dependencies = [
  "async-trait",
  "base64 0.13.0",
