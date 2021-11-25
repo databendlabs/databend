@@ -23,7 +23,7 @@ use common_exception::Result;
 
 use crate::servers::http::v1::query::execute_state::ExecuteState;
 use crate::servers::http::v1::query::execute_state::ExecuteStateName;
-use crate::servers::http::v1::query::execute_state::ExecuteStateRef;
+use crate::servers::http::v1::query::execute_state::ExecutorRef;
 use crate::servers::http::v1::query::execute_state::HttpQueryRequest;
 use crate::servers::http::v1::query::result_data_manager::ResponseData;
 use crate::servers::http::v1::query::result_data_manager::ResultDataManager;
@@ -35,6 +35,7 @@ pub struct ResponseInitialState {
 }
 
 pub struct ResponseState {
+    pub wall_time_ms: u128,
     pub progress: Option<ProgressValues>,
     pub state: ExecuteStateName,
     pub error: Option<ErrorCode>,
@@ -50,7 +51,7 @@ pub struct HttpQuery {
     pub(crate) id: String,
     #[allow(dead_code)]
     request: HttpQueryRequest,
-    state: ExecuteStateRef,
+    state: ExecutorRef,
     data: Arc<TokioMutex<ResultDataManager>>,
 }
 
@@ -112,7 +113,9 @@ impl HttpQuery {
     pub async fn get_state(&self) -> ResponseState {
         let state = self.state.read().await;
         let (exe_state, err) = state.state.extract();
+        let wall_time_ms = state.elapsed().as_millis();
         ResponseState {
+            wall_time_ms,
             progress: state.get_progress(),
             state: exe_state,
             error: err,
