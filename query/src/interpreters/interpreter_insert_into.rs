@@ -30,6 +30,7 @@ use common_streams::ValueSource;
 use futures::TryStreamExt;
 
 use crate::catalogs::Table;
+use crate::interpreters::plan_scheduler_ext;
 use crate::interpreters::utils::apply_plan_rewrite;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;

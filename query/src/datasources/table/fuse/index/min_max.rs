@@ -17,7 +17,10 @@ use std::sync::Arc;
 
 use common_dal::DataAccessor;
 use common_datavalues::DataSchemaRef;
+use common_exception::Result;
 use common_planners::Extras;
+use futures::StreamExt;
+use futures::TryStreamExt;
 
 use crate::datasources::index::RangeFilter;
 use crate::datasources::table::fuse::util;
@@ -31,6 +34,7 @@ pub struct MinMaxIndex {
     da: Arc<dyn DataAccessor>,
 }
 
+type Pred = Box<dyn Fn(&BlockStats) -> Result<bool> + Send + Sync + Unpin>;
 impl MinMaxIndex {
     pub fn new(table_snapshot: &TableSnapshot, da: Arc<dyn DataAccessor>) -> Self {
         Self {
@@ -46,41 +50,62 @@ impl MinMaxIndex {
         &self,
         schema: DataSchemaRef,
         push_down: Option<Extras>,
-    ) -> common_exception::Result<Vec<BlockMeta>> {
-        type Pred =
-            Box<dyn Fn(&BlockStats) -> common_exception::Result<bool> + Send + Sync + Unpin>;
-        let pred_true: fn() -> Pred = || Box::new(|_: &BlockStats| Ok(true));
-
-        let block_pred: Pred = if let Some(exprs) = push_down {
-            if exprs.filters.is_empty() {
-                pred_true()
-            } else {
+    ) -> Result<Vec<BlockMeta>> {
+        let block_pred: Pred = match push_down {
+            Some(exprs) if !exprs.filters.is_empty() => {
                 // for the time being, we only handle the first expr
                 let verifiable_expression = RangeFilter::try_create(&exprs.filters[0], schema)?;
                 Box::new(move |v: &BlockStats| verifiable_expression.eval(v))
             }
-        } else {
-            pred_true()
+            _ => Self::pred_true(),
         };
 
         let snapshot =
             common_dal::read_obj::<TableSnapshot>(self.da.clone(), self.table_snapshot_loc.clone())
                 .await?;
+        let segment_num = snapshot.segments.len();
         let segment_locs = snapshot.segments;
 
-        let mut res = vec![];
-        for seg_loc in segment_locs {
-            let segment_info =
-                common_dal::read_obj::<SegmentInfo>(self.da.clone(), seg_loc).await?;
-            if block_pred(&segment_info.summary.col_stats)? {
-                for block_meta in segment_info.blocks {
-                    if block_pred(&block_meta.col_stats)? {
-                        res.push(block_meta)
+        if segment_locs.is_empty() {
+            return Ok(vec![]);
+        };
+
+        let res = futures::stream::iter(segment_locs)
+            .map(|seg_loc| async {
+                let segment_info =
+                    common_dal::read_obj::<SegmentInfo>(self.da.clone(), seg_loc).await?;
+                Self::filter_segment(segment_info, &block_pred)
+            })
+            // configuration of the max size of buffered futures
+            .buffered(std::cmp::min(10, segment_num))
+            .try_collect::<Vec<_>>()
+            .await?
+            .into_iter()
+            .flatten();
+
+        Ok(res.collect())
+    }
+
+    #[inline]
+    fn pred_true() -> Pred {
+        Box::new(|_: &BlockStats| Ok(true))
+    }
+
+    #[inline]
+    fn filter_segment(segment_info: SegmentInfo, pred: &Pred) -> Result<Vec<BlockMeta>> {
+        if pred(&segment_info.summary.col_stats)? {
+            segment_info
+                .blocks
+                .into_iter()
+                .try_fold(Vec::new(), |mut acc, block_meta| {
+                    if pred(&block_meta.col_stats)? {
+                        acc.push(block_meta)
                     }
-                }
-            }
+                    Ok(acc)
+                })
+        } else {
+            Ok(vec![])
         }
-        Ok(res)
     }
 }
 
