@@ -15,3 +15,4 @@
 pub mod aws_s3;
 pub mod azure_blob;
 pub mod local;
+mod memory;

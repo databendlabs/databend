@@ -12,19 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_to_json;
+use poem::handler;
+use poem::listener::TcpListener;
+use poem::post;
+use poem::web::Multipart;
+use poem::Route;
+use poem::Server;
 
-#[cfg(test)]
-mod block_to_json_test;
-pub mod http_query_handlers;
-#[cfg(test)]
-mod http_query_handlers_test;
-pub(crate) mod query;
-pub mod statement;
-#[cfg(test)]
-mod statement_test;
-mod streaming_load;
+#[handler]
+pub async fn load_data(mut multipart: Multipart) {
+    while let Ok(Some(field)) = multipart.next_field().await {
+        let name = field.name().map(ToString::to_string);
+        let file_name = field.file_name().map(ToString::to_string);
 
-pub(super) use http_query_handlers::query_route;
-pub(super) use statement::statement_router;
-pub(super) use streaming_load::load_data;
+        match field.bytes().await {
+            Ok(bs) => {}
+            Err(_) => todo!(),
+        }
+    }
+}
