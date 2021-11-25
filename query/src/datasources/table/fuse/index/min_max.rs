@@ -89,15 +89,16 @@ impl MinMaxIndex {
     #[inline]
     fn filter_segment(segment_info: SegmentInfo, pred: &Pred) -> Result<Vec<BlockMeta>> {
         if pred(&segment_info.summary.col_stats)? {
-            segment_info
-                .blocks
-                .into_iter()
-                .try_fold(Vec::new(), |mut acc, block_meta| {
+            let block_num = segment_info.blocks.len();
+            segment_info.blocks.into_iter().try_fold(
+                Vec::with_capacity(block_num),
+                |mut acc, block_meta| {
                     if pred(&block_meta.col_stats)? {
                         acc.push(block_meta)
                     }
                     Ok(acc)
-                })
+                },
+            )
         } else {
             Ok(vec![])
         }

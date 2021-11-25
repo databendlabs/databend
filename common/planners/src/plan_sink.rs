@@ -19,8 +19,16 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_meta_types::TableInfo;
+use lazy_static::lazy_static;
 
 use crate::PlanNode;
+
+lazy_static! {
+    pub static ref SINK_SCHEMA: DataSchemaRef = DataSchemaRefExt::create(vec![
+        DataField::new("seg_loc", DataType::String, false),
+        DataField::new("seg_info", DataType::String, false),
+    ]);
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct SinkPlan {
@@ -32,10 +40,6 @@ pub struct SinkPlan {
 impl SinkPlan {
     /// Return sink schema
     pub fn schema(&self) -> DataSchemaRef {
-        // TODO pass this guy in
-        DataSchemaRefExt::create(vec![
-            DataField::new("seg_loc", DataType::String, false),
-            DataField::new("seg_info", DataType::String, false),
-        ])
+        SINK_SCHEMA.clone()
     }
 }

@@ -63,7 +63,7 @@ pub async fn schedule_query(
     match in_local_pipeline.execute().await {
         Ok(stream) => Ok(ScheduledStream::create(scheduled, stream, ctx.clone())),
         Err(error) => {
-            error_handler(scheduled, ctx, timeout).await;
+            handle_error(scheduled, ctx, timeout).await;
             Err(error)
         }
     }
@@ -93,7 +93,7 @@ impl ScheduledStream {
     fn cancel_scheduled_action(&self) -> Result<()> {
         let scheduled = self.scheduled.clone();
         let timeout = self.context.get_settings().get_flight_client_timeout()?;
-        let handler = error_handler(scheduled, &self.context, timeout);
+        let handler = handle_error(scheduled, &self.context, timeout);
         futures::executor::block_on(handler);
         Ok(())
     }
@@ -123,7 +123,7 @@ impl Stream for ScheduledStream {
     }
 }
 
-async fn error_handler(scheduled: Scheduled, context: &Arc<QueryContext>, timeout: u64) {
+async fn handle_error(scheduled: Scheduled, context: &Arc<QueryContext>, timeout: u64) {
     let query_id = context.get_id();
     let config = context.get_config();
     let cluster = context.get_cluster();

@@ -129,6 +129,7 @@ pub use plan_setting::SettingPlan;
 pub use plan_setting::VarValue;
 pub use plan_show_table_create::ShowCreateTablePlan;
 pub use plan_sink::SinkPlan;
+pub use plan_sink::SINK_SCHEMA;
 pub use plan_sort::SortPlan;
 pub use plan_stage::StageKind;
 pub use plan_stage::StagePlan;

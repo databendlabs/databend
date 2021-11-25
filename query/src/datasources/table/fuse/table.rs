@@ -86,10 +86,9 @@ impl Table for FuseTable {
         stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
         let log = self.append_trunks(ctx, stream).await?;
-        let blocks = if let Some(op_log) = log {
-            vec![DataBlock::try_from(op_log)?]
-        } else {
-            vec![]
+        let blocks = match log {
+            Some(op_log) => vec![DataBlock::try_from(op_log)?],
+            _ => vec![],
         };
         Ok(Box::pin(DataBlockStream::create(
             AppendOperation::schema(),

@@ -18,18 +18,16 @@ use std::convert::TryFrom;
 use common_datablocks::DataBlock;
 use common_datavalues::series::Series;
 use common_datavalues::series::SeriesFrom;
-use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 
 use crate::datasources::table::fuse::SegmentInfo;
 
-// currently, only support append
+// currently, only support append,
 pub type TableOperationLog = Vec<AppendOperation>;
 
+// to be wrapped in enum
 pub struct AppendOperation {
     pub segment_location: String,
     pub segment_info: SegmentInfo,
@@ -37,11 +35,7 @@ pub struct AppendOperation {
 
 impl AppendOperation {
     pub fn schema() -> DataSchemaRef {
-        // CALL_ONCE / lazy_init?
-        DataSchemaRefExt::create(vec![
-            DataField::new("seg_loc", DataType::String, false),
-            DataField::new("seg_info", DataType::String, false),
-        ])
+        common_planners::SINK_SCHEMA.clone()
     }
 
     pub fn new(segment_location: String, segment_info: SegmentInfo) -> Self {
@@ -64,32 +58,36 @@ impl TryFrom<AppendOperation> for DataBlock {
 
 impl TryFrom<&DataBlock> for AppendOperation {
     type Error = common_exception::ErrorCode;
-    fn try_from(value: &DataBlock) -> std::result::Result<Self, Self::Error> {
+    fn try_from(block: &DataBlock) -> std::result::Result<Self, Self::Error> {
         // check schema
-        if value.schema() != &AppendOperation::schema() {
+        if block.schema() != &AppendOperation::schema() {
             return Err(ErrorCode::LogicalError(format!(
                 "invalid data block of AppendOperation log, {:?}",
-                value.schema()
+                block.schema()
             )));
         }
 
-        let string_value_of = |idx, val: &DataBlock| {
-            let col = &val.column(idx).to_values()?[0];
-            if let DataValue::String(Some(v)) = col {
-                Ok(String::from_utf8(v.clone())?)
-            } else {
-                Err(ErrorCode::LogicalError(
-                    "can not extract string values from Append Operation log",
-                ))
-            }
-        };
-
-        let segment_location = string_value_of(0, value)?;
-        let seg_info = string_value_of(1, value)?;
+        let segment_location = Self::parse_col(0, block)?;
+        let seg_info = Self::parse_col(1, block)?;
         let segment_info: SegmentInfo = serde_json::from_str(seg_info.as_str())?;
         Ok(AppendOperation {
             segment_location,
             segment_info,
         })
+    }
+}
+
+impl AppendOperation {
+    fn parse_col(idx: usize, val: &DataBlock) -> common_exception::Result<String> {
+        let col = &val.column(idx).to_values()?[0];
+        if let DataValue::String(Some(v)) = col {
+            Ok(String::from_utf8(v.clone())?)
+        } else {
+            Err(ErrorCode::LogicalError(format!(
+                "can not extract string value from data block as \
+                 a column of Append Operation log (col: {})",
+                idx
+            )))
+        }
     }
 }
