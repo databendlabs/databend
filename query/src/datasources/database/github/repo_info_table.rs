@@ -21,7 +21,6 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::CreateTableReq;
-use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_planners::ReadDataSourcePlan;
@@ -65,7 +64,7 @@ impl RepoInfoTable {
             table_meta: TableMeta {
                 schema: RepoInfoTable::schema(),
                 engine: REPO_INFO_ENGINE.into(),
-                options: options,
+                options,
             },
         };
         ctx.meta.create_table(req).await?;
@@ -149,7 +148,7 @@ impl Table for RepoInfoTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
+        _ctx: DatabendQueryContextRef,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let arrays = self.get_data_from_github().await?;

@@ -113,7 +113,7 @@ impl MutableCatalog {
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
         // TODO(bohu): Add the database engine match, now we set only one fuse database here, like:
         let mut engine = db_info.meta.engine.as_str();
-        if engine == "" {
+        if engine.is_empty() {
             engine = "DEFAULT";
         }
         let factory = self
@@ -152,7 +152,7 @@ impl Catalog for MutableCatalog {
 
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         let mut engine = req.engine.clone();
-        if engine == "" {
+        if engine.is_empty() {
             engine = "DEFAULT".to_string();
         }
         let res = self.ctx.meta.create_database(req.clone()).await?;

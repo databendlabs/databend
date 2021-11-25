@@ -18,17 +18,21 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::CreateTableReq;
-use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use octocrab::models;
+use octocrab::params;
 
 use crate::catalogs::Table;
 use crate::datasources::context::DataSourceContext;
+use crate::datasources::database::github::database::OWNER;
+use crate::datasources::database::github::database::REPO;
 use crate::datasources::database::github::database::REPO_ISSUES_ENGINE;
 use crate::sessions::DatabendQueryContextRef;
 
@@ -51,8 +55,8 @@ impl RepoIssuesTable {
 
     pub async fn create(ctx: DataSourceContext, owner: String, repo: String) -> Result<()> {
         let mut options = HashMap::new();
-        options.insert("owner".to_string(), owner.clone());
-        options.insert("repo".to_string(), repo.clone());
+        options.insert(OWNER.to_string(), owner.clone());
+        options.insert(REPO.to_string(), repo.clone());
 
         let req = CreateTableReq {
             if_not_exists: false,
@@ -61,7 +65,7 @@ impl RepoIssuesTable {
             table_meta: TableMeta {
                 schema: RepoIssuesTable::schema(),
                 engine: REPO_ISSUES_ENGINE.into(),
-                options: options,
+                options,
             },
         };
         ctx.meta.create_table(req).await?;
@@ -70,8 +74,9 @@ impl RepoIssuesTable {
 
     fn schema() -> Arc<DataSchema> {
         let fields = vec![
-            DataField::new(NUMBER, DataType::UInt32, false),
+            DataField::new(NUMBER, DataType::UInt64, false),
             DataField::new(TITLE, DataType::String, true),
+            // DataField::new(BODY, DataType::String, true),
             DataField::new(STATE, DataType::String, true),
             DataField::new(USER, DataType::String, true),
             DataField::new(LABELS, DataType::String, true),
@@ -80,6 +85,82 @@ impl RepoIssuesTable {
         ];
 
         Arc::new(DataSchema::new(fields))
+    }
+
+    async fn get_data_from_github(&self) -> Result<Vec<Series>> {
+        // init array
+        let mut issue_numer_array: Vec<u64> = Vec::new();
+        let mut title_array: Vec<Vec<u8>> = Vec::new();
+        // let mut body_array: Vec<Vec<u8>> = Vec::new();
+        let mut state_array: Vec<Vec<u8>> = Vec::new();
+        let mut user_array: Vec<Vec<u8>> = Vec::new();
+        let mut labels_array: Vec<Vec<u8>> = Vec::new();
+        let mut assigness_array: Vec<Vec<u8>> = Vec::new();
+        let mut comments_number_array: Vec<u32> = Vec::new();
+
+        // get owner repo info from table meta
+        let owner = self
+            .table_info
+            .meta
+            .options
+            .get(OWNER)
+            .ok_or_else(|| ErrorCode::UnexpectedError("Github table need owner in its mata"))?;
+        let repo = self
+            .table_info
+            .meta
+            .options
+            .get(REPO)
+            .ok_or_else(|| ErrorCode::UnexpectedError("Github table need repo in its mata"))?;
+
+        // get issues from github
+        let octocrab = octocrab::instance();
+        // Returns the first page of all issues.
+        let page = octocrab
+            .issues(owner, repo)
+            .list()
+            // Optional Parameters
+            .state(params::State::All)
+            .per_page(50)
+            .send()
+            .await?;
+
+        // Go through every page of issues. Warning: There's no rate limiting so
+        // be careful.
+        while let Some(page) = octocrab
+            .get_page::<models::issues::Issue>(&page.next)
+            .await?
+        {
+            for issue in page {
+                issue_numer_array.push(issue.id.into_inner());
+                title_array.push(issue.title.clone().into());
+                state_array.push(issue.state.clone().into());
+                user_array.push(issue.user.login.clone().into());
+                labels_array.push(issue.labels.iter().fold(Vec::new(), |mut content, label| {
+                    content.extend_from_slice(label.name.clone().as_bytes());
+                    content.push(b',');
+                    content
+                }));
+                assigness_array.push(issue.assignees.iter().fold(
+                    Vec::new(),
+                    |mut content, user| {
+                        content.extend_from_slice(user.login.clone().as_bytes());
+                        content.push(b',');
+                        content
+                    },
+                ));
+                comments_number_array.push(issue.comments);
+            }
+        }
+
+        Ok(vec![
+            Series::new(issue_numer_array),
+            Series::new(title_array),
+            Series::new(state_array),
+            Series::new(user_array),
+            Series::new(labels_array),
+            Series::new(assigness_array),
+            Series::new(comments_number_array),
+        ])
     }
 }
 
@@ -95,9 +176,16 @@ impl Table for RepoIssuesTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
+        _ctx: DatabendQueryContextRef,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        unimplemented!()
+        let arrays = self.get_data_from_github().await?;
+        let block = DataBlock::create_by_array(self.table_info.schema(), arrays);
+
+        Ok(Box::pin(DataBlockStream::create(
+            self.table_info.schema(),
+            None,
+            vec![block],
+        )))
     }
 }

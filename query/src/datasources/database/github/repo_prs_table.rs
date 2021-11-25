@@ -16,15 +16,12 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::CreateTableReq;
-use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_planners::ReadDataSourcePlan;
-use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
@@ -61,7 +58,7 @@ impl RepoPrsTable {
             table_meta: TableMeta {
                 schema: RepoPrsTable::schema(),
                 engine: REPO_PRS_ENGINE.into(),
-                options: options,
+                options,
             },
         };
         ctx.meta.create_table(req).await?;
@@ -95,7 +92,7 @@ impl Table for RepoPrsTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
+        _ctx: DatabendQueryContextRef,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         unimplemented!()

@@ -13,22 +13,16 @@
 //  limitations under the License.
 //
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_api::MetaApi;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListTableReq;
 use common_meta_types::TableInfo;
-use common_meta_types::TableMeta;
 use common_tracing::tracing;
 use octocrab::params;
 
@@ -91,6 +85,10 @@ impl Database for GithubDatabase {
     }
 
     async fn init(&self) -> Result<()> {
+        // TODO(veeupup)
+        // maybe we will need a user token needed from config to login
+        // because github api has rate limit for each user, check it at
+        // https://docs.github.com/en/rest/overview/resources-in-the-rest-api#rate-limiting
         // 1. get all repos in this organization
         let repos = octocrab::instance()
             .orgs(&self.db_name)
@@ -149,13 +147,13 @@ impl Database for GithubDatabase {
         })
     }
 
-    async fn create_table(&self, req: CreateTableReq) -> Result<()> {
+    async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
         Err(ErrorCode::UnImplement(
             "Cannot create GITHUB database table",
         ))
     }
 
-    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
+    async fn drop_table(&self, _req: DropTableReq) -> Result<DropTableReply> {
         Err(ErrorCode::UnImplement("Cannot drop GITHUB database table"))
     }
 }
