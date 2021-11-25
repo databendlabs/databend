@@ -57,7 +57,7 @@ impl MinMaxIndex {
                 let verifiable_expression = RangeFilter::try_create(&exprs.filters[0], schema)?;
                 Box::new(move |v: &BlockStats| verifiable_expression.eval(v))
             }
-            _ => Self::pred_true(),
+            _ => Box::new(|_: &BlockStats| Ok(true)),
         };
 
         let snapshot =
@@ -84,11 +84,6 @@ impl MinMaxIndex {
             .flatten();
 
         Ok(res.collect())
-    }
-
-    #[inline]
-    fn pred_true() -> Pred {
-        Box::new(|_: &BlockStats| Ok(true))
     }
 
     #[inline]
