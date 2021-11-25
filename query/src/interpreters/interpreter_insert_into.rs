@@ -12,9 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Cursor;
 use std::sync::Arc;
 
+use common_datablocks::DataBlock;
+use common_datavalues::series::Series;
+use common_datavalues::series::SeriesFrom;
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
@@ -23,12 +28,11 @@ use common_planners::PlanNode;
 use common_streams::CastStream;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_streams::SourceStream;
-use common_streams::ValueSource;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
+use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 
 pub struct InsertIntoInterpreter {
@@ -73,13 +77,33 @@ impl Interpreter for InsertIntoInterpreter {
         let table = &self.plan.tbl_name;
         let write_table = self.ctx.get_table(database, table).await?;
 
-        let input_stream = if self.plan.values_opt.is_some() {
-            let values = self.plan.values_opt.clone().take().unwrap();
-            let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
-            let values_source =
-                ValueSource::new(Cursor::new(values), self.plan.schema(), block_size);
-            let stream_source = SourceStream::new(Box::new(values_source));
-            stream_source.execute().await
+        let input_stream = if self.plan.value_exprs_opt.is_some() {
+            let values_exprs = self.plan.value_exprs_opt.clone().take().unwrap();
+            let dummy =
+                DataSchemaRefExt::create(vec![DataField::new("dummy", DataType::UInt8, false)]);
+            let one_row_block =
+                DataBlock::create_by_array(dummy.clone(), vec![Series::new(vec![1u8])]);
+
+            let blocks = values_exprs
+                .iter()
+                .map(|exprs| {
+                    let executor = ExpressionExecutor::try_create(
+                        "Insert into from values",
+                        dummy.clone(),
+                        self.plan.schema(),
+                        exprs.clone(),
+                        true,
+                    )?;
+                    executor.execute(&one_row_block)
+                })
+                .collect::<Result<Vec<_>>>()?;
+            // merge into one block in sync mode
+            let stream: SendableDataBlockStream =
+                Box::pin(futures::stream::iter(vec![DataBlock::concat_blocks(
+                    &blocks,
+                )]));
+
+            Ok(stream)
         } else if let Some(select_executor) = &self.select {
             let output_schema = self.plan.schema();
             let select_schema = select_executor.schema();

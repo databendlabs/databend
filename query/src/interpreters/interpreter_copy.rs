@@ -88,7 +88,7 @@ impl Interpreter for CopyInterpreter {
             tbl_name: self.plan.tbl_name.clone(),
             tbl_id: self.plan.tbl_id,
             schema: self.plan.schema.clone(),
-            values_opt: None,
+            value_exprs_opt: None,
             select_plan: None,
         };
 
