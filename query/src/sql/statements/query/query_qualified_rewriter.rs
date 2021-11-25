@@ -21,147 +21,59 @@ use common_planners::Expression;
 use crate::sessions::QueryContext;
 use crate::sql::statements::query::query_schema_joined::JoinedTableDesc;
 use crate::sql::statements::query::JoinedSchema;
-use crate::sql::statements::QueryASTIR;
+use crate::sql::statements::query::query_ast_ir::QueryASTIRVisitor;
+use crate::sql::statements::query::QueryASTIR;
 
 pub struct QualifiedRewriter {
     tables_schema: JoinedSchema,
     ctx: Arc<QueryContext>,
 }
 
-impl QualifiedRewriter {
-    pub fn create(tables_schema: JoinedSchema, ctx: Arc<QueryContext>) -> QualifiedRewriter {
-        QualifiedRewriter { tables_schema, ctx }
+impl QueryASTIRVisitor<QualifiedRewriter> for QualifiedRewriter {
+    fn visit_expr(expr: &mut Expression, data: &mut QualifiedRewriter) -> Result<()> {
+        match expr {
+            Expression::Column(v) => {
+                *expr = Self::rewrite_column(data, v)?;
+                Ok(())
+            }
+            Expression::QualifiedColumn(names) => {
+                *expr = Self::rewrite_qualified_column(data, names)?;
+                Ok(())
+            }
+            _ => Ok(())
+        }
     }
 
-    pub async fn rewrite(&self, mut ir: QueryASTIR) -> Result<QueryASTIR> {
-        self.rewrite_group(&mut ir)?;
-        self.rewrite_order(&mut ir)?;
-        self.rewrite_aggregate(&mut ir)?;
-        self.rewrite_projection(&mut ir)?;
-
-        if let Some(predicate) = &ir.filter_predicate {
-            match self.rewrite_expr(predicate) {
-                Ok(predicate) => {
-                    ir.filter_predicate = Some(predicate);
-                }
-                Err(cause) => {
-                    return Err(cause.add_message_back(format!(
-                        " (while in analyze filter predicate {:?})",
-                        predicate
-                    )));
-                }
-            }
-        }
-
-        if let Some(predicate) = &ir.having_predicate {
-            match self.rewrite_expr(predicate) {
-                Ok(predicate) => {
-                    ir.having_predicate = Some(predicate);
-                }
-                Err(cause) => {
-                    return Err(cause.add_message_back(format!(
-                        " (while in analyze having predicate {:?})",
-                        predicate
-                    )));
-                }
-            }
-        }
-
-        Ok(ir)
-    }
-
-    fn rewrite_group(&self, mut ir: &mut QueryASTIR) -> Result<()> {
-        let mut group_expressions = Vec::with_capacity(ir.group_by_expressions.len());
-
-        for group_by_expression in &ir.group_by_expressions {
-            match self.rewrite_expr(group_by_expression) {
-                Ok(expr) => {
-                    group_expressions.push(expr);
-                }
-                Err(cause) => {
-                    return Err(cause.add_message_back(format!(
-                        " (while in analyze group expr: {:?})",
-                        group_by_expression
-                    )));
-                }
-            }
-        }
-
-        ir.group_by_expressions = group_expressions;
-        Ok(())
-    }
-
-    fn rewrite_aggregate(&self, mut ir: &mut QueryASTIR) -> Result<()> {
-        let mut aggregate_expressions = Vec::with_capacity(ir.aggregate_expressions.len());
-
-        for aggregate_expression in &ir.aggregate_expressions {
-            match self.rewrite_expr(aggregate_expression) {
-                Ok(expr) => {
-                    aggregate_expressions.push(expr);
-                }
-                Err(cause) => {
-                    return Err(cause.add_message_back(format!(
-                        " (while in analyze aggregate expr: {:?})",
-                        aggregate_expression
-                    )));
-                }
-            }
-        }
-
-        ir.aggregate_expressions = aggregate_expressions;
-        Ok(())
-    }
-
-    fn rewrite_order(&self, mut ir: &mut QueryASTIR) -> Result<()> {
-        let mut order_expressions = Vec::with_capacity(ir.order_by_expressions.len());
-
-        for order_by_expression in &ir.order_by_expressions {
-            match self.rewrite_expr(order_by_expression) {
-                Ok(expr) => {
-                    order_expressions.push(expr);
-                }
-                Err(cause) => {
-                    return Err(cause.add_message_back(format!(
-                        " (while in analyze order expr: {:?})",
-                        order_by_expression
-                    )));
-                }
-            }
-        }
-
-        ir.order_by_expressions = order_expressions;
-        Ok(())
-    }
-
-    fn rewrite_projection(&self, mut ir: &mut QueryASTIR) -> Result<()> {
-        let mut projection_expressions = Vec::with_capacity(ir.projection_expressions.len());
+    fn visit_projection(exprs: &mut Vec<Expression>, data: &mut QualifiedRewriter) -> Result<()> {
+        let mut new_exprs = Vec::with_capacity(exprs.len());
 
         // TODO: alias.*
-        for projection_expression in &ir.projection_expressions {
-            if let Expression::Alias(_, x) = projection_expression {
+        for index in 0..exprs.len() {
+            let projection_expr = &mut exprs[index];
+            if let Expression::Alias(_, x) = projection_expr {
                 if let Expression::Wildcard = x.as_ref() {
                     return Err(ErrorCode::SyntaxException("* AS alias is wrong syntax"));
                 }
             }
 
-            match projection_expression {
-                Expression::Wildcard => self.expand_wildcard(&mut projection_expressions),
-                _ => match self.rewrite_expr(projection_expression) {
-                    Ok(expr) => {
-                        projection_expressions.push(expr);
-                    }
-                    Err(cause) => {
-                        return Err(cause.add_message_back(format!(
-                            " (while in analyze projection expr: {:?})",
-                            projection_expression
-                        )));
-                    }
-                },
+            match projection_expr {
+                Expression::Wildcard => Self::expand_wildcard(data, &mut new_exprs),
+                _ => {
+                    Self::visit_recursive_expr(projection_expr, data)?;
+                    new_exprs.push(projection_expr.clone());
+                }
             }
         }
 
-        ir.projection_expressions = projection_expressions;
+        *exprs = new_exprs;
         Ok(())
+    }
+}
+
+impl QualifiedRewriter {
+    pub fn rewrite(schema: &JoinedSchema, ctx: Arc<QueryContext>, ir: &mut QueryASTIR) -> Result<()> {
+        let mut rewriter = QualifiedRewriter { tables_schema: schema.clone(), ctx };
+        QualifiedRewriter::visit(ir, &mut rewriter)
     }
 
     fn expand_wildcard(&self, columns_expression: &mut Vec<Expression>) {
@@ -179,76 +91,10 @@ impl QualifiedRewriter {
         }
     }
 
-    fn rewrite_expr(&self, expr: &Expression) -> Result<Expression> {
-        match expr {
-            Expression::Column(v) => match self.tables_schema.contains_column(v) {
-                true => Ok(Expression::Column(v.clone())),
-                false => Err(ErrorCode::UnknownColumn(format!("Unknown column {}", v))),
-            },
-            Expression::QualifiedColumn(names) => self.rewrite_qualified_column(names),
-            Expression::Alias(alias, expr) => Ok(Expression::Alias(
-                alias.clone(),
-                Box::new(self.rewrite_expr(expr)?),
-            )),
-            Expression::UnaryExpression { op, expr } => Ok(Expression::UnaryExpression {
-                op: op.clone(),
-                expr: Box::new(self.rewrite_expr(expr)?),
-            }),
-            Expression::BinaryExpression { left, op, right } => Ok(Expression::BinaryExpression {
-                op: op.clone(),
-                left: Box::new(self.rewrite_expr(left)?),
-                right: Box::new(self.rewrite_expr(right)?),
-            }),
-            Expression::ScalarFunction { op, args } => {
-                let mut new_args = Vec::with_capacity(args.len());
-
-                for arg in args {
-                    new_args.push(self.rewrite_expr(arg)?);
-                }
-
-                Ok(Expression::ScalarFunction {
-                    op: op.clone(),
-                    args: new_args,
-                })
-            }
-            Expression::AggregateFunction {
-                op,
-                distinct,
-                params,
-                args,
-            } => {
-                let mut new_args = Vec::with_capacity(args.len());
-
-                for arg in args {
-                    new_args.push(self.rewrite_expr(arg)?);
-                }
-
-                Ok(Expression::AggregateFunction {
-                    op: op.clone(),
-                    distinct: *distinct,
-                    params: params.clone(),
-                    args: new_args,
-                })
-            }
-            Expression::Sort {
-                expr,
-                asc,
-                nulls_first,
-                origin_expr,
-            } => Ok(Expression::Sort {
-                expr: Box::new(self.rewrite_expr(expr)?),
-                asc: *asc,
-                nulls_first: *nulls_first,
-                origin_expr: Box::new(self.rewrite_expr(origin_expr)?),
-            }),
-            Expression::Cast { expr, data_type } => Ok(Expression::Cast {
-                expr: Box::new(self.rewrite_expr(expr)?),
-                data_type: data_type.clone(),
-            }),
-            Expression::Wildcard
-            | Expression::Literal { .. }
-            | Expression::Subquery { .. }
-            | Expression::ScalarSubquery { .. } => Ok(expr.clone()),
+    fn rewrite_column(&self, name: &str) -> Result<Expression> {
+        match self.tables_schema.contains_column(name) {
+            true => Ok(Expression::Column(name.to_string())),
+            false => Err(ErrorCode::UnknownColumn(format!("Unknown column {}", name))),
         }
     }
 

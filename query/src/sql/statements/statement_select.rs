@@ -23,7 +23,6 @@ use common_planners::find_aggregate_exprs;
 use common_planners::find_aggregate_exprs_in_expr;
 use common_planners::rebase_expr;
 use common_planners::Expression;
-use common_planners::Extras;
 use common_tracing::tracing;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Offset;
@@ -34,7 +33,7 @@ use sqlparser::ast::TableWithJoins;
 use crate::catalogs::ToReadDataSourcePlan;
 use crate::sessions::QueryContext;
 use crate::sql::statements::analyzer_statement::QueryAnalyzeState;
-use crate::sql::statements::query::JoinedSchema;
+use crate::sql::statements::query::{JoinedSchema, QueryCollectPushDowns};
 use crate::sql::statements::query::JoinedSchemaAnalyzer;
 use crate::sql::statements::query::JoinedTableDesc;
 use crate::sql::statements::query::QualifiedRewriter;
@@ -61,16 +60,15 @@ impl AnalyzableStatement for DfQueryStatement {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let analyzer = JoinedSchemaAnalyzer::create(ctx.clone());
-        let joined_schema = analyzer.analyze(self).await?;
+        let mut joined_schema = analyzer.analyze(self).await?;
 
-        let normal_transform = QueryNormalizer::create(ctx.clone());
-        let normalized_result = normal_transform.transform(self).await?;
+        let mut ir = QueryNormalizer::normalize(ctx.clone(), self).await?;
 
-        let schema = joined_schema.clone();
-        let qualified_rewriter = QualifiedRewriter::create(schema, ctx.clone());
-        let normalized_result = qualified_rewriter.rewrite(normalized_result).await?;
+        QualifiedRewriter::rewrite(&joined_schema, ctx.clone(), &mut ir)?;
 
-        let analyze_state = self.analyze_query(normalized_result).await?;
+        QueryCollectPushDowns::collect_extras(&mut ir, &mut joined_schema)?;
+
+        let analyze_state = self.analyze_query(ir).await?;
         self.check_and_finalize(joined_schema, analyze_state, ctx)
             .await
     }
@@ -209,11 +207,8 @@ impl DfQueryStatement {
         }
 
         match tables_desc.remove(0) {
-            JoinedTableDesc::Table { table, .. } => {
-                // TODO: collect push down
-                let source_plan = table
-                    .read_plan(ctx.clone(), Some(Extras::default()))
-                    .await?;
+            JoinedTableDesc::Table { table, push_downs, .. } => {
+                let source_plan = table.read_plan(ctx.clone(), push_downs).await?;
                 state.relation = QueryRelation::FromTable(Box::new(source_plan));
             }
             JoinedTableDesc::Subquery {

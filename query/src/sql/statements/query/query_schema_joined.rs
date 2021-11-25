@@ -24,6 +24,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::Extras;
 
 use crate::catalogs::Table;
 use crate::sql::statements::QueryAnalyzeState;
@@ -86,6 +87,13 @@ impl JoinedSchema {
 
     pub fn get_tables_desc(&self) -> &[JoinedTableDesc] {
         &self.tables_long_name_columns
+    }
+
+    pub fn set_table_push_downs(&mut self, table_pos: usize, extras: Extras) {
+        match &mut self.tables_long_name_columns[table_pos] {
+            JoinedTableDesc::Table { push_downs, .. } => *push_downs = Some(extras),
+            _ => {}
+        };
     }
 
     pub fn take_tables_desc(self) -> Vec<JoinedTableDesc> {
@@ -164,6 +172,7 @@ pub enum JoinedTableDesc {
         table: Arc<dyn Table>,
         name_parts: Vec<String>,
         columns_desc: Vec<JoinedColumnDesc>,
+        push_downs: Option<Extras>,
     },
     Subquery {
         state: Box<QueryAnalyzeState>,
@@ -185,6 +194,7 @@ impl JoinedTableDesc {
             table,
             columns_desc,
             name_parts: prefix,
+            push_downs: None,
         }
     }
 

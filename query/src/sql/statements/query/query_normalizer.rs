@@ -13,10 +13,8 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::fmt::Debug;
 use std::sync::Arc;
 
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::extract_aliases;
@@ -30,18 +28,7 @@ use sqlparser::ast::SelectItem;
 use crate::sessions::QueryContext;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::DfQueryStatement;
-
-// Intermediate representation for query AST(after normalize)
-pub struct QueryASTIR {
-    pub filter_predicate: Option<Expression>,
-    pub group_by_expressions: Vec<Expression>,
-    pub having_predicate: Option<Expression>,
-    pub aggregate_expressions: Vec<Expression>,
-    pub order_by_expressions: Vec<Expression>,
-    pub projection_expressions: Vec<Expression>,
-    pub limit: Option<usize>,
-    pub offset: Option<usize>,
-}
+use crate::sql::statements::query::QueryASTIR;
 
 pub struct QueryNormalizer {
     query_ast_ir: QueryASTIR,
@@ -51,7 +38,7 @@ pub struct QueryNormalizer {
 
 /// Replace alias in query and collect aggregate functions
 impl QueryNormalizer {
-    pub fn create(ctx: Arc<QueryContext>) -> QueryNormalizer {
+    fn create(ctx: Arc<QueryContext>) -> QueryNormalizer {
         QueryNormalizer {
             expression_analyzer: ExpressionAnalyzer::create(ctx),
             aliases_map: HashMap::new(),
@@ -66,6 +53,11 @@ impl QueryNormalizer {
                 offset: None,
             },
         }
+    }
+
+    pub async fn normalize(ctx: Arc<QueryContext>, v: &DfQueryStatement) -> Result<QueryASTIR> {
+        let query_normalizer = QueryNormalizer::create(ctx);
+        query_normalizer.transform(v).await
     }
 
     pub async fn transform(mut self, query: &DfQueryStatement) -> Result<QueryASTIR> {
@@ -233,37 +225,5 @@ impl QueryNormalizer {
         }
 
         Ok(())
-    }
-}
-
-impl Debug for QueryASTIR {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        let mut debug_struct = f.debug_struct("NormalQuery");
-
-        if let Some(predicate) = &self.filter_predicate {
-            debug_struct.field("filter", predicate);
-        }
-
-        if !self.group_by_expressions.is_empty() {
-            debug_struct.field("group by", &self.group_by_expressions);
-        }
-
-        if let Some(predicate) = &self.having_predicate {
-            debug_struct.field("having", predicate);
-        }
-
-        if !self.aggregate_expressions.is_empty() {
-            debug_struct.field("aggregate", &self.aggregate_expressions);
-        }
-
-        if !self.order_by_expressions.is_empty() {
-            debug_struct.field("order by", &self.order_by_expressions);
-        }
-
-        if !self.projection_expressions.is_empty() {
-            debug_struct.field("projection", &self.projection_expressions);
-        }
-
-        debug_struct.finish()
     }
 }

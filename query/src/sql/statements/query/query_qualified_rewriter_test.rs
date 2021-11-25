@@ -106,18 +106,12 @@ async fn test_query_qualified_rewriter() -> Result<()> {
         match statements.remove(0) {
             DfStatement::Query(query) => {
                 let analyzer = JoinedSchemaAnalyzer::create(ctx.clone());
-                let joined_schema = analyzer.analyze(&query).await?;
+                let schema = analyzer.analyze(&query).await?;
 
-                let transform = QueryNormalizer::create(ctx.clone());
-                let data = transform.transform(&query).await?;
+                let mut ir = QueryNormalizer::normalize(ctx.clone(), &query).await?;
+                QualifiedRewriter::rewrite(&schema, ctx, &mut ir)?;
 
-                let rewriter = QualifiedRewriter::create(joined_schema, ctx);
-                assert_eq!(
-                    test_case.expect,
-                    format!("{:?}", rewriter.rewrite(data).await?),
-                    "{:#?}",
-                    test_case.name
-                )
+                assert_eq!(test_case.expect, format!("{:?}", ir), "{:#?}", test_case.name);
             }
             _ => {
                 return Err(ErrorCode::LogicalError("Cannot get analyze query state."));
