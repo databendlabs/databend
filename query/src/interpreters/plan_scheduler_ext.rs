@@ -59,6 +59,7 @@ pub async fn schedule_query(
 
     let pipeline_builder = PipelineBuilder::create(ctx.clone());
     let mut in_local_pipeline = pipeline_builder.build(&scheduled_tasks.get_local_task())?;
+
     match in_local_pipeline.execute().await {
         Ok(stream) => Ok(ScheduledStream::create(scheduled, stream, ctx.clone())),
         Err(error) => {

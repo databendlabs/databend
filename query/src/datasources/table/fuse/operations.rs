@@ -52,7 +52,6 @@ impl AppendOperation {
     }
 }
 
-// TODO refine this, json is not that suitable
 impl TryFrom<AppendOperation> for DataBlock {
     type Error = common_exception::ErrorCode;
     fn try_from(value: AppendOperation) -> std::result::Result<Self, Self::Error> {

@@ -45,12 +45,14 @@ impl PlanRewriter for PlanDoReadSource {
     fn rewrite_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<PlanNode> {
         let context = self.ctx.clone();
         let table = context.build_table_from_source_plan(plan)?;
-        futures::executor::block_on(async move {
+        // as suggested by @ygf11, we use `task::unconstrained` as a temp workaround here
+        // till futures::executor::block_on be eliminated from here
+        futures::executor::block_on(common_base::tokio::task::unconstrained(async move {
             let plan = table
                 .read_plan(context.clone(), plan.push_downs.clone())
                 .await?;
             Ok(PlanNode::ReadSource(plan))
-        })
+        }))
     }
 
     fn rewrite_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<PlanNode> {

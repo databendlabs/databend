@@ -109,7 +109,7 @@ impl InsertIntoInterpreter {
     ) -> Result<SendableDataBlockStream> {
         if let PlanNode::Select(sel) = plan_node {
             let optimized_plan = self.rewrite_plan(sel, table.get_table_info())?;
-            plan_scheduler_ext::schedule_query(&self.ctx, &optimized_plan).await
+             = plan_scheduler_ext::schedule_query(&self.ctx, &optimized_plan).await
         } else {
             Err(ErrorCode::UnknownTypeOfQuery(format!(
                 "Unsupported select query plan for insert_into interpreter, {}",

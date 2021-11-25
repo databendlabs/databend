@@ -15,7 +15,6 @@
 
 use std::any::Any;
 use std::convert::TryFrom;
-use std::convert::TryInto;
 use std::sync::Arc;
 
 use common_dal::read_obj;
@@ -87,10 +86,15 @@ impl Table for FuseTable {
         stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
         let log = self.append_trunks(ctx, stream).await?;
+        let blocks = if let Some(op_log) = log {
+            vec![DataBlock::try_from(op_log)?]
+        } else {
+            vec![]
+        };
         Ok(Box::pin(DataBlockStream::create(
             AppendOperation::schema(),
             None,
-            vec![log.try_into()?],
+            blocks,
         )))
     }
 

@@ -30,17 +30,20 @@ impl FuseTable {
         &self,
         ctx: Arc<QueryContext>,
         stream: SendableDataBlockStream,
-    ) -> Result<AppendOperation> {
+    ) -> Result<Option<AppendOperation>> {
         let da = ctx.get_data_accessor()?;
 
-        let segment_info =
+        let segment =
             BlockAppender::append_blocks(da.clone(), stream, self.table_info.schema().as_ref())
                 .await?;
-
-        let seg_loc = util::gen_segment_info_location();
-        let bytes = serde_json::to_vec(&segment_info)?;
-        da.put(&seg_loc, bytes).await?;
-
-        Ok(AppendOperation::new(seg_loc, segment_info))
+        let append_op_log = if let Some(seg) = segment {
+            let seg_loc = util::gen_segment_info_location();
+            let bytes = serde_json::to_vec(&seg)?;
+            da.put(&seg_loc, bytes).await?;
+            Some(AppendOperation::new(seg_loc, seg))
+        } else {
+            None
+        };
+        Ok(append_op_log)
     }
 }
