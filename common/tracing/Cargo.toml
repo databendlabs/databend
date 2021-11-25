@@ -17,6 +17,6 @@ opentelemetry-jaeger = { version = "0.15", features = ["rt-tokio"] }
 tonic = "0.6.0"
 tracing = "0.1.29"
 tracing-appender = "0.2.0"
-tracing-bunyan-formatter = "0.3.0"
+tracing-bunyan-formatter = "0.3.1"
 tracing-opentelemetry = "0.16.0"
 tracing-subscriber = { version = "0.3.1", features = ["env-filter"] }
