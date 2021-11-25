@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,8 @@ use comfy_table::Cell;
 use comfy_table::Color;
 use comfy_table::Table;
 use common_base::ProgressValues;
-use common_datavalues::prelude::*;
+use common_datavalues::DataSchemaRef;
+use http::Uri;
 use lexical_util::num::AsPrimitive;
 use num_format::Locale;
 use num_format::ToFormattedString;
@@ -220,7 +221,11 @@ pub fn build_query_endpoint(status: &Status) -> Result<(reqwest::Client, String)
             )
             .parse::<SocketAddr>()
             .expect("cannot build query socket address");
-            format!("http://{}:{}/v1/query", address.ip(), address.port())
+            format!(
+                "http://{}:{}/v1/query?wait_time=-1",
+                address.ip(),
+                address.port()
+            )
         } else {
             todo!()
         }
@@ -252,6 +257,17 @@ pub async fn execute_query_json(
         )));
     } else {
         let ans = ans.unwrap();
+        if let Some(final_uri) = ans.final_uri {
+            let uri = url.parse::<Uri>().unwrap();
+            let uri = format!(
+                "{}://{}:{}/{}",
+                uri.scheme().unwrap(),
+                uri.host().unwrap(),
+                uri.port().unwrap(),
+                final_uri
+            );
+            cli.get(uri).send().await.expect("fail to get final_uri");
+        }
         if ans.error.is_some() {
             return Err(CliError::Unknown(format!(
                 "Query has error: {:?}",

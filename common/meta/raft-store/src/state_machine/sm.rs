@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::convert::Infallible;
 use std::convert::TryInto;
 use std::fmt::Debug;
 use std::time::SystemTime;
@@ -39,11 +40,12 @@ use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_meta_types::TableIdent;
 use common_meta_types::TableMeta;
 use common_tracing::tracing;
 use serde::Deserialize;
 use serde::Serialize;
+use sled::transaction::ConflictableTransactionError;
+use sled::transaction::TransactionError;
 use sled::IVec;
 
 use crate::config::RaftConfig;
@@ -247,9 +249,24 @@ impl StateMachine {
         let log_id = &entry.log_id;
 
         let sm_meta = self.sm_meta();
-        sm_meta
-            .insert(&LastApplied, &StateMachineMetaValue::LogId(*log_id))
-            .await?;
+
+        // use `Infallible` here cause Sled make it infallible
+        // ref: https://github.com/datafuse-extras/sled/blob/43fa7250d3c6f4964167c9498b622f2923289cf3/src/transaction.rs#L235
+        let r: Result<Option<StateMachineMetaValue>, TransactionError<Infallible>> =
+            self.sm_tree.txn(true, move |t| {
+                let txn_sm_meta = t.key_space::<StateMachineMeta>();
+                txn_sm_meta
+                    .insert(&LastApplied, &StateMachineMetaValue::LogId(*log_id))
+                    .map_err(|e| {
+                        let err: ConflictableTransactionError<Infallible> =
+                            ConflictableTransactionError::from(e);
+                        err
+                    })
+            });
+        match r {
+            Ok(_) => (),
+            Err(e) => return Err(ErrorCode::from(e)),
+        }
 
         match entry.payload {
             EntryPayload::Blank => {}
@@ -335,6 +352,14 @@ impl StateMachine {
                 if prev.is_none() && result.is_some() {
                     // TODO(xp): reconsider this impl. it may not be required.
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
+                } else {
+                    // exist
+                    let db_id = prev.unwrap().data;
+                    let prev = self.get_database_meta_by_id(&db_id)?;
+                    return Ok(AppliedState::DatabaseMeta(Change::nochange_with_id(
+                        db_id,
+                        Some(prev),
+                    )));
                 }
 
                 let dbs = self.databases();
@@ -360,7 +385,12 @@ impl StateMachine {
                     db_id,
                     result
                 );
-                Ok(Change::new(prev, result).into())
+
+                Ok(AppliedState::DatabaseMeta(Change::new_with_id(
+                    db_id,
+                    prev_meta,
+                    result_meta,
+                )))
             }
 
             Cmd::DropDatabase { ref name } => {
@@ -370,14 +400,36 @@ impl StateMachine {
                     .sub_tree_upsert(dbs, name, &MatchSeq::Any, Operation::Delete, None)
                     .await?;
 
+                assert!(
+                    result.is_none(),
+                    "delete with MatchSeq::Any always succeeds"
+                );
+
                 // if it is just deleted
-                if prev.is_some() && result.is_none() {
+                if let Some(seq_db_id) = prev {
                     // TODO(xp): reconsider this impl. it may not be required.
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
+
+                    let db_id = seq_db_id.data;
+
+                    let dbs = self.databases();
+                    let (prev_meta, result_meta) = self
+                        .sub_tree_upsert(dbs, &db_id, &MatchSeq::Any, Operation::Delete, None)
+                        .await?;
+
+                    tracing::debug!("applied drop Database: {} {:?}", name, result);
+
+                    return Ok(AppliedState::DatabaseMeta(Change::new_with_id(
+                        db_id,
+                        prev_meta,
+                        result_meta,
+                    )));
                 }
 
+                // not exist
+
                 tracing::debug!("applied drop Database: {} {:?}", name, result);
-                Ok(Change::new(prev, result).into())
+                Ok(AppliedState::DatabaseMeta(Change::new(None, None)))
             }
 
             Cmd::CreateTable {
@@ -399,8 +451,10 @@ impl StateMachine {
                     let table_id = u.data.0;
 
                     let prev = self.get_table_meta_by_id(&table_id)?;
-                    let prev = prev.map(|x| TableIdent::new(table_id, x.seq));
-                    return Ok((prev.clone(), prev).into());
+
+                    return Ok(AppliedState::TableMeta(Change::nochange_with_id(
+                        table_id, prev,
+                    )));
                 }
 
                 let table_meta = table_meta.clone();
@@ -431,10 +485,9 @@ impl StateMachine {
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
                 }
 
-                Ok(AppliedState::TableIdent {
-                    prev: prev.map(|x| TableIdent::new(table_id, x.seq)),
-                    result: result.map(|x| TableIdent::new(table_id, x.seq)),
-                })
+                Ok(AppliedState::TableMeta(Change::new_with_id(
+                    table_id, prev, result,
+                )))
             }
 
             Cmd::DropTable {
