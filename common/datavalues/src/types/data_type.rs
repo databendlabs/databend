@@ -87,6 +87,37 @@ impl DataType {
         self.clone().into()
     }
 
+    #[inline]
+    pub fn is_integer(&self) -> bool {
+        matches!(
+            self,
+            DataType::Int8
+                | DataType::Int16
+                | DataType::Int32
+                | DataType::Int64
+                | DataType::UInt8
+                | DataType::UInt16
+                | DataType::UInt32
+                | DataType::UInt64
+        )
+    }
+
+    #[inline]
+    pub fn is_signed_integer(&self) -> bool {
+        matches!(
+            self,
+            DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64
+        )
+    }
+
+    #[inline]
+    pub fn is_unsigned_integer(&self) -> bool {
+        matches!(
+            self,
+            DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64
+        )
+    }
+
     pub fn to_arrow(&self) -> ArrowDataType {
         use DataType::*;
         match self {
