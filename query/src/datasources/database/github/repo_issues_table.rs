@@ -34,7 +34,7 @@ use crate::datasources::database::github::database::OWNER;
 use crate::datasources::database::github::database::REPO;
 use crate::datasources::database::github::database::REPO_ISSUES_ENGINE;
 use crate::datasources::database::github::util;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 const NUMBER: &str = "number";
 const TITLE: &str = "title";
@@ -160,7 +160,7 @@ impl Table for RepoIssuesTable {
 
     async fn read(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let arrays = self.get_data_from_github().await?;

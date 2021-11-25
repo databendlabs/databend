@@ -32,7 +32,7 @@ use crate::datasources::database::github::database::OWNER;
 use crate::datasources::database::github::database::REPO;
 use crate::datasources::database::github::database::REPO_INFO_ENGINE;
 use crate::datasources::database::github::util;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 const REPOSITORY: &str = "reposiroty";
 const LANGUAGE: &str = "language";
@@ -138,7 +138,7 @@ impl Table for RepoInfoTable {
 
     async fn read(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let arrays = self.get_data_from_github().await?;
