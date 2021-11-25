@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
+use common_meta_types::DatabaseMeta;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
@@ -40,7 +41,6 @@ use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
-use crate::state_machine::AppliedState;
 use crate::state_machine::StateMachine;
 use crate::state_machine::TableLookupKey;
 
@@ -57,7 +57,8 @@ impl MetaApi for StateMachine {
 
         let res = self.apply_cmd(&cmd).await?;
 
-        let ch: Change<u64> = res.try_into().unwrap();
+        let mut ch: Change<DatabaseMeta> = res.try_into().unwrap();
+        let db_id = ch.ident.take().expect("Some(db_id)");
         let (prev, result) = ch.unpack_data();
 
         assert!(result.is_some());
@@ -69,9 +70,7 @@ impl MetaApi for StateMachine {
             )));
         }
 
-        Ok(CreateDatabaseReply {
-            database_id: result.unwrap(),
-        })
+        Ok(CreateDatabaseReply { database_id: db_id })
     }
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, ErrorCode> {
@@ -94,17 +93,13 @@ impl MetaApi for StateMachine {
     }
 
     async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, ErrorCode> {
-        let res = self
-            .get_database_id(&req.db_name)?
-            .ok_or_else(|| ErrorCode::UnknownDatabase(req.db_name.clone()))?;
-        let db_meta = self
-            .get_database_by_id(&res.data)?
-            .ok_or_else(|| ErrorCode::UnknownDatabaseId(format!("database_id: {}", res.data)))?;
+        let db_id = self.get_database_id(&req.db_name)?;
+        let seq_meta = self.get_database_meta_by_id(&db_id)?;
 
         let dbi = DatabaseInfo {
-            database_id: res.data,
+            database_id: db_id,
             db: req.db_name.clone(),
-            meta: db_meta.data,
+            meta: seq_meta.data,
         };
         Ok(Arc::new(dbi))
     }
@@ -113,17 +108,22 @@ impl MetaApi for StateMachine {
         &self,
         _req: ListDatabaseReq,
     ) -> Result<Vec<Arc<DatabaseInfo>>, ErrorCode> {
-        let res = self.get_databases()?;
-        Ok(res
-            .iter()
-            .map(|(name, db, meta)| {
-                Arc::new(DatabaseInfo {
-                    database_id: *db,
-                    db: name.to_string(),
-                    meta: meta.clone(),
-                })
-            })
-            .collect::<Vec<_>>())
+        let mut res = vec![];
+
+        let it = self.database_lookup().range(..)?;
+        for r in it {
+            let (db_name, seq_id) = r?;
+            let seq_meta = self.get_database_meta_by_id(&seq_id.data)?;
+
+            let db_info = DatabaseInfo {
+                database_id: seq_id.data,
+                db: db_name,
+                meta: seq_meta.data,
+            };
+            res.push(Arc::new(db_info));
+        }
+
+        Ok(res)
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, ErrorCode> {
@@ -142,12 +142,9 @@ impl MetaApi for StateMachine {
         };
 
         let res = self.apply_cmd(&cr).await?;
-        let (prev, result) = match res {
-            AppliedState::TableIdent { prev, result } => (prev, result),
-            _ => {
-                panic!("not TableIdent result");
-            }
-        };
+        let mut ch: Change<TableMeta, u64> = res.try_into().unwrap();
+        let table_id = ch.ident.take().unwrap();
+        let (prev, result) = ch.unpack_data();
 
         assert!(result.is_some());
 
@@ -157,9 +154,7 @@ impl MetaApi for StateMachine {
                 table_name
             )))
         } else {
-            Ok(CreateTableReply {
-                table_id: result.unwrap().table_id,
-            })
+            Ok(CreateTableReply { table_id })
         }
     }
 
@@ -191,11 +186,7 @@ impl MetaApi for StateMachine {
         let db = &req.db_name;
         let table_name = &req.table_name;
 
-        let seq_db = self.get_database_id(db)?.ok_or_else(|| {
-            ErrorCode::UnknownDatabase(format!("get table: database not found {:}", db))
-        })?;
-
-        let db_id = seq_db.data;
+        let db_id = self.get_database_id(db)?;
 
         let table_id = self
             .table_lookup()
@@ -224,11 +215,40 @@ impl MetaApi for StateMachine {
     }
 
     async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, ErrorCode> {
-        let tables = self.get_tables(&req.db_name)?;
-        Ok(tables
-            .iter()
-            .map(|t| Arc::new(t.clone()))
-            .collect::<Vec<_>>())
+        let db_name = &req.db_name;
+        let db_id = self.get_database_id(db_name)?;
+
+        let mut tbls = vec![];
+        let tables = self.tables();
+        let tables_iter = self.table_lookup().range(..)?;
+        for r in tables_iter {
+            let (k, seq_table_id) = r?;
+
+            let got_db_id = k.database_id;
+            let table_name = k.table_name;
+
+            if got_db_id == db_id {
+                let table_id = seq_table_id.data.0;
+
+                let seq_table_meta = tables.get(&table_id)?.ok_or_else(|| {
+                    ErrorCode::IllegalMetaState(format!(" table of id {}, not found", table_id))
+                })?;
+
+                let version = seq_table_meta.seq;
+                let table_meta = seq_table_meta.data;
+
+                let table_info = TableInfo::new(
+                    db_name,
+                    &table_name,
+                    TableIdent::new(table_id, version),
+                    table_meta,
+                );
+
+                tbls.push(Arc::new(table_info));
+            }
+        }
+
+        Ok(tbls)
     }
 
     async fn get_table_by_id(

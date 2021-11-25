@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::Expression;
 use common_planners::InsertIntoPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
@@ -31,6 +32,7 @@ use sqlparser::ast::Values;
 
 use crate::catalogs::Table;
 use crate::sessions::QueryContext;
+use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
@@ -67,7 +69,7 @@ impl AnalyzableStatement for DfInsertStatement {
         match &self.source {
             None => self.analyze_insert_without_source(&ctx).await,
             Some(source) => match &source.body {
-                SetExpr::Values(v) => self.analyze_insert_values(&ctx, v).await,
+                SetExpr::Values(v) => self.analyze_insert_values(ctx.clone(), v).await,
                 SetExpr::Select(_) => self.analyze_insert_select(&ctx, source).await,
                 _ => Err(ErrorCode::SyntaxException(
                     "Insert must be have values or select.",
@@ -119,20 +121,41 @@ impl DfInsertStatement {
 
     async fn analyze_insert_values(
         &self,
-        ctx: &QueryContext,
+        ctx: Arc<QueryContext>,
         values: &Values,
     ) -> Result<AnalyzedResult> {
         tracing::debug!("{:?}", values);
 
-        let (db, table) = self.resolve_table(ctx)?;
+        let (db, table) = self.resolve_table(&ctx)?;
         let write_table = ctx.get_table(&db, &table).await?;
         let table_meta_id = write_table.get_id();
         let schema = self.insert_schema(write_table)?;
 
-        let values = format!("{}", values);
-        let values_data = (values["VALUES ".len()..]).to_string();
+        let expression_analyzer = ExpressionAnalyzer::create(ctx);
+        let mut value_exprs = Vec::with_capacity(values.0.len());
+
+        for value in &values.0 {
+            let mut exprs = Vec::with_capacity(value.len());
+            for (i, v) in value.iter().enumerate() {
+                let expr = expression_analyzer.analyze(v).await?;
+                let expr = if &expr.to_data_type(&schema)? != schema.field(i).data_type() {
+                    Expression::Cast {
+                        expr: Box::new(expr),
+                        data_type: schema.field(i).data_type().clone(),
+                    }
+                } else {
+                    expr
+                };
+                exprs.push(Expression::Alias(
+                    schema.field(i).name().to_string(),
+                    Box::new(expr),
+                ));
+            }
+            value_exprs.push(exprs);
+        }
+
         Ok(AnalyzedResult::SimpleQuery(PlanNode::InsertInto(
-            InsertIntoPlan::insert_values(db, table, table_meta_id, schema, values_data),
+            InsertIntoPlan::insert_values(db, table, table_meta_id, schema, value_exprs),
         )))
     }
 

@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@ use std::convert::TryInto;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
+use common_meta_api::MetaApi;
 use common_meta_flight::FlightReq;
 use common_meta_flight::GetTableExtReq;
-use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd::CreateDatabase;
 use common_meta_types::Cmd::CreateTable;
@@ -31,6 +31,7 @@ use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
+use common_meta_types::DatabaseMeta;
 use common_meta_types::DropDatabaseReply;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
@@ -76,8 +77,9 @@ impl RequestHandler<FlightReq<CreateDatabaseReq>> for ActionHandler {
             .await
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
-        let ch: Change<u64> = res.try_into().unwrap();
-        let (prev, result) = ch.unpack_data();
+        let mut ch: Change<DatabaseMeta> = res.try_into().unwrap();
+        let db_id = ch.ident.take().expect("Some(db_id)");
+        let (prev, _result) = ch.unpack_data();
 
         if prev.is_some() && !if_not_exists {
             return Err(ErrorCode::DatabaseAlreadyExists(format!(
@@ -88,7 +90,7 @@ impl RequestHandler<FlightReq<CreateDatabaseReq>> for ActionHandler {
 
         Ok(CreateDatabaseReply {
             // TODO(xp): return DatabaseInfo?
-            database_id: result.unwrap(),
+            database_id: db_id,
         })
     }
 }
@@ -99,25 +101,8 @@ impl RequestHandler<FlightReq<GetDatabaseReq>> for ActionHandler {
         &self,
         act: FlightReq<GetDatabaseReq>,
     ) -> common_exception::Result<Arc<DatabaseInfo>> {
-        let db_name = &act.req.db_name;
-        let db_id = self
-            .meta_node
-            .get_state_machine()
-            .await
-            .get_database_id(db_name)?
-            .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.clone()))?;
-        let db_meta = self
-            .meta_node
-            .get_state_machine()
-            .await
-            .get_database_by_id(&db_id.data)?
-            .ok_or_else(|| ErrorCode::UnknownDatabaseId(format!("database_id: {}", db_id.data)))?;
-
-        Ok(Arc::new(DatabaseInfo {
-            database_id: db_id.data,
-            db: db_name.to_string(),
-            meta: db_meta.data,
-        }))
+        let sm = self.meta_node.get_state_machine().await;
+        sm.get_database(act.req).await
     }
 }
 
@@ -136,16 +121,14 @@ impl RequestHandler<FlightReq<DropDatabaseReq>> for ActionHandler {
             },
         };
 
-        let rst = self
+        let res = self
             .meta_node
             .write(cr)
             .await
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
-        let (prev, _result) = match rst {
-            AppliedState::DatabaseId(Change { prev, result }) => (prev, result),
-            _ => return Err(ErrorCode::MetaNodeInternalError("not a Database result")),
-        };
+        let ch: Change<DatabaseMeta> = res.try_into().unwrap();
+        let (prev, _result) = ch.unpack_data();
 
         if prev.is_some() || if_exists {
             Ok(DropDatabaseReply {})
@@ -189,10 +172,10 @@ impl RequestHandler<FlightReq<CreateTableReq>> for ActionHandler {
             .await
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
-        let (prev, result) = match rst {
-            AppliedState::TableIdent { prev, result } => (prev, result),
-            _ => return Err(ErrorCode::MetaNodeInternalError("not a Table result")),
-        };
+        let mut ch: Change<TableMeta, u64> = rst.try_into().expect("TableId");
+        let table_id = ch.ident.take().unwrap();
+        let (prev, _) = ch.unpack_data();
+
         if prev.is_some() && !if_not_exists {
             return Err(ErrorCode::TableAlreadyExists(format!(
                 "table exists: {}",
@@ -200,9 +183,7 @@ impl RequestHandler<FlightReq<CreateTableReq>> for ActionHandler {
             )));
         }
 
-        Ok(CreateTableReply {
-            table_id: result.unwrap().table_id,
-        })
+        Ok(CreateTableReply { table_id })
     }
 }
 
@@ -250,38 +231,8 @@ impl RequestHandler<FlightReq<GetTableReq>> for ActionHandler {
         &self,
         act: FlightReq<GetTableReq>,
     ) -> common_exception::Result<Arc<TableInfo>> {
-        let db_name = &act.req.db_name;
-        let table_name = &act.req.table_name;
-
-        let x = self
-            .meta_node
-            .get_state_machine()
-            .await
-            .get_database_id(db_name)?;
-        let db = x.ok_or_else(|| {
-            ErrorCode::UnknownDatabase(format!("get table: database not found {:}", db_name))
-        })?;
-
-        let db_id = db.data;
-
-        let seq_table_id = self
-            .meta_node
-            .lookup_table_id(db_id, table_name)
-            .await?
-            .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table: '{:}'", table_name)))?;
-
-        let table_id = seq_table_id.data.0;
-        let result = self.meta_node.get_table_by_id(&table_id).await?;
-
-        match result {
-            Some(table) => Ok(Arc::new(TableInfo::new(
-                db_name,
-                table_name,
-                TableIdent::new(table_id, table.seq),
-                table.data,
-            ))),
-            None => Err(ErrorCode::UnknownTable(table_name)),
-        }
+        let sm = self.meta_node.get_state_machine().await;
+        sm.get_table(act.req).await
     }
 }
 
@@ -310,20 +261,10 @@ impl RequestHandler<GetTableExtReq> for ActionHandler {
 impl RequestHandler<FlightReq<ListDatabaseReq>> for ActionHandler {
     async fn handle(
         &self,
-        _req: FlightReq<ListDatabaseReq>,
+        req: FlightReq<ListDatabaseReq>,
     ) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
-        let res = self.meta_node.get_state_machine().await.get_databases()?;
-
-        Ok(res
-            .iter()
-            .map(|(name, db, meta)| {
-                Arc::new(DatabaseInfo {
-                    database_id: *db,
-                    db: name.to_string(),
-                    meta: meta.clone(),
-                })
-            })
-            .collect::<Vec<_>>())
+        let sm = self.meta_node.get_state_machine().await;
+        sm.list_databases(req.req).await
     }
 }
 
@@ -333,8 +274,8 @@ impl RequestHandler<FlightReq<ListTableReq>> for ActionHandler {
         &self,
         req: FlightReq<ListTableReq>,
     ) -> common_exception::Result<Vec<Arc<TableInfo>>> {
-        let res = self.meta_node.get_tables(&req.req.db_name).await?;
-        Ok(res.iter().map(|t| Arc::new(t.clone())).collect::<Vec<_>>())
+        let sm = self.meta_node.get_state_machine().await;
+        sm.list_tables(req.req).await
     }
 }
 #[async_trait::async_trait]

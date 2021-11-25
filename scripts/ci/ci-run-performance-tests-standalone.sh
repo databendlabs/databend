@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0.
 
 get_latest_tag() {
-  curl --silent "https://api.github.com/repos/$1/tags" | # Get latest release from GitHub api
-    grep '"name":' | # Get tag line
-    sed -E 's/.*"([^"]+)".*/\1/' | grep 'v' | head -1
+	curl --silent "https://api.github.com/repos/$1/tags" | # Get latest release from GitHub api
+		grep '"name":' |                                      # Get tag line
+		sed -E 's/.*"([^"]+)".*/\1/' | grep 'v' | head -1
 }
 
 tag=$(get_latest_tag "datafuselabs/databend")
@@ -30,9 +30,9 @@ python perfs.py --output "${d_pull}" --bin "${BASE_DIR}/target/release/databend-
 
 ## run perf for latest release
 if [ ! -d "${d_release}" ]; then
-  mkdir -p "${d_release}"
-  ${BASE_DIR}/scripts/deploy/databend-query-standalone-from-release.sh "${tag}"
-  python perfs.py --output "${d_release}" --bin "${BASE_DIR}/target/release/databend-benchmark" --host 127.0.0.1 --port 9001
+	mkdir -p "${d_release}"
+	${BASE_DIR}/scripts/deploy/databend-query-standalone-from-release.sh "${tag}"
+	python perfs.py --output "${d_release}" --bin "${BASE_DIR}/target/release/databend-benchmark" --host 127.0.0.1 --port 9001
 fi
 
 ## run comparation scripts

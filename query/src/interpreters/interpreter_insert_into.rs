@@ -12,9 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Cursor;
 use std::sync::Arc;
 
+use common_datablocks::DataBlock;
+use common_datavalues::series::Series;
+use common_datavalues::series::SeriesFrom;
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
@@ -34,7 +39,9 @@ use crate::interpreters::plan_scheduler_ext;
 use crate::interpreters::utils::apply_plan_rewrite;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::interpreters::SelectInterpreter;
 use crate::optimizers::Optimizers;
+use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 
 pub struct InsertIntoInterpreter {
@@ -68,17 +75,35 @@ impl Interpreter for InsertIntoInterpreter {
             self.insert_with_select_plan(plan_node.as_ref(), table.as_ref())
                 .await?
         } else {
-            let input_stream = if self.plan.values_opt.is_some() {
+            let input_stream = if self.plan.value_exprs_opt.is_some() {
                 // if values are provided in SQL
                 // e.g. `insert into ... value(...), ...`
-                let values = self.plan.values_opt.clone().take().ok_or_else(|| {
-                    ErrorCode::EmptyData("values of insert plan not exist or consumed")
-                })?;
-                let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
-                let values_source =
-                    ValueSource::new(Cursor::new(values), self.plan.schema(), block_size);
-                let stream_source = SourceStream::new(Box::new(values_source));
-                stream_source.execute().await
+                let values_exprs = self.plan.value_exprs_opt.clone().take().unwrap();
+                let dummy =
+                    DataSchemaRefExt::create(vec![DataField::new("dummy", DataType::UInt8, false)]);
+                let one_row_block =
+                    DataBlock::create_by_array(dummy.clone(), vec![Series::new(vec![1u8])]);
+
+                let blocks = values_exprs
+                    .iter()
+                    .map(|exprs| {
+                        let executor = ExpressionExecutor::try_create(
+                            "Insert into from values",
+                            dummy.clone(),
+                            self.plan.schema(),
+                            exprs.clone(),
+                            true,
+                        )?;
+                        executor.execute(&one_row_block)
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                // merge into one block in sync mode
+                let stream: SendableDataBlockStream =
+                    Box::pin(futures::stream::iter(vec![DataBlock::concat_blocks(
+                        &blocks,
+                    )]));
+
+                Ok(stream)
             } else {
                 // if values are provided as a block stream
                 // e.g. using clickhouse client

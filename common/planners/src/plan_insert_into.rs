@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 use common_datavalues::DataSchemaRef;
 use common_meta_types::MetaId;
 
+use crate::Expression;
 use crate::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -25,7 +26,7 @@ pub struct InsertIntoPlan {
     pub schema: DataSchemaRef,
 
     pub select_plan: Option<Box<PlanNode>>,
-    pub values_opt: Option<String>,
+    pub value_exprs_opt: Option<Vec<Vec<Expression>>>,
 }
 
 impl PartialEq for InsertIntoPlan {
@@ -54,7 +55,7 @@ impl InsertIntoPlan {
             tbl_id: table_meta_id,
             schema,
             select_plan: Some(Box::new(select_plan)),
-            values_opt: None,
+            value_exprs_opt: None,
         }
     }
 
@@ -63,7 +64,7 @@ impl InsertIntoPlan {
         table: String,
         table_meta_id: MetaId,
         schema: DataSchemaRef,
-        values: String,
+        values: Vec<Vec<Expression>>,
     ) -> InsertIntoPlan {
         InsertIntoPlan {
             db_name: db,
@@ -71,7 +72,7 @@ impl InsertIntoPlan {
             tbl_id: table_meta_id,
             schema,
             select_plan: None,
-            values_opt: Some(values),
+            value_exprs_opt: Some(values),
         }
     }
 
@@ -87,7 +88,7 @@ impl InsertIntoPlan {
             tbl_id: table_meta_id,
             schema,
             select_plan: None,
-            values_opt: None,
+            value_exprs_opt: None,
         }
     }
 }

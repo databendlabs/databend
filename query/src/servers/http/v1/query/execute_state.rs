@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
 
 use common_base::tokio;
 use common_base::tokio::sync::mpsc;
@@ -71,23 +73,46 @@ impl ExecuteState {
 
 use ExecuteState::*;
 
-pub(crate) type ExecuteStateRef = Arc<RwLock<ExecuteStateWrapper>>;
+pub(crate) type ExecutorRef = Arc<RwLock<Executor>>;
 
 pub(crate) struct ExecuteStopped {
     progress: Option<ProgressValues>,
     reason: Result<()>,
+    stop_time: Instant,
 }
 
-pub(crate) struct ExecuteStateWrapper {
+pub(crate) struct Executor {
+    start_time: Instant,
     pub(crate) state: ExecuteState,
 }
 
-impl ExecuteStateWrapper {
+impl Executor {
     pub(crate) fn get_progress(&self) -> Option<ProgressValues> {
         match &self.state {
             Running(r) => Some(r.context.get_progress_value()),
             Stopped(f) => f.progress.clone(),
         }
+    }
+    pub(crate) fn elapsed(&self) -> Duration {
+        match &self.state {
+            Running(_) => Instant::now() - self.start_time,
+            Stopped(f) => f.stop_time - self.start_time,
+        }
+    }
+    pub(crate) async fn stop(this: &ExecutorRef, reason: Result<()>, kill: bool) {
+        let mut guard = this.write().await;
+        if let Running(r) = &guard.state {
+            // release session
+            let progress = Some(r.context.get_progress_value());
+            if kill {
+                r.session.force_kill_query();
+            }
+            guard.state = Stopped(ExecuteStopped {
+                progress,
+                reason,
+                stop_time: Instant::now(),
+            });
+        };
     }
 }
 
@@ -116,7 +141,7 @@ impl ExecuteState {
         request: &HttpQueryRequest,
         session_manager: &Arc<SessionManager>,
         block_tx: mpsc::Sender<DataBlock>,
-    ) -> Result<(ExecuteStateRef, DataSchemaRef)> {
+    ) -> Result<(ExecutorRef, DataSchemaRef)> {
         let sql = &request.sql;
         let session = session_manager.create_session("http-statement")?;
         let context = session.create_context().await?;
@@ -141,11 +166,12 @@ impl ExecuteState {
             session,
             context: context.clone(),
         };
-        let state = Arc::new(RwLock::new(ExecuteStateWrapper {
+        let executor = Arc::new(RwLock::new(Executor {
+            start_time: Instant::now(),
             state: Running(running_state),
         }));
-        let state_clone = state.clone();
 
+        let executor_clone = executor.clone();
         context
             .try_spawn(async move {
                 loop {
@@ -154,34 +180,22 @@ impl ExecuteState {
                             Ok(block) => tokio::select! {
                                 _ = block_tx.send(block) => { },
                                 _ = abort_rx.recv() => {
-                                    ExecuteState::stop(&state, Err(ErrorCode::AbortedQuery("query aborted")), true).await;
+                                    Executor::stop(&executor, Err(ErrorCode::AbortedQuery("query aborted")), true).await;
                                     break;
                                 },
                             },
                             Err(err) => {
-                                ExecuteState::stop(&state, Err(err), false).await;
+                                Executor::stop(&executor, Err(err), false).await;
                                 break
                             }
                         };
                     } else {
-                        ExecuteState::stop(&state, Ok(()), false).await;
+                        Executor::stop(&executor, Ok(()), false).await;
                         break;
                     }
                 }
                 log::debug!("drop block sender!");
             })?;
-        Ok((state_clone, schema))
-    }
-
-    pub(crate) async fn stop(this: &ExecuteStateRef, reason: Result<()>, kill: bool) {
-        let mut guard = this.write().await;
-        if let Running(r) = &guard.state {
-            // release session
-            let progress = Some(r.context.get_progress_value());
-            if kill {
-                r.session.force_kill_query();
-            }
-            guard.state = Stopped(ExecuteStopped { progress, reason });
-        };
+        Ok((executor_clone, schema))
     }
 }
