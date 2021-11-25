@@ -52,6 +52,10 @@ impl HttpService {
                 get(super::http::v1::cluster_state::nodes_handler),
             )
             .at(
+                "/v1/cluster/state",
+                get(super::http::v1::cluster_state::state_handler),
+            )
+            .at(
                 "/debug/home",
                 get(super::http::debug::home::debug_home_handler),
             )

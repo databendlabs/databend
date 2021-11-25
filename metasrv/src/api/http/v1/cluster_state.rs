@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,42 +14,33 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
 use poem::http::StatusCode;
 use poem::web::Data;
-use poem::web::Html;
 use poem::web::IntoResponse;
-use poem::Response;
+use poem::web::Json;
+use serde_json;
 
 use crate::meta_service::MetaNode;
-
-pub struct ClusterTemplate {
-    result: Result<String>,
-}
-
-impl IntoResponse for ClusterTemplate {
-    fn into_response(self) -> Response {
-        match self.result {
-            Ok(nodes) => Html(nodes).into_response(),
-            Err(cause) => Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(format!(
-                    "Failed to fetch cluster nodes list. cause: {}",
-                    cause
-                )),
-        }
-    }
-}
 
 // GET /v1/cluster/nodes
 // list all nodes in current databend-metasrv cluster
 // request: None
 // return: return a list of cluster node information
 #[poem::handler]
-pub async fn nodes_handler(meta_node: Data<&Arc<MetaNode>>) -> ClusterTemplate {
-    let nodes = meta_node.get_nodes().await.unwrap();
-    let nodes_list = serde_json::to_string(&nodes).unwrap();
-    ClusterTemplate {
-        result: Ok(nodes_list),
-    }
+pub async fn nodes_handler(meta_node: Data<&Arc<MetaNode>>) -> poem::Result<impl IntoResponse> {
+    let nodes = meta_node.get_nodes().await.map_err(|e| {
+        poem::Error::new(StatusCode::INTERNAL_SERVER_ERROR)
+            .with_reason(format!("failed to get nodes: {}", e))
+    })?;
+    Ok(Json(nodes))
+}
+
+#[poem::handler]
+pub async fn state_handler(meta_node: Data<&Arc<MetaNode>>) -> Json<serde_json::Value> {
+    let voters = meta_node.get_voters().await.unwrap();
+    let non_voters = meta_node.get_non_voters().await.unwrap();
+    Json(serde_json::json!({
+        "voters": voters,
+        "non_voters": non_voters,
+    }))
 }
