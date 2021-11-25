@@ -20,7 +20,6 @@ use common_exception::ErrorCode;
 use common_meta_api::MetaApi;
 use common_meta_flight::FlightReq;
 use common_meta_flight::GetTableExtReq;
-use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd::CreateDatabase;
 use common_meta_types::Cmd::CreateTable;
@@ -122,16 +121,14 @@ impl RequestHandler<FlightReq<DropDatabaseReq>> for ActionHandler {
             },
         };
 
-        let rst = self
+        let res = self
             .meta_node
             .write(cr)
             .await
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
-        let (prev, _result) = match rst {
-            AppliedState::DatabaseId(Change { prev, result, .. }) => (prev, result),
-            _ => return Err(ErrorCode::MetaNodeInternalError("not a Database result")),
-        };
+        let ch: Change<DatabaseMeta> = res.try_into().unwrap();
+        let (prev, _result) = ch.unpack_data();
 
         if prev.is_some() || if_exists {
             Ok(DropDatabaseReply {})
