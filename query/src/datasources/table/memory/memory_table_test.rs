@@ -66,7 +66,7 @@ async fn test_memorytable() -> Result<()> {
             tbl_id: 0,
             schema,
             select_plan: None,
-            values_opt: None,
+            value_exprs_opt: None,
         };
         table
             .append_data(ctx.clone(), insert_plan, Box::pin(input_stream))

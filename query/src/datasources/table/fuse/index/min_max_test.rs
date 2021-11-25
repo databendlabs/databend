@@ -89,7 +89,7 @@ async fn test_min_max_index() -> Result<()> {
         tbl_id: table.get_id(),
         schema: test_schema.clone(),
         select_plan: None,
-        values_opt: None,
+        value_exprs_opt: None,
     };
     let da = ctx.get_data_accessor()?;
     let stream = Box::pin(futures::stream::iter(blocks));
