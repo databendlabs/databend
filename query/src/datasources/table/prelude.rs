@@ -15,6 +15,11 @@
 
 use common_exception::Result;
 
+use crate::datasources::database::github;
+use crate::datasources::database::github::RepoCommentsTable;
+use crate::datasources::database::github::RepoInfoTable;
+use crate::datasources::database::github::RepoIssuesTable;
+use crate::datasources::database::github::RepoPrsTable;
 use crate::datasources::table::csv::csv_table::CsvTable;
 use crate::datasources::table::fuse::FuseTable;
 use crate::datasources::table::memory::memory_table::MemoryTable;
@@ -23,10 +28,29 @@ use crate::datasources::table::parquet::parquet_table::ParquetTable;
 use crate::datasources::TableEngineRegistry;
 
 pub fn register_prelude_tbl_engines(registry: &TableEngineRegistry) -> Result<()> {
+    // common table engine
     registry.register("CSV", std::sync::Arc::new(CsvTable::try_create))?;
     registry.register("PARQUET", std::sync::Arc::new(ParquetTable::try_create))?;
     registry.register("NULL", std::sync::Arc::new(NullTable::try_create))?;
     registry.register("MEMORY", std::sync::Arc::new(MemoryTable::try_create))?;
     registry.register("FUSE", std::sync::Arc::new(FuseTable::try_create))?;
+
+    // github database table engine
+    registry.register(
+        github::REPO_INFO_ENGINE,
+        std::sync::Arc::new(RepoInfoTable::try_create),
+    )?;
+    registry.register(
+        github::REPO_ISSUES_ENGINE,
+        std::sync::Arc::new(RepoIssuesTable::try_create),
+    )?;
+    registry.register(
+        github::REPO_PRS_ENGINE,
+        std::sync::Arc::new(RepoPrsTable::try_create),
+    )?;
+    registry.register(
+        github::REPO_COMMENTS_ENGINE,
+        std::sync::Arc::new(RepoCommentsTable::try_create),
+    )?;
     Ok(())
 }

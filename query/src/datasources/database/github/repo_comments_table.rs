@@ -42,6 +42,10 @@ pub struct RepoCommentsTable {
 }
 
 impl RepoCommentsTable {
+    pub fn try_create(table_info: TableInfo, _ctx: DataSourceContext) -> Result<Box<dyn Table>> {
+        Ok(Box::new(RepoCommentsTable { table_info }))
+    }
+
     pub async fn create(ctx: DataSourceContext, owner: String, repo: String) -> Result<()> {
         let mut options = HashMap::new();
         options.insert("owner".to_string(), owner.clone());
@@ -70,12 +74,6 @@ impl RepoCommentsTable {
         ];
 
         Arc::new(DataSchema::new(fields))
-    }
-
-    pub fn build_table(table_info: &TableInfo) -> Box<dyn Table> {
-        Box::new(Self {
-            table_info: table_info.clone(),
-        })
     }
 }
 

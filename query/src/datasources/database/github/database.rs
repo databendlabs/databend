@@ -50,6 +50,8 @@ pub const REPO_INFO_ENGINE: &str = "REPO_INFO_ENGINE";
 pub const REPO_ISSUES_ENGINE: &str = "REPO_ISSUES_ENGINE";
 pub const REPO_PRS_ENGINE: &str = "REPO_PRS_ENGINE";
 pub const REPO_COMMENTS_ENGINE: &str = "REPO_COMMENTS_ENGINE";
+pub const OWNER: &str = "owner";
+pub const REPO: &str = "repo";
 
 impl GithubDatabase {
     pub fn try_create(db_name: &str, ctx: DataSourceContext) -> Result<Box<dyn Database>> {
@@ -60,29 +62,25 @@ impl GithubDatabase {
     }
 
     fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+        tracing::error!(
+            "github database trying build table: {} engine: {} related repo",
+            &table_info.name,
+            &table_info.meta.engine
+        );
         let engine = table_info.engine();
-        match engine {
-            REPO_INFO_ENGINE => {
-                let tbl: Arc<dyn Table> = RepoInfoTable::build_table(table_info).into();
-                Ok(tbl)
-            }
-            REPO_ISSUES_ENGINE => {
-                let tbl: Arc<dyn Table> = RepoIssuesTable::build_table(table_info).into();
-                Ok(tbl)
-            }
-            REPO_PRS_ENGINE => {
-                let tbl: Arc<dyn Table> = RepoPrsTable::build_table(table_info).into();
-                Ok(tbl)
-            }
-            REPO_COMMENTS_ENGINE => {
-                let tbl: Arc<dyn Table> = RepoCommentsTable::build_table(table_info).into();
-                Ok(tbl)
-            }
-            _ => Err(ErrorCode::UnknownTableEngine(format!(
-                "unknown table engine {}",
-                engine
-            ))),
-        }
+        let factory = self
+            .ctx
+            .table_engine_registry
+            .get_table_factory(engine)
+            .ok_or_else(|| {
+                ErrorCode::UnknownTableEngine(format!("unknown table engine {}", engine))
+            })?;
+
+        let tbl: Arc<dyn Table> = factory
+            .try_create(table_info.clone(), self.ctx.clone())?
+            .into();
+
+        Ok(tbl)
     }
 }
 

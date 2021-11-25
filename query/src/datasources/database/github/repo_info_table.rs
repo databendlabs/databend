@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::CreateTableReq;
 use common_meta_types::TableIdent;
@@ -29,6 +30,8 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
 use crate::datasources::context::DataSourceContext;
+use crate::datasources::database::github::database::OWNER;
+use crate::datasources::database::github::database::REPO;
 use crate::datasources::database::github::database::REPO_INFO_ENGINE;
 use crate::sessions::DatabendQueryContextRef;
 
@@ -46,10 +49,14 @@ pub struct RepoInfoTable {
 }
 
 impl RepoInfoTable {
+    pub fn try_create(table_info: TableInfo, _ctx: DataSourceContext) -> Result<Box<dyn Table>> {
+        Ok(Box::new(RepoInfoTable { table_info }))
+    }
+
     pub async fn create(ctx: DataSourceContext, owner: String, repo: String) -> Result<()> {
         let mut options = HashMap::new();
-        options.insert("owner".to_string(), owner.clone());
-        options.insert("repo".to_string(), repo.clone());
+        options.insert(OWNER.to_string(), owner.clone());
+        options.insert(REPO.to_string(), repo.clone());
 
         let req = CreateTableReq {
             if_not_exists: false,
@@ -80,10 +87,53 @@ impl RepoInfoTable {
         Arc::new(DataSchema::new(fields))
     }
 
-    pub fn build_table(table_info: &TableInfo) -> Box<dyn Table> {
-        Box::new(Self {
-            table_info: table_info.clone(),
-        })
+    async fn get_data_from_github(&self) -> Result<Vec<Series>> {
+        let owner = self
+            .table_info
+            .meta
+            .options
+            .get(OWNER)
+            .ok_or_else(|| ErrorCode::UnexpectedError("Github table need owner in its mata"))?;
+        let repo = self
+            .table_info
+            .meta
+            .options
+            .get(REPO)
+            .ok_or_else(|| ErrorCode::UnexpectedError("Github table need repo in its mata"))?;
+
+        let repo = octocrab::instance().repos(owner, repo).get().await?;
+
+        let repo_name_array: Vec<Vec<u8>> = vec![repo.name.clone().into()];
+        let language_array: Vec<Vec<u8>> = vec![repo
+            .language
+            .as_ref()
+            .and_then(|l| l.as_str())
+            .unwrap_or("No Language")
+            .as_bytes()
+            .to_vec()];
+        let license_array: Vec<Vec<u8>> = vec![repo
+            .license
+            .as_ref()
+            .map(|l| l.key.as_str())
+            .unwrap_or("No license")
+            .as_bytes()
+            .to_vec()];
+        let star_count_array: Vec<u32> = vec![repo.stargazers_count.unwrap_or(0)];
+        let forks_count_array: Vec<u32> = vec![repo.forks_count.unwrap_or(0)];
+        let watchers_count_array: Vec<u32> = vec![repo.watchers_count.unwrap_or(0)];
+        let open_issues_count_array: Vec<u32> = vec![repo.open_issues_count.unwrap_or(0)];
+        let subscribers_count_array: Vec<u32> = vec![repo.subscribers_count.unwrap_or(0) as u32];
+
+        Ok(vec![
+            Series::new(repo_name_array),
+            Series::new(language_array),
+            Series::new(license_array),
+            Series::new(star_count_array),
+            Series::new(forks_count_array),
+            Series::new(watchers_count_array),
+            Series::new(open_issues_count_array),
+            Series::new(subscribers_count_array),
+        ])
     }
 }
 
@@ -102,6 +152,13 @@ impl Table for RepoInfoTable {
         ctx: DatabendQueryContextRef,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        unimplemented!()
+        let arrays = self.get_data_from_github().await?;
+        let block = DataBlock::create_by_array(self.table_info.schema(), arrays);
+
+        Ok(Box::pin(DataBlockStream::create(
+            self.table_info.schema(),
+            None,
+            vec![block],
+        )))
     }
 }
