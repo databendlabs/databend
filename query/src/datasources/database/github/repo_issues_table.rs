@@ -74,7 +74,7 @@ impl RepoIssuesTable {
 
     fn schema() -> Arc<DataSchema> {
         let fields = vec![
-            DataField::new(NUMBER, DataType::UInt64, false),
+            DataField::new(NUMBER, DataType::Int64, false),
             DataField::new(TITLE, DataType::String, true),
             // DataField::new(BODY, DataType::String, true),
             DataField::new(STATE, DataType::String, true),
@@ -89,7 +89,7 @@ impl RepoIssuesTable {
 
     async fn get_data_from_github(&self) -> Result<Vec<Series>> {
         // init array
-        let mut issue_numer_array: Vec<u64> = Vec::new();
+        let mut issue_numer_array: Vec<i64> = Vec::new();
         let mut title_array: Vec<Vec<u8>> = Vec::new();
         // let mut body_array: Vec<Vec<u8>> = Vec::new();
         let mut state_array: Vec<Vec<u8>> = Vec::new();
@@ -114,7 +114,7 @@ impl RepoIssuesTable {
 
         let issues = instance.all_pages::<models::issues::Issue>(page).await?;
         for issue in issues {
-            issue_numer_array.push(issue.id.into_inner());
+            issue_numer_array.push(issue.number);
             title_array.push(issue.title.clone().into());
             state_array.push(issue.state.clone().into());
             user_array.push(issue.user.login.clone().into());

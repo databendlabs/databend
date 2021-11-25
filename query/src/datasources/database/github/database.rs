@@ -56,11 +56,6 @@ impl GithubDatabase {
     }
 
     fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        tracing::error!(
-            "github database trying build table: {} engine: {} related repo",
-            &table_info.name,
-            &table_info.meta.engine
-        );
         let engine = table_info.engine();
         let factory = self
             .ctx
@@ -85,10 +80,6 @@ impl Database for GithubDatabase {
     }
 
     async fn init(&self) -> Result<()> {
-        // TODO(veeupup)
-        // maybe we will need a user token needed from config to login
-        // because github api has rate limit for each user, check it at
-        // https://docs.github.com/en/rest/overview/resources-in-the-rest-api#rate-limiting
         // 1. get all repos in this organization
         let repos = octocrab::instance()
             .orgs(&self.db_name)
