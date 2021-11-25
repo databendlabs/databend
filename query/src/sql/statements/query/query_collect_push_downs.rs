@@ -36,13 +36,15 @@ impl QueryCollectPushDowns {
             let table_desc = &schema.get_tables_desc()[index];
             let projection = self.collect_table_require_columns(table_desc);
 
-            schema.set_table_push_downs(index, Extras {
-                projection: Some(projection),
-                // TODO:
-                filters: vec![],
-                limit: None,
-                order_by: vec![],
-            });
+            if !projection.is_empty() {
+                schema.set_table_push_downs(index, Extras {
+                    projection: Some(projection),
+                    // TODO:
+                    filters: vec![],
+                    limit: None,
+                    order_by: vec![],
+                });
+            }
         }
 
         Ok(())

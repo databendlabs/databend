@@ -174,7 +174,7 @@ fn test_plan_parser() -> Result<()> {
             \n            AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]\
             \n              Expression: (number % 3):UInt8, (number + 1):UInt64 (Before GroupBy)\
             \n                Filter: (number > 1)\
-            \n                  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            \n                  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
             error: "",
         },
         Test {
@@ -189,7 +189,7 @@ fn test_plan_parser() -> Result<()> {
             expect: "\
             Projection: number:UInt64\
             \n  Filter: NULL\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
             error: "",
         },
         Test {
@@ -198,7 +198,7 @@ fn test_plan_parser() -> Result<()> {
             expect: "\
             Projection: number:UInt64\
             \n  Filter: (NULL AND true)\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
             error: "",
         },
         Test {
@@ -206,7 +206,7 @@ fn test_plan_parser() -> Result<()> {
             sql: "show metrics",
             expect: "\
             Projection: metric:String, kind:String, labels:String, value:String\
-            \n  ReadDataSource: scan partitions: [1], scan schema: [metric:String, kind:String, labels:String, value:String], statistics: [read_rows: 0, read_bytes: 0]",
+            \n  ReadDataSource: scan partitions: [1], scan schema: [metric:String, kind:String, labels:String, value:String], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0, 1, 2, 3]]",
             error: "",
         },
         Test {
@@ -214,7 +214,7 @@ fn test_plan_parser() -> Result<()> {
             sql: "show processlist",
             expect: "\
             Projection: id:String, type:String, host:String, user:String, state:String, database:String, extra_info:String, memory_usage:UInt64\
-            \n  ReadDataSource: scan partitions: [1], scan schema: [id:String, type:String, host:String;N, user:String;N, state:String, database:String, extra_info:String;N, memory_usage:UInt64;N], statistics: [read_rows: 0, read_bytes: 0]",
+            \n  ReadDataSource: scan partitions: [1], scan schema: [id:String, type:String, host:String;N, user:String;N, state:String, database:String, extra_info:String;N, memory_usage:UInt64;N], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0, 1, 2, 3, 4, 5, 6, 7]]",
             error: "",
         },
     ];

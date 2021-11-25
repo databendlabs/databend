@@ -215,6 +215,7 @@ impl DfQueryStatement {
                 state: subquery_state,
                 ..
             } => {
+                // TODO: maybe need reanalyze subquery.
                 state.relation = QueryRelation::Nested(subquery_state);
             }
         }

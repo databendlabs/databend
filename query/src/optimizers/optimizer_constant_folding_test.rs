@@ -41,7 +41,7 @@ mod tests {
                 expect: "\
                 Projection: (((dummy + 1) + 2) + 3):UInt64\
                 \n  Expression: (((dummy + 1) + 2) + 3):UInt64 (Before Projection)\
-                \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
+                \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1], push_downs: [projections: [0]]",
             },
             Test {
                 name: "Projection right non const recursion",
@@ -49,7 +49,7 @@ mod tests {
                 expect: "\
                 Projection: (((1 + 2) + 3) + dummy):UInt64\
                 \n  Expression: (6 + dummy):UInt64 (Before Projection)\
-                \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
+                \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1], push_downs: [projections: [0]]",
             },
             Test {
                 name: "Projection arithmetic const recursion",
@@ -113,7 +113,7 @@ mod tests {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: (number > 1)\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
             },
             Test {
                 name: "Filter cond and true",
@@ -121,7 +121,7 @@ mod tests {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: (number > 1)\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
             },
             Test {
                 name: "Filter false and cond",
@@ -129,7 +129,7 @@ mod tests {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: false\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
             },
             Test {
                 name: "Filter cond and false",
@@ -137,7 +137,7 @@ mod tests {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: false\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
             },
             Test {
                 name: "Filter false or cond",
@@ -145,7 +145,7 @@ mod tests {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: (number > 1)\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
             },
             Test {
                 name: "Filter cond or false",
@@ -153,7 +153,7 @@ mod tests {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: (number > 1)\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
             },
             Test {
                 name: "Filter true or cond",
@@ -161,7 +161,7 @@ mod tests {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: true\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
             },
             Test {
                 name: "Filter cond or true",
@@ -169,7 +169,7 @@ mod tests {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: true\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
             },
         ];
 

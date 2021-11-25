@@ -84,7 +84,6 @@ type Scheduled = HashMap<String, Arc<NodeInfo>>;
 impl SelectInterpreter {
     async fn schedule_query(&self, scheduled: &mut Scheduled) -> Result<SendableDataBlockStream> {
         let optimized_plan = apply_plan_rewrite(
-            self.ctx.clone(),
             Optimizers::create(self.ctx.clone()),
             &self.select.input,
         )?;

@@ -38,7 +38,7 @@ async fn test_local_pipeline_builds() -> Result<()> {
             plan: "\
             Projection: number as c1:UInt64, number as c2:UInt64\
             \n  Sort: number:UInt64\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
 
             pipeline: "\
             ProjectionTransform × 1 processor\
@@ -73,7 +73,7 @@ async fn test_local_pipeline_builds() -> Result<()> {
             plan: "\
             Projection: number as c1:UInt64, number as c2:UInt64\
             \n  Sort: number:UInt64, number:UInt64\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
 
 
             pipeline: "\
@@ -110,7 +110,7 @@ async fn test_local_pipeline_builds() -> Result<()> {
             Projection: number as c1:UInt64, (number + 1) as c2:UInt64\
             \n  Sort: number:UInt64, (number + 1):UInt64\
             \n    Expression: number:UInt64, (number + 1):UInt64 (Before OrderBy)\
-            \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
 
             pipeline: "\
             ProjectionTransform × 1 processor\
@@ -147,7 +147,7 @@ async fn test_local_pipeline_builds() -> Result<()> {
             Limit: 5, 5\
             \n  Projection: number:UInt64\
             \n    Sort: number:UInt64\
-            \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800]",
+            \n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 100, read_bytes: 800], push_downs: [projections: [0]]",
 
             pipeline: "\
             LimitTransform × 1 processor\
