@@ -1,6 +1,21 @@
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::{Debug, Formatter};
-use common_planners::Expression;
+// Copyright 2021 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Debug;
+use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
 use common_exception::Result;
+use common_planners::Expression;
 
 // Intermediate representation for query AST(after normalize)
 pub struct QueryASTIR {
@@ -57,12 +72,14 @@ pub trait QueryASTIRVisitor<Data> {
 
                 Ok(())
             }
-            Expression::Sort { expr, origin_expr, .. } => {
+            Expression::Sort {
+                expr, origin_expr, ..
+            } => {
                 Self::visit_recursive_expr(expr, data)?;
                 Self::visit_recursive_expr(origin_expr, data)
             }
             Expression::Cast { expr, .. } => Self::visit_recursive_expr(expr, data),
-            _ => Self::visit_expr(expr, data)
+            _ => Self::visit_expr(expr, data),
         }
     }
 

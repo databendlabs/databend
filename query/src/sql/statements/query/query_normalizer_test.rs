@@ -124,7 +124,12 @@ async fn test_query_normalizer() -> Result<()> {
         match statements.remove(0) {
             DfStatement::Query(query) => {
                 let ir = QueryNormalizer::normalize(ctx, &query).await?;
-                assert_eq!(test_case.expect, format!("{:?}", ir), "{:#?}", test_case.name);
+                assert_eq!(
+                    test_case.expect,
+                    format!("{:?}", ir),
+                    "{:#?}",
+                    test_case.name
+                );
             }
             _ => {
                 return Err(ErrorCode::LogicalError("Cannot get analyze query state."));

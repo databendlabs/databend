@@ -111,7 +111,12 @@ async fn test_query_qualified_rewriter() -> Result<()> {
                 let mut ir = QueryNormalizer::normalize(ctx.clone(), &query).await?;
                 QualifiedRewriter::rewrite(&schema, ctx, &mut ir)?;
 
-                assert_eq!(test_case.expect, format!("{:?}", ir), "{:#?}", test_case.name);
+                assert_eq!(
+                    test_case.expect,
+                    format!("{:?}", ir),
+                    "{:#?}",
+                    test_case.name
+                );
             }
             _ => {
                 return Err(ErrorCode::LogicalError("Cannot get analyze query state."));

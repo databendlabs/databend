@@ -90,10 +90,10 @@ impl JoinedSchema {
     }
 
     pub fn set_table_push_downs(&mut self, table_pos: usize, extras: Extras) {
-        match &mut self.tables_long_name_columns[table_pos] {
-            JoinedTableDesc::Table { push_downs, .. } => *push_downs = Some(extras),
-            _ => {}
-        };
+        let table_desc = &mut self.tables_long_name_columns[table_pos];
+        if let JoinedTableDesc::Table { push_downs, .. } = table_desc {
+            *push_downs = Some(extras);
+        }
     }
 
     pub fn take_tables_desc(self) -> Vec<JoinedTableDesc> {

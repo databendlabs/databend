@@ -33,11 +33,12 @@ use sqlparser::ast::TableWithJoins;
 use crate::catalogs::ToReadDataSourcePlan;
 use crate::sessions::QueryContext;
 use crate::sql::statements::analyzer_statement::QueryAnalyzeState;
-use crate::sql::statements::query::{JoinedSchema, QueryCollectPushDowns};
+use crate::sql::statements::query::JoinedSchema;
 use crate::sql::statements::query::JoinedSchemaAnalyzer;
 use crate::sql::statements::query::JoinedTableDesc;
 use crate::sql::statements::query::QualifiedRewriter;
 use crate::sql::statements::query::QueryASTIR;
+use crate::sql::statements::query::QueryCollectPushDowns;
 use crate::sql::statements::query::QueryNormalizer;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
@@ -207,7 +208,9 @@ impl DfQueryStatement {
         }
 
         match tables_desc.remove(0) {
-            JoinedTableDesc::Table { table, push_downs, .. } => {
+            JoinedTableDesc::Table {
+                table, push_downs, ..
+            } => {
                 let source_plan = table.read_plan(ctx.clone(), push_downs).await?;
                 state.relation = QueryRelation::FromTable(Box::new(source_plan));
             }

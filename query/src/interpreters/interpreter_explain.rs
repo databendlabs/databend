@@ -67,10 +67,7 @@ impl ExplainInterpreter {
 
     fn explain_graph(&self) -> Result<DataBlock> {
         let schema = self.schema();
-        let plan = apply_plan_rewrite(
-            Optimizers::create(self.ctx.clone()),
-            &self.explain.input,
-        )?;
+        let plan = apply_plan_rewrite(Optimizers::create(self.ctx.clone()), &self.explain.input)?;
         let formatted_plan = Series::new(
             format!("{}", plan.display_graphviz())
                 .lines()
@@ -82,10 +79,7 @@ impl ExplainInterpreter {
 
     fn explain_syntax(&self) -> Result<DataBlock> {
         let schema = self.schema();
-        let plan = apply_plan_rewrite(
-            Optimizers::create(self.ctx.clone()),
-            &self.explain.input,
-        )?;
+        let plan = apply_plan_rewrite(Optimizers::create(self.ctx.clone()), &self.explain.input)?;
         let formatted_plan = Series::new(
             format!("{:?}", plan)
                 .lines()

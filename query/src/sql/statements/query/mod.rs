@@ -21,19 +21,19 @@ mod query_normalizer_test;
 #[cfg(test)]
 mod query_qualified_rewriter_test;
 
+mod query_ast_ir;
+mod query_collect_push_downs;
 mod query_normalizer;
 mod query_qualified_rewriter;
 mod query_schema_joined;
 mod query_schema_joined_analyzer;
-mod query_ast_ir;
-mod query_collect_push_downs;
 
 pub use query_ast_ir::QueryASTIR;
+pub use query_ast_ir::QueryASTIRVisitor;
+pub use query_collect_push_downs::QueryCollectPushDowns;
 pub use query_normalizer::QueryNormalizer;
 pub use query_qualified_rewriter::QualifiedRewriter;
 pub use query_schema_joined::JoinedColumnDesc;
 pub use query_schema_joined::JoinedSchema;
 pub use query_schema_joined::JoinedTableDesc;
 pub use query_schema_joined_analyzer::JoinedSchemaAnalyzer;
-pub use query_collect_push_downs::QueryCollectPushDowns;
-pub use query_ast_ir::QueryASTIRVisitor;

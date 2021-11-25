@@ -19,9 +19,9 @@ use common_exception::Result;
 use common_planners::Expression;
 
 use crate::sessions::QueryContext;
+use crate::sql::statements::query::query_ast_ir::QueryASTIRVisitor;
 use crate::sql::statements::query::query_schema_joined::JoinedTableDesc;
 use crate::sql::statements::query::JoinedSchema;
-use crate::sql::statements::query::query_ast_ir::QueryASTIRVisitor;
 use crate::sql::statements::query::QueryASTIR;
 
 pub struct QualifiedRewriter {
@@ -40,7 +40,7 @@ impl QueryASTIRVisitor<QualifiedRewriter> for QualifiedRewriter {
                 *expr = Self::rewrite_qualified_column(data, names)?;
                 Ok(())
             }
-            _ => Ok(())
+            _ => Ok(()),
         }
     }
 
@@ -48,8 +48,7 @@ impl QueryASTIRVisitor<QualifiedRewriter> for QualifiedRewriter {
         let mut new_exprs = Vec::with_capacity(exprs.len());
 
         // TODO: alias.*
-        for index in 0..exprs.len() {
-            let projection_expr = &mut exprs[index];
+        for projection_expr in exprs.iter_mut() {
             if let Expression::Alias(_, x) = projection_expr {
                 if let Expression::Wildcard = x.as_ref() {
                     return Err(ErrorCode::SyntaxException("* AS alias is wrong syntax"));
@@ -71,8 +70,15 @@ impl QueryASTIRVisitor<QualifiedRewriter> for QualifiedRewriter {
 }
 
 impl QualifiedRewriter {
-    pub fn rewrite(schema: &JoinedSchema, ctx: Arc<QueryContext>, ir: &mut QueryASTIR) -> Result<()> {
-        let mut rewriter = QualifiedRewriter { tables_schema: schema.clone(), ctx };
+    pub fn rewrite(
+        schema: &JoinedSchema,
+        ctx: Arc<QueryContext>,
+        ir: &mut QueryASTIR,
+    ) -> Result<()> {
+        let mut rewriter = QualifiedRewriter {
+            tables_schema: schema.clone(),
+            ctx,
+        };
         QualifiedRewriter::visit(ir, &mut rewriter)
     }
 

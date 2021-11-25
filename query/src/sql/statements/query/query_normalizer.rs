@@ -27,8 +27,8 @@ use sqlparser::ast::SelectItem;
 
 use crate::sessions::QueryContext;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
-use crate::sql::statements::DfQueryStatement;
 use crate::sql::statements::query::QueryASTIR;
+use crate::sql::statements::DfQueryStatement;
 
 pub struct QueryNormalizer {
     query_ast_ir: QueryASTIR,
