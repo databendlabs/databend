@@ -2815,9 +2815,9 @@ dependencies = [
 
 [[package]]
 name = "futures-sink"
-version = "0.3.17"
+version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36ea153c13024fe480590b3e3d4cad89a0cfacecc24577b68f86c6ced9c2bc11"
+checksum = "996c6442437b62d21a32cd9906f9c41e7dc1e19a9579843fad948696769305af"
 
 [[package]]
 name = "futures-task"
@@ -6927,15 +6927,15 @@ dependencies = [
 
 [[package]]
 name = "tracing-bunyan-formatter"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0814e45b1ba02f79418d90107acc44ae55dceb0623d40f4ee7d981b5e1984869"
+checksum = "1cb2ad6aa9b1c637d84c54db002275bbf72a7f3c6fed80f8b33f5af0c39027e9"
 dependencies = [
- "chrono",
  "gethostname",
  "log",
  "serde",
  "serde_json",
+ "time 0.3.5",
  "tracing",
  "tracing-core",
  "tracing-log",
