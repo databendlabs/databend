@@ -15,7 +15,6 @@ export S3_STORAGE_ENDPOINT_URL=http://127.0.0.1:9900
 export S3_STORAGE_ACCESS_KEY_ID=minioadmin
 export S3_STORAGE_SECRET_ACCESS_KEY=minioadmin
 
-
 echo "calling test suite"
 echo "Starting standalone DatabendQuery(debug)"
 ./scripts/deploy/databend-query-standalone.sh
@@ -25,4 +24,3 @@ cd "$SCRIPT_PATH/../../tests" || exit
 
 echo "Starting databend-test"
 ./databend-test --mode 'standalone' --run-dir 0_stateful
-
