@@ -23,6 +23,7 @@ use common_exception::Result;
 
 use crate::servers::http::v1::query::execute_state::ExecuteState;
 use crate::servers::http::v1::query::execute_state::ExecuteStateName;
+use crate::servers::http::v1::query::execute_state::Executor;
 use crate::servers::http::v1::query::execute_state::ExecutorRef;
 use crate::servers::http::v1::query::execute_state::HttpQueryRequest;
 use crate::servers::http::v1::query::result_data_manager::ResponseData;
@@ -133,7 +134,7 @@ impl HttpQuery {
     }
 
     pub async fn kill(&self) {
-        ExecuteState::stop(
+        Executor::stop(
             &self.state,
             Err(ErrorCode::AbortedQuery("killed by http")),
             true,

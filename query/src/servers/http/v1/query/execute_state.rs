@@ -99,6 +99,21 @@ impl Executor {
             Stopped(f) => f.stop_time - self.start_time,
         }
     }
+    pub(crate) async fn stop(this: &ExecutorRef, reason: Result<()>, kill: bool) {
+        let mut guard = this.write().await;
+        if let Running(r) = &guard.state {
+            // release session
+            let progress = Some(r.context.get_progress_value());
+            if kill {
+                r.session.force_kill_query();
+            }
+            guard.state = Stopped(ExecuteStopped {
+                progress,
+                reason,
+                stop_time: Instant::now(),
+            });
+        };
+    }
 }
 
 pub struct HttpQueryHandle {
@@ -165,38 +180,22 @@ impl ExecuteState {
                             Ok(block) => tokio::select! {
                                 _ = block_tx.send(block) => { },
                                 _ = abort_rx.recv() => {
-                                    ExecuteState::stop(&executor, Err(ErrorCode::AbortedQuery("query aborted")), true).await;
+                                    Executor::stop(&executor, Err(ErrorCode::AbortedQuery("query aborted")), true).await;
                                     break;
                                 },
                             },
                             Err(err) => {
-                                ExecuteState::stop(&executor, Err(err), false).await;
+                                Executor::stop(&executor, Err(err), false).await;
                                 break
                             }
                         };
                     } else {
-                        ExecuteState::stop(&executor, Ok(()), false).await;
+                        Executor::stop(&executor, Ok(()), false).await;
                         break;
                     }
                 }
                 log::debug!("drop block sender!");
             })?;
         Ok((executor_clone, schema))
-    }
-
-    pub(crate) async fn stop(this: &ExecutorRef, reason: Result<()>, kill: bool) {
-        let mut guard = this.write().await;
-        if let Running(r) = &guard.state {
-            // release session
-            let progress = Some(r.context.get_progress_value());
-            if kill {
-                r.session.force_kill_query();
-            }
-            guard.state = Stopped(ExecuteStopped {
-                progress,
-                reason,
-                stop_time: Instant::now(),
-            });
-        };
     }
 }
