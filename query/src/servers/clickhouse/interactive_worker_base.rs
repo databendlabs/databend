@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use super::writers::from_clickhouse_block;
 use crate::interpreters::InterpreterFactory;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 use crate::sessions::SessionRef;
 use crate::sql::PlanParser;
 
@@ -111,7 +111,7 @@ impl InteractiveWorkerBase {
     pub async fn process_insert_query(
         insert: InsertIntoPlan,
         ch_ctx: &mut CHContext,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
     ) -> Result<Receiver<BlockItem>> {
         let sample_block = DataBlock::empty_with_schema(insert.schema());
         let (sender, rec) = channel(4);

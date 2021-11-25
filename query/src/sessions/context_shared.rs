@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ use uuid::Uuid;
 use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::Catalog;
 use crate::catalogs::Table;
-use crate::clusters::ClusterRef;
+use crate::clusters::Cluster;
 use crate::configs::Config;
 use crate::servers::http::v1::query::HttpQueryHandle;
 use crate::sessions::Session;
@@ -48,13 +48,13 @@ type DatabaseAndTable = (String, String);
 ///         (SELECT scalar FROM table_name_3) AS scalar_3
 ///     FROM table_name_4;
 /// For each subquery, they will share a runtime, session, progress, init_query_id
-pub struct DatabendQueryContextShared {
+pub struct QueryContextShared {
     pub(in crate::sessions) conf: Config,
     pub(in crate::sessions) progress: Arc<Progress>,
     pub(in crate::sessions) session: Arc<Session>,
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
-    pub(in crate::sessions) cluster_cache: ClusterRef,
+    pub(in crate::sessions) cluster_cache: Arc<Cluster>,
     pub(in crate::sessions) sources_abort_handle: Arc<RwLock<Vec<AbortHandle>>>,
     pub(in crate::sessions) ref_count: Arc<AtomicUsize>,
     pub(in crate::sessions) subquery_index: Arc<AtomicUsize>,
@@ -65,13 +65,13 @@ pub struct DatabendQueryContextShared {
     pub(in crate::sessions) dal_ctx: Arc<DalContext>,
 }
 
-impl DatabendQueryContextShared {
+impl QueryContextShared {
     pub fn try_create(
         conf: Config,
         session: Arc<Session>,
-        cluster_cache: ClusterRef,
-    ) -> Arc<DatabendQueryContextShared> {
-        Arc::new(DatabendQueryContextShared {
+        cluster_cache: Arc<Cluster>,
+    ) -> Arc<QueryContextShared> {
+        Arc::new(QueryContextShared {
             conf,
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             progress: Arc::new(Progress::create()),
@@ -104,12 +104,16 @@ impl DatabendQueryContextShared {
         // TODO: Wait for the query to be processed (write out the last error)
     }
 
-    pub fn get_cluster(&self) -> ClusterRef {
+    pub fn get_cluster(&self) -> Arc<Cluster> {
         self.cluster_cache.clone()
     }
 
     pub fn get_current_database(&self) -> String {
         self.session.get_current_database()
+    }
+
+    pub fn get_current_user(&self) -> Result<String> {
+        self.session.get_current_user()
     }
 
     pub fn set_current_database(&self, new_database_name: String) {

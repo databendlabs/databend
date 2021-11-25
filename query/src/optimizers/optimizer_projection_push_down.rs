@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
@@ -34,7 +35,7 @@ use common_planners::SortPlan;
 
 use crate::optimizers::Optimizer;
 use crate::optimizers::RequireColumnsVisitor;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct ProjectionPushDownOptimizer {}
 
@@ -209,7 +210,7 @@ impl Optimizer for ProjectionPushDownOptimizer {
 }
 
 impl ProjectionPushDownOptimizer {
-    pub fn create(_ctx: DatabendQueryContextRef) -> ProjectionPushDownOptimizer {
+    pub fn create(_ctx: Arc<QueryContext>) -> ProjectionPushDownOptimizer {
         ProjectionPushDownOptimizer {}
     }
 }

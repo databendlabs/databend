@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ pub struct NumberFunction<T, R> {
 
 pub trait NumberResultFunction<R> {
     const IS_DETERMINISTIC: bool;
+    const MAYBE_MONOTONIC: bool;
 
     fn return_type() -> Result<DataType>;
     fn to_number(_value: DateTime<Utc>) -> R;
@@ -48,6 +49,7 @@ pub struct ToYYYYMM;
 
 impl NumberResultFunction<u32> for ToYYYYMM {
     const IS_DETERMINISTIC: bool = true;
+    const MAYBE_MONOTONIC: bool = true;
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt32)
@@ -66,6 +68,7 @@ pub struct ToYYYYMMDD;
 
 impl NumberResultFunction<u32> for ToYYYYMMDD {
     const IS_DETERMINISTIC: bool = true;
+    const MAYBE_MONOTONIC: bool = true;
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt32)
@@ -84,6 +87,7 @@ pub struct ToYYYYMMDDhhmmss;
 
 impl NumberResultFunction<u64> for ToYYYYMMDDhhmmss {
     const IS_DETERMINISTIC: bool = true;
+    const MAYBE_MONOTONIC: bool = true;
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt64)
@@ -108,6 +112,7 @@ pub struct ToStartOfYear;
 
 impl NumberResultFunction<u16> for ToStartOfYear {
     const IS_DETERMINISTIC: bool = true;
+    const MAYBE_MONOTONIC: bool = true;
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
@@ -127,6 +132,7 @@ pub struct ToStartOfISOYear;
 
 impl NumberResultFunction<u16> for ToStartOfISOYear {
     const IS_DETERMINISTIC: bool = true;
+    const MAYBE_MONOTONIC: bool = true;
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
@@ -151,6 +157,7 @@ pub struct ToStartOfQuarter;
 
 impl NumberResultFunction<u16> for ToStartOfQuarter {
     const IS_DETERMINISTIC: bool = true;
+    const MAYBE_MONOTONIC: bool = true;
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
@@ -171,6 +178,7 @@ pub struct ToStartOfMonth;
 
 impl NumberResultFunction<u16> for ToStartOfMonth {
     const IS_DETERMINISTIC: bool = true;
+    const MAYBE_MONOTONIC: bool = true;
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
@@ -190,6 +198,7 @@ pub struct ToMonth;
 
 impl NumberResultFunction<u8> for ToMonth {
     const IS_DETERMINISTIC: bool = true;
+    const MAYBE_MONOTONIC: bool = false;
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt8)
@@ -208,6 +217,7 @@ pub struct ToDayOfYear;
 
 impl NumberResultFunction<u16> for ToDayOfYear {
     const IS_DETERMINISTIC: bool = true;
+    const MAYBE_MONOTONIC: bool = false;
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt16)
@@ -226,6 +236,7 @@ pub struct ToDayOfMonth;
 
 impl NumberResultFunction<u8> for ToDayOfMonth {
     const IS_DETERMINISTIC: bool = true;
+    const MAYBE_MONOTONIC: bool = false;
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt8)
@@ -244,6 +255,7 @@ pub struct ToDayOfWeek;
 
 impl NumberResultFunction<u8> for ToDayOfWeek {
     const IS_DETERMINISTIC: bool = true;
+    const MAYBE_MONOTONIC: bool = false;
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt8)
@@ -262,6 +274,7 @@ pub struct ToHour;
 
 impl NumberResultFunction<u8> for ToHour {
     const IS_DETERMINISTIC: bool = true;
+    const MAYBE_MONOTONIC: bool = false;
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt8)
@@ -280,6 +293,7 @@ pub struct ToMinute;
 
 impl NumberResultFunction<u8> for ToMinute {
     const IS_DETERMINISTIC: bool = true;
+    const MAYBE_MONOTONIC: bool = false;
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt8)
@@ -298,6 +312,7 @@ pub struct ToSecond;
 
 impl NumberResultFunction<u8> for ToSecond {
     const IS_DETERMINISTIC: bool = true;
+    const MAYBE_MONOTONIC: bool = false;
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt8)
@@ -316,6 +331,7 @@ pub struct ToMonday;
 
 impl NumberResultFunction<u16> for ToMonday {
     const IS_DETERMINISTIC: bool = true;
+    const MAYBE_MONOTONIC: bool = true;
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
@@ -349,6 +365,10 @@ where
 
         if T::IS_DETERMINISTIC {
             features = features.deterministic();
+        }
+
+        if T::MAYBE_MONOTONIC {
+            features = features.monotonicity();
         }
 
         FunctionDescription::creator(Box::new(Self::try_create)).features(features)

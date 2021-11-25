@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,5 @@ pub use cluster::ClusterApi;
 pub use cluster::ClusterMgr;
 pub use stage::StageMgr;
 pub use stage::StageMgrApi;
-pub use user::user_api::UserInfo;
 pub use user::user_api::UserMgrApi;
 pub use user::user_mgr::UserMgr;

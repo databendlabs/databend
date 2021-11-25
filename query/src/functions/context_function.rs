@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -19,17 +21,14 @@ use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::scalars::FunctionFactory;
 use common_planners::Expression;
 
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct ContextFunction;
 
 impl ContextFunction {
     // Some function args need from context
     // such as `SELECT database()`, the arg is ctx.get_default_db()
-    pub fn build_args_from_ctx(
-        name: &str,
-        ctx: DatabendQueryContextRef,
-    ) -> Result<Vec<Expression>> {
+    pub fn build_args_from_ctx(name: &str, ctx: Arc<QueryContext>) -> Result<Vec<Expression>> {
         // Check the function is supported in common functions.
         let function_factory = FunctionFactory::instance();
         let aggregate_function_factory = AggregateFunctionFactory::instance();
@@ -47,6 +46,11 @@ impl ContextFunction {
             )))],
             "version" => vec![Expression::create_literal(DataValue::String(Some(
                 ctx.get_fuse_version().into_bytes(),
+            )))],
+            "current_user" => vec![Expression::create_literal(DataValue::String(Some(
+                ctx.get_current_user()
+                    .unwrap_or_else(|_| "".to_string())
+                    .into_bytes(),
             )))],
             _ => vec![],
         })

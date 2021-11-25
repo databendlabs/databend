@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,11 +37,10 @@ use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Pipeline;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::pipelines::processors::Processor;
-use crate::sessions::DatabendQueryContext;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct CreateSetsTransform {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<QueryContext>,
     schema: DataSchemaRef,
     input: Arc<dyn Processor>,
     sub_queries_puller: Arc<Mutex<SubQueriesPuller<'static>>>,
@@ -49,7 +48,7 @@ pub struct CreateSetsTransform {
 
 impl CreateSetsTransform {
     pub fn try_create(
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
         schema: DataSchemaRef,
         sub_queries_puller: Arc<Mutex<SubQueriesPuller<'static>>>,
     ) -> Result<CreateSetsTransform> {
@@ -134,14 +133,14 @@ type SubqueryData = Result<DataValue>;
 type SharedFuture<'a> = Shared<BoxFuture<'a, SubqueryData>>;
 
 pub struct SubQueriesPuller<'a> {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<QueryContext>,
     expressions: Vec<Expression>,
     sub_queries: Vec<SharedFuture<'a>>,
 }
 
 impl<'a> SubQueriesPuller<'a> {
     pub fn create(
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
         expressions: Vec<Expression>,
     ) -> Arc<Mutex<SubQueriesPuller<'a>>> {
         let expression_len = expressions.len();
@@ -169,7 +168,7 @@ impl<'a> SubQueriesPuller<'a> {
 
     fn init(&mut self) -> Result<()> {
         for query_expression in &self.expressions {
-            let subquery_ctx = DatabendQueryContext::new(self.ctx.clone());
+            let subquery_ctx = QueryContext::new(self.ctx.clone());
 
             match query_expression {
                 Expression::Subquery { query_plan, .. } => {

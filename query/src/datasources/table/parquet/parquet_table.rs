@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ use common_streams::Source;
 
 use crate::catalogs::Table;
 use crate::datasources::context::DataSourceContext;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct ParquetTable {
     table_info: TableInfo,
@@ -73,7 +73,7 @@ impl Table for ParquetTable {
 
     async fn read_partitions(
         &self,
-        _ctx: DatabendQueryContextRef,
+        _ctx: Arc<QueryContext>,
         _push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let parts = vec![Part {
@@ -85,7 +85,7 @@ impl Table for ParquetTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let ctx_clone = ctx.clone();

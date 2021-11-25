@@ -32,7 +32,7 @@ _local_fs/*
 _meta*/*
 stateless_test_data/*
 **/_logs*/*
-_data/*
+_data/
 _tmp/*
 tls/certs/*
 

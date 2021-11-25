@@ -13,6 +13,8 @@
 //  limitations under the License.
 //
 
+use std::sync::Arc;
+
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
@@ -31,11 +33,11 @@ use uuid::Uuid;
 use crate::catalogs::Catalog;
 use crate::catalogs::Table;
 use crate::configs::Config;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct TestFixture {
     _tmp_dir: TempDir,
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<QueryContext>,
     prefix: String,
 }
 
@@ -71,7 +73,7 @@ impl TestFixture {
         }
     }
 
-    pub fn ctx(&self) -> DatabendQueryContextRef {
+    pub fn ctx(&self) -> Arc<QueryContext> {
         self.ctx.clone()
     }
 

@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,8 +30,7 @@ use sqlparser::ast::UnaryOperator;
 use sqlparser::ast::Value;
 
 use crate::functions::ContextFunction;
-use crate::sessions::DatabendQueryContext;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 use crate::sql::statements::analyzer_value_expr::ValueExprAnalyzer;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
@@ -40,11 +39,11 @@ use crate::sql::PlanParser;
 use crate::sql::SQLCommon;
 
 pub struct ExpressionAnalyzer {
-    context: DatabendQueryContextRef,
+    context: Arc<QueryContext>,
 }
 
 impl ExpressionAnalyzer {
-    pub fn create(context: DatabendQueryContextRef) -> ExpressionAnalyzer {
+    pub fn create(context: Arc<QueryContext>) -> ExpressionAnalyzer {
         ExpressionAnalyzer { context }
     }
 
@@ -221,7 +220,7 @@ impl ExpressionAnalyzer {
         let statement = DfQueryStatement::try_from(subquery.clone())?;
 
         let query_context = self.context.clone();
-        let subquery_context = DatabendQueryContext::new(query_context.clone());
+        let subquery_context = QueryContext::new(query_context.clone());
 
         let analyze_subquery = statement.analyze(subquery_context);
         if let AnalyzedResult::SelectQuery(analyze_data) = analyze_subquery.await? {
@@ -246,7 +245,7 @@ impl ExpressionAnalyzer {
         let statement = DfQueryStatement::try_from(subquery.clone())?;
 
         let query_context = self.context.clone();
-        let subquery_context = DatabendQueryContext::new(query_context.clone());
+        let subquery_context = QueryContext::new(query_context.clone());
 
         let analyze_subquery = statement.analyze(subquery_context);
         if let AnalyzedResult::SelectQuery(analyze_data) = analyze_subquery.await? {

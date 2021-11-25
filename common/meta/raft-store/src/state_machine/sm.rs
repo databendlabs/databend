@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::convert::Infallible;
+use std::convert::TryInto;
 use std::fmt::Debug;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -38,12 +40,12 @@ use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_meta_types::TableIdent;
-use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_tracing::tracing;
 use serde::Deserialize;
 use serde::Serialize;
+use sled::transaction::ConflictableTransactionError;
+use sled::transaction::TransactionError;
 use sled::IVec;
 
 use crate::config::RaftConfig;
@@ -241,18 +243,30 @@ impl StateMachine {
     /// will be made and the previous resp is returned. In this way a client is able to re-send a
     /// command safely in case of network failure etc.
     #[tracing::instrument(level = "trace", skip(self))]
-    pub async fn apply(
-        &mut self,
-        entry: &Entry<LogEntry>,
-    ) -> common_exception::Result<AppliedState> {
+    pub async fn apply(&self, entry: &Entry<LogEntry>) -> common_exception::Result<AppliedState> {
         // TODO(xp): all update need to be done in a tx.
 
         let log_id = &entry.log_id;
 
         let sm_meta = self.sm_meta();
-        sm_meta
-            .insert(&LastApplied, &StateMachineMetaValue::LogId(*log_id))
-            .await?;
+
+        // use `Infallible` here cause Sled make it infallible
+        // ref: https://github.com/datafuse-extras/sled/blob/43fa7250d3c6f4964167c9498b622f2923289cf3/src/transaction.rs#L235
+        let r: Result<Option<StateMachineMetaValue>, TransactionError<Infallible>> =
+            self.sm_tree.txn(true, move |t| {
+                let txn_sm_meta = t.key_space::<StateMachineMeta>();
+                txn_sm_meta
+                    .insert(&LastApplied, &StateMachineMetaValue::LogId(*log_id))
+                    .map_err(|e| {
+                        let err: ConflictableTransactionError<Infallible> =
+                            ConflictableTransactionError::from(e);
+                        err
+                    })
+            });
+        match r {
+            Ok(_) => (),
+            Err(e) => return Err(ErrorCode::from(e)),
+        }
 
         match entry.payload {
             EntryPayload::Blank => {}
@@ -338,6 +352,14 @@ impl StateMachine {
                 if prev.is_none() && result.is_some() {
                     // TODO(xp): reconsider this impl. it may not be required.
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
+                } else {
+                    // exist
+                    let db_id = prev.unwrap().data;
+                    let prev = self.get_database_meta_by_id(&db_id)?;
+                    return Ok(AppliedState::DatabaseMeta(Change::nochange_with_id(
+                        db_id,
+                        Some(prev),
+                    )));
                 }
 
                 let dbs = self.databases();
@@ -363,7 +385,12 @@ impl StateMachine {
                     db_id,
                     result
                 );
-                Ok(Change::new(prev, result).into())
+
+                Ok(AppliedState::DatabaseMeta(Change::new_with_id(
+                    db_id,
+                    prev_meta,
+                    result_meta,
+                )))
             }
 
             Cmd::DropDatabase { ref name } => {
@@ -373,14 +400,36 @@ impl StateMachine {
                     .sub_tree_upsert(dbs, name, &MatchSeq::Any, Operation::Delete, None)
                     .await?;
 
+                assert!(
+                    result.is_none(),
+                    "delete with MatchSeq::Any always succeeds"
+                );
+
                 // if it is just deleted
-                if prev.is_some() && result.is_none() {
+                if let Some(seq_db_id) = prev {
                     // TODO(xp): reconsider this impl. it may not be required.
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
+
+                    let db_id = seq_db_id.data;
+
+                    let dbs = self.databases();
+                    let (prev_meta, result_meta) = self
+                        .sub_tree_upsert(dbs, &db_id, &MatchSeq::Any, Operation::Delete, None)
+                        .await?;
+
+                    tracing::debug!("applied drop Database: {} {:?}", name, result);
+
+                    return Ok(AppliedState::DatabaseMeta(Change::new_with_id(
+                        db_id,
+                        prev_meta,
+                        result_meta,
+                    )));
                 }
 
+                // not exist
+
                 tracing::debug!("applied drop Database: {} {:?}", name, result);
-                Ok(Change::new(prev, result).into())
+                Ok(AppliedState::DatabaseMeta(Change::new(None, None)))
             }
 
             Cmd::CreateTable {
@@ -388,7 +437,7 @@ impl StateMachine {
                 ref table_name,
                 ref table_meta,
             } => {
-                let db_id = self.get_db_id(db_name).await?;
+                let db_id = self.get_database_id(db_name)?;
 
                 let lookup_key = TableLookupKey {
                     database_id: db_id,
@@ -401,9 +450,11 @@ impl StateMachine {
                 if let Some(u) = seq_table_id {
                     let table_id = u.data.0;
 
-                    let prev = self.get_table_by_id(&table_id)?;
-                    let prev = prev.map(|x| TableIdent::new(table_id, x.seq));
-                    return Ok((prev.clone(), prev).into());
+                    let prev = self.get_table_meta_by_id(&table_id)?;
+
+                    return Ok(AppliedState::TableMeta(Change::nochange_with_id(
+                        table_id, prev,
+                    )));
                 }
 
                 let table_meta = table_meta.clone();
@@ -434,17 +485,16 @@ impl StateMachine {
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
                 }
 
-                Ok(AppliedState::TableIdent {
-                    prev: prev.map(|x| TableIdent::new(table_id, x.seq)),
-                    result: result.map(|x| TableIdent::new(table_id, x.seq)),
-                })
+                Ok(AppliedState::TableMeta(Change::new_with_id(
+                    table_id, prev, result,
+                )))
             }
 
             Cmd::DropTable {
                 ref db_name,
                 ref table_name,
             } => {
-                let db_id = self.get_db_id(db_name).await?;
+                let db_id = self.get_database_id(db_name)?;
 
                 let lookup_key = TableLookupKey {
                     database_id: db_id,
@@ -609,7 +659,7 @@ impl StateMachine {
     }
 
     #[allow(clippy::ptr_arg)]
-    async fn get_db_id(&self, db_name: &String) -> common_exception::Result<u64> {
+    pub fn get_database_id(&self, db_name: &String) -> common_exception::Result<u64> {
         let seq_dbi = self
             .database_lookup()
             .get(db_name)?
@@ -677,31 +727,12 @@ impl StateMachine {
         sm_nodes.get(node_id)
     }
 
-    #[tracing::instrument(level = "debug", skip(self))]
-    pub fn get_database_id(&self, name: &str) -> Result<Option<SeqV<u64>>, ErrorCode> {
-        let dbs = self.database_lookup();
-        let x = dbs.get(&name.to_string())?;
+    pub fn get_database_meta_by_id(&self, db_id: &u64) -> Result<SeqV<DatabaseMeta>, ErrorCode> {
+        let x = self
+            .databases()
+            .get(db_id)?
+            .ok_or_else(|| ErrorCode::UnknownDatabaseId(format!("database_id: {}", db_id)))?;
         Ok(x)
-    }
-
-    pub fn get_database_by_id(&self, did: &u64) -> Result<Option<SeqV<DatabaseMeta>>, ErrorCode> {
-        let x = self.databases().get(did)?;
-        Ok(x)
-    }
-
-    pub fn get_databases(&self) -> Result<Vec<(String, u64, DatabaseMeta)>, ErrorCode> {
-        let mut res = vec![];
-
-        let it = self.database_lookup().range(..)?;
-        for r in it {
-            let (a, b) = r?;
-            let meta = self
-                .get_database_by_id(&b.data)?
-                .ok_or_else(|| ErrorCode::UnknownDatabaseId(format!("database_id: {}", b.data)))?;
-            res.push((a, b.data, meta.data));
-        }
-
-        Ok(res)
     }
 
     pub fn get_database_meta_ver(&self) -> common_exception::Result<Option<u64>> {
@@ -710,7 +741,8 @@ impl StateMachine {
         Ok(res.map(|x| x.0))
     }
 
-    pub fn get_table_by_id(&self, tid: &u64) -> Result<Option<SeqV<TableMeta>>, ErrorCode> {
+    // TODO(xp): need a better name.
+    pub fn get_table_meta_by_id(&self, tid: &u64) -> Result<Option<SeqV<TableMeta>>, ErrorCode> {
         let x = self.tables().get(tid)?;
         Ok(x)
     }
@@ -727,53 +759,6 @@ impl StateMachine {
             .await?;
         self.incr_seq(SEQ_DATABASE_META_ID).await?; // need this?
         Ok(result)
-    }
-
-    pub fn get_tables(&self, db_name: &str) -> Result<Vec<TableInfo>, ErrorCode> {
-        let db = self.get_database_id(db_name)?;
-        let db = match db {
-            Some(x) => x,
-            None => {
-                return Err(ErrorCode::UnknownDatabase(format!(
-                    "unknown database {}",
-                    db_name
-                )));
-            }
-        };
-
-        let db_id = db.data;
-
-        let mut tbls = vec![];
-        let tables = self.tables();
-        let tables_iter = self.table_lookup().range(..)?;
-        for r in tables_iter {
-            let (k, seq_table_id) = r?;
-
-            let got_db_id = k.database_id;
-            let table_name = k.table_name;
-
-            if got_db_id == db_id {
-                let table_id = seq_table_id.data.0;
-
-                let seq_table_meta = tables.get(&table_id)?.ok_or_else(|| {
-                    ErrorCode::IllegalMetaState(format!(" table of id {}, not found", table_id))
-                })?;
-
-                let version = seq_table_meta.seq;
-                let table_meta = seq_table_meta.data;
-
-                let table_info = TableInfo::new(
-                    db_name,
-                    &table_name,
-                    TableIdent::new(table_id, version),
-                    table_meta,
-                );
-
-                tbls.push(table_info);
-            }
-        }
-
-        Ok(tbls)
     }
 
     pub fn unexpired_opt<V: Debug>(seq_value: Option<SeqV<V>>) -> Option<SeqV<V>> {
@@ -810,6 +795,20 @@ impl StateMachine {
         } else {
             Some(seq_value)
         }
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn lookup_table_id(
+        &self,
+        db_id: u64,
+        name: &str,
+    ) -> Result<Option<SeqV<TableLookupValue>>, ErrorCode> {
+        self.table_lookup().get(
+            &(TableLookupKey {
+                database_id: db_id,
+                table_name: name.to_string(),
+            }),
+        )
     }
 }
 

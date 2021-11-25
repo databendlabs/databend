@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ pub struct ToCastFunction;
 
 impl ToCastFunction {
     fn cast_function_creator(to_type: DataType) -> FunctionDescription {
-        let mut features = FunctionFeatures::default().deterministic();
+        let mut features = FunctionFeatures::default().deterministic().monotonicity();
         if to_type == DataType::Boolean {
             features = features.bool_function();
         }

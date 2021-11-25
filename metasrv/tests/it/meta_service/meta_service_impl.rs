@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ async fn test_meta_server_upsert_kv() -> anyhow::Result<()> {
         let rst: Result<AppliedState, RetryableError> = raft_mes.into();
         let resp: AppliedState = rst?;
         match resp {
-            AppliedState::KV(Change { prev, result }) => {
+            AppliedState::KV(Change { prev, result, .. }) => {
                 assert!(prev.is_none());
                 let sv = result.unwrap();
                 assert!(sv.seq > 0);

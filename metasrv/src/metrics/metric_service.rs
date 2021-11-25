@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,10 +21,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::PrometheusHandle;
 use poem::web::Data;
-use poem::web::Html;
 use poem::EndpointExt;
 use poem::IntoResponse;
-use poem::Response;
 
 use crate::configs::Config;
 
@@ -33,20 +31,9 @@ pub struct MetricService {
     shutdown_handler: HttpShutdownHandler,
 }
 
-pub struct MetricTemplate {
-    prom: PrometheusHandle,
-}
-
-impl IntoResponse for MetricTemplate {
-    fn into_response(self) -> Response {
-        Html(self.prom.render()).into_response()
-    }
-}
-
 #[poem::handler]
-pub async fn metric_handler(prom_extension: Data<&PrometheusHandle>) -> MetricTemplate {
-    let prom = prom_extension.0.clone();
-    MetricTemplate { prom }
+pub async fn metric_handler(prom_extension: Data<&PrometheusHandle>) -> impl IntoResponse {
+    prom_extension.0.render()
 }
 
 impl MetricService {

@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -109,7 +109,10 @@ impl ClickHouseSession for InteractiveWorker {
                 Err(err) => Err(err),
             };
             match res {
-                Ok(res) => res,
+                Ok(res) => {
+                    self.session.set_current_user(user.to_string());
+                    res
+                }
                 Err(failure) => {
                     log::error!(
                         "ClickHouse handler authenticate failed, \

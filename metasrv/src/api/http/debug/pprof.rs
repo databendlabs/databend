@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,9 @@ use crate::api::http::debug::PProfRequest;
 // example: /debug/pprof/profile?seconds=5&frequency=99
 // req query contains pprofrequest information
 #[poem::handler]
-pub async fn debug_pprof_handler(req: Option<Query<PProfRequest>>) -> impl IntoResponse {
+pub async fn debug_pprof_handler(
+    req: Option<Query<PProfRequest>>,
+) -> poem::Result<impl IntoResponse> {
     let profile = match req {
         Some(query) => {
             let duration = Duration::from_secs(query.seconds);
@@ -45,8 +47,8 @@ pub async fn debug_pprof_handler(req: Option<Query<PProfRequest>>) -> impl IntoR
             Profiling::create(duration, i32::from(PProfRequest::default_frequency()))
         }
     };
-    let body = profile.dump_flamegraph().await.unwrap();
+    let body = profile.dump_flamegraph().await?;
 
     tracing::info!("finished pprof request");
-    body
+    Ok(body)
 }

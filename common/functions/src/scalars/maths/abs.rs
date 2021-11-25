@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,9 @@ use common_exception::Result;
 use crate::scalars::function::Function;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
+use crate::scalars::ComparisonGtEqFunction;
+use crate::scalars::ComparisonLtEqFunction;
+use crate::scalars::Monotonicity;
 
 #[derive(Clone)]
 pub struct AbsFunction {
@@ -36,7 +39,7 @@ impl AbsFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().monotonicity())
     }
 }
 
@@ -103,6 +106,65 @@ impl Function for AbsFunction {
             }
             DataType::Null => Ok(columns[0].column().clone()),
             _ => unreachable!(),
+        }
+    }
+
+    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
+        // for constant value, just return clone
+        if args[0].is_constant {
+            return Ok(args[0].clone());
+        }
+
+        // if either left boundary or right boundary is unknown, we don't known the monotonicity
+        if args[0].left.is_none() || args[0].right.is_none() {
+            return Ok(Monotonicity::default());
+        }
+
+        let left = args[0].left.clone().unwrap();
+        let right = args[0].right.clone().unwrap();
+
+        let gt_eq_zero = |data: &DataColumnWithField| -> Result<bool> {
+            let zero = DataColumn::Constant(DataValue::Int8(Some(0)), 1);
+            let zero_column_field =
+                DataColumnWithField::new(zero, DataField::new("", DataType::Int8, false));
+
+            let f = ComparisonGtEqFunction::try_create_func("")?;
+            let res = f.eval(&[data.clone(), zero_column_field], 1)?;
+            let res_value = res.try_get(0)?;
+            res_value.as_bool()
+        };
+
+        let lt_eq_zero = |data: &DataColumnWithField| -> Result<bool> {
+            let zero = DataColumn::Constant(DataValue::Int8(Some(0)), 1);
+            let zero_column_field =
+                DataColumnWithField::new(zero, DataField::new("", DataType::Int8, false));
+
+            let f = ComparisonLtEqFunction::try_create_func("")?;
+            let res = f.eval(&[data.clone(), zero_column_field], 1)?;
+            let res_value = res.try_get(0)?;
+            res_value.as_bool()
+        };
+
+        if gt_eq_zero(&left)? && gt_eq_zero(&right)? {
+            // both left and right are >= 0, we keep the current is_positive
+            Ok(Monotonicity {
+                is_monotonic: true,
+                is_positive: args[0].is_positive,
+                is_constant: false,
+                left: None,
+                right: None,
+            })
+        } else if lt_eq_zero(&left)? && lt_eq_zero(&right)? {
+            // both left and right are <= 0, we flip the current is_positive
+            Ok(Monotonicity {
+                is_monotonic: true,
+                is_positive: !args[0].is_positive,
+                is_constant: false,
+                left: None,
+                right: None,
+            })
+        } else {
+            Ok(Monotonicity::default())
         }
     }
 }

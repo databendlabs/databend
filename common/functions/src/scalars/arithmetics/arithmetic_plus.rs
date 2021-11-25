@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@ use common_datavalues::DataValueArithmeticOperator;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::scalars::function::MonotonicityNode;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticFunction;
@@ -32,10 +31,10 @@ impl ArithmeticPlusFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create_func))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().monotonicity())
     }
 
-    pub fn get_monotonicity(args: &[MonotonicityNode]) -> Result<MonotonicityNode> {
+    pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
         if args.is_empty() || args.len() > 2 {
             return Err(ErrorCode::BadArguments(format!(
                 "Invalid argument lengths {} for get_monotonicity",
@@ -47,71 +46,50 @@ impl ArithmeticPlusFunction {
             return Ok(args[0].clone());
         }
 
-        // TODO: handle input with data range
-        match (&args[0], &args[1]) {
-            // a constant value plus a function, like 12 + f(x), the monotonicity should be the same as f
-            (MonotonicityNode::Function(mono, None), MonotonicityNode::Constant(_))
-            | (MonotonicityNode::Constant(_), MonotonicityNode::Function(mono, None)) => {
-                Ok(MonotonicityNode::Function(mono.clone(), None))
-            }
+        // For expression f(x) + g(x), only when both f(x) and g(x) are monotonic and have
+        // same 'is_positive' can we get a monotonic expression.
+        let f_x = &args[0];
+        let g_x = &args[1];
 
-            // a constant value plus a variable, like x + 12 should be monotonically increasing
-            (MonotonicityNode::Constant(_), MonotonicityNode::Variable(_, None))
-            | (MonotonicityNode::Variable(_, None), MonotonicityNode::Constant(_)) => {
-                Ok(MonotonicityNode::Function(
-                    Monotonicity {
-                        is_monotonic: true,
-                        is_positive: true,
-                        is_always_monotonic: true,
-                    },
-                    None,
-                ))
-            }
-
-            // two function plus, f(x) + g(x) , if they have same monotonicity, then should return that monotonicity
-            (MonotonicityNode::Function(mono1, None), MonotonicityNode::Function(mono2, None)) => {
-                if mono1.is_monotonic
-                    && mono2.is_monotonic
-                    && mono1.is_positive == mono2.is_positive
-                {
-                    return Ok(MonotonicityNode::Function(
-                        Monotonicity {
-                            is_monotonic: true,
-                            is_positive: mono1.is_positive,
-                            is_always_monotonic: mono1.is_always_monotonic
-                                && mono2.is_always_monotonic,
-                        },
-                        None,
-                    ));
-                }
-                Ok(MonotonicityNode::Function(Monotonicity::default(), None))
-            }
-
-            // two variable plus(we assume only one variable exists), like x+x, should be monotonically increasing
-            (MonotonicityNode::Variable(var1, None), MonotonicityNode::Variable(var2, None)) => {
-                if var1 == var2 {
-                    return Ok(MonotonicityNode::Function(
-                        Monotonicity {
-                            is_monotonic: true,
-                            is_positive: true,
-                            is_always_monotonic: true,
-                        },
-                        None,
-                    ));
-                }
-                Ok(MonotonicityNode::Function(Monotonicity::default(), None))
-            }
-
-            // a function plus the variable, like f(x) + x, if f(x) is monotonically increasing, return it.
-            (MonotonicityNode::Function(mono, None), MonotonicityNode::Variable(_, None))
-            | (MonotonicityNode::Variable(_, None), MonotonicityNode::Function(mono, None)) => {
-                if mono.is_monotonic && mono.is_positive {
-                    return Ok(MonotonicityNode::Function(mono.clone(), None));
-                }
-                Ok(MonotonicityNode::Function(Monotonicity::default(), None))
-            }
-
-            _ => Ok(MonotonicityNode::Function(Monotonicity::default(), None)),
+        // if either one is non-monotonic, return non-monotonic
+        if !f_x.is_monotonic || !g_x.is_monotonic {
+            return Ok(Monotonicity::default());
         }
+
+        // if f(x) is a constant value, return the monotonicity of g(x)
+        if f_x.is_constant {
+            return Ok(Monotonicity {
+                is_monotonic: g_x.is_monotonic,
+                is_positive: g_x.is_positive,
+                is_constant: g_x.is_constant,
+                left: None,
+                right: None,
+            });
+        }
+
+        // if g(x) is a constant value, return the monotonicity of f(x)
+        if g_x.is_constant {
+            return Ok(Monotonicity {
+                is_monotonic: f_x.is_monotonic,
+                is_positive: f_x.is_positive,
+                is_constant: f_x.is_constant,
+                left: None,
+                right: None,
+            });
+        }
+
+        // Now we have f(x) and g(x) both are non-constant.
+        // When both are monotonic, but have different 'is_positive', we can't determine the monotonicity
+        if f_x.is_positive != g_x.is_positive {
+            return Ok(Monotonicity::default());
+        }
+
+        Ok(Monotonicity {
+            is_monotonic: true,
+            is_positive: f_x.is_positive,
+            is_constant: false,
+            left: None,
+            right: None,
+        })
     }
 }

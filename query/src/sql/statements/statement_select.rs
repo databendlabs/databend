@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRefExt;
@@ -30,7 +32,7 @@ use sqlparser::ast::SelectItem;
 use sqlparser::ast::TableWithJoins;
 
 use crate::catalogs::ToReadDataSourcePlan;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 use crate::sql::statements::analyzer_statement::QueryAnalyzeState;
 use crate::sql::statements::query::JoinedSchema;
 use crate::sql::statements::query::JoinedSchemaAnalyzer;
@@ -57,7 +59,7 @@ pub struct DfQueryStatement {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfQueryStatement {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let analyzer = JoinedSchemaAnalyzer::create(ctx.clone());
         let joined_schema = analyzer.analyze(self).await?;
 
@@ -195,7 +197,7 @@ impl DfQueryStatement {
         &self,
         schema: JoinedSchema,
         mut state: QueryAnalyzeState,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
     ) -> Result<AnalyzedResult> {
         let dry_run_res = Self::verify_with_dry_run(&schema, &state)?;
         state.finalize_schema = dry_run_res.schema().clone();

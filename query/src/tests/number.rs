@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::Result;
@@ -21,16 +23,16 @@ use common_planners::ReadDataSourcePlan;
 use crate::catalogs::Catalog;
 use crate::catalogs::ToReadDataSourcePlan;
 use crate::pipelines::transforms::SourceTransform;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 use crate::tests::try_create_catalog;
 
 pub struct NumberTestData {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<QueryContext>,
     table: &'static str,
 }
 
 impl NumberTestData {
-    pub fn create(ctx: DatabendQueryContextRef) -> Self {
+    pub fn create(ctx: Arc<QueryContext>) -> Self {
         NumberTestData {
             ctx,
             table: "numbers_mt",

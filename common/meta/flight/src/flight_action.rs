@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::GetTableReq;
+use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::MetaId;
@@ -60,7 +61,7 @@ pub enum MetaFlightAction {
     CreateDatabase(FlightReq<CreateDatabaseReq>),
     DropDatabase(FlightReq<DropDatabaseReq>),
     GetDatabase(FlightReq<GetDatabaseReq>),
-    ListDatabases(ListDatabasesAction),
+    ListDatabases(FlightReq<ListDatabaseReq>),
 
     CreateTable(FlightReq<CreateTableReq>),
     DropTable(FlightReq<DropTableReq>),
@@ -190,11 +191,6 @@ impl RequestFor for FlightReq<ListTableReq> {
     type Reply = Vec<Arc<TableInfo>>;
 }
 
-// -get databases
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct ListDatabasesAction;
-
-impl RequestFor for ListDatabasesAction {
+impl RequestFor for FlightReq<ListDatabaseReq> {
     type Reply = Vec<Arc<DatabaseInfo>>;
 }

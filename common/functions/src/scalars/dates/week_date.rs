@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ pub struct WeekFunction<T, R> {
 
 pub trait WeekResultFunction<R> {
     const IS_DETERMINISTIC: bool;
+    const MAYBE_MONOTONIC: bool;
 
     fn return_type() -> Result<DataType>;
     fn to_number(_value: DateTime<Utc>, mode: Option<u64>) -> R;
@@ -49,6 +50,7 @@ pub struct ToStartOfWeek;
 
 impl WeekResultFunction<u32> for ToStartOfWeek {
     const IS_DETERMINISTIC: bool = true;
+    const MAYBE_MONOTONIC: bool = true;
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
@@ -89,6 +91,10 @@ where
 
         if T::IS_DETERMINISTIC {
             features = features.deterministic();
+        }
+
+        if T::MAYBE_MONOTONIC {
+            features = features.monotonicity();
         }
 
         FunctionDescription::creator(Box::new(Self::try_create)).features(features)

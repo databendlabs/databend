@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,16 +31,16 @@ use crate::api::rpc::DatabendQueryFlightDispatcher;
 use crate::api::rpc::DatabendQueryFlightService;
 use crate::configs::Config;
 use crate::servers::Server as DatabendQueryServer;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionManager;
 
 pub struct RpcService {
-    pub(crate) sessions: SessionManagerRef,
+    pub(crate) sessions: Arc<SessionManager>,
     pub(crate) abort_notify: Arc<Notify>,
     pub(crate) dispatcher: Arc<DatabendQueryFlightDispatcher>,
 }
 
 impl RpcService {
-    pub fn create(sessions: SessionManagerRef) -> Box<dyn DatabendQueryServer> {
+    pub fn create(sessions: Arc<SessionManager>) -> Box<dyn DatabendQueryServer> {
         Box::new(Self {
             sessions,
             abort_notify: Arc::new(Notify::new()),

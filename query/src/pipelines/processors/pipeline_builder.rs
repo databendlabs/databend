@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,17 +51,17 @@ use crate::pipelines::transforms::SortPartialTransform;
 use crate::pipelines::transforms::SourceTransform;
 use crate::pipelines::transforms::SubQueriesPuller;
 use crate::pipelines::transforms::WhereTransform;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct PipelineBuilder {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<QueryContext>,
 
     limit: Option<usize>,
     offset: usize,
 }
 
 impl PipelineBuilder {
-    pub fn create(ctx: DatabendQueryContextRef) -> PipelineBuilder {
+    pub fn create(ctx: Arc<QueryContext>) -> PipelineBuilder {
         PipelineBuilder {
             ctx,
             limit: None,

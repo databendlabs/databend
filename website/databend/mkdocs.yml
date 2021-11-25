@@ -220,6 +220,7 @@ nav:
               - SIGN: sqlstatement/numeric-functions/sign.md
               - ROUND: sqlstatement/numeric-functions/round.md
               - TRUNCATE: sqlstatement/numeric-functions/truncate.md
+              - RAND: sqlstatement/numeric-functions/rand.md
           - String Functions:
               - SUBSTRING: sqlstatement/string-functions/substring.md
           - Test Functions:
@@ -241,6 +242,7 @@ nav:
       - Profling: development/profiling.md
       - Roadmap: development/roadmap.md
       - Databend release channels: development/release-channels.md
+      - How to write scalar functions: development/how-to-write-scalar-functions.md
       - How to write aggregate functions: development/how-to-write-aggregate-functions.md
       - How to get server logs: development/how-to-get-server-logs.md
       - RFCs:

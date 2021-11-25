@@ -22,16 +22,16 @@ use common_tracing::tracing;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 #[derive(Debug)]
 pub struct AlterUserInterpreter {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<QueryContext>,
     plan: AlterUserPlan,
 }
 
 impl AlterUserInterpreter {
-    pub fn try_create(ctx: DatabendQueryContextRef, plan: AlterUserPlan) -> Result<InterpreterPtr> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: AlterUserPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(AlterUserInterpreter { ctx, plan }))
     }
 }

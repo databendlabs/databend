@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,18 +22,15 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct UseDatabaseInterpreter {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<QueryContext>,
     plan: UseDatabasePlan,
 }
 
 impl UseDatabaseInterpreter {
-    pub fn try_create(
-        ctx: DatabendQueryContextRef,
-        plan: UseDatabasePlan,
-    ) -> Result<InterpreterPtr> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: UseDatabasePlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(UseDatabaseInterpreter { ctx, plan }))
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,8 +30,7 @@ use sqlparser::ast::SqliteOnConflict;
 use sqlparser::ast::Values;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContext;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
@@ -62,7 +61,7 @@ pub struct DfInsertStatement {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfInsertStatement {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         self.is_supported()?;
 
         match &self.source {
@@ -79,7 +78,7 @@ impl AnalyzableStatement for DfInsertStatement {
 }
 
 impl DfInsertStatement {
-    fn resolve_table(&self, ctx: &DatabendQueryContext) -> Result<(String, String)> {
+    fn resolve_table(&self, ctx: &QueryContext) -> Result<(String, String)> {
         match self.table_name.0.len() {
             0 => Err(ErrorCode::SyntaxException("Insert table name is empty")),
             1 => Ok((
@@ -120,7 +119,7 @@ impl DfInsertStatement {
 
     async fn analyze_insert_values(
         &self,
-        ctx: &DatabendQueryContext,
+        ctx: &QueryContext,
         values: &Values,
     ) -> Result<AnalyzedResult> {
         tracing::debug!("{:?}", values);
@@ -139,7 +138,7 @@ impl DfInsertStatement {
 
     async fn analyze_insert_without_source(
         &self,
-        ctx: &DatabendQueryContextRef,
+        ctx: &Arc<QueryContext>,
     ) -> Result<AnalyzedResult> {
         let (db, table) = self.resolve_table(ctx)?;
         let write_table = ctx.get_table(&db, &table).await?;
@@ -153,7 +152,7 @@ impl DfInsertStatement {
 
     async fn analyze_insert_select(
         &self,
-        ctx: &DatabendQueryContextRef,
+        ctx: &Arc<QueryContext>,
         source: &Query,
     ) -> Result<AnalyzedResult> {
         let (db, table) = self.resolve_table(ctx)?;

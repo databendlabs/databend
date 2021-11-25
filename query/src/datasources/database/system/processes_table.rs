@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::series::Series;
@@ -29,8 +30,8 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
-use crate::sessions::DatabendQueryContextRef;
 use crate::sessions::ProcessInfo;
+use crate::sessions::QueryContext;
 
 pub struct ProcessesTable {
     table_info: TableInfo,
@@ -42,6 +43,7 @@ impl ProcessesTable {
             DataField::new("id", DataType::String, false),
             DataField::new("type", DataType::String, false),
             DataField::new("host", DataType::String, true),
+            DataField::new("user", DataType::String, true),
             DataField::new("state", DataType::String, false),
             DataField::new("database", DataType::String, false),
             DataField::new("extra_info", DataType::String, true),
@@ -87,7 +89,7 @@ impl Table for ProcessesTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let sessions_manager = ctx.get_sessions_manager();
@@ -96,6 +98,7 @@ impl Table for ProcessesTable {
         let mut processes_id = Vec::with_capacity(processes_info.len());
         let mut processes_type = Vec::with_capacity(processes_info.len());
         let mut processes_host = Vec::with_capacity(processes_info.len());
+        let mut processes_user = Vec::with_capacity(processes_info.len());
         let mut processes_state = Vec::with_capacity(processes_info.len());
         let mut processes_database = Vec::with_capacity(processes_info.len());
         let mut processes_extra_info = Vec::with_capacity(processes_info.len());
@@ -107,6 +110,7 @@ impl Table for ProcessesTable {
             processes_state.push(process_info.state.clone().into_bytes());
             processes_database.push(process_info.database.clone().into_bytes());
             processes_host.push(ProcessesTable::process_host(process_info));
+            processes_user.push(process_info.user.clone().into_bytes());
             processes_extra_info.push(ProcessesTable::process_extra_info(process_info));
             processes_memory_usage.push(process_info.memory_usage);
         }
@@ -116,6 +120,7 @@ impl Table for ProcessesTable {
             Series::new(processes_id),
             Series::new(processes_type),
             Series::new(processes_host),
+            Series::new(processes_user),
             Series::new(processes_state),
             Series::new(processes_database),
             Series::new(processes_extra_info),

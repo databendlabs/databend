@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 use std::net::SocketAddr;
 use std::path::Path;
+use std::sync::Arc;
 
 use common_exception::Result;
 use poem::get;
@@ -25,15 +26,15 @@ use poem::Route;
 use crate::common::service::HttpShutdownHandler;
 use crate::configs::Config;
 use crate::servers::Server;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionManager;
 
 pub struct HttpService {
-    sessions: SessionManagerRef,
+    sessions: Arc<SessionManager>,
     shutdown_handler: HttpShutdownHandler,
 }
 
 impl HttpService {
-    pub fn create(sessions: SessionManagerRef) -> Box<HttpService> {
+    pub fn create(sessions: Arc<SessionManager>) -> Box<HttpService> {
         Box::new(HttpService {
             sessions,
             shutdown_handler: HttpShutdownHandler::create("http api".to_string()),

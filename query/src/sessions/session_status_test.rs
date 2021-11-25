@@ -19,8 +19,8 @@ use std::sync::Arc;
 use common_exception::Result;
 
 use crate::clusters::Cluster;
-use crate::sessions::DatabendQueryContextShared;
 use crate::sessions::MutableStatus;
+use crate::sessions::QueryContextShared;
 use crate::tests::SessionManagerBuilder;
 
 #[test]
@@ -57,6 +57,14 @@ fn test_session_status() -> Result<()> {
         assert_eq!(Some(server), val);
     }
 
+    // Current user.
+    {
+        mutable_status.set_current_user("user1".to_string());
+
+        let val = mutable_status.get_current_user();
+        assert_eq!(Some("user1".to_string()), val);
+    }
+
     // io shutdown tx.
     {
         let (tx, _) = futures::channel::oneshot::channel();
@@ -73,7 +81,7 @@ fn test_session_status() -> Result<()> {
     {
         let sessions = SessionManagerBuilder::create().build()?;
         let dummy_session = sessions.create_session("TestSession")?;
-        let shared = DatabendQueryContextShared::try_create(
+        let shared = QueryContextShared::try_create(
             sessions.get_conf().clone(),
             Arc::new(dummy_session.as_ref().clone()),
             Cluster::empty(),

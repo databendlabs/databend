@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticFunction;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
-use crate::scalars::MonotonicityNode;
 
 pub struct ArithmeticMulFunction;
 
@@ -31,11 +30,11 @@ impl ArithmeticMulFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create_func))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().monotonicity())
     }
 
-    pub fn get_monotonicity(_args: &[MonotonicityNode]) -> Result<MonotonicityNode> {
-        //TODO: implement
-        Ok(MonotonicityNode::Function(Monotonicity::default(), None))
+    pub fn get_monotonicity(_args: &[Monotonicity]) -> Result<Monotonicity> {
+        //TODO
+        Ok(Monotonicity::default())
     }
 }

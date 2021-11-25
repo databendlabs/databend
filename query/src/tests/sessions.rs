@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::env;
+use std::sync::Arc;
 
 use common_base::tokio::runtime::Runtime;
 use common_base::Thread;
@@ -20,9 +21,8 @@ use common_exception::Result;
 
 use crate::configs::Config;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionManagerRef;
 
-async fn async_try_create_sessions(config: Config) -> Result<SessionManagerRef> {
+async fn async_try_create_sessions(config: Config) -> Result<Arc<SessionManager>> {
     let sessions = SessionManager::from_conf(config.clone()).await?;
 
     let cluster_discovery = sessions.get_cluster_discovery();
@@ -30,7 +30,7 @@ async fn async_try_create_sessions(config: Config) -> Result<SessionManagerRef> 
     Ok(sessions)
 }
 
-fn sync_try_create_sessions(config: Config) -> Result<SessionManagerRef> {
+fn sync_try_create_sessions(config: Config) -> Result<Arc<SessionManager>> {
     let runtime = Runtime::new()?;
     runtime.block_on(async_try_create_sessions(config))
 }
@@ -102,7 +102,7 @@ impl SessionManagerBuilder {
         SessionManagerBuilder::inner_create(new_config)
     }
 
-    pub fn build(self) -> Result<SessionManagerRef> {
+    pub fn build(self) -> Result<Arc<SessionManager>> {
         let config = self.config;
         let handle = Thread::spawn(move || sync_try_create_sessions(config));
         handle.join().unwrap()

@@ -14,6 +14,7 @@
 //
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use common_dal::read_obj;
 use common_exception::Result;
@@ -25,13 +26,13 @@ use common_planners::Statistics;
 use crate::datasources::table::fuse::index;
 use crate::datasources::table::fuse::BlockMeta;
 use crate::datasources::table::fuse::FuseTable;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 impl FuseTable {
     #[inline]
     pub async fn do_read_partitions(
         &self,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let location = self.snapshot_loc();

@@ -28,6 +28,7 @@ pub mod client_last_resp;
 pub mod placement;
 pub mod sm;
 mod sm_kv_api_impl;
+mod sm_meta_api_impl;
 pub mod snapshot;
 pub mod state_machine_meta;
 pub mod table_lookup;

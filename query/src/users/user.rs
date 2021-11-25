@@ -13,8 +13,8 @@
 // limitations under the License.
 //
 
-use common_management::UserInfo;
 use common_meta_types::AuthType;
+use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilege;
 use common_meta_types::UserQuota;
 
@@ -61,5 +61,21 @@ impl From<&User> for UserInfo {
 impl From<User> for UserInfo {
     fn from(user: User) -> Self {
         UserInfo::from(&user)
+    }
+}
+
+pub struct CertifiedInfo {
+    pub user_name: String,
+    pub user_password: Vec<u8>,
+    pub user_client_address: String,
+}
+
+impl CertifiedInfo {
+    pub fn create(user: &str, password: impl AsRef<[u8]>, address: &str) -> CertifiedInfo {
+        CertifiedInfo {
+            user_name: user.to_string(),
+            user_password: password.as_ref().to_vec(),
+            user_client_address: address.to_string(),
+        }
     }
 }

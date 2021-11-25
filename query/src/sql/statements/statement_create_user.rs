@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 use common_meta_types::AuthType;
 use common_planners::CreateUserPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
@@ -35,7 +37,7 @@ pub struct DfCreateUser {
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfCreateUser {
     #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
-    async fn analyze(&self, _ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         Ok(AnalyzedResult::SimpleQuery(PlanNode::CreateUser(
             CreateUserPlan {
                 name: self.name.clone(),

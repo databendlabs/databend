@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
@@ -29,7 +30,7 @@ use walkdir::WalkDir;
 
 use crate::catalogs::Table;
 use crate::datasources::database::system::TracingTableStream;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct TracingTable {
     table_info: TableInfo,
@@ -76,7 +77,7 @@ impl Table for TracingTable {
 
     async fn read(
         &self,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let mut log_files = vec![];

@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -187,6 +187,7 @@ impl ClusterApi for ClusterMgr {
 
         match upsert_node.await? {
             UpsertKVActionReply {
+                ident: None,
                 prev: Some(_),
                 result: None,
             } => Ok(()),
@@ -215,6 +216,7 @@ impl ClusterApi for ClusterMgr {
 
         match upsert_meta.await? {
             UpsertKVActionReply {
+                ident: None,
                 prev: Some(_),
                 result: Some(SeqV { seq: s, .. }),
             } => Ok(s),

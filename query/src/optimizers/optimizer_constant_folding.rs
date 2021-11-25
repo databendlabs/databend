@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ use common_planners::PlanRewriter;
 
 use crate::optimizers::Optimizer;
 use crate::pipelines::transforms::ExpressionExecutor;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct ConstantFoldingOptimizer {}
 
@@ -372,7 +372,7 @@ impl Optimizer for ConstantFoldingOptimizer {
 }
 
 impl ConstantFoldingOptimizer {
-    pub fn create(_ctx: DatabendQueryContextRef) -> Self {
+    pub fn create(_ctx: Arc<QueryContext>) -> Self {
         ConstantFoldingOptimizer {}
     }
 }

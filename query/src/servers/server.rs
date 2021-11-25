@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ use futures::stream::Abortable;
 use futures::StreamExt;
 use tokio_stream::wrappers::TcpListenerStream;
 
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionManager;
 
 pub type ListeningStream = Abortable<TcpListenerStream>;
 
@@ -38,12 +38,12 @@ pub trait Server: Send {
 
 pub struct ShutdownHandle {
     shutdown: Arc<AtomicBool>,
-    sessions: SessionManagerRef,
+    sessions: Arc<SessionManager>,
     services: Vec<Box<dyn Server>>,
 }
 
 impl ShutdownHandle {
-    pub fn create(sessions: SessionManagerRef) -> ShutdownHandle {
+    pub fn create(sessions: Arc<SessionManager>) -> ShutdownHandle {
         ShutdownHandle {
             sessions,
             services: vec![],

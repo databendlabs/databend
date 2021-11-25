@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,19 +25,19 @@ use crate::api::FlightClient;
 use crate::api::FlightTicket;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct RemoteTransform {
     ticket: FlightTicket,
     fetch_node_name: String,
     schema: DataSchemaRef,
-    pub ctx: DatabendQueryContextRef,
+    pub ctx: Arc<QueryContext>,
 }
 
 impl RemoteTransform {
     pub fn try_create(
         ticket: FlightTicket,
-        context: DatabendQueryContextRef,
+        context: Arc<QueryContext>,
         fetch_node_name: String,
         schema: DataSchemaRef,
     ) -> Result<RemoteTransform> {

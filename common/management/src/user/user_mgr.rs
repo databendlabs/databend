@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,9 +27,9 @@ use common_meta_types::MatchSeqExt;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
+use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilege;
 
-use crate::user::user_api::UserInfo;
 use crate::user::user_api::UserMgrApi;
 
 static USER_API_KEY_PREFIX: &str = "__fd_users";

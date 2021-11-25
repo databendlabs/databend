@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@ mod optimizer_scatters_test;
 mod optimizer_statistics_exact_test;
 #[cfg(test)]
 mod optimizer_test;
+#[cfg(test)]
+mod utils_test;
 
 #[cfg(test)]
 mod optimizer_top_n_push_down_test;

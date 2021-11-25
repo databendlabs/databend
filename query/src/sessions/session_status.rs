@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ use common_infallible::RwLock;
 use common_macros::MallocSizeOf;
 use futures::channel::oneshot::Sender;
 
-use crate::sessions::context_shared::DatabendQueryContextShared;
+use crate::sessions::context_shared::QueryContextShared;
 use crate::sessions::Settings;
 
 #[derive(MallocSizeOf)]
@@ -30,21 +30,23 @@ pub struct MutableStatus {
     abort: AtomicBool,
     current_database: RwLock<String>,
     session_settings: RwLock<Settings>,
+    current_user: RwLock<Option<String>>,
     #[ignore_malloc_size_of = "insignificant"]
     client_host: RwLock<Option<SocketAddr>>,
     #[ignore_malloc_size_of = "insignificant"]
     io_shutdown_tx: RwLock<Option<Sender<Sender<()>>>>,
     #[ignore_malloc_size_of = "insignificant"]
-    context_shared: RwLock<Option<Arc<DatabendQueryContextShared>>>,
+    context_shared: RwLock<Option<Arc<QueryContextShared>>>,
 }
 
 impl MutableStatus {
     pub fn try_create() -> Result<Self> {
         Ok(MutableStatus {
             abort: Default::default(),
+            current_user: Default::default(),
+            client_host: Default::default(),
             current_database: RwLock::new("default".to_string()),
             session_settings: RwLock::new(Settings::try_create()?.as_ref().clone()),
-            client_host: Default::default(),
             io_shutdown_tx: Default::default(),
             context_shared: Default::default(),
         })
@@ -70,6 +72,18 @@ impl MutableStatus {
     pub fn set_current_database(&self, db: String) {
         let mut lock = self.current_database.write();
         *lock = db
+    }
+
+    // Set the current user after authentication
+    pub fn set_current_user(&self, user: String) {
+        let mut lock = self.current_user.write();
+        *lock = Some(user);
+    }
+
+    // Get current user
+    pub fn get_current_user(&self) -> Option<String> {
+        let lock = self.current_user.read();
+        lock.clone()
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {
@@ -103,18 +117,18 @@ impl MutableStatus {
         lock.is_none()
     }
 
-    pub fn get_context_shared(&self) -> Option<Arc<DatabendQueryContextShared>> {
+    pub fn get_context_shared(&self) -> Option<Arc<QueryContextShared>> {
         let lock = self.context_shared.read();
         lock.clone()
     }
 
-    pub fn set_context_shared(&self, ctx: Option<Arc<DatabendQueryContextShared>>) {
+    pub fn set_context_shared(&self, ctx: Option<Arc<QueryContextShared>>) {
         let mut lock = self.context_shared.write();
         *lock = ctx
     }
 
     //  Take the context_shared.
-    pub fn take_context_shared(&self) -> Option<Arc<DatabendQueryContextShared>> {
+    pub fn take_context_shared(&self) -> Option<Arc<QueryContextShared>> {
         let mut lock = self.context_shared.write();
         lock.take()
     }

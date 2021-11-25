@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,10 @@ use lazy_static::lazy_static;
 use crate::PlanNode;
 
 lazy_static! {
-    static ref OP_SET: HashSet<&'static str> = ["database", "version",].iter().copied().collect();
+    static ref OP_SET: HashSet<&'static str> = ["database", "version", "current_user"]
+        .iter()
+        .copied()
+        .collect();
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]

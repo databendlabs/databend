@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,17 +35,16 @@ use crate::servers::mysql::reject_connection::RejectConnection;
 use crate::servers::server::ListeningStream;
 use crate::servers::server::Server;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionManagerRef;
 
 pub struct MySQLHandler {
-    sessions: SessionManagerRef,
+    sessions: Arc<SessionManager>,
     abort_handle: AbortHandle,
     abort_registration: Option<AbortRegistration>,
     join_handle: Option<JoinHandle<()>>,
 }
 
 impl MySQLHandler {
-    pub fn create(sessions: SessionManagerRef) -> Box<dyn Server> {
+    pub fn create(sessions: Arc<SessionManager>) -> Box<dyn Server> {
         let (abort_handle, registration) = AbortHandle::new_pair();
         Box::new(MySQLHandler {
             sessions,

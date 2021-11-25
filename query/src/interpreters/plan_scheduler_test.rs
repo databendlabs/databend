@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ use common_planners::*;
 
 use crate::api::FlightAction;
 use crate::interpreters::plan_scheduler::PlanScheduler;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 use crate::tests::try_create_cluster_context;
 use crate::tests::ClusterDescriptor;
 
@@ -324,7 +324,7 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
     Ok(())
 }
 
-async fn create_env() -> Result<DatabendQueryContextRef> {
+async fn create_env() -> Result<Arc<QueryContext>> {
     try_create_cluster_context(
         ClusterDescriptor::new()
             .with_node("dummy_local", "localhost:9090")

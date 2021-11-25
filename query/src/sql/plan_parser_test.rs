@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -213,8 +213,8 @@ fn test_plan_parser() -> Result<()> {
             name: "show-processlist",
             sql: "show processlist",
             expect: "\
-            Projection: id:String, type:String, host:String, state:String, database:String, extra_info:String, memory_usage:UInt64\
-            \n  ReadDataSource: scan partitions: [1], scan schema: [id:String, type:String, host:String;N, state:String, database:String, extra_info:String;N, memory_usage:UInt64;N], statistics: [read_rows: 0, read_bytes: 0]",
+            Projection: id:String, type:String, host:String, user:String, state:String, database:String, extra_info:String, memory_usage:UInt64\
+            \n  ReadDataSource: scan partitions: [1], scan schema: [id:String, type:String, host:String;N, user:String;N, state:String, database:String, extra_info:String;N, memory_usage:UInt64;N], statistics: [read_rows: 0, read_bytes: 0]",
             error: "",
         },
     ];

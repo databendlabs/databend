@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -19,7 +21,7 @@ use common_functions::scalars::FunctionFactory;
 use common_planners::*;
 
 use crate::optimizers::Optimizer;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct ExprTransformOptimizer {}
 
@@ -188,22 +190,6 @@ impl PlanRewriter for ExprTransformImpl {
         }
     }
 
-    fn rewrite_limit(&mut self, plan: &LimitPlan) -> Result<PlanNode> {
-        let new_input = if let Some(0) = plan.n {
-            // case of limit zero.
-            self.one_time_limit = Some(false);
-            let plan = self.rewrite_plan_node(plan.input.as_ref())?;
-            self.one_time_limit = None;
-            plan
-        } else {
-            self.rewrite_plan_node(plan.input.as_ref())?
-        };
-
-        PlanBuilder::from(&new_input)
-            .limit_offset(plan.n, plan.offset)?
-            .build()
-    }
-
     fn rewrite_filter(&mut self, plan: &FilterPlan) -> Result<PlanNode> {
         if plan.is_literal_false() {
             self.one_time_filter = Some(false);
@@ -234,6 +220,22 @@ impl PlanRewriter for ExprTransformImpl {
         let new_predicate = Self::boolean_transformer(&plan.predicate)?;
         let new_predicate = Self::truth_transformer(&new_predicate, false)?;
         PlanBuilder::from(&new_input).having(new_predicate)?.build()
+    }
+
+    fn rewrite_limit(&mut self, plan: &LimitPlan) -> Result<PlanNode> {
+        let new_input = if let Some(0) = plan.n {
+            // case of limit zero.
+            self.one_time_limit = Some(false);
+            let plan = self.rewrite_plan_node(plan.input.as_ref())?;
+            self.one_time_limit = None;
+            plan
+        } else {
+            self.rewrite_plan_node(plan.input.as_ref())?
+        };
+
+        PlanBuilder::from(&new_input)
+            .limit_offset(plan.n, plan.offset)?
+            .build()
     }
 
     fn rewrite_read_data_source(&mut self, plan: &ReadDataSourcePlan) -> Result<PlanNode> {
@@ -290,7 +292,7 @@ impl Optimizer for ExprTransformOptimizer {
 }
 
 impl ExprTransformOptimizer {
-    pub fn create(_ctx: DatabendQueryContextRef) -> Self {
+    pub fn create(_ctx: Arc<QueryContext>) -> Self {
         ExprTransformOptimizer {}
     }
 }

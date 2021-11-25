@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_management::UserInfo;
 use common_meta_types::AuthType;
+use common_meta_types::UserInfo;
 use common_planners::*;
 use pretty_assertions::assert_eq;
 

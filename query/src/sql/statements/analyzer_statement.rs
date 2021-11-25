@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ use common_planners::Expression;
 use common_planners::PlanNode;
 use common_planners::ReadDataSourcePlan;
 
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 use crate::sql::DfStatement;
 
 #[allow(clippy::enum_variant_names)]
@@ -139,12 +139,12 @@ impl Debug for QueryAnalyzeState {
 
 #[async_trait::async_trait]
 pub trait AnalyzableStatement {
-    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult>;
+    async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult>;
 }
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfStatement {
-    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         match self {
             DfStatement::Query(v) => v.analyze(ctx).await,
             DfStatement::Explain(v) => v.analyze(ctx).await,

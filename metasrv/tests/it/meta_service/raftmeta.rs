@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -252,9 +252,12 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
             assert_applied_index(all.clone(), last_applied + 1).await?;
 
             for (i, mn) in all.iter().enumerate() {
-                let got = mn.get_state_machine().await.get_database_id(name)?;
+                let got = mn
+                    .get_state_machine()
+                    .await
+                    .get_database_id(&name.to_string())?;
 
-                assert_eq!(*want_id, got.unwrap().data, "n{} applied AddDatabase", i);
+                assert_eq!(*want_id, got, "n{} applied AddDatabase", i);
             }
         }
     }

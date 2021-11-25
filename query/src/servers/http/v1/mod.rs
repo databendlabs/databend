@@ -16,7 +16,7 @@ mod block_to_json;
 
 #[cfg(test)]
 mod block_to_json_test;
-mod http_query_handlers;
+pub mod http_query_handlers;
 #[cfg(test)]
 mod http_query_handlers_test;
 pub(crate) mod query;

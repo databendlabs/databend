@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
 
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::QueryAnalyzeState;
@@ -34,14 +34,14 @@ use crate::sql::DfStatement;
 pub struct PlanParser;
 
 impl PlanParser {
-    pub async fn parse(query: &str, ctx: DatabendQueryContextRef) -> Result<PlanNode> {
+    pub async fn parse(query: &str, ctx: Arc<QueryContext>) -> Result<PlanNode> {
         let (statements, _) = DfParser::parse_sql(query)?;
         PlanParser::build_plan(statements, ctx).await
     }
 
     pub async fn parse_with_hint(
         query: &str,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
     ) -> (Result<PlanNode>, Vec<DfHint>) {
         match DfParser::parse_sql(query) {
             Err(cause) => (Err(cause), vec![]),
@@ -51,7 +51,7 @@ impl PlanParser {
 
     pub async fn build_plan(
         statements: Vec<DfStatement>,
-        ctx: DatabendQueryContextRef,
+        ctx: Arc<QueryContext>,
     ) -> Result<PlanNode> {
         if statements.len() != 1 {
             return Err(ErrorCode::SyntaxException("Only support single query"));

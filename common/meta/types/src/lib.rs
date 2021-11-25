@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ mod cluster;
 mod cmd;
 mod database;
 mod errors;
-mod grant_object;
 mod kv_message;
 mod log_entry;
 mod match_seq;
@@ -30,6 +29,8 @@ mod seq_num;
 mod seq_value;
 mod table;
 mod user_auth;
+mod user_grant_object;
+mod user_info;
 mod user_privilege;
 mod user_quota;
 mod user_stage;
@@ -47,8 +48,8 @@ pub use database::DatabaseMeta;
 pub use database::DropDatabaseReply;
 pub use database::DropDatabaseReq;
 pub use database::GetDatabaseReq;
+pub use database::ListDatabaseReq;
 pub use errors::ConflictSeq;
-pub use grant_object::GrantObject;
 pub use kv_message::GetKVActionReply;
 pub use kv_message::MGetKVActionReply;
 pub use kv_message::PrefixListReply;
@@ -82,6 +83,8 @@ pub use table::TableNameIndent;
 pub use table::UpsertTableOptionReply;
 pub use table::UpsertTableOptionReq;
 pub use user_auth::AuthType;
+pub use user_grant_object::GrantObject;
+pub use user_info::UserInfo;
 pub use user_privilege::UserPrivilege;
 pub use user_privilege::UserPrivilegeType;
 pub use user_quota::UserQuota;

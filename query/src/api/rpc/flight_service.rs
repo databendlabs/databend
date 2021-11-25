@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,20 +41,20 @@ use crate::api::rpc::flight_dispatcher::DatabendQueryFlightDispatcher;
 use crate::api::rpc::flight_dispatcher::DatabendQueryFlightDispatcherRef;
 use crate::api::rpc::flight_service_stream::FlightDataStream;
 use crate::api::rpc::flight_tickets::FlightTicket;
-use crate::sessions::SessionManagerRef;
+use crate::sessions::SessionManager;
 
 pub type FlightStream<T> =
     Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
 pub struct DatabendQueryFlightService {
-    sessions: SessionManagerRef,
+    sessions: Arc<SessionManager>,
     dispatcher: Arc<DatabendQueryFlightDispatcher>,
 }
 
 impl DatabendQueryFlightService {
     pub fn create(
         dispatcher: DatabendQueryFlightDispatcherRef,
-        sessions: SessionManagerRef,
+        sessions: Arc<SessionManager>,
     ) -> Self {
         DatabendQueryFlightService {
             sessions,

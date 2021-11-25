@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,12 +38,12 @@ use crate::interpreters::SettingInterpreter;
 use crate::interpreters::ShowCreateTableInterpreter;
 use crate::interpreters::TruncateTableInterpreter;
 use crate::interpreters::UseDatabaseInterpreter;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 pub struct InterpreterFactory;
 
 impl InterpreterFactory {
-    pub fn get(ctx: DatabendQueryContextRef, plan: PlanNode) -> Result<Arc<dyn Interpreter>> {
+    pub fn get(ctx: Arc<QueryContext>, plan: PlanNode) -> Result<Arc<dyn Interpreter>> {
         let ctx_clone = ctx.clone();
         let inner = match plan {
             PlanNode::Select(v) => SelectInterpreter::try_create(ctx_clone, v),

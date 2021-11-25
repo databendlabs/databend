@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,16 +22,16 @@ use common_tracing::tracing;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 
 #[derive(Debug)]
 pub struct DropUserInterpreter {
-    ctx: DatabendQueryContextRef,
+    ctx: Arc<QueryContext>,
     plan: DropUserPlan,
 }
 
 impl DropUserInterpreter {
-    pub fn try_create(ctx: DatabendQueryContextRef, plan: DropUserPlan) -> Result<InterpreterPtr> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropUserPlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(DropUserInterpreter { ctx, plan }))
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
@@ -22,7 +23,7 @@ use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::SqlOption;
 
-use crate::sessions::DatabendQueryContextRef;
+use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
@@ -37,7 +38,7 @@ pub struct DfCopy {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfCopy {
-    async fn analyze(&self, ctx: DatabendQueryContextRef) -> Result<AnalyzedResult> {
+    async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let mut db_name = ctx.get_current_database();
         let mut tbl_name = self.name.0[0].value.clone();
 
