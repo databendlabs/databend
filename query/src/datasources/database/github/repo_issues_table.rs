@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::CreateTableReq;
 use common_meta_types::TableInfo;
@@ -34,6 +33,7 @@ use crate::datasources::context::DataSourceContext;
 use crate::datasources::database::github::database::OWNER;
 use crate::datasources::database::github::database::REPO;
 use crate::datasources::database::github::database::REPO_ISSUES_ENGINE;
+use crate::datasources::database::github::util;
 use crate::sessions::DatabendQueryContextRef;
 
 const NUMBER: &str = "number";
@@ -99,57 +99,41 @@ impl RepoIssuesTable {
         let mut comments_number_array: Vec<u32> = Vec::new();
 
         // get owner repo info from table meta
-        let owner = self
-            .table_info
-            .meta
-            .options
-            .get(OWNER)
-            .ok_or_else(|| ErrorCode::UnexpectedError("Github table need owner in its mata"))?;
-        let repo = self
-            .table_info
-            .meta
-            .options
-            .get(REPO)
-            .ok_or_else(|| ErrorCode::UnexpectedError("Github table need repo in its mata"))?;
+        let (owner, repo) = util::get_own_repo_from_table_info(&self.table_info)?;
+        let instance = util::create_github_client()?;
 
-        // get issues from github
-        let octocrab = octocrab::instance();
-        // Returns the first page of all issues.
-        let page = octocrab
+        #[allow(unused_mut)]
+        let mut page = instance
             .issues(owner, repo)
             .list()
             // Optional Parameters
             .state(params::State::All)
-            .per_page(50)
+            .per_page(100)
             .send()
             .await?;
 
-        // Go through every page of issues. Warning: There's no rate limiting so
-        // be careful.
-        while let Some(page) = octocrab
-            .get_page::<models::issues::Issue>(&page.next)
-            .await?
-        {
-            for issue in page {
-                issue_numer_array.push(issue.id.into_inner());
-                title_array.push(issue.title.clone().into());
-                state_array.push(issue.state.clone().into());
-                user_array.push(issue.user.login.clone().into());
-                labels_array.push(issue.labels.iter().fold(Vec::new(), |mut content, label| {
-                    content.extend_from_slice(label.name.clone().as_bytes());
-                    content.push(b',');
-                    content
-                }));
-                assigness_array.push(issue.assignees.iter().fold(
-                    Vec::new(),
-                    |mut content, user| {
+        let issues = instance.all_pages::<models::issues::Issue>(page).await?;
+        for issue in issues {
+            issue_numer_array.push(issue.id.into_inner());
+            title_array.push(issue.title.clone().into());
+            state_array.push(issue.state.clone().into());
+            user_array.push(issue.user.login.clone().into());
+            labels_array.push(issue.labels.iter().fold(Vec::new(), |mut content, label| {
+                content.extend_from_slice(label.name.clone().as_bytes());
+                content.push(b',');
+                content
+            }));
+            assigness_array.push(
+                issue
+                    .assignees
+                    .iter()
+                    .fold(Vec::new(), |mut content, user| {
                         content.extend_from_slice(user.login.clone().as_bytes());
                         content.push(b',');
                         content
-                    },
-                ));
-                comments_number_array.push(issue.comments);
-            }
+                    }),
+            );
+            comments_number_array.push(issue.comments);
         }
 
         Ok(vec![

@@ -18,6 +18,7 @@ mod repo_comments_table;
 mod repo_info_table;
 mod repo_issues_table;
 mod repo_prs_table;
+mod util;
 
 pub use database::GithubDatabase;
 pub use database::REPO_COMMENTS_ENGINE;

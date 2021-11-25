@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::CreateTableReq;
 use common_meta_types::TableInfo;
@@ -32,6 +31,7 @@ use crate::datasources::context::DataSourceContext;
 use crate::datasources::database::github::database::OWNER;
 use crate::datasources::database::github::database::REPO;
 use crate::datasources::database::github::database::REPO_INFO_ENGINE;
+use crate::datasources::database::github::util;
 use crate::sessions::DatabendQueryContextRef;
 
 const REPOSITORY: &str = "reposiroty";
@@ -87,20 +87,10 @@ impl RepoInfoTable {
     }
 
     async fn get_data_from_github(&self) -> Result<Vec<Series>> {
-        let owner = self
-            .table_info
-            .meta
-            .options
-            .get(OWNER)
-            .ok_or_else(|| ErrorCode::UnexpectedError("Github table need owner in its mata"))?;
-        let repo = self
-            .table_info
-            .meta
-            .options
-            .get(REPO)
-            .ok_or_else(|| ErrorCode::UnexpectedError("Github table need repo in its mata"))?;
+        let (owner, repo) = util::get_own_repo_from_table_info(&self.table_info)?;
+        let instance = util::create_github_client()?;
 
-        let repo = octocrab::instance().repos(owner, repo).get().await?;
+        let repo = instance.repos(owner, repo).get().await?;
 
         let repo_name_array: Vec<Vec<u8>> = vec![repo.name.clone().into()];
         let language_array: Vec<Vec<u8>> = vec![repo
