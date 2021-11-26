@@ -13,19 +13,7 @@
 //  limitations under the License.
 //
 
-pub use io::TBL_OPT_KEY_SNAPSHOT_LOC;
-pub use meta::ColStats;
-pub use statistics::BlockStats;
-pub use table::FuseTable;
-
-mod index;
-mod io;
-mod meta;
-mod operations;
-mod statistics;
-mod table;
-
-#[cfg(test)]
-mod table_test;
-#[cfg(test)]
-mod table_test_fixture;
+pub const TBL_OPT_KEY_SNAPSHOT_LOC: &str = "SNAPSHOT_LOC";
+pub const FUSE_TBL_BLOCK_PREFIX: &str = "_b";
+pub const FUSE_TBL_SEGMENT_PREFIX: &str = "_sg";
+pub const FUSE_TBL_SNAPSHOT_PREFIX: &str = "_ss";

@@ -13,19 +13,17 @@
 //  limitations under the License.
 //
 
-pub use io::TBL_OPT_KEY_SNAPSHOT_LOC;
-pub use meta::ColStats;
-pub use statistics::BlockStats;
-pub use table::FuseTable;
+use crate::datasources::table::fuse::meta::block::BlockMeta;
+use crate::datasources::table::fuse::meta::Stats;
 
-mod index;
-mod io;
-mod meta;
-mod operations;
-mod statistics;
-mod table;
+/// A segment comprised of one or more blocks
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct SegmentInfo {
+    // TODO format_version
+    // pub format_version: u32,
+    /// blocks belong to this segment
+    pub blocks: Vec<BlockMeta>,
 
-#[cfg(test)]
-mod table_test;
-#[cfg(test)]
-mod table_test_fixture;
+    /// summary statistics
+    pub summary: Stats,
+}
