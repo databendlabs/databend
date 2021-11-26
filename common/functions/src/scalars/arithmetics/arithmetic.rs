@@ -24,6 +24,7 @@ use crate::scalars::dates::IntervalFunctionFactory;
 use crate::scalars::function::Monotonicity;
 use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::ArithmeticDivFunction;
+use crate::scalars::ArithmeticIntDivFunction;
 use crate::scalars::ArithmeticMinusFunction;
 use crate::scalars::ArithmeticModuloFunction;
 use crate::scalars::ArithmeticMulFunction;
@@ -47,6 +48,7 @@ impl ArithmeticFunction {
         factory.register("divide", ArithmeticDivFunction::desc());
         factory.register("%", ArithmeticModuloFunction::desc());
         factory.register("modulo", ArithmeticModuloFunction::desc());
+        factory.register("div", ArithmeticIntDivFunction::desc());
     }
 
     pub fn try_create_func(op: DataValueArithmeticOperator) -> Result<Box<dyn Function>> {
@@ -124,6 +126,7 @@ impl Function for ArithmeticFunction {
             Minus => ArithmeticMinusFunction::get_monotonicity(args),
             Mul => ArithmeticMulFunction::get_monotonicity(args),
             Div => ArithmeticDivFunction::get_monotonicity(args),
+            IntDiv => ArithmeticIntDivFunction::get_monotonicity(args),
             Modulo => ArithmeticModuloFunction::get_monotonicity(args),
         }
     }

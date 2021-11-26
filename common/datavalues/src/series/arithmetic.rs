@@ -95,6 +95,20 @@ impl Neg for &Series {
     }
 }
 
+impl IntDiv for &Series {
+    type Output = Result<Series>;
+
+    fn int_div(self, rhs: Self) -> Self::Output {
+        let (lhs, rhs) = coerce_lhs_rhs(&DataValueArithmeticOperator::IntDiv, self, rhs)?;
+        Ok(lhs
+            .divide(&rhs)?
+            .cast_with_type(&DataType::Float64)?
+            .f64()?
+            .apply(f64::floor)
+            .into_series())
+    }
+}
+
 pub trait NumOpsDispatch: Debug {
     fn subtract(&self, rhs: &Series) -> Result<Series> {
         Err(ErrorCode::BadDataValueType(format!(

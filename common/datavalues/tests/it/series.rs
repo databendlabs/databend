@@ -277,6 +277,25 @@ fn test_arithmetic_series() {
                 "Code: 10, displayText = DataValue Error: Unsupported (String) modulo (String).",
             ],
         },
+        ArrayTest {
+            name: "int_div-passed",
+            args: vec![
+                vec![Series::new(vec!["xx"]), Series::new(vec!["yy"])],
+                vec![
+                    Series::new(vec![10, 10, 10, 10]),
+                    Series::new(vec![0, 2, 3, 4]),
+                ],
+            ],
+            op: DataValueArithmeticOperator::IntDiv,
+
+            expect: vec![
+                Series::new(vec![""]),
+                Series::new(vec![f64::INFINITY, 5_f64, 3_f64, 2_f64]),
+            ],
+            error: vec![
+                "Code: 10, displayText = DataValue Error: Unsupported (String) div (String).",
+            ],
+        },
     ];
 
     for t in tests {
@@ -287,6 +306,7 @@ fn test_arithmetic_series() {
                 DataValueArithmeticOperator::Mul => &args[0] * &args[1],
                 DataValueArithmeticOperator::Div => &args[0] / &args[1],
                 DataValueArithmeticOperator::Modulo => &args[0] % &args[1],
+                DataValueArithmeticOperator::IntDiv => args[0].int_div(&args[1]),
             };
 
             match result {
