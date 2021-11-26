@@ -32,8 +32,9 @@ async fn test_fuse_table_block_appender() {
     let tmp_dir = TempDir::new().unwrap();
     let local_fs = common_dal::Local::with_path(tmp_dir.path().to_owned());
     let local_fs = Arc::new(local_fs);
-    // some blocks
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
+
+    // single segments
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
     let block_stream = futures::stream::iter(vec![Ok(block)]);
     let r = BlockAppender::append_blocks(
@@ -44,6 +45,25 @@ async fn test_fuse_table_block_appender() {
     )
     .await;
     assert!(r.is_ok());
+    let r = r.unwrap();
+    assert_eq!(r.len(), 1);
+
+    // multiple segments
+    let number_of_blocks = 30;
+    let chunk_size = 10;
+    let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
+    let blocks = std::iter::repeat(Ok(block)).take(number_of_blocks);
+    let block_stream = futures::stream::iter(blocks);
+    let r = BlockAppender::append_blocks(
+        local_fs.clone(),
+        Box::pin(block_stream),
+        schema.as_ref(),
+        chunk_size,
+    )
+    .await;
+    assert!(r.is_ok());
+    let r = r.unwrap();
+    assert_eq!(r.len(), number_of_blocks / chunk_size);
 
     // non blocks
     let block_stream = futures::stream::iter(vec![]);
