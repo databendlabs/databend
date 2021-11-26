@@ -97,8 +97,6 @@ tonic = "0.6.0"
 uuid = { version = "0.8", features = ["serde", "v4"] }
 walkdir = "2.3.2"
 
-pin-project-lite = "^0.2"
-
 [dependencies.parquet-format-async-temp]
 version = "0.2.0"
 

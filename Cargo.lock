@@ -2111,7 +2111,6 @@ dependencies = [
  "num_cpus",
  "parquet-format-async-temp",
  "paste",
- "pin-project-lite",
  "poem",
  "pretty_assertions",
  "prost 0.9.0",
