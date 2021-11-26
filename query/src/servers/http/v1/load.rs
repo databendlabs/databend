@@ -97,8 +97,9 @@ pub async fn streaming_load(
     let mut data_stream = interpreter.execute(Some(Box::pin(stream))).await?;
     while let Some(_block) = data_stream.next().await {}
 
+    // TODO generate id
+    // TODO duplicate by insert_label
     let mut id = uuid::Uuid::new_v4().to_string();
-
     Ok(Json(LoadResponse {
         id,
         state: "SUCCESS".to_string(),
