@@ -18,6 +18,7 @@ use std::fs::File;
 use std::sync::Arc;
 
 use async_stream::stream;
+use common_dal::DataAccessor;
 use common_dal::Local;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -113,7 +114,8 @@ impl Table for CsvTable {
                         }
 
                         let part = partitions.get(0).unwrap();
-                        let mut source = CsvSource::try_create(dal.clone(), part.name.clone(), schema.clone(), has_header, block_size)?;
+                        let reader = dal.get_input_stream(&part.name, None)?;
+                        let mut source = CsvSource::try_create(reader, schema.clone(), has_header, block_size)?;
 
                         loop {
                             let block = source.read().await;

@@ -44,8 +44,9 @@ where
         Ok(())
     }
 
+    // TODO introduce strid mod
     fn de_text(&mut self, reader: &[u8]) -> Result<()> {
-        if reader.eq_ignore_ascii_case(b"null") {
+        if reader.eq_ignore_ascii_case(b"null") || reader.is_empty() {
             self.builder.append_null();
             return Ok(());
         }

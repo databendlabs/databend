@@ -17,15 +17,15 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use poem::get;
-use poem::post;
+use poem::put;
 use poem::Endpoint;
 use poem::EndpointExt;
 use poem::Route;
 
 use crate::common::service::HttpShutdownHandler;
-use crate::servers::http::v1::load_data;
 use crate::servers::http::v1::query_route;
 use crate::servers::http::v1::statement_router;
+use crate::servers::http::v1::streaming_load;
 use crate::servers::Server;
 use crate::sessions::SessionManager;
 
@@ -51,7 +51,7 @@ impl HttpHandler {
             .at("/", get(poem::endpoint::make_sync(|_| HTTP_HANDLER_USAGE)))
             .nest("/v1/statement", statement_router())
             .nest("/v1/query", query_route())
-            .at("/v1/load", post(load_data))
+            .at("/v1/streaming_load", put(streaming_load))
             .data(self.session_manager.clone())
             .boxed()
     }
