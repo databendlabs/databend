@@ -21,10 +21,10 @@ mod repo_prs_table;
 mod util;
 
 pub use database::GithubDatabase;
-pub use database::REPO_COMMENTS_ENGINE;
-pub use database::REPO_INFO_ENGINE;
-pub use database::REPO_ISSUES_ENGINE;
-pub use database::REPO_PRS_ENGINE;
+pub use database::GITHUB_REPO_COMMENTS_ENGINE;
+pub use database::GITHUB_REPO_INFO_ENGINE;
+pub use database::GITHUB_REPO_ISSUES_ENGINE;
+pub use database::GITHUB_REPO_PRS_ENGINE;
 pub use repo_comments_table::RepoCommentsTable;
 pub use repo_info_table::RepoInfoTable;
 pub use repo_issues_table::RepoIssuesTable;

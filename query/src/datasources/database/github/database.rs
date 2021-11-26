@@ -40,10 +40,10 @@ pub struct GithubDatabase {
     ctx: DataSourceContext,
 }
 
-pub const REPO_INFO_ENGINE: &str = "REPO_INFO_ENGINE";
-pub const REPO_ISSUES_ENGINE: &str = "REPO_ISSUES_ENGINE";
-pub const REPO_PRS_ENGINE: &str = "REPO_PRS_ENGINE";
-pub const REPO_COMMENTS_ENGINE: &str = "REPO_COMMENTS_ENGINE";
+pub const GITHUB_REPO_INFO_ENGINE: &str = "GITHUB_REPO_INFO_ENGINE";
+pub const GITHUB_REPO_ISSUES_ENGINE: &str = "GITHUB_REPO_ISSUES_ENGINE";
+pub const GITHUB_REPO_PRS_ENGINE: &str = "GITHUB_REPO_PRS_ENGINE";
+pub const GITHUB_REPO_COMMENTS_ENGINE: &str = "GITHUB_REPO_COMMENTS_ENGINE";
 pub const OWNER: &str = "owner";
 pub const REPO: &str = "repo";
 

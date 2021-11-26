@@ -28,9 +28,9 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Table;
 use crate::datasources::context::DataSourceContext;
+use crate::datasources::database::github::database::GITHUB_REPO_INFO_ENGINE;
 use crate::datasources::database::github::database::OWNER;
 use crate::datasources::database::github::database::REPO;
-use crate::datasources::database::github::database::REPO_INFO_ENGINE;
 use crate::datasources::database::github::util;
 use crate::sessions::QueryContext;
 
@@ -63,7 +63,7 @@ impl RepoInfoTable {
             table: repo.clone(),
             table_meta: TableMeta {
                 schema: RepoInfoTable::schema(),
-                engine: REPO_INFO_ENGINE.into(),
+                engine: GITHUB_REPO_INFO_ENGINE.into(),
                 options,
             },
         };

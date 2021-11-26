@@ -37,19 +37,19 @@ pub fn register_prelude_tbl_engines(registry: &TableEngineRegistry) -> Result<()
 
     // github database table engine
     registry.register(
-        github::REPO_INFO_ENGINE,
+        github::GITHUB_REPO_INFO_ENGINE,
         std::sync::Arc::new(RepoInfoTable::try_create),
     )?;
     registry.register(
-        github::REPO_ISSUES_ENGINE,
+        github::GITHUB_REPO_ISSUES_ENGINE,
         std::sync::Arc::new(RepoIssuesTable::try_create),
     )?;
     registry.register(
-        github::REPO_PRS_ENGINE,
+        github::GITHUB_REPO_PRS_ENGINE,
         std::sync::Arc::new(RepoPrsTable::try_create),
     )?;
     registry.register(
-        github::REPO_COMMENTS_ENGINE,
+        github::GITHUB_REPO_COMMENTS_ENGINE,
         std::sync::Arc::new(RepoCommentsTable::try_create),
     )?;
     Ok(())

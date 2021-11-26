@@ -29,9 +29,9 @@ use octocrab::models;
 
 use crate::catalogs::Table;
 use crate::datasources::context::DataSourceContext;
+use crate::datasources::database::github::database::GITHUB_REPO_COMMENTS_ENGINE;
 use crate::datasources::database::github::database::OWNER;
 use crate::datasources::database::github::database::REPO;
-use crate::datasources::database::github::database::REPO_COMMENTS_ENGINE;
 use crate::datasources::database::github::util;
 use crate::sessions::QueryContext;
 
@@ -59,7 +59,7 @@ impl RepoCommentsTable {
             table: repo + "_comments",
             table_meta: TableMeta {
                 schema: RepoCommentsTable::schema(),
-                engine: REPO_COMMENTS_ENGINE.into(),
+                engine: GITHUB_REPO_COMMENTS_ENGINE.into(),
                 options,
             },
         };
