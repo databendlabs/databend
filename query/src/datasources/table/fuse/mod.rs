@@ -13,11 +13,12 @@
 //  limitations under the License.
 //
 
-pub use io::TBL_OPT_KEY_SNAPSHOT_LOC;
+pub use constants::*;
 pub use meta::ColStats;
 pub use statistics::BlockStats;
 pub use table::FuseTable;
 
+mod constants;
 mod index;
 mod io;
 mod meta;

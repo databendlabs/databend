@@ -25,6 +25,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
+use futures::TryStreamExt;
 
 use crate::datasources::table::fuse::io;
 use crate::datasources::table::fuse::meta::SegmentInfo;
@@ -33,23 +34,30 @@ use crate::datasources::table::fuse::statistics;
 use crate::datasources::table::fuse::statistics::BlockMetaAccumulator;
 use crate::datasources::table::fuse::statistics::StatisticsAccumulator;
 
-/// dummy struct, namespace placeholder
 pub struct BlockAppender;
 
 impl BlockAppender {
+    fn merge_blocks(blocks: Vec<DataBlock>) -> Result<DataBlock> {
+        DataBlock::concat_blocks(&blocks)
+    }
+
     // TODO should return a stream of SegmentInfo (batch blocks into segments)
     pub async fn append_blocks(
         data_accessor: Arc<dyn DataAccessor>,
-        mut stream: SendableDataBlockStream,
+        stream: SendableDataBlockStream,
         data_schema: &DataSchema,
-    ) -> Result<Option<SegmentInfo>> {
-        let mut stats_acc = StatisticsAccumulator::new();
-        let mut block_meta_acc = BlockMetaAccumulator::new();
+        chunk_block_num: usize,
+    ) -> Result<Vec<SegmentInfo>> {
+        let mut stream = stream.try_chunks(chunk_block_num);
+        let mut segments = vec![];
 
-        let mut block_nums = 0;
         // accumulate the stats and save the blocks
-        while let Some(block) = stream.next().await {
-            let block = block?;
+        while let Some(item) = stream.next().await {
+            let mut block_nums = 0;
+            let item = item.map_err(|e| ErrorCode::UnknownException(e.to_string()))?;
+            let block = Self::merge_blocks(item)?;
+            let mut stats_acc = StatisticsAccumulator::new();
+            let mut block_meta_acc = BlockMetaAccumulator::new();
             if block.num_rows() != 0 {
                 stats_acc.acc(&block)?;
                 let schema = block.schema().to_arrow();
@@ -58,28 +66,26 @@ impl BlockAppender {
                 block_meta_acc.acc(file_size, location, &mut stats_acc);
                 block_nums += 1;
             }
+
+            if block_nums > 0 {
+                // summary and give back a segment_info
+                // we need to send back a stream of segment latter
+                let block_metas = block_meta_acc.blocks_metas;
+                let summary = statistics::reduce_block_stats(&stats_acc.blocks_stats, data_schema)?;
+                let seg = SegmentInfo {
+                    blocks: block_metas,
+                    summary: Stats {
+                        row_count: stats_acc.summary_row_count,
+                        block_count: stats_acc.summary_block_count,
+                        uncompressed_byte_size: stats_acc.in_memory_size,
+                        compressed_byte_size: stats_acc.file_size,
+                        col_stats: summary,
+                    },
+                };
+                segments.push(seg)
+            };
         }
-
-        let segment = if block_nums > 0 {
-            // summary and give back a segment_info
-            // we need to send back a stream of segment latter
-            let block_metas = block_meta_acc.blocks_metas;
-            let summary = statistics::reduce_block_stats(&stats_acc.blocks_stats, data_schema)?;
-            Some(SegmentInfo {
-                blocks: block_metas,
-                summary: Stats {
-                    row_count: stats_acc.summary_row_count,
-                    block_count: stats_acc.summary_block_count,
-                    uncompressed_byte_size: stats_acc.in_memory_size,
-                    compressed_byte_size: stats_acc.file_size,
-                    col_stats: summary,
-                },
-            })
-        } else {
-            None
-        };
-
-        Ok(segment)
+        Ok(segments)
     }
 
     pub(super) async fn save_block(

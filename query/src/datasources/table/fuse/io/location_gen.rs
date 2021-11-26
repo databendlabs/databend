@@ -15,9 +15,9 @@
 
 use uuid::Uuid;
 
-use super::constants::FUSE_TBL_BLOCK_PREFIX;
-use super::constants::FUSE_TBL_SEGMENT_PREFIX;
-use super::constants::FUSE_TBL_SNAPSHOT_PREFIX;
+use crate::datasources::table::fuse::constants::FUSE_TBL_BLOCK_PREFIX;
+use crate::datasources::table::fuse::constants::FUSE_TBL_SEGMENT_PREFIX;
+use crate::datasources::table::fuse::constants::FUSE_TBL_SNAPSHOT_PREFIX;
 
 pub fn gen_block_location() -> String {
     let part_uuid = Uuid::new_v4().to_simple().to_string() + ".parquet";

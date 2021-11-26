@@ -25,6 +25,7 @@ use common_datavalues::DataType;
 use tempfile::TempDir;
 
 use crate::datasources::table::fuse::io::BlockAppender;
+use crate::datasources::table::fuse::DEFAULT_CHUNK_BLOCK_NUM;
 
 #[tokio::test]
 async fn test_fuse_table_block_appender() {
@@ -35,13 +36,24 @@ async fn test_fuse_table_block_appender() {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
     let block_stream = futures::stream::iter(vec![Ok(block)]);
-    let r = BlockAppender::append_blocks(local_fs.clone(), Box::pin(block_stream), schema.as_ref())
-        .await;
+    let r = BlockAppender::append_blocks(
+        local_fs.clone(),
+        Box::pin(block_stream),
+        schema.as_ref(),
+        DEFAULT_CHUNK_BLOCK_NUM,
+    )
+    .await;
     assert!(r.is_ok());
 
     // non blocks
     let block_stream = futures::stream::iter(vec![]);
-    let r = BlockAppender::append_blocks(local_fs, Box::pin(block_stream), schema.as_ref()).await;
+    let r = BlockAppender::append_blocks(
+        local_fs,
+        Box::pin(block_stream),
+        schema.as_ref(),
+        DEFAULT_CHUNK_BLOCK_NUM,
+    )
+    .await;
     assert!(r.is_ok());
-    assert!(r.unwrap().is_none())
+    assert!(r.unwrap().is_empty())
 }
