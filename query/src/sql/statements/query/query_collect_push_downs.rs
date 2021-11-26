@@ -56,23 +56,44 @@ impl QueryCollectPushDowns {
             let table_desc = &schema.get_tables_desc()[index];
             let projection = self.collect_table_require_columns(table_desc);
 
-            if !projection.is_empty() {
-                schema.set_table_push_downs(index, Extras {
-                    projection: Some(projection),
-                    // TODO:
-                    filters: vec![],
-                    limit: None,
-                    order_by: vec![],
-                });
-            }
+            schema.set_table_push_downs(index, Extras {
+                projection: Some(projection),
+                // TODO:
+                filters: vec![],
+                limit: None,
+                order_by: vec![],
+            });
         }
 
         Ok(())
     }
 
     fn collect_table_require_columns(&mut self, table_desc: &JoinedTableDesc) -> Vec<usize> {
-        let mut table_require_columns = Vec::new();
+        match self.require_columns.is_empty() {
+            true => Self::collect_table_smallest_column(table_desc),
+            false => self.collect_table_projection_columns(table_desc),
+        }
+    }
 
+    // SELECT COUNT() FROM table_name.
+    fn collect_table_smallest_column(table_desc: &JoinedTableDesc) -> Vec<usize> {
+        let mut smallest_index = 0;
+        let mut smallest_size = usize::MAX;
+        let columns_desc = table_desc.get_columns_desc();
+        for (column_index, column_desc) in columns_desc.iter().enumerate() {
+            if let Ok(bytes) = column_desc.data_type.numeric_byte_size() {
+                if smallest_size > bytes {
+                    smallest_size = bytes;
+                    smallest_index = column_index;
+                }
+            }
+        }
+
+        vec![smallest_index]
+    }
+
+    fn collect_table_projection_columns(&mut self, table_desc: &JoinedTableDesc) -> Vec<usize> {
+        let mut table_require_columns = Vec::new();
         let columns_desc = table_desc.get_columns_desc();
         for (column_index, column_desc) in columns_desc.iter().enumerate() {
             let column_name = match column_desc.is_ambiguity {

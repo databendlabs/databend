@@ -33,7 +33,7 @@ mod tests {
                 expect: "\
                 Projection: ((1 + 2) + 3):UInt32\
                 \n  Expression: 6:UInt32 (Before Projection)\
-                \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
+                \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1], push_downs: [projections: [0]]",
             },
             Test {
                 name: "Projection left non const recursion",
@@ -57,7 +57,7 @@ mod tests {
                 expect: "\
                 Projection: ((1 + 2) + (3 / 3)):Float64\
                 \n  Expression: 4:Float64 (Before Projection)\
-                \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
+                \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1], push_downs: [projections: [0]]",
             },
             Test {
                 name: "Projection comparisons const recursion",
@@ -65,7 +65,7 @@ mod tests {
                 expect: "\
                 Projection: (((1 + 2) + 3) > 3):Boolean\
                 \n  Expression: true:Boolean (Before Projection)\
-                \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
+                \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1], push_downs: [projections: [0]]",
             },
             Test {
                 name: "Projection cast const recursion",
@@ -73,7 +73,7 @@ mod tests {
                 expect: "\
                 Projection: cast(1 as Int64):Int64\
                 \n  Expression: 1:Int64 (Before Projection)\
-                \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
+                \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1], push_downs: [projections: [0]]",
             },
             Test {
                 name: "Projection hash const recursion",
@@ -81,7 +81,7 @@ mod tests {
                 expect: "\
                 Projection: sipHash('test_string'):UInt64\
                 \n  Expression: 15735157695654173841:UInt64 (Before Projection)\
-                \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
+                \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1], push_downs: [projections: [0]]",
             },
             Test {
                 name: "Projection logics const recursion",
@@ -89,7 +89,7 @@ mod tests {
                 expect: "\
                 Projection: ((1 = 1) AND (2 > 1)):Boolean\
                 \n  Expression: true:Boolean (Before Projection)\
-                \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
+                \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1], push_downs: [projections: [0]]",
             },
             Test {
                 name: "Projection strings const recursion",
@@ -97,7 +97,7 @@ mod tests {
                 expect: "\
                 Projection: substring('1234567890', 3, 3):String\
                 \n  Expression: 345:String (Before Projection)\
-                \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
+                \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1], push_downs: [projections: [0]]",
             },
             Test {
                 name: "Projection to type name const recursion",
@@ -105,7 +105,7 @@ mod tests {
                 expect: "\
                 Projection: toTypeName('1234567890'):String\
                 \n  Expression: String:String (Before Projection)\
-                \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
+                \n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1], push_downs: [projections: [0]]",
             },
             Test {
                 name: "Filter true and cond",
