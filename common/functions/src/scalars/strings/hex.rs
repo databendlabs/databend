@@ -23,40 +23,14 @@ use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
-trait OctString {
-    fn oct_string(self) -> String;
-}
-
-impl OctString for i64 {
-    fn oct_string(self) -> String {
-        match self.cmp(&0) {
-            Ordering::Less => {
-                format!("-0{:o}", self.unsigned_abs())
-            }
-            Ordering::Equal => "0".to_string(),
-            Ordering::Greater => format!("0{:o}", self),
-        }
-    }
-}
-
-impl OctString for u64 {
-    fn oct_string(self) -> String {
-        if self == 0 {
-            "0".to_string()
-        } else {
-            format!("0{:o}", self)
-        }
-    }
-}
-
 #[derive(Clone)]
-pub struct OctFunction {
+pub struct HexFunction {
     _display_name: String,
 }
 
-impl OctFunction {
+impl HexFunction {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(OctFunction {
+        Ok(Box::new(HexFunction {
             _display_name: display_name.to_string(),
         }))
     }
@@ -67,9 +41,9 @@ impl OctFunction {
     }
 }
 
-impl Function for OctFunction {
+impl Function for HexFunction {
     fn name(&self) -> &str {
-        "oct"
+        "hex"
     }
 
     fn num_arguments(&self) -> usize {
@@ -91,31 +65,60 @@ impl Function for OctFunction {
         Ok(true)
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
+    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         match columns[0].data_type() {
             DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64 => {
-                let mut string_array = StringArrayBuilder::with_capacity(input_rows);
+                let mut string_array = StringArrayBuilder::with_capacity(columns[0].column().len());
                 for value in columns[0]
                     .column()
                     .cast_with_type(&DataType::UInt64)?
                     .to_minimal_array()?
                     .u64()?
                 {
-                    string_array.append_option(value.map(|n| n.oct_string()));
+                    string_array.append_option(value.map(|n| format!("{:x}", n)));
                 }
 
                 let column: DataColumn = string_array.finish().into();
                 Ok(column.resize_constant(columns[0].column().len()))
             }
-            _ => {
-                let mut string_array = StringArrayBuilder::with_capacity(input_rows);
+            DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => {
+                let mut string_array = StringArrayBuilder::with_capacity(columns[0].column().len());
                 for value in columns[0]
                     .column()
                     .cast_with_type(&DataType::Int64)?
                     .to_minimal_array()?
                     .i64()?
                 {
-                    string_array.append_option(value.map(|n| n.oct_string()));
+                    string_array.append_option(value.map(|n| match n.cmp(&0) {
+                        Ordering::Less => {
+                            format!("-{:x}", n.unsigned_abs())
+                        }
+                        _ => format!("{:x}", n),
+                    }));
+                }
+
+                let column: DataColumn = string_array.finish().into();
+                Ok(column.resize_constant(columns[0].column().len()))
+            }
+            _ => {
+                const BUFFER_SIZE: usize = 32;
+                let mut buffer = [0; BUFFER_SIZE * 2];
+                let mut string_array = StringArrayBuilder::with_capacity(columns[0].column().len());
+                for value in columns[0]
+                    .column()
+                    .cast_with_type(&DataType::String)?
+                    .to_minimal_array()?
+                    .string()?
+                {
+                    match value {
+                        Some(value) if value.len() <= BUFFER_SIZE => {
+                            let size = value.len() * 2;
+                            let _ = hex::encode_to_slice(value, &mut buffer[..size]);
+                            string_array.append_value(&buffer[..size])
+                        }
+                        Some(value) => string_array.append_value(hex::encode(value)),
+                        None => string_array.append_null(),
+                    }
                 }
 
                 let column: DataColumn = string_array.finish().into();
@@ -125,8 +128,8 @@ impl Function for OctFunction {
     }
 }
 
-impl fmt::Display for OctFunction {
+impl fmt::Display for HexFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "OCT")
+        write!(f, "HEX")
     }
 }
