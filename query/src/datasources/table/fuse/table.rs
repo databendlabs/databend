@@ -14,19 +14,22 @@
 //
 
 use std::any::Any;
+use std::convert::TryFrom;
 use std::sync::Arc;
 
 use common_dal::read_obj;
+use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
-use common_planners::InsertIntoPlan;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
+use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
+use super::operations::AppendOperation;
 use super::util;
 use crate::catalogs::Table;
 use crate::datasources::context::DataSourceContext;
@@ -80,10 +83,27 @@ impl Table for FuseTable {
     async fn append_data(
         &self,
         ctx: Arc<QueryContext>,
-        insert_plan: InsertIntoPlan,
         stream: SendableDataBlockStream,
-    ) -> Result<()> {
-        self.do_append(ctx, insert_plan, stream).await
+    ) -> Result<SendableDataBlockStream> {
+        let log = self.append_trunks(ctx, stream).await?;
+        let blocks = match log {
+            Some(op_log) => vec![DataBlock::try_from(op_log)?],
+            _ => vec![],
+        };
+        Ok(Box::pin(DataBlockStream::create(
+            AppendOperation::schema(),
+            None,
+            blocks,
+        )))
+    }
+
+    async fn commit(&self, _ctx: Arc<QueryContext>, operations: Vec<DataBlock>) -> Result<()> {
+        // only append operation supported currently
+        let append_log_entries = operations
+            .iter()
+            .map(AppendOperation::try_from)
+            .collect::<Result<Vec<AppendOperation>>>()?;
+        self.do_commit(_ctx, append_log_entries).await
     }
 
     async fn truncate(

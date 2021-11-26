@@ -17,16 +17,16 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
-use common_exception::ErrorCode;
+use common_datavalues::DataSchema;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
-use common_planners::InsertIntoPlan;
 use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
+use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::stream::StreamExt;
 
@@ -106,19 +106,18 @@ impl Table for MemoryTable {
     async fn append_data(
         &self,
         _ctx: Arc<QueryContext>,
-        insert_plan: InsertIntoPlan,
         mut stream: SendableDataBlockStream,
-    ) -> Result<()> {
-        if insert_plan.schema().as_ref().fields() != self.table_info.schema().as_ref().fields() {
-            return Err(ErrorCode::BadArguments("DataBlock schema mismatch"));
-        }
-
+    ) -> Result<SendableDataBlockStream> {
         while let Some(block) = stream.next().await {
             let block = block?;
             let mut blocks = self.blocks.write();
             blocks.push(block);
         }
-        Ok(())
+        Ok(Box::pin(DataBlockStream::create(
+            std::sync::Arc::new(DataSchema::empty()),
+            None,
+            vec![],
+        )))
     }
 
     async fn truncate(
