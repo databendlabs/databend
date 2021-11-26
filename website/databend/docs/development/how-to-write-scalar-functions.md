@@ -142,6 +142,23 @@ But this's inefficient because we need to check the null value every time we ite
 According to the memory layout of Arrow, we can directly use the validity bitmap of the original column to indicate the null value.
 So we have `ArrayApply` trait to help you iterate the column. If there are two zip iterator, we can use `binary` function to combine the validity bitmap of two columns.
 
+ArrayApply
+```rust
+let array: DFUInt8Array = self.apply_cast_numeric(|a| {
+                            AsPrimitive::<u8>::as_(a - (a / rhs) * rhs)
+                        });
+```
+
+binary
+```rust
+binary(x_series.f64()?, y_series.f64()?, |x, y| x.pow(y))
+```
+
+### Nullable check
+Nullable is anoying, but we can accept `DataType::Null` argument in most cases.
+
+### Implicit cast
+Databend can accept implicit cast, eg: `pow('3', 2)`, `sign('1232')` we can cast the argument to specific column using `cast_with_type`.
 
 
 
