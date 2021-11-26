@@ -18,14 +18,19 @@ use std::sync::Arc;
 use common_exception::Result;
 
 use crate::datasources::database::FuseDatabase;
+use crate::datasources::database::GithubDatabase;
 use crate::datasources::DatabaseEngineRegistry;
 
 #[test]
 fn test_database_engine_registry() -> Result<()> {
     let registry = DatabaseEngineRegistry::default();
     registry.register("DEFAULT", Arc::new(FuseDatabase::try_create))?;
+    registry.register("GITHUB", Arc::new(GithubDatabase::try_create))?;
 
     let engine = registry.get_database_factory("default");
+    assert!(engine.is_some());
+
+    let engine = registry.get_database_factory("github");
     assert!(engine.is_some());
 
     let engine = registry.get_database_factory("xx");

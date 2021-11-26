@@ -13,17 +13,19 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
+pub mod database;
+mod repo_comments_table;
+mod repo_info_table;
+mod repo_issues_table;
+mod repo_prs_table;
+mod util;
 
-use common_exception::Result;
-
-use crate::datasources::database::FuseDatabase;
-use crate::datasources::database::GithubDatabase;
-use crate::datasources::DatabaseEngineRegistry;
-
-pub fn register_database_engines(registry: &DatabaseEngineRegistry) -> Result<()> {
-    // Register a DEFAULT database engine.
-    registry.register("DEFAULT", Arc::new(FuseDatabase::try_create))?;
-    registry.register("GITHUB", Arc::new(GithubDatabase::try_create))?;
-    Ok(())
-}
+pub use database::GithubDatabase;
+pub use database::GITHUB_REPO_COMMENTS_ENGINE;
+pub use database::GITHUB_REPO_INFO_ENGINE;
+pub use database::GITHUB_REPO_ISSUES_ENGINE;
+pub use database::GITHUB_REPO_PRS_ENGINE;
+pub use repo_comments_table::RepoCommentsTable;
+pub use repo_info_table::RepoInfoTable;
+pub use repo_issues_table::RepoIssuesTable;
+pub use repo_prs_table::RepoPrsTable;

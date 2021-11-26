@@ -17,9 +17,11 @@
 mod tests;
 
 pub(crate) mod fuse;
+pub(crate) mod github;
 pub(crate) mod prelude;
 pub(crate) mod system;
 
 pub use fuse::FuseDatabase;
+pub use github::GithubDatabase;
 pub use prelude::register_database_engines;
 pub use system::SystemDatabase;
