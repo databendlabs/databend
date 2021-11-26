@@ -33,6 +33,7 @@ sha1 = "0.6.0"
 sha2 = "0.9.8"
 md5 = "0.7.0"
 rand = "0.8.4"
+hex = "0.4.3"
 
 [dev-dependencies]
 bumpalo = "3.8.0"
