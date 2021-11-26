@@ -106,6 +106,7 @@ impl Interpreter for InsertIntoInterpreter {
         )))
     }
 }
+
 impl InsertIntoInterpreter {
     async fn insert_with_select_plan(
         &self,

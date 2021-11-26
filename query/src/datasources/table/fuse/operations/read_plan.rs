@@ -24,7 +24,7 @@ use common_planners::Partitions;
 use common_planners::Statistics;
 
 use crate::datasources::table::fuse::index;
-use crate::datasources::table::fuse::BlockMeta;
+use crate::datasources::table::fuse::meta::BlockMeta;
 use crate::datasources::table::fuse::FuseTable;
 use crate::sessions::QueryContext;
 
@@ -42,43 +42,43 @@ impl FuseTable {
             let push_downs_c = push_downs.clone();
             let snapshot = read_obj(da.clone(), loc).await?;
             let block_metas = index::range_filter(&snapshot, schema, push_downs_c, da).await?;
-            let (statistics, parts) = to_partitions(&block_metas, push_downs);
+            let (statistics, parts) = Self::to_partitions(&block_metas, push_downs);
             Ok((statistics, parts))
         } else {
             Ok((Statistics::default(), vec![]))
         }
     }
-}
 
-pub(crate) fn to_partitions(
-    blocks_metas: &[BlockMeta],
-    push_downs: Option<Extras>,
-) -> (Statistics, Partitions) {
-    let proj_cols =
-        push_downs.and_then(|extras| extras.projection.map(HashSet::<usize>::from_iter));
-    blocks_metas.iter().fold(
-        (Statistics::default(), Partitions::default()),
-        |(mut stats, mut parts), block_meta| {
-            parts.push(Part {
-                name: block_meta.location.location.clone(),
-                version: 0,
-            });
+    pub(crate) fn to_partitions(
+        blocks_metas: &[BlockMeta],
+        push_downs: Option<Extras>,
+    ) -> (Statistics, Partitions) {
+        let proj_cols =
+            push_downs.and_then(|extras| extras.projection.map(HashSet::<usize>::from_iter));
+        blocks_metas.iter().fold(
+            (Statistics::default(), Partitions::default()),
+            |(mut stats, mut parts), block_meta| {
+                parts.push(Part {
+                    name: block_meta.location.location.clone(),
+                    version: 0,
+                });
 
-            stats.read_rows += block_meta.row_count as usize;
+                stats.read_rows += block_meta.row_count as usize;
 
-            match &proj_cols {
-                Some(proj) => {
-                    stats.read_bytes += block_meta
-                        .col_stats
-                        .iter()
-                        .filter(|(cid, _)| proj.contains(&(**cid as usize)))
-                        .map(|(_, col_stats)| col_stats.in_memory_size)
-                        .sum::<u64>() as usize
+                match &proj_cols {
+                    Some(proj) => {
+                        stats.read_bytes += block_meta
+                            .col_stats
+                            .iter()
+                            .filter(|(cid, _)| proj.contains(&(**cid as usize)))
+                            .map(|(_, col_stats)| col_stats.in_memory_size)
+                            .sum::<u64>() as usize
+                    }
+                    None => stats.read_bytes += block_meta.block_size as usize,
                 }
-                None => stats.read_bytes += block_meta.block_size as usize,
-            }
 
-            (stats, parts)
-        },
-    )
+                (stats, parts)
+            },
+        )
+    }
 }

@@ -24,17 +24,24 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use tempfile::TempDir;
 
-use crate::datasources::table::fuse::BlockAppender;
+use crate::datasources::table::fuse::io::BlockAppender;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test]
 async fn test_fuse_table_block_appender() {
     let tmp_dir = TempDir::new().unwrap();
     let local_fs = common_dal::Local::with_path(tmp_dir.path().to_owned());
+    let local_fs = Arc::new(local_fs);
+    // some blocks
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
     let block_stream = futures::stream::iter(vec![Ok(block)]);
-    let r =
-        BlockAppender::append_blocks(Arc::new(local_fs), Box::pin(block_stream), schema.as_ref())
-            .await;
-    assert!(r.is_ok())
+    let r = BlockAppender::append_blocks(local_fs.clone(), Box::pin(block_stream), schema.as_ref())
+        .await;
+    assert!(r.is_ok());
+
+    // non blocks
+    let block_stream = futures::stream::iter(vec![]);
+    let r = BlockAppender::append_blocks(local_fs, Box::pin(block_stream), schema.as_ref()).await;
+    assert!(r.is_ok());
+    assert!(r.unwrap().is_none())
 }
