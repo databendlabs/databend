@@ -32,6 +32,7 @@ use futures::TryStreamExt;
 use crate::catalogs::Catalog;
 use crate::datasources::table::fuse::index::min_max::range_filter;
 use crate::datasources::table::fuse::table_test_fixture::TestFixture;
+use crate::datasources::table::fuse::TBL_OPT_KEY_CHUNK_BLOCK_NUM;
 use crate::datasources::table::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 
 #[tokio::test]
@@ -53,7 +54,8 @@ async fn test_min_max_index() -> Result<()> {
         table_meta: TableMeta {
             schema: test_schema.clone(),
             engine: "FUSE".to_string(),
-            options: Default::default(),
+            // make sure blocks will not be merged
+            options: [(TBL_OPT_KEY_CHUNK_BLOCK_NUM.to_owned(), "1".to_owned())].into(),
         },
     };
 
