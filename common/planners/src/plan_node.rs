@@ -15,8 +15,6 @@
 use std::sync::Arc;
 
 use common_datavalues::DataSchemaRef;
-use common_exception::ErrorCode;
-use common_exception::Result;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
@@ -47,6 +45,7 @@ use crate::RemotePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateTablePlan;
+use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
 use crate::TruncateTablePlan;
@@ -69,6 +68,7 @@ pub enum PlanNode {
     Limit(LimitPlan),
     LimitBy(LimitByPlan),
     ReadSource(ReadDataSourcePlan),
+    Sink(SinkPlan),
     Select(SelectPlan),
     Explain(ExplainPlan),
     CreateDatabase(CreateDatabasePlan),
@@ -126,6 +126,7 @@ impl PlanNode {
             PlanNode::AlterUser(v) => v.schema(),
             PlanNode::DropUser(v) => v.schema(),
             PlanNode::GrantPrivilege(v) => v.schema(),
+            PlanNode::Sink(v) => v.schema(),
             PlanNode::Copy(v) => v.schema(),
         }
     }
@@ -164,6 +165,7 @@ impl PlanNode {
             PlanNode::AlterUser(_) => "AlterUser",
             PlanNode::DropUser(_) => "DropUser",
             PlanNode::GrantPrivilege(_) => "GrantPrivilegePlan",
+            PlanNode::Sink(_) => "SinkPlan",
             PlanNode::Copy(_) => "CopyPlan",
         }
     }
@@ -183,6 +185,7 @@ impl PlanNode {
             PlanNode::Select(v) => vec![v.input.clone()],
             PlanNode::Sort(v) => vec![v.input.clone()],
             PlanNode::SubQueryExpression(v) => v.get_inputs(),
+            PlanNode::Sink(v) => vec![v.input.clone()],
 
             _ => vec![],
         }
@@ -190,35 +193,5 @@ impl PlanNode {
 
     pub fn input(&self, n: usize) -> Arc<PlanNode> {
         self.inputs()[n].clone()
-    }
-
-    pub fn set_inputs(&mut self, inputs: Vec<&PlanNode>) -> Result<()> {
-        if inputs.is_empty() {
-            return Result::Err(ErrorCode::BadPlanInputs("Inputs must not be empty"));
-        }
-
-        match self {
-            PlanNode::Stage(v) => v.set_input(inputs[0]),
-            PlanNode::Broadcast(v) => v.set_input(inputs[0]),
-            PlanNode::Projection(v) => v.set_input(inputs[0]),
-            PlanNode::Expression(v) => v.set_input(inputs[0]),
-            PlanNode::AggregatorPartial(v) => v.set_input(inputs[0]),
-            PlanNode::AggregatorFinal(v) => v.set_input(inputs[0]),
-            PlanNode::Filter(v) => v.set_input(inputs[0]),
-            PlanNode::Having(v) => v.set_input(inputs[0]),
-            PlanNode::Limit(v) => v.set_input(inputs[0]),
-            PlanNode::Explain(v) => v.set_input(inputs[0]),
-            PlanNode::Select(v) => v.set_input(inputs[0]),
-            PlanNode::Sort(v) => v.set_input(inputs[0]),
-            PlanNode::SubQueryExpression(v) => v.set_inputs(inputs),
-            _ => {
-                return Err(ErrorCode::UnImplement(format!(
-                    "UnImplement set_inputs for {:?}",
-                    self
-                )));
-            }
-        }
-
-        Ok(())
     }
 }

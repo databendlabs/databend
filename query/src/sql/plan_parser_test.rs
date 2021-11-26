@@ -102,13 +102,13 @@ fn test_plan_parser() -> Result<()> {
         Test {
             name: "cast-passed",
             sql: "select cast('1' as int)",
-            expect: "Projection: cast('1' as Int32):Int32\n  Expression: cast(1 as Int32):Int32 (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
+            expect: "Projection: cast('1' as Int32):Int32\n  Expression: cast(1 as Int32):Int32 (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1], push_downs: [projections: [0]]",
             error: "",
         },
         Test {
             name: "database-passed",
             sql: "select database()",
-            expect: "Projection: database():String\n  Expression: database(default):String (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
+            expect: "Projection: database():String\n  Expression: database(default):String (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1], push_downs: [projections: [0]]",
             error: "",
         },
         Test {
@@ -120,6 +120,12 @@ fn test_plan_parser() -> Result<()> {
             // error: "Code: 26, displayText = Column `number` is not under aggregate function and not in GROUP BY: While processing [(number + 1), (number + 3)].",
         },
         Test {
+            name: "select-count",
+            sql: "SELECT COUNT() FROM numbers(10)",
+            expect: "Projection: COUNT():UInt64\n  AggregatorFinal: groupBy=[[]], aggr=[[COUNT()]]\n    AggregatorPartial: groupBy=[[]], aggr=[[COUNT()]]\n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+            error: "",
+        },
+        Test {
             name: "unsupported-function",
             sql: "select unsupported()",
             expect: "",
@@ -128,7 +134,7 @@ fn test_plan_parser() -> Result<()> {
         Test {
             name: "interval-passed",
             sql: "SELECT INTERVAL '1' year, INTERVAL '1' month, INTERVAL '1' day, INTERVAL '1' hour, INTERVAL '1' minute, INTERVAL '1' second",
-            expect: "Projection: 12:Interval(YearMonth), 1:Interval(YearMonth), 86400000:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime)\n  Expression: 12:Interval(YearMonth), 1:Interval(YearMonth), 86400000:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime) (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
+            expect: "Projection: 12:Interval(YearMonth), 1:Interval(YearMonth), 86400000:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime)\n  Expression: 12:Interval(YearMonth), 1:Interval(YearMonth), 86400000:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime) (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1], push_downs: [projections: [0]]",
             error: "",
         },
         // Test {
@@ -174,7 +180,7 @@ fn test_plan_parser() -> Result<()> {
             \n            AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]\
             \n              Expression: (number % 3):UInt8, (number + 1):UInt64 (Before GroupBy)\
             \n                Filter: (number > 1)\
-            \n                  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            \n                  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
             error: "",
         },
         Test {
@@ -189,7 +195,7 @@ fn test_plan_parser() -> Result<()> {
             expect: "\
             Projection: number:UInt64\
             \n  Filter: NULL\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
             error: "",
         },
         Test {
@@ -198,7 +204,7 @@ fn test_plan_parser() -> Result<()> {
             expect: "\
             Projection: number:UInt64\
             \n  Filter: (NULL AND true)\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80]",
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
             error: "",
         },
         Test {
@@ -206,7 +212,7 @@ fn test_plan_parser() -> Result<()> {
             sql: "show metrics",
             expect: "\
             Projection: metric:String, kind:String, labels:String, value:String\
-            \n  ReadDataSource: scan partitions: [1], scan schema: [metric:String, kind:String, labels:String, value:String], statistics: [read_rows: 0, read_bytes: 0]",
+            \n  ReadDataSource: scan partitions: [1], scan schema: [metric:String, kind:String, labels:String, value:String], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0, 1, 2, 3]]",
             error: "",
         },
         Test {
@@ -214,7 +220,7 @@ fn test_plan_parser() -> Result<()> {
             sql: "show processlist",
             expect: "\
             Projection: id:String, type:String, host:String, user:String, state:String, database:String, extra_info:String, memory_usage:UInt64\
-            \n  ReadDataSource: scan partitions: [1], scan schema: [id:String, type:String, host:String;N, user:String;N, state:String, database:String, extra_info:String;N, memory_usage:UInt64;N], statistics: [read_rows: 0, read_bytes: 0]",
+            \n  ReadDataSource: scan partitions: [1], scan schema: [id:String, type:String, host:String;N, user:String;N, state:String, database:String, extra_info:String;N, memory_usage:UInt64;N], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0, 1, 2, 3, 4, 5, 6, 7]]",
             error: "",
         },
     ];

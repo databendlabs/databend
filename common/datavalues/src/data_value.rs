@@ -114,6 +114,40 @@ impl DataValue {
         }
     }
 
+    #[inline]
+    pub fn is_integer(&self) -> bool {
+        matches!(
+            self,
+            DataValue::Int8(_)
+                | DataValue::Int16(_)
+                | DataValue::Int32(_)
+                | DataValue::Int64(_)
+                | DataValue::UInt8(_)
+                | DataValue::UInt16(_)
+                | DataValue::UInt32(_)
+                | DataValue::UInt64(_)
+        )
+    }
+
+    #[inline]
+    pub fn is_signed_integer(&self) -> bool {
+        matches!(
+            self,
+            DataValue::Int8(_) | DataValue::Int16(_) | DataValue::Int32(_) | DataValue::Int64(_)
+        )
+    }
+
+    #[inline]
+    pub fn is_unsigned_integer(&self) -> bool {
+        matches!(
+            self,
+            DataValue::UInt8(_)
+                | DataValue::UInt16(_)
+                | DataValue::UInt32(_)
+                | DataValue::UInt64(_)
+        )
+    }
+
     pub fn to_array(&self) -> Result<Series> {
         self.to_series_with_size(1)
     }

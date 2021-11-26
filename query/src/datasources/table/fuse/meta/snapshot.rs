@@ -16,10 +16,11 @@ use std::collections::HashMap;
 
 use common_base::uuid;
 use common_datavalues::DataSchema;
-use common_datavalues::DataValue;
 use serde::Deserialize;
 use serde::Serialize;
 use uuid::Uuid;
+
+use crate::datasources::table::fuse::meta::column_stats::ColStats;
 
 pub type SnapshotId = Uuid; // TODO String might be better
 pub type ColumnId = u32;
@@ -48,22 +49,11 @@ pub struct TableSnapshot {
 }
 
 impl TableSnapshot {
+    #[allow(dead_code)]
     pub fn append_segment(mut self, location: Location) -> TableSnapshot {
         self.segments.push(location);
         self
     }
-}
-
-/// A segment comprised of one or more blocks
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
-pub struct SegmentInfo {
-    // TODO format_version
-    // pub format_version: u32,
-    /// blocks belong to this segment
-    pub blocks: Vec<BlockMeta>,
-
-    /// summary statistics
-    pub summary: Stats,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
@@ -76,29 +66,4 @@ pub struct Stats {
     pub compressed_byte_size: u64,
 
     pub col_stats: HashMap<ColumnId, ColStats>,
-}
-
-/// Meta information of a block (currently, the parquet file)
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct BlockMeta {
-    /// Pointer of the data Block
-    pub row_count: u64,
-    pub block_size: u64,
-    pub col_stats: HashMap<ColumnId, ColStats>,
-    pub location: BlockLocation,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct BlockLocation {
-    pub location: Location,
-    // for parquet, this filed can be used to fetch the meta data without seeking around
-    pub meta_size: u64,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-pub struct ColStats {
-    pub min: DataValue,
-    pub max: DataValue,
-    pub null_count: u64,
-    pub in_memory_size: u64,
 }

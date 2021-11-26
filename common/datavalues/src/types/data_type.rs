@@ -15,6 +15,8 @@
 use core::fmt;
 
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_macros::MallocSizeOf;
 
 use crate::DataField;
@@ -85,6 +87,93 @@ impl fmt::Display for IntervalUnit {
 impl DataType {
     pub fn to_physical_type(&self) -> PhysicalDataType {
         self.clone().into()
+    }
+
+    #[inline]
+    pub fn is_integer(&self) -> bool {
+        matches!(
+            self,
+            DataType::Int8
+                | DataType::Int16
+                | DataType::Int32
+                | DataType::Int64
+                | DataType::UInt8
+                | DataType::UInt16
+                | DataType::UInt32
+                | DataType::UInt64
+        )
+    }
+
+    #[inline]
+    pub fn is_signed_integer(&self) -> bool {
+        matches!(
+            self,
+            DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64
+        )
+    }
+
+    #[inline]
+    pub fn is_unsigned_integer(&self) -> bool {
+        matches!(
+            self,
+            DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64
+        )
+    }
+
+    #[inline]
+    pub fn is_floating(&self) -> bool {
+        matches!(self, DataType::Float32 | DataType::Float64)
+    }
+
+    #[inline]
+    pub fn is_date_or_date_time(&self) -> bool {
+        matches!(
+            self,
+            DataType::Date16 | DataType::Date32 | DataType::DateTime32(_)
+        )
+    }
+
+    /// Determine if a DataType is signed numeric or not
+    #[inline]
+    pub fn is_signed_numeric(&self) -> bool {
+        matches!(
+            self,
+            DataType::Int8
+                | DataType::Int16
+                | DataType::Int32
+                | DataType::Int64
+                | DataType::Float32
+                | DataType::Float64
+        )
+    }
+
+    /// Determine if a DataType is numeric or not
+    #[inline]
+    pub fn is_numeric(&self) -> bool {
+        self.is_signed_numeric()
+            || matches!(
+                self,
+                DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64
+            )
+    }
+
+    #[inline]
+    pub fn is_interval(&self) -> bool {
+        matches!(self, DataType::Interval(_))
+    }
+
+    #[inline]
+    pub fn numeric_byte_size(&self) -> Result<usize> {
+        match self {
+            DataType::Int8 | DataType::UInt8 => Ok(1),
+            DataType::Int16 | DataType::UInt16 => Ok(2),
+            DataType::Int32 | DataType::UInt32 | DataType::Float32 => Ok(4),
+            DataType::Int64 | DataType::UInt64 | DataType::Float64 => Ok(8),
+            _ => Result::Err(ErrorCode::BadArguments(format!(
+                "Function number_byte_size argument must be numeric types, but got {:?}",
+                self
+            ))),
+        }
     }
 
     pub fn to_arrow(&self) -> ArrowDataType {

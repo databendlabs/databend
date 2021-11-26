@@ -508,6 +508,8 @@ impl StateMachine {
                     return Ok(Change::<TableMeta>::new(None, None).into());
                 }
 
+                let table_id = seq_table_id.unwrap().data.0;
+
                 self.sub_tree_upsert(
                     table_lookup_tree,
                     &lookup_key,
@@ -519,19 +521,13 @@ impl StateMachine {
 
                 let tables = self.tables();
                 let (prev, result) = self
-                    .sub_tree_upsert(
-                        tables,
-                        &seq_table_id.unwrap().data.0,
-                        &MatchSeq::Any,
-                        Operation::Delete,
-                        None,
-                    )
+                    .sub_tree_upsert(tables, &table_id, &MatchSeq::Any, Operation::Delete, None)
                     .await?;
                 if prev.is_some() && result.is_none() {
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
                 }
                 tracing::debug!("applied drop Table: {} {:?}", table_name, result);
-                Ok(Change::new(prev, result).into())
+                Ok(Change::new_with_id(table_id, prev, result).into())
             }
 
             Cmd::UpsertKV {
@@ -585,7 +581,11 @@ impl StateMachine {
 
                 self.tables().insert(&req.table_id, &sv).await?;
 
-                Ok(AppliedState::TableMeta(Change::new(Some(prev), Some(sv))))
+                Ok(AppliedState::TableMeta(Change::new_with_id(
+                    req.table_id,
+                    Some(prev),
+                    Some(sv),
+                )))
             }
         }
     }

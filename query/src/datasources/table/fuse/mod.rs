@@ -13,23 +13,19 @@
 //  limitations under the License.
 //
 
-mod append;
-pub(crate) mod index;
-pub(crate) mod io;
-mod meta;
-mod read;
-mod read_plan;
-mod table;
-mod truncate;
-pub(crate) mod util;
+pub use io::TBL_OPT_KEY_SNAPSHOT_LOC;
+pub use meta::ColStats;
+pub use statistics::BlockStats;
+pub use table::FuseTable;
 
-#[cfg(test)]
-mod read_plan_test;
+mod index;
+mod io;
+mod meta;
+mod operations;
+mod statistics;
+mod table;
+
 #[cfg(test)]
 mod table_test;
 #[cfg(test)]
 mod table_test_fixture;
-
-pub(crate) use io::*;
-pub(crate) use meta::*;
-pub(crate) use table::FuseTable;

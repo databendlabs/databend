@@ -19,10 +19,10 @@ use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Extras;
 
-use crate::datasources::table::fuse::read_plan::to_partitions;
-use crate::datasources::table::fuse::BlockLocation;
-use crate::datasources::table::fuse::BlockMeta;
-use crate::datasources::table::fuse::ColStats;
+use crate::datasources::table::fuse::meta::BlockLocation;
+use crate::datasources::table::fuse::meta::BlockMeta;
+use crate::datasources::table::fuse::meta::ColStats;
+use crate::datasources::table::fuse::FuseTable;
 
 #[test]
 fn test_to_partitions() -> Result<()> {
@@ -61,7 +61,7 @@ fn test_to_partitions() -> Result<()> {
         .collect::<Vec<_>>();
 
     // CASE I:  no projection
-    let (s, _) = to_partitions(&blocks_metas, None);
+    let (s, _) = FuseTable::to_partitions(&blocks_metas, None);
     let expected_block_size: u64 = cols_stats
         .iter()
         .map(|(_, col_stats)| col_stats.in_memory_size)
@@ -89,7 +89,7 @@ fn test_to_partitions() -> Result<()> {
         limit: None,
         order_by: vec![],
     });
-    let (stats, _) = to_partitions(&blocks_metas, push_down);
+    let (stats, _) = FuseTable::to_partitions(&blocks_metas, push_down);
     assert_eq!(expected_block_size * num_of_block, stats.read_bytes as u64);
     Ok(())
 }
