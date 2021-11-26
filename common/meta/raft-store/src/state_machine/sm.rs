@@ -26,8 +26,10 @@ use common_exception::ToErrorCode;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
+use common_meta_sled_store::AsTxnKeySpace;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledTree;
+use common_meta_sled_store::TransactionSledTree;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::DatabaseMeta;
@@ -39,6 +41,7 @@ use common_meta_types::MatchSeqExt;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
+use common_meta_types::SeqNum;
 use common_meta_types::SeqV;
 use common_meta_types::TableMeta;
 use common_tracing::tracing;
@@ -536,9 +539,25 @@ impl StateMachine {
                 value: value_op,
                 value_meta,
             } => {
-                let (prev, result) = self
-                    .sub_tree_upsert(self.kvs(), key, seq, value_op.clone(), value_meta.clone())
-                    .await?;
+                // TODO(ariesdevil): need refactor !!!
+                let r: Result<(Option<SeqV>, Option<SeqV>), TransactionError<Infallible>> =
+                    self.sm_tree.txn(true, |tree| {
+                        let sub_tree = tree.key_space::<GenericKV>();
+                        let (p, r) = self.sub_txn_tree_upsert(
+                            &sub_tree,
+                            &tree,
+                            key,
+                            seq,
+                            value_op.clone(),
+                            value_meta.clone(),
+                        );
+                        Ok((p, r))
+                    });
+
+                let (prev, result) = match r {
+                    Ok(v) => (v.0, v.1),
+                    Err(e) => return Err(ErrorCode::from(e)),
+                };
 
                 tracing::debug!("applied UpsertKV: {} {:?}", key, result);
                 Ok(Change::new(prev, result).into())
@@ -622,9 +641,6 @@ impl StateMachine {
         Ok((prev, result))
     }
 
-    /// Update a record into a sled tree sub tree, defined by a KeySpace, without seq check.
-    ///
-    /// TODO(xp); this should be a method of sled sub tree
     async fn sub_tree_do_update<'s, V, KS>(
         &'s self,
         sub_tree: &AsKeySpace<'s, KS>,
@@ -656,6 +672,88 @@ impl StateMachine {
         sub_tree.insert(key, &seq_kv_value).await?;
 
         Ok(Some(seq_kv_value))
+    }
+
+    fn txn_incr_seq(&self, key: &str, txn_tree: &TransactionSledTree) -> u64 {
+        let seq_sub_tree = txn_tree.key_space::<Sequences>();
+        let old: Option<SeqNum> = seq_sub_tree.get(&key.to_string()).unwrap();
+        let curr = old.unwrap_or_default() + 1;
+        seq_sub_tree.insert(&key.to_string(), &curr).unwrap();
+
+        tracing::debug!("applied IncrSeq: {}={}", key, curr);
+
+        curr.0
+    }
+
+    fn sub_txn_tree_upsert<'s, V, KS>(
+        &'s self,
+        sub_tree: &AsTxnKeySpace<'s, KS>,
+        txn_tree: &TransactionSledTree,
+        key: &KS::K,
+        seq: &MatchSeq,
+        value_op: Operation<V>,
+        value_meta: Option<KVMeta>,
+    ) -> (Option<SeqV<V>>, Option<SeqV<V>>)
+    where
+        V: Clone + Debug,
+        KS: SledKeySpace<V = SeqV<V>>,
+    {
+        let prev = sub_tree.get(key).unwrap();
+
+        // If prev is timed out, treat it as a None.
+        let prev = Self::unexpired_opt(prev);
+
+        if seq.match_seq(&prev).is_err() {
+            return (prev.clone(), prev);
+        }
+
+        // result is the state after applying an operation.
+        let result = self.sub_txn_tree_do_update(
+            sub_tree,
+            txn_tree,
+            key,
+            prev.clone(),
+            value_meta,
+            value_op,
+        );
+
+        tracing::debug!("applied upsert: {} {:?}", key, result);
+        (prev, result)
+    }
+
+    /// Update a record into a sled tree sub tree, defined by a KeySpace, without seq check.
+    ///
+    /// TODO(xp); this should be a method of sled sub tree
+    fn sub_txn_tree_do_update<'s, V, KS>(
+        &'s self,
+        sub_tree: &AsTxnKeySpace<'s, KS>,
+        txn_tree: &TransactionSledTree,
+        key: &KS::K,
+        prev: Option<SeqV<V>>,
+        value_meta: Option<KVMeta>,
+        value_op: Operation<V>,
+    ) -> Option<SeqV<V>>
+    where
+        V: Clone + Debug,
+        KS: SledKeySpace<V = SeqV<V>>,
+    {
+        let mut seq_kv_value = match value_op {
+            Operation::Update(v) => SeqV::with_meta(0, value_meta, v),
+            Operation::Delete => {
+                sub_tree.remove(key).unwrap();
+                return None;
+            }
+            Operation::AsIs => match prev {
+                None => return None,
+                Some(ref prev_kv_value) => prev_kv_value.clone().set_meta(value_meta),
+            },
+        };
+
+        seq_kv_value.seq = self.txn_incr_seq(KS::NAME, txn_tree);
+
+        sub_tree.insert(key, &seq_kv_value).unwrap();
+
+        Some(seq_kv_value)
     }
 
     #[allow(clippy::ptr_arg)]
