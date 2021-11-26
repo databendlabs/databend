@@ -70,9 +70,9 @@ mod interpreter_use_database;
 mod interpreter_user_alter;
 mod interpreter_user_create;
 mod interpreter_user_drop;
-mod plan_do_readsource;
 #[allow(clippy::needless_range_loop)]
 mod plan_scheduler;
+mod plan_scheduler_ext;
 mod utils;
 
 pub use interpreter::Interpreter;

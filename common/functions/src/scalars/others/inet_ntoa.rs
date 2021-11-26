@@ -15,7 +15,6 @@
 use std::fmt;
 use std::str;
 
-use common_datavalues::is_numeric;
 use common_datavalues::prelude::DFStringArray;
 use common_datavalues::prelude::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
@@ -58,7 +57,7 @@ impl Function for InetNtoaFunction {
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if is_numeric(&args[0]) || args[0] == DataType::String || args[0] == DataType::Null {
+        if args[0].is_numeric() || args[0] == DataType::String || args[0] == DataType::Null {
             Ok(DataType::String)
         } else {
             Err(ErrorCode::IllegalDataType(format!(

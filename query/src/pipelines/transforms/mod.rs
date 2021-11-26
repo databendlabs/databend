@@ -26,6 +26,7 @@ pub use transform_limit::LimitTransform;
 pub use transform_limit_by::LimitByTransform;
 pub use transform_projection::ProjectionTransform;
 pub use transform_remote::RemoteTransform;
+pub use transform_sink::SinkTransform;
 pub use transform_sort_merge::SortMergeTransform;
 pub use transform_sort_partial::get_sort_descriptions;
 pub use transform_sort_partial::SortPartialTransform;
@@ -71,3 +72,4 @@ mod transform_sort_partial;
 mod transform_source;
 
 mod group_by;
+mod transform_sink;

@@ -37,6 +37,7 @@ use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::RemotePlan;
 use common_planners::SelectPlan;
+use common_planners::SinkPlan;
 use common_planners::SortPlan;
 use common_planners::StageKind;
 use common_planners::StagePlan;
@@ -48,6 +49,7 @@ use crate::api::FlightAction;
 use crate::api::ShuffleAction;
 use crate::sessions::QueryContext;
 
+#[derive(PartialEq)]
 enum RunningMode {
     Cluster,
     Standalone,
@@ -301,6 +303,7 @@ impl PlanScheduler {
             PlanNode::Limit(plan) => self.visit_limit(plan, tasks),
             PlanNode::LimitBy(plan) => self.visit_limit_by(plan, tasks),
             PlanNode::ReadSource(plan) => self.visit_data_source(plan, tasks),
+            PlanNode::Sink(plan) => self.visit_sink(plan, tasks),
             PlanNode::Select(plan) => self.visit_select(plan, tasks),
             PlanNode::Stage(plan) => self.visit_stage(plan, tasks),
             PlanNode::Broadcast(plan) => self.visit_broadcast(plan, tasks),
@@ -803,6 +806,34 @@ impl PlanScheduler {
         }
 
         Ok(())
+    }
+
+    fn visit_sink(&mut self, plan: &SinkPlan, tasks: &mut Tasks) -> Result<()> {
+        self.visit_plan_node(plan.input.as_ref(), tasks)?;
+        let local = self.running_mode == RunningMode::Standalone;
+        match local {
+            true => self.visit_local_sink(plan),
+            false => self.visit_cluster_sink(plan),
+        }
+        Ok(())
+    }
+
+    fn visit_local_sink(&mut self, plan: &SinkPlan) {
+        self.nodes_plan[self.local_pos] = PlanNode::Sink(SinkPlan {
+            table_info: plan.table_info.clone(),
+            input: Arc::new(self.nodes_plan[self.local_pos].clone()),
+            cast_needed: plan.cast_needed,
+        })
+    }
+
+    fn visit_cluster_sink(&mut self, plan: &SinkPlan) {
+        for index in 0..self.nodes_plan.len() {
+            self.nodes_plan[index] = PlanNode::Sink(SinkPlan {
+                table_info: plan.table_info.clone(),
+                input: Arc::new(self.nodes_plan[index].clone()),
+                cast_needed: plan.cast_needed,
+            })
+        }
     }
 
     fn visit_select(&mut self, plan: &SelectPlan, tasks: &mut Tasks) -> Result<()> {

@@ -400,14 +400,36 @@ impl StateMachine {
                     .sub_tree_upsert(dbs, name, &MatchSeq::Any, Operation::Delete, None)
                     .await?;
 
+                assert!(
+                    result.is_none(),
+                    "delete with MatchSeq::Any always succeeds"
+                );
+
                 // if it is just deleted
-                if prev.is_some() && result.is_none() {
+                if let Some(seq_db_id) = prev {
                     // TODO(xp): reconsider this impl. it may not be required.
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
+
+                    let db_id = seq_db_id.data;
+
+                    let dbs = self.databases();
+                    let (prev_meta, result_meta) = self
+                        .sub_tree_upsert(dbs, &db_id, &MatchSeq::Any, Operation::Delete, None)
+                        .await?;
+
+                    tracing::debug!("applied drop Database: {} {:?}", name, result);
+
+                    return Ok(AppliedState::DatabaseMeta(Change::new_with_id(
+                        db_id,
+                        prev_meta,
+                        result_meta,
+                    )));
                 }
 
+                // not exist
+
                 tracing::debug!("applied drop Database: {} {:?}", name, result);
-                Ok(Change::new(prev, result).into())
+                Ok(AppliedState::DatabaseMeta(Change::new(None, None)))
             }
 
             Cmd::CreateTable {
@@ -486,6 +508,8 @@ impl StateMachine {
                     return Ok(Change::<TableMeta>::new(None, None).into());
                 }
 
+                let table_id = seq_table_id.unwrap().data.0;
+
                 self.sub_tree_upsert(
                     table_lookup_tree,
                     &lookup_key,
@@ -497,19 +521,13 @@ impl StateMachine {
 
                 let tables = self.tables();
                 let (prev, result) = self
-                    .sub_tree_upsert(
-                        tables,
-                        &seq_table_id.unwrap().data.0,
-                        &MatchSeq::Any,
-                        Operation::Delete,
-                        None,
-                    )
+                    .sub_tree_upsert(tables, &table_id, &MatchSeq::Any, Operation::Delete, None)
                     .await?;
                 if prev.is_some() && result.is_none() {
                     self.incr_seq(SEQ_DATABASE_META_ID).await?;
                 }
                 tracing::debug!("applied drop Table: {} {:?}", table_name, result);
-                Ok(Change::new(prev, result).into())
+                Ok(Change::new_with_id(table_id, prev, result).into())
             }
 
             Cmd::UpsertKV {
@@ -563,7 +581,11 @@ impl StateMachine {
 
                 self.tables().insert(&req.table_id, &sv).await?;
 
-                Ok(AppliedState::TableMeta(Change::new(Some(prev), Some(sv))))
+                Ok(AppliedState::TableMeta(Change::new_with_id(
+                    req.table_id,
+                    Some(prev),
+                    Some(sv),
+                )))
             }
         }
     }

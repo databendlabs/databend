@@ -8,55 +8,55 @@ killall databend-query
 killall databend-meta
 make cluster
 if [ $? -eq 0 ]; then
-    echo "provisioned cluster"
+	echo "provisioned cluster"
 else
-    echo "cannot provision cluster"
-    exit 1
+	echo "cannot provision cluster"
+	exit 1
 fi
 if [[ -f "$HOME/dataset/ontime.csv" ]]; then
-  echo "dataset exists"
+	echo "dataset exists"
 else
-  echo "dataset not exists."
-  mkdir -p $HOME/dataset
-  wget -P $HOME/dataset "https://repo.databend.rs/dataset/stateful/ontime.csv"
+	echo "dataset not exists."
+	mkdir -p $HOME/dataset
+	wget -P $HOME/dataset "https://repo.databend.rs/dataset/stateful/ontime.csv"
 fi
-echo "$DATASET_SHA256 $HOME/dataset/ontime.csv" > checksums.txt
+echo "$DATASET_SHA256 $HOME/dataset/ontime.csv" >checksums.txt
 sha256sum -c checksums.txt
 if [ $? -eq 0 ]; then
-    echo "dataset checksum passed"
+	echo "dataset checksum passed"
 else
-    echo "current dataset is not our stateful test dataset"
-    exit 1
+	echo "current dataset is not our stateful test dataset"
+	exit 1
 fi
 
 ./target/release/bendctl --databend_dir ./.databend --group local query ./tests/suites/0_stateful/ddl/create_table.sql
 if [ $? -eq 0 ]; then
-    echo "dataset table DDL passed"
+	echo "dataset table DDL passed"
 else
-    echo "cannot create DDL"
-    exit 1
+	echo "cannot create DDL"
+	exit 1
 fi
 ./target/release/bendctl --databend_dir ./.databend --group local load $HOME/dataset/ontime.csv --table ontime
 if [ $? -eq 0 ]; then
-    echo "successfull loaded ontime dataset"
+	echo "successfull loaded ontime dataset"
 else
-    exit 1
+	exit 1
 fi
 echo "Starting stateful databend-test"
 # Create table
 # shellcheck disable=SC2044
-for i in `find ./tests/suites/0_stateful/sql -name "*.sql" -type f`; do
-  ./target/release/bendctl --databend_dir ./.databend --group local query $i 2>$i.error > $i.out
-  # shellcheck disable=SC2046
-  if [ $(cat $i.error | wc -l ) -ne 0 ]; then
-      cat $i.error
-      exit 1
-  fi
-  # shellcheck disable=SC2046
-  if [ $(comm -13 <(sort -u $i.out) <(sort -u $i.result) | wc -l ) -ne 0 ]; then
-      echo "result does not match"
-      echo $i.out
-      exit 1
-  fi
-  echo $i passed
+for i in $(find ./tests/suites/0_stateful/sql -name "*.sql" -type f); do
+	./target/release/bendctl --databend_dir ./.databend --group local query $i 2>$i.error >$i.out
+	# shellcheck disable=SC2046
+	if [ $(cat $i.error | wc -l) -ne 0 ]; then
+		cat $i.error
+		exit 1
+	fi
+	# shellcheck disable=SC2046
+	if [ $(comm -13 <(sort -u $i.out) <(sort -u $i.result) | wc -l) -ne 0 ]; then
+		echo "result does not match"
+		echo $i.out
+		exit 1
+	fi
+	echo $i passed
 done

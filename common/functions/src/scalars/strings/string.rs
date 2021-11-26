@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use crate::scalars::function_factory::FunctionFactory;
+use crate::scalars::strings::repeat::RepeatFunction;
+use crate::scalars::OctFunction;
 use crate::scalars::SubstringFunction;
 
 #[derive(Clone)]
@@ -20,6 +22,8 @@ pub struct StringFunction;
 
 impl StringFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register("substring", SubstringFunction::desc())
+        factory.register("substring", SubstringFunction::desc());
+        factory.register("oct", OctFunction::desc());
+        factory.register("repeat", RepeatFunction::desc());
     }
 }

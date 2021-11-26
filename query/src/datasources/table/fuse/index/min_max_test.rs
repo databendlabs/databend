@@ -27,7 +27,7 @@ use common_meta_types::TableMeta;
 use common_planners::col;
 use common_planners::lit;
 use common_planners::Extras;
-use common_planners::InsertIntoPlan;
+use futures::TryStreamExt;
 
 use crate::catalogs::Catalog;
 use crate::datasources::table::fuse::index::min_max::range_filter;
@@ -83,19 +83,10 @@ async fn test_min_max_index() -> Result<()> {
         })
         .collect::<Vec<_>>();
 
-    let insert_into_plan = InsertIntoPlan {
-        db_name: fixture.default_db(),
-        tbl_name: test_tbl_name.to_string(),
-        tbl_id: table.get_id(),
-        schema: test_schema.clone(),
-        select_plan: None,
-        values_opt: None,
-    };
     let da = ctx.get_data_accessor()?;
     let stream = Box::pin(futures::stream::iter(blocks));
-    table
-        .append_data(ctx.clone(), insert_into_plan, stream)
-        .await?;
+    let r = table.append_data(ctx.clone(), stream).await?;
+    table.commit(ctx.clone(), r.try_collect().await?).await?;
 
     // get the latest tbl
     let table = catalog

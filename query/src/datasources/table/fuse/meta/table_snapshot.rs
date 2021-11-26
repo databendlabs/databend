@@ -48,6 +48,7 @@ pub struct TableSnapshot {
 }
 
 impl TableSnapshot {
+    #[allow(dead_code)]
     pub fn append_segment(mut self, location: Location) -> TableSnapshot {
         self.segments.push(location);
         self

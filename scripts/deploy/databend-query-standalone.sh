@@ -9,12 +9,11 @@ killall databend-query
 killall databend-meta
 sleep 1
 
-for bin in databend-query databend-meta
-do
-  if test -n "$(pgrep $bin)"; then
-      echo "The $bin is not killed. force killing."
-      killall -9 $bin
-  fi
+for bin in databend-query databend-meta; do
+	if test -n "$(pgrep $bin)"; then
+		echo "The $bin is not killed. force killing."
+		killall -9 $bin
+	fi
 done
 
 BIN=${1:-debug}
@@ -23,7 +22,6 @@ echo 'Start DatabendStore...'
 nohup target/${BIN}/databend-meta --single=true --log-level=ERROR &
 echo "Waiting on databend-meta 10 seconds..."
 python scripts/ci/wait_tcp.py --timeout 5 --port 9191
-
 
 echo 'Start DatabendQuery...'
 nohup target/${BIN}/databend-query -c scripts/deploy/config/databend-query-node-1.toml &
