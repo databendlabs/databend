@@ -24,6 +24,7 @@ use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
+use futures::stream::TryChunksError;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
@@ -54,7 +55,7 @@ impl BlockAppender {
         // accumulate the stats and save the blocks
         while let Some(item) = stream.next().await {
             let mut block_nums = 0;
-            let item = item.map_err(|e| ErrorCode::UnknownException(e.to_string()))?;
+            let item = item.map_err(|TryChunksError(_, e)| e)?;
             let block = Self::merge_blocks(item)?;
             let mut stats_acc = StatisticsAccumulator::new();
             let mut block_meta_acc = BlockMetaAccumulator::new();
