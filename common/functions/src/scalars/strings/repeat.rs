@@ -126,6 +126,7 @@ impl fmt::Display for RepeatFunction {
     }
 }
 
+#[inline]
 fn repeat(string: Option<impl AsRef<[u8]>>, times: Option<u64>) -> Result<Option<Vec<u8>>> {
     if let (Some(string), Some(times)) = (string, times) {
         if times > MAX_REPEAT_TIMES {
