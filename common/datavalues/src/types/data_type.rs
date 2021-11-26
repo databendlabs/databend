@@ -134,6 +134,7 @@ impl DataType {
     }
 
     /// Determine if a DataType is signed numeric or not
+    #[inline]
     pub fn is_signed_numeric(&self) -> bool {
         matches!(
             self,
@@ -147,6 +148,7 @@ impl DataType {
     }
 
     /// Determine if a DataType is numeric or not
+    #[inline]
     pub fn is_numeric(&self) -> bool {
         self.is_signed_numeric()
             || matches!(
@@ -155,10 +157,12 @@ impl DataType {
             )
     }
 
+    #[inline]
     pub fn is_interval(&self) -> bool {
         matches!(self, DataType::Interval(_))
     }
 
+    #[inline]
     pub fn numeric_byte_size(&self) -> Result<usize> {
         match self {
             DataType::Int8 | DataType::UInt8 => Ok(1),
