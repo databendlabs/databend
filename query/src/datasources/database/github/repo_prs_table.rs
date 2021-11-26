@@ -140,31 +140,32 @@ impl RepoPrsTable {
                     .as_bytes()
                     .to_vec(),
             );
-            labels_array.push(
-                pr.labels
-                    .map(|labels| {
-                        let label_str = labels.iter().fold(Vec::new(), |mut content, label| {
-                            content.extend_from_slice(label.name.clone().as_bytes());
-                            content.push(b',');
-                            content
-                        });
-                        label_str
-                    })
-                    .unwrap_or_else(|| vec![b' ']),
-            );
-            assigness_array.push(
-                pr.assignees
-                    .map(|assignees| {
-                        let assigness_str =
-                            assignees.iter().fold(Vec::new(), |mut content, user| {
-                                content.extend_from_slice(user.login.clone().as_bytes());
-                                content.push(b',');
-                                content
-                            });
-                        assigness_str
-                    })
-                    .unwrap_or_else(|| vec![b' ']),
-            );
+            let mut labels_str = pr
+                .labels
+                .map(|labels| {
+                    let label_str = labels.iter().fold(Vec::new(), |mut content, label| {
+                        content.extend_from_slice(label.name.clone().as_bytes());
+                        content.push(b',');
+                        content
+                    });
+                    label_str
+                })
+                .unwrap_or_else(|| vec![b' ']);
+            labels_str.pop();
+            labels_array.push(labels_str);
+            let mut assignees_str = pr
+                .assignees
+                .map(|assignees| {
+                    let assigness_str = assignees.iter().fold(Vec::new(), |mut content, user| {
+                        content.extend_from_slice(user.login.clone().as_bytes());
+                        content.push(b',');
+                        content
+                    });
+                    assigness_str
+                })
+                .unwrap_or_else(|| vec![b' ']);
+            assignees_str.pop();
+            assigness_array.push(assignees_str);
         }
 
         Ok(vec![
