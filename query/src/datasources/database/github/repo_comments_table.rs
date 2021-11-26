@@ -35,7 +35,7 @@ use crate::datasources::database::github::database::REPO;
 use crate::datasources::database::github::util;
 use crate::sessions::QueryContext;
 
-const RELATED_ISSUE: &str = "related_issue";
+const COMMENT_ID: &str = "comment_id";
 const USER: &str = "user";
 const BODY: &str = "body";
 
@@ -69,7 +69,7 @@ impl RepoCommentsTable {
 
     fn schema() -> Arc<DataSchema> {
         let fields = vec![
-            DataField::new(RELATED_ISSUE, DataType::UInt64, false),
+            DataField::new(COMMENT_ID, DataType::UInt64, false),
             DataField::new(USER, DataType::String, true),
             DataField::new(BODY, DataType::String, true),
         ];
