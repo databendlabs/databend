@@ -29,11 +29,11 @@ use common_planners::TruncateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use super::operations::AppendOperation;
-use super::util;
 use crate::catalogs::Table;
 use crate::datasources::context::DataSourceContext;
-use crate::datasources::table::fuse::TableSnapshot;
+use crate::datasources::table::fuse::meta::TableSnapshot;
+use crate::datasources::table::fuse::operations::AppendOperationLogEntry;
+use crate::datasources::table::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::sessions::QueryContext;
 
 pub struct FuseTable {
@@ -91,7 +91,7 @@ impl Table for FuseTable {
             _ => vec![],
         };
         Ok(Box::pin(DataBlockStream::create(
-            AppendOperation::schema(),
+            AppendOperationLogEntry::schema(),
             None,
             blocks,
         )))
@@ -101,8 +101,8 @@ impl Table for FuseTable {
         // only append operation supported currently
         let append_log_entries = operations
             .iter()
-            .map(AppendOperation::try_from)
-            .collect::<Result<Vec<AppendOperation>>>()?;
+            .map(AppendOperationLogEntry::try_from)
+            .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
         self.do_commit(_ctx, append_log_entries).await
     }
 
@@ -119,7 +119,7 @@ impl FuseTable {
     pub(crate) fn snapshot_loc(&self) -> Option<String> {
         self.table_info
             .options()
-            .get(util::TBL_OPT_KEY_SNAPSHOT_LOC)
+            .get(TBL_OPT_KEY_SNAPSHOT_LOC)
             .cloned()
     }
 

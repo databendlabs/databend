@@ -13,6 +13,17 @@
 //  limitations under the License.
 //
 
-pub use table_snapshot::*;
+pub use block::BlockLocation;
+pub use block::BlockMeta;
+pub use column_stats::ColStats;
+pub use segment::SegmentInfo;
+pub use snapshot::ColumnId;
+pub use snapshot::Location;
+pub use snapshot::SnapshotId;
+pub use snapshot::Stats;
+pub use snapshot::TableSnapshot;
 
-mod table_snapshot;
+mod block;
+mod column_stats;
+mod segment;
+mod snapshot;

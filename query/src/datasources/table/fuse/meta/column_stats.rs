@@ -13,19 +13,12 @@
 //  limitations under the License.
 //
 
-pub use io::TBL_OPT_KEY_SNAPSHOT_LOC;
-pub use meta::ColStats;
-pub use statistics::BlockStats;
-pub use table::FuseTable;
+use common_datavalues::DataValue;
 
-mod index;
-mod io;
-mod meta;
-mod operations;
-mod statistics;
-mod table;
-
-#[cfg(test)]
-mod table_test;
-#[cfg(test)]
-mod table_test_fixture;
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct ColStats {
+    pub min: DataValue,
+    pub max: DataValue,
+    pub null_count: u64,
+    pub in_memory_size: u64,
+}

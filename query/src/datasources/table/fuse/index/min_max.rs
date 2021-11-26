@@ -23,11 +23,11 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 
 use crate::datasources::index::RangeFilter;
-use crate::datasources::table::fuse::util;
-use crate::datasources::table::fuse::util::BlockStats;
-use crate::datasources::table::fuse::BlockMeta;
-use crate::datasources::table::fuse::SegmentInfo;
-use crate::datasources::table::fuse::TableSnapshot;
+use crate::datasources::table::fuse::io::snapshot_location;
+use crate::datasources::table::fuse::meta::BlockMeta;
+use crate::datasources::table::fuse::meta::SegmentInfo;
+use crate::datasources::table::fuse::meta::TableSnapshot;
+use crate::datasources::table::fuse::statistics::BlockStats;
 
 pub struct MinMaxIndex {
     table_snapshot_loc: String,
@@ -38,7 +38,7 @@ type Pred = Box<dyn Fn(&BlockStats) -> Result<bool> + Send + Sync + Unpin>;
 impl MinMaxIndex {
     pub fn new(table_snapshot: &TableSnapshot, da: Arc<dyn DataAccessor>) -> Self {
         Self {
-            table_snapshot_loc: util::snapshot_location(
+            table_snapshot_loc: snapshot_location(
                 table_snapshot.snapshot_id.to_simple().to_string(),
             ),
             da,

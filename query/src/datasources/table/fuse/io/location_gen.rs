@@ -15,11 +15,11 @@
 
 use uuid::Uuid;
 
-const FUSE_TBL_BLOCK_PREFIX: &str = "_b";
-const FUSE_TBL_SEGMENT_PREFIX: &str = "_sg";
-const FUSE_TBL_SNAPSHOT_PREFIX: &str = "_ss";
+use super::constants::FUSE_TBL_BLOCK_PREFIX;
+use super::constants::FUSE_TBL_SEGMENT_PREFIX;
+use super::constants::FUSE_TBL_SNAPSHOT_PREFIX;
 
-pub fn gen_unique_block_location() -> String {
+pub fn gen_block_location() -> String {
     let part_uuid = Uuid::new_v4().to_simple().to_string() + ".parquet";
     format!("{}/{}", FUSE_TBL_BLOCK_PREFIX, part_uuid)
 }

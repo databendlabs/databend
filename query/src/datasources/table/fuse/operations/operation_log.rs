@@ -22,18 +22,18 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 
-use crate::datasources::table::fuse::SegmentInfo;
+use crate::datasources::table::fuse::meta::SegmentInfo;
 
 // currently, only support append,
-pub type TableOperationLog = Vec<AppendOperation>;
+pub type TableOperationLog = Vec<AppendOperationLogEntry>;
 
 // to be wrapped in enum
-pub struct AppendOperation {
+pub struct AppendOperationLogEntry {
     pub segment_location: String,
     pub segment_info: SegmentInfo,
 }
 
-impl AppendOperation {
+impl AppendOperationLogEntry {
     pub fn schema() -> DataSchemaRef {
         common_planners::SINK_SCHEMA.clone()
     }
@@ -46,21 +46,24 @@ impl AppendOperation {
     }
 }
 
-impl TryFrom<AppendOperation> for DataBlock {
+impl TryFrom<AppendOperationLogEntry> for DataBlock {
     type Error = common_exception::ErrorCode;
-    fn try_from(value: AppendOperation) -> std::result::Result<Self, Self::Error> {
-        Ok(DataBlock::create_by_array(AppendOperation::schema(), vec![
-            Series::new(vec![value.segment_location.as_str()]),
-            Series::new(vec![serde_json::to_string(&value.segment_info)?.as_str()]),
-        ]))
+    fn try_from(value: AppendOperationLogEntry) -> std::result::Result<Self, Self::Error> {
+        Ok(DataBlock::create_by_array(
+            AppendOperationLogEntry::schema(),
+            vec![
+                Series::new(vec![value.segment_location.as_str()]),
+                Series::new(vec![serde_json::to_string(&value.segment_info)?.as_str()]),
+            ],
+        ))
     }
 }
 
-impl TryFrom<&DataBlock> for AppendOperation {
+impl TryFrom<&DataBlock> for AppendOperationLogEntry {
     type Error = common_exception::ErrorCode;
     fn try_from(block: &DataBlock) -> std::result::Result<Self, Self::Error> {
         // check schema
-        if block.schema() != &AppendOperation::schema() {
+        if block.schema() != &AppendOperationLogEntry::schema() {
             return Err(ErrorCode::LogicalError(format!(
                 "invalid data block of AppendOperation log, {:?}",
                 block.schema()
@@ -70,14 +73,14 @@ impl TryFrom<&DataBlock> for AppendOperation {
         let segment_location = Self::parse_col(0, block)?;
         let seg_info = Self::parse_col(1, block)?;
         let segment_info: SegmentInfo = serde_json::from_str(seg_info.as_str())?;
-        Ok(AppendOperation {
+        Ok(AppendOperationLogEntry {
             segment_location,
             segment_info,
         })
     }
 }
 
-impl AppendOperation {
+impl AppendOperationLogEntry {
     fn parse_col(idx: usize, val: &DataBlock) -> common_exception::Result<String> {
         let col = &val.column(idx).to_values()?[0];
         if let DataValue::String(Some(v)) = col {

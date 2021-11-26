@@ -102,13 +102,13 @@ fn test_plan_parser() -> Result<()> {
         Test {
             name: "cast-passed",
             sql: "select cast('1' as int)",
-            expect: "Projection: cast('1' as Int32):Int32\n  Expression: cast(1 as Int32):Int32 (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
+            expect: "Projection: cast('1' as Int32):Int32\n  Expression: cast(1 as Int32):Int32 (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1], push_downs: [projections: [0]]",
             error: "",
         },
         Test {
             name: "database-passed",
             sql: "select database()",
-            expect: "Projection: database():String\n  Expression: database(default):String (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
+            expect: "Projection: database():String\n  Expression: database(default):String (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1], push_downs: [projections: [0]]",
             error: "",
         },
         Test {
@@ -120,6 +120,12 @@ fn test_plan_parser() -> Result<()> {
             // error: "Code: 26, displayText = Column `number` is not under aggregate function and not in GROUP BY: While processing [(number + 1), (number + 3)].",
         },
         Test {
+            name: "select-count",
+            sql: "SELECT COUNT() FROM numbers(10)",
+            expect: "Projection: COUNT():UInt64\n  AggregatorFinal: groupBy=[[]], aggr=[[COUNT()]]\n    AggregatorPartial: groupBy=[[]], aggr=[[COUNT()]]\n      ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+            error: "",
+        },
+        Test {
             name: "unsupported-function",
             sql: "select unsupported()",
             expect: "",
@@ -128,7 +134,7 @@ fn test_plan_parser() -> Result<()> {
         Test {
             name: "interval-passed",
             sql: "SELECT INTERVAL '1' year, INTERVAL '1' month, INTERVAL '1' day, INTERVAL '1' hour, INTERVAL '1' minute, INTERVAL '1' second",
-            expect: "Projection: 12:Interval(YearMonth), 1:Interval(YearMonth), 86400000:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime)\n  Expression: 12:Interval(YearMonth), 1:Interval(YearMonth), 86400000:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime) (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1]",
+            expect: "Projection: 12:Interval(YearMonth), 1:Interval(YearMonth), 86400000:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime)\n  Expression: 12:Interval(YearMonth), 1:Interval(YearMonth), 86400000:Interval(DayTime), 3600000:Interval(DayTime), 60000:Interval(DayTime), 1000:Interval(DayTime) (Before Projection)\n    ReadDataSource: scan partitions: [1], scan schema: [dummy:UInt8], statistics: [read_rows: 1, read_bytes: 1], push_downs: [projections: [0]]",
             error: "",
         },
         // Test {

@@ -13,16 +13,16 @@
 //  limitations under the License.
 //
 
-pub use col_encoding::*;
-pub use constants::TBL_OPT_KEY_SNAPSHOT_LOC;
-pub use location_gen::*;
-pub use statistic_helper::*;
+mod accumulator;
+mod block_meta_acc;
+mod util;
 
-mod col_encoding;
-mod location_gen;
-mod statistic_helper;
-
-mod constants;
+pub use accumulator::BlockStats;
+pub use accumulator::StatisticsAccumulator;
+pub use block_meta_acc::BlockMetaAccumulator;
+pub use util::merge_append_operations;
+pub use util::merge_stats;
+pub use util::reduce_block_stats;
 
 #[cfg(test)]
-mod statistic_helper_test;
+mod statistics_test;

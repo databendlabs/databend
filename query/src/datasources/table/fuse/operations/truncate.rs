@@ -21,9 +21,9 @@ use common_planners::TruncateTablePlan;
 use uuid::Uuid;
 
 use crate::catalogs::Catalog;
-use crate::datasources::table::fuse::util;
-use crate::datasources::table::fuse::util::TBL_OPT_KEY_SNAPSHOT_LOC;
+use crate::datasources::table::fuse::io;
 use crate::datasources::table::fuse::FuseTable;
+use crate::datasources::table::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::sessions::QueryContext;
 
 impl FuseTable {
@@ -41,7 +41,7 @@ impl FuseTable {
             new_snapshot.summary = Default::default();
             new_snapshot.snapshot_id = Uuid::new_v4();
             let new_snapshot_loc =
-                util::snapshot_location(new_snapshot.snapshot_id.to_simple().to_string().as_str()); // TODO refine this
+                io::snapshot_location(new_snapshot.snapshot_id.to_simple().to_string().as_str()); // TODO refine this
             let da = ctx.get_data_accessor()?;
             let bytes = serde_json::to_vec(&new_snapshot)?;
             da.put(&new_snapshot_loc, bytes).await?;

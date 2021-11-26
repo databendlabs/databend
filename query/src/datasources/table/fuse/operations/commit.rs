@@ -22,12 +22,13 @@ use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use uuid::Uuid;
 
-use super::operations::TableOperationLog;
 use crate::catalogs::Catalog;
-use crate::datasources::table::fuse::util;
-use crate::datasources::table::fuse::util::TBL_OPT_KEY_SNAPSHOT_LOC;
+use crate::datasources::table::fuse::io;
+use crate::datasources::table::fuse::meta::TableSnapshot;
+use crate::datasources::table::fuse::operations::TableOperationLog;
+use crate::datasources::table::fuse::statistics;
 use crate::datasources::table::fuse::FuseTable;
-use crate::datasources::table::fuse::TableSnapshot;
+use crate::datasources::table::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::sessions::QueryContext;
 
 impl FuseTable {
@@ -47,7 +48,7 @@ impl FuseTable {
         )?;
 
         let uuid = new_snapshot.snapshot_id;
-        let snapshot_loc = util::snapshot_location(uuid.to_simple().to_string().as_str());
+        let snapshot_loc = io::snapshot_location(uuid.to_simple().to_string().as_str());
         let bytes = serde_json::to_vec(&new_snapshot)?;
         let da = ctx.get_data_accessor()?;
         da.put(&snapshot_loc, bytes).await?;
@@ -62,11 +63,11 @@ impl FuseTable {
         ops: TableOperationLog,
     ) -> Result<TableSnapshot> {
         // 1. merge operations(appends, currently) of this ops
-        let (mut segs, stats) = util::merge_appends(schema, ops)?;
+        let (mut segs, stats) = statistics::merge_append_operations(schema, ops)?;
 
         // 2. merge stats with previous snapshot, if any
         let stats = if let Some(TableSnapshot { summary, .. }) = &prev {
-            util::merge_stats(schema, &stats, summary)?
+            statistics::merge_stats(schema, &stats, summary)?
         } else {
             stats
         };
