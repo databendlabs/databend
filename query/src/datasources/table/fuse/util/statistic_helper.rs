@@ -20,8 +20,10 @@ use std::collections::HashMap;
 use common_datablocks::DataBlock;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchema;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::datasources::table::fuse::operations::AppendOperation;
 use crate::datasources::table::fuse::util;
 use crate::datasources::table::fuse::BlockLocation;
 use crate::datasources::table::fuse::BlockMeta;
@@ -214,4 +216,30 @@ pub fn merge_stats(schema: &DataSchema, l: &Stats, r: &Stats) -> Result<Stats> {
         col_stats: util::column_stats_reduce_with_schema(&[&l.col_stats, &r.col_stats], schema)?,
     };
     Ok(s)
+}
+
+pub fn merge_appends(
+    schema: &DataSchema,
+    append_log_entries: Vec<AppendOperation>,
+) -> Result<(Vec<String>, Stats)> {
+    let (s, seg_locs) = append_log_entries.iter().try_fold(
+        (
+            Stats::default(),
+            Vec::with_capacity(append_log_entries.len()),
+        ),
+        |(mut acc, mut seg_acc), log_entry| {
+            let loc = &log_entry.segment_location;
+            let stats = &log_entry.segment_info.summary;
+            acc.row_count += stats.row_count;
+            acc.block_count += stats.block_count;
+            acc.uncompressed_byte_size += stats.uncompressed_byte_size;
+            acc.compressed_byte_size += stats.compressed_byte_size;
+            acc.col_stats =
+                util::column_stats_reduce_with_schema(&[&acc.col_stats, &stats.col_stats], schema)?;
+            seg_acc.push(loc.clone());
+            Ok::<_, ErrorCode>((acc, seg_acc))
+        },
+    )?;
+
+    Ok((seg_locs, s))
 }

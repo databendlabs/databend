@@ -67,11 +67,7 @@ impl ExplainInterpreter {
 
     fn explain_graph(&self) -> Result<DataBlock> {
         let schema = self.schema();
-        let plan = apply_plan_rewrite(
-            self.ctx.clone(),
-            Optimizers::create(self.ctx.clone()),
-            &self.explain.input,
-        )?;
+        let plan = apply_plan_rewrite(Optimizers::create(self.ctx.clone()), &self.explain.input)?;
         let formatted_plan = Series::new(
             format!("{}", plan.display_graphviz())
                 .lines()
@@ -83,11 +79,7 @@ impl ExplainInterpreter {
 
     fn explain_syntax(&self) -> Result<DataBlock> {
         let schema = self.schema();
-        let plan = apply_plan_rewrite(
-            self.ctx.clone(),
-            Optimizers::create(self.ctx.clone()),
-            &self.explain.input,
-        )?;
+        let plan = apply_plan_rewrite(Optimizers::create(self.ctx.clone()), &self.explain.input)?;
         let formatted_plan = Series::new(
             format!("{:?}", plan)
                 .lines()
@@ -100,7 +92,7 @@ impl ExplainInterpreter {
     fn explain_pipeline(&self) -> Result<DataBlock> {
         let schema = self.schema();
         let optimizer = Optimizers::without_scatters(self.ctx.clone());
-        let plan = apply_plan_rewrite(self.ctx.clone(), optimizer, &self.explain.input)?;
+        let plan = apply_plan_rewrite(optimizer, &self.explain.input)?;
 
         let pipeline_builder = PipelineBuilder::create(self.ctx.clone());
         let pipeline = pipeline_builder.build(&plan)?;

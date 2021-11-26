@@ -60,16 +60,8 @@ async fn test_memorytable() -> Result<()> {
         let blocks = vec![Ok(block), Ok(block2)];
 
         let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks.clone());
-        let insert_plan = InsertIntoPlan {
-            db_name: "default".to_string(),
-            tbl_name: "a".to_string(),
-            tbl_id: 0,
-            schema,
-            select_plan: None,
-            values_opt: None,
-        };
         table
-            .append_data(ctx.clone(), insert_plan, Box::pin(input_stream))
+            .append_data(ctx.clone(), Box::pin(input_stream))
             .await
             .unwrap();
     }

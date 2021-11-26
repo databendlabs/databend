@@ -12,23 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_exception::Result;
 use common_planners::PlanNode;
-use common_planners::PlanRewriter;
 
-use super::plan_do_readsource::PlanDoReadSource;
 use crate::optimizers::Optimizers;
-use crate::sessions::QueryContext;
 
-pub fn apply_plan_rewrite(
-    context: Arc<QueryContext>,
-    optimizer: Optimizers,
-    plan: &PlanNode,
-) -> Result<PlanNode> {
-    let mut optimizer = optimizer;
-    let plan = optimizer.optimize(plan)?;
-    let plan = PlanDoReadSource::create(context).rewrite_plan_node(&plan)?;
-    Ok(plan)
+pub fn apply_plan_rewrite(mut optimizer: Optimizers, plan: &PlanNode) -> Result<PlanNode> {
+    optimizer.optimize(plan)
 }
