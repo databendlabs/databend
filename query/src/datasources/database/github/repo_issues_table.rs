@@ -118,21 +118,23 @@ impl RepoIssuesTable {
             title_array.push(issue.title.clone().into());
             state_array.push(issue.state.clone().into());
             user_array.push(issue.user.login.clone().into());
-            labels_array.push(issue.labels.iter().fold(Vec::new(), |mut content, label| {
+            let mut labels_str = issue.labels.iter().fold(Vec::new(), |mut content, label| {
                 content.extend_from_slice(label.name.clone().as_bytes());
                 content.push(b',');
                 content
-            }));
-            assigness_array.push(
-                issue
-                    .assignees
-                    .iter()
-                    .fold(Vec::new(), |mut content, user| {
-                        content.extend_from_slice(user.login.clone().as_bytes());
-                        content.push(b',');
-                        content
-                    }),
-            );
+            });
+            labels_str.pop();
+            labels_array.push(labels_str);
+            let mut assigness_str = issue
+                .assignees
+                .iter()
+                .fold(Vec::new(), |mut content, user| {
+                    content.extend_from_slice(user.login.clone().as_bytes());
+                    content.push(b',');
+                    content
+                });
+            assigness_str.pop();
+            assigness_array.push(assigness_str);
             comments_number_array.push(issue.comments);
         }
 
