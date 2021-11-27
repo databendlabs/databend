@@ -13,7 +13,7 @@ if [ ! -f /tmp/ontime.csv ]; then
 fi
 
 
-curl -H "insert_sql:insert into ontime format CSV" -F  "upload=@/tmp/ontime.csv"  -XPUT http://localhost:8001/v1/streaming_load > /dev/null 2>&1
+curl -H "insert_sql:insert into ontime format CSV" -H "csv_header:1" -F  "upload=@/tmp/ontime.csv"  -XPUT http://localhost:8001/v1/streaming_load > /dev/null 2>&1
 
 
 echo "select count(1) ,avg(Year), sum(DayOfWeek)  from ontime;" | $MYSQL_CLIENT_CONNECT
