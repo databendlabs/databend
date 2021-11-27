@@ -15,6 +15,7 @@
 
 use common_exception::Result;
 
+use crate::configs::Config;
 use crate::datasources::database::github;
 use crate::datasources::database::github::RepoCommentsTable;
 use crate::datasources::database::github::RepoInfoTable;
@@ -27,12 +28,17 @@ use crate::datasources::table::null::null_table::NullTable;
 use crate::datasources::table::parquet::parquet_table::ParquetTable;
 use crate::datasources::TableEngineRegistry;
 
-pub fn register_prelude_tbl_engines(registry: &TableEngineRegistry) -> Result<()> {
-    // common table engine
-    registry.register("CSV", std::sync::Arc::new(CsvTable::try_create))?;
-    registry.register("PARQUET", std::sync::Arc::new(ParquetTable::try_create))?;
+pub fn register_prelude_tbl_engines(registry: &TableEngineRegistry, conf: Config) -> Result<()> {
+    if conf.query.table_engine_csv_enabled {
+        registry.register("CSV", std::sync::Arc::new(CsvTable::try_create))?;
+    }
+    if conf.query.table_engine_parquet_enabled {
+        registry.register("PARQUET", std::sync::Arc::new(ParquetTable::try_create))?;
+    }
+    if conf.query.table_engine_memory_enabled {
+        registry.register("MEMORY", std::sync::Arc::new(MemoryTable::try_create))?;
+    }
     registry.register("NULL", std::sync::Arc::new(NullTable::try_create))?;
-    registry.register("MEMORY", std::sync::Arc::new(MemoryTable::try_create))?;
     registry.register("FUSE", std::sync::Arc::new(FuseTable::try_create))?;
 
     // github database table engine

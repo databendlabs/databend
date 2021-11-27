@@ -20,5 +20,7 @@ mod csv;
 mod memory;
 mod null;
 mod parquet;
+#[cfg(test)]
+mod prelude_test;
 
 pub use prelude::register_prelude_tbl_engines;

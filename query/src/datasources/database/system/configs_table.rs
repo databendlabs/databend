@@ -65,10 +65,11 @@ impl ConfigsTable {
     ) {
         for (k, v) in config_value.as_object().unwrap().into_iter() {
             names.push(k.to_string());
-            if let Value::String(s) = v {
-                values.push(s.to_string());
-            } else if let Value::Number(n) = v {
-                values.push(n.to_string());
+            match v {
+                Value::String(s) => values.push(s.to_string()),
+                Value::Number(n) => values.push(n.to_string()),
+                Value::Bool(b) => values.push(b.to_string()),
+                _ => unimplemented!(),
             }
             groups.push(group.clone());
             descs.push("".to_string());
