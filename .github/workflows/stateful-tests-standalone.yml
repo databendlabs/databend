@@ -71,4 +71,3 @@ jobs:
         if: matrix.config.os == 'ubuntu-latest'
         run: |
           bash ./scripts/ci/ci-run-stateful-tests-standalone-s3.sh
-
