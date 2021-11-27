@@ -169,6 +169,7 @@ impl LoadCommand {
                 reader.read_to_end(&mut data)?;
 
                 let table = args.value_of("table").unwrap();
+                let skip_header = args.value_of("skip_header_lines").unwrap_or("1");
                 let schema = args.value_of("schema");
                 let table_with_schema = match schema {
                     Some(_) => {
@@ -192,13 +193,13 @@ impl LoadCommand {
                         .parse()
                         .unwrap(),
                 );
-                headers.insert("csv_header", "1".to_string().parse().unwrap());
+                headers.insert("csv_header", skip_header.to_string().parse().unwrap());
                 let progress = execute_load(&cli, &url, headers, data).await?;
 
                 let elapsed = start.elapsed();
                 let time = elapsed.as_millis() as f64 / 1000f64;
                 writer.write_ok(format!(
-                    "successfully loaded {} lines, rows/src: {} (rows/sec). time: {} sec",
+                    "successfully loaded {} rows, rows/src: {} (rows/sec). time: {} sec",
                     progress.read_rows.to_formatted_string(&Locale::en),
                     (progress.read_rows as f64 / time)
                         .as_u128()
