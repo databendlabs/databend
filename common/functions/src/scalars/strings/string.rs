@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use crate::scalars::function_factory::FunctionFactory;
+use crate::scalars::AsciiFunction;
 use crate::scalars::HexFunction;
 use crate::scalars::LTrimFunction;
 use crate::scalars::OctFunction;
@@ -35,5 +36,6 @@ impl StringFunction {
         factory.register("hex", HexFunction::desc());
         factory.register("unhex", UnhexFunction::desc());
         factory.register("quote", QuoteFunction::desc());
+        factory.register("ascii", AsciiFunction::desc());
     }
 }

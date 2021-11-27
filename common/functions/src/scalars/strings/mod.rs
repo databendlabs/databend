@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod ascii;
 mod hex;
 mod oct;
 mod quote;
@@ -21,6 +22,7 @@ mod substring;
 mod trim;
 mod unhex;
 
+pub use ascii::AsciiFunction;
 pub use oct::OctFunction;
 pub use quote::QuoteFunction;
 pub use repeat::RepeatFunction;
