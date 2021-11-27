@@ -41,10 +41,6 @@ const QUERY_RPC_TLS_SERVER_KEY: &str = "QUERY_RPC_TLS_SERVER_KEY";
 const QUERY_RPC_TLS_SERVER_ROOT_CA_CERT: &str = "QUERY_RPC_TLS_SERVER_ROOT_CA_CERT";
 const QUERY_RPC_TLS_SERVICE_DOMAIN_NAME: &str = "QUERY_RPC_TLS_SERVICE_DOMAIN_NAME";
 
-const TABLE_ENGINE_CSV_ENABLED: &str = "TABLE_ENGINE_CSV_ENABLED";
-const TABLE_ENGINE_PARQUET_ENABLED: &str = "TABLE_ENGINE_PARQUET_ENABLED";
-const TABLE_ENGINE_MEMORY_ENABLED: &str = "TABLE_ENGINE_MEMORY_ENABLED";
-
 /// Query config group.
 /// serde(default) make the toml de to default working.
 #[derive(
@@ -346,28 +342,6 @@ impl QueryConfig {
             String,
             QUERY_RPC_TLS_SERVICE_DOMAIN_NAME
         );
-        env_helper!(
-            mut_config,
-            query,
-            table_engine_csv_enabled,
-            bool,
-            TABLE_ENGINE_CSV_ENABLED
-        );
-        env_helper!(
-            mut_config,
-            query,
-            table_engine_parquet_enabled,
-            bool,
-            TABLE_ENGINE_PARQUET_ENABLED
-        );
-        env_helper!(
-            mut_config,
-            query,
-            table_engine_memory_enabled,
-            bool,
-            TABLE_ENGINE_MEMORY_ENABLED
-        );
-
         env_helper!(
             mut_config,
             query,

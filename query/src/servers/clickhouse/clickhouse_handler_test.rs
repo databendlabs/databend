@@ -30,8 +30,12 @@ use crate::tests::SessionManagerBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_clickhouse_handler_query() -> Result<()> {
-    let mut handler =
-        ClickHouseHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
+    let mut handler = ClickHouseHandler::create(
+        SessionManagerBuilder::create()
+            .max_sessions(1)
+            .table_engine_memory_enabled()
+            .build()?,
+    );
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
@@ -47,8 +51,12 @@ async fn test_clickhouse_handler_query() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_clickhouse_insert_data() -> Result<()> {
-    let mut handler =
-        ClickHouseHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
+    let mut handler = ClickHouseHandler::create(
+        SessionManagerBuilder::create()
+            .max_sessions(1)
+            .table_engine_memory_enabled()
+            .build()?,
+    );
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
@@ -78,6 +86,7 @@ async fn test_clickhouse_insert_to_fuse_table() -> Result<()> {
         SessionManagerBuilder::create()
             .max_sessions(1)
             .disk_storage_path(data_path)
+            .table_engine_memory_enabled()
             .build()?,
     );
 
@@ -110,8 +119,12 @@ async fn test_clickhouse_insert_to_fuse_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_reject_clickhouse_connection() -> Result<()> {
-    let mut handler =
-        ClickHouseHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
+    let mut handler = ClickHouseHandler::create(
+        SessionManagerBuilder::create()
+            .max_sessions(1)
+            .table_engine_memory_enabled()
+            .build()?,
+    );
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
@@ -139,8 +152,12 @@ async fn test_reject_clickhouse_connection() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_abort_clickhouse_server() -> Result<()> {
-    let mut handler =
-        ClickHouseHandler::create(SessionManagerBuilder::create().max_sessions(3).build()?);
+    let mut handler = ClickHouseHandler::create(
+        SessionManagerBuilder::create()
+            .max_sessions(3)
+            .table_engine_memory_enabled()
+            .build()?,
+    );
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;

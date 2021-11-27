@@ -29,6 +29,10 @@ http_handler_port = 8001
 
 cluster_id = "test_cluster"
 
+table_engine_memory_enabled = true
+table_engine_csv_enabled = true
+table_engine_parquet_enabled = true
+
 [log]
 log_level = "ERROR"
 log_dir = "./_logs"

@@ -102,6 +102,12 @@ impl SessionManagerBuilder {
         SessionManagerBuilder::inner_create(new_config)
     }
 
+    pub fn table_engine_memory_enabled(self) -> SessionManagerBuilder {
+        let mut new_config = self.config;
+        new_config.query.table_engine_memory_enabled = true;
+        SessionManagerBuilder::inner_create(new_config)
+    }
+
     pub fn build(self) -> Result<Arc<SessionManager>> {
         let config = self.config;
         let handle = Thread::spawn(move || sync_try_create_sessions(config));

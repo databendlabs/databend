@@ -21,7 +21,7 @@ use crate::datasources::table_engine_registry::TableEngineRegistry;
 
 #[test]
 pub fn test_register_prelude_tbl_engines() -> Result<()> {
-    let table_engine_registry = std::sync::Arc::new(TableEngineRegistry::new());
+    let table_engine_registry = std::sync::Arc::new(TableEngineRegistry::default());
     let config = Config::default();
 
     register_prelude_tbl_engines(&table_engine_registry, config)?;
