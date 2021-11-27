@@ -17,7 +17,6 @@ use std::sync::Arc;
 use async_compat::CompatExt;
 use async_stream::stream;
 use common_base::ProgressValues;
-use common_datablocks::pretty_format_blocks;
 use common_planners::PlanNode;
 use common_streams::CsvSource;
 use common_streams::Source;
@@ -100,12 +99,7 @@ pub async fn streaming_load(
 
     // this runs inside the runtime of poem, load is not cpu densive so it's ok
     let mut data_stream = interpreter.execute(Some(Box::pin(stream))).await?;
-    while let Some(_block) = data_stream.next().await {
-        println!("{:?}", _block);
-        let b = _block.unwrap();
-        let output = pretty_format_blocks(&[b])?;
-        println!("{:?}", output);
-    }
+    while let Some(_block) = data_stream.next().await {}
 
     // TODO generate id
     // TODO duplicate by insert_label
