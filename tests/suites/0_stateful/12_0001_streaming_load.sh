@@ -9,7 +9,7 @@ cat $CURDIR/ddl/create_table.sql | $MYSQL_CLIENT_CONNECT
 
 
 if [ ! -f /tmp/ontime.csv ]; then
-    wget -P /tmp "https://repo.databend.rs/dataset/stateful/ontime.csv"
+    wget -P /tmp "https://repo.databend.rs/dataset/stateful/ontime.csv" > /dev/null 2>&1
 fi
 
 
