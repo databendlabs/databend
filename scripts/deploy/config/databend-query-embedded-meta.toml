@@ -30,7 +30,7 @@ http_handler_port = 8001
 cluster_id = "test_cluster"
 
 [log]
-log_level = "ERROR"
+log_level = "INFO"
 log_dir = "./_logs"
 
 [meta]

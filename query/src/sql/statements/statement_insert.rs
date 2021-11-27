@@ -169,7 +169,13 @@ impl DfInsertStatement {
         let table_schema = self.insert_schema(write_table)?;
 
         Ok(AnalyzedResult::SimpleQuery(PlanNode::InsertInto(
-            InsertIntoPlan::insert_without_source(db, table, table_meta_id, table_schema),
+            InsertIntoPlan::insert_without_source(
+                db,
+                table,
+                table_meta_id,
+                table_schema,
+                self.format.clone(),
+            ),
         )))
     }
 
