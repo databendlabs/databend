@@ -21,8 +21,6 @@ use common_exception::Result;
 use crate::scalars::function::Function;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::ComparisonGtEqFunction;
-use crate::scalars::ComparisonLtEqFunction;
 use crate::scalars::Monotonicity;
 
 #[derive(Clone)]
@@ -120,33 +118,8 @@ impl Function for AbsFunction {
             return Ok(Monotonicity::default());
         }
 
-        let left = args[0].left.clone().unwrap();
-        let right = args[0].right.clone().unwrap();
-
-        let gt_eq_zero = |data: &DataColumnWithField| -> Result<bool> {
-            let zero = DataColumn::Constant(DataValue::Int8(Some(0)), 1);
-            let zero_column_field =
-                DataColumnWithField::new(zero, DataField::new("", DataType::Int8, false));
-
-            let f = ComparisonGtEqFunction::try_create_func("")?;
-            let res = f.eval(&[data.clone(), zero_column_field], 1)?;
-            let res_value = res.try_get(0)?;
-            res_value.as_bool()
-        };
-
-        let lt_eq_zero = |data: &DataColumnWithField| -> Result<bool> {
-            let zero = DataColumn::Constant(DataValue::Int8(Some(0)), 1);
-            let zero_column_field =
-                DataColumnWithField::new(zero, DataField::new("", DataType::Int8, false));
-
-            let f = ComparisonLtEqFunction::try_create_func("")?;
-            let res = f.eval(&[data.clone(), zero_column_field], 1)?;
-            let res_value = res.try_get(0)?;
-            res_value.as_bool()
-        };
-
-        if gt_eq_zero(&left)? && gt_eq_zero(&right)? {
-            // both left and right are >= 0, we keep the current is_positive
+        if args[0].gt_eq_zero()? {
+            // the range is >= 0, abs function do nothing
             Ok(Monotonicity {
                 is_monotonic: true,
                 is_positive: args[0].is_positive,
@@ -154,8 +127,8 @@ impl Function for AbsFunction {
                 left: None,
                 right: None,
             })
-        } else if lt_eq_zero(&left)? && lt_eq_zero(&right)? {
-            // both left and right are <= 0, we flip the current is_positive
+        } else if args[0].lt_eq_zero()? {
+            // the range is <= 0, abs function flip the is_positive
             Ok(Monotonicity {
                 is_monotonic: true,
                 is_positive: !args[0].is_positive,

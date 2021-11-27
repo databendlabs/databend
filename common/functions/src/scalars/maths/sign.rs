@@ -17,6 +17,7 @@ use std::str;
 
 use common_datavalues::prelude::ArrayApply;
 use common_datavalues::prelude::DataColumn;
+use common_datavalues::prelude::DataColumnWithField;
 use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
@@ -26,6 +27,7 @@ use common_exception::Result;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
+use crate::scalars::Monotonicity;
 
 #[derive(Clone)]
 pub struct SignFunction {
@@ -100,6 +102,31 @@ impl Function for SignFunction {
             });
         let column: DataColumn = result.into();
         Ok(column)
+    }
+
+    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
+        let mono = args[0].clone();
+        if mono.is_constant {
+            return Ok(Monotonicity::create_constant());
+        }
+
+        // check whether the left/right boundary is numeric or not.
+        let is_boundary_numeric = |boundary: Option<DataColumnWithField>| -> bool {
+            if let Some(column_field) = boundary {
+                column_field.field().data_type().is_numeric()
+            } else {
+                false
+            }
+        };
+
+        // sign operator is monotonically non-decreasing for numeric values. However,'String' input is an exception.
+        // For example, query like "SELECT sign('-1'), sign('+1'), '-1' >= '+1';" returns -1, 1, 1(true),
+        // which is not monotonically increasing.
+        if is_boundary_numeric(mono.left) || is_boundary_numeric(mono.right) {
+            return Ok(Monotonicity::clone_without_range(&args[0]));
+        }
+
+        Ok(Monotonicity::default())
     }
 }
 

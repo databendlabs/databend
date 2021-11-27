@@ -27,6 +27,7 @@ use common_exception::Result;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
+use crate::scalars::Monotonicity;
 
 #[derive(Clone, Debug)]
 pub struct NumberFunction<T, R> {
@@ -42,6 +43,7 @@ pub trait NumberResultFunction<R> {
     fn return_type() -> Result<DataType>;
     fn to_number(_value: DateTime<Utc>) -> R;
     fn to_constant_value(_value: DateTime<Utc>) -> DataValue;
+    fn get_monotonicity(_args: &[Monotonicity]) -> Result<Monotonicity>;
 }
 
 #[derive(Clone)]
@@ -61,6 +63,13 @@ impl NumberResultFunction<u32> for ToYYYYMM {
     fn to_constant_value(value: DateTime<Utc>) -> DataValue {
         DataValue::UInt32(Some(Self::to_number(value)))
     }
+
+    fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
+        // ToYYYYMM function should always be monotonic and positive/non-decreasing, that is, if data_1 is earlier than date_2,
+        // eg. data_1 < data_2, we should have ToYYYYMM(date_1) <= ToYYYYMM(date_2), and vice versa.
+        // So here we clone the input monotonicity and return.
+        Ok(Monotonicity::clone_without_range(&args[0]))
+    }
 }
 
 #[derive(Clone)]
@@ -79,6 +88,13 @@ impl NumberResultFunction<u32> for ToYYYYMMDD {
 
     fn to_constant_value(value: DateTime<Utc>) -> DataValue {
         DataValue::UInt32(Some(Self::to_number(value)))
+    }
+
+    fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
+        // Same as ToYYYYMM, ToYYYYMMDD function should always be monotonic and positive/non-decreasing,
+        // that is, if data_1 is earlier than date_2, eg. data_1 < data_2, we should have ToYYYYMMDD(date_1) <= ToYYYYMMDD(date_2), and vice versa.
+        // So here we clone the input monotonicity and return.
+        Ok(Monotonicity::clone_without_range(&args[0]))
     }
 }
 
@@ -105,6 +121,13 @@ impl NumberResultFunction<u64> for ToYYYYMMDDhhmmss {
     fn to_constant_value(value: DateTime<Utc>) -> DataValue {
         DataValue::UInt64(Some(Self::to_number(value)))
     }
+
+    fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
+        // Same as ToYYYYMM, ToYYYYMMDDhhmmss function should always be monotonic and positive/non-decreasing,
+        // that is, if data_1 is earlier than date_2, eg. data_1 < data_2, we should have ToYYYYMMDDhhmmss(date_1) <= ToYYYYMMDDhhmmss(date_2), and vice versa.
+        // So here we clone the input monotonicity and return.
+        Ok(Monotonicity::clone_without_range(&args[0]))
+    }
 }
 
 #[derive(Clone)]
@@ -124,6 +147,13 @@ impl NumberResultFunction<u16> for ToStartOfYear {
 
     fn to_constant_value(value: DateTime<Utc>) -> DataValue {
         DataValue::UInt16(Some(Self::to_number(value) as u16))
+    }
+
+    fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
+        // ToStartOfYear should always be monotonic and positive/non-decreasing.
+        // If data_1 is earlier than date_2, eg. data_1 < data_2, we should have ToStartOfYear(date_1) <= ToStartOfYear(date_2), and vice versa.
+        // So here we clone the input monotonicity and return.
+        Ok(Monotonicity::clone_without_range(&args[0]))
     }
 }
 
@@ -150,6 +180,13 @@ impl NumberResultFunction<u16> for ToStartOfISOYear {
     fn to_constant_value(value: DateTime<Utc>) -> DataValue {
         DataValue::UInt16(Some(Self::to_number(value) as u16))
     }
+
+    fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
+        // ToStartOfISOYear should always be monotonic and positive/non-decreasing.
+        // If data_1 is earlier than date_2, eg. data_1 < data_2, we should have ToStartOfISOYear(date_1) <= ToStartOfISOYear(date_2), and vice versa.
+        // So here we clone the input monotonicity and return.
+        Ok(Monotonicity::clone_without_range(&args[0]))
+    }
 }
 
 #[derive(Clone)]
@@ -171,6 +208,13 @@ impl NumberResultFunction<u16> for ToStartOfQuarter {
     fn to_constant_value(value: DateTime<Utc>) -> DataValue {
         DataValue::UInt16(Some(Self::to_number(value) as u16))
     }
+
+    fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
+        // ToStartOfQuarter should always be monotonic and positive/non-decreasing.
+        // If data_1 is earlier than date_2, eg. data_1 < data_2, we should have ToStartOfQuarter(date_1) <= ToStartOfQuarter(date_2), and vice versa.
+        // So here we clone the input monotonicity and return.
+        Ok(Monotonicity::clone_without_range(&args[0]))
+    }
 }
 
 #[derive(Clone)]
@@ -191,6 +235,13 @@ impl NumberResultFunction<u16> for ToStartOfMonth {
     fn to_constant_value(value: DateTime<Utc>) -> DataValue {
         DataValue::UInt16(Some(Self::to_number(value) as u16))
     }
+
+    fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
+        // ToStartOfMonth should always be monotonic and positive/non-decreasing.
+        // If data_1 is earlier than date_2, eg. data_1 < data_2, we should have ToStartOfMonth(date_1) <= ToStartOfMonth(date_2), and vice versa.
+        // So here we clone the input monotonicity and return.
+        Ok(Monotonicity::clone_without_range(&args[0]))
+    }
 }
 
 #[derive(Clone)]
@@ -209,6 +260,13 @@ impl NumberResultFunction<u8> for ToMonth {
 
     fn to_constant_value(value: DateTime<Utc>) -> DataValue {
         DataValue::UInt8(Some(Self::to_number(value)))
+    }
+
+    fn get_monotonicity(_args: &[Monotonicity]) -> Result<Monotonicity> {
+        // ToMonth is NOT a monotonic function in general, unless the time range is within the same year.
+        // For example, date(2020-12-01) < date(2021-5-5), while ToMonth(2020-12-01) > ToMonth(2021-5-5).
+        // So we return default non-monotonic value.
+        Ok(Monotonicity::default())
     }
 }
 
@@ -229,6 +287,13 @@ impl NumberResultFunction<u16> for ToDayOfYear {
     fn to_constant_value(value: DateTime<Utc>) -> DataValue {
         DataValue::UInt16(Some(Self::to_number(value)))
     }
+
+    fn get_monotonicity(_args: &[Monotonicity]) -> Result<Monotonicity> {
+        // ToDayOfYear is NOT a monotonic function in general, unless the time range is within the same year.
+        // For example, date(2020-12-01) < date(2021-5-5), while ToDayOfYear(2020-12-01) > ToDayOfYear(2021-5-5).
+        // So we return default non-monotonic value.
+        Ok(Monotonicity::default())
+    }
 }
 
 #[derive(Clone)]
@@ -247,6 +312,13 @@ impl NumberResultFunction<u8> for ToDayOfMonth {
 
     fn to_constant_value(value: DateTime<Utc>) -> DataValue {
         DataValue::UInt8(Some(Self::to_number(value)))
+    }
+
+    fn get_monotonicity(_args: &[Monotonicity]) -> Result<Monotonicity> {
+        // ToDayOfMonth is not a monotonic function in general, unless the time range is within the same month.
+        // For example, date(2021-11-20) < date(2021-12-01), while ToDayOfMonth((2021-11-20) > ToDayOfMonth(2021-12-01).
+        // So we return default non-monotonic value.
+        Ok(Monotonicity::default())
     }
 }
 
@@ -267,6 +339,12 @@ impl NumberResultFunction<u8> for ToDayOfWeek {
     fn to_constant_value(value: DateTime<Utc>) -> DataValue {
         DataValue::UInt8(Some(Self::to_number(value)))
     }
+
+    fn get_monotonicity(_args: &[Monotonicity]) -> Result<Monotonicity> {
+        // ToDayOfWeek is not a monotonic function in general, unless the time range is within the same week.
+        // So we return default non-monotonic value.
+        Ok(Monotonicity::default())
+    }
 }
 
 #[derive(Clone)]
@@ -285,6 +363,12 @@ impl NumberResultFunction<u8> for ToHour {
 
     fn to_constant_value(value: DateTime<Utc>) -> DataValue {
         DataValue::UInt8(Some(Self::to_number(value)))
+    }
+
+    fn get_monotonicity(_args: &[Monotonicity]) -> Result<Monotonicity> {
+        // ToHour is not a monotonic function in general, unless the time range is within the same day.
+        // So we return default non-monotonic value.
+        Ok(Monotonicity::default())
     }
 }
 
@@ -305,6 +389,12 @@ impl NumberResultFunction<u8> for ToMinute {
     fn to_constant_value(value: DateTime<Utc>) -> DataValue {
         DataValue::UInt8(Some(Self::to_number(value)))
     }
+
+    fn get_monotonicity(_args: &[Monotonicity]) -> Result<Monotonicity> {
+        // ToMinute is not a monotonic function in general, unless the time range is within the same hour.
+        // So we return default non-monotonic value.
+        Ok(Monotonicity::default())
+    }
 }
 
 #[derive(Clone)]
@@ -323,6 +413,12 @@ impl NumberResultFunction<u8> for ToSecond {
 
     fn to_constant_value(value: DateTime<Utc>) -> DataValue {
         DataValue::UInt8(Some(Self::to_number(value)))
+    }
+
+    fn get_monotonicity(_args: &[Monotonicity]) -> Result<Monotonicity> {
+        // ToSecond is not a monotonic function in general, unless the time range is within the same minute.
+        // So we return default non-monotonic value.
+        Ok(Monotonicity::default())
     }
 }
 
@@ -343,6 +439,13 @@ impl NumberResultFunction<u16> for ToMonday {
 
     fn to_constant_value(value: DateTime<Utc>) -> DataValue {
         DataValue::UInt16(Some(Self::to_number(value)))
+    }
+
+    fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
+        // ToMonday returns the nearest Monday as number of days since epoch, so it should always be monotonic and positive/non-decreasing.
+        // If data_1 is earlier than date_2, eg. data_1 < data_2, we should have ToMonday(date_1) <= ToMonday(date_2), and vice versa.
+        // So here we clone the input monotonicity and return.
+        Ok(Monotonicity::clone_without_range(&args[0]))
     }
 }
 
@@ -457,6 +560,13 @@ where
                 self.name()))),
         }?;
         Ok(number_array)
+    }
+
+    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
+        if T::MAYBE_MONOTONIC {
+            return T::get_monotonicity(args);
+        }
+        Ok(Monotonicity::default())
     }
 }
 

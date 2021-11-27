@@ -110,8 +110,8 @@ where T: IntegerTypedArithmetic + Clone + Sync + Send + 'static
             integer_col = &columns[0];
         } else {
             return Err(ErrorCode::IllegalDataType(format!(
-				"Illegal arguments for function {}. Should be a date or dateTime plus or minus an integer.",
-				self.name())));
+                "Illegal arguments for function {}. Should be a date or dateTime plus or minus an integer.",
+                self.name())));
         }
 
         T::get_func(integer_col.data_type(), date_col.data_type())(
