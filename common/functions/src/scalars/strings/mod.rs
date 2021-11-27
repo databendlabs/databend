@@ -12,11 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod hex;
 mod oct;
+mod quote;
 mod repeat;
 mod string;
 mod substring;
+mod trim;
+mod unhex;
 
 pub use oct::OctFunction;
+pub use quote::QuoteFunction;
+pub use repeat::RepeatFunction;
 pub use string::StringFunction;
 pub use substring::SubstringFunction;
+pub use trim::LTrimFunction;
+pub use trim::RTrimFunction;
+pub use unhex::UnhexFunction;
+
+pub use self::hex::HexFunction;
