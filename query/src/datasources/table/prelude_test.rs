@@ -33,7 +33,7 @@ pub fn test_register_prelude_tbl_engines() -> Result<()> {
         .is_none());
     assert!(table_engine_registry
         .get_table_factory(String::from("MEMORY"))
-        .is_none());
+        .is_some());
     assert!(table_engine_registry
         .get_table_factory(String::from("NULL"))
         .is_some());

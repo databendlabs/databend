@@ -194,10 +194,10 @@ pub struct QueryConfig {
     pub table_engine_memory_enabled: bool,
 
     #[structopt(
-        long,
-        env = QUERY_WAIT_TIMEOUT_MILLS,
-        default_value = "5000"
-        )]
+    long,
+    env = QUERY_WAIT_TIMEOUT_MILLS,
+    default_value = "5000"
+    )]
     #[serde(default)]
     pub wait_timeout_mills: u64,
 }
@@ -227,7 +227,7 @@ impl QueryConfig {
             rpc_tls_query_service_domain_name: "localhost".to_string(),
             table_engine_csv_enabled: false,
             table_engine_parquet_enabled: false,
-            table_engine_memory_enabled: false,
+            table_engine_memory_enabled: true,
             wait_timeout_mills: 5000,
         }
     }

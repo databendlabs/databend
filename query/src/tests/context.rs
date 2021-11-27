@@ -28,9 +28,7 @@ use crate::sessions::QueryContextShared;
 use crate::tests::SessionManagerBuilder;
 
 pub fn try_create_context() -> Result<Arc<QueryContext>> {
-    let sessions = SessionManagerBuilder::create()
-        .table_engine_memory_enabled()
-        .build()?;
+    let sessions = SessionManagerBuilder::create().build()?;
     let dummy_session = sessions.create_session("TestSession")?;
 
     let context = QueryContext::from_shared(QueryContextShared::try_create(

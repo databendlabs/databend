@@ -59,7 +59,7 @@ rpc_tls_query_server_root_ca_cert = \"\"
 rpc_tls_query_service_domain_name = \"localhost\"
 table_engine_csv_enabled = false
 table_engine_parquet_enabled = false
-table_engine_memory_enabled = false
+table_engine_memory_enabled = true
 wait_timeout_mills = 5000
 
 [log]
@@ -154,7 +154,7 @@ fn test_env_config() -> Result<()> {
 
     assert!(!configured.query.table_engine_csv_enabled);
     assert!(!configured.query.table_engine_parquet_enabled);
-    assert!(!configured.query.table_engine_memory_enabled);
+    assert!(configured.query.table_engine_memory_enabled);
 
     // clean up
     std::env::remove_var("LOG_LEVEL");

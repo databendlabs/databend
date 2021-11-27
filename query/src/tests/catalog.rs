@@ -19,8 +19,7 @@ use crate::configs::Config;
 
 pub fn try_create_catalog() -> Result<DatabaseCatalog> {
     futures::executor::block_on(async move {
-        let mut config = Config::default();
-        config.query.table_engine_memory_enabled = true;
-        DatabaseCatalog::try_create_with_config(config).await
+        let conf = Config::default();
+        DatabaseCatalog::try_create_with_config(conf).await
     })
 }
