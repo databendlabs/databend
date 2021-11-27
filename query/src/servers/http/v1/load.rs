@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use async_compat::CompatExt;
 use async_stream::stream;
+use common_base::ProgressValues;
 use common_planners::PlanNode;
 use common_streams::CsvSource;
 use common_streams::Source;
@@ -37,6 +38,7 @@ use crate::sql::PlanParser;
 pub struct LoadResponse {
     pub id: String,
     pub state: String,
+    pub stats: ProgressValues,
     pub error: Option<String>,
 }
 
@@ -105,6 +107,7 @@ pub async fn streaming_load(
     Ok(Json(LoadResponse {
         id,
         state: "SUCCESS".to_string(),
+        stats: context.get_progress_value(),
         error: None,
     }))
 }
