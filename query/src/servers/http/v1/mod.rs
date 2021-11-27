@@ -19,7 +19,7 @@ mod block_to_json_test;
 pub mod http_query_handlers;
 #[cfg(test)]
 mod http_query_handlers_test;
-mod load;
+pub mod load;
 pub(crate) mod query;
 pub mod statement;
 #[cfg(test)]

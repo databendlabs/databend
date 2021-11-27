@@ -24,6 +24,7 @@ use clap::AppSettings;
 use clap::Arg;
 use clap::ArgMatches;
 use common_base::tokio::time;
+use http::HeaderMap;
 // Lets us call into_async_read() to convert a futures::stream::Stream into a
 // futures::io::AsyncRead.
 use itertools::Itertools;
@@ -33,7 +34,9 @@ use num_format::ToFormattedString;
 
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::command::Command;
+use crate::cmds::queries::query::build_load_endpoint;
 use crate::cmds::queries::query::build_query_endpoint;
+use crate::cmds::queries::query::execute_load;
 use crate::cmds::queries::query::execute_query_json;
 use crate::cmds::Config;
 use crate::cmds::Status;
@@ -162,10 +165,12 @@ impl LoadCommand {
         match self.local_exec_precheck(args).await {
             Ok(_) => {
                 let mut reader = build_reader(args.value_of("load")).await;
-                let mut record = reader.records();
+                let mut data = vec![];
+                reader.read_to_end(&mut data)?;
+
                 let table = args.value_of("table").unwrap();
                 let schema = args.value_of("schema");
-                let table_format = match schema {
+                let table_with_schema = match schema {
                     Some(_) => {
                         let schema: Schema =
                             args.value_of_t("schema").expect("cannot build schema");
@@ -179,64 +184,23 @@ impl LoadCommand {
                 };
                 let start = time::Instant::now();
                 let status = Status::read(self.conf.clone())?;
-                let (cli, url) = build_query_endpoint(&status)?;
-                let mut count = 0;
-                for _ in 0..args.value_of("skip_header_lines").unwrap().parse().unwrap() {
-                    record.next();
-                }
-                loop {
-                    let mut batch = vec![];
-                    // possible optimization is to run iterator in parallel
-                    for _ in 0..100_000 {
-                        if let Some(line) = record.next() {
-                            if let Ok(line) = line {
-                                batch.push(line);
-                                count += 1;
-                            } else {
-                                writer.write_err(format!(
-                                    "cannot read csv line {}, error: {}",
-                                    count,
-                                    line.unwrap_err()
-                                ))
-                            }
-                        } else {
-                            break;
-                        }
-                    }
-                    if batch.is_empty() {
-                        break;
-                    }
-                    let values: Vec<String> = batch
-                        .into_iter()
-                        .map(|s| {
-                            s.iter()
-                                .map(|i| {
-                                    if i.trim().is_empty() {
-                                        "null".to_string()
-                                    } else {
-                                        "'".to_owned() + i + &*"'".to_owned()
-                                    }
-                                })
-                                .join(",")
-                        })
-                        .map(|e| format!("({})", e.trim()))
-                        .filter(|e| !e.trim().is_empty())
-                        .collect();
-                    let values = values.join(",");
-                    let query = format!("INSERT INTO {} VALUES {}", table_format, values);
-                    if let Err(e) = execute_query_json(&cli, &url, query.clone()).await {
-                        writer.write_err(format!(
-                            "cannot insert data into {} with query {}, error: {:?}",
-                            table, query, e
-                        ))
-                    }
-                }
+                let (cli, url) = build_load_endpoint(&status)?;
+                let mut headers = HeaderMap::new();
+                headers.insert(
+                    "insert_sql",
+                    format!("INSERT INTO {} format CSV", table_with_schema)
+                        .parse()
+                        .unwrap(),
+                );
+                headers.insert("csv_header", "1".to_string().parse().unwrap());
+                let progress = execute_load(&cli, &url, headers, data).await?;
+
                 let elapsed = start.elapsed();
                 let time = elapsed.as_millis() as f64 / 1000f64;
                 writer.write_ok(format!(
                     "successfully loaded {} lines, rows/src: {} (rows/sec). time: {} sec",
-                    count.to_formatted_string(&Locale::en),
-                    (count as f64 / time)
+                    progress.read_rows.to_formatted_string(&Locale::en),
+                    (progress.read_rows as f64 / time)
                         .as_u128()
                         .to_formatted_string(&Locale::en),
                     time
@@ -285,14 +249,12 @@ impl LoadCommand {
     }
 }
 
-async fn build_reader(load: Option<&str>) -> csv::Reader<Box<dyn std::io::Read + Send + Sync>> {
+async fn build_reader(load: Option<&str>) -> Box<dyn std::io::Read + Send + Sync> {
     match load {
         Some(val) => {
             if Path::new(val).exists() {
                 let f = std::fs::File::open(val).expect("cannot open file: permission denied");
-                csv::ReaderBuilder::new()
-                    .has_headers(false)
-                    .from_reader(Box::new(f))
+                Box::new(f)
             } else if val.contains("://") {
                 let target = reqwest::get(val)
                     .await
@@ -302,20 +264,14 @@ async fn build_reader(load: Option<&str>) -> csv::Reader<Box<dyn std::io::Read +
                     .text()
                     .await
                     .expect("cannot fetch for target"); // generate an error if server didn't respond
-                csv::ReaderBuilder::new()
-                    .has_headers(false)
-                    .from_reader(Box::new(Cursor::new(target)))
+                Box::new(Box::new(Cursor::new(target)))
             } else {
-                csv::ReaderBuilder::new()
-                    .has_headers(false)
-                    .from_reader(Box::new(Cursor::new(val.to_string().as_bytes().to_owned())))
+                Box::new(Cursor::new(val.to_string()))
             }
         }
         None => {
             let io = std::io::stdin();
-            csv::ReaderBuilder::new()
-                .has_headers(false)
-                .from_reader(Box::new(io))
+            Box::new(io)
         }
     }
 }
