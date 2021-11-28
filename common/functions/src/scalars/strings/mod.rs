@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod ascii;
+mod base_64;
 mod hex;
 mod oct;
 mod quote;
@@ -25,6 +26,8 @@ mod trim;
 mod unhex;
 
 pub use ascii::AsciiFunction;
+pub use base_64::Base64DecodeFunction;
+pub use base_64::Base64EncodeFunction;
 pub use oct::OctFunction;
 pub use quote::QuoteFunction;
 pub use repeat::RepeatFunction;
