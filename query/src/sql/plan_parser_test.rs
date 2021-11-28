@@ -219,8 +219,8 @@ fn test_plan_parser() -> Result<()> {
             name: "show-processlist",
             sql: "show processlist",
             expect: "\
-            Projection: id:String, type:String, host:String, user:String, state:String, database:String, extra_info:String, memory_usage:UInt64\
-            \n  ReadDataSource: scan partitions: [1], scan schema: [id:String, type:String, host:String;N, user:String;N, state:String, database:String, extra_info:String;N, memory_usage:UInt64;N], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0, 1, 2, 3, 4, 5, 6, 7]]",
+            Projection: id:String, type:String, host:String, user:String, state:String, database:String, extra_info:String, memory_usage:Int64\
+            \n  ReadDataSource: scan partitions: [1], scan schema: [id:String, type:String, host:String;N, user:String;N, state:String, database:String, extra_info:String;N, memory_usage:Int64;N], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0, 1, 2, 3, 4, 5, 6, 7]]",
             error: "",
         },
     ];

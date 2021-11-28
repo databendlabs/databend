@@ -47,7 +47,7 @@ impl ProcessesTable {
             DataField::new("state", DataType::String, false),
             DataField::new("database", DataType::String, false),
             DataField::new("extra_info", DataType::String, true),
-            DataField::new("memory_usage", DataType::UInt64, true),
+            DataField::new("memory_usage", DataType::Int64, true),
         ]);
 
         let table_info = TableInfo {
