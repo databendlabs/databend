@@ -28,10 +28,12 @@ use comfy_table::Color;
 use comfy_table::Table;
 use common_base::ProgressValues;
 use common_datavalues::DataSchemaRef;
+use http::HeaderMap;
 use http::Uri;
 use lexical_util::num::AsPrimitive;
 use num_format::Locale;
 use num_format::ToFormattedString;
+use reqwest::multipart;
 use serde_json::json;
 use serde_json::Value;
 
@@ -203,7 +205,7 @@ async fn query_writer(
 }
 
 // TODO(zhihanz) mTLS support
-pub fn build_query_endpoint(status: &Status) -> Result<(reqwest::Client, String)> {
+fn build_endpoint(status: &Status, path: &str) -> Result<(reqwest::Client, String)> {
     let query_configs = status.get_local_query_configs();
 
     let (_, query) = query_configs.get(0).expect("cannot find query configs");
@@ -221,16 +223,20 @@ pub fn build_query_endpoint(status: &Status) -> Result<(reqwest::Client, String)
             )
             .parse::<SocketAddr>()
             .expect("cannot build query socket address");
-            format!(
-                "http://{}:{}/v1/query?wait_time=-1",
-                address.ip(),
-                address.port()
-            )
+            format!("http://{}:{}{}", address.ip(), address.port(), path)
         } else {
             todo!()
         }
     };
     Ok((client, url))
+}
+
+pub fn build_query_endpoint(status: &Status) -> Result<(reqwest::Client, String)> {
+    build_endpoint(status, "/v1/query?wait_time=-1")
+}
+
+pub fn build_load_endpoint(status: &Status) -> Result<(reqwest::Client, String)> {
+    build_endpoint(status, "/v1/streaming_load")
 }
 
 pub async fn execute_query_json(
@@ -301,6 +307,33 @@ async fn execute_query(
             table.add_row(row.iter().map(|elem| Cell::new(elem.to_string())));
         }
         Ok((table.trim_fmt(), stats.progress))
+    }
+}
+
+pub async fn execute_load(
+    cli: &reqwest::Client,
+    url: &str,
+    headers: HeaderMap,
+    data: Vec<u8>,
+) -> Result<ProgressValues> {
+    let part = multipart::Part::stream(data);
+    let form = multipart::Form::new().part("sample", part);
+
+    let resp = cli
+        .put(url)
+        .headers(headers)
+        .multipart(form)
+        .send()
+        .await
+        .expect("cannot post to http handler")
+        .json::<databend_query::servers::http::v1::load::LoadResponse>()
+        .await;
+    match resp {
+        Ok(v) => Ok(v.stats),
+        Err(e) => Err(CliError::Unknown(format!(
+            "Cannot retrieve query result: {:?}",
+            e
+        ))),
     }
 }
 

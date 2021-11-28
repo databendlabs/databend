@@ -21,65 +21,11 @@ use crate::prelude::DataType;
 use crate::DataField;
 use crate::DataValueArithmeticOperator;
 
-/// Determine if a DataType is signed numeric or not
-pub fn is_signed_numeric(dt: &DataType) -> bool {
-    matches!(
-        dt,
-        DataType::Int8
-            | DataType::Int16
-            | DataType::Int32
-            | DataType::Int64
-            | DataType::Float32
-            | DataType::Float64
-    )
-}
-
-/// Determine if a DataType is numeric or not
-pub fn is_numeric(dt: &DataType) -> bool {
-    is_signed_numeric(dt)
-        || matches!(
-            dt,
-            DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64
-        )
-}
-
-pub fn is_interval(dt: &DataType) -> bool {
-    matches!(dt, DataType::Interval(_))
-}
-
 fn next_size(size: usize) -> usize {
     if size < 8_usize {
         return size * 2;
     }
     size
-}
-
-pub fn is_floating(dt: &DataType) -> bool {
-    matches!(dt, DataType::Float32 | DataType::Float64)
-}
-
-pub fn is_date_or_date_time(dt: &DataType) -> bool {
-    matches!(
-        dt,
-        DataType::Date16 | DataType::Date32 | DataType::DateTime32(_)
-    )
-}
-
-pub fn is_integer(dt: &DataType) -> bool {
-    is_numeric(dt) && !is_floating(dt)
-}
-
-pub fn numeric_byte_size(dt: &DataType) -> Result<usize> {
-    match dt {
-        DataType::Int8 | DataType::UInt8 => Ok(1),
-        DataType::Int16 | DataType::UInt16 => Ok(2),
-        DataType::Int32 | DataType::UInt32 | DataType::Float32 => Ok(4),
-        DataType::Int64 | DataType::UInt64 | DataType::Float64 => Ok(8),
-        _ => Result::Err(ErrorCode::BadArguments(format!(
-            "Function number_byte_size argument must be numeric types, but got {:?}",
-            dt
-        ))),
-    }
 }
 
 pub fn construct_numeric_type(
@@ -123,20 +69,20 @@ pub fn numerical_coercion(
     rhs_type: &DataType,
     allow_overflow: bool,
 ) -> Result<DataType> {
-    let has_float = is_floating(lhs_type) || is_floating(rhs_type);
-    let has_integer = is_integer(lhs_type) || is_integer(rhs_type);
-    let has_signed = is_signed_numeric(lhs_type) || is_signed_numeric(rhs_type);
+    let has_float = lhs_type.is_floating() || rhs_type.is_floating();
+    let has_integer = lhs_type.is_integer() || rhs_type.is_integer();
+    let has_signed = lhs_type.is_signed_numeric() || rhs_type.is_signed_numeric();
 
-    let size_of_lhs = numeric_byte_size(lhs_type)?;
-    let size_of_rhs = numeric_byte_size(rhs_type)?;
+    let size_of_lhs = lhs_type.numeric_byte_size()?;
+    let size_of_rhs = rhs_type.numeric_byte_size()?;
 
     let max_size_of_unsigned_integer = cmp::max(
-        if is_signed_numeric(lhs_type) {
+        if lhs_type.is_signed_numeric() {
             0
         } else {
             size_of_lhs
         },
-        if is_signed_numeric(rhs_type) {
+        if rhs_type.is_signed_numeric() {
             0
         } else {
             size_of_rhs
@@ -144,12 +90,12 @@ pub fn numerical_coercion(
     );
 
     let max_size_of_signed_integer = cmp::max(
-        if !is_signed_numeric(lhs_type) {
+        if !lhs_type.is_signed_numeric() {
             0
         } else {
             size_of_lhs
         },
-        if !is_signed_numeric(rhs_type) {
+        if !rhs_type.is_signed_numeric() {
             0
         } else {
             size_of_rhs
@@ -157,12 +103,12 @@ pub fn numerical_coercion(
     );
 
     let max_size_of_integer = cmp::max(
-        if !is_integer(lhs_type) {
+        if !lhs_type.is_integer() {
             0
         } else {
             size_of_lhs
         },
-        if !is_integer(rhs_type) {
+        if !rhs_type.is_integer() {
             0
         } else {
             size_of_rhs
@@ -170,12 +116,12 @@ pub fn numerical_coercion(
     );
 
     let max_size_of_float = cmp::max(
-        if !is_floating(lhs_type) {
+        if !lhs_type.is_floating() {
             0
         } else {
             size_of_lhs
         },
-        if !is_floating(rhs_type) {
+        if !rhs_type.is_floating() {
             0
         } else {
             size_of_rhs
@@ -212,16 +158,16 @@ pub fn numerical_arithmetic_coercion(
     rhs_type: &DataType,
 ) -> Result<DataType> {
     // error on any non-numeric type
-    if !is_numeric(lhs_type) || !is_numeric(rhs_type) {
+    if !lhs_type.is_numeric() || !rhs_type.is_numeric() {
         return Result::Err(ErrorCode::BadDataValueType(format!(
             "DataValue Error: Unsupported ({:?}) {} ({:?})",
             lhs_type, op, rhs_type
         )));
     };
 
-    let has_signed = is_signed_numeric(lhs_type) || is_signed_numeric(rhs_type);
-    let has_float = is_floating(lhs_type) || is_floating(rhs_type);
-    let max_size = cmp::max(numeric_byte_size(lhs_type)?, numeric_byte_size(rhs_type)?);
+    let has_signed = lhs_type.is_signed_numeric() || rhs_type.is_signed_numeric();
+    let has_float = lhs_type.is_floating() || rhs_type.is_floating();
+    let max_size = cmp::max(lhs_type.numeric_byte_size()?, rhs_type.numeric_byte_size()?);
 
     match op {
         DataValueArithmeticOperator::Plus | DataValueArithmeticOperator::Mul => {
@@ -235,8 +181,8 @@ pub fn numerical_arithmetic_coercion(
             // From clickhouse: NumberTraits.h
             // If modulo of division can yield negative number, we need larger type to accommodate it.
             // Example: toInt32(-199) % toUInt8(200) will return -199 that does not fit in Int8, only in Int16.
-            let result_is_signed = is_signed_numeric(lhs_type);
-            let right_size = numeric_byte_size(rhs_type)?;
+            let result_is_signed = lhs_type.is_signed_numeric();
+            let right_size = rhs_type.numeric_byte_size()?;
             let size_of_result = if result_is_signed {
                 next_size(right_size)
             } else {
@@ -263,13 +209,13 @@ pub fn datetime_arithmetic_coercion(
         lhs_type, op, rhs_type
     )));
 
-    if !is_date_or_date_time(lhs_type) && !is_date_or_date_time(rhs_type) {
+    if !lhs_type.is_date_or_date_time() && !rhs_type.is_date_or_date_time() {
         return e;
     }
 
     let mut a = lhs_type.clone();
     let mut b = rhs_type.clone();
-    if !is_date_or_date_time(&a) {
+    if !a.is_date_or_date_time() {
         a = rhs_type.clone();
         b = lhs_type.clone();
     }
@@ -278,7 +224,7 @@ pub fn datetime_arithmetic_coercion(
         DataValueArithmeticOperator::Plus => Ok(a),
 
         DataValueArithmeticOperator::Minus => {
-            if is_numeric(&b) || is_interval(&b) {
+            if b.is_numeric() || b.is_interval() {
                 Ok(a)
             } else {
                 // Date minus Date or DateTime minus DateTime
@@ -301,15 +247,15 @@ pub fn interval_arithmetic_coercion(
     )));
 
     // only allow date/datetime [+/-] interval
-    if !(is_date_or_date_time(lhs_type) && is_interval(rhs_type)
-        || is_date_or_date_time(rhs_type) && is_interval(lhs_type))
+    if !(lhs_type.is_date_or_date_time() && rhs_type.is_interval()
+        || rhs_type.is_date_or_date_time() && lhs_type.is_interval())
     {
         return e;
     }
 
     match op {
         DataValueArithmeticOperator::Plus | DataValueArithmeticOperator::Minus => {
-            if is_date_or_date_time(lhs_type) {
+            if lhs_type.is_date_or_date_time() {
                 Ok(lhs_type.clone())
             } else {
                 Ok(rhs_type.clone())
@@ -325,7 +271,7 @@ pub fn numerical_unary_arithmetic_coercion(
     val_type: &DataType,
 ) -> Result<DataType> {
     // error on any non-numeric type
-    if !is_numeric(val_type) {
+    if !val_type.is_numeric() {
         return Result::Err(ErrorCode::BadDataValueType(format!(
             "DataValue Error: Unsupported ({:?})",
             val_type
@@ -335,9 +281,9 @@ pub fn numerical_unary_arithmetic_coercion(
     match op {
         DataValueArithmeticOperator::Plus => Ok(val_type.clone()),
         DataValueArithmeticOperator::Minus => {
-            let has_float = is_floating(val_type);
-            let has_signed = is_signed_numeric(val_type);
-            let numeric_size = numeric_byte_size(val_type)?;
+            let has_float = val_type.is_floating();
+            let has_signed = val_type.is_signed_numeric();
+            let numeric_size = val_type.numeric_byte_size()?;
             let max_size = if has_signed {
                 numeric_size
             } else {
@@ -359,7 +305,7 @@ pub fn compare_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<Data
         return Ok(lhs_type.clone());
     }
 
-    if is_numeric(lhs_type) && is_numeric(rhs_type) {
+    if lhs_type.is_numeric() && rhs_type.is_numeric() {
         return numerical_coercion(lhs_type, rhs_type, true);
     }
 
@@ -374,27 +320,29 @@ pub fn compare_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<Data
     }
 
     // one of is String and other is number
-    if (is_numeric(lhs_type) && rhs_type == &DataType::String)
-        || (is_numeric(rhs_type) && lhs_type == &DataType::String)
+    if (lhs_type.is_numeric() && rhs_type == &DataType::String)
+        || (rhs_type.is_numeric() && lhs_type == &DataType::String)
     {
         return Ok(DataType::Float64);
     }
 
     // one of is datetime and other is number or string
     {
-        if (is_numeric(lhs_type) || lhs_type == &DataType::String) && is_date_or_date_time(rhs_type)
+        if (lhs_type.is_numeric() || lhs_type == &DataType::String)
+            && rhs_type.is_date_or_date_time()
         {
             return Ok(rhs_type.clone());
         }
 
-        if (is_numeric(rhs_type) || rhs_type == &DataType::String) && is_date_or_date_time(lhs_type)
+        if (rhs_type.is_numeric() || rhs_type == &DataType::String)
+            && lhs_type.is_date_or_date_time()
         {
             return Ok(lhs_type.clone());
         }
     }
 
     // one of is datetime and other is number or string
-    if is_date_or_date_time(lhs_type) || is_date_or_date_time(rhs_type) {
+    if lhs_type.is_date_or_date_time() || rhs_type.is_date_or_date_time() {
         // one of is datetime
         if matches!(lhs_type, DataType::DateTime32(_))
             || matches!(rhs_type, DataType::DateTime32(_))
@@ -474,7 +422,7 @@ pub fn merge_types(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType>
             if lhs_type == rhs_type {
                 return Ok(lhs_type.clone());
             }
-            if is_numeric(lhs_type) && is_numeric(rhs_type) {
+            if lhs_type.is_numeric() && rhs_type.is_numeric() {
                 numerical_coercion(lhs_type, rhs_type, false)
             } else {
                 Result::Err(ErrorCode::BadDataValueType(format!(

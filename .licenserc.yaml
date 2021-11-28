@@ -31,5 +31,6 @@ header:
     - ".cargo"
     - "metasrv/src/proto/meta.rs"
     - ".yamllint.yml"
+    - ".mergify.yml"
 
   comment: on-failure

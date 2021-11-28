@@ -28,6 +28,7 @@ use common_planners::ProjectionPlan;
 use common_planners::ReadDataSourcePlan;
 use common_planners::RemotePlan;
 use common_planners::SelectPlan;
+use common_planners::SinkPlan;
 use common_planners::SortPlan;
 use common_planners::StagePlan;
 use common_planners::SubQueriesSetPlan;
@@ -46,6 +47,7 @@ use crate::pipelines::transforms::LimitByTransform;
 use crate::pipelines::transforms::LimitTransform;
 use crate::pipelines::transforms::ProjectionTransform;
 use crate::pipelines::transforms::RemoteTransform;
+use crate::pipelines::transforms::SinkTransform;
 use crate::pipelines::transforms::SortMergeTransform;
 use crate::pipelines::transforms::SortPartialTransform;
 use crate::pipelines::transforms::SourceTransform;
@@ -94,6 +96,7 @@ impl PipelineBuilder {
             PlanNode::LimitBy(node) => self.visit_limit_by(node),
             PlanNode::ReadSource(node) => self.visit_read_data_source(node),
             PlanNode::SubQueryExpression(node) => self.visit_create_sets(node),
+            PlanNode::Sink(node) => self.visit_sink(node),
             other => Result::Err(ErrorCode::UnknownPlan(format!(
                 "Build pipeline from the plan node unsupported:{:?}",
                 other.name()
@@ -318,6 +321,18 @@ impl PipelineBuilder {
             let source = SourceTransform::try_create(self.ctx.clone(), plan.clone())?;
             pipeline.add_source(Arc::new(source))?;
         }
+        Ok(pipeline)
+    }
+
+    fn visit_sink(&mut self, plan: &SinkPlan) -> Result<Pipeline> {
+        let mut pipeline = self.visit(&plan.input)?;
+        pipeline.add_simple_transform(|| {
+            Ok(Box::new(SinkTransform::create(
+                self.ctx.clone(),
+                plan.table_info.clone(),
+                plan.cast_needed,
+            )))
+        })?;
         Ok(pipeline)
     }
 

@@ -70,10 +70,10 @@ impl Function for ArithmeticFunction {
             return numerical_unary_arithmetic_coercion(&self.op, &args[0]);
         }
 
-        if is_interval(&args[0]) || is_interval(&args[1]) {
+        if args[0].is_interval() || args[1].is_interval() {
             return interval_arithmetic_coercion(&self.op, &args[0], &args[1]);
         }
-        if is_date_or_date_time(&args[0]) || is_date_or_date_time(&args[1]) {
+        if args[0].is_date_or_date_time() || args[1].is_date_or_date_time() {
             return datetime_arithmetic_coercion(&self.op, &args[0], &args[1]);
         }
         numerical_arithmetic_coercion(&self.op, &args[0], &args[1])
@@ -98,7 +98,7 @@ impl Function for ArithmeticFunction {
             }
         };
 
-        let has_date_or_date_time = columns.iter().any(|c| is_date_or_date_time(c.data_type()));
+        let has_date_or_date_time = columns.iter().any(|c| c.data_type().is_date_or_date_time());
 
         if has_date_or_date_time {
             let args = columns

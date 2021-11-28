@@ -27,6 +27,8 @@ lint:
 	cargo clippy --tests -- -D warnings
 	# Python file formatter(make setup to install)
 	yapf -ri tests/
+	# Bash file formatter(make setup to install)
+	shfmt -l -w scripts/*
 
 lint-yaml: $(YAML_FILES)
 	$(YAMLLINT_DOCKER) -f parsable -c $(YAMLLINT_CONFIG) $(YAMLLINT_ARGS) -- $?
@@ -49,14 +51,6 @@ build-native:
 
 build-debug:
 	bash ./scripts/build/build-debug.sh
-
-build-tool:
-	docker build . -t ${HUB}/build-tool:arm-unknown-linux-gnueabi  --file ./docker/build-tool/armv6/Dockerfile
-	docker build . -t ${HUB}/build-tool:aarch64-unknown-linux-gnu  --file ./docker/build-tool/arm64/Dockerfile
-	docker build . -t ${HUB}/build-tool:armv7-unknown-linux-gnueabihf  --file ./docker/build-tool/armv7/Dockerfile
-	docker push ${HUB}/build-tool:arm-unknown-linux-gnueabi
-	docker push ${HUB}/build-tool:aarch64-unknown-linux-gnu
-	docker push ${HUB}/build-tool:armv7-unknown-linux-gnueabihf
 
 cross-compile-debug:
 	cross build --target aarch64-unknown-linux-gnu
@@ -126,17 +120,7 @@ docker:
 	docker build --network host -f docker/Dockerfile -t ${HUB}/databend-query:${TAG} .
 
 k8s-docker:
-#	cargo build --target x86_64-unknown-linux-gnu --release
-#	cross build --target aarch64-unknown-linux-gnu --release
-	mkdir -p ./distro/linux/amd64
-	mkdir -p ./distro/linux/arm64
-	cp ./target/x86_64-unknown-linux-gnu/release/databend-meta ./distro/linux/amd64
-	cp ./target/x86_64-unknown-linux-gnu/release/databend-query ./distro/linux/amd64
-	cp ./target/aarch64-unknown-linux-gnu/release/databend-meta ./distro/linux/arm64
-	cp ./target/aarch64-unknown-linux-gnu/release/databend-query ./distro/linux/arm64
-	mkdir -p ./distro/linux/arm64
-	docker buildx build . -f ./docker/meta/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend-meta:${TAG} --push
-	docker buildx build . -f ./docker/query/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend-query:${TAG} --push
+	bash ./scripts/build/build-k8s-runner.sh
 
 docker_release:
 	docker buildx build . -f ./docker/release/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend:${TAG} --build-arg VERSION=${VERSION}--push
@@ -144,6 +128,9 @@ docker_release:
 # experiment feature: take a look at docker/README.md for detailed multi architecture image build support
 dockerx:
 	docker buildx build . -f ./docker/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend-query:${TAG} --build-arg VERSION=${VERSION} --push
+
+build-tool:
+	bash ./scripts/build/build-tool-runner.sh
 
 build-perf-tool:
 	cargo build --target x86_64-unknown-linux-gnu --bin databend-benchmark

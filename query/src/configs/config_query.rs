@@ -181,11 +181,23 @@ pub struct QueryConfig {
     #[serde(default)]
     pub rpc_tls_query_service_domain_name: String,
 
+    #[structopt(long, env, help = "Table engine csv enabled")]
+    #[serde(default)]
+    pub table_engine_csv_enabled: bool,
+
+    #[structopt(long, env, help = "Table engine parquet enabled")]
+    #[serde(default)]
+    pub table_engine_parquet_enabled: bool,
+
+    #[structopt(long, env, help = "Table engine memory enabled")]
+    #[serde(default)]
+    pub table_engine_memory_enabled: bool,
+
     #[structopt(
-        long,
-        env = QUERY_WAIT_TIMEOUT_MILLS,
-        default_value = "5000"
-        )]
+    long,
+    env = QUERY_WAIT_TIMEOUT_MILLS,
+    default_value = "5000"
+    )]
     #[serde(default)]
     pub wait_timeout_mills: u64,
 }
@@ -213,6 +225,9 @@ impl QueryConfig {
             rpc_tls_server_key: "".to_string(),
             rpc_tls_query_server_root_ca_cert: "".to_string(),
             rpc_tls_query_service_domain_name: "localhost".to_string(),
+            table_engine_csv_enabled: false,
+            table_engine_parquet_enabled: false,
+            table_engine_memory_enabled: true,
             wait_timeout_mills: 5000,
         }
     }
@@ -327,7 +342,6 @@ impl QueryConfig {
             String,
             QUERY_RPC_TLS_SERVICE_DOMAIN_NAME
         );
-
         env_helper!(
             mut_config,
             query,

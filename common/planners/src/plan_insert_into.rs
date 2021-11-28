@@ -15,6 +15,7 @@
 use common_datavalues::DataSchemaRef;
 use common_meta_types::MetaId;
 
+use crate::Expression;
 use crate::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -25,7 +26,8 @@ pub struct InsertIntoPlan {
     pub schema: DataSchemaRef,
 
     pub select_plan: Option<Box<PlanNode>>,
-    pub values_opt: Option<String>,
+    pub value_exprs_opt: Option<Vec<Vec<Expression>>>,
+    pub format: Option<String>,
 }
 
 impl PartialEq for InsertIntoPlan {
@@ -54,7 +56,8 @@ impl InsertIntoPlan {
             tbl_id: table_meta_id,
             schema,
             select_plan: Some(Box::new(select_plan)),
-            values_opt: None,
+            value_exprs_opt: None,
+            format: None,
         }
     }
 
@@ -63,7 +66,7 @@ impl InsertIntoPlan {
         table: String,
         table_meta_id: MetaId,
         schema: DataSchemaRef,
-        values: String,
+        values: Vec<Vec<Expression>>,
     ) -> InsertIntoPlan {
         InsertIntoPlan {
             db_name: db,
@@ -71,7 +74,8 @@ impl InsertIntoPlan {
             tbl_id: table_meta_id,
             schema,
             select_plan: None,
-            values_opt: Some(values),
+            value_exprs_opt: Some(values),
+            format: None,
         }
     }
 
@@ -80,6 +84,7 @@ impl InsertIntoPlan {
         table: String,
         table_meta_id: MetaId,
         schema: DataSchemaRef,
+        format: Option<String>,
     ) -> InsertIntoPlan {
         InsertIntoPlan {
             db_name: db,
@@ -87,7 +92,8 @@ impl InsertIntoPlan {
             tbl_id: table_meta_id,
             schema,
             select_plan: None,
-            values_opt: None,
+            value_exprs_opt: None,
+            format,
         }
     }
 }

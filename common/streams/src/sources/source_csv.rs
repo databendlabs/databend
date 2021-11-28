@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use async_trait::async_trait;
-use common_dal::DataAccessor;
-use common_dal::InputStream;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
@@ -25,25 +21,26 @@ use common_exception::ToErrorCode;
 use csv_async::AsyncReader;
 use csv_async::AsyncReaderBuilder;
 use futures::stream::StreamExt;
+use futures::AsyncRead;
 
 use crate::Source;
 
-pub struct CsvSource {
-    reader: AsyncReader<InputStream>,
+pub struct CsvSource<R> {
+    reader: AsyncReader<R>,
     schema: DataSchemaRef,
     block_size: usize,
     rows: usize,
 }
 
-impl CsvSource {
+impl<R> CsvSource<R>
+where R: AsyncRead + Unpin + Send
+{
     pub fn try_create(
-        data_accessor: Arc<dyn DataAccessor>,
-        path: String,
+        reader: R,
         schema: DataSchemaRef,
         header: bool,
         block_size: usize,
     ) -> Result<Self> {
-        let reader = data_accessor.get_input_stream(&path, None)?;
         let reader = AsyncReaderBuilder::new()
             .has_headers(header)
             .create_reader(reader);
@@ -58,7 +55,9 @@ impl CsvSource {
 }
 
 #[async_trait]
-impl Source for CsvSource {
+impl<R> Source for CsvSource<R>
+where R: AsyncRead + Unpin + Send
+{
     async fn read(&mut self) -> Result<Option<DataBlock>> {
         let mut desers = self
             .schema

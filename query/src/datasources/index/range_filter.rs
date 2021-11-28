@@ -25,7 +25,7 @@ use common_planners::Expression;
 use common_planners::Expressions;
 use common_planners::RewriteHelper;
 
-use crate::datasources::table::fuse::util::BlockStats;
+use crate::datasources::table::fuse::BlockStats;
 use crate::optimizers::RequireColumnsVisitor;
 use crate::pipelines::transforms::ExpressionExecutor;
 

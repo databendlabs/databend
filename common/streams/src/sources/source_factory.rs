@@ -47,9 +47,9 @@ impl SourceFactory {
                     .cloned()
                     .unwrap_or_else(|| "0".to_string());
 
+                let reader = params.acc.get_input_stream(params.path, None)?;
                 Ok(Box::new(CsvSource::try_create(
-                    params.acc,
-                    params.path.to_owned(),
+                    reader,
                     params.schema,
                     has_header.eq_ignore_ascii_case("1"),
                     params.max_block_size,

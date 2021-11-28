@@ -26,9 +26,12 @@ use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 
-use crate::datasources::table::fuse::util;
-use crate::datasources::table::fuse::SegmentInfo;
-use crate::datasources::table::fuse::Stats;
+use crate::datasources::table::fuse::io;
+use crate::datasources::table::fuse::meta::SegmentInfo;
+use crate::datasources::table::fuse::meta::Stats;
+use crate::datasources::table::fuse::statistics;
+use crate::datasources::table::fuse::statistics::BlockMetaAccumulator;
+use crate::datasources::table::fuse::statistics::StatisticsAccumulator;
 
 /// dummy struct, namespace placeholder
 pub struct BlockAppender;
@@ -39,35 +42,44 @@ impl BlockAppender {
         data_accessor: Arc<dyn DataAccessor>,
         mut stream: SendableDataBlockStream,
         data_schema: &DataSchema,
-    ) -> Result<SegmentInfo> {
-        let mut stats_acc = util::StatisticsAccumulator::new();
-        let mut block_meta_acc = util::BlockMetaAccumulator::new();
+    ) -> Result<Option<SegmentInfo>> {
+        let mut stats_acc = StatisticsAccumulator::new();
+        let mut block_meta_acc = BlockMetaAccumulator::new();
 
+        let mut block_nums = 0;
         // accumulate the stats and save the blocks
         while let Some(block) = stream.next().await {
             let block = block?;
-            stats_acc.acc(&block)?;
-            let schema = block.schema().to_arrow();
-            let location = util::gen_unique_block_location();
-            let file_size = Self::save_block(&schema, block, &data_accessor, &location).await?;
-            block_meta_acc.acc(file_size, location, &mut stats_acc);
+            if block.num_rows() != 0 {
+                stats_acc.acc(&block)?;
+                let schema = block.schema().to_arrow();
+                let location = io::gen_block_location();
+                let file_size = Self::save_block(&schema, block, &data_accessor, &location).await?;
+                block_meta_acc.acc(file_size, location, &mut stats_acc);
+                block_nums += 1;
+            }
         }
 
-        // summary and give back a segment_info
-        // we need to send back a stream of segment latter
-        let block_metas = block_meta_acc.blocks_metas;
-        let summary = util::column_stats_reduce_with_schema(&stats_acc.blocks_stats, data_schema)?;
-        let segment_info = SegmentInfo {
-            blocks: block_metas,
-            summary: Stats {
-                row_count: stats_acc.summary_row_count,
-                block_count: stats_acc.summary_block_count,
-                uncompressed_byte_size: stats_acc.in_memory_size,
-                compressed_byte_size: stats_acc.file_size,
-                col_stats: summary,
-            },
+        let segment = if block_nums > 0 {
+            // summary and give back a segment_info
+            // we need to send back a stream of segment latter
+            let block_metas = block_meta_acc.blocks_metas;
+            let summary = statistics::reduce_block_stats(&stats_acc.blocks_stats, data_schema)?;
+            Some(SegmentInfo {
+                blocks: block_metas,
+                summary: Stats {
+                    row_count: stats_acc.summary_row_count,
+                    block_count: stats_acc.summary_block_count,
+                    uncompressed_byte_size: stats_acc.in_memory_size,
+                    compressed_byte_size: stats_acc.file_size,
+                    col_stats: summary,
+                },
+            })
+        } else {
+            None
         };
-        Ok(segment_info)
+
+        Ok(segment)
     }
 
     pub(super) async fn save_block(
@@ -86,7 +98,7 @@ impl BlockAppender {
         let encodings: Vec<_> = arrow_schema
             .fields()
             .iter()
-            .map(|f| util::col_encoding(&f.data_type))
+            .map(|f| io::col_encoding(&f.data_type))
             .collect();
 
         let iter = vec![Ok(batch)];
