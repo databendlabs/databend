@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-
 use super::string2string::String2StringFunction;
 use super::string2string::StringOperator;
 #[derive(Clone, Default)]
