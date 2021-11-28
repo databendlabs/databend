@@ -281,19 +281,30 @@ fn test_arithmetic_series() {
             name: "int_div-passed",
             args: vec![
                 vec![Series::new(vec!["xx"]), Series::new(vec!["yy"])],
+                vec![Series::new(vec![7]), Series::new(vec![0])],
+                vec![Series::new(vec![7.0]), Series::new(vec![0.0])],
+                vec![Series::new(vec![7.0]), Series::new(vec![0.0_f64])],
+                vec![Series::new(vec![7_u8]), Series::new(vec![2_u8])],
                 vec![
                     Series::new(vec![10, 10, 10, 10]),
-                    Series::new(vec![0, 2, 3, 4]),
+                    Series::new(vec![1, 2, 3, 4]),
                 ],
             ],
             op: DataValueArithmeticOperator::IntDiv,
 
             expect: vec![
                 Series::new(vec![""]),
-                Series::new(vec![f64::INFINITY, 5_f64, 3_f64, 2_f64]),
+                Series::new(vec![""]),
+                Series::new(vec![""]),
+                Series::new(vec![""]),
+                Series::new(vec![3_u8]),
+                Series::new(vec![10, 5, 3, 2]),
             ],
             error: vec![
                 "Code: 10, displayText = DataValue Error: Unsupported (String) div (String).",
+                "Code: 6, displayText = Division by zero.",
+                "Code: 6, displayText = Division by zero.",
+                "Code: 6, displayText = Division by zero.",
             ],
         },
     ];
