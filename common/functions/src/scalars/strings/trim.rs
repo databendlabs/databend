@@ -14,31 +14,32 @@
 use super::string2string::String2StringFunction;
 use super::string2string::StringOperator;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct LTrim;
 
 impl StringOperator for LTrim {
-    fn apply(s: &[u8]) -> &[u8] {
+    #[inline]
+    fn apply<'a>(&'a mut self, s: &'a [u8]) -> Option<&'a [u8]> {
         for (idx, ch) in s.iter().enumerate() {
             if *ch != b' ' && *ch != b'\t' {
-                return &s[idx..];
+                return Some(&s[idx..]);
             }
         }
-        b""
+        Some(b"")
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct RTrim;
 
 impl StringOperator for RTrim {
-    fn apply(s: &[u8]) -> &[u8] {
+    fn apply<'a>(&'a mut self, s: &'a [u8]) -> Option<&'a [u8]> {
         for (idx, ch) in s.iter().rev().enumerate() {
             if *ch != b' ' && *ch != b'\t' {
-                return &s[..s.len() - idx];
+                return Some(&s[..s.len() - idx]);
             }
         }
-        b""
+        Some(b"")
     }
 }
 

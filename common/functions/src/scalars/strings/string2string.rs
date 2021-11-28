@@ -22,23 +22,23 @@ use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
-pub trait StringOperator: Send + Sync + Clone + 'static {
-    fn apply(_: &[u8]) -> &[u8];
+pub trait StringOperator: Send + Sync + Clone + Default + 'static {
+    fn apply<'a>(&'a mut self, _: &'a [u8]) -> Option<&'a [u8]>;
 }
 
 /// A common function template that transform string column into string column
 /// Eg: trim, lower, upper, etc.
 #[derive(Clone)]
 pub struct String2StringFunction<T> {
-    _display_name: String,
-    _mark: PhantomData<T>,
+    display_name: String,
+    _marker: PhantomData<T>,
 }
 
 impl<T: StringOperator> String2StringFunction<T> {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(Self {
-            _display_name: display_name.to_string(),
-            _mark: PhantomData,
+            display_name: display_name.to_string(),
+            _marker: PhantomData,
         }))
     }
 
@@ -50,7 +50,7 @@ impl<T: StringOperator> String2StringFunction<T> {
 
 impl<T: StringOperator> Function for String2StringFunction<T> {
     fn name(&self) -> &str {
-        &self._display_name
+        &self.display_name
     }
 
     fn num_arguments(&self) -> usize {
@@ -73,6 +73,7 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
+        let mut op = T::default();
         let column: DataColumn = columns[0]
             .column()
             .cast_with_type(&DataType::String)?
@@ -82,7 +83,7 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
             .fold(
                 StringArrayBuilder::with_capacity(columns[0].column().len()),
                 |mut builder, s| {
-                    builder.append_option(s.map(T::apply));
+                    builder.append_option(s.and_then(|values| op.apply(values)));
                     builder
                 },
             )
@@ -94,6 +95,6 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
 
 impl<F> fmt::Display for String2StringFunction<F> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(&self._display_name)
+        f.write_str(&self.display_name)
     }
 }

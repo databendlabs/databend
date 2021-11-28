@@ -22,6 +22,7 @@ use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
+/// we can change this into the style of String2StringFunction in the future
 pub trait NumberResultFunction<R> {
     const IS_DETERMINISTIC: bool;
     const MAYBE_MONOTONIC: bool;

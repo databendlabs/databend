@@ -12,100 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
 
-use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
-use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
-use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
-
-#[derive(Clone)]
-pub struct QuoteFunction {
-    _display_name: String,
+use super::string2string::String2StringFunction;
+use super::string2string::StringOperator;
+#[derive(Clone, Default)]
+pub struct Quote {
+    buffer: Vec<u8>,
 }
 
-impl QuoteFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(QuoteFunction {
-            _display_name: display_name.to_string(),
-        }))
-    }
+impl StringOperator for Quote {
+    #[inline]
+    fn apply<'a>(&'a mut self, value: &'a [u8]) -> Option<&'a [u8]> {
+        self.buffer.clear();
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
-    }
-}
-
-impl Function for QuoteFunction {
-    fn name(&self) -> &str {
-        "quote"
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
-    }
-
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if args[0] != DataType::String && args[0] != DataType::Null {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected string or null, but got {}",
-                args[0]
-            )));
-        }
-
-        Ok(DataType::String)
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
-    }
-
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        let mut string_array = StringArrayBuilder::with_capacity(columns[0].column().len());
-        let mut buffer = Vec::new();
-
-        for value in columns[0]
-            .column()
-            .cast_with_type(&DataType::String)?
-            .to_minimal_array()?
-            .string()?
-        {
-            match value {
-                Some(value) => string_array.append_value(quote_string(value, &mut buffer)),
-                None => string_array.append_null(),
+        for ch in value {
+            match *ch {
+                0 => self.buffer.extend_from_slice(&[b'\\', b'0']),
+                b'\'' => self.buffer.extend_from_slice(&[b'\\', b'\'']),
+                b'\"' => self.buffer.extend_from_slice(&[b'\\', b'\"']),
+                8 => self.buffer.extend_from_slice(&[b'\\', b'b']),
+                b'\n' => self.buffer.extend_from_slice(&[b'\\', b'n']),
+                b'\r' => self.buffer.extend_from_slice(&[b'\\', b'r']),
+                b'\t' => self.buffer.extend_from_slice(&[b'\\', b't']),
+                b'\\' => self.buffer.extend_from_slice(&[b'\\', b'\\']),
+                _ => self.buffer.push(*ch),
             }
         }
 
-        Ok(string_array.finish().into())
+        Some(&self.buffer[..self.buffer.len()])
     }
 }
 
-impl fmt::Display for QuoteFunction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "QUOTE")
-    }
-}
-
-fn quote_string<'a>(value: &[u8], buffer: &'a mut Vec<u8>) -> &'a [u8] {
-    buffer.clear();
-
-    for ch in value {
-        match *ch {
-            0 => buffer.extend_from_slice(&[b'\\', b'0']),
-            b'\'' => buffer.extend_from_slice(&[b'\\', b'\'']),
-            b'\"' => buffer.extend_from_slice(&[b'\\', b'\"']),
-            8 => buffer.extend_from_slice(&[b'\\', b'b']),
-            b'\n' => buffer.extend_from_slice(&[b'\\', b'n']),
-            b'\r' => buffer.extend_from_slice(&[b'\\', b'r']),
-            b'\t' => buffer.extend_from_slice(&[b'\\', b't']),
-            b'\\' => buffer.extend_from_slice(&[b'\\', b'\\']),
-            _ => buffer.push(*ch),
-        }
-    }
-
-    &buffer[..buffer.len()]
-}
+pub type QuoteFunction = String2StringFunction<Quote>;
