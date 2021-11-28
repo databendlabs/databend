@@ -78,7 +78,7 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
 ####  Logical datatypes and physical datatypes.
 
 Logical datatypes are the datatypes that we use in Databend, and physical datatypes are the datatypes that we use in the execution/compute engine.
-Such as `Date32`, it's a logical data type, but its physical is `UInt32`, so its column is represented by `DFUInt32Array`.
+Such as `Date32`, it's a logical data type, but its physical is `Int32`, so its column is represented by `DFInt32Array`.
 
 We can get logical datatype by `data_type` function of `DataField` , and the physical datatype by `data_type` function in `DataColumn`.
 `DataColumnsWithField` has `data_type` function which returns the logical datatype.
