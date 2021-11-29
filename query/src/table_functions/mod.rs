@@ -25,4 +25,5 @@ mod table_function_factory;
 
 pub use memory_block_part::generate_block_parts;
 pub use numbers_table::NumbersTable;
+pub use table_function_factory::TableArgs;
 pub use table_function_factory::TableFunctionFactory;

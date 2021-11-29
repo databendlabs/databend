@@ -20,20 +20,13 @@ mod database_engine_registry;
 mod index;
 mod table_engine;
 mod table_engine_registry;
-mod table_func_engine_registry;
 
 pub(crate) mod common;
 pub(crate) mod context;
 pub(crate) mod database;
 pub(crate) mod table;
-pub(crate) mod table_func;
-pub(crate) mod table_func_engine;
 
 pub use database_engine::DatabaseEngine;
 pub use database_engine_registry::DatabaseEngineRegistry;
 pub use table_engine::TableEngine;
 pub use table_engine_registry::TableEngineRegistry;
-pub use table_func::prelude::prelude_func_engines;
-pub use table_func_engine::TableArgs;
-pub use table_func_engine::TableFuncEngine;
-pub use table_func_engine_registry::TableFuncEngineRegistry;

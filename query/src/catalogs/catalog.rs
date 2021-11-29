@@ -30,7 +30,7 @@ use dyn_clone::DynClone;
 use crate::catalogs::Database;
 use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
-use crate::datasources::table_func_engine::TableArgs;
+use crate::table_functions::TableArgs;
 
 /// Catalog is the global view of all the databases of the user.
 /// The global view has many engine type: Local-Database(engine=Local), Remote-Database(engine=Remote)

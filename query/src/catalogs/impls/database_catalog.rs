@@ -34,7 +34,7 @@ use crate::catalogs::Database;
 use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
 use crate::configs::Config;
-use crate::datasources::TableArgs;
+use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunctionFactory;
 
 /// Combine two catalogs together
