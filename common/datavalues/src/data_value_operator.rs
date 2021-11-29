@@ -68,6 +68,7 @@ pub enum DataValueArithmeticOperator {
     Minus,
     Mul,
     Div,
+    IntDiv,
     Modulo,
 }
 
@@ -78,6 +79,7 @@ impl std::fmt::Display for DataValueArithmeticOperator {
             DataValueArithmeticOperator::Minus => "minus",
             DataValueArithmeticOperator::Mul => "multiply",
             DataValueArithmeticOperator::Div => "divide",
+            DataValueArithmeticOperator::IntDiv => "div",
             DataValueArithmeticOperator::Modulo => "modulo",
         };
         write!(f, "{}", display)
@@ -100,4 +102,11 @@ impl std::fmt::Display for DataValueLogicOperator {
         };
         write!(f, "{}", display)
     }
+}
+
+pub trait IntDiv<Rhs = Self> {
+    type Output;
+
+    #[must_use]
+    fn int_div(self, rhs: Rhs) -> Self::Output;
 }

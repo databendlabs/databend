@@ -1,3 +1,13 @@
 SELECT 1 + 1 as a, 1 - 1, 1 * 1, 1 / 2;
 SELECT -1, +1;
+SELECT 8 / 2;
+SELECT 20 DIV 1;
+SELECT 20 DIV 2;
+SELECT 20 DIV 3;
+SELECT 20 DIV 4;
+SELECT 20 DIV 5;
+SELECT 20 DIV 6;
+SELECT 20 DIV 7;
+SELECT 20 DIV 8;
+SELECT 20 DIV 9;
 SELECT toTypeName(-toUInt32(1)), toTypeName(-toUInt64(1)), toTypeName(-toInt32(1)), toTypeName(-toFloat32(1)), toTypeName(+toUInt8(1));
