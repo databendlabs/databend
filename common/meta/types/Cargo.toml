@@ -15,11 +15,11 @@ common-datavalues = {path = "../../datavalues"}
 common-exception = {path = "../../exception"}
 
 async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.14.1" }
-derive_more = "0.99.16"
-enumflags2 = {version = "0.7.1", features = ["serde"] }
+derive_more = "0.99.17"
+enumflags2 = { version = "0.7.1", features = ["serde"] }
 maplit = "1.0.2"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde = { version = "1.0.130", features = ["derive"] }
+serde_json = "1.0.72"
 
 [dev-dependencies]
-pretty_assertions = "1.0"
+pretty_assertions = "1.0.0"

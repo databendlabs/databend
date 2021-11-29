@@ -19,6 +19,6 @@ common-tracing = { path = "../tracing" }
 # Crates.io dependencies
 lazy_static = "1.4.0"
 metrics = "0.17.0"
-metrics-exporter-prometheus = "0.6.0"
+metrics-exporter-prometheus = "0.6.1"
 prometheus-parse = "0.2.2"
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0.130", features = ["derive"] }

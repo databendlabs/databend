@@ -23,7 +23,6 @@ simd = ["common-arrow/simd"]
 # Workspace dependencies
 common-arrow = { path = "../common/arrow" }
 common-base = { path = "../common/base" }
-common-cache = { path = "../common/cache" }
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }
 common-dal = { path = "../common/dal" }
 common-datablocks = { path = "../common/datablocks" }
@@ -54,60 +53,58 @@ sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "18
 # Crates.io dependencies
 ahash = "0.7.6"
 async-compat = "0.2.1"
-async-trait = "0.1"
+async-trait = "0.1.51"
 async-stream = "0.3.2"
-poem = { version = "1.0.30", features = ["rustls", "multipart"] }
+poem = { version = "1.0.32", features = ["rustls", "multipart"] }
 bumpalo = "3.8.0"
-byteorder = "1"
-bytes = "1"
+byteorder = "1.4.3"
+bytes = "1.1.0"
 cargo-license = "0.4.2"
 cargo_metadata = "0.14.1"
-chrono = "0.4.0"
-chrono-tz = "0.6"
-crossbeam = "0.8"
+chrono = "0.4.19"
+chrono-tz = "0.6.0"
+crossbeam = "0.8.1"
 crossbeam-queue = "0.3.2"
-ctrlc = { version = "3.1.9", features = ["termination"] }
+ctrlc = { version = "3.2.1", features = ["termination"] }
 dyn-clone = "1.0.4"
-env_logger = "0.9"
-futures = "0.3"
-headers = "0.3.4"
-hyper = "0.14.14"
+env_logger = "0.9.0"
+futures = "0.3.18"
+headers = "0.3.5"
+hyper = "0.14.15"
 indexmap = "1.7.0"
 lazy_static = "1.4.0"
-log = "0.4"
+log = "0.4.14"
 metrics = "0.17.0"
 nom = "7.1.0"
-num = "0.4"
-num_cpus = "1.0"
-octocrab = "0.15"
-paste = "^1.0"
+num = "0.4.0"
+num_cpus = "1.13.0"
+octocrab = "0.15.1"
+paste = "1.0.6"
 prost = "0.9.0"
 quantiles = "0.7.1"
 rand = "0.8.4"
-reqwest = { version = "0.11" }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+reqwest = "0.11.6"
+serde = { version = "1.0.130", features = ["derive"] }
+serde_json = "1.0.72"
 sha1 = "0.6.0"
 sha2 = "0.9.8"
-structopt = "0.3"
+structopt = "0.3.25"
 structopt-toml = "0.5.0"
 threadpool = "1.8.1"
-tokio-rustls = "0.22.0"
-tokio-stream = { version = "0.1", features = ["net"] }
+tokio-rustls = "0.23.1"
+tokio-stream = { version = "0.1.8", features = ["net"] }
 toml = "0.5.8"
-tonic = "0.6.0"
-uuid = { version = "0.8", features = ["serde", "v4"] }
+tonic = "0.6.1"
+uuid = { version = "0.8.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
-
-[dependencies.parquet-format-async-temp]
-version = "0.2.0"
+parquet-format-async-temp= "0.2.0"
 
 [dev-dependencies]
-criterion = "0.3"
-flaky_test = "0.1"
-mysql = "21.0.1"
-pretty_assertions = "1.0"
-reqwest = { version = "0.11", features = ["json", "native-tls"] }
+criterion = "0.3.5"
+flaky_test = "0.1.0"
+mysql = "21.0.2"
+pretty_assertions = "1.0.0"
+reqwest = { version = "0.11.6", features = ["json", "native-tls"] }
 tempfile = "3.2.0"
 
 [build-dependencies]
