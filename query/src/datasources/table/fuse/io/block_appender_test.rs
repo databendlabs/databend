@@ -82,8 +82,10 @@ async fn test_fuse_table_block_appender() {
 }
 
 #[test]
-fn test_fuse_table_block_appender_reshape() {
+fn test_fuse_table_block_appender_reshape() -> common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
+    let sample_block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
+    let sample_block_size = sample_block.memory_size();
 
     // 1 empty blocks
     // 1.1 empty block, zero block_size_threshold
@@ -101,35 +103,46 @@ fn test_fuse_table_block_appender_reshape() {
     assert_eq!(r.len(), 0);
 
     // 2. merge
-    // 2.1 exactly into on block
-    {
-        let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
-        let block_size = block.memory_size();
-        let block_num = 10;
-        let blocks = std::iter::repeat(block).take(block_num);
-        let block_size_threshold = block_size * block_num;
-        let r = BlockAppender::reshape_blocks(blocks.collect(), block_size_threshold);
-        assert!(r.is_ok(), "oops, unexpected result: {:?}", r);
-        let r = r.unwrap();
-        assert_eq!(r.len(), 1);
-        assert_eq!(r[0].memory_size(), block_size_threshold);
-    }
+    // 2.1 several blocks into exactly one block
+    let block_num = 10;
+    let (blocks, block_size_threshold) = gen_blocks(&sample_block, block_num);
+    let r = BlockAppender::reshape_blocks(blocks.collect(), block_size_threshold)?;
+    assert_eq!(r.len(), 1);
+    assert_eq!(r[0].memory_size(), block_size_threshold);
 
     // 2.1 with remainders
-    {
-        let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
-        let block_size = block.memory_size();
-        let block_num = 10;
-        let blocks = std::iter::repeat(block.clone()).take(block_num);
-        let block_size_threshold = block_size * block_num;
+    // 2.1.1 reminders at tail
+    let block_num = 10;
+    let (blocks, block_size_threshold) = gen_blocks(&sample_block, block_num);
+    // push back an extra block
+    let blocks = blocks.chain(std::iter::once(sample_block.clone()));
+    let r = BlockAppender::reshape_blocks(blocks.collect(), block_size_threshold)?;
+    assert_eq!(r.len(), 2);
+    assert_eq!(r[0].memory_size(), block_size_threshold);
+    assert_eq!(r[1].memory_size(), sample_block_size);
 
-        // append an extra block
-        let blocks = blocks.chain(std::iter::once(block));
-        let r = BlockAppender::reshape_blocks(blocks.collect(), block_size_threshold);
-        assert!(r.is_ok(), "oops, unexpected result: {:?}", r);
-        let r = r.unwrap();
-        assert_eq!(r.len(), 2);
-        assert_eq!(r[0].memory_size(), block_size_threshold);
-        assert_eq!(r[1].memory_size(), block_size);
-    }
+    // 2.1.2 large blocks will not be split
+    let block_num = 10;
+    let (blocks, block_size_threshold) = gen_blocks(&sample_block, block_num);
+
+    // push front a large block
+    let (tmp_blocks, tmp_block_size_threshold) = gen_blocks(&sample_block, block_num * 2);
+    assert!(tmp_block_size_threshold > block_size_threshold);
+    let large_block = DataBlock::concat_blocks(&tmp_blocks.collect::<Vec<_>>())?;
+    let large_block_size = large_block.memory_size();
+    let blocks = std::iter::once(large_block).chain(blocks);
+
+    let r = BlockAppender::reshape_blocks(blocks.collect(), block_size_threshold)?;
+    assert_eq!(r.len(), 2);
+    assert_eq!(r[0].memory_size(), large_block_size);
+    assert_eq!(r[1].memory_size(), block_size_threshold);
+    Ok(())
+}
+
+fn gen_blocks(sample_block: &DataBlock, num: usize) -> (impl Iterator<Item = DataBlock>, usize) {
+    let block_size = sample_block.memory_size();
+    let block = sample_block.clone();
+    let blocks = std::iter::repeat(block).take(num);
+    let ideal_threshold = block_size * num;
+    (blocks, ideal_threshold)
 }
