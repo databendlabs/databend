@@ -14,6 +14,8 @@
 
 use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::AsciiFunction;
+use crate::scalars::Base64DecodeFunction;
+use crate::scalars::Base64EncodeFunction;
 use crate::scalars::HexFunction;
 use crate::scalars::LTrimFunction;
 use crate::scalars::OctFunction;
@@ -37,5 +39,7 @@ impl StringFunction {
         factory.register("unhex", UnhexFunction::desc());
         factory.register("quote", QuoteFunction::desc());
         factory.register("ascii", AsciiFunction::desc());
+        factory.register("to_base64", Base64EncodeFunction::desc());
+        factory.register("from_base64", Base64DecodeFunction::desc());
     }
 }

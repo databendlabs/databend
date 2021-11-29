@@ -223,6 +223,8 @@ nav:
               - RAND: sqlstatement/numeric-functions/rand.md
           - String Functions:
               - SUBSTRING: sqlstatement/string-functions/substring.md
+              - TO_BASE64: sqlstatement/string-functions/to_base64.md
+              - FROM_BASE64: sqlstatement/string-functions/from_base64.md
           - Test Functions:
               - SLEEP: sqlstatement/test-functions/sleep.md
               - CRASHME: sqlstatement/test-functions/crashme.md
