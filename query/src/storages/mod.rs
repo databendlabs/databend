@@ -15,5 +15,8 @@
 mod context;
 mod csv;
 mod memory;
+mod storage_factory;
 
 pub use context::StorageContext;
+pub use storage_factory::StorageEngine;
+pub use storage_factory::StorageEngineFactory;

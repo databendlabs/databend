@@ -33,19 +33,16 @@ async fn test_memorytable() -> Result<()> {
         DataField::new("a", DataType::UInt64, false),
         DataField::new("b", DataType::UInt64, false),
     ]);
-    let table = MemoryTable::try_create(
-        TableInfo {
-            desc: "'default'.'a'".into(),
-            name: "a".into(),
-            ident: Default::default(),
-            meta: TableMeta {
-                schema: schema.clone(),
-                engine: "Memory".to_string(),
-                options: TableOptions::default(),
-            },
+    let table = MemoryTable::try_create(crate::tests::try_create_storage_context()?, TableInfo {
+        desc: "'default'.'a'".into(),
+        name: "a".into(),
+        ident: Default::default(),
+        meta: TableMeta {
+            schema: schema.clone(),
+            engine: "Memory".to_string(),
+            options: TableOptions::default(),
         },
-        crate::tests::try_create_datasource_context()?,
-    )?;
+    })?;
 
     // append data.
     {
