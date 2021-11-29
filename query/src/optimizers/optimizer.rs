@@ -22,7 +22,6 @@ use metrics::histogram;
 use crate::optimizers::optimizer_scatters::ScattersOptimizer;
 use crate::optimizers::ConstantFoldingOptimizer;
 use crate::optimizers::ExprTransformOptimizer;
-use crate::optimizers::ProjectionPushDownOptimizer;
 use crate::optimizers::StatisticsExactOptimizer;
 use crate::optimizers::TopNPushDownOptimizer;
 use crate::sessions::QueryContext;
@@ -50,7 +49,6 @@ impl Optimizers {
             inner: vec![
                 Box::new(ConstantFoldingOptimizer::create(ctx.clone())),
                 Box::new(ExprTransformOptimizer::create(ctx.clone())),
-                Box::new(ProjectionPushDownOptimizer::create(ctx.clone())),
                 Box::new(TopNPushDownOptimizer::create(ctx.clone())),
                 Box::new(StatisticsExactOptimizer::create(ctx)),
             ],

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::fmt;
 
-use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::cmp::Ordering;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;

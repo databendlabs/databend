@@ -13,43 +13,93 @@
 // limitations under the License.
 
 use std::alloc::Layout;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 #[thread_local]
-static mut TRACKER: *const ThreadTracker = std::ptr::null();
+static mut TRACKER: *mut ThreadTracker = std::ptr::null_mut();
+
+static UNTRACKED_MEMORY_LIMIT: i64 = 4 * 1024 * 1024;
 
 pub struct ThreadTracker {
     rt_tracker: Arc<RuntimeTracker>,
+    untracked_memory: i64,
 }
 
 impl ThreadTracker {
     pub fn create(rt_tracker: Arc<RuntimeTracker>) -> *mut ThreadTracker {
-        Box::into_raw(Box::new(ThreadTracker { rt_tracker }))
+        unsafe {
+            TRACKER = Box::into_raw(Box::new(ThreadTracker {
+                rt_tracker,
+                untracked_memory: 0,
+            }));
+
+            TRACKER
+        }
     }
 
     #[inline]
-    pub fn current() -> *const ThreadTracker {
+    pub fn current() -> *mut ThreadTracker {
         unsafe { TRACKER }
     }
 
     #[inline]
-    #[allow(clippy::not_unsafe_ptr_arg_deref)]
-    pub fn set_current(value: *const ThreadTracker) {
-        unsafe { TRACKER = value }
+    pub fn current_runtime_tracker() -> Option<Arc<RuntimeTracker>> {
+        unsafe {
+            match TRACKER.is_null() {
+                true => None,
+                false => Some((*TRACKER).rt_tracker.clone()),
+            }
+        }
     }
 
     #[inline]
-    #[allow(clippy::not_unsafe_ptr_arg_deref)]
-    pub fn get_memory_tracker(pointer: *const Self) -> Arc<MemoryTracker> {
-        debug_assert!(!pointer.is_null());
-        unsafe { (*pointer).rt_tracker.get_memory_tracker() }
+    pub fn alloc_memory(size: i64) {
+        unsafe {
+            if !TRACKER.is_null() {
+                (*TRACKER).untracked_memory += size;
+
+                if (*TRACKER).untracked_memory > UNTRACKED_MEMORY_LIMIT {
+                    (*TRACKER)
+                        .rt_tracker
+                        .memory_tracker
+                        .alloc_memory((*TRACKER).untracked_memory);
+                    (*TRACKER).untracked_memory = 0;
+                }
+            }
+        }
+    }
+
+    #[inline]
+    pub fn dealloc_memory(size: i64) {
+        unsafe {
+            if !TRACKER.is_null() {
+                (*TRACKER).untracked_memory -= size;
+
+                if (*TRACKER).untracked_memory < -UNTRACKED_MEMORY_LIMIT {
+                    (*TRACKER)
+                        .rt_tracker
+                        .memory_tracker
+                        .dealloc_memory(-(*TRACKER).untracked_memory);
+                    (*TRACKER).untracked_memory = 0;
+                }
+            }
+        }
+    }
+
+    #[inline]
+    pub fn realloc_memory(old_size: i64, new_size: i64) {
+        let addition = new_size - old_size;
+        match addition > 0 {
+            true => Self::alloc_memory(addition),
+            false => Self::dealloc_memory(-addition),
+        }
     }
 }
 
 pub struct MemoryTracker {
-    memory_usage: AtomicUsize,
+    memory_usage: AtomicI64,
     parent_memory_tracker: Option<Arc<MemoryTracker>>,
 }
 
@@ -57,12 +107,12 @@ impl MemoryTracker {
     pub fn create(parent_memory_tracker: Option<Arc<MemoryTracker>>) -> Arc<MemoryTracker> {
         Arc::new(MemoryTracker {
             parent_memory_tracker,
-            memory_usage: AtomicUsize::new(0),
+            memory_usage: AtomicI64::new(0),
         })
     }
 
     #[inline]
-    pub fn alloc_memory(&self, size: usize) {
+    pub fn alloc_memory(&self, size: i64) {
         self.memory_usage.fetch_add(size, Ordering::Relaxed);
 
         if let Some(parent_memory_tracker) = &self.parent_memory_tracker {
@@ -71,7 +121,7 @@ impl MemoryTracker {
     }
 
     #[inline]
-    pub fn dealloc_memory(&self, size: usize) {
+    pub fn dealloc_memory(&self, size: i64) {
         self.memory_usage.fetch_sub(size, Ordering::Relaxed);
 
         if let Some(parent_memory_tracker) = &self.parent_memory_tracker {
@@ -80,24 +130,18 @@ impl MemoryTracker {
     }
 
     #[inline]
-    pub fn realloc_memory(&self, old_size: usize, new_size: usize) {
-        self.memory_usage.fetch_sub(old_size, Ordering::Relaxed);
-        self.memory_usage.fetch_add(new_size, Ordering::Relaxed);
-
-        if let Some(parent_memory_tracker) = &self.parent_memory_tracker {
-            parent_memory_tracker.realloc_memory(old_size, new_size);
-        }
-    }
-
     pub fn current() -> Option<Arc<MemoryTracker>> {
-        let thread_trckcer = ThreadTracker::current();
-        match thread_trckcer.is_null() {
-            true => None,
-            false => Some(ThreadTracker::get_memory_tracker(thread_trckcer)),
+        unsafe {
+            let thread_tracker = ThreadTracker::current();
+            match thread_tracker.is_null() {
+                true => None,
+                false => Some((*thread_tracker).rt_tracker.memory_tracker.clone()),
+            }
         }
     }
 
-    pub fn get_memory_usage(&self) -> usize {
+    #[inline]
+    pub fn get_memory_usage(&self) -> i64 {
         self.memory_usage.load(Ordering::Relaxed)
     }
 }
@@ -114,13 +158,14 @@ impl RuntimeTracker {
         })
     }
 
-    pub fn get_memory_tracker(&self) -> Arc<MemoryTracker> {
-        self.memory_tracker.clone()
+    #[inline]
+    pub fn get_memory_tracker(&self) -> &MemoryTracker {
+        &self.memory_tracker
     }
 
     pub fn on_stop_thread(self: &Arc<Self>) -> impl Fn() {
         move || unsafe {
-            let tracker = std::mem::replace(&mut TRACKER, std::ptr::null());
+            let tracker = std::mem::replace(&mut TRACKER, std::ptr::null_mut());
 
             std::ptr::drop_in_place(tracker as usize as *mut ThreadTracker);
             std::alloc::dealloc(tracker as *mut u8, Layout::new::<ThreadTracker>());
@@ -132,8 +177,7 @@ impl RuntimeTracker {
         let rt_tracker = self.clone();
 
         move || {
-            let thread_tracker = ThreadTracker::create(rt_tracker.clone());
-            ThreadTracker::set_current(thread_tracker);
+            ThreadTracker::create(rt_tracker.clone());
         }
     }
 }

@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::CopyPlan;
 use common_streams::DataBlockStream;
+use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 use common_streams::SourceFactory;
 use common_streams::SourceParams;
@@ -81,9 +82,13 @@ impl Interpreter for CopyInterpreter {
         };
         let source_stream = SourceStream::new(SourceFactory::try_get(source_params)?);
         let input_stream = source_stream.execute().await?;
+        let progress_stream = Box::pin(ProgressStream::try_create(
+            input_stream,
+            self.ctx.progress_callback()?,
+        )?);
 
         let r = table
-            .append_data(self.ctx.clone(), input_stream)
+            .append_data(self.ctx.clone(), progress_stream)
             .await?
             .try_collect()
             .await?;

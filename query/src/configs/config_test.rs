@@ -57,6 +57,9 @@ rpc_tls_server_cert = \"\"
 rpc_tls_server_key = \"\"
 rpc_tls_query_server_root_ca_cert = \"\"
 rpc_tls_query_service_domain_name = \"localhost\"
+table_engine_csv_enabled = false
+table_engine_parquet_enabled = false
+table_engine_memory_enabled = true
 wait_timeout_mills = 5000
 
 [log]
@@ -118,6 +121,9 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("S3_STORAGE_ACCESS_KEY_ID", "us.key.id");
     std::env::set_var("S3_STORAGE_SECRET_ACCESS_KEY", "us.key");
     std::env::set_var("S3_STORAGE_BUCKET", "us.bucket");
+    std::env::set_var("TABLE_ENGINE_CSV_ENABLED", "true");
+    std::env::set_var("TABLE_ENGINE_PARQUET_ENABLED", "true");
+    std::env::set_var("TABLE_ENGINE_MEMORY_ENABLED", "true");
     std::env::remove_var("CONFIG_FILE");
 
     let default = Config::default();
@@ -146,6 +152,10 @@ fn test_env_config() -> Result<()> {
     assert_eq!("us.key", configured.storage.s3.secret_access_key);
     assert_eq!("us.bucket", configured.storage.s3.bucket);
 
+    assert!(!configured.query.table_engine_csv_enabled);
+    assert!(!configured.query.table_engine_parquet_enabled);
+    assert!(configured.query.table_engine_memory_enabled);
+
     // clean up
     std::env::remove_var("LOG_LEVEL");
     std::env::remove_var("QUERY_TENANT_ID");
@@ -165,6 +175,9 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("S3_STORAGE_ACCESS_KEY_ID");
     std::env::remove_var("S3_STORAGE_SECRET_ACCESS_KEY");
     std::env::remove_var("S3_STORAGE_BUCKET");
+    std::env::remove_var("TABLE_ENGINE_CSV_ENABLED");
+    std::env::remove_var("TABLE_ENGINE_PARQUET_ENABLED");
+    std::env::remove_var("TABLE_ENGINE_MEMORY_ENABLED");
     Ok(())
 }
 

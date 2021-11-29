@@ -13,9 +13,15 @@
 // limitations under the License.
 
 use crate::scalars::function_factory::FunctionFactory;
-use crate::scalars::strings::repeat::RepeatFunction;
+use crate::scalars::AsciiFunction;
+use crate::scalars::HexFunction;
+use crate::scalars::LTrimFunction;
 use crate::scalars::OctFunction;
+use crate::scalars::QuoteFunction;
+use crate::scalars::RTrimFunction;
+use crate::scalars::RepeatFunction;
 use crate::scalars::SubstringFunction;
+use crate::scalars::UnhexFunction;
 
 #[derive(Clone)]
 pub struct StringFunction;
@@ -25,5 +31,11 @@ impl StringFunction {
         factory.register("substring", SubstringFunction::desc());
         factory.register("oct", OctFunction::desc());
         factory.register("repeat", RepeatFunction::desc());
+        factory.register("ltrim", LTrimFunction::desc());
+        factory.register("rtrim", RTrimFunction::desc());
+        factory.register("hex", HexFunction::desc());
+        factory.register("unhex", UnhexFunction::desc());
+        factory.register("quote", QuoteFunction::desc());
+        factory.register("ascii", AsciiFunction::desc());
     }
 }

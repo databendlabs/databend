@@ -30,6 +30,7 @@ use common_planners::SelectPlan;
 use common_planners::SinkPlan;
 use common_planners::StagePlan;
 use common_streams::DataBlockStream;
+use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
 
@@ -91,7 +92,13 @@ impl Interpreter for InsertIntoInterpreter {
                     .take()
                     .ok_or_else(|| ErrorCode::EmptyData("input stream not exist or consumed"))
             }?;
-            table.append_data(self.ctx.clone(), input_stream).await?
+
+            let progress_stream = Box::pin(ProgressStream::try_create(
+                input_stream,
+                self.ctx.progress_callback()?,
+            )?);
+
+            table.append_data(self.ctx.clone(), progress_stream).await?
         };
 
         // feed back the append operation logs to table

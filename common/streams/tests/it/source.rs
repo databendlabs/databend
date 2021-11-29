@@ -14,9 +14,9 @@
 
 use std::fs::File;
 use std::io::Write;
-use std::sync::Arc;
 
 use common_base::tokio;
+use common_dal::DataAccessor;
 use common_dal::Local;
 use common_datablocks::assert_blocks_eq;
 use common_datavalues::DataField;
@@ -71,8 +71,8 @@ async fn test_parse_csvs() {
     ]);
 
     let local = Local::with_path(dir.path().to_path_buf());
-    let mut csv_source =
-        CsvSource::try_create(Arc::new(local), name.to_string(), schema, false, 10).unwrap();
+    let stream = local.get_input_stream(name, None).unwrap();
+    let mut csv_source = CsvSource::try_create(stream, schema, false, 10).unwrap();
     let block = csv_source.read().await.unwrap().unwrap();
     assert_blocks_eq(
         vec![

@@ -27,6 +27,7 @@ pub struct InsertIntoPlan {
 
     pub select_plan: Option<Box<PlanNode>>,
     pub value_exprs_opt: Option<Vec<Vec<Expression>>>,
+    pub format: Option<String>,
 }
 
 impl PartialEq for InsertIntoPlan {
@@ -56,6 +57,7 @@ impl InsertIntoPlan {
             schema,
             select_plan: Some(Box::new(select_plan)),
             value_exprs_opt: None,
+            format: None,
         }
     }
 
@@ -73,6 +75,7 @@ impl InsertIntoPlan {
             schema,
             select_plan: None,
             value_exprs_opt: Some(values),
+            format: None,
         }
     }
 
@@ -81,6 +84,7 @@ impl InsertIntoPlan {
         table: String,
         table_meta_id: MetaId,
         schema: DataSchemaRef,
+        format: Option<String>,
     ) -> InsertIntoPlan {
         InsertIntoPlan {
             db_name: db,
@@ -89,6 +93,7 @@ impl InsertIntoPlan {
             schema,
             select_plan: None,
             value_exprs_opt: None,
+            format,
         }
     }
 }
