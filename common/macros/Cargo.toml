@@ -15,4 +15,3 @@ quote = "1"
 proc-macro2 = "1"
 syn = { version = "1", features = ["full"] }
 synstructure = "0.12"
-common-base = { path = "../base" }

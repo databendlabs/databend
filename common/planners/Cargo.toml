@@ -13,7 +13,6 @@ test = false
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-datavalues = {path = "../datavalues"}
-common-streams = {path = "../streams"}
 common-functions = {path = "../functions"}
 common-exception = {path = "../exception"}
 common-datablocks = {path = "../datablocks"}

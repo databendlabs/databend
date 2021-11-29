@@ -23,7 +23,6 @@ databend-query = {path = "../query"}
 common-base = {path = "../common/base" }
 common-datavalues = { path = "../common/datavalues" }
 itertools = "0.10.1"
-shellwords = "1.1.0"
 databend-meta = {path = "../metasrv" }
 common-meta-raft-store= {path = "../common/meta/raft-store"}
 colored = "2.0.0"

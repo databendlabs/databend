@@ -23,7 +23,6 @@ simd = ["common-arrow/simd"]
 # Workspace dependencies
 common-arrow = { path = "../common/arrow" }
 common-base = { path = "../common/base" }
-common-cache = { path = "../common/cache" }
 common-clickhouse-srv = { path = "../common/clickhouse-srv" }
 common-dal = { path = "../common/dal" }
 common-datablocks = { path = "../common/datablocks" }

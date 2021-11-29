@@ -563,7 +563,6 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "sha2",
- "shellwords",
  "structopt",
  "structopt-toml",
  "sysinfo 0.21.1",
@@ -1332,7 +1331,6 @@ dependencies = [
 name = "common-macros"
 version = "0.1.0"
 dependencies = [
- "common-base",
  "proc-macro2",
  "quote",
  "syn",
@@ -1378,7 +1376,6 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-meta-types",
- "common-planners",
  "common-tracing",
  "futures",
  "maplit",
@@ -1414,14 +1411,12 @@ dependencies = [
  "async-trait",
  "common-arrow",
  "common-base",
- "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-flight-rpc",
  "common-infallible",
  "common-meta-api",
  "common-meta-types",
- "common-planners",
  "common-tracing",
  "derive_more",
  "futures",
@@ -1525,7 +1520,6 @@ dependencies = [
  "common-functions",
  "common-infallible",
  "common-meta-types",
- "common-streams",
  "futures",
  "lazy_static",
  "pretty_assertions",
@@ -1546,7 +1540,6 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-io",
- "crossbeam 0.8.1",
  "csv-async",
  "futures",
  "pin-project-lite",
@@ -2012,11 +2005,9 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-building",
- "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-flight-rpc",
- "common-functions",
  "common-infallible",
  "common-macros",
  "common-meta-api",
@@ -2025,7 +2016,6 @@ dependencies = [
  "common-meta-sled-store",
  "common-meta-types",
  "common-metrics",
- "common-planners",
  "common-tracing",
  "derive_more",
  "flaky_test",
@@ -2077,7 +2067,6 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-building",
- "common-cache",
  "common-clickhouse-srv",
  "common-dal",
  "common-datablocks",
@@ -6149,16 +6138,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "900fba806f70c630b0a382d0d825e17a0f19fcd059a2ade1ff237bcddf446b31"
 dependencies = [
  "lazy_static",
-]
-
-[[package]]
-name = "shellwords"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89e515aa4699a88148ed5ef96413ceef0048ce95b43fbc955a33bde0a70fcae6"
-dependencies = [
- "lazy_static",
- "regex",
 ]
 
 [[package]]

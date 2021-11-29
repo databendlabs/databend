@@ -14,14 +14,12 @@ test = false
 # Workspace dependencies
 common-arrow = {path = "../../arrow"}
 common-base = {path = "../../base" }
-common-datablocks= {path = "../../datablocks"}
 common-datavalues = {path = "../../datavalues"}
 common-flight-rpc = {path = "../../flight-rpc"}
 common-exception= {path = "../../exception"}
 common-infallible = {path = "../../infallible"}
 common-meta-api = {path = "../api" }
 common-meta-types = {path = "../../meta/types"}
-common-planners = {path = "../../planners"}
 common-tracing = {path = "../../tracing"}
 
 # Github dependencies
