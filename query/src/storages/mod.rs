@@ -23,6 +23,6 @@ mod storage_factory;
 mod system;
 
 pub use storage_context::StorageContext;
-pub use storage_factory::StorageEngine;
-pub use storage_factory::StorageEngineFactory;
+pub use storage_factory::StorageCreator;
+pub use storage_factory::StorageCreatorFactory;
 pub use system::SystemDatabase;

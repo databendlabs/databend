@@ -29,8 +29,8 @@ use common_tracing::tracing;
 use walkdir::WalkDir;
 
 use crate::catalogs::Table;
-use crate::datasources::database::system::TracingTableStream;
 use crate::sessions::QueryContext;
+use crate::storages::system::TracingTableStream;
 
 pub struct TracingTable {
     table_info: TableInfo,

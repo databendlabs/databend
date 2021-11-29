@@ -32,7 +32,6 @@ use futures::stream::StreamExt;
 
 use crate::catalogs::Table;
 use crate::sessions::QueryContext;
-use crate::storages::memory::generate_block_parts;
 use crate::storages::memory::MemoryTableStream;
 use crate::storages::StorageContext;
 
@@ -83,7 +82,7 @@ impl Table for MemoryTable {
         let bytes = blocks.iter().map(|block| block.memory_size()).sum();
 
         let statistics = Statistics::new_exact(rows, bytes);
-        let parts = generate_block_parts(
+        let parts = crate::table_functions::generate_block_parts(
             0,
             ctx.get_settings().get_max_threads()? as u64,
             blocks.len() as u64,

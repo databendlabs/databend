@@ -29,11 +29,11 @@ use crate::storages::null::NullTable;
 use crate::storages::parquet::ParquetTable;
 use crate::storages::StorageContext;
 
-pub trait StorageEngine: Send + Sync {
+pub trait StorageCreator: Send + Sync {
     fn try_create(&self, ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>>;
 }
 
-impl<T> StorageEngine for T
+impl<T> StorageCreator for T
 where
     T: Fn(StorageContext, TableInfo) -> Result<Box<dyn Table>>,
     T: Send + Sync,
@@ -44,43 +44,43 @@ where
 }
 
 #[derive(Default)]
-pub struct StorageEngineFactory {
-    engines: RwLock<HashMap<String, Arc<dyn StorageEngine>>>,
+pub struct StorageCreatorFactory {
+    creators: RwLock<HashMap<String, Arc<dyn StorageCreator>>>,
 }
 
-impl StorageEngineFactory {
+impl StorageCreatorFactory {
     pub fn create(query_ctx: QueryContext) -> Self {
-        let mut engines: HashMap<String, Arc<dyn StorageEngine>> = Default::default();
+        let mut creators: HashMap<String, Arc<dyn StorageCreator>> = Default::default();
 
         // Register csv table engine.
         if query_ctx.get_config().query.table_engine_csv_enabled {
-            engines.insert("CSV".to_string(), Arc::new(CsvTable::try_create));
+            creators.insert("CSV".to_string(), Arc::new(CsvTable::try_create));
         }
 
         // Register memory table engine.
         if query_ctx.get_config().query.table_engine_memory_enabled {
-            engines.insert("MEMORY".to_string(), Arc::new(MemoryTable::try_create));
+            creators.insert("MEMORY".to_string(), Arc::new(MemoryTable::try_create));
         }
 
         // Register parquet table engine.
         if query_ctx.get_config().query.table_engine_parquet_enabled {
-            engines.insert("PARQUET".to_string(), Arc::new(ParquetTable::try_create));
+            creators.insert("PARQUET".to_string(), Arc::new(ParquetTable::try_create));
         }
 
         // Register NULL table engine.
-        engines.insert("NULL".to_string(), Arc::new(NullTable::try_create));
+        creators.insert("NULL".to_string(), Arc::new(NullTable::try_create));
 
         // Register FUSE table engine.
-        engines.insert("FUSE".to_string(), Arc::new(FuseTable::try_create));
+        creators.insert("FUSE".to_string(), Arc::new(FuseTable::try_create));
 
-        StorageEngineFactory {
-            engines: RwLock::new(engines),
+        StorageCreatorFactory {
+            creators: RwLock::new(creators),
         }
     }
 
     pub fn get_table(&self, ctx: StorageContext, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         let engine = table_info.engine().to_uppercase();
-        let lock = self.engines.read();
+        let lock = self.creators.read();
         let factory = lock.get(&engine).ok_or_else(|| {
             ErrorCode::UnknownTableEngine(format!("Unknown table engine {}", engine))
         })?;
