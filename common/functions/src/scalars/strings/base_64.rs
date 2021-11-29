@@ -12,136 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
+use super::string2string::String2StringFunction;
+use super::string2string::StringOperator;
 
-use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
-use common_exception::Result;
-
-use crate::scalars::function_factory::FunctionDescription;
-use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
-
-#[derive(Clone)]
-pub struct Base64EncodeFunction {
-    display_name: String,
+#[derive(Clone, Default)]
+pub struct Encode {
+    buf: Vec<u8>,
 }
 
-impl Base64EncodeFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(Base64EncodeFunction {
-            display_name: display_name.to_string(),
-        }))
-    }
-
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+impl StringOperator for Encode {
+    #[inline]
+    fn apply<'a>(&'a mut self, s: &'a [u8]) -> Option<&'a [u8]> {
+        self.buf.resize(s.len() * 4 / 3 + 4, 0);
+        let bytes_written = base64::encode_config_slice(s, base64::STANDARD, &mut self.buf);
+        Some(&self.buf[..bytes_written])
     }
 }
 
-impl Function for Base64EncodeFunction {
-    fn name(&self) -> &str {
-        &*self.display_name
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
-    }
-
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
-        Ok(DataType::String)
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
-    }
-
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        let column: DataColumn = DFStringArray::new_from_opt_iter(
-            columns[0]
-                .column()
-                .to_minimal_array()?
-                .cast_with_type(&DataType::String)?
-                .string()?
-                .into_iter()
-                .map(|vo| vo.map(base64::encode)),
-        )
-        .into();
-        Ok(column.resize_constant(columns[0].column().len()))
-    }
+#[derive(Clone, Default)]
+pub struct Decode {
+    buf: Vec<u8>,
 }
 
-impl fmt::Display for Base64EncodeFunction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.display_name)
-    }
-}
-
-#[derive(Clone)]
-pub struct Base64DecodeFunction {
-    display_name: String,
-}
-
-impl Base64DecodeFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(Base64DecodeFunction {
-            display_name: display_name.to_string(),
-        }))
-    }
-
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
-    }
-}
-
-impl Function for Base64DecodeFunction {
-    fn name(&self) -> &str {
-        &*self.display_name
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
-    }
-
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if args[0] != DataType::String && args[0] != DataType::Null {
-            return Err(ErrorCode::IllegalDataType(format!(
-                "Expected string or null, but got {}",
-                args[0]
-            )));
+impl StringOperator for Decode {
+    #[inline]
+    fn apply<'a>(&'a mut self, s: &'a [u8]) -> Option<&'a [u8]> {
+        self.buf.resize((s.len() + 3) / 4 * 3, 0);
+        match base64::decode_config_slice(s, base64::STANDARD, &mut self.buf) {
+            Ok(bw) => Some(&self.buf[..bw]),
+            Err(_) => None,
         }
-        Ok(DataType::String)
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
-    }
-
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        let column: DataColumn = DFStringArray::new_from_opt_iter(
-            columns[0]
-                .column()
-                .to_minimal_array()?
-                .cast_with_type(&DataType::String)?
-                .string()?
-                .into_iter()
-                .map(|vo| match vo {
-                    Some(v) => match base64::decode(v) {
-                        Ok(v) => Some(v),
-                        Err(_) => None,
-                    },
-                    None => None,
-                }),
-        )
-        .into();
-        Ok(column.resize_constant(columns[0].column().len()))
     }
 }
 
-impl fmt::Display for Base64DecodeFunction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.display_name)
-    }
-}
+pub type Base64EncodeFunction = String2StringFunction<Encode>;
+pub type Base64DecodeFunction = String2StringFunction<Decode>;
