@@ -124,7 +124,11 @@ pub fn try_create_datasource_context() -> Result<DataSourceContext> {
 }
 
 pub fn try_create_storage_context() -> Result<StorageContext> {
+    let meta_embedded = MetaEmbedded::sync_new_temp().unwrap();
+    let meta = Arc::new(meta_embedded);
+
     Ok(StorageContext {
+        meta,
         in_memory_data: Arc::new(Default::default()),
     })
 }

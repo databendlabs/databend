@@ -22,6 +22,8 @@ mod storage_context;
 mod storage_factory;
 mod system;
 
+pub mod github;
+
 pub use storage_context::StorageContext;
 pub use storage_factory::StorageCreator;
 pub use storage_factory::StorageFactory;
