@@ -23,6 +23,7 @@ use nom::lib::std::collections::HashMap;
 use crate::catalogs::Table;
 use crate::sessions::QueryContext;
 use crate::storages::csv::CsvTable;
+use crate::storages::fuse::FuseTable;
 use crate::storages::memory::MemoryTable;
 use crate::storages::null::NullTable;
 use crate::storages::parquet::ParquetTable;
@@ -67,9 +68,10 @@ impl StorageEngineFactory {
         }
 
         // Register NULL table engine.
-        if query_ctx.get_config().query.table_engine_parquet_enabled {
-            engines.insert("NULL".to_string(), Arc::new(NullTable::try_create));
-        }
+        engines.insert("NULL".to_string(), Arc::new(NullTable::try_create));
+
+        // Register FUSE table engine.
+        engines.insert("FUSE".to_string(), Arc::new(FuseTable::try_create));
 
         StorageEngineFactory {
             engines: RwLock::new(engines),

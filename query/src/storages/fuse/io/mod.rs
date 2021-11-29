@@ -11,16 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
-mod csv;
-mod fuse;
-mod index;
-mod memory;
-mod null;
-mod parquet;
-mod storage_context;
-mod storage_factory;
+pub use block_appender::BlockAppender;
+pub use col_encoding::col_encoding;
+pub use constants::TBL_OPT_KEY_SNAPSHOT_LOC;
+pub use location_gen::gen_block_location;
+pub use location_gen::gen_segment_info_location;
+pub use location_gen::snapshot_location;
 
-pub use storage_context::StorageContext;
-pub use storage_factory::StorageEngine;
-pub use storage_factory::StorageEngineFactory;
+mod block_appender;
+mod col_encoding;
+mod constants;
+mod location_gen;
+
+#[cfg(test)]
+mod block_appender_test;
