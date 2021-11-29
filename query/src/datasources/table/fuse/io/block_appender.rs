@@ -38,8 +38,36 @@ use crate::datasources::table::fuse::statistics::StatisticsAccumulator;
 pub struct BlockAppender;
 
 impl BlockAppender {
-    fn merge_blocks(blocks: Vec<DataBlock>) -> Result<DataBlock> {
-        DataBlock::concat_blocks(&blocks)
+    fn reshape_blocks(
+        blocks: Vec<DataBlock>,
+        row_limit_per_block: usize,
+    ) -> Result<Vec<DataBlock>> {
+        let mut result = vec![];
+
+        let mut row_num_acc = 0;
+        let mut block_size_acc = 0;
+        let mut block_acc = vec![];
+        let block_size_limit = 20 * 1024 * 1024; // 200 MB
+
+        for block in blocks {
+            if block_size_acc < block_size_limit {
+                //|| row_num_acc < row_limit_per_block {
+                row_num_acc += block.num_rows();
+                block_size_acc += block.memory_size();
+            } else {
+                result.push(DataBlock::concat_blocks(&block_acc)?);
+                block_acc.clear();
+                row_num_acc = 0;
+                block_size_acc = 0;
+            }
+            block_acc.push(block);
+        }
+
+        if !block_acc.is_empty() {
+            result.push(DataBlock::concat_blocks(&block_acc)?)
+        }
+
+        Ok(result)
     }
 
     // TODO should return a stream of SegmentInfo (batch blocks into segments)
@@ -49,43 +77,55 @@ impl BlockAppender {
         data_schema: &DataSchema,
         chunk_block_num: usize,
     ) -> Result<Vec<SegmentInfo>> {
-        let mut stream = stream.try_chunks(chunk_block_num);
-        let mut segments = vec![];
+        // filter out empty blocks
+        let stream = stream.try_filter(|block| std::future::ready(block.num_rows() > 0));
 
+        // chunks by chunk_block_num
+        eprintln!("chunk block num {}", chunk_block_num);
+        let mut stream = stream.try_chunks(chunk_block_num);
+
+        let mut segments = vec![];
         // accumulate the stats and save the blocks
+        eprintln!("READING STREAM");
         while let Some(item) = stream.next().await {
-            let mut block_nums = 0;
             let item = item.map_err(|TryChunksError(_, e)| e)?;
-            let block = Self::merge_blocks(item)?;
+
+            let item_len = item.len();
+            // re-shape the blocks
+            let blocks = Self::reshape_blocks(item, 8192)?;
+            eprintln!(
+                "number of block, {},  after re-shape {}",
+                item_len,
+                blocks.len()
+            );
             let mut stats_acc = StatisticsAccumulator::new();
             let mut block_meta_acc = BlockMetaAccumulator::new();
-            if block.num_rows() != 0 {
+
+            for block in blocks.into_iter() {
                 stats_acc.acc(&block)?;
                 let schema = block.schema().to_arrow();
                 let location = io::gen_block_location();
                 let file_size = Self::save_block(&schema, block, &data_accessor, &location).await?;
                 block_meta_acc.acc(file_size, location, &mut stats_acc);
-                block_nums += 1;
             }
 
-            if block_nums > 0 {
-                // summary and give back a segment_info
-                // we need to send back a stream of segment latter
-                let block_metas = block_meta_acc.blocks_metas;
-                let summary = statistics::reduce_block_stats(&stats_acc.blocks_stats, data_schema)?;
-                let seg = SegmentInfo {
-                    blocks: block_metas,
-                    summary: Stats {
-                        row_count: stats_acc.summary_row_count,
-                        block_count: stats_acc.summary_block_count,
-                        uncompressed_byte_size: stats_acc.in_memory_size,
-                        compressed_byte_size: stats_acc.file_size,
-                        col_stats: summary,
-                    },
-                };
-                segments.push(seg)
+            // summary and give back a segment_info
+            // we need to send back a stream of segment latter
+            let block_metas = block_meta_acc.blocks_metas;
+            let summary = statistics::reduce_block_stats(&stats_acc.blocks_stats, data_schema)?;
+            let seg = SegmentInfo {
+                blocks: block_metas,
+                summary: Stats {
+                    row_count: stats_acc.summary_row_count,
+                    block_count: stats_acc.summary_block_count,
+                    uncompressed_byte_size: stats_acc.in_memory_size,
+                    compressed_byte_size: stats_acc.file_size,
+                    col_stats: summary,
+                },
             };
+            segments.push(seg)
         }
+        eprintln!("READING STREAM | EDN");
         Ok(segments)
     }
 
@@ -119,7 +159,7 @@ impl BlockAppender {
 
         use bytes::BufMut;
         // we need a configuration of block size threshold here
-        let mut writer = Vec::with_capacity(10 * 1024 * 1024).writer();
+        let mut writer = Vec::with_capacity(100 * 1024 * 1024).writer();
 
         let len = common_arrow::parquet::write::write_file(
             &mut writer,

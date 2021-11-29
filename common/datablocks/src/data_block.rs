@@ -96,6 +96,10 @@ impl DataBlock {
         &self.columns
     }
 
+    pub fn columns_owned(self) -> Vec<DataColumn> {
+        self.columns
+    }
+
     pub fn try_column_by_name(&self, name: &str) -> Result<&DataColumn> {
         if name == "*" {
             Ok(&self.columns[0])
