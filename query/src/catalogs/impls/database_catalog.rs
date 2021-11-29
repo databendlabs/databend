@@ -13,14 +13,16 @@
 //  limitations under the License.
 //
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateTableReq;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropTableReply;
+use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -35,10 +37,8 @@ use crate::catalogs::Database;
 use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
 use crate::configs::Config;
-use crate::datasources::prelude_func_engines;
-use crate::datasources::TableArgs;
-use crate::datasources::TableFuncEngine;
-use crate::datasources::TableFuncEngineRegistry;
+use crate::table_functions::TableArgs;
+use crate::table_functions::TableFunctionFactory;
 
 /// Combine two catalogs together
 /// - read/search like operations are always performed at
@@ -51,30 +51,30 @@ pub struct DatabaseCatalog {
     /// bottom layer, writing goes here
     mutable_catalog: Arc<dyn Catalog>,
     /// table function engine factories
-    func_engine_registry: TableFuncEngineRegistry,
+    table_function_factory: Arc<TableFunctionFactory>,
 }
 
 impl DatabaseCatalog {
     pub fn create(
         immutable_catalog: Arc<dyn Catalog>,
         mutable_catalog: Arc<dyn Catalog>,
-        func_engine_registry: HashMap<String, (u64, Arc<dyn TableFuncEngine>)>,
+        table_function_factory: Arc<TableFunctionFactory>,
     ) -> Self {
         Self {
             immutable_catalog,
             mutable_catalog,
-            func_engine_registry,
+            table_function_factory,
         }
     }
 
     pub async fn try_create_with_config(conf: Config) -> Result<DatabaseCatalog> {
         let immutable_catalog = ImmutableCatalog::try_create_with_config(&conf).await?;
         let mutable_catalog = MutableCatalog::try_create_with_config(conf).await?;
-        let func_engine_registry = prelude_func_engines();
+        let table_function_factory = TableFunctionFactory::create();
         let res = DatabaseCatalog::create(
             Arc::new(immutable_catalog),
             Arc::new(mutable_catalog),
-            func_engine_registry,
+            Arc::new(table_function_factory),
         );
         Ok(res)
     }
@@ -82,7 +82,7 @@ impl DatabaseCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for DatabaseCatalog {
-    async fn get_database(&self, db_name: &str) -> common_exception::Result<Arc<dyn Database>> {
+    async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
         let r = self.immutable_catalog.get_database(db_name).await;
         match r {
             Err(e) => {
@@ -96,7 +96,7 @@ impl Catalog for DatabaseCatalog {
         }
     }
 
-    async fn list_databases(&self) -> common_exception::Result<Vec<Arc<dyn Database>>> {
+    async fn list_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
         let mut dbs = self.immutable_catalog.list_databases().await?;
         let mut other = self.mutable_catalog.list_databases().await?;
         dbs.append(&mut other);
@@ -125,17 +125,73 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.drop_database(req).await
     }
 
-    fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        let res = self.immutable_catalog.build_table(table_info);
+    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+        let res = self.immutable_catalog.get_table_by_info(table_info);
         match res {
             Ok(t) => Ok(t),
             Err(e) => {
                 if e.code() == ErrorCode::UnknownTable("").code() {
-                    self.mutable_catalog.build_table(table_info)
+                    self.mutable_catalog.get_table_by_info(table_info)
                 } else {
                     Err(e)
                 }
             }
+        }
+    }
+
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
+        let res = self.immutable_catalog.get_table_meta_by_id(table_id).await;
+
+        if let Ok(x) = res {
+            Ok(x)
+        } else {
+            self.mutable_catalog.get_table_meta_by_id(table_id).await
+        }
+    }
+
+    async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
+        let res = self.immutable_catalog.get_table(db_name, table_name).await;
+        match res {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                if e.code() == ErrorCode::UnknownDatabaseCode() {
+                    self.mutable_catalog.get_table(db_name, table_name).await
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
+    async fn list_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+        let r = self.immutable_catalog.list_tables(db_name).await;
+        match r {
+            Ok(x) => Ok(x),
+            Err(e) => {
+                if e.code() == ErrorCode::UnknownDatabaseCode() {
+                    self.mutable_catalog.list_tables(db_name).await
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
+    async fn create_table(&self, req: CreateTableReq) -> Result<()> {
+        self.mutable_catalog.create_table(req).await
+    }
+
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
+        let r = self.immutable_catalog.drop_table(req.clone()).await;
+        match r {
+            Err(e) => {
+                if e.code() == ErrorCode::UnknownTableCode() {
+                    self.mutable_catalog.drop_table(req).await
+                } else {
+                    Err(e)
+                }
+            }
+            Ok(x) => Ok(x),
         }
     }
 
@@ -152,25 +208,6 @@ impl Catalog for DatabaseCatalog {
         func_name: &str,
         tbl_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        let (id, factory) = self.func_engine_registry.get(func_name).ok_or_else(|| {
-            ErrorCode::UnknownTable(format!("Unknown table function {}", func_name))
-        })?;
-
-        // table function belongs to no/every database
-        let func = factory.try_create("", func_name, *id, tbl_args)?;
-        Ok(func)
-    }
-
-    async fn get_table_meta_by_id(
-        &self,
-        table_id: MetaId,
-    ) -> common_exception::Result<(TableIdent, Arc<TableMeta>)> {
-        let res = self.immutable_catalog.get_table_meta_by_id(table_id).await;
-
-        if let Ok(x) = res {
-            Ok(x)
-        } else {
-            self.mutable_catalog.get_table_meta_by_id(table_id).await
-        }
+        self.table_function_factory.get(func_name, tbl_args)
     }
 }

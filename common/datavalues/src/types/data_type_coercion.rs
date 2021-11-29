@@ -194,6 +194,9 @@ pub fn numerical_arithmetic_coercion(
             construct_numeric_type(true, has_float, next_size(max_size))
         }
         DataValueArithmeticOperator::Div => Ok(DataType::Float64),
+        DataValueArithmeticOperator::IntDiv => {
+            construct_numeric_type(has_signed, has_float, max_size)
+        }
     }
 }
 

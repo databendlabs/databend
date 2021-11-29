@@ -14,7 +14,7 @@
 
 use common_exception::Result;
 
-use crate::catalogs::impls::DatabaseCatalog;
+use crate::catalogs::DatabaseCatalog;
 use crate::configs::Config;
 
 pub fn try_create_catalog() -> Result<DatabaseCatalog> {

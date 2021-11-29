@@ -28,7 +28,7 @@ use common_metrics::label_counter;
 use futures::future::Either;
 use futures::StreamExt;
 
-use crate::catalogs::impls::DatabaseCatalog;
+use crate::catalogs::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
 use crate::configs::Config;
 use crate::servers::http::v1::query::HttpQueryManager;

@@ -73,9 +73,10 @@ impl QueryError {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct QueryStats {
     pub progress: Option<ProgressValues>,
+    pub wall_time_ms: u128,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -105,6 +106,7 @@ impl QueryResponse {
         let columns = r.initial_state.as_ref().and_then(|v| v.schema.clone());
         let stats = QueryStats {
             progress: r.state.progress.clone(),
+            wall_time_ms: r.state.wall_time_ms,
         };
         QueryResponse {
             data,
@@ -124,10 +126,9 @@ impl QueryResponse {
     }
 
     pub(crate) fn fail_to_start_sql(id: String, err: &ErrorCode) -> QueryResponse {
-        let stats = QueryStats { progress: None };
         QueryResponse {
             id,
-            stats,
+            stats: QueryStats::default(),
             state: ExecuteStateName::Failed,
             data: Arc::new(vec![]),
             columns: None,

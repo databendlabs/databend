@@ -15,16 +15,20 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_api::MetaApi;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropTableReply;
+use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
+use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
+use common_meta_types::ListTableReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -36,14 +40,13 @@ use common_tracing::tracing;
 use crate::catalogs::backends::MetaRemote;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::database::Database;
+use crate::catalogs::CatalogContext;
+use crate::catalogs::DefaultDatabase;
 use crate::catalogs::Table;
 use crate::common::MetaClientProvider;
 use crate::configs::Config;
-use crate::datasources::context::DataSourceContext;
-use crate::datasources::database::register_database_engines;
-use crate::datasources::table::register_prelude_tbl_engines;
-use crate::datasources::DatabaseEngineRegistry;
-use crate::datasources::TableEngineRegistry;
+use crate::storages::StorageContext;
+use crate::storages::StorageFactory;
 
 /// Catalog based on MetaStore
 /// - System Database NOT included
@@ -52,7 +55,7 @@ use crate::datasources::TableEngineRegistry;
 /// - Database engines are free to save table meta in metastore or not
 #[derive(Clone)]
 pub struct MutableCatalog {
-    ctx: DataSourceContext,
+    ctx: CatalogContext,
 }
 
 impl MutableCatalog {
@@ -87,12 +90,6 @@ impl MutableCatalog {
             Arc::new(meta_remote)
         };
 
-        // Register database and table engine.
-        let database_engine_registry = Arc::new(DatabaseEngineRegistry::default());
-        register_database_engines(&database_engine_registry)?;
-        let table_engine_registry = Arc::new(TableEngineRegistry::default());
-        register_prelude_tbl_engines(&table_engine_registry, conf)?;
-
         // Create default database.
         let req = CreateDatabaseReq {
             if_not_exists: true,
@@ -102,30 +99,18 @@ impl MutableCatalog {
         };
         meta.create_database(req).await?;
 
-        let ctx = DataSourceContext {
+        let storage_factory = StorageFactory::create(conf.clone());
+        let ctx = CatalogContext {
             meta,
-            table_engine_registry,
-            database_engine_registry,
+            storage_factory: Arc::new(storage_factory),
             in_memory_data: Arc::new(Default::default()),
         };
         Ok(MutableCatalog { ctx })
     }
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
-        // TODO(bohu): Add the database engine match, now we set only one fuse database here, like:
-        let mut engine = db_info.meta.engine.as_str();
-        if engine.is_empty() {
-            engine = "DEFAULT";
-        }
-        let factory = self
-            .ctx
-            .database_engine_registry
-            .get_database_factory(engine)
-            .ok_or_else(|| {
-                ErrorCode::UnknownDatabaseEngine(format!("unknown database engine {}", engine))
-            })?;
-
-        let db: Arc<dyn Database> = factory.try_create(&db_info.db, self.ctx.clone())?.into();
+        let db = DefaultDatabase::new(&db_info.db);
+        let db = Arc::new(db);
         Ok(db)
     }
 }
@@ -152,25 +137,7 @@ impl Catalog for MutableCatalog {
     }
 
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
-        let mut engine = req.engine.clone();
-        if engine.is_empty() {
-            engine = "DEFAULT".to_string();
-        }
-        let res = self.ctx.meta.create_database(req.clone()).await?;
-
-        let factory = self
-            .ctx
-            .database_engine_registry
-            .get_database_factory(&engine)
-            .ok_or_else(|| {
-                ErrorCode::UnknownDatabaseEngine(format!("unknown database engine {}", &req.engine))
-            })?;
-        tracing::error!("db name: {}, engine: {}", &req.db, &req.engine);
-        let db: Arc<dyn Database> = factory.try_create(&req.db, self.ctx.clone())?.into();
-        // if database created successfully, then init database
-        db.init().await?;
-
-        Ok(res)
+        self.ctx.meta.create_database(req).await
     }
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<()> {
@@ -178,28 +145,13 @@ impl Catalog for MutableCatalog {
         Ok(())
     }
 
-    fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        let engine = table_info.engine();
-        let factory = self
-            .ctx
-            .table_engine_registry
-            .get_table_factory(engine)
-            .ok_or_else(|| {
-                ErrorCode::UnknownTableEngine(format!("unknown table engine {}", engine))
-            })?;
-
-        let tbl: Arc<dyn Table> = factory
-            .try_create(table_info.clone(), self.ctx.clone())?
-            .into();
-
-        Ok(tbl)
-    }
-
-    async fn upsert_table_option(
-        &self,
-        req: UpsertTableOptionReq,
-    ) -> Result<UpsertTableOptionReply> {
-        self.ctx.meta.upsert_table_option(req).await
+    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+        let storage = self.ctx.storage_factory.clone();
+        let ctx = StorageContext {
+            meta: self.ctx.meta.clone(),
+            in_memory_data: self.ctx.in_memory_data.clone(),
+        };
+        storage.get_table(ctx, table_info)
     }
 
     async fn get_table_meta_by_id(
@@ -207,5 +159,44 @@ impl Catalog for MutableCatalog {
         table_id: MetaId,
     ) -> common_exception::Result<(TableIdent, Arc<TableMeta>)> {
         self.ctx.meta.get_table_by_id(table_id).await
+    }
+
+    async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
+        let table_info = self
+            .ctx
+            .meta
+            .get_table(GetTableReq::new(db_name, table_name))
+            .await?;
+        self.get_table_by_info(table_info.as_ref())
+    }
+
+    async fn list_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+        let table_infos = self
+            .ctx
+            .meta
+            .list_tables(ListTableReq::new(db_name))
+            .await?;
+
+        table_infos.iter().try_fold(vec![], |mut acc, item| {
+            let tbl = self.get_table_by_info(item.as_ref())?;
+            acc.push(tbl);
+            Ok(acc)
+        })
+    }
+
+    async fn create_table(&self, req: CreateTableReq) -> Result<()> {
+        self.ctx.meta.create_table(req).await?;
+        Ok(())
+    }
+
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
+        self.ctx.meta.drop_table(req).await
+    }
+
+    async fn upsert_table_option(
+        &self,
+        req: UpsertTableOptionReq,
+    ) -> Result<UpsertTableOptionReply> {
+        self.ctx.meta.upsert_table_option(req).await
     }
 }

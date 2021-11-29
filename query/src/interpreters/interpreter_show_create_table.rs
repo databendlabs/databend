@@ -54,11 +54,7 @@ impl Interpreter for ShowCreateTableInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let catalog = self.ctx.get_catalog();
 
-        let table = catalog
-            .get_database(&self.plan.db)
-            .await?
-            .get_table(&self.plan.db, &self.plan.table)
-            .await?;
+        let table = catalog.get_table(&self.plan.db, &self.plan.table).await?;
 
         let name = table.name();
         let engine = table.engine();

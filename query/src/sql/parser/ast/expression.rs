@@ -127,6 +127,7 @@ pub enum BinaryOperator {
     Plus,
     Minus,
     Multiply,
+    Div,
     Divide,
     Modulo,
     StringConcat,
@@ -183,6 +184,9 @@ impl Display for BinaryOperator {
             }
             BinaryOperator::Multiply => {
                 write!(f, "*")
+            }
+            BinaryOperator::Div => {
+                write!(f, "DIV")
             }
             BinaryOperator::Divide => {
                 write!(f, "/")

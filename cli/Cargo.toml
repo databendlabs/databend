@@ -48,7 +48,7 @@ sysinfo = "0.21.1"
 tar = "0.4.37"
 thiserror = "1.0.30"
 ureq = { version = "2.3.1", features = ["json"] }
-nix = "0.22.2"
+nix = "0.23.0"
 log = "0.4"
 serde_yaml = "0.8.21"
 structopt = "0.3"
