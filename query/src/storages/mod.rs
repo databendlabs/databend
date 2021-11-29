@@ -20,7 +20,9 @@ mod null;
 mod parquet;
 mod storage_context;
 mod storage_factory;
+mod system;
 
 pub use storage_context::StorageContext;
 pub use storage_factory::StorageEngine;
 pub use storage_factory::StorageEngineFactory;
+pub use system::SystemDatabase;
