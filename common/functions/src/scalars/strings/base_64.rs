@@ -11,37 +11,39 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 use super::string2string::String2StringFunction;
 use super::string2string::StringOperator;
 
 #[derive(Clone, Default)]
-pub struct LTrim;
+pub struct Encode {
+    buf: Vec<u8>,
+}
 
-impl StringOperator for LTrim {
+impl StringOperator for Encode {
     #[inline]
     fn apply<'a>(&'a mut self, s: &'a [u8]) -> Option<&'a [u8]> {
-        for (idx, ch) in s.iter().enumerate() {
-            if *ch != b' ' && *ch != b'\t' {
-                return Some(&s[idx..]);
-            }
-        }
-        Some(b"")
+        self.buf.resize(s.len() * 4 / 3 + 4, 0);
+        let bytes_written = base64::encode_config_slice(s, base64::STANDARD, &mut self.buf);
+        Some(&self.buf[..bytes_written])
     }
 }
 
 #[derive(Clone, Default)]
-pub struct RTrim;
+pub struct Decode {
+    buf: Vec<u8>,
+}
 
-impl StringOperator for RTrim {
+impl StringOperator for Decode {
+    #[inline]
     fn apply<'a>(&'a mut self, s: &'a [u8]) -> Option<&'a [u8]> {
-        for (idx, ch) in s.iter().rev().enumerate() {
-            if *ch != b' ' && *ch != b'\t' {
-                return Some(&s[..s.len() - idx]);
-            }
+        self.buf.resize((s.len() + 3) / 4 * 3, 0);
+        match base64::decode_config_slice(s, base64::STANDARD, &mut self.buf) {
+            Ok(bw) => Some(&self.buf[..bw]),
+            Err(_) => None,
         }
-        Some(b"")
     }
 }
 
-pub type LTrimFunction = String2StringFunction<LTrim>;
-pub type RTrimFunction = String2StringFunction<RTrim>;
+pub type Base64EncodeFunction = String2StringFunction<Encode>;
+pub type Base64DecodeFunction = String2StringFunction<Decode>;

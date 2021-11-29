@@ -29,7 +29,7 @@ pub struct ProcessInfo {
     pub settings: Arc<Settings>,
     pub client_address: Option<SocketAddr>,
     pub session_extra_info: Option<String>,
-    pub memory_usage: u64,
+    pub memory_usage: i64,
 }
 
 impl Session {
@@ -45,7 +45,7 @@ impl Session {
             if let Ok(runtime) = shared.try_get_runtime() {
                 let runtime_tracker = runtime.get_tracker();
                 let runtime_memory_tracker = runtime_tracker.get_memory_tracker();
-                memory_usage = runtime_memory_tracker.get_memory_usage() as u64;
+                memory_usage = runtime_memory_tracker.get_memory_usage();
             }
         }
 
