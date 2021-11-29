@@ -25,6 +25,7 @@ use crate::datasources::DatabaseEngineRegistry;
 use crate::datasources::TableEngineRegistry;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
+use crate::storages::StorageContext;
 use crate::tests::SessionManagerBuilder;
 
 pub fn try_create_context() -> Result<Arc<QueryContext>> {
@@ -118,6 +119,12 @@ pub fn try_create_datasource_context() -> Result<DataSourceContext> {
         meta,
         table_engine_registry,
         database_engine_registry,
+        in_memory_data: Arc::new(Default::default()),
+    })
+}
+
+pub fn try_create_storage_context() -> Result<StorageContext> {
+    Ok(StorageContext {
         in_memory_data: Arc::new(Default::default()),
     })
 }

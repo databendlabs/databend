@@ -14,12 +14,14 @@
 //
 
 #[cfg(test)]
-mod csv_line_test;
+mod memory_block_part_test;
 #[cfg(test)]
-mod csv_table_test;
+mod memory_table_test;
 
-mod csv_line;
-mod csv_table;
+mod memory_block_part;
+mod memory_table;
+mod memory_table_stream;
 
-pub use csv_line::count_lines;
-pub use csv_table::CsvTable;
+pub use memory_block_part::generate_block_parts;
+pub use memory_table::MemoryTable;
+pub use memory_table_stream::MemoryTableStream;

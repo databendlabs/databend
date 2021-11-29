@@ -25,6 +25,7 @@ use common_planners::*;
 use futures::TryStreamExt;
 
 use crate::catalogs::ToReadDataSourcePlan;
+use crate::storages::csv::CsvTable;
 
 #[tokio::test]
 async fn test_csv_table() -> Result<()> {
@@ -55,7 +56,7 @@ async fn test_csv_table() -> Result<()> {
                 options,
             },
         },
-        crate::tests::try_create_datasource_context()?,
+        crate::tests::try_create_storage_context()?,
     )?;
 
     let source_plan = table
@@ -116,7 +117,7 @@ async fn test_csv_table_parse_error() -> Result<()> {
                 options,
             },
         },
-        crate::tests::try_create_datasource_context()?,
+        crate::tests::try_create_storage_context()?,
     )?;
 
     let source_plan = table

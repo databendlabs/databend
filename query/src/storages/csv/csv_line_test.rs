@@ -12,14 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::env;
 
-use common_dal::InMemoryData;
-use common_infallible::RwLock;
+use common_exception::Result;
+use pretty_assertions::assert_eq;
 
-/// Storage Context.
-#[derive(Clone)]
-pub struct StorageContext {
-    // For shared data in memory.
-    pub in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
+use crate::storages::csv::count_lines;
+
+#[test]
+fn test_lines_count() -> Result<()> {
+    let file = env::current_dir()?
+        .join("../tests/data/sample.csv")
+        .display()
+        .to_string();
+
+    let lines = count_lines(std::fs::File::open(file.as_str())?)?;
+    assert_eq!(6, lines);
+    Ok(())
 }

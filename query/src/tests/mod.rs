@@ -25,6 +25,7 @@ pub use context::try_create_cluster_context;
 pub use context::try_create_context;
 pub use context::try_create_context_with_config;
 pub use context::try_create_datasource_context;
+pub use context::try_create_storage_context;
 pub use context::ClusterDescriptor;
 pub use number::NumberTestData;
 pub use parquet::ParquetTestData;
