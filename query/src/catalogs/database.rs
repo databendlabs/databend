@@ -12,46 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_types::CreateTableReq;
-use common_meta_types::DropTableReply;
-use common_meta_types::DropTableReq;
 use dyn_clone::DynClone;
-
-use crate::catalogs::Table;
 
 #[async_trait::async_trait]
 pub trait Database: DynClone + Sync + Send {
     /// Database name.
     fn name(&self) -> &str;
+}
 
-    async fn init(&self) -> Result<()> {
-        Ok(())
-    }
+#[derive(Clone)]
+pub struct DefaultDatabase {
+    db_name: String,
+}
 
-    // Get one table by db and table name.
-    async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>>;
-
-    async fn list_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
-
-    async fn create_table(&self, req: CreateTableReq) -> Result<()>;
-
-    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply>;
-
-    // Check a db.table is exists or not.
-    async fn exists_table(&self, db_name: &str, table_name: &str) -> Result<bool> {
-        match self.get_table(db_name, table_name).await {
-            Ok(_) => Ok(true),
-            Err(err) => {
-                if err.code() == ErrorCode::UnknownTableCode() {
-                    Ok(false)
-                } else {
-                    Err(err)
-                }
-            }
+impl DefaultDatabase {
+    pub fn new(db_name: impl Into<String>) -> Self {
+        Self {
+            db_name: db_name.into(),
         }
+    }
+}
+
+impl Database for DefaultDatabase {
+    fn name(&self) -> &str {
+        &self.db_name
     }
 }

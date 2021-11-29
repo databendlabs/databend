@@ -69,7 +69,10 @@ impl Processor for SinkTransform {
 
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!("executing sink transform");
-        let tbl = self.ctx.get_catalog().build_table(self.table_info())?;
+        let tbl = self
+            .ctx
+            .get_catalog()
+            .get_table_by_info(self.table_info())?;
         let mut upstream = self.input.execute().await?;
         let output_schema = self.table_info.schema();
         if self.cast_needed {

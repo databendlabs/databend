@@ -18,7 +18,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
+use common_meta_types::CreateTableReq;
 use common_meta_types::DropDatabaseReq;
+use common_meta_types::DropTableReply;
+use common_meta_types::DropTableReq;
 use common_meta_types::MetaId;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -30,7 +33,7 @@ use dyn_clone::DynClone;
 use crate::catalogs::Database;
 use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
-use crate::datasources::table_func_engine::TableArgs;
+use crate::table_functions::TableArgs;
 
 /// Catalog is the global view of all the databases of the user.
 /// The global view has many engine type: Local-Database(engine=Local), Remote-Database(engine=Remote)
@@ -39,6 +42,10 @@ use crate::datasources::table_func_engine::TableArgs;
 /// and use the engine to create them.
 #[async_trait::async_trait]
 pub trait Catalog: DynClone + Send + Sync {
+    ///
+    /// Database.
+    ///
+
     // Get the database by name.
     async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>>;
 
@@ -63,13 +70,47 @@ pub trait Catalog: DynClone + Send + Sync {
         }
     }
 
+    ///
+    /// Table.
+    ///
+
     // Build a `Arc<dyn Table>` from `TableInfo`.
-    fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
+    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
+
+    // Get the table meta by meta id.
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)>;
+
+    // Get one table by db and table name.
+    async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>>;
+
+    async fn list_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
+
+    async fn create_table(&self, req: CreateTableReq) -> Result<()>;
+
+    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply>;
+
+    // Check a db.table is exists or not.
+    async fn exists_table(&self, db_name: &str, table_name: &str) -> Result<bool> {
+        match self.get_table(db_name, table_name).await {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                if err.code() == ErrorCode::UnknownTableCode() {
+                    Ok(false)
+                } else {
+                    Err(err)
+                }
+            }
+        }
+    }
 
     async fn upsert_table_option(
         &self,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply>;
+
+    ///
+    /// Table function
+    ///
 
     // Get function by name.
     fn get_table_function(
@@ -79,7 +120,4 @@ pub trait Catalog: DynClone + Send + Sync {
     ) -> Result<Arc<dyn TableFunction>> {
         unimplemented!()
     }
-
-    // Get the table meta by meta id.
-    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)>;
 }

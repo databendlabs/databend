@@ -28,8 +28,8 @@ use common_planners::PlanNode;
 use futures::future::AbortHandle;
 use uuid::Uuid;
 
-use crate::catalogs::impls::DatabaseCatalog;
 use crate::catalogs::Catalog;
+use crate::catalogs::DatabaseCatalog;
 use crate::catalogs::Table;
 use crate::clusters::Cluster;
 use crate::configs::Config;
@@ -147,11 +147,7 @@ impl QueryContextShared {
 
     async fn get_table_to_cache(&self, database: &str, table: &str) -> Result<Arc<dyn Table>> {
         let catalog = self.get_catalog();
-        let cache_table = catalog
-            .get_database(database)
-            .await?
-            .get_table(database, table)
-            .await?;
+        let cache_table = catalog.get_table(database, table).await?;
 
         let table_meta_key = (database.to_string(), table.to_string());
         let mut tables_refs = self.tables_refs.lock();
