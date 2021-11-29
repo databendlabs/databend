@@ -13,7 +13,7 @@ test = false
 common-base = {path = "../base" }
 tikv-jemalloc-sys = "0.4.2"
 common-infallible = { path = "../infallible" }
-parking_lot = "0.11"
+parking_lot = "0.11.2"
 
 [dev-dependencies]
 common-macros = { path = "../macros" }
