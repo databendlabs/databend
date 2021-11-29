@@ -38,6 +38,13 @@ use crate::datasources::table::fuse::statistics::StatisticsAccumulator;
 pub struct BlockAppender;
 
 impl BlockAppender {
+    // A simple strategy of merging small blocks into larger ones:
+    // for each n successive data blocks in `blocks`, if the sum of their `memory_size` exceeds
+    //   `block_size_threshold`, they will be merged into one larger block.
+    //  NOTE:
+    //    - the max size of merge-block will be 2 * block_size_threshold
+    //    - for block that is larger than `block_size_threshold`, they will NOT be split
+    //        TODO handling split in table compact/optimize
     pub(crate) fn reshape_blocks(
         blocks: Vec<DataBlock>,
         block_size_threshold: usize,
