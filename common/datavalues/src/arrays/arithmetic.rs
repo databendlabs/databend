@@ -24,10 +24,9 @@ use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::array::UInt64Array;
 use common_arrow::arrow::compute::arithmetics::basic;
-use common_arrow::arrow::compute::arithmetics::negate;
+use common_arrow::arrow::compute::arithmetics::basic::negate;
 use common_arrow::arrow::compute::arity::unary;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use common_arrow::arrow::error::ArrowError;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::cast::AsPrimitive;
@@ -50,16 +49,13 @@ fn arithmetic_helper<T, Kernel, SKernel, F>(
 where
     T: DFPrimitiveType,
     T: Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Div<Output = T> + num::Zero,
-    Kernel: Fn(
-        &PrimitiveArray<T>,
-        &PrimitiveArray<T>,
-    ) -> std::result::Result<PrimitiveArray<T>, ArrowError>,
+    Kernel: Fn(&PrimitiveArray<T>, &PrimitiveArray<T>) -> PrimitiveArray<T>,
     SKernel: Fn(&PrimitiveArray<T>, &T) -> PrimitiveArray<T>,
     F: Fn(T, T) -> T,
 {
     let ca = match (lhs.len(), rhs.len()) {
         (a, b) if a == b => {
-            let array = kernel(lhs.inner(), rhs.inner()).expect("output");
+            let array = kernel(lhs.inner(), rhs.inner());
 
             array.into()
         }

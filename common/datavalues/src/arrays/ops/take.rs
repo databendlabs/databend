@@ -20,7 +20,6 @@
 
 use std::fmt::Debug;
 
-use common_arrow::arrow::array::*;
 use common_arrow::arrow::compute::take;
 use common_exception::ErrorCode;
 use common_exception::Result;

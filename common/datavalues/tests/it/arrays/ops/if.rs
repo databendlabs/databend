@@ -15,10 +15,8 @@
 use common_arrow::arrow::array::BooleanArray;
 use common_arrow::arrow::array::NullArray;
 use common_arrow::arrow::array::UInt64Array;
-use common_arrow::arrow::compute::comparison::compare_scalar;
-use common_arrow::arrow::compute::comparison::Operator;
+use common_arrow::arrow::compute::comparison;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
-use common_arrow::arrow::scalar::PrimitiveScalar;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
@@ -80,13 +78,7 @@ fn test_array_if() -> Result<()> {
 
 #[test]
 fn test_gt_u64_scalar() {
-    use common_arrow::arrow::datatypes::DataType as ArrowDataType;
     let a = UInt64Array::from_slice(vec![0, 1, 2]);
-    let c = compare_scalar(
-        &a,
-        &PrimitiveScalar::new(ArrowDataType::UInt64, Some(1u64)),
-        Operator::Gt,
-    )
-    .unwrap();
+    let c = comparison::primitive::gt_scalar(&a, 1u64);
     assert_eq!(BooleanArray::from_slice(vec![false, false, true]), c);
 }
