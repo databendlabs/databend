@@ -44,7 +44,6 @@ pub trait WeekResultFunction<R> {
     fn return_type() -> Result<DataType>;
     fn to_number(_value: DateTime<Utc>, mode: Option<u64>) -> R;
     fn to_constant_value(_value: DateTime<Utc>, mode: Option<u64>) -> DataValue;
-    fn get_monotonicity(_args: &[Monotonicity]) -> Result<Monotonicity>;
 }
 
 #[derive(Clone)]
@@ -71,13 +70,6 @@ impl WeekResultFunction<u32> for ToStartOfWeek {
 
     fn to_constant_value(value: DateTime<Utc>, mode: Option<u64>) -> DataValue {
         DataValue::UInt16(Some(Self::to_number(value, mode) as u16))
-    }
-
-    fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
-        // ToStartOfWeek should always be monotonic and positive/non-decreasing.
-        // If data_1 is earlier than date_2, eg. data_1 < data_2, we should have ToStartOfWeek(date_1) <= ToStartOfWeek(date_2), and vice versa.
-        // So here we clone the input monotonicity and return.
-        Ok(Monotonicity::clone_without_range(&args[0]))
     }
 }
 
@@ -206,7 +198,11 @@ where
     }
 
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
-        T::get_monotonicity(args)
+        if T::MAYBE_MONOTONIC {
+            // all the week functions here with MAYBE_MONOTONIC true happens to be monotonically positive.
+            return Ok(Monotonicity::clone_without_range(&args[0]));
+        }
+        Ok(Monotonicity::default())
     }
 }
 

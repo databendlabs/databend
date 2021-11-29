@@ -108,30 +108,6 @@ impl Monotonicity {
         }
     }
 
-    /// Compare self.left, self.right with the target, return true is cmp_func
-    pub fn compare_range(
-        &self,
-        target: DataColumnWithField,
-        cmp_func: Box<dyn Function>,
-    ) -> Result<bool> {
-        if let (Some(left_val), Some(right_val)) = (self.left.clone(), self.right.clone()) {
-            let left_res_col = cmp_func.eval(&[left_val, target.clone()], 1)?;
-            let right_res_col = cmp_func.eval(&[right_val, target], 1)?;
-
-            let left_res = left_res_col.try_get(0)?.as_bool()?;
-            let right_res = right_res_col.try_get(0)?.as_bool()?;
-
-            if left_res && right_res {
-                Ok(true)
-            } else {
-                Ok(false)
-            }
-        } else {
-            // No full boundary information found, return false.
-            Ok(false)
-        }
-    }
-
     /// Check whether the range greater than or equal to the target.
     /// True means the min(left, right) >= the target.
     /// False means the range interval may be unknown, covering the target or both < target.

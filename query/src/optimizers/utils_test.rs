@@ -236,14 +236,14 @@ mod monotonicity_check {
                 name: "f(x) = -1/x",
                 expr: Expression::create_binary_expression("/", vec![lit(-1_i8), col("x")]),
                 column: "x",
-                left: None,
-                right: None,
+                left: create_data(5.0),
+                right: create_data(10.0),
                 expect_mono: Monotonicity {
                     is_monotonic: true,
                     is_positive: true,
                     is_constant: false,
-                    left: None,
-                    right: None,
+                    left: create_data(-0.2),
+                    right: create_data(-0.1),
                 },
             },
             Test {

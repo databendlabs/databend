@@ -113,7 +113,7 @@ impl Function for SignFunction {
         // check whether the left/right boundary is numeric or not.
         let is_boundary_numeric = |boundary: Option<DataColumnWithField>| -> bool {
             if let Some(column_field) = boundary {
-                column_field.field().data_type().is_numeric()
+                column_field.data_type().is_numeric()
             } else {
                 false
             }
