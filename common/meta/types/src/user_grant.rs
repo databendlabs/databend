@@ -164,20 +164,28 @@ impl UserGrantSet {
         object: &GrantObject,
         privileges: BitFlags<UserPrivilegeType>,
     ) -> UserGrantSet {
-        let grants = self
-            .grants
-            .iter()
-            .map(|e| {
-                if e.matches_entry(user, host_pattern, object) {
-                    let mut e = e.clone();
-                    e.privileges |= privileges;
-                    e
-                } else {
-                    e.clone()
-                }
+        let mut new_grants: Vec<GrantEntry> = vec![];
+        let mut changed = false;
+
+        for grant in self.grants {
+            let mut grant = grant.clone();
+            if grant.matches_entry(user, host_pattern, object) {
+                grant.privileges |= &privileges;
+                changed = true;
+            }
+            new_grants.push(grant);
+        }
+
+        if !changed {
+            new_grants.push(GrantEntry {
+                user: user.into(),
+                host_pattern: host_pattern.into(),
+                object: object.clone(),
+                privileges: privileges.clone(),
             })
-            .collect::<Vec<_>>();
-        Self { grants }
+        }
+
+        Self { grants: new_grants }
     }
 
     pub fn revoke(
@@ -199,6 +207,7 @@ impl UserGrantSet {
                     e.clone()
                 }
             })
+            .filter(|e| e.privileges != BitFlags::empty())
             .collect::<Vec<_>>();
         Self { grants }
     }
