@@ -1299,6 +1299,7 @@ dependencies = [
  "float-cmp 0.9.0",
  "hex",
  "indexmap",
+ "itertools",
  "lazy_static",
  "md5",
  "num",
