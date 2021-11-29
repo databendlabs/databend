@@ -551,7 +551,7 @@ dependencies = [
  "lexical-util",
  "libc",
  "log",
- "nix 0.22.2",
+ "nix 0.23.0",
  "num-format",
  "portpicker",
  "predicates 2.0.3",
@@ -628,9 +628,9 @@ checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
 
 [[package]]
 name = "bitflags"
-version = "1.2.1"
+version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
+checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitmaps"
@@ -1948,7 +1948,7 @@ version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "377c9b002a72a0b2c1a18c62e2f3864bdfea4a015e3683a96e24aa45dd6c02d1"
 dependencies = [
- "nix 0.22.2",
+ "nix 0.22.0",
  "winapi",
 ]
 
@@ -2554,10 +2554,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "findshlibs"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "40b9e59cd0f7e0806cca4be089683ecb6434e602038df21fe6bf6711b2f07f64"
+dependencies = [
+ "cc",
+ "lazy_static",
+ "libc",
+ "winapi",
+]
+
+[[package]]
 name = "fixedbitset"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37ab347416e802de484e4d03c7316c48f1ecb56574dfd4a46a80f173ce1de04d"
+
+[[package]]
+name = "fixedbitset"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "398ea4fabe40b9b0d885340a2a991a44c8a645624075ad966d21f88688e2b69e"
 
 [[package]]
 name = "flaky_test"
@@ -3558,7 +3576,7 @@ dependencies = [
  "ena",
  "itertools",
  "lalrpop-util",
- "petgraph",
+ "petgraph 0.5.1",
  "pico-args",
  "regex",
  "regex-syntax",
@@ -4125,7 +4143,7 @@ dependencies = [
  "mysql_common",
  "named_pipe",
  "native-tls",
- "nix 0.21.2",
+ "nix 0.21.0",
  "once_cell",
  "pem",
  "percent-encoding",
@@ -4218,9 +4236,9 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.20.2"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5e06129fb611568ef4e868c14b326274959aa70ff7776e9d55323531c374945"
+checksum = "5c3728fec49d363a50a8828a190b379a446cc5cf085c06259bbbeb34447e4ec7"
 dependencies = [
  "bitflags",
  "cc",
@@ -4231,9 +4249,9 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.21.2"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77d9f3521ea8e0641a153b3cddaf008dcbf26acd4ed739a2517295e0760d12c7"
+checksum = "cf1e25ee6b412c2a1e3fcb6a4499a5c1bfe7f43e014bdce9a6b6666e5aa2d187"
 dependencies = [
  "bitflags",
  "cc",
@@ -4244,9 +4262,9 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.22.2"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3bb9a13fa32bc5aeb64150cd3f32d6cf4c748f8f8a417cce5d2eb976a8370ba"
+checksum = "f305c2c2e4c39a82f7bf0bf65fb557f9070ce06781d4f2454295cc34b1c43188"
 dependencies = [
  "bitflags",
  "cc",
@@ -4800,7 +4818,17 @@ version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "467d164a6de56270bd7c4d070df81d07beace25012d5103ced4e9ff08d6afdb7"
 dependencies = [
- "fixedbitset",
+ "fixedbitset 0.2.0",
+ "indexmap",
+]
+
+[[package]]
+name = "petgraph"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a13a2fa9d0b63e5f22328828741e523766fff0ee9e779316902290dff3f824f"
+dependencies = [
+ "fixedbitset 0.4.0",
  "indexmap",
 ]
 
@@ -5018,20 +5046,22 @@ dependencies = [
 
 [[package]]
 name = "pprof"
-version = "0.5.1"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc842ca3fb958643d1696cfdada75410482480c11a7129463924fff5ab18d405"
+checksum = "9d47237f290398d4cfcd293fcc9dcc53cdb1f9bde65b78fcbfaafa7f8190d9e9"
 dependencies = [
  "backtrace",
+ "cfg-if 1.0.0",
+ "findshlibs",
  "inferno",
  "lazy_static",
  "libc",
  "log",
- "nix 0.20.2",
+ "nix 0.23.0",
  "parking_lot",
- "prost 0.8.0",
- "prost-build",
- "prost-derive 0.8.0",
+ "prost 0.9.0",
+ "prost-build 0.9.0",
+ "prost-derive 0.9.0",
  "symbolic-demangle",
  "tempfile",
  "thiserror",
@@ -5195,9 +5225,29 @@ dependencies = [
  "itertools",
  "log",
  "multimap",
- "petgraph",
+ "petgraph 0.5.1",
  "prost 0.8.0",
- "prost-types",
+ "prost-types 0.8.0",
+ "tempfile",
+ "which 4.2.2",
+]
+
+[[package]]
+name = "prost-build"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62941722fb675d463659e49c4f3fe1fe792ff24fe5bbaa9c08cd3b98a1c354f5"
+dependencies = [
+ "bytes",
+ "heck",
+ "itertools",
+ "lazy_static",
+ "log",
+ "multimap",
+ "petgraph 0.6.0",
+ "prost 0.9.0",
+ "prost-types 0.9.0",
+ "regex",
  "tempfile",
  "which 4.2.2",
 ]
@@ -5236,6 +5286,16 @@ checksum = "603bbd6394701d13f3f25aada59c7de9d35a6a5887cfc156181234a44002771b"
 dependencies = [
  "bytes",
  "prost 0.8.0",
+]
+
+[[package]]
+name = "prost-types"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "534b7a0e836e3c482d2693070f982e39e7611da9695d4d1f5a4b186b51faef0a"
+dependencies = [
+ "bytes",
+ "prost 0.9.0",
 ]
 
 [[package]]
@@ -5807,7 +5867,7 @@ dependencies = [
  "libc",
  "log",
  "memchr",
- "nix 0.22.2",
+ "nix 0.22.0",
  "radix_trie",
  "scopeguard",
  "smallvec",
@@ -6988,7 +7048,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "12b52d07035516c2b74337d2ac7746075e7dcae7643816c1b12c5ff8a7484c08"
 dependencies = [
  "proc-macro2",
- "prost-build",
+ "prost-build 0.8.0",
  "quote",
  "syn",
 ]
