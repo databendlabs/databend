@@ -15,8 +15,10 @@
 
 pub const TBL_OPT_KEY_SNAPSHOT_LOC: &str = "SNAPSHOT_LOC";
 pub const TBL_OPT_KEY_CHUNK_BLOCK_NUM: &str = "CHUNK_BLOCK_NUM";
+pub const TBL_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD: &str = "BLOCK_SIZE_THRESHOLD";
 pub const FUSE_TBL_BLOCK_PREFIX: &str = "_b";
 pub const FUSE_TBL_SEGMENT_PREFIX: &str = "_sg";
 pub const FUSE_TBL_SNAPSHOT_PREFIX: &str = "_ss";
 
 pub const DEFAULT_CHUNK_BLOCK_NUM: usize = 1000;
+pub const DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD: usize = 100 * 1024 * 1024;

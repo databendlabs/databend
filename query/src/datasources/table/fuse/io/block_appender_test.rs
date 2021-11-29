@@ -42,6 +42,7 @@ async fn test_fuse_table_block_appender() {
         Box::pin(block_stream),
         schema.as_ref(),
         DEFAULT_CHUNK_BLOCK_NUM,
+        0,
     )
     .await;
     assert!(r.is_ok());
@@ -59,19 +60,21 @@ async fn test_fuse_table_block_appender() {
         Box::pin(block_stream),
         schema.as_ref(),
         chunk_size,
+        0,
     )
     .await;
     assert!(r.is_ok());
     let r = r.unwrap();
     assert_eq!(r.len(), number_of_blocks / chunk_size);
 
-    // non blocks
+    // empty blocks
     let block_stream = futures::stream::iter(vec![]);
     let r = BlockAppender::append_blocks(
         local_fs,
         Box::pin(block_stream),
         schema.as_ref(),
         DEFAULT_CHUNK_BLOCK_NUM,
+        0,
     )
     .await;
     assert!(r.is_ok());

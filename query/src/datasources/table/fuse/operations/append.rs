@@ -13,6 +13,7 @@
 //  limitations under the License.
 //
 
+use std::str::FromStr;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -22,7 +23,9 @@ use crate::datasources::table::fuse::io;
 use crate::datasources::table::fuse::io::BlockAppender;
 use crate::datasources::table::fuse::operations::AppendOperationLogEntry;
 use crate::datasources::table::fuse::FuseTable;
+use crate::datasources::table::fuse::DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD;
 use crate::datasources::table::fuse::DEFAULT_CHUNK_BLOCK_NUM;
+use crate::datasources::table::fuse::TBL_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::datasources::table::fuse::TBL_OPT_KEY_CHUNK_BLOCK_NUM;
 use crate::sessions::QueryContext;
 
@@ -33,20 +36,19 @@ impl FuseTable {
         ctx: Arc<QueryContext>,
         stream: SendableDataBlockStream,
     ) -> Result<Vec<AppendOperationLogEntry>> {
-        let chunk_size = self
-            .table_info
-            .options()
-            .get(TBL_OPT_KEY_CHUNK_BLOCK_NUM)
-            .map(|s| s.parse::<usize>().ok())
-            .flatten()
-            .unwrap_or(DEFAULT_CHUNK_BLOCK_NUM);
+        let chunk_block_num = self.get_option(TBL_OPT_KEY_CHUNK_BLOCK_NUM, DEFAULT_CHUNK_BLOCK_NUM);
+        let block_size_threshold = self.get_option(
+            TBL_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
+            DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
+        );
 
         let da = ctx.get_data_accessor()?;
         let segments = BlockAppender::append_blocks(
             da.clone(),
             stream,
             self.table_info.schema().as_ref(),
-            chunk_size,
+            chunk_block_num,
+            block_size_threshold,
         )
         .await?;
 
@@ -58,5 +60,14 @@ impl FuseTable {
             result.push(AppendOperationLogEntry::new(seg_loc, seg))
         }
         Ok(result)
+    }
+
+    fn get_option<T: FromStr>(&self, opt_key: &str, default: T) -> T {
+        self.table_info
+            .options()
+            .get(opt_key)
+            .map(|s| s.parse::<T>().ok())
+            .flatten()
+            .unwrap_or(default)
     }
 }

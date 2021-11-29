@@ -40,24 +40,19 @@ pub struct BlockAppender;
 impl BlockAppender {
     fn reshape_blocks(
         blocks: Vec<DataBlock>,
-        row_limit_per_block: usize,
+        block_size_threshold: usize,
     ) -> Result<Vec<DataBlock>> {
         let mut result = vec![];
 
-        let mut row_num_acc = 0;
         let mut block_size_acc = 0;
         let mut block_acc = vec![];
-        let block_size_limit = 20 * 1024 * 1024; // 200 MB
 
         for block in blocks {
-            if block_size_acc < block_size_limit {
-                //|| row_num_acc < row_limit_per_block {
-                row_num_acc += block.num_rows();
+            if block_size_acc < block_size_threshold {
                 block_size_acc += block.memory_size();
             } else {
                 result.push(DataBlock::concat_blocks(&block_acc)?);
                 block_acc.clear();
-                row_num_acc = 0;
                 block_size_acc = 0;
             }
             block_acc.push(block);
@@ -76,28 +71,21 @@ impl BlockAppender {
         stream: SendableDataBlockStream,
         data_schema: &DataSchema,
         chunk_block_num: usize,
+        block_size_threshold: usize,
     ) -> Result<Vec<SegmentInfo>> {
         // filter out empty blocks
         let stream = stream.try_filter(|block| std::future::ready(block.num_rows() > 0));
 
         // chunks by chunk_block_num
-        eprintln!("chunk block num {}", chunk_block_num);
         let mut stream = stream.try_chunks(chunk_block_num);
 
         let mut segments = vec![];
         // accumulate the stats and save the blocks
-        eprintln!("READING STREAM");
         while let Some(item) = stream.next().await {
             let item = item.map_err(|TryChunksError(_, e)| e)?;
 
-            let item_len = item.len();
             // re-shape the blocks
-            let blocks = Self::reshape_blocks(item, 8192)?;
-            eprintln!(
-                "number of block, {},  after re-shape {}",
-                item_len,
-                blocks.len()
-            );
+            let blocks = Self::reshape_blocks(item, block_size_threshold)?;
             let mut stats_acc = StatisticsAccumulator::new();
             let mut block_meta_acc = BlockMetaAccumulator::new();
 
@@ -125,7 +113,6 @@ impl BlockAppender {
             };
             segments.push(seg)
         }
-        eprintln!("READING STREAM | EDN");
         Ok(segments)
     }
 
