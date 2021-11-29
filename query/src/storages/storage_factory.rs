@@ -25,6 +25,7 @@ use crate::sessions::QueryContext;
 use crate::storages::csv::CsvTable;
 use crate::storages::memory::MemoryTable;
 use crate::storages::null::NullTable;
+use crate::storages::parquet::ParquetTable;
 use crate::storages::StorageContext;
 
 pub trait StorageEngine: Send + Sync {
@@ -50,13 +51,25 @@ impl StorageEngineFactory {
     pub fn create(query_ctx: QueryContext) -> Self {
         let mut engines: HashMap<String, Arc<dyn StorageEngine>> = Default::default();
 
+        // Register csv table engine.
         if query_ctx.get_config().query.table_engine_csv_enabled {
             engines.insert("CSV".to_string(), Arc::new(CsvTable::try_create));
         }
+
+        // Register memory table engine.
         if query_ctx.get_config().query.table_engine_memory_enabled {
             engines.insert("MEMORY".to_string(), Arc::new(MemoryTable::try_create));
         }
-        engines.insert("NULL".to_string(), Arc::new(NullTable::try_create));
+
+        // Register parquet table engine.
+        if query_ctx.get_config().query.table_engine_parquet_enabled {
+            engines.insert("PARQUET".to_string(), Arc::new(ParquetTable::try_create));
+        }
+
+        // Register NULL table engine.
+        if query_ctx.get_config().query.table_engine_parquet_enabled {
+            engines.insert("NULL".to_string(), Arc::new(NullTable::try_create));
+        }
 
         StorageEngineFactory {
             engines: RwLock::new(engines),

@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod context;
 mod csv;
 mod memory;
 mod null;
+mod parquet;
+mod storage_context;
 mod storage_factory;
 
-pub use context::StorageContext;
+pub use storage_context::StorageContext;
 pub use storage_factory::StorageEngine;
 pub use storage_factory::StorageEngineFactory;
