@@ -24,6 +24,7 @@ use crate::catalogs::Table;
 use crate::sessions::QueryContext;
 use crate::storages::csv::CsvTable;
 use crate::storages::memory::MemoryTable;
+use crate::storages::null::NullTable;
 use crate::storages::StorageContext;
 
 pub trait StorageEngine: Send + Sync {
@@ -55,6 +56,7 @@ impl StorageEngineFactory {
         if query_ctx.get_config().query.table_engine_memory_enabled {
             engines.insert("MEMORY".to_string(), Arc::new(MemoryTable::try_create));
         }
+        engines.insert("NULL".to_string(), Arc::new(NullTable::try_create));
 
         StorageEngineFactory {
             engines: RwLock::new(engines),
