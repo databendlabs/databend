@@ -13,7 +13,6 @@
 //  limitations under the License.
 //
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
@@ -35,10 +34,8 @@ use crate::catalogs::Database;
 use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
 use crate::configs::Config;
-use crate::datasources::prelude_func_engines;
 use crate::datasources::TableArgs;
-use crate::datasources::TableFuncEngine;
-use crate::datasources::TableFuncEngineRegistry;
+use crate::table_functions::TableFunctionFactory;
 
 /// Combine two catalogs together
 /// - read/search like operations are always performed at
@@ -51,30 +48,30 @@ pub struct DatabaseCatalog {
     /// bottom layer, writing goes here
     mutable_catalog: Arc<dyn Catalog>,
     /// table function engine factories
-    func_engine_registry: TableFuncEngineRegistry,
+    table_function_factory: Arc<TableFunctionFactory>,
 }
 
 impl DatabaseCatalog {
     pub fn create(
         immutable_catalog: Arc<dyn Catalog>,
         mutable_catalog: Arc<dyn Catalog>,
-        func_engine_registry: HashMap<String, (u64, Arc<dyn TableFuncEngine>)>,
+        table_function_factory: Arc<TableFunctionFactory>,
     ) -> Self {
         Self {
             immutable_catalog,
             mutable_catalog,
-            func_engine_registry,
+            table_function_factory,
         }
     }
 
     pub async fn try_create_with_config(conf: Config) -> Result<DatabaseCatalog> {
         let immutable_catalog = ImmutableCatalog::try_create_with_config(&conf).await?;
         let mutable_catalog = MutableCatalog::try_create_with_config(conf).await?;
-        let func_engine_registry = prelude_func_engines();
+        let table_function_factory = TableFunctionFactory::create();
         let res = DatabaseCatalog::create(
             Arc::new(immutable_catalog),
             Arc::new(mutable_catalog),
-            func_engine_registry,
+            Arc::new(table_function_factory),
         );
         Ok(res)
     }
@@ -152,13 +149,7 @@ impl Catalog for DatabaseCatalog {
         func_name: &str,
         tbl_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        let (id, factory) = self.func_engine_registry.get(func_name).ok_or_else(|| {
-            ErrorCode::UnknownTable(format!("Unknown table function {}", func_name))
-        })?;
-
-        // table function belongs to no/every database
-        let func = factory.try_create("", func_name, *id, tbl_args)?;
-        Ok(func)
+        self.table_function_factory.get(func_name, tbl_args)
     }
 
     async fn get_table_meta_by_id(

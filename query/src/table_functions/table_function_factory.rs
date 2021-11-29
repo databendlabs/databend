@@ -25,7 +25,6 @@ use common_planners::Expression;
 use crate::catalogs::TableFunction;
 use crate::catalogs::SYS_TBL_FUC_ID_END;
 use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
-use crate::sessions::QueryContext;
 use crate::table_functions::NumbersTable;
 
 pub type TableArgs = Option<Vec<Expression>>;
@@ -63,7 +62,7 @@ pub struct TableFunctionFactory {
 }
 
 impl TableFunctionFactory {
-    pub fn create(_query_ctx: QueryContext) -> Self {
+    pub fn create() -> Self {
         let mut id = SYS_TBL_FUNC_ID_BEGIN;
         let mut next_id = || -> MetaId {
             if id >= SYS_TBL_FUC_ID_END {
