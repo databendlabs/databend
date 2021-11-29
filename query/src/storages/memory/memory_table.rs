@@ -14,9 +14,11 @@
 //
 
 use std::any::Any;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
+use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchema;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -71,17 +73,44 @@ impl Table for MemoryTable {
         &self.table_info
     }
 
+    fn benefit_column_prune(&self) -> bool {
+        true
+    }
+
     async fn read_partitions(
         &self,
         ctx: Arc<QueryContext>,
-        _push_downs: Option<Extras>,
+        push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
         let blocks = self.blocks.read();
 
-        let rows = blocks.iter().map(|block| block.num_rows()).sum();
-        let bytes = blocks.iter().map(|block| block.memory_size()).sum();
+        let statistics = if let Some(Extras {
+            projection: Some(prj),
+            ..
+        }) = push_downs
+        {
+            let proj_cols = HashSet::<usize>::from_iter(prj);
+            blocks
+                .iter()
+                .fold(Statistics::default(), |mut stats, block| {
+                    stats.read_rows += block.num_rows() as usize;
+                    stats.read_bytes += (0..block.num_columns())
+                        .into_iter()
+                        .collect::<Vec<usize>>()
+                        .iter()
+                        .filter(|cid| proj_cols.contains(&(**cid as usize)))
+                        .map(|cid| block.columns()[*cid].get_array_memory_size() as u64)
+                        .sum::<u64>() as usize;
 
-        let statistics = Statistics::new_exact(rows, bytes);
+                    stats
+                })
+        } else {
+            let rows = blocks.iter().map(|block| block.num_rows()).sum();
+            let bytes = blocks.iter().map(|block| block.memory_size()).sum();
+
+            Statistics::new_exact(rows, bytes)
+        };
+
         let parts = crate::table_functions::generate_block_parts(
             0,
             ctx.get_settings().get_max_threads()? as u64,
@@ -93,13 +122,33 @@ impl Table for MemoryTable {
     async fn read(
         &self,
         ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
+        plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let blocks = self.blocks.read();
-        Ok(Box::pin(MemoryTableStream::try_create(
-            ctx,
-            blocks.clone(),
-        )?))
+        let push_downs = &plan.push_downs;
+
+        let blocks = if let Some(Extras {
+            projection: Some(prj),
+            ..
+        }) = push_downs
+        {
+            let mut pruned_blocks = Vec::with_capacity(prj.len());
+            let schema = Arc::new(self.table_info.schema().project(prj.clone()));
+            let raw_blocks = self.blocks.read().clone();
+
+            for raw_block in raw_blocks {
+                let raw_columns = raw_block.columns();
+                let columns: Vec<DataColumn> =
+                    prj.iter().map(|idx| raw_columns[*idx].clone()).collect();
+
+                pruned_blocks.push(DataBlock::create(schema.clone(), columns))
+            }
+
+            pruned_blocks
+        } else {
+            self.blocks.read().clone()
+        };
+
+        Ok(Box::pin(MemoryTableStream::try_create(ctx, blocks)?))
     }
 
     async fn append_data(

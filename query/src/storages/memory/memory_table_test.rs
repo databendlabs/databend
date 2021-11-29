@@ -63,11 +63,42 @@ async fn test_memorytable() -> Result<()> {
             .unwrap();
     }
 
-    // read.
+    // read pruned column.
+    {
+        let mut push_downs = Extras::default();
+        push_downs.projection = Some(vec![0usize]);
+        let source_plan = table.read_plan(ctx.clone(), Some(push_downs)).await?;
+        ctx.try_set_partitions(source_plan.parts.clone())?;
+        assert_eq!(table.engine(), "Memory");
+        assert!(table.benefit_column_prune());
+
+        let stream = table.read(ctx.clone(), &source_plan).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        assert_blocks_sorted_eq(
+            vec![
+                "+---+", //
+                "| a |", //
+                "+---+", //
+                "| 1 |", //
+                "| 2 |", //
+                "| 3 |", //
+                "| 4 |", //
+                "+---+", //
+            ],
+            &result,
+        );
+
+        // statistics
+        let expected_statistics = Statistics::new_estimated(4usize, 32usize);
+        assert_eq!(expected_statistics, source_plan.statistics);
+    }
+
+    // read all column.
     {
         let source_plan = table.read_plan(ctx.clone(), None).await?;
         ctx.try_set_partitions(source_plan.parts.clone())?;
         assert_eq!(table.engine(), "Memory");
+        assert!(table.benefit_column_prune());
 
         let stream = table.read(ctx.clone(), &source_plan).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
@@ -84,6 +115,10 @@ async fn test_memorytable() -> Result<()> {
             ],
             &result,
         );
+
+        // statistics
+        let expected_statistics = Statistics::new_exact(4usize, 64usize);
+        assert_eq!(expected_statistics, source_plan.statistics);
     }
 
     // truncate.
