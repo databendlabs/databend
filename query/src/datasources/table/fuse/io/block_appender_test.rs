@@ -45,7 +45,7 @@ async fn test_fuse_table_block_appender() {
         0,
     )
     .await;
-    assert!(r.is_ok());
+    assert!(r.is_ok(), "oops, unexpected result: {:?}", r);
     let r = r.unwrap();
     assert_eq!(r.len(), 1);
 
@@ -63,7 +63,7 @@ async fn test_fuse_table_block_appender() {
         0,
     )
     .await;
-    assert!(r.is_ok());
+    assert!(r.is_ok(), "oops, unexpected result: {:?}", r);
     let r = r.unwrap();
     assert_eq!(r.len(), number_of_blocks / chunk_size);
 
@@ -77,6 +77,59 @@ async fn test_fuse_table_block_appender() {
         0,
     )
     .await;
-    assert!(r.is_ok());
+    assert!(r.is_ok(), "oops, unexpected result: {:?}", r);
     assert!(r.unwrap().is_empty())
+}
+
+#[test]
+fn test_fuse_table_block_appender_reshape() {
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
+
+    // 1 empty blocks
+    // 1.1 empty block, zero block_size_threshold
+    let blocks = vec![];
+    let r = BlockAppender::reshape_blocks(blocks, 0);
+    assert!(r.is_ok(), "oops, unexpected result: {:?}", r);
+    let r = r.unwrap();
+    assert_eq!(r.len(), 0);
+
+    // 1.2 empty block, non block_size_threshold
+    let blocks = vec![];
+    let r = BlockAppender::reshape_blocks(blocks, 100);
+    assert!(r.is_ok(), "oops, unexpected result: {:?}", r);
+    let r = r.unwrap();
+    assert_eq!(r.len(), 0);
+
+    // 2. merge
+    // 2.1 exactly into on block
+    {
+        let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
+        let block_size = block.memory_size();
+        let block_num = 10;
+        let blocks = std::iter::repeat(block).take(block_num);
+        let block_size_threshold = block_size * block_num;
+        let r = BlockAppender::reshape_blocks(blocks.collect(), block_size_threshold);
+        assert!(r.is_ok(), "oops, unexpected result: {:?}", r);
+        let r = r.unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].memory_size(), block_size_threshold);
+    }
+
+    // 2.1 with remainders
+    {
+        let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
+        let block_size = block.memory_size();
+        let block_num = 10;
+        let blocks = std::iter::repeat(block.clone()).take(block_num);
+        let block_size_threshold = block_size * block_num;
+
+        // append an extra block
+        let blocks = blocks.chain(std::iter::once(block));
+        let r = BlockAppender::reshape_blocks(blocks.collect(), block_size_threshold);
+        assert!(r.is_ok(), "oops, unexpected result: {:?}", r);
+        let r = r.unwrap();
+        assert_eq!(r.len(), 2);
+        assert_eq!(r[0].memory_size(), block_size_threshold);
+        assert_eq!(r[1].memory_size(), block_size);
+    }
 }

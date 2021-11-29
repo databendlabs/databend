@@ -38,7 +38,7 @@ use crate::datasources::table::fuse::statistics::StatisticsAccumulator;
 pub struct BlockAppender;
 
 impl BlockAppender {
-    fn reshape_blocks(
+    pub(crate) fn reshape_blocks(
         blocks: Vec<DataBlock>,
         block_size_threshold: usize,
     ) -> Result<Vec<DataBlock>> {
@@ -48,14 +48,13 @@ impl BlockAppender {
         let mut block_acc = vec![];
 
         for block in blocks {
-            if block_size_acc < block_size_threshold {
-                block_size_acc += block.memory_size();
-            } else {
+            block_size_acc += block.memory_size();
+            block_acc.push(block);
+            if block_size_acc >= block_size_threshold {
                 result.push(DataBlock::concat_blocks(&block_acc)?);
                 block_acc.clear();
                 block_size_acc = 0;
             }
-            block_acc.push(block);
         }
 
         if !block_acc.is_empty() {
