@@ -44,11 +44,11 @@ where
 }
 
 #[derive(Default)]
-pub struct StorageCreatorFactory {
+pub struct StorageFactory {
     creators: RwLock<HashMap<String, Arc<dyn StorageCreator>>>,
 }
 
-impl StorageCreatorFactory {
+impl StorageFactory {
     pub fn create(query_ctx: QueryContext) -> Self {
         let mut creators: HashMap<String, Arc<dyn StorageCreator>> = Default::default();
 
@@ -73,7 +73,7 @@ impl StorageCreatorFactory {
         // Register FUSE table engine.
         creators.insert("FUSE".to_string(), Arc::new(FuseTable::try_create));
 
-        StorageCreatorFactory {
+        StorageFactory {
             creators: RwLock::new(creators),
         }
     }

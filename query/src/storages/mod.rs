@@ -24,5 +24,5 @@ mod system;
 
 pub use storage_context::StorageContext;
 pub use storage_factory::StorageCreator;
-pub use storage_factory::StorageCreatorFactory;
+pub use storage_factory::StorageFactory;
 pub use system::SystemDatabase;
