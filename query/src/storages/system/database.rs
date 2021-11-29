@@ -15,24 +15,16 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_meta_types::CreateTableReq;
-use common_meta_types::DropTableReply;
-use common_meta_types::DropTableReq;
-
-use crate::catalogs::Database;
-use crate::catalogs::InMemoryMetas;
-use crate::catalogs::Table;
+use crate::catalogs1::Database;
+use crate::catalogs1::InMemoryMetas;
+use crate::catalogs1::Table;
 use crate::storages::system;
 
 #[derive(Clone)]
-pub struct SystemDatabase {
-    sys_db_meta: Arc<InMemoryMetas>,
-}
+pub struct SystemDatabase {}
 
 impl SystemDatabase {
-    pub fn create(sys_db_meta: Arc<InMemoryMetas>) -> Self {
+    pub fn create(sys_db_meta: &mut InMemoryMetas) -> Self {
         let table_list: Vec<Arc<dyn Table>> = vec![
             Arc::new(system::OneTable::create(sys_db_meta.next_id())),
             Arc::new(system::FunctionsTable::create(sys_db_meta.next_id())),
@@ -54,7 +46,7 @@ impl SystemDatabase {
             sys_db_meta.insert(tbl);
         }
 
-        Self { sys_db_meta }
+        Self {}
     }
 }
 
@@ -62,43 +54,5 @@ impl SystemDatabase {
 impl Database for SystemDatabase {
     fn name(&self) -> &str {
         "system"
-    }
-
-    async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
-        // Check the database.
-        if db_name != self.name() {
-            return Err(ErrorCode::UnknownDatabase(format!(
-                "Unknown database {}",
-                db_name
-            )));
-        }
-
-        let table = self
-            .sys_db_meta
-            .get_by_name(table_name)
-            .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table: '{}'", table_name)))?;
-
-        Ok(table.clone())
-    }
-
-    async fn list_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
-        // ensure db exists
-        if db_name != self.name() {
-            return Err(ErrorCode::UnknownDatabase(format!(
-                "Unknown database {}",
-                db_name
-            )));
-        }
-        self.sys_db_meta.get_all_tables()
-    }
-
-    async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
-        Err(ErrorCode::UnImplement(
-            "Cannot create system database table",
-        ))
-    }
-
-    async fn drop_table(&self, _req: DropTableReq) -> Result<DropTableReply> {
-        Err(ErrorCode::UnImplement("Cannot drop system database table"))
     }
 }

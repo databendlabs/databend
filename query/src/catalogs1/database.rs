@@ -12,14 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+use dyn_clone::DynClone;
 
-use crate::catalogs1::DatabaseCatalog;
-use crate::configs::Config;
+#[async_trait::async_trait]
+pub trait Database: DynClone + Sync + Send {
+    /// Database name.
+    fn name(&self) -> &str;
+}
 
-pub fn try_create_catalog() -> Result<DatabaseCatalog> {
-    futures::executor::block_on(async move {
-        let conf = Config::default();
-        DatabaseCatalog::try_create_with_config(conf).await
-    })
+#[derive(Clone)]
+pub struct DefaultDatabase {
+    db_name: String,
+}
+
+impl DefaultDatabase {
+    pub fn new(db_name: impl Into<String>) -> Self {
+        Self {
+            db_name: db_name.into(),
+        }
+    }
+}
+
+impl Database for DefaultDatabase {
+    fn name(&self) -> &str {
+        &self.db_name
+    }
 }

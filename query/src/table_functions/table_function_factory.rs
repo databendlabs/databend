@@ -22,9 +22,9 @@ use common_infallible::RwLock;
 use common_meta_types::MetaId;
 use common_planners::Expression;
 
-use crate::catalogs::TableFunction;
-use crate::catalogs::SYS_TBL_FUC_ID_END;
-use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
+use crate::catalogs1::TableFunction;
+use crate::catalogs1::SYS_TBL_FUC_ID_END;
+use crate::catalogs1::SYS_TBL_FUNC_ID_BEGIN;
 use crate::table_functions::NumbersTable;
 
 pub type TableArgs = Option<Vec<Expression>>;

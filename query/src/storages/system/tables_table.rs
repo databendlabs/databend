@@ -25,8 +25,8 @@ use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::Catalog;
-use crate::catalogs::Table;
+use crate::catalogs1::Catalog;
+use crate::catalogs1::Table;
 use crate::sessions::QueryContext;
 
 pub struct TablesTable {
@@ -78,7 +78,7 @@ impl Table for TablesTable {
         let mut database_tables = vec![];
         for database in databases {
             let name = database.name();
-            for table in catalog.get_database(name).await?.list_tables(name).await? {
+            for table in catalog.list_tables(name).await? {
                 database_tables.push((name.to_string(), table));
             }
         }

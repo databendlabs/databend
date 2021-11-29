@@ -30,7 +30,7 @@ use sqlparser::ast::SetExpr;
 use sqlparser::ast::SqliteOnConflict;
 use sqlparser::ast::Values;
 
-use crate::catalogs::Table;
+use crate::catalogs1::Table;
 use crate::sessions::QueryContext;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::AnalyzableStatement;

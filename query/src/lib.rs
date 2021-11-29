@@ -20,11 +20,10 @@
 pub mod tests;
 
 pub mod api;
-pub mod catalogs;
+pub mod catalogs1;
 pub mod clusters;
 pub mod common;
 pub mod configs;
-pub mod datasources;
 pub mod functions;
 pub mod interpreters;
 pub mod metrics;

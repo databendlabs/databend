@@ -19,8 +19,8 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::TruncateTablePlan;
 use futures::TryStreamExt;
 
-use crate::catalogs::Catalog;
-use crate::catalogs::ToReadDataSourcePlan;
+use crate::catalogs1::Catalog;
+use crate::catalogs1::ToReadDataSourcePlan;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test]
@@ -30,18 +30,11 @@ async fn test_fuse_table_simple_case() -> Result<()> {
 
     // create test table
     let create_table_plan = fixture.default_crate_table_plan();
-    let db = create_table_plan.db.clone();
     let catalog = ctx.get_catalog();
-    catalog
-        .get_database(&db)
-        .await?
-        .create_table(create_table_plan.into())
-        .await?;
+    catalog.create_table(create_table_plan.into()).await?;
 
     // get table
     let table = catalog
-        .get_database(&db)
-        .await?
         .get_table(
             fixture.default_db().as_str(),
             fixture.default_table().as_str(),
@@ -60,8 +53,6 @@ async fn test_fuse_table_simple_case() -> Result<()> {
     // get the latest tbl
     let prev_version = table.get_table_info().ident.version;
     let table = catalog
-        .get_database(fixture.default_db().as_str())
-        .await?
         .get_table(
             fixture.default_db().as_str(),
             fixture.default_table().as_str(),
@@ -123,17 +114,10 @@ async fn test_fuse_table_truncate() -> Result<()> {
     let ctx = fixture.ctx();
 
     let create_table_plan = fixture.default_crate_table_plan();
-    let db = create_table_plan.db.clone();
     let catalog = ctx.get_catalog();
-    catalog
-        .get_database(&db)
-        .await?
-        .create_table(create_table_plan.into())
-        .await?;
+    catalog.create_table(create_table_plan.into()).await?;
 
     let table = catalog
-        .get_database(&db)
-        .await?
         .get_table(
             fixture.default_db().as_str(),
             fixture.default_table().as_str(),
@@ -149,8 +133,6 @@ async fn test_fuse_table_truncate() -> Result<()> {
     let prev_version = table.get_table_info().ident.version;
     let r = table.truncate(ctx.clone(), truncate_plan.clone()).await;
     let table = catalog
-        .get_database(fixture.default_db().as_str())
-        .await?
         .get_table(
             fixture.default_db().as_str(),
             fixture.default_table().as_str(),
@@ -173,8 +155,6 @@ async fn test_fuse_table_truncate() -> Result<()> {
     // get the latest tbl
     let prev_version = table.get_table_info().ident.version;
     let table = catalog
-        .get_database(fixture.default_db().as_str())
-        .await?
         .get_table(
             fixture.default_db().as_str(),
             fixture.default_table().as_str(),
@@ -196,8 +176,6 @@ async fn test_fuse_table_truncate() -> Result<()> {
     // get the latest tbl
     let prev_version = table.get_table_info().ident.version;
     let table = catalog
-        .get_database(fixture.default_db().as_str())
-        .await?
         .get_table(
             fixture.default_db().as_str(),
             fixture.default_table().as_str(),

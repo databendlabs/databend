@@ -12,14 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+use std::sync::Arc;
 
-use crate::catalogs1::DatabaseCatalog;
-use crate::configs::Config;
+use common_dal::InMemoryData;
+use common_infallible::RwLock;
+use common_meta_api::MetaApi;
 
-pub fn try_create_catalog() -> Result<DatabaseCatalog> {
-    futures::executor::block_on(async move {
-        let conf = Config::default();
-        DatabaseCatalog::try_create_with_config(conf).await
-    })
+use crate::storages::StorageFactory;
+
+#[derive(Clone)]
+pub struct CatalogContext {
+    pub meta: Arc<dyn MetaApi>,
+    pub storage_factory: Arc<StorageFactory>,
+    pub in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
 }

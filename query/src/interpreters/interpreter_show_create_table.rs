@@ -26,7 +26,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use log::debug;
 
-use crate::catalogs::Catalog;
+use crate::catalogs1::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
@@ -54,11 +54,7 @@ impl Interpreter for ShowCreateTableInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let catalog = self.ctx.get_catalog();
 
-        let table = catalog
-            .get_database(&self.plan.db)
-            .await?
-            .get_table(&self.plan.db, &self.plan.table)
-            .await?;
+        let table = catalog.get_table(&self.plan.db, &self.plan.table).await?;
 
         let name = table.name();
         let engine = table.engine();

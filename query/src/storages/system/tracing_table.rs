@@ -28,7 +28,7 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 use walkdir::WalkDir;
 
-use crate::catalogs::Table;
+use crate::catalogs1::Table;
 use crate::sessions::QueryContext;
 use crate::storages::system::TracingTableStream;
 

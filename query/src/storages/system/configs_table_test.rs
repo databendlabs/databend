@@ -19,8 +19,8 @@ use common_exception::Result;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
-use crate::catalogs::Table;
-use crate::catalogs::ToReadDataSourcePlan;
+use crate::catalogs1::Table;
+use crate::catalogs1::ToReadDataSourcePlan;
 use crate::configs::Config;
 use crate::storages::system::ConfigsTable;
 use crate::tests::try_create_context_with_config;

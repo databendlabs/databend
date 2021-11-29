@@ -18,14 +18,13 @@ use common_exception::Result;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_types::NodeInfo;
 
+use crate::catalogs1::CatalogContext;
 use crate::clusters::Cluster;
 use crate::configs::Config;
-use crate::datasources::context::DataSourceContext;
-use crate::datasources::DatabaseEngineRegistry;
-use crate::datasources::TableEngineRegistry;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::storages::StorageContext;
+use crate::storages::StorageFactory;
 use crate::tests::SessionManagerBuilder;
 
 pub fn try_create_context() -> Result<Arc<QueryContext>> {
@@ -109,26 +108,23 @@ pub fn try_create_cluster_context(desc: ClusterDescriptor) -> Result<Arc<QueryCo
     Ok(context)
 }
 
-pub fn try_create_datasource_context() -> Result<DataSourceContext> {
+pub fn try_create_catalog_context() -> Result<CatalogContext> {
     let meta_embedded = MetaEmbedded::sync_new_temp().unwrap();
-    let meta = Arc::new(meta_embedded);
-    let table_engine_registry = Arc::new(TableEngineRegistry::default());
-    let database_engine_registry = Arc::new(DatabaseEngineRegistry::default());
+    let meta = meta_embedded;
+    let storage_factory = StorageFactory::create(Config::default());
 
-    Ok(DataSourceContext {
-        meta,
-        table_engine_registry,
-        database_engine_registry,
+    Ok(CatalogContext {
+        meta: Arc::new(meta),
+        storage_factory: Arc::new(storage_factory),
         in_memory_data: Arc::new(Default::default()),
     })
 }
 
 pub fn try_create_storage_context() -> Result<StorageContext> {
     let meta_embedded = MetaEmbedded::sync_new_temp().unwrap();
-    let meta = Arc::new(meta_embedded);
 
     Ok(StorageContext {
-        meta,
+        meta: Arc::new(meta_embedded),
         in_memory_data: Arc::new(Default::default()),
     })
 }

@@ -11,23 +11,30 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
 
 mod catalog;
-mod context;
-mod number;
-mod parquet;
-mod parse_query;
-mod sessions;
-pub(crate) mod tls_constants;
+mod catalog_context;
+mod database;
+mod table;
+mod table_function;
+mod table_id_ranges;
+mod table_memory_meta;
 
-pub use catalog::try_create_catalog;
-pub use context::try_create_catalog_context;
-pub use context::try_create_cluster_context;
-pub use context::try_create_context;
-pub use context::try_create_context_with_config;
-pub use context::try_create_storage_context;
-pub use context::ClusterDescriptor;
-pub use number::NumberTestData;
-pub use parquet::ParquetTestData;
-pub use parse_query::parse_query;
-pub use sessions::SessionManagerBuilder;
+mod backends;
+mod impls;
+
+pub use backends::MetaRemote;
+pub use catalog::Catalog;
+pub use catalog_context::CatalogContext;
+pub use database::Database;
+pub use database::DefaultDatabase;
+pub use impls::DatabaseCatalog;
+pub use impls::ImmutableCatalog;
+pub use impls::MutableCatalog;
+pub use table::Table;
+pub use table::TablePtr;
+pub use table::ToReadDataSourcePlan;
+pub use table_function::TableFunction;
+pub use table_id_ranges::*;
+pub use table_memory_meta::InMemoryMetas;

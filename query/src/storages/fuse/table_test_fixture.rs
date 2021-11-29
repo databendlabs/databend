@@ -29,7 +29,7 @@ use common_planners::CreateTablePlan;
 use tempfile::TempDir;
 use uuid::Uuid;
 
-use crate::catalogs::Catalog;
+use crate::catalogs1::Catalog;
 use crate::configs::Config;
 use crate::sessions::QueryContext;
 

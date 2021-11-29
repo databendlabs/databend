@@ -24,7 +24,7 @@ use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
 
-use crate::catalogs::ToReadDataSourcePlan;
+use crate::catalogs1::ToReadDataSourcePlan;
 use crate::optimizers::Optimizer;
 use crate::sessions::QueryContext;
 

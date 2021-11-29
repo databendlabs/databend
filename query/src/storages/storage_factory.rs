@@ -20,8 +20,8 @@ use common_infallible::RwLock;
 use common_meta_types::TableInfo;
 use nom::lib::std::collections::HashMap;
 
-use crate::catalogs::Table;
-use crate::sessions::QueryContext;
+use crate::catalogs1::Table;
+use crate::configs::Config;
 use crate::storages::csv::CsvTable;
 use crate::storages::fuse::FuseTable;
 use crate::storages::memory::MemoryTable;
@@ -49,21 +49,21 @@ pub struct StorageFactory {
 }
 
 impl StorageFactory {
-    pub fn create(query_ctx: QueryContext) -> Self {
+    pub fn create(conf: Config) -> Self {
         let mut creators: HashMap<String, Arc<dyn StorageCreator>> = Default::default();
 
         // Register csv table engine.
-        if query_ctx.get_config().query.table_engine_csv_enabled {
+        if conf.query.table_engine_csv_enabled {
             creators.insert("CSV".to_string(), Arc::new(CsvTable::try_create));
         }
 
         // Register memory table engine.
-        if query_ctx.get_config().query.table_engine_memory_enabled {
+        if conf.query.table_engine_memory_enabled {
             creators.insert("MEMORY".to_string(), Arc::new(MemoryTable::try_create));
         }
 
         // Register parquet table engine.
-        if query_ctx.get_config().query.table_engine_parquet_enabled {
+        if conf.query.table_engine_parquet_enabled {
             creators.insert("PARQUET".to_string(), Arc::new(ParquetTable::try_create));
         }
 

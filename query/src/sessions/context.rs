@@ -42,9 +42,9 @@ use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::impls::DatabaseCatalog;
-use crate::catalogs::Catalog;
-use crate::catalogs::Table;
+use crate::catalogs1::Catalog;
+use crate::catalogs1::DatabaseCatalog;
+use crate::catalogs1::Table;
 use crate::clusters::Cluster;
 use crate::configs::AzureStorageBlobConfig;
 use crate::configs::Config;

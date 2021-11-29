@@ -34,8 +34,8 @@ use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
 
 use super::numbers_stream::NumbersStream;
-use crate::catalogs::Table;
-use crate::catalogs::TableFunction;
+use crate::catalogs1::Table;
+use crate::catalogs1::TableFunction;
 use crate::pipelines::transforms::get_sort_descriptions;
 use crate::sessions::QueryContext;
 use crate::table_functions::generate_block_parts;

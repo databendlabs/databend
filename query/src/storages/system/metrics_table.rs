@@ -33,7 +33,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use serde_json;
 
-use crate::catalogs::Table;
+use crate::catalogs1::Table;
 use crate::sessions::QueryContext;
 
 pub struct MetricsTable {

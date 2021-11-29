@@ -22,7 +22,7 @@ use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use uuid::Uuid;
 
-use crate::catalogs::Catalog;
+use crate::catalogs1::Catalog;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io;
 use crate::storages::fuse::io::TBL_OPT_KEY_SNAPSHOT_LOC;

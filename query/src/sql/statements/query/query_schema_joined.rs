@@ -26,7 +26,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Extras;
 
-use crate::catalogs::Table;
+use crate::catalogs1::Table;
 use crate::sql::statements::QueryAnalyzeState;
 
 #[derive(Clone)]

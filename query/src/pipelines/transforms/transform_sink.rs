@@ -22,7 +22,7 @@ use common_streams::CastStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
-use crate::catalogs::Catalog;
+use crate::catalogs1::Catalog;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::sessions::QueryContext;

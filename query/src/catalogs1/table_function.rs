@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+use std::sync::Arc;
 
-use crate::catalogs1::DatabaseCatalog;
-use crate::configs::Config;
+use crate::catalogs1::Table;
 
-pub fn try_create_catalog() -> Result<DatabaseCatalog> {
-    futures::executor::block_on(async move {
-        let conf = Config::default();
-        DatabaseCatalog::try_create_with_config(conf).await
-    })
+pub trait TableFunction: Sync + Send + Table {
+    fn function_name(&self) -> &str;
+
+    fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
+    where Self: 'a;
 }

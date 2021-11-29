@@ -21,7 +21,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
-use crate::catalogs::Catalog;
+use crate::catalogs1::Catalog;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
@@ -54,12 +54,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
 
         match &plan.on {
             GrantObject::Table(database_name, table_name) => {
-                if !catalog
-                    .get_database(database_name)
-                    .await?
-                    .exists_table(database_name, table_name)
-                    .await?
-                {
+                if !catalog.exists_table(database_name, table_name).await? {
                     return Err(common_exception::ErrorCode::UnknownTable(format!(
                         "table {}.{} not exists",
                         database_name, table_name,
@@ -67,7 +62,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
                 }
             }
             GrantObject::Database(database_name) => {
-                if !catalog.as_ref().exists_database(database_name).await? {
+                if !catalog.exists_database(database_name).await? {
                     return Err(common_exception::ErrorCode::UnknownDatabase(format!(
                         "database {} not exists",
                         database_name,

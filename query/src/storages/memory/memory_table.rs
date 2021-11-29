@@ -30,7 +30,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::stream::StreamExt;
 
-use crate::catalogs::Table;
+use crate::catalogs1::Table;
 use crate::sessions::QueryContext;
 use crate::storages::memory::MemoryTableStream;
 use crate::storages::StorageContext;

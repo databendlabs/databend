@@ -18,8 +18,8 @@ use common_base::tokio;
 use common_exception::Result;
 use futures::TryStreamExt;
 
-use crate::catalogs::Table;
-use crate::catalogs::ToReadDataSourcePlan;
+use crate::catalogs1::Table;
+use crate::catalogs1::ToReadDataSourcePlan;
 use crate::storages::system::ColumnsTable;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
