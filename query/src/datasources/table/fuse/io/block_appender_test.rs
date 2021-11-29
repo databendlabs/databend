@@ -84,7 +84,7 @@ async fn test_fuse_table_block_appender() {
 #[test]
 fn test_fuse_table_block_appender_reshape() -> common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
-    let sample_block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
+    let sample_block = DataBlock::create_by_array(schema, vec![Series::new(vec![1, 2, 3])]);
     let sample_block_size = sample_block.memory_size();
 
     // 1 empty blocks
@@ -95,7 +95,7 @@ fn test_fuse_table_block_appender_reshape() -> common_exception::Result<()> {
     let r = r.unwrap();
     assert_eq!(r.len(), 0);
 
-    // 1.2 empty block, non block_size_threshold
+    // 1.2 empty block, arbitrary block_size_threshold
     let blocks = vec![];
     let r = BlockAppender::reshape_blocks(blocks, 100);
     assert!(r.is_ok(), "oops, unexpected result: {:?}", r);
