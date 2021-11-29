@@ -28,9 +28,9 @@ use common_planners::PlanNode;
 use futures::future::AbortHandle;
 use uuid::Uuid;
 
-use crate::catalogs1::Catalog;
-use crate::catalogs1::DatabaseCatalog;
-use crate::catalogs1::Table;
+use crate::catalogs::Catalog;
+use crate::catalogs::DatabaseCatalog;
+use crate::catalogs::Table;
 use crate::clusters::Cluster;
 use crate::configs::Config;
 use crate::servers::http::v1::query::HttpQueryHandle;

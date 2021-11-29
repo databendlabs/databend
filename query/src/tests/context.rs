@@ -18,7 +18,7 @@ use common_exception::Result;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_types::NodeInfo;
 
-use crate::catalogs1::CatalogContext;
+use crate::catalogs::CatalogContext;
 use crate::clusters::Cluster;
 use crate::configs::Config;
 use crate::sessions::QueryContext;

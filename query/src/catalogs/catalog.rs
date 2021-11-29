@@ -30,9 +30,9 @@ use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use dyn_clone::DynClone;
 
-use crate::catalogs1::Database;
-use crate::catalogs1::Table;
-use crate::catalogs1::TableFunction;
+use crate::catalogs::Database;
+use crate::catalogs::Table;
+use crate::catalogs::TableFunction;
 use crate::table_functions::TableArgs;
 
 /// Catalog is the global view of all the databases of the user.
@@ -42,6 +42,10 @@ use crate::table_functions::TableArgs;
 /// and use the engine to create them.
 #[async_trait::async_trait]
 pub trait Catalog: DynClone + Send + Sync {
+    ///
+    /// Database.
+    ///
+
     // Get the database by name.
     async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>>;
 
@@ -66,29 +70,15 @@ pub trait Catalog: DynClone + Send + Sync {
         }
     }
 
+    ///
+    /// Table.
+    ///
+
     // Build a `Arc<dyn Table>` from `TableInfo`.
-    fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
-
-    async fn upsert_table_option(
-        &self,
-        req: UpsertTableOptionReq,
-    ) -> Result<UpsertTableOptionReply>;
-
-    // Get function by name.
-    fn get_table_function(
-        &self,
-        _func_name: &str,
-        _tbl_args: TableArgs,
-    ) -> Result<Arc<dyn TableFunction>> {
-        unimplemented!()
-    }
+    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
 
     // Get the table meta by meta id.
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)>;
-
-    async fn init(&self) -> Result<()> {
-        Ok(())
-    }
 
     // Get one table by db and table name.
     async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>>;
@@ -111,5 +101,23 @@ pub trait Catalog: DynClone + Send + Sync {
                 }
             }
         }
+    }
+
+    async fn upsert_table_option(
+        &self,
+        req: UpsertTableOptionReq,
+    ) -> Result<UpsertTableOptionReply>;
+
+    ///
+    /// Table function
+    ///
+
+    // Get function by name.
+    fn get_table_function(
+        &self,
+        _func_name: &str,
+        _tbl_args: TableArgs,
+    ) -> Result<Arc<dyn TableFunction>> {
+        unimplemented!()
     }
 }

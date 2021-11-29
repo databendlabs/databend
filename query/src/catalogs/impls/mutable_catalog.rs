@@ -37,12 +37,12 @@ use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
 
-use crate::catalogs1::backends::MetaRemote;
-use crate::catalogs1::catalog::Catalog;
-use crate::catalogs1::database::Database;
-use crate::catalogs1::CatalogContext;
-use crate::catalogs1::DefaultDatabase;
-use crate::catalogs1::Table;
+use crate::catalogs::backends::MetaRemote;
+use crate::catalogs::catalog::Catalog;
+use crate::catalogs::database::Database;
+use crate::catalogs::CatalogContext;
+use crate::catalogs::DefaultDatabase;
+use crate::catalogs::Table;
 use crate::common::MetaClientProvider;
 use crate::configs::Config;
 use crate::storages::StorageContext;
@@ -145,20 +145,13 @@ impl Catalog for MutableCatalog {
         Ok(())
     }
 
-    fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         let storage = self.ctx.storage_factory.clone();
         let ctx = StorageContext {
             meta: self.ctx.meta.clone(),
             in_memory_data: self.ctx.in_memory_data.clone(),
         };
         storage.get_table(ctx, table_info)
-    }
-
-    async fn upsert_table_option(
-        &self,
-        req: UpsertTableOptionReq,
-    ) -> Result<UpsertTableOptionReply> {
-        self.ctx.meta.upsert_table_option(req).await
     }
 
     async fn get_table_meta_by_id(
@@ -174,7 +167,7 @@ impl Catalog for MutableCatalog {
             .meta
             .get_table(GetTableReq::new(db_name, table_name))
             .await?;
-        self.build_table(table_info.as_ref())
+        self.get_table_by_info(table_info.as_ref())
     }
 
     async fn list_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
@@ -185,7 +178,7 @@ impl Catalog for MutableCatalog {
             .await?;
 
         table_infos.iter().try_fold(vec![], |mut acc, item| {
-            let tbl = self.build_table(item.as_ref())?;
+            let tbl = self.get_table_by_info(item.as_ref())?;
             acc.push(tbl);
             Ok(acc)
         })
@@ -198,5 +191,12 @@ impl Catalog for MutableCatalog {
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
         self.ctx.meta.drop_table(req).await
+    }
+
+    async fn upsert_table_option(
+        &self,
+        req: UpsertTableOptionReq,
+    ) -> Result<UpsertTableOptionReply> {
+        self.ctx.meta.upsert_table_option(req).await
     }
 }

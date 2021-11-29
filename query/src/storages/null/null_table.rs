@@ -26,7 +26,7 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing::info;
 use futures::stream::StreamExt;
 
-use crate::catalogs1::Table;
+use crate::catalogs::Table;
 use crate::sessions::QueryContext;
 use crate::storages::StorageContext;
 

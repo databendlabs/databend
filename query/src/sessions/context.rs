@@ -42,9 +42,9 @@ use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs1::Catalog;
-use crate::catalogs1::DatabaseCatalog;
-use crate::catalogs1::Table;
+use crate::catalogs::Catalog;
+use crate::catalogs::DatabaseCatalog;
+use crate::catalogs::Table;
 use crate::clusters::Cluster;
 use crate::configs::AzureStorageBlobConfig;
 use crate::configs::Config;
@@ -92,7 +92,7 @@ impl QueryContext {
         let catalog = self.get_catalog();
 
         if plan.tbl_args.is_none() {
-            catalog.build_table(&plan.table_info)
+            catalog.get_table_by_info(&plan.table_info)
         } else {
             Ok(catalog
                 .get_table_function(&plan.table_info.name, plan.tbl_args.clone())?

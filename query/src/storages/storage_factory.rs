@@ -20,7 +20,7 @@ use common_infallible::RwLock;
 use common_meta_types::TableInfo;
 use nom::lib::std::collections::HashMap;
 
-use crate::catalogs1::Table;
+use crate::catalogs::Table;
 use crate::configs::Config;
 use crate::storages::csv::CsvTable;
 use crate::storages::fuse::FuseTable;

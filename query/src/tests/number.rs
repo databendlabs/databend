@@ -20,8 +20,8 @@ use common_exception::Result;
 use common_planners::Expression;
 use common_planners::ReadDataSourcePlan;
 
-use crate::catalogs1::Catalog;
-use crate::catalogs1::ToReadDataSourcePlan;
+use crate::catalogs::Catalog;
+use crate::catalogs::ToReadDataSourcePlan;
 use crate::pipelines::transforms::SourceTransform;
 use crate::sessions::QueryContext;
 use crate::tests::try_create_catalog;

@@ -29,7 +29,7 @@ use common_planners::TruncateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs1::Table;
+use crate::catalogs::Table;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::fuse::meta::TableSnapshot;

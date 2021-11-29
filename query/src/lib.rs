@@ -20,7 +20,7 @@
 pub mod tests;
 
 pub mod api;
-pub mod catalogs1;
+pub mod catalogs;
 pub mod clusters;
 pub mod common;
 pub mod configs;

@@ -20,7 +20,7 @@ use common_planners::*;
 use futures::TryStreamExt;
 
 use super::NumbersTable;
-use crate::catalogs1::ToReadDataSourcePlan;
+use crate::catalogs::ToReadDataSourcePlan;
 
 #[tokio::test]
 async fn test_number_table() -> Result<()> {

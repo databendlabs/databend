@@ -22,7 +22,7 @@ use common_macros::MallocSizeOf;
 use common_mem_allocator::malloc_size;
 use futures::channel::*;
 
-use crate::catalogs1::DatabaseCatalog;
+use crate::catalogs::DatabaseCatalog;
 use crate::configs::Config;
 use crate::sessions::context_shared::QueryContextShared;
 use crate::sessions::MutableStatus;

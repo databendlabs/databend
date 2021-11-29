@@ -34,7 +34,7 @@ use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
 
-use crate::catalogs1::Table;
+use crate::catalogs::Table;
 use crate::interpreters::plan_scheduler_ext;
 use crate::interpreters::utils::apply_plan_rewrite;
 use crate::interpreters::Interpreter;

@@ -30,12 +30,12 @@ use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 
-use crate::catalogs1::catalog::Catalog;
-use crate::catalogs1::impls::ImmutableCatalog;
-use crate::catalogs1::impls::MutableCatalog;
-use crate::catalogs1::Database;
-use crate::catalogs1::Table;
-use crate::catalogs1::TableFunction;
+use crate::catalogs::catalog::Catalog;
+use crate::catalogs::impls::ImmutableCatalog;
+use crate::catalogs::impls::MutableCatalog;
+use crate::catalogs::Database;
+use crate::catalogs::Table;
+use crate::catalogs::TableFunction;
 use crate::configs::Config;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunctionFactory;
@@ -125,34 +125,18 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.drop_database(req).await
     }
 
-    fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        let res = self.immutable_catalog.build_table(table_info);
+    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+        let res = self.immutable_catalog.get_table_by_info(table_info);
         match res {
             Ok(t) => Ok(t),
             Err(e) => {
                 if e.code() == ErrorCode::UnknownTable("").code() {
-                    self.mutable_catalog.build_table(table_info)
+                    self.mutable_catalog.get_table_by_info(table_info)
                 } else {
                     Err(e)
                 }
             }
         }
-    }
-
-    async fn upsert_table_option(
-        &self,
-        req: UpsertTableOptionReq,
-    ) -> Result<UpsertTableOptionReply> {
-        // upsert table option in BOTTOM layer only
-        self.mutable_catalog.upsert_table_option(req).await
-    }
-
-    fn get_table_function(
-        &self,
-        func_name: &str,
-        tbl_args: TableArgs,
-    ) -> Result<Arc<dyn TableFunction>> {
-        self.table_function_factory.get(func_name, tbl_args)
     }
 
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
@@ -209,5 +193,21 @@ impl Catalog for DatabaseCatalog {
             }
             Ok(x) => Ok(x),
         }
+    }
+
+    async fn upsert_table_option(
+        &self,
+        req: UpsertTableOptionReq,
+    ) -> Result<UpsertTableOptionReply> {
+        // upsert table option in BOTTOM layer only
+        self.mutable_catalog.upsert_table_option(req).await
+    }
+
+    fn get_table_function(
+        &self,
+        func_name: &str,
+        tbl_args: TableArgs,
+    ) -> Result<Arc<dyn TableFunction>> {
+        self.table_function_factory.get(func_name, tbl_args)
     }
 }

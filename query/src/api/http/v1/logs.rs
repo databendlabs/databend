@@ -22,7 +22,7 @@ use poem::web::Data;
 use poem::IntoResponse;
 use tokio_stream::StreamExt;
 
-use crate::catalogs1::ToReadDataSourcePlan;
+use crate::catalogs::ToReadDataSourcePlan;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 

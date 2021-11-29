@@ -19,8 +19,8 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::TruncateTablePlan;
 use futures::TryStreamExt;
 
-use crate::catalogs1::Catalog;
-use crate::catalogs1::ToReadDataSourcePlan;
+use crate::catalogs::Catalog;
+use crate::catalogs::ToReadDataSourcePlan;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test]

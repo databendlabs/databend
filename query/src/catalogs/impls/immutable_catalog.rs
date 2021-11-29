@@ -30,11 +30,11 @@ use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 
-use crate::catalogs1::catalog::Catalog;
-use crate::catalogs1::Database;
-use crate::catalogs1::InMemoryMetas;
-use crate::catalogs1::Table;
-use crate::catalogs1::SYS_TBL_ID_BEGIN;
+use crate::catalogs::catalog::Catalog;
+use crate::catalogs::Database;
+use crate::catalogs::InMemoryMetas;
+use crate::catalogs::Table;
+use crate::catalogs::SYS_TBL_ID_BEGIN;
 use crate::configs::Config;
 use crate::storages::SystemDatabase;
 
@@ -86,7 +86,7 @@ impl Catalog for ImmutableCatalog {
         Err(ErrorCode::UnImplement("Cannot drop system database"))
     }
 
-    fn build_table(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         let table_id = table_info.ident.table_id;
 
         let table = self
@@ -94,16 +94,6 @@ impl Catalog for ImmutableCatalog {
             .get_by_id(&table_id)
             .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id)))?;
         Ok(table.clone())
-    }
-
-    async fn upsert_table_option(
-        &self,
-        req: UpsertTableOptionReq,
-    ) -> Result<UpsertTableOptionReply> {
-        Err(ErrorCode::UnImplement(format!(
-            "Commit table not allowed for system database {:?}",
-            req
-        )))
     }
 
     async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<(TableIdent, Arc<TableMeta>)> {
@@ -150,5 +140,15 @@ impl Catalog for ImmutableCatalog {
             "Unknown table: '{}'",
             table_name
         )));
+    }
+
+    async fn upsert_table_option(
+        &self,
+        req: UpsertTableOptionReq,
+    ) -> Result<UpsertTableOptionReply> {
+        Err(ErrorCode::UnImplement(format!(
+            "Commit table not allowed for system database {:?}",
+            req
+        )))
     }
 }

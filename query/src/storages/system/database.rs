@@ -15,9 +15,9 @@
 
 use std::sync::Arc;
 
-use crate::catalogs1::Database;
-use crate::catalogs1::InMemoryMetas;
-use crate::catalogs1::Table;
+use crate::catalogs::Database;
+use crate::catalogs::InMemoryMetas;
+use crate::catalogs::Table;
 use crate::storages::system;
 
 #[derive(Clone)]

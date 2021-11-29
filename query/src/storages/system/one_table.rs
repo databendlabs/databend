@@ -29,7 +29,7 @@ use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs1::Table;
+use crate::catalogs::Table;
 use crate::sessions::QueryContext;
 
 pub struct OneTable {

@@ -29,7 +29,7 @@ use common_planners::lit;
 use common_planners::Extras;
 use futures::TryStreamExt;
 
-use crate::catalogs1::Catalog;
+use crate::catalogs::Catalog;
 use crate::storages::fuse::index::range_filter;
 use crate::storages::fuse::io::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::fuse::table_test_fixture::TestFixture;

@@ -32,7 +32,7 @@ use common_streams::CsvSource;
 use common_streams::SendableDataBlockStream;
 use common_streams::Source;
 
-use crate::catalogs1::Table;
+use crate::catalogs::Table;
 use crate::sessions::QueryContext;
 use crate::storages::csv::count_lines;
 use crate::storages::StorageContext;
