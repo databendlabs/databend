@@ -45,7 +45,7 @@ pub fn add_env_vergen() {
 
 pub fn add_env_commit_authors() {
     let r = run_script::run_script!(
-        // use eamil to uniq authors
+        // use email to uniq authors
         r#"git shortlog HEAD -sne | awk '{$1=""; sub(" ", "    \""); print }' | awk -F'<' '!x[$1]++' | \
         awk -F'<' '!x[$2]++' | awk -F'<' '{gsub(/ +$/, "\",", $1); print $1}' | sort | xargs"#
     );

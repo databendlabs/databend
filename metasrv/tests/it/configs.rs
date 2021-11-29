@@ -15,7 +15,7 @@
 use databend_meta::configs::Config;
 
 #[test]
-fn test_fuse_commit_version() -> anyhow::Result<()> {
+fn test_bin_commit_version() -> anyhow::Result<()> {
     let v = &databend_meta::configs::DATABEND_COMMIT_VERSION;
     assert!(v.len() > 0);
     Ok(())
