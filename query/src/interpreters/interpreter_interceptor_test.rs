@@ -24,7 +24,7 @@ use crate::sql::*;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_interpreter_interceptor() -> Result<()> {
     common_tracing::init_default_ut_tracing();
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
 
     static TEST_QUERY: &str = "select number from numbers_mt(10)";
     if let PlanNode::Select(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {

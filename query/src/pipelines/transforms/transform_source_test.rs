@@ -23,7 +23,7 @@ use crate::pipelines::processors::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn transform_source_test() -> Result<()> {
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
     let mut pipeline = Pipeline::create(ctx);

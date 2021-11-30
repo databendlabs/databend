@@ -252,7 +252,7 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
         write!(f, "Create table {:}.{:}", plan.db, plan.table)?;
         write!(f, " {:},", plan.schema())?;
         // need engine to impl Display
-        write!(f, " engine: {},", plan.engine().to_string())?;
+        write!(f, " engine: {},", plan.engine())?;
         write!(f, " if_not_exists:{:},", plan.if_not_exists)?;
         write!(f, " option: {:?}", plan.options())
     }

@@ -21,10 +21,10 @@ use common_planners::Expression;
 use common_planners::ReadDataSourcePlan;
 
 use crate::catalogs::Catalog;
-use crate::catalogs::ToReadDataSourcePlan;
 use crate::pipelines::transforms::SourceTransform;
 use crate::sessions::QueryContext;
-use crate::tests::try_create_catalog;
+use crate::storages::ToReadDataSourcePlan;
+use crate::tests::create_catalog;
 
 pub struct NumberTestData {
     ctx: Arc<QueryContext>,
@@ -40,13 +40,13 @@ impl NumberTestData {
     }
 
     pub fn number_schema_for_test(&self) -> Result<DataSchemaRef> {
-        let catalog = try_create_catalog()?;
+        let catalog = create_catalog()?;
         let tbl_arg = Some(vec![Expression::create_literal(DataValue::Int64(Some(1)))]);
         Ok(catalog.get_table_function(self.table, tbl_arg)?.schema())
     }
 
     pub fn number_read_source_plan_for_test(&self, numbers: i64) -> Result<ReadDataSourcePlan> {
-        let catalog = try_create_catalog()?;
+        let catalog = create_catalog()?;
         futures::executor::block_on(async move {
             let tbl_arg = Some(vec![Expression::create_literal(DataValue::Int64(Some(
                 numbers,

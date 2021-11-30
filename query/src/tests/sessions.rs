@@ -22,7 +22,7 @@ use common_exception::Result;
 use crate::configs::Config;
 use crate::sessions::SessionManager;
 
-async fn async_try_create_sessions(config: Config) -> Result<Arc<SessionManager>> {
+async fn async_create_sessions(config: Config) -> Result<Arc<SessionManager>> {
     let sessions = SessionManager::from_conf(config.clone()).await?;
 
     let cluster_discovery = sessions.get_cluster_discovery();
@@ -30,9 +30,9 @@ async fn async_try_create_sessions(config: Config) -> Result<Arc<SessionManager>
     Ok(sessions)
 }
 
-fn sync_try_create_sessions(config: Config) -> Result<Arc<SessionManager>> {
+fn sync_create_sessions(config: Config) -> Result<Arc<SessionManager>> {
     let runtime = Runtime::new()?;
-    runtime.block_on(async_try_create_sessions(config))
+    runtime.block_on(async_create_sessions(config))
 }
 
 pub struct SessionManagerBuilder {
@@ -104,7 +104,7 @@ impl SessionManagerBuilder {
 
     pub fn build(self) -> Result<Arc<SessionManager>> {
         let config = self.config;
-        let handle = Thread::spawn(move || sync_try_create_sessions(config));
+        let handle = Thread::spawn(move || sync_create_sessions(config));
         handle.join().unwrap()
     }
 }

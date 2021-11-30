@@ -22,10 +22,10 @@ use common_infallible::RwLock;
 use common_meta_types::MetaId;
 use common_planners::Expression;
 
-use crate::catalogs::TableFunction;
 use crate::catalogs::SYS_TBL_FUC_ID_END;
 use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
 use crate::table_functions::NumbersTable;
+use crate::table_functions::TableFunction;
 
 pub type TableArgs = Option<Vec<Expression>>;
 type TableFunctionCreators = RwLock<HashMap<String, (MetaId, Arc<dyn TableFunctionCreator>)>>;

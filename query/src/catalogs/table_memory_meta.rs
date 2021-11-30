@@ -22,7 +22,7 @@ use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::MetaId;
 
-use crate::catalogs::Table;
+use crate::storages::Table;
 
 pub struct InMemoryMetas {
     next_id: AtomicU64,

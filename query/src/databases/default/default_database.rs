@@ -12,13 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use common_exception::Result;
 
-use crate::catalogs::Table;
+use crate::databases::Database;
+use crate::databases::DatabaseContext;
 
-pub trait TableFunction: Sync + Send + Table {
-    fn function_name(&self) -> &str;
+#[derive(Clone)]
+pub struct DefaultDatabase {
+    db_name: String,
+}
 
-    fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
-    where Self: 'a;
+impl DefaultDatabase {
+    pub fn try_create(
+        _ctx: DatabaseContext,
+        db_name: &str,
+        _db_engine: &str,
+    ) -> Result<Box<dyn Database>> {
+        Ok(Box::new(Self {
+            db_name: db_name.to_string(),
+        }))
+    }
+}
+
+impl Database for DefaultDatabase {
+    fn name(&self) -> &str {
+        &self.db_name
+    }
 }

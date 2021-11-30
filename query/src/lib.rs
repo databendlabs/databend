@@ -24,6 +24,7 @@ pub mod catalogs;
 pub mod clusters;
 pub mod common;
 pub mod configs;
+pub mod databases;
 pub mod functions;
 pub mod interpreters;
 pub mod metrics;

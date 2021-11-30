@@ -39,8 +39,8 @@ impl AnalyzableStatement for DfUseDatabase {
         }
 
         let db = self.name.0[0].value.clone();
-        Ok(AnalyzedResult::SimpleQuery(PlanNode::UseDatabase(
-            UseDatabasePlan { db },
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            PlanNode::UseDatabase(UseDatabasePlan { db }),
         )))
     }
 }

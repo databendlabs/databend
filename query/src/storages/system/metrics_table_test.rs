@@ -20,14 +20,14 @@ use common_exception::Result;
 use common_metrics::init_default_metrics_recorder;
 use futures::TryStreamExt;
 
-use crate::catalogs::Table;
-use crate::catalogs::ToReadDataSourcePlan;
 use crate::storages::system::MetricsTable;
+use crate::storages::Table;
+use crate::storages::ToReadDataSourcePlan;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_metrics_table() -> Result<()> {
     init_default_metrics_recorder();
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
     let table: Arc<dyn Table> = Arc::new(MetricsTable::create(1));
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 

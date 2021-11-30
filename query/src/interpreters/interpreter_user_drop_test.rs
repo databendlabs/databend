@@ -26,7 +26,7 @@ use crate::sql::*;
 async fn test_drop_user_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
 
     {
         static TEST_QUERY: &str = "DROP USER 'test'@'localhost'";

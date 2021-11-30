@@ -85,7 +85,7 @@ async fn test_clickhouse_insert_to_fuse_table() -> Result<()> {
     let listening = handler.start(listening).await?;
     let mut handler = create_conn(listening.port()).await?;
 
-    let test_tbl_name = format!("tbl_{}", Uuid::new_v4().to_simple().to_string());
+    let test_tbl_name = format!("tbl_{}", Uuid::new_v4().to_simple());
     let query_str = format!(
         "CREATE TABLE {}(a UInt32, b UInt64, c String) Engine = fuse",
         test_tbl_name

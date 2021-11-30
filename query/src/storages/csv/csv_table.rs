@@ -32,10 +32,10 @@ use common_streams::CsvSource;
 use common_streams::SendableDataBlockStream;
 use common_streams::Source;
 
-use crate::catalogs::Table;
 use crate::sessions::QueryContext;
 use crate::storages::csv::count_lines;
 use crate::storages::StorageContext;
+use crate::storages::Table;
 
 pub struct CsvTable {
     table_info: TableInfo,

@@ -21,7 +21,7 @@ use crate::sql::statements::query::QualifiedRewriter;
 use crate::sql::statements::query::QueryNormalizer;
 use crate::sql::DfParser;
 use crate::sql::DfStatement;
-use crate::tests::try_create_context;
+use crate::tests::create_query_context;
 
 #[tokio::test]
 async fn test_query_qualified_rewriter() -> Result<()> {
@@ -100,7 +100,7 @@ async fn test_query_qualified_rewriter() -> Result<()> {
     ];
 
     for test_case in &tests {
-        let ctx = try_create_context()?;
+        let ctx = create_query_context()?;
         let (mut statements, _) = DfParser::parse_sql(test_case.query)?;
 
         match statements.remove(0) {

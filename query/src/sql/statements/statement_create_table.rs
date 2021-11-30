@@ -51,13 +51,13 @@ impl AnalyzableStatement for DfCreateTable {
         let if_not_exists = self.if_not_exists;
         let (db, table) = self.resolve_table(ctx)?;
 
-        Ok(AnalyzedResult::SimpleQuery(PlanNode::CreateTable(
-            CreateTablePlan {
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            PlanNode::CreateTable(CreateTablePlan {
                 if_not_exists,
                 db,
                 table,
                 table_meta,
-            },
+            }),
         )))
     }
 }

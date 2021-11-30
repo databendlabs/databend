@@ -48,10 +48,7 @@ impl S3 {
         let region = Self::parse_region(region_name, endpoint_url)?;
 
         let dispatcher = HttpClient::new().map_err(|e| {
-            ErrorCode::DALTransportError(format!(
-                "failed to create http client of s3, {}",
-                e.to_string()
-            ))
+            ErrorCode::DALTransportError(format!("failed to create http client of s3, {}", e))
         })?;
 
         let client = match Self::credential_provider(access_key_id, secret_accesses_key) {
@@ -60,7 +57,7 @@ impl S3 {
                 DefaultCredentialsProvider::new().map_err(|e| {
                     ErrorCode::DALTransportError(format!(
                         "failed to create default credentials provider, {}",
-                        e.to_string()
+                        e
                     ))
                 })?,
                 dispatcher,
@@ -79,8 +76,7 @@ impl S3 {
             Region::from_str(name).map_err(|e| {
                 ErrorCode::DALTransportError(format!(
                     "invalid region {}, error details {}",
-                    name,
-                    e.to_string()
+                    name, e
                 ))
             })
         } else {

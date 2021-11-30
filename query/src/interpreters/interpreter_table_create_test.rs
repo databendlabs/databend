@@ -22,7 +22,7 @@ use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_table_interpreter() -> Result<()> {
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
 
     static TEST_CREATE_QUERY: &str = "\
         CREATE TABLE default.a(\

@@ -77,8 +77,4 @@ impl MetaEmbedded {
 
         Self::new(&name).await
     }
-
-    pub fn sync_new_temp() -> common_exception::Result<MetaEmbedded> {
-        futures::executor::block_on(MetaEmbedded::new_temp())
-    }
 }
