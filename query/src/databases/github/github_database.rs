@@ -28,19 +28,17 @@ use crate::storages::StorageContext;
 pub struct GithubDatabase {
     ctx: DatabaseContext,
     db_name: String,
-    db_engine: String,
 }
 
 impl GithubDatabase {
     pub fn try_create(
         ctx: DatabaseContext,
         db_name: &str,
-        db_engine: &str,
+        _db_engine: &str,
     ) -> Result<Box<dyn Database>> {
         Ok(Box::new(Self {
             ctx,
             db_name: db_name.to_string(),
-            db_engine: db_engine.to_string(),
         }))
     }
 }
