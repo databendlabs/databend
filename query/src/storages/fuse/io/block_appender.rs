@@ -46,9 +46,12 @@ impl BlockAppender {
     //    - for block that is larger than `block_size_threshold`, they will NOT be split
     //        TODO handling split in table compact/optimize
     pub(crate) fn reshape_blocks(
-        blocks: Vec<DataBlock>,
+        mut blocks: Vec<DataBlock>,
         block_size_threshold: usize,
     ) -> Result<Vec<DataBlock>> {
+        // sort by memory_size ASC
+        blocks.sort_unstable_by_key(|block| block.memory_size());
+
         let mut result = vec![];
 
         let mut block_size_acc = 0;
@@ -88,10 +91,9 @@ impl BlockAppender {
         let mut segments = vec![];
         // accumulate the stats and save the blocks
         while let Some(item) = stream.next().await {
-            let item = item.map_err(|TryChunksError(_, e)| e)?;
-
+            let blocks = item.map_err(|TryChunksError(_, e)| e)?;
             // re-shape the blocks
-            let blocks = Self::reshape_blocks(item, block_size_threshold)?;
+            let blocks = Self::reshape_blocks(blocks, block_size_threshold)?;
             let mut stats_acc = StatisticsAccumulator::new();
             let mut block_meta_acc = BlockMetaAccumulator::new();
 

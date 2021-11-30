@@ -132,10 +132,12 @@ fn test_fuse_table_block_appender_reshape() -> common_exception::Result<()> {
     let large_block_size = large_block.memory_size();
     let blocks = std::iter::once(large_block).chain(blocks);
 
+    // blocks are sorted (asc by size) during reshape
     let r = BlockAppender::reshape_blocks(blocks.collect(), block_size_threshold)?;
     assert_eq!(r.len(), 2);
-    assert_eq!(r[0].memory_size(), large_block_size);
-    assert_eq!(r[1].memory_size(), block_size_threshold);
+    assert_eq!(r[0].memory_size(), block_size_threshold);
+    assert_eq!(r[1].memory_size(), large_block_size);
+
     Ok(())
 }
 
