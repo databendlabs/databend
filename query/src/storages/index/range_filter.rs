@@ -26,6 +26,7 @@ use common_planners::lit;
 use common_planners::Expression;
 use common_planners::Expressions;
 
+use crate::optimizers::MonotonicityCheckVisitor;
 use crate::optimizers::RequireColumnsVisitor;
 use crate::pipelines::transforms::ExpressionExecutor;
 
@@ -85,8 +86,25 @@ impl RangeFilter {
                     ))
                 })?;
                 let val = match c.stat_type {
-                    StatType::Max => stat.max.clone(),
-                    StatType::Min => stat.min.clone(),
+                    StatType::Max | StatType::Min => {
+                        let left = Some(DataColumnWithField::new(
+                            DataColumn::Constant(stat.min.clone(), 1),
+                            c.column_field.clone(),
+                        ));
+                        let right = Some(DataColumnWithField::new(
+                            DataColumn::Constant(stat.max.clone(), 1),
+                            c.column_field.clone(),
+                        ));
+                        let monotonicity =
+                            MonotonicityCheckVisitor::check_expression(&c.expr, left, right)?;
+                        if !monotonicity.is_monotonic {
+                            return Err(ErrorCode::UnknownException(
+                                "The expression in range is not monotonic",
+                            ));
+                        }
+
+                        stat.max.clone()
+                    }
                     StatType::Nulls => DataValue::UInt64(Some(stat.null_count as u64)),
                 };
                 val.to_array()
@@ -168,13 +186,20 @@ impl fmt::Display for StatType {
 #[derive(Debug, Clone)]
 pub(crate) struct StatColumn {
     column_id: u32,
+    column_field: DataField,
     stat_type: StatType,
     stat_field: DataField,
     expr: Expression,
 }
 
 impl StatColumn {
-    fn create(column_id: u32, stat_type: StatType, field: &DataField, expr: Expression) -> Self {
+    fn create(
+        column_id: u32,
+        column_field: DataField,
+        stat_type: StatType,
+        field: &DataField,
+        expr: Expression,
+    ) -> Self {
         let column_new = format!("{}_{}", stat_type, field.name());
         let data_type = if matches!(stat_type, StatType::Nulls) {
             DataType::UInt64
@@ -185,10 +210,30 @@ impl StatColumn {
 
         Self {
             column_id,
+            column_field,
             stat_type,
             stat_field,
             expr,
         }
+    }
+
+    fn apply_stat_value(&self, left: DataValue, right: DataValue) -> Result<Monotonicity> {
+        let variable_left = Some(DataColumnWithField::new(
+            DataColumn::Constant(left.clone(), 1),
+            self.column_field.clone(),
+        ));
+        let variable_right = Some(DataColumnWithField::new(
+            DataColumn::Constant(right.max.clone(), 1),
+            self.column_field.clone(),
+        ));
+        let monotonicity =
+            MonotonicityCheckVisitor::check_expression(self.expr, variable_left, variable_right)?;
+        if !monotonicity.is_monotonic {
+            return Err(ErrorCode::UnknownException(
+                "The expression in range is not monotonic",
+            ));
+        }
+        Ok(monotonicity)
     }
 }
 
@@ -198,6 +243,7 @@ struct VerifiableExprBuilder<'a> {
     op: &'a str,
     args: Expressions,
     column_id: u32,
+    column_field: DataField,
     field: DataField,
     stat_columns: &'a mut StatColumns,
 }
@@ -250,9 +296,9 @@ impl<'a> VerifiableExprBuilder<'a> {
             ));
         }
 
-        let col_name = cols.iter().next().unwrap().clone();
-        let (index, _) = schema
-            .column_with_name(col_name.as_str())
+        let column_name = cols.iter().next().unwrap().clone();
+        let (index, column_field) = schema
+            .column_with_name(column_name.as_str())
             .ok_or_else(|| ErrorCode::UnknownException("Unable to find the column name"))?;
         let column_id = index as u32;
 
@@ -261,8 +307,9 @@ impl<'a> VerifiableExprBuilder<'a> {
         Ok(Self {
             op,
             args,
-            field,
             column_id,
+            column_field,
+            field,
             stat_columns,
         })
     }
@@ -382,13 +429,18 @@ impl<'a> VerifiableExprBuilder<'a> {
     }
 
     fn stat_column_expr(&mut self, stat_type: StatType) -> Result<Expression> {
-        let stat_col =
-            StatColumn::create(self.column_id, stat_type, &self.field, self.args[0].clone());
-        if !self
-            .stat_columns
-            .iter()
-            .any(|c| c.column_id == self.column_id && c.stat_type == stat_type)
-        {
+        let stat_col = StatColumn::create(
+            self.column_id,
+            self.column_field.clone(),
+            stat_type,
+            &self.field,
+            self.args[0].clone(),
+        );
+        if !self.stat_columns.iter().any(|c| {
+            c.column_id == self.column_id
+                && c.stat_type == stat_type
+                && c.field.name() == self.field.name()
+        }) {
             self.stat_columns.push(stat_col.clone());
         }
         Ok(Expression::Column(stat_col.stat_field.name().to_owned()))
