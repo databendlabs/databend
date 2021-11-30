@@ -87,6 +87,7 @@ region = \"\"
 endpoint_url = \"\"
 access_key_id = \"\"
 secret_access_key = \"\"
+enable_pod_iam_policy = false
 bucket = \"\"
 
 [storage.azure_storage_blob]
@@ -120,6 +121,7 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("S3_STORAGE_ENDPOINT_URL", "");
     std::env::set_var("S3_STORAGE_ACCESS_KEY_ID", "us.key.id");
     std::env::set_var("S3_STORAGE_SECRET_ACCESS_KEY", "us.key");
+    std::env::set_var("S3_STORAGE_ENABLE_POD_IAM_POLICY", "true");
     std::env::set_var("S3_STORAGE_BUCKET", "us.bucket");
     std::env::set_var("TABLE_ENGINE_CSV_ENABLED", "true");
     std::env::set_var("TABLE_ENGINE_PARQUET_ENABLED", "true");
@@ -150,6 +152,7 @@ fn test_env_config() -> Result<()> {
     assert_eq!("", configured.storage.s3.endpoint_url);
     assert_eq!("us.key.id", configured.storage.s3.access_key_id);
     assert_eq!("us.key", configured.storage.s3.secret_access_key);
+    assert!(configured.storage.s3.enable_pod_iam_policy);
     assert_eq!("us.bucket", configured.storage.s3.bucket);
 
     assert!(!configured.query.table_engine_csv_enabled);
@@ -175,6 +178,7 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("S3_STORAGE_ACCESS_KEY_ID");
     std::env::remove_var("S3_STORAGE_SECRET_ACCESS_KEY");
     std::env::remove_var("S3_STORAGE_BUCKET");
+    std::env::remove_var("S3_STORAGE_ENABLE_POD_IAM_POLICY");
     std::env::remove_var("TABLE_ENGINE_CSV_ENABLED");
     std::env::remove_var("TABLE_ENGINE_PARQUET_ENABLED");
     std::env::remove_var("TABLE_ENGINE_MEMORY_ENABLED");
