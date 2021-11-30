@@ -19,22 +19,3 @@ pub trait Database: DynClone + Sync + Send {
     /// Database name.
     fn name(&self) -> &str;
 }
-
-#[derive(Clone)]
-pub struct DefaultDatabase {
-    db_name: String,
-}
-
-impl DefaultDatabase {
-    pub fn new(db_name: impl Into<String>) -> Self {
-        Self {
-            db_name: db_name.into(),
-        }
-    }
-}
-
-impl Database for DefaultDatabase {
-    fn name(&self) -> &str {
-        &self.db_name
-    }
-}

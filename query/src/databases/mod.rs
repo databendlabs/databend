@@ -12,9 +12,11 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
+mod database;
 mod database_context;
 mod database_factory;
 mod default;
 
+pub use database::Database;
 pub use database_context::DatabaseContext;
 pub use database_factory::DatabaseFactory;

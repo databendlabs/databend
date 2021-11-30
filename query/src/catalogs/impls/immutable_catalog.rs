@@ -31,11 +31,11 @@ use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 
 use crate::catalogs::catalog::Catalog;
-use crate::catalogs::Database;
 use crate::catalogs::InMemoryMetas;
 use crate::catalogs::Table;
 use crate::catalogs::SYS_TBL_ID_BEGIN;
 use crate::configs::Config;
+use crate::databases::Database;
 use crate::storages::SystemDatabase;
 
 /// System Catalog contains ... all the system databases (no surprise :)

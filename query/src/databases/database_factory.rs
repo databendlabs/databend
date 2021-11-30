@@ -21,9 +21,9 @@ use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::DatabaseInfo;
 
-use crate::catalogs::Database;
 use crate::configs::Config;
 use crate::databases::default::DefaultDatabase;
+use crate::databases::Database;
 use crate::databases::DatabaseContext;
 
 pub trait DatabaseCreator: Send + Sync {

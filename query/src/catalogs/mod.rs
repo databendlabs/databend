@@ -15,7 +15,6 @@
 
 mod catalog;
 mod catalog_context;
-mod database;
 mod table;
 mod table_function;
 mod table_id_ranges;
@@ -27,8 +26,6 @@ mod impls;
 pub use backends::MetaRemote;
 pub use catalog::Catalog;
 pub use catalog_context::CatalogContext;
-pub use database::Database;
-pub use database::DefaultDatabase;
 pub use impls::DatabaseCatalog;
 pub use impls::ImmutableCatalog;
 pub use impls::MutableCatalog;

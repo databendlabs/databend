@@ -15,7 +15,7 @@
 use common_exception::Result;
 use common_meta_types::DatabaseInfo;
 
-use crate::catalogs::Database;
+use crate::databases::Database;
 use crate::databases::DatabaseContext;
 
 #[derive(Clone)]
