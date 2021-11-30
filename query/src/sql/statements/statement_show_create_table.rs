@@ -40,8 +40,8 @@ impl AnalyzableStatement for DfShowCreateTable {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let schema = Self::schema();
         let (db, table) = self.resolve_table(ctx)?;
-        Ok(AnalyzedResult::SimpleQuery(PlanNode::ShowCreateTable(
-            ShowCreateTablePlan { db, table, schema },
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            PlanNode::ShowCreateTable(ShowCreateTablePlan { db, table, schema }),
         )))
     }
 }

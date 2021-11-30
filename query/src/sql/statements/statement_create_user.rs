@@ -38,13 +38,13 @@ pub struct DfCreateUser {
 impl AnalyzableStatement for DfCreateUser {
     #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        Ok(AnalyzedResult::SimpleQuery(PlanNode::CreateUser(
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::CreateUser(
             CreateUserPlan {
                 name: self.name.clone(),
                 password: Vec::from(self.password.clone()),
                 hostname: self.hostname.clone(),
                 auth_type: self.auth_type.clone(),
             },
-        )))
+        ))))
     }
 }

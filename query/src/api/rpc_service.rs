@@ -50,12 +50,7 @@ impl RpcService {
 
     async fn listener_tcp(listening: SocketAddr) -> Result<(TcpListenerStream, SocketAddr)> {
         let listener = TcpListener::bind(listening).await.map_err(|e| {
-            ErrorCode::TokioError(format!(
-                "{{{}:{}}} {}",
-                listening.ip().to_string(),
-                listening.port().to_string(),
-                e
-            ))
+            ErrorCode::TokioError(format!("{{{}:{}}} {}", listening.ip(), listening.port(), e))
         })?;
         let listener_addr = listener.local_addr()?;
         Ok((TcpListenerStream::new(listener), listener_addr))
@@ -88,13 +83,13 @@ impl RpcService {
                 .tls_config(Self::server_tls_config(conf).await.map_err(|e| {
                     ErrorCode::TLSConfigurationFailure(format!(
                         "failed to load server tls config: {}",
-                        e.to_string()
+                        e
                     ))
                 })?)
                 .map_err(|e| {
                     ErrorCode::TLSConfigurationFailure(format!(
                         "failed to invoke tls_config: {}",
-                        e.to_string()
+                        e
                     ))
                 })?
         } else {

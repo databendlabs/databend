@@ -120,6 +120,7 @@ impl fmt::Debug for ServerInfo {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub(crate) struct Context {
     pub(crate) server_info: ServerInfo,

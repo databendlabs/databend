@@ -41,8 +41,8 @@ impl AnalyzableStatement for DfDescribeTable {
         let schema = Self::schema();
         let (db, table) = self.resolve_table(ctx)?;
 
-        Ok(AnalyzedResult::SimpleQuery(PlanNode::DescribeTable(
-            DescribeTablePlan { db, table, schema },
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            PlanNode::DescribeTable(DescribeTablePlan { db, table, schema }),
         )))
     }
 }

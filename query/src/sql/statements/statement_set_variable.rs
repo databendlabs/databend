@@ -47,8 +47,8 @@ impl AnalyzableStatement for DfSetVariable {
 
         // TODO: session variable and local variable
         let vars = self.mapping_set_vars();
-        Ok(AnalyzedResult::SimpleQuery(PlanNode::SetVariable(
-            SettingPlan { vars },
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            PlanNode::SetVariable(SettingPlan { vars }),
         )))
     }
 }
