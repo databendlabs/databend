@@ -32,6 +32,7 @@ use uuid::Uuid;
 use crate::catalogs::Catalog;
 use crate::configs::Config;
 use crate::sessions::QueryContext;
+use crate::storages::fuse::TBL_OPT_KEY_CHUNK_BLOCK_NUM;
 
 pub struct TestFixture {
     _tmp_dir: TempDir,
@@ -95,7 +96,8 @@ impl TestFixture {
             table_meta: TableMeta {
                 schema: TestFixture::default_schema(),
                 engine: "FUSE".to_string(),
-                options: Default::default(),
+                // make sure blocks will not be merged
+                options: [(TBL_OPT_KEY_CHUNK_BLOCK_NUM.to_owned(), "1".to_owned())].into(),
             },
         }
     }
