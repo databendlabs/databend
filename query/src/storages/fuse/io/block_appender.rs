@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
+use std::cmp::Reverse;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
@@ -50,7 +51,7 @@ impl BlockAppender {
         block_size_threshold: usize,
     ) -> Result<Vec<DataBlock>> {
         // sort by memory_size DESC
-        blocks.sort_unstable_by(|l, r| r.memory_size().cmp(&l.memory_size()));
+        blocks.sort_unstable_by_key(|r| Reverse(r.memory_size()));
 
         let mut result = vec![];
 
