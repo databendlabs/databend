@@ -536,13 +536,13 @@ impl TransformerSqlparser {
                     Ok(TableReference::Table {
                         database: None,
                         table: Identifier::from(&idents[0]),
-                        alias: alias.as_ref().map(|v| Self::transform_table_alias(v)),
+                        alias: alias.as_ref().map(Self::transform_table_alias),
                     })
                 } else if idents.len() == 2 {
                     Ok(TableReference::Table {
                         database: Some(Identifier::from(&idents[0])),
                         table: Identifier::from(&idents[1]),
-                        alias: alias.as_ref().map(|v| Self::transform_table_alias(v)),
+                        alias: alias.as_ref().map(Self::transform_table_alias),
                     })
                 } else {
                     Err(ErrorCode::SyntaxException(format!(
@@ -555,11 +555,11 @@ impl TransformerSqlparser {
                 subquery, alias, ..
             } => Ok(TableReference::Subquery {
                 subquery: Box::from(self.transform_query(subquery.as_ref())?),
-                alias: alias.as_ref().map(|v| Self::transform_table_alias(v)),
+                alias: alias.as_ref().map(Self::transform_table_alias),
             }),
             TableFactor::TableFunction { expr, alias } => Ok(TableReference::TableFunction {
                 expr: self.transform_expr(expr)?,
-                alias: alias.as_ref().map(|v| Self::transform_table_alias(v)),
+                alias: alias.as_ref().map(Self::transform_table_alias),
             }),
             TableFactor::NestedJoin(nested_join) => self.transform_table_with_joins(nested_join),
         };

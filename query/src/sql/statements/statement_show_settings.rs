@@ -31,6 +31,8 @@ impl AnalyzableStatement for DfShowSettings {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let rewritten_query = "SELECT name, value FROM system.settings ORDER BY name";
         let rewritten_query_plan = PlanParser::parse(rewritten_query, ctx);
-        Ok(AnalyzedResult::SimpleQuery(rewritten_query_plan.await?))
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            rewritten_query_plan.await?,
+        )))
     }
 }

@@ -41,6 +41,7 @@ use common_meta_types::UpsertTableOptionReq;
 use crate::common::MetaClientProvider;
 
 /// A `MetaApi` impl with MetaApi RPC.
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct MetaRemote {
     rpc_time_out: Option<Duration>,
