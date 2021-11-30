@@ -91,7 +91,7 @@ impl Function for LocateFunction {
                     let s_array = s_series.string()?;
                     DFUInt64Array::new_from_iter_validity(
                         s_array.into_no_null_iter().map(|s| find_at(s, &ss, &p)),
-                        combine_validities(s_array.inner().validity(), None),
+                        s_array.inner().validity().cloned(),
                     )
                     .into()
                 } else {
@@ -107,7 +107,7 @@ impl Function for LocateFunction {
                     let ss_array = ss_series.string()?;
                     DFUInt64Array::new_from_iter_validity(
                         ss_array.into_no_null_iter().map(|ss| find_at(&s, ss, &p)),
-                        combine_validities(ss_array.inner().validity(), None),
+                        ss_array.inner().validity().cloned(),
                     )
                     .into()
                 } else {
@@ -143,7 +143,7 @@ impl Function for LocateFunction {
                     let p_array = p_series.u64()?;
                     DFUInt64Array::new_from_iter_validity(
                         p_array.into_no_null_iter().map(|p| find_at(&s, &ss, p)),
-                        combine_validities(p_array.inner().validity(), None),
+                        p_array.inner().validity().cloned(),
                     )
                     .into()
                 } else {
