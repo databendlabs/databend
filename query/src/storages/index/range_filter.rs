@@ -21,10 +21,10 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::FunctionFactory;
 use common_planners::lit;
 use common_planners::Expression;
 use common_planners::Expressions;
-use common_planners::RewriteHelper;
 
 use crate::optimizers::RequireColumnsVisitor;
 use crate::pipelines::transforms::ExpressionExecutor;
@@ -49,7 +49,7 @@ pub struct RangeFilter {
 impl RangeFilter {
     pub fn try_create(expr: &Expression, schema: DataSchemaRef) -> Result<Self> {
         let mut stat_columns: StatColumns = Vec::new();
-        let verifiable_expr = build_verifiable_expr(expr, schema, &mut stat_columns);
+        let verifiable_expr = build_verifiable_expr(expr, &schema, &mut stat_columns);
         let input_fields = stat_columns
             .iter()
             .map(|c| c.stat_field.clone())
@@ -103,7 +103,7 @@ impl RangeFilter {
 /// Rules: (section 5.2 of http://vldb.org/pvldb/vol14/p3083-edara.pdf)
 pub(crate) fn build_verifiable_expr(
     expr: &Expression,
-    schema: DataSchemaRef,
+    schema: &DataSchemaRef,
     stat_columns: &mut StatColumns,
 ) -> Expression {
     let unhandled = lit(true);
@@ -113,12 +113,12 @@ pub(crate) fn build_verifiable_expr(
         Expression::ScalarFunction { op, args } => (args.clone(), op.clone()),
         Expression::BinaryExpression { left, op, right } => match op.to_lowercase().as_str() {
             "and" => {
-                let left = build_verifiable_expr(left, schema.clone(), stat_columns);
+                let left = build_verifiable_expr(left, schema, stat_columns);
                 let right = build_verifiable_expr(right, schema, stat_columns);
                 return left.and(right);
             }
             "or" => {
-                let left = build_verifiable_expr(left, schema.clone(), stat_columns);
+                let left = build_verifiable_expr(left, schema, stat_columns);
                 let right = build_verifiable_expr(right, schema, stat_columns);
                 return left.or(right);
             }
@@ -130,46 +130,8 @@ pub(crate) fn build_verifiable_expr(
         _ => return unhandled,
     };
 
-    VerifiableExprBuilder::try_create(
-        exprs,
-        op.to_lowercase().as_str(),
-        schema.as_ref(),
-        stat_columns,
-    )
-    .map_or(unhandled.clone(), |mut v| v.build().unwrap_or(unhandled))
-}
-
-struct Monotonic {
-    is_monotonic: bool,
-    is_positive: bool,
-}
-
-// TODO: need add monotonic check for the expression, will move to FunctionFeatures.
-// ISSUE-2343: https://github.com/datafuselabs/databend/issues/2343
-fn is_monotonic_expression(expr: &Expression) -> Monotonic {
-    match expr {
-        Expression::Column(_) => Monotonic {
-            is_monotonic: true,
-            is_positive: true,
-        },
-        Expression::UnaryExpression { op, expr } => match op.as_str() {
-            "-" => {
-                let mut monotonic = is_monotonic_expression(expr);
-                if monotonic.is_monotonic {
-                    monotonic.is_positive = !monotonic.is_positive;
-                }
-                monotonic
-            }
-            _ => Monotonic {
-                is_monotonic: false,
-                is_positive: true,
-            },
-        },
-        _ => Monotonic {
-            is_monotonic: false,
-            is_positive: true,
-        },
-    }
+    VerifiableExprBuilder::try_create(exprs, op.to_lowercase().as_str(), schema, stat_columns)
+        .map_or(unhandled.clone(), |mut v| v.build().unwrap_or(unhandled))
 }
 
 fn inverse_operator(op: &str) -> Result<&str> {
@@ -208,11 +170,12 @@ pub(crate) struct StatColumn {
     column_id: u32,
     stat_type: StatType,
     stat_field: DataField,
+    expr: Expression,
 }
 
 impl StatColumn {
-    fn create(column_name: String, column_id: u32, stat_type: StatType, field: &DataField) -> Self {
-        let column_new = format!("{}_{}", stat_type, column_name);
+    fn create(column_id: u32, stat_type: StatType, field: &DataField, expr: Expression) -> Self {
+        let column_new = format!("{}_{}", stat_type, field.name());
         let data_type = if matches!(stat_type, StatType::Nulls) {
             DataType::UInt64
         } else {
@@ -224,6 +187,7 @@ impl StatColumn {
             column_id,
             stat_type,
             stat_field,
+            expr,
         }
     }
 }
@@ -231,12 +195,10 @@ impl StatColumn {
 pub(crate) type StatColumns = Vec<StatColumn>;
 
 struct VerifiableExprBuilder<'a> {
-    args: Expressions,
     op: &'a str,
-    column_name: String,
+    args: Expressions,
     column_id: u32,
-    monotonic: Monotonic,
-    field: &'a DataField,
+    field: DataField,
     stat_columns: &'a mut StatColumns,
 }
 
@@ -244,7 +206,7 @@ impl<'a> VerifiableExprBuilder<'a> {
     fn try_create(
         exprs: Expressions,
         op: &'a str,
-        schema: &'a DataSchema,
+        schema: &'a DataSchemaRef,
         stat_columns: &'a mut StatColumns,
     ) -> Result<Self> {
         let (args, cols, op) = match exprs.len() {
@@ -282,26 +244,25 @@ impl<'a> VerifiableExprBuilder<'a> {
             }
         };
 
-        let monotonic = is_monotonic_expression(&args[0]);
-
-        if !monotonic.is_monotonic {
+        if !check_maybe_monotonic(&args[0])? {
             return Err(ErrorCode::UnknownException(
                 "Only support the monotonic expression",
             ));
         }
-        let column_name = cols.iter().next().unwrap().clone();
-        let (index, field) = schema
-            .column_with_name(column_name.as_str())
+
+        let col_name = cols.iter().next().unwrap().clone();
+        let (index, _) = schema
+            .column_with_name(col_name.as_str())
             .ok_or_else(|| ErrorCode::UnknownException("Unable to find the column name"))?;
         let column_id = index as u32;
 
+        let field = args[0].to_data_field(schema)?;
+
         Ok(Self {
-            args,
             op,
+            args,
             field,
-            column_name,
             column_id,
-            monotonic,
             stat_columns,
         })
     }
@@ -421,12 +382,8 @@ impl<'a> VerifiableExprBuilder<'a> {
     }
 
     fn stat_column_expr(&mut self, stat_type: StatType) -> Result<Expression> {
-        let stat_col = StatColumn::create(
-            self.column_name.clone(),
-            self.column_id,
-            stat_type,
-            self.field,
-        );
+        let stat_col =
+            StatColumn::create(self.column_id, stat_type, &self.field, self.args[0].clone());
         if !self
             .stat_columns
             .iter()
@@ -434,27 +391,15 @@ impl<'a> VerifiableExprBuilder<'a> {
         {
             self.stat_columns.push(stat_col.clone());
         }
-        RewriteHelper::rewrite_column_expr(
-            &self.args[0],
-            self.column_name.as_str(),
-            stat_col.stat_field.name(),
-        )
+        Ok(Expression::Column(stat_col.stat_field.name().to_owned()))
     }
 
     fn min_column_expr(&mut self) -> Result<Expression> {
-        if self.monotonic.is_positive {
-            self.stat_column_expr(StatType::Min)
-        } else {
-            self.stat_column_expr(StatType::Max)
-        }
+        self.stat_column_expr(StatType::Min)
     }
 
     fn max_column_expr(&mut self) -> Result<Expression> {
-        if self.monotonic.is_positive {
-            self.stat_column_expr(StatType::Max)
-        } else {
-            self.stat_column_expr(StatType::Min)
-        }
+        self.stat_column_expr(StatType::Max)
     }
 
     fn nulls_column_expr(&mut self) -> Result<Expression> {
@@ -502,4 +447,35 @@ pub(crate) fn right_bound_for_like_pattern(prefix: Vec<u8>) -> Vec<u8> {
     }
 
     res
+}
+
+fn get_maybe_monotonic(op: &str, args: Expressions) -> Result<bool> {
+    let factory = FunctionFactory::instance();
+    let function_features = factory.get_features(op)?;
+    if !function_features.maybe_monotonic {
+        return Ok(false);
+    }
+
+    for arg in args {
+        if !check_maybe_monotonic(&arg)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn check_maybe_monotonic(expr: &Expression) -> Result<bool> {
+    match expr {
+        Expression::Literal { .. } => Ok(true),
+        Expression::Column { .. } => Ok(true),
+        Expression::BinaryExpression { op, left, right } => {
+            get_maybe_monotonic(op, vec![left.as_ref().clone(), right.as_ref().clone()])
+        }
+        Expression::UnaryExpression { op, expr } => {
+            get_maybe_monotonic(op, vec![expr.as_ref().clone()])
+        }
+        Expression::ScalarFunction { op, args } => get_maybe_monotonic(op, args.clone()),
+        Expression::Cast { expr, .. } => check_maybe_monotonic(expr),
+        _ => Ok(false),
+    }
 }
