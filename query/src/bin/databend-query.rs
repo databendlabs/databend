@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_base::RuntimeTracker;
 use common_macros::databend_main;
+use common_meta_embedded::MetaEmbedded;
 use common_metrics::init_default_metrics_recorder;
 use common_tracing::init_tracing_with_file;
 use common_tracing::set_panic_hook;
@@ -48,6 +49,10 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     // Override configs based on env variables
     conf = Config::load_from_env(&conf)?;
     conf.initial_dir()?;
+
+    if conf.meta.meta_address.is_empty() {
+        MetaEmbedded::init_global_meta_store(conf.meta.meta_embedded_dir.clone()).await?;
+    }
 
     env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or(conf.log.log_level.to_lowercase().as_str()),

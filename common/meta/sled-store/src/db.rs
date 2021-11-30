@@ -26,7 +26,28 @@ pub(crate) struct GlobalSledDb {
     /// When opening a db on a temp dir, the temp dir guard must be held.
     #[allow(dead_code)]
     pub(crate) temp_dir: Option<TempDir>,
+    pub(crate) path: String,
     pub(crate) db: sled::Db,
+}
+
+impl GlobalSledDb {
+    pub(crate) fn new_temp(temp_dir: TempDir) -> Self {
+        let temp_path = temp_dir.path().to_str().unwrap().to_string();
+
+        GlobalSledDb {
+            temp_dir: Some(temp_dir),
+            path: temp_path.clone(),
+            db: sled::open(temp_path).expect("open global sled::Db"),
+        }
+    }
+
+    pub(crate) fn new(path: String) -> Self {
+        GlobalSledDb {
+            temp_dir: None,
+            path: path.clone(),
+            db: sled::open(path).expect("open global sled::Db"),
+        }
+    }
 }
 
 lazy_static! {
@@ -35,31 +56,40 @@ lazy_static! {
 
 /// Open a db at a temp dir. For test purpose only.
 pub fn init_temp_sled_db(temp_dir: TempDir) {
-    let mut g = GLOBAL_SLED.as_ref().lock().unwrap();
+    let temp_path = temp_dir.path().to_str().unwrap().to_string();
 
-    if g.is_some() {
-        return;
+    let (inited_as_temp, curr_path) = {
+        let mut g = GLOBAL_SLED.as_ref().lock().unwrap();
+        if let Some(gdb) = g.as_ref() {
+            (gdb.temp_dir.is_some(), gdb.path.clone())
+        } else {
+            *g = Some(GlobalSledDb::new_temp(temp_dir));
+            return;
+        }
+    };
+
+    if !inited_as_temp {
+        panic!("sled db is already initialized with specified path: {}, can not re-init with temp path {}", curr_path, temp_path);
     }
-
-    let path = temp_dir.path().to_str().unwrap().to_string();
-
-    *g = Some(GlobalSledDb {
-        temp_dir: Some(temp_dir),
-        db: sled::open(path).expect("open global sled::Db"),
-    });
 }
 
 pub fn init_sled_db(path: String) {
-    let mut g = GLOBAL_SLED.as_ref().lock().unwrap();
+    let (inited_as_temp, curr_path) = {
+        let mut g = GLOBAL_SLED.as_ref().lock().unwrap();
+        if let Some(gdb) = g.as_ref() {
+            (gdb.temp_dir.is_some(), gdb.path.clone())
+        } else {
+            *g = Some(GlobalSledDb::new(path));
+            return;
+        }
+    };
 
-    if g.is_some() {
-        return;
+    if inited_as_temp {
+        panic!(
+            "sled db is already initialized with temp dir: {}, can not re-init with path {}",
+            curr_path, path
+        );
     }
-
-    *g = Some(GlobalSledDb {
-        temp_dir: None,
-        db: sled::open(path).expect("open global sled::Db"),
-    });
 }
 
 pub fn get_sled_db() -> sled::Db {
