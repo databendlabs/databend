@@ -20,22 +20,20 @@ use common_datablocks::DataBlock;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::ColumnId;
 use crate::storages::fuse::statistics::util;
-use crate::storages::fuse::ColumnStats;
-
-// TODO move this to other crate
-pub type BlockStats = HashMap<ColumnId, ColumnStats>;
+use crate::storages::index::BlockStatistics;
+use crate::storages::index::ColumnStatistics;
 
 #[derive(Default)]
 pub struct StatisticsAccumulator {
     pub blocks_metas: Vec<BlockMeta>,
-    pub blocks_stats: Vec<BlockStats>,
+    pub blocks_stats: Vec<BlockStatistics>,
     pub summary_row_count: u64,
     pub summary_block_count: u64,
     pub in_memory_size: u64,
     pub file_size: u64,
     pub last_block_rows: u64,
     pub last_block_size: u64,
-    pub last_block_col_stats: Option<HashMap<ColumnId, ColumnStats>>,
+    pub last_block_col_stats: Option<HashMap<ColumnId, ColumnStatistics>>,
 }
 
 impl StatisticsAccumulator {

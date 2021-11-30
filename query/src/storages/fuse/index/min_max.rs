@@ -26,7 +26,7 @@ use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
-use crate::storages::fuse::BlockStats;
+use crate::storages::index::BlockStatistics;
 use crate::storages::index::RangeFilter;
 
 pub struct MinMaxIndex {
@@ -34,7 +34,7 @@ pub struct MinMaxIndex {
     da: Arc<dyn DataAccessor>,
 }
 
-type Pred = Box<dyn Fn(&BlockStats) -> Result<bool> + Send + Sync + Unpin>;
+type Pred = Box<dyn Fn(&BlockStatistics) -> Result<bool> + Send + Sync + Unpin>;
 impl MinMaxIndex {
     pub fn new(table_snapshot: &TableSnapshot, da: Arc<dyn DataAccessor>) -> Self {
         Self {
@@ -55,9 +55,9 @@ impl MinMaxIndex {
             Some(exprs) if !exprs.filters.is_empty() => {
                 // for the time being, we only handle the first expr
                 let verifiable_expression = RangeFilter::try_create(&exprs.filters[0], schema)?;
-                Box::new(move |v: &BlockStats| verifiable_expression.eval(v))
+                Box::new(move |v: &BlockStatistics| verifiable_expression.eval(v))
             }
-            _ => Box::new(|_: &BlockStats| Ok(true)),
+            _ => Box::new(|_: &BlockStatistics| Ok(true)),
         };
 
         let snapshot =
@@ -103,4 +103,15 @@ impl MinMaxIndex {
             Ok(vec![])
         }
     }
+}
+
+pub async fn apply_range_filter(
+    table_snapshot: &TableSnapshot,
+    schema: DataSchemaRef,
+    push_down: Option<Extras>,
+    data_accessor: Arc<dyn DataAccessor>,
+) -> Result<Vec<BlockMeta>> {
+    MinMaxIndex::new(table_snapshot, data_accessor)
+        .apply(schema, push_down)
+        .await
 }

@@ -13,6 +13,7 @@
 // limitations under the License.
 //
 
+use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
@@ -27,7 +28,16 @@ use common_planners::RewriteHelper;
 
 use crate::optimizers::RequireColumnsVisitor;
 use crate::pipelines::transforms::ExpressionExecutor;
-use crate::storages::fuse::BlockStats;
+
+pub type BlockStatistics = HashMap<u32, ColumnStatistics>;
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct ColumnStatistics {
+    pub min: DataValue,
+    pub max: DataValue,
+    pub null_count: u64,
+    pub in_memory_size: u64,
+}
 
 #[derive(Debug, Clone)]
 pub struct RangeFilter {
@@ -63,7 +73,7 @@ impl RangeFilter {
         })
     }
 
-    pub fn eval(&self, stats: &BlockStats) -> Result<bool> {
+    pub fn eval(&self, stats: &BlockStatistics) -> Result<bool> {
         let columns = self
             .stat_columns
             .iter()
