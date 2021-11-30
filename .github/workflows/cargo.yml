@@ -32,10 +32,10 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ runner.os }}-cargo-clippycache-${{ secrets.CACHE_RESET_KEY }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-basecache-${{ secrets.CACHE_RESET_KEY }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-clippycache-${{ secrets.CACHE_RESET_KEY }}-
-            ${{ runner.os }}-cargo-clippycache-
+            ${{ runner.os }}-cargo-basecache-${{ secrets.CACHE_RESET_KEY }}-
+            ${{ runner.os }}-cargo-basecache-
             ${{ runner.os }}-cargo-
 
       - name: Run clippy
@@ -51,5 +51,10 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
+        env:
+          CARGO_INCREMENTAL: '0'
+      
+      - name: Build
+        run: cargo build --verbose
         env:
           CARGO_INCREMENTAL: '0'
