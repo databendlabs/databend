@@ -1,17 +1,12 @@
 [advisories]
 ignore = [
-    # title: Potential segfault in the time crate
-    # This can be ignored because it only affects users that use the feature flag "clock" of "chrono",
-    # which we do not. Specifically:
-    # * the call of "localtime_r" [is unsound](https://github.com/chronotope/chrono/issues/602#issuecomment-940445390)
-    # * that call [is part of the module "sys"](https://docs.rs/chrono/0.4.19/src/chrono/sys/unix.rs.html#84)
-    # * "sys" is only available on feature "clock": https://docs.rs/chrono/0.4.19/src/chrono/lib.rs.html#456
-    #
-    # Therefore, this advisory does not affect us.
+    # https://github.com/datafuselabs/databend/issues/3159
+    "RUSTSEC-2021-0119",
+    # https://github.com/datafuselabs/databend/issues/2565
+    # need to fix upstream rusoto dependencies on credential and sts for this issue as well
+    "RUSTSEC-2020-0159",
     "RUSTSEC-2020-0071",
-    "RUSTSEC-2020-0159", # same as previous
+    # https://github.com/datafuselabs/databend/issues/2690
+    "RUSTSEC-2021-0122"
 
-    # this cannot be addressed, only mitigated.
-    # See [.github/workflows/security.yml] for details on how we mitigate this.
-    "RUSTSEC-2021-0122",
 ]
