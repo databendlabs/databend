@@ -20,8 +20,8 @@ use common_planners::TruncateTablePlan;
 use futures::TryStreamExt;
 
 use crate::catalogs::Catalog;
-use crate::catalogs::ToReadDataSourcePlan;
 use crate::storages::fuse::table_test_fixture::TestFixture;
+use crate::storages::ToReadDataSourcePlan;
 
 #[tokio::test]
 async fn test_fuse_table_simple_case() -> Result<()> {

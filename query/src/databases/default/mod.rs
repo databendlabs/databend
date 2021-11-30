@@ -13,19 +13,6 @@
 //  limitations under the License.
 //
 
-#[cfg(test)]
-mod memory_block_part_test;
-#[cfg(test)]
-mod numbers_table_test;
+mod default_database;
 
-mod memory_block_part;
-mod numbers_stream;
-mod numbers_table;
-mod table_function;
-mod table_function_factory;
-
-pub use memory_block_part::generate_block_parts;
-pub use numbers_table::NumbersTable;
-pub use table_function::TableFunction;
-pub use table_function_factory::TableArgs;
-pub use table_function_factory::TableFunctionFactory;
+pub use default_database::DefaultDatabase;

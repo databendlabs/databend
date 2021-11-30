@@ -19,9 +19,9 @@ use common_exception::Result;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
-use crate::catalogs::Table;
-use crate::catalogs::ToReadDataSourcePlan;
 use crate::storages::system::SettingsTable;
+use crate::storages::Table;
+use crate::storages::ToReadDataSourcePlan;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_settings_table() -> Result<()> {

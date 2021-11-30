@@ -22,8 +22,8 @@ use common_meta_types::TableMeta;
 use common_planners::*;
 use futures::TryStreamExt;
 
-use crate::catalogs::ToReadDataSourcePlan;
 use crate::storages::null::NullTable;
+use crate::storages::ToReadDataSourcePlan;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_null_table() -> Result<()> {

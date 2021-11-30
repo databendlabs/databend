@@ -21,6 +21,7 @@ use common_meta_types::NodeInfo;
 use crate::catalogs::CatalogContext;
 use crate::clusters::Cluster;
 use crate::configs::Config;
+use crate::databases::DatabaseFactory;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::storages::StorageContext;
@@ -112,10 +113,12 @@ pub fn try_create_catalog_context() -> Result<CatalogContext> {
     let meta_embedded = MetaEmbedded::sync_new_temp().unwrap();
     let meta = meta_embedded;
     let storage_factory = StorageFactory::create(Config::default());
+    let database_factory = DatabaseFactory::create(Config::default());
 
     Ok(CatalogContext {
         meta: Arc::new(meta),
         storage_factory: Arc::new(storage_factory),
+        database_factory: Arc::new(database_factory),
         in_memory_data: Arc::new(Default::default()),
     })
 }

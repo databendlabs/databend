@@ -19,10 +19,10 @@ use common_exception::Result;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
-use crate::catalogs::Table;
-use crate::catalogs::ToReadDataSourcePlan;
 use crate::configs::Config;
 use crate::storages::system::ConfigsTable;
+use crate::storages::Table;
+use crate::storages::ToReadDataSourcePlan;
 use crate::tests::try_create_context_with_config;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

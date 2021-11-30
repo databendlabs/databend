@@ -30,7 +30,6 @@ use sqlparser::ast::SetExpr;
 use sqlparser::ast::SqliteOnConflict;
 use sqlparser::ast::Values;
 
-use crate::catalogs::Table;
 use crate::sessions::QueryContext;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::AnalyzableStatement;
@@ -38,6 +37,7 @@ use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
 use crate::sql::DfStatement;
 use crate::sql::PlanParser;
+use crate::storages::Table;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfInsertStatement {

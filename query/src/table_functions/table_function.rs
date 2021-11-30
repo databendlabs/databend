@@ -14,17 +14,11 @@
 
 use std::sync::Arc;
 
-use common_dal::InMemoryData;
-use common_infallible::RwLock;
-use common_meta_api::MetaApi;
+use crate::storages::Table;
 
-use crate::databases::DatabaseFactory;
-use crate::storages::StorageFactory;
+pub trait TableFunction: Sync + Send + Table {
+    fn function_name(&self) -> &str;
 
-#[derive(Clone)]
-pub struct CatalogContext {
-    pub meta: Arc<dyn MetaApi>,
-    pub storage_factory: Arc<StorageFactory>,
-    pub database_factory: Arc<DatabaseFactory>,
-    pub in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
+    fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
+    where Self: 'a;
 }

@@ -30,12 +30,12 @@ use uuid::Uuid;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
-use crate::catalogs::Table;
 use crate::clusters::Cluster;
 use crate::configs::Config;
 use crate::servers::http::v1::query::HttpQueryHandle;
 use crate::sessions::Session;
 use crate::sessions::Settings;
+use crate::storages::Table;
 
 type DatabaseAndTable = (String, String);
 

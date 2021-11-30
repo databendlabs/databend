@@ -12,20 +12,12 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
+mod database;
+mod database_context;
+mod database_factory;
+mod default;
+mod github;
 
-#[cfg(test)]
-mod memory_block_part_test;
-#[cfg(test)]
-mod numbers_table_test;
-
-mod memory_block_part;
-mod numbers_stream;
-mod numbers_table;
-mod table_function;
-mod table_function_factory;
-
-pub use memory_block_part::generate_block_parts;
-pub use numbers_table::NumbersTable;
-pub use table_function::TableFunction;
-pub use table_function_factory::TableArgs;
-pub use table_function_factory::TableFunctionFactory;
+pub use database::Database;
+pub use database_context::DatabaseContext;
+pub use database_factory::DatabaseFactory;

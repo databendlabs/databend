@@ -23,9 +23,9 @@ use common_meta_types::UserQuota;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
-use crate::catalogs::Table;
-use crate::catalogs::ToReadDataSourcePlan;
 use crate::storages::system::UsersTable;
+use crate::storages::Table;
+use crate::storages::ToReadDataSourcePlan;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_users_table() -> Result<()> {

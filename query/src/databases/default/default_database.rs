@@ -12,19 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use common_exception::Result;
 
-use common_dal::InMemoryData;
-use common_infallible::RwLock;
-use common_meta_api::MetaApi;
-
-use crate::databases::DatabaseFactory;
-use crate::storages::StorageFactory;
+use crate::databases::Database;
+use crate::databases::DatabaseContext;
 
 #[derive(Clone)]
-pub struct CatalogContext {
-    pub meta: Arc<dyn MetaApi>,
-    pub storage_factory: Arc<StorageFactory>,
-    pub database_factory: Arc<DatabaseFactory>,
-    pub in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
+pub struct DefaultDatabase {
+    db_name: String,
+    db_engine: String,
+}
+
+impl DefaultDatabase {
+    pub fn try_create(
+        _ctx: DatabaseContext,
+        db_name: &str,
+        db_engine: &str,
+    ) -> Result<Box<dyn Database>> {
+        Ok(Box::new(Self {
+            db_name: db_name.to_string(),
+            db_engine: db_engine.to_string(),
+        }))
+    }
+}
+
+impl Database for DefaultDatabase {
+    fn name(&self) -> &str {
+        &self.db_name
+    }
 }
