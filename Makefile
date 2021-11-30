@@ -75,7 +75,7 @@ unit-test:
 
 # Bendctl with cluster for stateful test.
 cluster: build cli-build
-	mkdir -p ./.databend/local/bin/test/ && make cluster_stop || echo "stop"
+	mkdir -p ./.databend/local/bin/test/ && mkdir ./.databend/local/configs/local/  && make cluster_stop || echo "stop"
 	cp ./target/release/databend-query ./.databend/local/bin/test/databend-query
 	cp ./target/release/databend-meta ./.databend/local/bin/test/databend-meta
 	./target/release/bendctl cluster create --databend_dir ./.databend --group local --version test --num-cpus ${NUM_CPUS} --query-tenant-id ${TENANT_ID} --query-cluster-id ${CLUSTER_ID} --force
@@ -123,7 +123,7 @@ k8s-docker:
 	bash ./scripts/build/build-k8s-runner.sh
 
 docker_release:
-	docker buildx build . -f ./docker/release/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend:${TAG} --build-arg VERSION=${VERSION}--push
+	docker buildx build . -f ./docker/release/Dockerfile  --platform ${PLATFORM} --allow network.host --builder host -t ${HUB}/databend:${TAG} --build-arg VERSION=${VERSION} --push
 
 # experiment feature: take a look at docker/README.md for detailed multi architecture image build support
 dockerx:

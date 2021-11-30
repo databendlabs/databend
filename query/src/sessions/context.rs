@@ -261,6 +261,7 @@ impl QueryContext {
                     &conf.bucket,
                     &conf.access_key_id,
                     &conf.secret_access_key,
+                    conf.enable_pod_iam_policy,
                 )?)
             }
             StorageScheme::AzureStorageBlob => {

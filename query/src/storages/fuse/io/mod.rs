@@ -13,17 +13,15 @@
 // limitations under the License.
 //
 
-pub use block_appender::BlockAppender;
-pub use col_encoding::col_encoding;
-pub use constants::TBL_OPT_KEY_SNAPSHOT_LOC;
-pub use location_gen::gen_block_location;
-pub use location_gen::gen_segment_info_location;
-pub use location_gen::snapshot_location;
+#[cfg(test)]
+mod block_appender_test;
 
 mod block_appender;
 mod col_encoding;
-mod constants;
 mod location_gen;
 
-#[cfg(test)]
-mod block_appender_test;
+pub use block_appender::BlockAppender;
+pub use col_encoding::col_encoding;
+pub use location_gen::gen_block_location;
+pub use location_gen::gen_segment_info_location;
+pub use location_gen::snapshot_location;

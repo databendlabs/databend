@@ -15,6 +15,7 @@
 
 use common_exception::Result;
 use common_meta_types::AuthType;
+use common_meta_types::GrantObject;
 use common_meta_types::SeqV;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilege;
@@ -41,10 +42,11 @@ pub trait UserMgrApi: Sync + Send {
         seq: Option<u64>,
     ) -> Result<Option<u64>>;
 
-    async fn set_user_privileges(
+    async fn grant_user_privileges(
         &self,
         username: String,
         hostname: String,
+        object: GrantObject,
         privileges: UserPrivilege,
         seq: Option<u64>,
     ) -> Result<Option<u64>>;

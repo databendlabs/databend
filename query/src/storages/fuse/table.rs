@@ -30,9 +30,9 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::sessions::QueryContext;
-use crate::storages::fuse::io::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
+use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::StorageContext;
 use crate::storages::Table;
 
@@ -86,14 +86,14 @@ impl Table for FuseTable {
         stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
         let log = self.append_trunks(ctx, stream).await?;
-        let blocks = match log {
-            Some(op_log) => vec![DataBlock::try_from(op_log)?],
-            _ => vec![],
-        };
+        let entries = log
+            .into_iter()
+            .map(DataBlock::try_from)
+            .collect::<Result<Vec<_>>>()?;
         Ok(Box::pin(DataBlockStream::create(
             AppendOperationLogEntry::schema(),
             None,
-            blocks,
+            entries,
         )))
     }
 

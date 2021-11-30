@@ -53,7 +53,7 @@ impl FuseTable {
         // TODO we need a configuration to specify the unit of dequeue operation
         let bite_size = 1;
         let ctx_clone = ctx.clone();
-        let iter = {
+        let iter =
             std::iter::from_fn(
                 move || match ctx_clone.clone().try_get_partitions(bite_size) {
                     Err(_) => None,
@@ -61,8 +61,7 @@ impl FuseTable {
                     Ok(parts) => Some(parts),
                 },
             )
-            .flatten()
-        };
+            .flatten();
         let da = ctx.get_data_accessor()?;
         let arrow_schema = self.table_info.schema().to_arrow();
         let table_schema = Arc::new(DataSchema::from(arrow_schema));

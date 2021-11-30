@@ -13,6 +13,7 @@
 //  limitations under the License.
 //
 
+use std::str::FromStr;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -23,6 +24,10 @@ use crate::storages::fuse::io;
 use crate::storages::fuse::io::BlockAppender;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::FuseTable;
+use crate::storages::fuse::DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD;
+use crate::storages::fuse::DEFAULT_CHUNK_BLOCK_NUM;
+use crate::storages::fuse::TBL_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
+use crate::storages::fuse::TBL_OPT_KEY_CHUNK_BLOCK_NUM;
 
 impl FuseTable {
     #[inline]
@@ -30,20 +35,39 @@ impl FuseTable {
         &self,
         ctx: Arc<QueryContext>,
         stream: SendableDataBlockStream,
-    ) -> Result<Option<AppendOperationLogEntry>> {
-        let da = ctx.get_data_accessor()?;
-        let segment =
-            BlockAppender::append_blocks(da.clone(), stream, self.table_info.schema().as_ref())
-                .await?;
+    ) -> Result<Vec<AppendOperationLogEntry>> {
+        let chunk_block_num = self.get_option(TBL_OPT_KEY_CHUNK_BLOCK_NUM, DEFAULT_CHUNK_BLOCK_NUM);
+        let block_size_threshold = self.get_option(
+            TBL_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
+            DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
+        );
 
-        match segment {
-            Some(seg) => {
-                let seg_loc = io::gen_segment_info_location();
-                let bytes = serde_json::to_vec(&seg)?;
-                da.put(&seg_loc, bytes).await?;
-                Ok(Some(AppendOperationLogEntry::new(seg_loc, seg)))
-            }
-            _ => Ok(None),
+        let da = ctx.get_data_accessor()?;
+        let segments = BlockAppender::append_blocks(
+            da.clone(),
+            stream,
+            self.table_info.schema().as_ref(),
+            chunk_block_num,
+            block_size_threshold,
+        )
+        .await?;
+
+        let mut result = Vec::with_capacity(segments.len());
+        for seg in segments {
+            let seg_loc = io::gen_segment_info_location();
+            let bytes = serde_json::to_vec(&seg)?;
+            da.put(&seg_loc, bytes).await?;
+            result.push(AppendOperationLogEntry::new(seg_loc, seg))
         }
+        Ok(result)
+    }
+
+    fn get_option<T: FromStr>(&self, opt_key: &str, default: T) -> T {
+        self.table_info
+            .options()
+            .get(opt_key)
+            .map(|s| s.parse::<T>().ok())
+            .flatten()
+            .unwrap_or(default)
     }
 }

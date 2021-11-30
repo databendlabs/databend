@@ -14,6 +14,7 @@
 
 mod cluster;
 mod match_seq;
+mod user_grant;
 mod user_info;
 mod user_privilege;
 mod user_quota;

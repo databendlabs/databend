@@ -44,6 +44,7 @@ impl S3 {
         bucket: &str,
         access_key_id: &str,
         secret_accesses_key: &str,
+        enable_pod_iam_policy: bool,
     ) -> Result<Self> {
         let region = Self::parse_region(region_name, endpoint_url)?;
 
@@ -53,15 +54,36 @@ impl S3 {
 
         let client = match Self::credential_provider(access_key_id, secret_accesses_key) {
             Some(provider) => Client::new_with(provider, dispatcher),
-            None => Client::new_with(
-                DefaultCredentialsProvider::new().map_err(|e| {
-                    ErrorCode::DALTransportError(format!(
-                        "failed to create default credentials provider, {}",
-                        e
-                    ))
-                })?,
-                dispatcher,
-            ),
+            None => {
+                // check on k8s admission webhook injection
+                if enable_pod_iam_policy {
+                    if std::env::var("AWS_WEB_IDENTITY_TOKEN_FILE").is_err() {
+                        return Err(ErrorCode::DALTransportError(
+                            "AWS_WEB_IDENTITY_TOKEN_FILE env variable is not set".to_string(),
+                        ));
+                    }
+                    let provider = rusoto_sts::WebIdentityProvider::from_k8s_env();
+                    let provider = rusoto_credential::AutoRefreshingProvider::new(provider)
+                        .map_err(|e| {
+                            ErrorCode::DALTransportError(format!(
+                                "failed to create Web Identity credential provider of s3, {}",
+                                e
+                            ))
+                        })?;
+                    Client::new_with(provider, dispatcher)
+                } else {
+                    // Otherwise, return the default.
+                    Client::new_with(
+                        DefaultCredentialsProvider::new().map_err(|e| {
+                            ErrorCode::DALTransportError(format!(
+                                "failed to create default credentials provider, {}",
+                                e
+                            ))
+                        })?,
+                        dispatcher,
+                    )
+                }
+            }
         };
 
         let s3_client = S3Client::new_with_client(client, region);
