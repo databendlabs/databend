@@ -34,12 +34,12 @@ use common_planners::Statistics;
 use common_streams::SendableDataBlockStream;
 
 use super::numbers_stream::NumbersStream;
-use crate::catalogs::TableFunction;
 use crate::pipelines::transforms::get_sort_descriptions;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 use crate::table_functions::generate_block_parts;
 use crate::table_functions::table_function_factory::TableArgs;
+use crate::table_functions::TableFunction;
 
 pub struct NumbersTable {
     table_info: TableInfo,

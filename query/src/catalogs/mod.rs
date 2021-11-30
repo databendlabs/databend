@@ -15,7 +15,6 @@
 
 mod catalog;
 mod catalog_context;
-mod table_function;
 mod table_id_ranges;
 mod table_memory_meta;
 
@@ -28,6 +27,5 @@ pub use catalog_context::CatalogContext;
 pub use impls::DatabaseCatalog;
 pub use impls::ImmutableCatalog;
 pub use impls::MutableCatalog;
-pub use table_function::TableFunction;
 pub use table_id_ranges::*;
 pub use table_memory_meta::InMemoryMetas;
