@@ -48,7 +48,9 @@ async fn test_fuse_table_simple_case() -> Result<()> {
     )));
 
     let r = table.append_data(ctx.clone(), stream).await?;
-    table.commit(ctx.clone(), r.try_collect().await?).await?;
+    table
+        .commit(ctx.clone(), r.try_collect().await?, false)
+        .await?;
 
     // get the latest tbl
     let prev_version = table.get_table_info().ident.version;
@@ -149,7 +151,9 @@ async fn test_fuse_table_truncate() -> Result<()> {
     )));
 
     let r = table.append_data(ctx.clone(), stream).await?;
-    table.commit(ctx.clone(), r.try_collect().await?).await?;
+    table
+        .commit(ctx.clone(), r.try_collect().await?, false)
+        .await?;
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
     // get the latest tbl

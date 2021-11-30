@@ -24,6 +24,7 @@ pub struct InsertIntoPlan {
     pub tbl_name: String,
     pub tbl_id: MetaId,
     pub schema: DataSchemaRef,
+    pub overwrite: bool,
 
     pub select_plan: Option<Box<PlanNode>>,
     pub value_exprs_opt: Option<Vec<Vec<Expression>>>,
@@ -48,6 +49,7 @@ impl InsertIntoPlan {
         table: String,
         table_meta_id: MetaId,
         schema: DataSchemaRef,
+        overwrite: bool,
         select_plan: PlanNode,
     ) -> InsertIntoPlan {
         InsertIntoPlan {
@@ -55,6 +57,7 @@ impl InsertIntoPlan {
             tbl_name: table,
             tbl_id: table_meta_id,
             schema,
+            overwrite,
             select_plan: Some(Box::new(select_plan)),
             value_exprs_opt: None,
             format: None,
@@ -66,6 +69,7 @@ impl InsertIntoPlan {
         table: String,
         table_meta_id: MetaId,
         schema: DataSchemaRef,
+        overwrite: bool,
         values: Vec<Vec<Expression>>,
     ) -> InsertIntoPlan {
         InsertIntoPlan {
@@ -73,6 +77,7 @@ impl InsertIntoPlan {
             tbl_name: table,
             tbl_id: table_meta_id,
             schema,
+            overwrite,
             select_plan: None,
             value_exprs_opt: Some(values),
             format: None,
@@ -84,6 +89,7 @@ impl InsertIntoPlan {
         table: String,
         table_meta_id: MetaId,
         schema: DataSchemaRef,
+        overwrite: bool,
         format: Option<String>,
     ) -> InsertIntoPlan {
         InsertIntoPlan {
@@ -91,6 +97,7 @@ impl InsertIntoPlan {
             tbl_name: table,
             tbl_id: table_meta_id,
             schema,
+            overwrite,
             select_plan: None,
             value_exprs_opt: None,
             format,

@@ -99,7 +99,12 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    async fn commit(&self, _ctx: Arc<QueryContext>, _operations: Vec<DataBlock>) -> Result<()> {
+    async fn commit(
+        &self,
+        _ctx: Arc<QueryContext>,
+        _operations: Vec<DataBlock>,
+        _overwrite: bool,
+    ) -> Result<()> {
         Ok(())
     }
 

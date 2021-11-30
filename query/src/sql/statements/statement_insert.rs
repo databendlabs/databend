@@ -98,12 +98,6 @@ impl DfInsertStatement {
     }
 
     fn is_supported(&self) -> Result<()> {
-        if self.overwrite {
-            return Err(ErrorCode::SyntaxException(
-                "Unsupport insert overwrite statement.",
-            ));
-        }
-
         if self.partitioned.is_some() {
             return Err(ErrorCode::SyntaxException(
                 "Unsupport insert ... partition statement.",
@@ -155,7 +149,14 @@ impl DfInsertStatement {
         }
 
         Ok(AnalyzedResult::SimpleQuery(PlanNode::InsertInto(
-            InsertIntoPlan::insert_values(db, table, table_meta_id, schema, value_exprs),
+            InsertIntoPlan::insert_values(
+                db,
+                table,
+                table_meta_id,
+                schema,
+                self.overwrite,
+                value_exprs,
+            ),
         )))
     }
 
@@ -174,6 +175,7 @@ impl DfInsertStatement {
                 table,
                 table_meta_id,
                 table_schema,
+                self.overwrite,
                 self.format.clone(),
             ),
         )))
@@ -193,7 +195,14 @@ impl DfInsertStatement {
         let select_plan =
             PlanParser::build_plan(vec![DfStatement::Query(statement)], ctx.clone()).await?;
         Ok(AnalyzedResult::SimpleQuery(PlanNode::InsertInto(
-            InsertIntoPlan::insert_select(db, table, table_meta_id, table_schema, select_plan),
+            InsertIntoPlan::insert_select(
+                db,
+                table,
+                table_meta_id,
+                table_schema,
+                self.overwrite,
+                select_plan,
+            ),
         )))
     }
 
