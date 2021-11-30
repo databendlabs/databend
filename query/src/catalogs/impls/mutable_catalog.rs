@@ -118,10 +118,11 @@ impl MutableCatalog {
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
         let ctx = DatabaseContext {
             meta: self.ctx.meta.clone(),
+            in_memory_data: self.ctx.in_memory_data.clone(),
         };
         self.ctx
             .database_factory
-            .get_database(ctx, db_info.as_ref())
+            .get_database(ctx, &db_info.db, &db_info.meta.engine)
     }
 }
 
@@ -147,7 +148,23 @@ impl Catalog for MutableCatalog {
     }
 
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
-        self.ctx.meta.create_database(req).await
+        // Create database.
+        let res = self.ctx.meta.create_database(req.clone()).await?;
+        tracing::error!("db name: {}, engine: {}", &req.db, &req.engine);
+
+        // Initial the database after creating.
+        let db_ctx = DatabaseContext {
+            meta: self.ctx.meta.clone(),
+            in_memory_data: self.ctx.in_memory_data.clone(),
+        };
+        let database = self
+            .ctx
+            .database_factory
+            .get_database(db_ctx, &req.db, &req.engine)?;
+        database.init_database().await?;
+        Ok(CreateDatabaseReply {
+            database_id: res.database_id,
+        })
     }
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<()> {

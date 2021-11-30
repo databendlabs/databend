@@ -12,10 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::Result;
 use dyn_clone::DynClone;
 
 #[async_trait::async_trait]
 pub trait Database: DynClone + Sync + Send {
     /// Database name.
     fn name(&self) -> &str;
+
+    // Initial a database.
+    async fn init_database(&self) -> Result<()> {
+        Ok(())
+    }
 }

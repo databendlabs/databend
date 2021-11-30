@@ -19,24 +19,34 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
-use common_meta_types::DatabaseInfo;
 
 use crate::configs::Config;
 use crate::databases::default::DefaultDatabase;
+use crate::databases::github::GithubDatabase;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 
 pub trait DatabaseCreator: Send + Sync {
-    fn try_create(&self, ctx: DatabaseContext, db_info: DatabaseInfo) -> Result<Box<dyn Database>>;
+    fn try_create(
+        &self,
+        ctx: DatabaseContext,
+        db_name: &str,
+        db_engine: &str,
+    ) -> Result<Box<dyn Database>>;
 }
 
 impl<T> DatabaseCreator for T
 where
-    T: Fn(DatabaseContext, DatabaseInfo) -> Result<Box<dyn Database>>,
+    T: Fn(DatabaseContext, &str, &str) -> Result<Box<dyn Database>>,
     T: Send + Sync,
 {
-    fn try_create(&self, ctx: DatabaseContext, db_info: DatabaseInfo) -> Result<Box<dyn Database>> {
-        self(ctx, db_info)
+    fn try_create(
+        &self,
+        ctx: DatabaseContext,
+        db_name: &str,
+        db_engine: &str,
+    ) -> Result<Box<dyn Database>> {
+        self(ctx, db_name, db_engine)
     }
 }
 
@@ -49,6 +59,7 @@ impl DatabaseFactory {
     pub fn create(_conf: Config) -> Self {
         let mut creators: HashMap<String, Arc<dyn DatabaseCreator>> = Default::default();
         creators.insert("DEFAULT".to_string(), Arc::new(DefaultDatabase::try_create));
+        creators.insert("GITHUB".to_string(), Arc::new(GithubDatabase::try_create));
 
         DatabaseFactory {
             creators: RwLock::new(creators),
@@ -58,12 +69,13 @@ impl DatabaseFactory {
     pub fn get_database(
         &self,
         ctx: DatabaseContext,
-        db_info: &DatabaseInfo,
+        db_name: &str,
+        db_engine: &str,
     ) -> Result<Arc<dyn Database>> {
-        let engine = if db_info.engine().is_empty() {
+        let engine = if db_engine.is_empty() {
             "DEFAULT".to_string()
         } else {
-            db_info.engine().to_uppercase()
+            db_engine.to_uppercase()
         };
 
         let lock = self.creators.read();
@@ -71,7 +83,7 @@ impl DatabaseFactory {
             ErrorCode::UnknownDatabaseEngine(format!("Unknown database engine {}", engine))
         })?;
 
-        let db: Arc<dyn Database> = factory.try_create(ctx, db_info.clone())?.into();
+        let db: Arc<dyn Database> = factory.try_create(ctx, db_name, db_engine)?.into();
         Ok(db)
     }
 }
