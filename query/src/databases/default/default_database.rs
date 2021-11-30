@@ -20,19 +20,16 @@ use crate::databases::DatabaseContext;
 #[derive(Clone)]
 pub struct DefaultDatabase {
     db_name: String,
-    #[allow(dead_code)]
-    db_engine: String,
 }
 
 impl DefaultDatabase {
     pub fn try_create(
         _ctx: DatabaseContext,
         db_name: &str,
-        db_engine: &str,
+        _db_engine: &str,
     ) -> Result<Box<dyn Database>> {
         Ok(Box::new(Self {
             db_name: db_name.to_string(),
-            db_engine: db_engine.to_string(),
         }))
     }
 }
