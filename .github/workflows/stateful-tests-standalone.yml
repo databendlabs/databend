@@ -20,10 +20,8 @@ jobs:
       fail-fast: true
       matrix:
         config:
-          # Linux
+          # Linux (ubuntu-latest only)
           - { os: ubuntu-latest, toolchain: stable, target: x86_64-unknown-linux-gnu, cross: false }
-          # Macos
-          - { os: macos-latest, toolchain: stable, target: x86_64-apple-darwin, cross: false }
     steps:
       - uses: actions/checkout@v2
 
@@ -51,7 +49,6 @@ jobs:
           CARGO_INCREMENTAL: '0'
 
       - name: Minio Setup for (ubuntu-latest only)
-        if: matrix.config.os == 'ubuntu-latest'
         run: |
           docker run -d -p 9900:9000 --name minio \
                   -e "MINIO_ACCESS_KEY=minioadmin" \
@@ -68,6 +65,5 @@ jobs:
 
 
       - name: Run Stateless Tests with Standalone mode (ubuntu-latest only)
-        if: matrix.config.os == 'ubuntu-latest'
         run: |
           bash ./scripts/ci/ci-run-stateful-tests-standalone-s3.sh

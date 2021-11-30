@@ -1,4 +1,4 @@
-name: Cargo
+name: Databend Base
 on:
   push:
     paths-ignore:
@@ -13,8 +13,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  rustfmt_and_clippy:
-    name: "Lint"
+  lint_and_build:
+    name: "Lint & Build"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -58,3 +58,9 @@ jobs:
         run: cargo build --verbose
         env:
           CARGO_INCREMENTAL: '0'
+
+      - name: YAML Lint
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: ./
+          config_file: .yamllint.yml
