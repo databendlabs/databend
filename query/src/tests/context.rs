@@ -110,7 +110,7 @@ pub fn try_create_cluster_context(desc: ClusterDescriptor) -> Result<Arc<QueryCo
 }
 
 pub fn try_create_catalog_context() -> Result<CatalogContext> {
-    let meta_embedded = MetaEmbedded::sync_new_temp().unwrap();
+    let meta_embedded = futures::executor::block_on(MetaEmbedded::new_temp()).unwrap();
     let meta = meta_embedded;
     let storage_factory = StorageFactory::create(Config::default());
     let database_factory = DatabaseFactory::create(Config::default());
@@ -124,7 +124,7 @@ pub fn try_create_catalog_context() -> Result<CatalogContext> {
 }
 
 pub fn try_create_storage_context() -> Result<StorageContext> {
-    let meta_embedded = MetaEmbedded::sync_new_temp().unwrap();
+    let meta_embedded = futures::executor::block_on(MetaEmbedded::new_temp()).unwrap();
 
     Ok(StorageContext {
         meta: Arc::new(meta_embedded),
