@@ -56,15 +56,31 @@ impl S3 {
 
         let client = match Self::credential_provider(access_key_id, secret_accesses_key) {
             Some(provider) => Client::new_with(provider, dispatcher),
-            None => Client::new_with(
-                DefaultCredentialsProvider::new().map_err(|e| {
-                    ErrorCode::DALTransportError(format!(
-                        "failed to create default credentials provider, {}",
-                        e.to_string()
-                    ))
-                })?,
-                dispatcher,
-            ),
+            None => {
+                // check on k8s admission webhook injection
+                if std::env::var("AWS_WEB_IDENTITY_TOKEN_FILE").is_ok() {
+                    let provider = rusoto_sts::WebIdentityProvider::from_k8s_env();
+                    let provider = rusoto_credential::AutoRefreshingProvider::new(provider)
+                        .map_err(|e| {
+                            ErrorCode::DALTransportError(format!(
+                                "failed to create Web Identity credential provider of s3, {}",
+                                e.to_string()
+                            ))
+                        })?;
+                    Client::new_with(provider, dispatcher)
+                } else {
+                    // Otherwise, return the default.
+                    Client::new_with(
+                        DefaultCredentialsProvider::new().map_err(|e| {
+                            ErrorCode::DALTransportError(format!(
+                                "failed to create default credentials provider, {}",
+                                e.to_string()
+                            ))
+                        })?,
+                        dispatcher,
+                    )
+                }
+            }
         };
 
         let s3_client = S3Client::new_with_client(client, region);
