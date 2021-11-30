@@ -82,3 +82,9 @@ impl ops::BitOrAssign for UserPrivilege {
         self.privileges |= other.privileges
     }
 }
+
+impl Into<BitFlags<UserPrivilegeType>> for UserPrivilege {
+    fn into(self) -> BitFlags<UserPrivilegeType> {
+        self.privileges
+    }
+}

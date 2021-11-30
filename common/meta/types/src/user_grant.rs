@@ -14,6 +14,7 @@
 
 use enumflags2::BitFlags;
 
+use crate::UserPrivilege;
 use crate::UserPrivilegeType;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -182,7 +183,7 @@ impl UserGrantSet {
         user: &str,
         host_pattern: &str,
         object: &GrantObject,
-        privileges: BitFlags<UserPrivilegeType>,
+        privileges: UserPrivilege,
     ) {
         let mut new_grants: Vec<GrantEntry> = vec![];
         let mut changed = false;
@@ -190,7 +191,7 @@ impl UserGrantSet {
         for grant in self.grants.iter() {
             let mut grant = grant.clone();
             if grant.matches_entry(user, host_pattern, object) {
-                grant.privileges |= privileges;
+                grant.privileges |= privileges.into();
                 changed = true;
             }
             new_grants.push(grant);
@@ -201,7 +202,7 @@ impl UserGrantSet {
                 user.into(),
                 host_pattern.into(),
                 object.clone(),
-                privileges,
+                privileges.into(),
             ))
         }
 
@@ -213,7 +214,7 @@ impl UserGrantSet {
         user: &str,
         host_pattern: &str,
         object: &GrantObject,
-        privileges: BitFlags<UserPrivilegeType>,
+        privileges: UserPrivilege,
     ) {
         let grants = self
             .grants
@@ -221,7 +222,7 @@ impl UserGrantSet {
             .map(|e| {
                 if e.matches_entry(user, host_pattern, object) {
                     let mut e = e.clone();
-                    e.privileges ^= privileges;
+                    e.privileges ^= privileges.into();
                     e
                 } else {
                     e.clone()
