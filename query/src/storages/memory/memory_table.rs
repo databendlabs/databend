@@ -84,31 +84,37 @@ impl Table for MemoryTable {
     ) -> Result<(Statistics, Partitions)> {
         let blocks = self.blocks.read();
 
-        let statistics = if let Some(Extras {
-            projection: Some(prj),
-            ..
-        }) = push_downs
-        {
-            let proj_cols = HashSet::<usize>::from_iter(prj);
-            blocks
-                .iter()
-                .fold(Statistics::default(), |mut stats, block| {
-                    stats.read_rows += block.num_rows() as usize;
-                    stats.read_bytes += (0..block.num_columns())
-                        .into_iter()
-                        .collect::<Vec<usize>>()
-                        .iter()
-                        .filter(|cid| proj_cols.contains(&(**cid as usize)))
-                        .map(|cid| block.columns()[*cid].get_array_memory_size() as u64)
-                        .sum::<u64>() as usize;
+        let statistics = match push_downs {
+            Some(push_downs) => {
+                let projection_filter: Box<dyn Fn(usize) -> bool> = match push_downs.projection {
+                    Some(prj) => {
+                        let proj_cols = HashSet::<usize>::from_iter(prj);
+                        Box::new(move |column_id: usize| proj_cols.contains(&column_id))
+                    }
+                    None => Box::new(|_: usize| true),
+                };
 
-                    stats
-                })
-        } else {
-            let rows = blocks.iter().map(|block| block.num_rows()).sum();
-            let bytes = blocks.iter().map(|block| block.memory_size()).sum();
+                blocks
+                    .iter()
+                    .fold(Statistics::default(), |mut stats, block| {
+                        stats.read_rows += block.num_rows() as usize;
+                        stats.read_bytes += (0..block.num_columns())
+                            .into_iter()
+                            .collect::<Vec<usize>>()
+                            .iter()
+                            .filter(|cid| projection_filter(**cid))
+                            .map(|cid| block.columns()[*cid].get_array_memory_size() as u64)
+                            .sum::<u64>() as usize;
 
-            Statistics::new_exact(rows, bytes)
+                        stats
+                    })
+            }
+            None => {
+                let rows = blocks.iter().map(|block| block.num_rows()).sum();
+                let bytes = blocks.iter().map(|block| block.memory_size()).sum();
+
+                Statistics::new_exact(rows, bytes)
+            }
         };
 
         let parts = crate::table_functions::generate_block_parts(
@@ -125,27 +131,27 @@ impl Table for MemoryTable {
         plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         let push_downs = &plan.push_downs;
+        let raw_blocks = self.blocks.read().clone();
 
-        let blocks = if let Some(Extras {
-            projection: Some(prj),
-            ..
-        }) = push_downs
-        {
-            let mut pruned_blocks = Vec::with_capacity(prj.len());
-            let schema = Arc::new(self.table_info.schema().project(prj.clone()));
-            let raw_blocks = self.blocks.read().clone();
+        let blocks = match push_downs {
+            Some(push_downs) => match &push_downs.projection {
+                Some(prj) => {
+                    let pruned_schema = Arc::new(self.table_info.schema().project(prj.clone()));
+                    let mut pruned_blocks = Vec::with_capacity(raw_blocks.len());
 
-            for raw_block in raw_blocks {
-                let raw_columns = raw_block.columns();
-                let columns: Vec<DataColumn> =
-                    prj.iter().map(|idx| raw_columns[*idx].clone()).collect();
+                    for raw_block in raw_blocks {
+                        let raw_columns = raw_block.columns();
+                        let columns: Vec<DataColumn> =
+                            prj.iter().map(|idx| raw_columns[*idx].clone()).collect();
 
-                pruned_blocks.push(DataBlock::create(schema.clone(), columns))
-            }
+                        pruned_blocks.push(DataBlock::create(pruned_schema.clone(), columns))
+                    }
 
-            pruned_blocks
-        } else {
-            self.blocks.read().clone()
+                    pruned_blocks
+                }
+                None => raw_blocks,
+            },
+            None => raw_blocks,
         };
 
         Ok(Box::pin(MemoryTableStream::try_create(ctx, blocks)?))
