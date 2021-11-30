@@ -44,6 +44,7 @@ impl S3 {
         bucket: &str,
         access_key_id: &str,
         secret_accesses_key: &str,
+        enable_pod_iam_policy: bool,
     ) -> Result<Self> {
         let region = Self::parse_region(region_name, endpoint_url)?;
 
@@ -55,7 +56,12 @@ impl S3 {
             Some(provider) => Client::new_with(provider, dispatcher),
             None => {
                 // check on k8s admission webhook injection
-                if std::env::var("AWS_WEB_IDENTITY_TOKEN_FILE").is_ok() {
+                if enable_pod_iam_policy {
+                    if std::env::var("AWS_WEB_IDENTITY_TOKEN_FILE").is_err() {
+                        return Err(ErrorCode::DALTransportError(
+                            "AWS_WEB_IDENTITY_TOKEN_FILE env variable is not set".to_string(),
+                        ));
+                    }
                     let provider = rusoto_sts::WebIdentityProvider::from_k8s_env();
                     let provider = rusoto_credential::AutoRefreshingProvider::new(provider)
                         .map_err(|e| {
