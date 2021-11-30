@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::TableInfo;
-use nom::lib::std::collections::HashMap;
 
 use crate::catalogs::Table;
 use crate::configs::Config;

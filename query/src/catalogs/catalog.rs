@@ -35,11 +35,6 @@ use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
 use crate::table_functions::TableArgs;
 
-/// Catalog is the global view of all the databases of the user.
-/// The global view has many engine type: Local-Database(engine=Local), Remote-Database(engine=Remote)
-/// or others(like MySQL-Database, engine=MySQL)
-/// When we create a new database, we first to get the engine from the registered engines,
-/// and use the engine to create them.
 #[async_trait::async_trait]
 pub trait Catalog: DynClone + Send + Sync {
     ///

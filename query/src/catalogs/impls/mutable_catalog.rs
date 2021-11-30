@@ -41,10 +41,11 @@ use crate::catalogs::backends::MetaRemote;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::database::Database;
 use crate::catalogs::CatalogContext;
-use crate::catalogs::DefaultDatabase;
 use crate::catalogs::Table;
 use crate::common::MetaClientProvider;
 use crate::configs::Config;
+use crate::databases::DatabaseContext;
+use crate::databases::DatabaseFactory;
 use crate::storages::StorageContext;
 use crate::storages::StorageFactory;
 
@@ -99,19 +100,28 @@ impl MutableCatalog {
         };
         meta.create_database(req).await?;
 
+        // Storage factory.
         let storage_factory = StorageFactory::create(conf.clone());
+
+        // Database factory.
+        let database_factory = DatabaseFactory::create(conf.clone());
+
         let ctx = CatalogContext {
             meta,
             storage_factory: Arc::new(storage_factory),
+            database_factory: Arc::new(database_factory),
             in_memory_data: Arc::new(Default::default()),
         };
         Ok(MutableCatalog { ctx })
     }
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
-        let db = DefaultDatabase::new(&db_info.db);
-        let db = Arc::new(db);
-        Ok(db)
+        let ctx = DatabaseContext {
+            meta: self.ctx.meta.clone(),
+        };
+        self.ctx
+            .database_factory
+            .get_database(ctx, db_info.as_ref())
     }
 }
 
