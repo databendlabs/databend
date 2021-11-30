@@ -26,8 +26,8 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Catalog;
-use crate::catalogs::Table;
 use crate::sessions::QueryContext;
+use crate::storages::Table;
 
 pub struct TablesTable {
     table_info: TableInfo,

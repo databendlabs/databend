@@ -20,9 +20,9 @@ use common_exception::Result;
 use common_metrics::init_default_metrics_recorder;
 use futures::TryStreamExt;
 
-use crate::catalogs::Table;
-use crate::catalogs::ToReadDataSourcePlan;
 use crate::storages::system::MetricsTable;
+use crate::storages::Table;
+use crate::storages::ToReadDataSourcePlan;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_metrics_table() -> Result<()> {

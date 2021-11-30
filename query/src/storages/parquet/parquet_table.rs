@@ -29,9 +29,9 @@ use common_streams::ParquetSource;
 use common_streams::SendableDataBlockStream;
 use common_streams::Source;
 
-use crate::catalogs::Table;
 use crate::sessions::QueryContext;
 use crate::storages::StorageContext;
+use crate::storages::Table;
 
 pub struct ParquetTable {
     table_info: TableInfo,

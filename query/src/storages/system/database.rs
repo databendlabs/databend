@@ -16,9 +16,9 @@
 use std::sync::Arc;
 
 use crate::catalogs::InMemoryMetas;
-use crate::catalogs::Table;
 use crate::databases::Database;
 use crate::storages::system;
+use crate::storages::Table;
 
 #[derive(Clone)]
 pub struct SystemDatabase {}

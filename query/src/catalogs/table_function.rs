@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use crate::catalogs::Table;
+use crate::storages::Table;
 
 pub trait TableFunction: Sync + Send + Table {
     fn function_name(&self) -> &str;

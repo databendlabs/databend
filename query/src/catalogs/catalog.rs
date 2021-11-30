@@ -30,9 +30,9 @@ use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use dyn_clone::DynClone;
 
-use crate::catalogs::Table;
 use crate::catalogs::TableFunction;
 use crate::databases::Database;
+use crate::storages::Table;
 use crate::table_functions::TableArgs;
 
 #[async_trait::async_trait]

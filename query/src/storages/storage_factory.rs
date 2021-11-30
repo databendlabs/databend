@@ -20,7 +20,6 @@ use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::TableInfo;
 
-use crate::catalogs::Table;
 use crate::configs::Config;
 use crate::storages::csv::CsvTable;
 use crate::storages::fuse::FuseTable;
@@ -28,6 +27,7 @@ use crate::storages::memory::MemoryTable;
 use crate::storages::null::NullTable;
 use crate::storages::parquet::ParquetTable;
 use crate::storages::StorageContext;
+use crate::storages::Table;
 
 pub trait StorageCreator: Send + Sync {
     fn try_create(&self, ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>>;

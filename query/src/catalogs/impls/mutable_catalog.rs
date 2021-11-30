@@ -40,7 +40,6 @@ use common_tracing::tracing;
 use crate::catalogs::backends::MetaRemote;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::CatalogContext;
-use crate::catalogs::Table;
 use crate::common::MetaClientProvider;
 use crate::configs::Config;
 use crate::databases::Database;
@@ -48,6 +47,7 @@ use crate::databases::DatabaseContext;
 use crate::databases::DatabaseFactory;
 use crate::storages::StorageContext;
 use crate::storages::StorageFactory;
+use crate::storages::Table;
 
 /// Catalog based on MetaStore
 /// - System Database NOT included
