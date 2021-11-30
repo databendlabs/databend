@@ -13,7 +13,7 @@ In this section we will talk about how to write aggregate functions in Databend.
 
 ## AggregateFunction trait introduction
 
-All aggregate functions implement `AggregateFunction` trait, and we register them into a global static factory named `FactoryFuncRef`, the factory is just an index map and the key is the name of the aggregate function.
+All aggregate functions implement `AggregateFunction` trait, and we register them into a global static `FunctionFactory`, the factory is just an index map and the key is the name of the aggregate function.
 
 !!! note
     Function name in Databend is case-insensitive.

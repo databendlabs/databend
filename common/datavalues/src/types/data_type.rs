@@ -294,7 +294,7 @@ impl fmt::Debug for DataType {
             Self::List(arg0) => f.debug_tuple("List").field(arg0).finish(),
             Self::Struct(arg0) => f.debug_tuple("Struct").field(arg0).finish(),
             Self::String => write!(f, "String"),
-            Self::Interval(unit) => write!(f, "Interval({})", unit.to_string()),
+            Self::Interval(unit) => write!(f, "Interval({})", unit),
         }
     }
 }

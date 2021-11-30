@@ -22,12 +22,12 @@ use common_planners::Expression;
 
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::ShuffleAction;
+use crate::tests::create_query_context;
 use crate::tests::parse_query;
-use crate::tests::try_create_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_shuffle_action_try_into() -> Result<()> {
-    let ctx = try_create_context()?;
+    let ctx = create_query_context()?;
 
     let shuffle_action = ShuffleAction {
         query_id: String::from("query_id"),

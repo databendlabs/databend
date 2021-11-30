@@ -38,6 +38,7 @@ use crate::flight_action::MetaFlightAction;
 use crate::flight_action::RequestFor;
 use crate::flight_client_conf::MetaFlightClientConf;
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct MetaFlightClient {
     token: Vec<u8>,

@@ -185,11 +185,10 @@ async fn query_writer(
                         "read rows: {}, read bytes: {}, rows/sec: {} (rows/sec), bytes/sec: {} ({}/sec), time: {} sec",
                         stat.read_rows.to_formatted_string(&Locale::en),
                         byte_unit::Byte::from_bytes(stat.read_bytes as u128)
-                            .get_appropriate_unit(false)
-                            .to_string(),
+                            .get_appropriate_unit(false),
                         (stat.read_rows as f64 / time).as_u128().to_formatted_string(&Locale::en),
                         byte_per_sec.get_value(),
-                        byte_per_sec.get_unit().to_string(), time
+                        byte_per_sec.get_unit(), time
                     )
                 );
             }

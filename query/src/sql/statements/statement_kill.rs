@@ -36,9 +36,11 @@ impl AnalyzableStatement for DfKillStatement {
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let id = self.object_id.value.clone();
         let kill_connection = !self.kill_query;
-        Ok(AnalyzedResult::SimpleQuery(PlanNode::Kill(KillPlan {
-            id,
-            kill_connection,
-        })))
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Kill(
+            KillPlan {
+                id,
+                kill_connection,
+            },
+        ))))
     }
 }

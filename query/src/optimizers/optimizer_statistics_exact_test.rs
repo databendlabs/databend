@@ -27,7 +27,7 @@ mod tests {
 
     #[test]
     fn test_statistics_exact_optimizer() -> Result<()> {
-        let ctx = crate::tests::try_create_context()?;
+        let ctx = crate::tests::create_query_context()?;
 
         let total = ctx.get_settings().get_max_block_size()? as u64;
         let statistics =
@@ -48,9 +48,7 @@ mod tests {
             statistics: statistics.clone(),
             description: format!(
                 "(Read from system.{} table, Exactly Read Rows:{}, Read Bytes:{})",
-                "test".to_string(),
-                statistics.read_rows,
-                statistics.read_bytes
+                "test", statistics.read_rows, statistics.read_bytes
             ),
             tbl_args: None,
             push_downs: None,

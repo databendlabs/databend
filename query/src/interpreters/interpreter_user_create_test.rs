@@ -25,7 +25,7 @@ use crate::sql::*;
 async fn test_create_user_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
 
     static TEST_QUERY: &str = "CREATE USER 'test'@'localhost' IDENTIFIED BY 'password'";
     if let PlanNode::CreateUser(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {

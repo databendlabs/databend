@@ -225,7 +225,7 @@ fn test_plan_parser() -> Result<()> {
         },
     ];
 
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
     for t in tests {
         match parse_query(t.sql, &ctx) {
             Ok(v) => {

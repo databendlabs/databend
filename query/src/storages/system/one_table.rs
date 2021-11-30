@@ -29,8 +29,8 @@ use common_planners::Statistics;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::Table;
 use crate::sessions::QueryContext;
+use crate::storages::Table;
 
 pub struct OneTable {
     table_info: TableInfo,

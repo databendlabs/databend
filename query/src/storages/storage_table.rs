@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -117,72 +116,5 @@ pub trait Table: Sync + Send {
             "truncate for local table {} is not implemented",
             self.name()
         )))
-    }
-}
-
-pub type TablePtr = Arc<dyn Table>;
-
-#[async_trait::async_trait]
-pub trait ToReadDataSourcePlan {
-    /// Real read_plan to access partitions/push_downs
-    async fn read_plan(
-        &self,
-        ctx: Arc<QueryContext>,
-        push_downs: Option<Extras>,
-    ) -> Result<ReadDataSourcePlan>;
-}
-
-#[async_trait::async_trait]
-impl ToReadDataSourcePlan for dyn Table {
-    async fn read_plan(
-        &self,
-        ctx: Arc<QueryContext>,
-        push_downs: Option<Extras>,
-    ) -> Result<ReadDataSourcePlan> {
-        let (statistics, parts) = self.read_partitions(ctx, push_downs.clone()).await?;
-        let table_info = self.get_table_info();
-        let description = get_description(table_info, &statistics);
-
-        let scan_fields = match (self.benefit_column_prune(), &push_downs) {
-            (true, Some(push_downs)) => match &push_downs.projection {
-                Some(projection) if projection.len() < table_info.schema().fields().len() => {
-                    let fields = projection
-                        .iter()
-                        .map(|i| table_info.schema().field(*i).clone());
-
-                    Some((projection.iter().cloned().zip(fields)).collect::<BTreeMap<_, _>>())
-                }
-                _ => None,
-            },
-            _ => None,
-        };
-
-        Ok(ReadDataSourcePlan {
-            table_info: table_info.clone(),
-            scan_fields,
-            parts,
-            statistics,
-            description,
-            tbl_args: self.table_args(),
-            push_downs,
-        })
-    }
-}
-
-fn get_description(table_info: &TableInfo, statistics: &Statistics) -> String {
-    if statistics.read_rows > 0 {
-        format!(
-            "(Read from {} table, {} Read Rows:{}, Read Bytes:{})",
-            table_info.desc,
-            if statistics.is_exact {
-                "Exactly"
-            } else {
-                "Approximately"
-            },
-            statistics.read_rows,
-            statistics.read_bytes,
-        )
-    } else {
-        format!("(Read from {} table)", table_info.desc)
     }
 }

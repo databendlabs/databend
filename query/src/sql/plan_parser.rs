@@ -58,7 +58,7 @@ impl PlanParser {
         }
 
         match statements[0].analyze(ctx.clone()).await? {
-            AnalyzedResult::SimpleQuery(plan) => Ok(plan),
+            AnalyzedResult::SimpleQuery(plan) => Ok(*plan),
             AnalyzedResult::SelectQuery(data) => Self::build_query_plan(&data),
             AnalyzedResult::ExplainQuery((typ, data)) => {
                 let res = Self::build_query_plan(&data)?;

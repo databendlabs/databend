@@ -38,8 +38,8 @@ impl AnalyzableStatement for DfDropDatabase {
         let db = self.database_name()?;
         let if_exists = self.if_exists;
 
-        Ok(AnalyzedResult::SimpleQuery(PlanNode::DropDatabase(
-            DropDatabasePlan { db, if_exists },
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            PlanNode::DropDatabase(DropDatabasePlan { db, if_exists }),
         )))
     }
 }
