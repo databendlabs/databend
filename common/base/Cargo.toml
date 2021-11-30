@@ -18,16 +18,16 @@ common-exception = { path = "../exception" }
 # Github dependencies
 
 # Crates.io dependencies
-async-trait = "0.1"
-ctrlc = { version = "3.1.9", features = ["termination"] }
-futures = "0.3"
+async-trait = "0.1.51"
+ctrlc = { version = "3.2.1", features = ["termination"] }
+futures = "0.3.18"
 pprof = { version = "0.6.1", features = ["flamegraph", "protobuf"] }
 tokio = { version = "1.14.0", features = ["macros", "rt", "rt-multi-thread", "sync", "fs", "signal"] }
-uuid = { version = "0.8", features = ["serde", "v4"] }
-serde = { version = "1.0", features = ["derive"] }
-poem = { version = "1.0.30", features = ["rustls"] }
+uuid = { version = "0.8.2", features = ["serde", "v4"] }
+serde = { version = "1.0.130", features = ["derive"] }
+poem = { version = "1.0.32", features = ["rustls"] }
 
 
 [dev-dependencies]
-pretty_assertions = "1.0"
+pretty_assertions = "1.0.0"
 

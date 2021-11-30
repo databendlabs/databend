@@ -14,11 +14,7 @@
 
 use std::fmt::Debug;
 
-use common_arrow::arrow::compute::comparison::binary_compare_scalar;
-use common_arrow::arrow::compute::comparison::boolean_compare_scalar;
-use common_arrow::arrow::compute::comparison::compare;
-use common_arrow::arrow::compute::comparison::primitive_compare_scalar;
-use common_arrow::arrow::compute::comparison::Operator;
+use common_arrow::arrow::compute::comparison;
 use common_arrow::arrow::compute::comparison::Simd8;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -26,6 +22,22 @@ use num::Num;
 use num::NumCast;
 
 use crate::prelude::*;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Operator {
+    /// Less than
+    Lt,
+    /// Less than or equal to
+    LtEq,
+    /// Greater than
+    Gt,
+    /// Greater than or equal to
+    GtEq,
+    /// Equal
+    Eq,
+    /// Not equal
+    Neq,
+}
 
 pub trait NumComp: Num + NumCast + PartialOrd {}
 
@@ -110,13 +122,25 @@ where T: DFPrimitiveType + NumComp + Simd8
     /// First ensure that the Arrays of lhs and rhs match and then iterates over the Arrays and applies
     /// the comparison operator.
     fn comparison(&self, rhs: &DFPrimitiveArray<T>, op: Operator) -> Result<DFBooleanArray> {
-        let array = compare(&self.array, &rhs.array, op)?;
-        Ok(array.into())
+        match op {
+            Operator::Eq => Ok(comparison::primitive::eq(&self.array, &rhs.array).into()),
+            Operator::Neq => Ok(comparison::primitive::neq(&self.array, &rhs.array).into()),
+            Operator::Gt => Ok(comparison::primitive::gt(&self.array, &rhs.array).into()),
+            Operator::GtEq => Ok(comparison::primitive::gt_eq(&self.array, &rhs.array).into()),
+            Operator::Lt => Ok(comparison::primitive::lt(&self.array, &rhs.array).into()),
+            Operator::LtEq => Ok(comparison::primitive::lt_eq(&self.array, &rhs.array).into()),
+        }
     }
 
     fn comparison_scalar(&self, rhs: T, op: Operator) -> Result<DFBooleanArray> {
-        let array = primitive_compare_scalar(&self.array, &Some(rhs).into(), op);
-        Ok(array.into())
+        match op {
+            Operator::Eq => Ok(comparison::primitive::eq_scalar(&self.array, rhs).into()),
+            Operator::Neq => Ok(comparison::primitive::neq_scalar(&self.array, rhs).into()),
+            Operator::Gt => Ok(comparison::primitive::gt_scalar(&self.array, rhs).into()),
+            Operator::GtEq => Ok(comparison::primitive::gt_eq_scalar(&self.array, rhs).into()),
+            Operator::Lt => Ok(comparison::primitive::lt_scalar(&self.array, rhs).into()),
+            Operator::LtEq => Ok(comparison::primitive::lt_eq_scalar(&self.array, rhs).into()),
+        }
     }
 }
 
@@ -172,13 +196,25 @@ impl DFBooleanArray {
     /// First ensure that the Arrays of lhs and rhs match and then iterates over the Arrays and applies
     /// the comparison operator.
     fn comparison(&self, rhs: &DFBooleanArray, op: Operator) -> Result<DFBooleanArray> {
-        let array = compare(&self.array, &rhs.array, op)?;
-        Ok(array.into())
+        match op {
+            Operator::Eq => Ok(comparison::boolean::eq(&self.array, &rhs.array).into()),
+            Operator::Neq => Ok(comparison::boolean::neq(&self.array, &rhs.array).into()),
+            Operator::Gt => Ok(comparison::boolean::gt(&self.array, &rhs.array).into()),
+            Operator::GtEq => Ok(comparison::boolean::gt_eq(&self.array, &rhs.array).into()),
+            Operator::Lt => Ok(comparison::boolean::lt(&self.array, &rhs.array).into()),
+            Operator::LtEq => Ok(comparison::boolean::lt_eq(&self.array, &rhs.array).into()),
+        }
     }
 
     fn comparison_scalar(&self, rhs: bool, op: Operator) -> Result<DFBooleanArray> {
-        let array = boolean_compare_scalar(&self.array, &Some(rhs).into(), op);
-        Ok(array.into())
+        match op {
+            Operator::Eq => Ok(comparison::boolean::eq_scalar(&self.array, rhs).into()),
+            Operator::Neq => Ok(comparison::boolean::neq_scalar(&self.array, rhs).into()),
+            Operator::Gt => Ok(comparison::boolean::gt_scalar(&self.array, rhs).into()),
+            Operator::GtEq => Ok(comparison::boolean::gt_eq_scalar(&self.array, rhs).into()),
+            Operator::Lt => Ok(comparison::boolean::lt_scalar(&self.array, rhs).into()),
+            Operator::LtEq => Ok(comparison::boolean::lt_eq_scalar(&self.array, rhs).into()),
+        }
     }
 }
 
@@ -210,13 +246,25 @@ impl ArrayCompare<&DFBooleanArray> for DFBooleanArray {
 
 impl DFStringArray {
     fn comparison(&self, rhs: &DFStringArray, op: Operator) -> Result<DFBooleanArray> {
-        let array = compare(&self.array, &rhs.array, op)?;
-        Ok(array.into())
+        match op {
+            Operator::Eq => Ok(comparison::binary::eq(&self.array, &rhs.array).into()),
+            Operator::Neq => Ok(comparison::binary::neq(&self.array, &rhs.array).into()),
+            Operator::Gt => Ok(comparison::binary::gt(&self.array, &rhs.array).into()),
+            Operator::GtEq => Ok(comparison::binary::gt_eq(&self.array, &rhs.array).into()),
+            Operator::Lt => Ok(comparison::binary::lt(&self.array, &rhs.array).into()),
+            Operator::LtEq => Ok(comparison::binary::lt_eq(&self.array, &rhs.array).into()),
+        }
     }
 
     fn comparison_scalar(&self, rhs: &[u8], op: Operator) -> Result<DFBooleanArray> {
-        let array = binary_compare_scalar(&self.array, &Some(rhs).into(), op);
-        Ok(array.into())
+        match op {
+            Operator::Eq => Ok(comparison::binary::eq_scalar(&self.array, rhs).into()),
+            Operator::Neq => Ok(comparison::binary::neq_scalar(&self.array, rhs).into()),
+            Operator::Gt => Ok(comparison::binary::gt_scalar(&self.array, rhs).into()),
+            Operator::GtEq => Ok(comparison::binary::gt_eq_scalar(&self.array, rhs).into()),
+            Operator::Lt => Ok(comparison::binary::lt_scalar(&self.array, rhs).into()),
+            Operator::LtEq => Ok(comparison::binary::lt_eq_scalar(&self.array, rhs).into()),
+        }
     }
 
     fn like(&self, rhs: &DFStringArray) -> Result<DFBooleanArray> {
