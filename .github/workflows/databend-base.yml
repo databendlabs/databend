@@ -19,6 +19,12 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: YAML Lint
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: ./
+          config_file: .yamllint.yml
+
       - name: Rust setup
         run: |
           bash ./scripts/setup/dev_setup.sh
@@ -53,14 +59,8 @@ jobs:
           args: --all -- --check
         env:
           CARGO_INCREMENTAL: '0'
-      
+
       - name: Build
         run: cargo build --verbose
         env:
           CARGO_INCREMENTAL: '0'
-
-      - name: YAML Lint
-        uses: ibiqlik/action-yamllint@v3
-        with:
-          file_or_dir: ./
-          config_file: .yamllint.yml
