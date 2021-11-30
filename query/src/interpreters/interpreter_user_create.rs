@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
-use common_meta_types::UserPrivilege;
 use common_meta_types::UserQuota;
 use common_planners::CreateUserPlan;
 use common_streams::DataBlockStream;
@@ -58,7 +57,6 @@ impl Interpreter for CreatUserInterpreter {
             hostname: plan.hostname,
             password: plan.password,
             auth_type: plan.auth_type,
-            privileges: UserPrivilege::empty(),
             grants: UserGrantSet::empty(),
             quota: UserQuota::no_limit(),
         };

@@ -53,6 +53,10 @@ impl UserPrivilege {
         }
     }
 
+    pub fn all_privileges() -> Self {
+        ALL_PRIVILEGES.into()
+    }
+
     pub fn set_privilege(&mut self, privilege: UserPrivilegeType) {
         self.privileges |= privilege;
     }
@@ -83,8 +87,14 @@ impl ops::BitOrAssign for UserPrivilege {
     }
 }
 
-impl Into<BitFlags<UserPrivilegeType>> for UserPrivilege {
-    fn into(self) -> BitFlags<UserPrivilegeType> {
-        self.privileges
+impl From<UserPrivilege> for BitFlags<UserPrivilegeType> {
+    fn from(privilege: UserPrivilege) -> BitFlags<UserPrivilegeType> {
+        privilege.privileges
+    }
+}
+
+impl From<BitFlags<UserPrivilegeType>> for UserPrivilege {
+    fn from(privileges: BitFlags<UserPrivilegeType>) -> UserPrivilege {
+        UserPrivilege { privileges }
     }
 }

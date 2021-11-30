@@ -66,25 +66,25 @@ fn test_user_grant_set() -> Result<()> {
         "u1",
         "h1",
         &GrantObject::Global,
-        make_bitflags!(UserPrivilegeType::{Create}),
+        make_bitflags!(UserPrivilegeType::{Create}).into(),
     );
     grants.grant_privileges(
         "u1",
         "h1",
         &GrantObject::Global,
-        make_bitflags!(UserPrivilegeType::{Insert}),
+        make_bitflags!(UserPrivilegeType::{Insert}).into(),
     );
     grants.grant_privileges(
         "u1",
         "%",
         &GrantObject::Global,
-        make_bitflags!(UserPrivilegeType::{Insert}),
+        make_bitflags!(UserPrivilegeType::{Insert}).into(),
     );
     grants.grant_privileges(
         "u1",
         "%",
         &GrantObject::Table("db1".into(), "table1".into()),
-        make_bitflags!(UserPrivilegeType::{Select | Create}),
+        make_bitflags!(UserPrivilegeType::{Select | Create}).into(),
     );
     assert_eq!(3, grants.entries().len());
 
@@ -92,7 +92,7 @@ fn test_user_grant_set() -> Result<()> {
         "u1",
         "%",
         &GrantObject::Global,
-        make_bitflags!(UserPrivilegeType::{Insert}),
+        make_bitflags!(UserPrivilegeType::{Insert}).into(),
     );
     assert_eq!(2, grants.entries().len());
     assert!(grants.verify_database_privilege("u1", "h1", "db1", UserPrivilegeType::Create));

@@ -20,7 +20,6 @@ use common_exception::Result;
 
 use crate::user_grant::UserGrantSet;
 use crate::AuthType;
-use crate::UserPrivilege;
 use crate::UserQuota;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -38,9 +37,6 @@ pub struct UserInfo {
     pub auth_type: AuthType,
 
     #[serde(default)]
-    pub privileges: UserPrivilege, // TODO: remove this field after the grants field take effects
-
-    #[serde(default)]
     pub grants: UserGrantSet,
 
     #[serde(default)]
@@ -50,7 +46,6 @@ pub struct UserInfo {
 impl UserInfo {
     pub fn new(name: String, hostname: String, password: Vec<u8>, auth_type: AuthType) -> Self {
         // Default is no privileges.
-        let privileges = UserPrivilege::empty();
         let grants = UserGrantSet::default();
         let quota = UserQuota::no_limit();
 
@@ -59,15 +54,9 @@ impl UserInfo {
             hostname,
             password,
             auth_type,
-            privileges,
             grants,
             quota,
         }
-    }
-
-    // TODO: remove this after grants field take effects
-    pub fn set_privileges(&mut self, privileges: UserPrivilege) {
-        self.privileges |= privileges;
     }
 }
 

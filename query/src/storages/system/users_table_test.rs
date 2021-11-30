@@ -19,7 +19,6 @@ use common_exception::Result;
 use common_meta_types::AuthType;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
-use common_meta_types::UserPrivilege;
 use common_meta_types::UserQuota;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
@@ -39,7 +38,6 @@ async fn test_users_table() -> Result<()> {
             hostname: "localhost".to_string(),
             password: Vec::from(""),
             auth_type: AuthType::None,
-            privileges: UserPrivilege::empty(),
             grants: UserGrantSet::empty(),
             quota: UserQuota::no_limit(),
         })
@@ -51,7 +49,6 @@ async fn test_users_table() -> Result<()> {
             hostname: "%".to_string(),
             password: Vec::from("123456789"),
             auth_type: AuthType::PlainText,
-            privileges: UserPrivilege::empty(),
             grants: UserGrantSet::empty(),
             quota: UserQuota::no_limit(),
         })

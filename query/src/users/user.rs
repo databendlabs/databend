@@ -16,7 +16,6 @@
 use common_meta_types::AuthType;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
-use common_meta_types::UserPrivilege;
 use common_meta_types::UserQuota;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -45,7 +44,6 @@ impl User {
 
 impl From<&User> for UserInfo {
     fn from(user: &User) -> Self {
-        let privileges = UserPrivilege::empty();
         let grants = UserGrantSet::empty();
         let quota = UserQuota::no_limit();
 
@@ -54,7 +52,6 @@ impl From<&User> for UserInfo {
             hostname: user.hostname.clone(),
             password: Vec::from(user.password.clone()),
             auth_type: user.auth_type.clone(),
-            privileges,
             grants,
             quota,
         }

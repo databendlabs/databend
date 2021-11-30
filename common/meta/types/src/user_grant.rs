@@ -185,13 +185,14 @@ impl UserGrantSet {
         object: &GrantObject,
         privileges: UserPrivilege,
     ) {
+        let privileges: BitFlags<UserPrivilegeType> = privileges.into();
         let mut new_grants: Vec<GrantEntry> = vec![];
         let mut changed = false;
 
         for grant in self.grants.iter() {
             let mut grant = grant.clone();
             if grant.matches_entry(user, host_pattern, object) {
-                grant.privileges |= privileges.into();
+                grant.privileges |= privileges;
                 changed = true;
             }
             new_grants.push(grant);
@@ -202,7 +203,7 @@ impl UserGrantSet {
                 user.into(),
                 host_pattern.into(),
                 object.clone(),
-                privileges.into(),
+                privileges,
             ))
         }
 
@@ -216,13 +217,14 @@ impl UserGrantSet {
         object: &GrantObject,
         privileges: UserPrivilege,
     ) {
+        let privileges: BitFlags<UserPrivilegeType> = privileges.into();
         let grants = self
             .grants
             .iter()
             .map(|e| {
                 if e.matches_entry(user, host_pattern, object) {
                     let mut e = e.clone();
-                    e.privileges ^= privileges.into();
+                    e.privileges ^= privileges;
                     e
                 } else {
                     e.clone()

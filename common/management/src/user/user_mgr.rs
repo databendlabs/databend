@@ -21,6 +21,7 @@ use common_exception::ToErrorCode;
 use common_meta_api::KVApi;
 use common_meta_types::AddResult;
 use common_meta_types::AuthType;
+use common_meta_types::GrantObject;
 use common_meta_types::IntoSeqV;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
@@ -131,7 +132,7 @@ impl UserMgrApi for UserMgr {
             new_password.map_or(user_info.password.clone(), |v| v.to_vec()),
             new_auth.unwrap_or(user_info.auth_type),
         );
-        new_user_info.set_privileges(user_info.privileges);
+        new_user_info.grants = user_info.grants;
 
         let user_key = format_user_key(&new_user_info.name, &new_user_info.hostname);
         let key = format!("{}/{}", self.user_prefix, user_key);
@@ -163,16 +164,19 @@ impl UserMgrApi for UserMgr {
         }
     }
 
-    async fn set_user_privileges(
+    async fn grant_user_privileges(
         &self,
         username: String,
         hostname: String,
+        object: GrantObject,
         privileges: UserPrivilege,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
         let user_val_seq = self.get_user(username.clone(), hostname.clone(), seq);
         let mut user_info = user_val_seq.await?.data;
-        user_info.set_privileges(privileges);
+        user_info
+            .grants
+            .grant_privileges(&username, &hostname, &object, privileges);
 
         let user_key = format_user_key(&user_info.name, &user_info.hostname);
         let key = format!("{}/{}", self.user_prefix, user_key);
