@@ -1,4 +1,4 @@
-name: Cargo
+name: Databend Base
 on:
   push:
     paths-ignore:
@@ -13,11 +13,17 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  rustfmt_and_clippy:
-    name: "Lint"
+  lint_and_build:
+    name: "Lint & Build"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+
+      - name: YAML Lint
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: ./
+          config_file: .yamllint.yml
 
       - name: Rust setup
         run: |
@@ -32,10 +38,10 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ runner.os }}-cargo-clippycache-${{ secrets.CACHE_RESET_KEY }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-basecache-${{ secrets.CACHE_RESET_KEY }}-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-clippycache-${{ secrets.CACHE_RESET_KEY }}-
-            ${{ runner.os }}-cargo-clippycache-
+            ${{ runner.os }}-cargo-basecache-${{ secrets.CACHE_RESET_KEY }}-
+            ${{ runner.os }}-cargo-basecache-
             ${{ runner.os }}-cargo-
 
       - name: Run clippy
@@ -51,5 +57,10 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
+        env:
+          CARGO_INCREMENTAL: '0'
+
+      - name: Build
+        run: cargo build --verbose
         env:
           CARGO_INCREMENTAL: '0'

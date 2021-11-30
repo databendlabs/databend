@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use common_exception::Result;
+use dyn_clone::DynClone;
 
-use crate::catalogs::Table;
+#[async_trait::async_trait]
+pub trait Database: DynClone + Sync + Send {
+    /// Database name.
+    fn name(&self) -> &str;
 
-pub trait TableFunction: Sync + Send + Table {
-    fn function_name(&self) -> &str;
-
-    fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
-    where Self: 'a;
+    // Initial a database.
+    async fn init_database(&self) -> Result<()> {
+        Ok(())
+    }
 }

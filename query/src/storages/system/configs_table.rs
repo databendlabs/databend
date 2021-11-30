@@ -26,8 +26,8 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use serde_json::Value;
 
-use crate::catalogs::Table;
 use crate::sessions::QueryContext;
+use crate::storages::Table;
 
 pub struct ConfigsTable {
     table_info: TableInfo,

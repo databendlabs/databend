@@ -15,9 +15,6 @@
 
 mod catalog;
 mod catalog_context;
-mod database;
-mod table;
-mod table_function;
 mod table_id_ranges;
 mod table_memory_meta;
 
@@ -27,14 +24,8 @@ mod impls;
 pub use backends::MetaRemote;
 pub use catalog::Catalog;
 pub use catalog_context::CatalogContext;
-pub use database::Database;
-pub use database::DefaultDatabase;
 pub use impls::DatabaseCatalog;
 pub use impls::ImmutableCatalog;
 pub use impls::MutableCatalog;
-pub use table::Table;
-pub use table::TablePtr;
-pub use table::ToReadDataSourcePlan;
-pub use table_function::TableFunction;
 pub use table_id_ranges::*;
 pub use table_memory_meta::InMemoryMetas;

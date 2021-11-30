@@ -58,12 +58,7 @@ impl MySQLHandler {
         let listener = tokio::net::TcpListener::bind(listening)
             .await
             .map_err(|e| {
-                ErrorCode::TokioError(format!(
-                    "{{{}:{}}} {}",
-                    listening.ip().to_string(),
-                    listening.port().to_string(),
-                    e
-                ))
+                ErrorCode::TokioError(format!("{{{}:{}}} {}", listening.ip(), listening.port(), e))
             })?;
         let listener_addr = listener.local_addr()?;
         Ok((TcpListenerStream::new(listener), listener_addr))

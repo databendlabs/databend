@@ -170,7 +170,7 @@ pub fn generate_query_config() -> QueryConfig {
 }
 
 pub async fn provision_local_query_service(
-    mut status: &mut Status,
+    status: &mut Status,
     writer: &mut Writer,
     mut query_config: LocalQueryConfig,
     file_name: String,
@@ -179,7 +179,7 @@ pub async fn provision_local_query_service(
         Ok(_) => {
             assert!(query_config.get_pid().is_some());
             Status::save_local_config::<LocalQueryConfig>(
-                &mut status,
+                status,
                 "query".to_string(),
                 file_name,
                 &query_config.clone(),

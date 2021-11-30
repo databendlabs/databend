@@ -24,8 +24,8 @@ use common_meta_types::TableMeta;
 use common_planners::*;
 use futures::TryStreamExt;
 
-use crate::catalogs::ToReadDataSourcePlan;
 use crate::storages::csv::CsvTable;
+use crate::storages::ToReadDataSourcePlan;
 
 #[tokio::test]
 async fn test_csv_table() -> Result<()> {

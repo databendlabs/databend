@@ -41,7 +41,7 @@ impl AzureBlobAccessor {
         if let Err(e) = master_key_res {
             return Err(ErrorCode::SecretKeyNotSet(format!(
                 "Secret key not found for azure blob client, {}",
-                e.to_string()
+                e
             )));
         }
 
@@ -80,7 +80,7 @@ impl AzureBlobAccessor {
             Err(e) => {
                 return Err(ErrorCode::DALTransportError(format!(
                     "Failed on azure blob put operation, {}",
-                    e.to_string()
+                    e
                 )))
             }
             Ok(_) => Ok(()),
@@ -111,7 +111,7 @@ impl AzureBlobAccessor {
             Err(e) => {
                 return Err(ErrorCode::DALTransportError(format!(
                     "Failed on azure blob get operation,, {}",
-                    e.to_string()
+                    e
                 )));
             }
             Ok(blob_data) => Ok(blob_data.data),

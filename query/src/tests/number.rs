@@ -21,9 +21,9 @@ use common_planners::Expression;
 use common_planners::ReadDataSourcePlan;
 
 use crate::catalogs::Catalog;
-use crate::catalogs::ToReadDataSourcePlan;
 use crate::pipelines::transforms::SourceTransform;
 use crate::sessions::QueryContext;
+use crate::storages::ToReadDataSourcePlan;
 use crate::tests::try_create_catalog;
 
 pub struct NumberTestData {

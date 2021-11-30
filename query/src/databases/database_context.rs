@@ -12,29 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use dyn_clone::DynClone;
+use std::sync::Arc;
 
-#[async_trait::async_trait]
-pub trait Database: DynClone + Sync + Send {
-    /// Database name.
-    fn name(&self) -> &str;
-}
+use common_dal::InMemoryData;
+use common_infallible::RwLock;
+use common_meta_api::MetaApi;
 
+/// Database Context.
 #[derive(Clone)]
-pub struct DefaultDatabase {
-    db_name: String,
-}
-
-impl DefaultDatabase {
-    pub fn new(db_name: impl Into<String>) -> Self {
-        Self {
-            db_name: db_name.into(),
-        }
-    }
-}
-
-impl Database for DefaultDatabase {
-    fn name(&self) -> &str {
-        &self.db_name
-    }
+pub struct DatabaseContext {
+    pub meta: Arc<dyn MetaApi>,
+    // For shared data in memory.
+    pub in_memory_data: Arc<RwLock<InMemoryData<u64>>>,
 }

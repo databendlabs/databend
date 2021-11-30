@@ -56,12 +56,7 @@ impl ClickHouseHandler {
 
     async fn listener_tcp(socket: SocketAddr) -> Result<(TcpListenerStream, SocketAddr)> {
         let listener = tokio::net::TcpListener::bind(socket).await.map_err(|e| {
-            ErrorCode::TokioError(format!(
-                "{{{}:{}}} {}",
-                socket.ip().to_string(),
-                socket.port().to_string(),
-                e
-            ))
+            ErrorCode::TokioError(format!("{{{}:{}}} {}", socket.ip(), socket.port(), e))
         })?;
         let listener_addr = listener.local_addr()?;
         Ok((TcpListenerStream::new(listener), listener_addr))

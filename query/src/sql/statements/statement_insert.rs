@@ -30,7 +30,6 @@ use sqlparser::ast::SetExpr;
 use sqlparser::ast::SqliteOnConflict;
 use sqlparser::ast::Values;
 
-use crate::catalogs::Table;
 use crate::sessions::QueryContext;
 use crate::sql::statements::analyzer_expr::ExpressionAnalyzer;
 use crate::sql::statements::AnalyzableStatement;
@@ -38,6 +37,7 @@ use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
 use crate::sql::DfStatement;
 use crate::sql::PlanParser;
+use crate::storages::Table;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfInsertStatement {
@@ -154,9 +154,9 @@ impl DfInsertStatement {
             value_exprs.push(exprs);
         }
 
-        Ok(AnalyzedResult::SimpleQuery(PlanNode::InsertInto(
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::InsertInto(
             InsertIntoPlan::insert_values(db, table, table_meta_id, schema, value_exprs),
-        )))
+        ))))
     }
 
     async fn analyze_insert_without_source(
@@ -168,7 +168,7 @@ impl DfInsertStatement {
         let table_meta_id = write_table.get_id();
         let table_schema = self.insert_schema(write_table)?;
 
-        Ok(AnalyzedResult::SimpleQuery(PlanNode::InsertInto(
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::InsertInto(
             InsertIntoPlan::insert_without_source(
                 db,
                 table,
@@ -176,7 +176,7 @@ impl DfInsertStatement {
                 table_schema,
                 self.format.clone(),
             ),
-        )))
+        ))))
     }
 
     async fn analyze_insert_select(
@@ -191,10 +191,11 @@ impl DfInsertStatement {
 
         let statement = DfQueryStatement::try_from(source.clone())?;
         let select_plan =
-            PlanParser::build_plan(vec![DfStatement::Query(statement)], ctx.clone()).await?;
-        Ok(AnalyzedResult::SimpleQuery(PlanNode::InsertInto(
+            PlanParser::build_plan(vec![DfStatement::Query(Box::new(statement))], ctx.clone())
+                .await?;
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::InsertInto(
             InsertIntoPlan::insert_select(db, table, table_meta_id, table_schema, select_plan),
-        )))
+        ))))
     }
 
     fn insert_schema(&self, read_table: Arc<dyn Table>) -> Result<DataSchemaRef> {

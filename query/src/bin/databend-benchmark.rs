@@ -134,11 +134,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> Result<()> {
         .expect("unable to resolve address")
         .next()
         .expect("unable to process address");
-    let database_url = format!(
-        "tcp://{}:{}?compression=lz4",
-        address.ip().to_string(),
-        address.port().to_string()
-    );
+    let database_url = format!("tcp://{}:{}?compression=lz4", address.ip(), address.port());
     let queries = read_queries(&conf.query)?;
 
     let bench = Arc::new(Benchmark::new(conf, queries, database_url));

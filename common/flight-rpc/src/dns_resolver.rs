@@ -161,13 +161,13 @@ impl ConnectionFactory {
                     let client_tls_config = Self::client_tls_config(&conf).map_err(|e| {
                         ErrorCode::TLSConfigurationFailure(format!(
                             "loading client tls config failure: {} ",
-                            e.to_string()
+                            e
                         ))
                     })?;
                     builder.tls_config(client_tls_config).map_err(|e| {
                         ErrorCode::TLSConfigurationFailure(format!(
                             "builder tls_config failure: {}",
-                            e.to_string()
+                            e
                         ))
                     })?
                 } else {

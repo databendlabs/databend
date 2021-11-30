@@ -35,12 +35,12 @@ pub struct DfDropUser {
 impl AnalyzableStatement for DfDropUser {
     #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        Ok(AnalyzedResult::SimpleQuery(PlanNode::DropUser(
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::DropUser(
             DropUserPlan {
                 if_exists: self.if_exists,
                 name: self.name.clone(),
                 hostname: self.hostname.clone(),
             },
-        )))
+        ))))
     }
 }

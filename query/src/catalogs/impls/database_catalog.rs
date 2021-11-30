@@ -33,11 +33,11 @@ use common_meta_types::UpsertTableOptionReq;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::impls::ImmutableCatalog;
 use crate::catalogs::impls::MutableCatalog;
-use crate::catalogs::Database;
-use crate::catalogs::Table;
-use crate::catalogs::TableFunction;
 use crate::configs::Config;
+use crate::databases::Database;
+use crate::storages::Table;
 use crate::table_functions::TableArgs;
+use crate::table_functions::TableFunction;
 use crate::table_functions::TableFunctionFactory;
 
 /// Combine two catalogs together
