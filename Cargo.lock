@@ -1393,6 +1393,7 @@ dependencies = [
  "common-tracing",
  "derive_more",
  "futures",
+ "lazy_static",
  "maplit",
  "pretty_assertions",
  "tempfile",

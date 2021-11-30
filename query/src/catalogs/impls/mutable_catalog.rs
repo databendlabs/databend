@@ -80,8 +80,8 @@ impl MutableCatalog {
             tracing::info!("use embedded meta");
             // TODO(xp): This can only be used for test: data will be removed when program quit.
 
-            let meta_embedded = MetaEmbedded::new_temp().await?;
-            Arc::new(meta_embedded)
+            let meta_embedded = MetaEmbedded::get_meta().await?;
+            meta_embedded
         } else {
             tracing::info!("use remote meta");
 
