@@ -49,8 +49,8 @@ impl BlockAppender {
         mut blocks: Vec<DataBlock>,
         block_size_threshold: usize,
     ) -> Result<Vec<DataBlock>> {
-        // sort by memory_size ASC
-        blocks.sort_unstable_by_key(|block| block.memory_size());
+        // sort by memory_size DESC
+        blocks.sort_unstable_by(|l, r| r.memory_size().cmp(&l.memory_size()));
 
         let mut result = vec![];
 

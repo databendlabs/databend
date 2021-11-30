@@ -125,18 +125,19 @@ fn test_fuse_table_block_appender_reshape() -> common_exception::Result<()> {
     let block_num = 10;
     let (blocks, block_size_threshold) = gen_blocks(&sample_block, block_num);
 
-    // push front a large block
+    // generate a large block
     let (tmp_blocks, tmp_block_size_threshold) = gen_blocks(&sample_block, block_num * 2);
     assert!(tmp_block_size_threshold > block_size_threshold);
     let large_block = DataBlock::concat_blocks(&tmp_blocks.collect::<Vec<_>>())?;
     let large_block_size = large_block.memory_size();
-    let blocks = std::iter::once(large_block).chain(blocks);
+    // push back the large block
+    let blocks = blocks.chain(std::iter::once(large_block));
 
-    // blocks are sorted (asc by size) during reshape
     let r = BlockAppender::reshape_blocks(blocks.collect(), block_size_threshold)?;
     assert_eq!(r.len(), 2);
-    assert_eq!(r[0].memory_size(), block_size_threshold);
-    assert_eq!(r[1].memory_size(), large_block_size);
+    // blocks are sorted (DESC by size) during reshape, thus we get the large_block at head
+    assert_eq!(r[0].memory_size(), large_block_size);
+    assert_eq!(r[1].memory_size(), block_size_threshold);
 
     Ok(())
 }
