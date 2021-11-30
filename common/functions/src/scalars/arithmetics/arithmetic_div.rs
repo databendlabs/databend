@@ -15,6 +15,7 @@
 use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
+use super::arithmetic_mul::arithmetic_mul_div_monotonicity;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::ArithmeticFunction;
@@ -33,8 +34,7 @@ impl ArithmeticDivFunction {
             .features(FunctionFeatures::default().deterministic().monotonicity())
     }
 
-    pub fn get_monotonicity(_args: &[Monotonicity]) -> Result<Monotonicity> {
-        // TODO
-        Ok(Monotonicity::default())
+    pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
+        arithmetic_mul_div_monotonicity(args, DataValueArithmeticOperator::Div)
     }
 }

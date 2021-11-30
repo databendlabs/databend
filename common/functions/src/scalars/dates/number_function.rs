@@ -27,6 +27,7 @@ use common_exception::Result;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
+use crate::scalars::Monotonicity;
 
 #[derive(Clone, Debug)]
 pub struct NumberFunction<T, R> {
@@ -198,6 +199,9 @@ pub struct ToMonth;
 
 impl NumberResultFunction<u8> for ToMonth {
     const IS_DETERMINISTIC: bool = true;
+
+    // ToMonth is NOT a monotonic function in general, unless the time range is within the same year.
+    // For example, date(2020-12-01) < date(2021-5-5), while ToMonth(2020-12-01) > ToMonth(2021-5-5).
     const MAYBE_MONOTONIC: bool = false;
 
     fn return_type() -> Result<DataType> {
@@ -217,6 +221,9 @@ pub struct ToDayOfYear;
 
 impl NumberResultFunction<u16> for ToDayOfYear {
     const IS_DETERMINISTIC: bool = true;
+
+    // ToDayOfYear is NOT a monotonic function in general, unless the time range is within the same year.
+    // For example, date(2020-12-01) < date(2021-5-5), while ToDayOfYear(2020-12-01) > ToDayOfYear(2021-5-5).
     const MAYBE_MONOTONIC: bool = false;
 
     fn return_type() -> Result<DataType> {
@@ -236,6 +243,9 @@ pub struct ToDayOfMonth;
 
 impl NumberResultFunction<u8> for ToDayOfMonth {
     const IS_DETERMINISTIC: bool = true;
+
+    // ToDayOfMonth is not a monotonic function in general, unless the time range is within the same month.
+    // For example, date(2021-11-20) < date(2021-12-01), while ToDayOfMonth((2021-11-20) > ToDayOfMonth(2021-12-01).
     const MAYBE_MONOTONIC: bool = false;
 
     fn return_type() -> Result<DataType> {
@@ -255,6 +265,8 @@ pub struct ToDayOfWeek;
 
 impl NumberResultFunction<u8> for ToDayOfWeek {
     const IS_DETERMINISTIC: bool = true;
+
+    // ToDayOfWeek is NOT a monotonic function in general, unless the time range is within the same week.
     const MAYBE_MONOTONIC: bool = false;
 
     fn return_type() -> Result<DataType> {
@@ -274,6 +286,8 @@ pub struct ToHour;
 
 impl NumberResultFunction<u8> for ToHour {
     const IS_DETERMINISTIC: bool = true;
+
+    // ToHour is NOT a monotonic function in general, unless the time range is within the same day.
     const MAYBE_MONOTONIC: bool = false;
 
     fn return_type() -> Result<DataType> {
@@ -293,6 +307,8 @@ pub struct ToMinute;
 
 impl NumberResultFunction<u8> for ToMinute {
     const IS_DETERMINISTIC: bool = true;
+
+    // ToMinute is NOT a monotonic function in general, unless the time range is within the same hour.
     const MAYBE_MONOTONIC: bool = false;
 
     fn return_type() -> Result<DataType> {
@@ -312,6 +328,8 @@ pub struct ToSecond;
 
 impl NumberResultFunction<u8> for ToSecond {
     const IS_DETERMINISTIC: bool = true;
+
+    // ToSecond is NOT a monotonic function in general, unless the time range is within the same minute.
     const MAYBE_MONOTONIC: bool = false;
 
     fn return_type() -> Result<DataType> {
@@ -457,6 +475,14 @@ where
                 self.name()))),
         }?;
         Ok(number_array)
+    }
+
+    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
+        if T::MAYBE_MONOTONIC {
+            // all the number functions here with MAYBE_MONOTONIC true happens to be monotonically positive.
+            return Ok(Monotonicity::clone_without_range(&args[0]));
+        }
+        Ok(Monotonicity::default())
     }
 }
 
