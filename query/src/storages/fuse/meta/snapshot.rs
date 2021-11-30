@@ -20,10 +20,10 @@ use serde::Deserialize;
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::storages::fuse::ColumnStats;
+use crate::storages::index::ColumnStatistics;
 
-pub type SnapshotId = Uuid; // TODO String might be better
 pub type ColumnId = u32;
+pub type SnapshotId = Uuid; // TODO String might be better
 pub type Location = String;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -65,5 +65,5 @@ pub struct Stats {
     pub uncompressed_byte_size: u64,
     pub compressed_byte_size: u64,
 
-    pub col_stats: HashMap<ColumnId, ColumnStats>,
+    pub col_stats: HashMap<ColumnId, ColumnStatistics>,
 }

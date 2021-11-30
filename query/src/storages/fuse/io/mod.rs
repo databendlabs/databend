@@ -21,7 +21,5 @@ mod col_encoding;
 mod location_gen;
 
 pub use block_appender::BlockAppender;
-pub use col_encoding::col_encoding;
-pub use location_gen::gen_block_location;
 pub use location_gen::gen_segment_info_location;
 pub use location_gen::snapshot_location;

@@ -27,7 +27,4 @@ mod statistics;
 mod table;
 
 pub use constants::*;
-pub use meta::ColumnId;
-pub use meta::ColumnStats;
-pub use statistics::BlockStats;
 pub use table::FuseTable;

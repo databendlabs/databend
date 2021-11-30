@@ -21,8 +21,8 @@ use common_planners::Extras;
 
 use crate::storages::fuse::meta::BlockLocation;
 use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::ColumnStats;
 use crate::storages::fuse::FuseTable;
+use crate::storages::index::ColumnStatistics;
 
 #[test]
 fn test_to_partitions() -> Result<()> {
@@ -30,7 +30,7 @@ fn test_to_partitions() -> Result<()> {
     let num_of_col = 10;
     let num_of_block = 5;
 
-    let col_stats_gen = |col_size| ColumnStats {
+    let col_stats_gen = |col_size| ColumnStatistics {
         min: DataValue::Int8(Some(1)),
         max: DataValue::Int8(Some(2)),
         null_count: 0,

@@ -29,7 +29,8 @@ use futures::stream::TryChunksError;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
-use crate::storages::fuse::io;
+use crate::storages::fuse::io::col_encoding::col_encoding;
+use crate::storages::fuse::io::location_gen::gen_block_location;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Stats;
 use crate::storages::fuse::statistics;
@@ -101,7 +102,7 @@ impl BlockAppender {
             for block in blocks.into_iter() {
                 stats_acc.acc(&block)?;
                 let schema = block.schema().to_arrow();
-                let location = io::gen_block_location();
+                let location = gen_block_location();
                 let file_size = Self::save_block(&schema, block, &data_accessor, &location).await?;
                 block_meta_acc.acc(file_size, location, &mut stats_acc);
             }
@@ -141,7 +142,7 @@ impl BlockAppender {
         let encodings: Vec<_> = arrow_schema
             .fields()
             .iter()
-            .map(|f| io::col_encoding(&f.data_type))
+            .map(|f| col_encoding(&f.data_type))
             .collect();
 
         let iter = vec![Ok(batch)];
