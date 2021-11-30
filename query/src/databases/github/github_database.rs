@@ -28,6 +28,7 @@ use crate::storages::StorageContext;
 pub struct GithubDatabase {
     ctx: DatabaseContext,
     db_name: String,
+    #[allow(dead_code)]
     db_engine: String,
 }
 

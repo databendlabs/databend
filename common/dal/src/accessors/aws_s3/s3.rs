@@ -61,7 +61,7 @@ impl S3 {
                         .map_err(|e| {
                             ErrorCode::DALTransportError(format!(
                                 "failed to create Web Identity credential provider of s3, {}",
-                                e.to_string()
+                                e
                             ))
                         })?;
                     Client::new_with(provider, dispatcher)
@@ -71,7 +71,7 @@ impl S3 {
                         DefaultCredentialsProvider::new().map_err(|e| {
                             ErrorCode::DALTransportError(format!(
                                 "failed to create default credentials provider, {}",
-                                e.to_string()
+                                e
                             ))
                         })?,
                         dispatcher,

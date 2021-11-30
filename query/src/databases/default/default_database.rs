@@ -20,6 +20,7 @@ use crate::databases::DatabaseContext;
 #[derive(Clone)]
 pub struct DefaultDatabase {
     db_name: String,
+    #[allow(dead_code)]
     db_engine: String,
 }
 
