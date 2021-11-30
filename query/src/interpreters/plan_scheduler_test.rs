@@ -22,7 +22,7 @@ use common_planners::*;
 use crate::api::FlightAction;
 use crate::interpreters::plan_scheduler::PlanScheduler;
 use crate::sessions::QueryContext;
-use crate::tests::try_create_cluster_context;
+use crate::tests::create_query_context_with_cluster;
 use crate::tests::ClusterDescriptor;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -325,7 +325,7 @@ async fn test_scheduler_plan_with_convergent_and_normal_stage() -> Result<()> {
 }
 
 async fn create_env() -> Result<Arc<QueryContext>> {
-    try_create_cluster_context(
+    create_query_context_with_cluster(
         ClusterDescriptor::new()
             .with_node("dummy_local", "localhost:9090")
             .with_node("dummy", "github.com:9090")

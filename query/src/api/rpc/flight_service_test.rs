@@ -32,8 +32,8 @@ use crate::api::rpc::DatabendQueryFlightDispatcher;
 use crate::api::rpc::DatabendQueryFlightService;
 use crate::api::FlightTicket;
 use crate::api::ShuffleAction;
+use crate::tests::create_query_context;
 use crate::tests::parse_query;
-use crate::tests::try_create_context;
 use crate::tests::SessionManagerBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -162,7 +162,7 @@ fn do_get_request(query_id: &str, stage_id: &str) -> Result<Request<Ticket>> {
 }
 
 fn do_action_request(query_id: &str, stage_id: &str) -> Result<Request<Action>> {
-    let ctx = try_create_context()?;
+    let ctx = create_query_context()?;
     let flight_action = FlightAction::PrepareShuffleAction(ShuffleAction {
         query_id: String::from(query_id),
         stage_id: String::from(stage_id),

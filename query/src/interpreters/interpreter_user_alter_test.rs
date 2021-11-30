@@ -27,7 +27,7 @@ use crate::sql::*;
 async fn test_alter_user_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
     let name = "test";
     let hostname = "localhost";
     let password = "test";

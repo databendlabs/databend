@@ -20,12 +20,12 @@ mod parse_query;
 mod sessions;
 pub(crate) mod tls_constants;
 
-pub use catalog::try_create_catalog;
-pub use context::try_create_catalog_context;
-pub use context::try_create_cluster_context;
-pub use context::try_create_context;
-pub use context::try_create_context_with_config;
-pub use context::try_create_storage_context;
+pub use catalog::create_catalog;
+pub use context::create_catalog_context;
+pub use context::create_query_context;
+pub use context::create_query_context_with_cluster;
+pub use context::create_query_context_with_config;
+pub use context::create_storage_context;
 pub use context::ClusterDescriptor;
 pub use number::NumberTestData;
 pub use parquet::ParquetTestData;
