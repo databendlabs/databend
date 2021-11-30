@@ -88,11 +88,10 @@ impl Function for LocateFunction {
                 DataColumn::Constant(DataValue::UInt64(p), _),
             ) => {
                 if let (Some(ss), Some(p)) = (ss, p) {
-                    DFUInt64Array::from_iter(
-                        s_series
-                            .string()?
-                            .into_no_null_iter()
-                            .map(|s| find_at(s, &ss, &p)),
+                    let s_array = s_series.string()?;
+                    DFUInt64Array::new_from_iter_validity(
+                        s_array.into_no_null_iter().map(|s| find_at(s, &ss, &p)),
+                        combine_validities(s_array.inner().validity(), None),
                     )
                     .into()
                 } else {
@@ -105,11 +104,10 @@ impl Function for LocateFunction {
                 DataColumn::Constant(DataValue::UInt64(p), _),
             ) => {
                 if let (Some(s), Some(p)) = (s, p) {
-                    DFUInt64Array::from_iter(
-                        ss_series
-                            .string()?
-                            .into_no_null_iter()
-                            .map(|ss| find_at(&s, ss, &p)),
+                    let ss_array = ss_series.string()?;
+                    DFUInt64Array::new_from_iter_validity(
+                        ss_array.into_no_null_iter().map(|ss| find_at(&s, ss, &p)),
+                        combine_validities(ss_array.inner().validity(), None),
                     )
                     .into()
                 } else {
@@ -122,12 +120,14 @@ impl Function for LocateFunction {
                 DataColumn::Constant(DataValue::UInt64(p), _),
             ) => {
                 if let Some(p) = p {
-                    DFUInt64Array::from_iter(
-                        ss_series
-                            .string()?
+                    let ss_array = ss_series.string()?;
+                    let s_array = s_series.string()?;
+                    DFUInt64Array::new_from_iter_validity(
+                        ss_array
                             .into_no_null_iter()
-                            .zip(s_series.string()?.into_no_null_iter())
+                            .zip(s_array.into_no_null_iter())
                             .map(|(ss, s)| find_at(s, ss, &p)),
+                        combine_validities(ss_array.inner().validity(), s_array.inner().validity()),
                     )
                     .into()
                 } else {
@@ -140,11 +140,10 @@ impl Function for LocateFunction {
                 DataColumn::Array(p_series),
             ) => {
                 if let (Some(ss), Some(s)) = (ss, s) {
-                    DFUInt64Array::from_iter(
-                        p_series
-                            .u64()?
-                            .into_no_null_iter()
-                            .map(|p| find_at(&s, &ss, p)),
+                    let p_array = p_series.u64()?;
+                    DFUInt64Array::new_from_iter_validity(
+                        p_array.into_no_null_iter().map(|p| find_at(&s, &ss, p)),
+                        combine_validities(p_array.inner().validity(), None),
                     )
                     .into()
                 } else {
@@ -157,12 +156,14 @@ impl Function for LocateFunction {
                 DataColumn::Array(p_series),
             ) => {
                 if let Some(ss) = ss {
-                    DFUInt64Array::from_iter(
-                        s_series
-                            .string()?
+                    let s_array = s_series.string()?;
+                    let p_array = p_series.u64()?;
+                    DFUInt64Array::new_from_iter_validity(
+                        s_array
                             .into_no_null_iter()
-                            .zip(p_series.u64()?.into_no_null_iter())
+                            .zip(p_array.into_no_null_iter())
                             .map(|(s, p)| find_at(s, &ss, p)),
+                        combine_validities(s_array.inner().validity(), p_array.inner().validity()),
                     )
                     .into()
                 } else {
@@ -175,12 +176,14 @@ impl Function for LocateFunction {
                 DataColumn::Array(p_series),
             ) => {
                 if let Some(s) = s {
-                    DFUInt64Array::from_iter(
-                        ss_series
-                            .string()?
+                    let ss_array = ss_series.string()?;
+                    let p_array = p_series.u64()?;
+                    DFUInt64Array::new_from_iter_validity(
+                        ss_array
                             .into_no_null_iter()
-                            .zip(p_series.u64()?.into_no_null_iter())
+                            .zip(p_array.into_no_null_iter())
                             .map(|(ss, p)| find_at(&s, ss, p)),
+                        combine_validities(ss_array.inner().validity(), p_array.inner().validity()),
                     )
                     .into()
                 } else {
@@ -191,15 +194,29 @@ impl Function for LocateFunction {
                 DataColumn::Array(ss_series),
                 DataColumn::Array(s_series),
                 DataColumn::Array(p_series),
-            ) => DFUInt64Array::from_iter(
-                izip!(
-                    ss_series.string()?.into_no_null_iter(),
-                    s_series.string()?.into_no_null_iter(),
-                    p_series.u64()?.into_no_null_iter(),
+            ) => {
+                let ss_array = ss_series.string()?;
+                let s_array = s_series.string()?;
+                let p_array = p_series.u64()?;
+
+                DFUInt64Array::new_from_iter_validity(
+                    izip!(
+                        ss_array.into_no_null_iter(),
+                        s_array.into_no_null_iter(),
+                        p_array.into_no_null_iter(),
+                    )
+                    .map(|(ss, s, p)| find_at(s, ss, p)),
+                    combine_validities(
+                        combine_validities(
+                            ss_array.inner().validity(),
+                            ss_array.inner().validity(),
+                        )
+                        .as_ref(),
+                        p_array.inner().validity(),
+                    ),
                 )
-                .map(|(ss, s, p)| find_at(s, ss, p)),
-            )
-            .into(),
+                .into()
+            }
             _ => DataColumn::Constant(DataValue::Null, input_rows),
         };
         Ok(r_column)
