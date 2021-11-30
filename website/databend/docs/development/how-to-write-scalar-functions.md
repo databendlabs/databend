@@ -29,7 +29,7 @@ One to One Mapping execution
 
 ## ScalarFunction trait introduction
 
-All scalar functions implement `Function` trait, and we register them into a global static factory named `FactoryFuncRef`, the factory is just an index map and the key is the name of the scalar function.
+All scalar functions implement `Function` trait, and we register them into a global static `FunctionFactory`, the factory is just an index map and the key is the name of the scalar function.
 
 !!! note
     Function name in Databend is case-insensitive.
