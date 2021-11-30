@@ -35,6 +35,7 @@ md5 = "0.7.0"
 rand = "0.8.4"
 hex = "0.4.3"
 base64 = "0.13.0"
+itertools = "0.10.1"
 
 [dev-dependencies]
 bumpalo = "3.8.0"
