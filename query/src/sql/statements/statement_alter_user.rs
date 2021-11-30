@@ -38,7 +38,7 @@ pub struct DfAlterUser {
 impl AnalyzableStatement for DfAlterUser {
     #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        Ok(AnalyzedResult::SimpleQuery(PlanNode::AlterUser(
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::AlterUser(
             AlterUserPlan {
                 if_current_user: self.if_current_user,
                 name: self.name.clone(),
@@ -46,6 +46,6 @@ impl AnalyzableStatement for DfAlterUser {
                 hostname: self.hostname.clone(),
                 new_auth_type: self.new_auth_type.clone(),
             },
-        )))
+        ))))
     }
 }

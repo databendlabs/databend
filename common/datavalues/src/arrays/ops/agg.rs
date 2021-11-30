@@ -130,16 +130,6 @@ where
             return Ok(DataValue::from(self.data_type()));
         }
 
-        let null_count = self.null_count();
-        if null_count == 0 {
-            let c = self
-                .array
-                .values()
-                .as_slice()
-                .iter()
-                .reduce(|a, b| if a < b { a } else { b });
-            return Ok(c.map_or(DataValue::from(self.data_type()), |x| (*x).into()));
-        }
         Ok(aggregate::min_primitive(self.inner())
             .map_or(DataValue::from(self.data_type()), |x| x.into()))
     }
@@ -147,17 +137,6 @@ where
     fn max(&self) -> Result<DataValue> {
         if self.is_empty() {
             return Ok(DataValue::from(self.data_type()));
-        }
-
-        let null_count = self.null_count();
-        if null_count == 0 {
-            let c = self
-                .inner()
-                .values()
-                .as_slice()
-                .iter()
-                .reduce(|a, b| if a > b { a } else { b });
-            return Ok(c.map_or(DataValue::from(self.data_type()), |x| (*x).into()));
         }
 
         Ok(aggregate::max_primitive(self.inner())

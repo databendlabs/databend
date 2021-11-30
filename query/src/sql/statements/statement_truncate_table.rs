@@ -35,8 +35,8 @@ impl AnalyzableStatement for DfTruncateTable {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let (db, table) = self.resolve_table(ctx)?;
-        Ok(AnalyzedResult::SimpleQuery(PlanNode::TruncateTable(
-            TruncateTablePlan { db, table },
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            PlanNode::TruncateTable(TruncateTablePlan { db, table }),
         )))
     }
 }

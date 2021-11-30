@@ -68,19 +68,13 @@ impl FlightServer {
         let builder = Server::builder();
 
         let tls_conf = Self::tls_config(&self.conf).await.map_err(|e| {
-            ErrorCode::TLSConfigurationFailure(format!(
-                "failed to build ServerTlsConfig, {}",
-                e.to_string()
-            ))
+            ErrorCode::TLSConfigurationFailure(format!("failed to build ServerTlsConfig, {}", e))
         })?;
 
         let mut builder = if let Some(conf) = tls_conf {
             tracing::info!("TLS RPC enabled");
             builder.tls_config(conf).map_err(|e| {
-                ErrorCode::TLSConfigurationFailure(format!(
-                    "server tls_config failure {}",
-                    e.to_string()
-                ))
+                ErrorCode::TLSConfigurationFailure(format!("server tls_config failure {}", e))
             })?
         } else {
             builder

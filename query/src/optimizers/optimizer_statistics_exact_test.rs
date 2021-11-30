@@ -48,9 +48,7 @@ mod tests {
             statistics: statistics.clone(),
             description: format!(
                 "(Read from system.{} table, Exactly Read Rows:{}, Read Bytes:{})",
-                "test".to_string(),
-                statistics.read_rows,
-                statistics.read_bytes
+                "test", statistics.read_rows, statistics.read_bytes
             ),
             tbl_args: None,
             push_downs: None,

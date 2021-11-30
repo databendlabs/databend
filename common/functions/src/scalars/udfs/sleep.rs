@@ -58,8 +58,7 @@ impl Function for SleepFunction {
         if !args[0].is_numeric() {
             return Err(ErrorCode::BadArguments(format!(
                 "Illegal type {} of argument of function {}, expected numeric",
-                args[0].to_string(),
-                self.display_name
+                args[0], self.display_name
             )));
         }
 

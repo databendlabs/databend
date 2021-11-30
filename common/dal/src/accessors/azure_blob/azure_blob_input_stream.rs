@@ -113,12 +113,7 @@ impl futures::AsyncRead for AzureBlobInputStream {
                         .map_err(|e| {
                             Error::new(
                                 std::io::ErrorKind::InvalidData,
-                                format!(
-                                    "Failed to read blob with range {}-{}, {}",
-                                    start,
-                                    end,
-                                    e.to_string()
-                                ),
+                                format!("Failed to read blob with range {}-{}, {}", start, end, e),
                             )
                         })
                 };
@@ -142,7 +137,7 @@ impl futures::AsyncRead for AzureBlobInputStream {
                         if let Err(err) = buf_mut.write_all(response.data.as_slice()) {
                             return Poll::Ready(Err(Error::new(
                                 std::io::ErrorKind::InvalidData,
-                                format!("Failed to write buffer {}", err.to_string()),
+                                format!("Failed to write buffer {}", err),
                             )));
                         }
                         Poll::Ready(Ok(len))
@@ -190,7 +185,7 @@ impl futures::AsyncSeek for AzureBlobInputStream {
                         client.get_properties().execute().await.map_err(|e| {
                             Error::new(
                                 std::io::ErrorKind::InvalidData,
-                                format!("Failed to get blob properties, {}", e.to_string()),
+                                format!("Failed to get blob properties, {}", e),
                             )
                         })
                     };

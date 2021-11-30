@@ -39,7 +39,9 @@ impl AnalyzableStatement for DfShowTables {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let rewritten_query = self.rewritten_query(ctx.clone());
         let rewritten_query_plan = PlanParser::parse(rewritten_query.as_str(), ctx);
-        Ok(AnalyzedResult::SimpleQuery(rewritten_query_plan.await?))
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            rewritten_query_plan.await?,
+        )))
     }
 }
 
