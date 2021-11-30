@@ -15,28 +15,28 @@
 use std::fmt;
 use std::str;
 
-use common_datavalues::prelude::DFUInt32Array;
 use common_datavalues::prelude::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::prelude::NewDataArray;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
-use common_exception::ErrorCode;
+use common_datavalues::DataValue;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
+// ignore(...) is a function that takes any arguments, and always returns 0.
+// it can be used in performance tests
+// eg: SELECT count() FROM numbers(1000000000) WHERE NOT ignore( toString(number) );
 #[derive(Clone)]
-#[doc(alias = "IPv4StringToNumFunction")]
-pub struct InetAtonFunction {
+pub struct IgnoreFunction {
     display_name: String,
 }
 
-impl InetAtonFunction {
+impl IgnoreFunction {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(InetAtonFunction {
+        Ok(Box::new(IgnoreFunction {
             display_name: display_name.to_string(),
         }))
     }
@@ -47,52 +47,29 @@ impl InetAtonFunction {
     }
 }
 
-impl Function for InetAtonFunction {
+impl Function for IgnoreFunction {
     fn name(&self) -> &str {
         &*self.display_name
     }
 
-    fn num_arguments(&self) -> usize {
-        1
+    fn variadic_arguments(&self) -> Option<(usize, usize)> {
+        Some((0, usize::MAX))
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if args[0] == DataType::String || args[0] == DataType::Null {
-            Ok(DataType::UInt32)
-        } else {
-            Err(ErrorCode::IllegalDataType(format!(
-                "Expected string or null type, but got {}",
-                args[0]
-            )))
-        }
+    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+        Ok(DataType::UInt8)
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
+        Ok(false)
     }
 
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        let opt_iter = columns[0]
-            .column()
-            .to_minimal_array()?
-            .cast_with_type(&DataType::String)?;
-
-        let opt_iter = opt_iter.string()?.into_iter().map(|vo| {
-            vo.and_then(
-                |v| match String::from_utf8_lossy(v).parse::<std::net::Ipv4Addr>() {
-                    Ok(a) => Some(u32::from(a)),
-                    Err(_) => None,
-                },
-            )
-        });
-
-        let result = DFUInt32Array::new_from_opt_iter(opt_iter);
-        let column: DataColumn = result.into();
-        Ok(column.resize_constant(columns[0].column().len()))
+    fn eval(&self, _columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
+        Ok(DataColumn::Constant(DataValue::UInt8(Some(0)), input_rows))
     }
 }
 
-impl fmt::Display for InetAtonFunction {
+impl fmt::Display for IgnoreFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name.to_uppercase())
     }

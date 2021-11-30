@@ -43,3 +43,6 @@ perfs:
 
   - name: Filter GtLt
     query: SELECT count() FROM numbers_mt(1000000000) where number > 10000 and number <= 1000000000
+
+  - name: Cast String
+    query: SELECT count() FROM numbers_mt(1000000000) where not ignore(toString(number))
