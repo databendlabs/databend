@@ -97,13 +97,18 @@ impl Table for FuseTable {
         )))
     }
 
-    async fn commit(&self, _ctx: Arc<QueryContext>, operations: Vec<DataBlock>) -> Result<()> {
+    async fn commit(
+        &self,
+        _ctx: Arc<QueryContext>,
+        operations: Vec<DataBlock>,
+        overwrite: bool,
+    ) -> Result<()> {
         // only append operation supported currently
         let append_log_entries = operations
             .iter()
             .map(AppendOperationLogEntry::try_from)
             .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
-        self.do_commit(_ctx, append_log_entries).await
+        self.do_commit(_ctx, append_log_entries, overwrite).await
     }
 
     async fn truncate(

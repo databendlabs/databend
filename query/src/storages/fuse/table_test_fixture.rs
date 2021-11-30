@@ -102,14 +102,16 @@ impl TestFixture {
         }
     }
 
-    pub fn gen_block_stream(num: u32) -> Vec<Result<DataBlock>> {
+    pub fn gen_block_stream(num: u32, start: i32) -> Vec<Result<DataBlock>> {
         (0..num)
             .into_iter()
             .map(|_v| {
                 let schema =
                     DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
                 Ok(DataBlock::create_by_array(schema, vec![Series::new(vec![
-                    1, 2, 3,
+                    start,
+                    start + 1,
+                    start + 2,
                 ])]))
             })
             .collect()

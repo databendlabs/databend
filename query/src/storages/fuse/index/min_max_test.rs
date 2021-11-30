@@ -82,7 +82,9 @@ async fn test_min_max_index() -> Result<()> {
     let da = ctx.get_data_accessor()?;
     let stream = Box::pin(futures::stream::iter(blocks));
     let r = table.append_data(ctx.clone(), stream).await?;
-    table.commit(ctx.clone(), r.try_collect().await?).await?;
+    table
+        .commit(ctx.clone(), r.try_collect().await?, false)
+        .await?;
 
     // get the latest tbl
     let table = catalog

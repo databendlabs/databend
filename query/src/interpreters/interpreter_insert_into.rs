@@ -103,7 +103,11 @@ impl Interpreter for InsertIntoInterpreter {
 
         // feed back the append operation logs to table
         table
-            .commit(self.ctx.clone(), append_op_logs.try_collect().await?)
+            .commit(
+                self.ctx.clone(),
+                append_op_logs.try_collect().await?,
+                self.plan.overwrite,
+            )
             .await?;
 
         Ok(Box::pin(DataBlockStream::create(

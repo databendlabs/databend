@@ -37,15 +37,24 @@ impl FuseTable {
         &self,
         ctx: Arc<QueryContext>,
         operation_log: TableOperationLog,
+        overwrite: bool,
     ) -> Result<()> {
         // TODO OCC retry & resolves conflicts if applicable
 
         let prev = self.table_snapshot(ctx.clone()).await?;
-        let new_snapshot = Self::merge_table_operations(
-            self.table_info.meta.schema.as_ref(),
-            prev,
-            operation_log,
-        )?;
+        let new_snapshot = if overwrite {
+            let schema = self.table_info.meta.schema.as_ref().clone();
+            let (segments, summary) = statistics::merge_append_operations(&schema, operation_log)?;
+            TableSnapshot {
+                snapshot_id: Uuid::new_v4(),
+                prev_snapshot_id: prev.as_ref().map(|v| v.snapshot_id),
+                schema,
+                summary,
+                segments,
+            }
+        } else {
+            Self::merge_table_operations(self.table_info.meta.schema.as_ref(), prev, operation_log)?
+        };
 
         let uuid = new_snapshot.snapshot_id;
         let snapshot_loc = io::snapshot_location(uuid.to_simple().to_string().as_str());
