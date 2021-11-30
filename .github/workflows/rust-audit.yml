@@ -1,13 +1,34 @@
-name: Security audit
+name: Audit Security
 
 on:
+  push:
+    paths:
+      - '**/Cargo.lock'
+  pull_request:
+    paths:
+      - '**/Cargo.lock'
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '25 4 * * *'
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
 jobs:
-  audit:
+  audit-security:
+    name: Audit Security
     runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, 'skip audit')"
     steps:
-      - uses: actions/checkout@v1
-      - uses: actions-rs/audit-check@v1
+      - uses: actions/checkout@v2
+
+      - name: Install cargo-audit
+        uses: actions-rs/cargo@v1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          command: install
+          args: cargo-audit
+
+      - name: Audit dependencies
+        uses: actions-rs/cargo@v1
+        with:
+          command: audit

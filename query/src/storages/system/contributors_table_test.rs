@@ -18,9 +18,9 @@ use common_base::tokio;
 use common_exception::Result;
 use futures::TryStreamExt;
 
-use crate::catalogs::Table;
-use crate::catalogs::ToReadDataSourcePlan;
 use crate::storages::system::ContributorsTable;
+use crate::storages::Table;
+use crate::storages::ToReadDataSourcePlan;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_contributors_table() -> Result<()> {

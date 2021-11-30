@@ -67,8 +67,8 @@ where
 
     /// Maps `Option<SeqV<T>>` to `Option<U>` for `prev` and `result`.
     pub fn map<F, U>(self, f: F) -> (Option<U>, Option<U>)
-    where F: Fn(SeqV<T>) -> U {
-        (self.prev.map(|x| f(x)), self.result.map(|x| f(x)))
+    where F: Fn(SeqV<T>) -> U + Copy {
+        (self.prev.map(f), self.result.map(f))
     }
 
     /// Extract `prev` and `result`.

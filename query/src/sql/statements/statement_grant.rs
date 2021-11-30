@@ -44,8 +44,8 @@ pub enum DfGrantObject {
 impl AnalyzableStatement for DfGrantStatement {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        Ok(AnalyzedResult::SimpleQuery(PlanNode::GrantPrivilege(
-            GrantPrivilegePlan {
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            PlanNode::GrantPrivilege(GrantPrivilegePlan {
                 name: self.name.clone(),
                 hostname: self.hostname.clone(),
                 on: match &self.on {
@@ -64,7 +64,7 @@ impl AnalyzableStatement for DfGrantStatement {
                     }
                 },
                 priv_types: self.priv_types,
-            },
+            }),
         )))
     }
 }

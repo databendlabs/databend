@@ -117,11 +117,7 @@ impl QueryResponse {
             next_uri: next_url,
             stats_uri: Some(make_state_uri(&id)),
             final_uri: Some(make_final_uri(&id)),
-            error: r
-                .state
-                .error
-                .as_ref()
-                .map(|e| QueryError::from_error_code(e)),
+            error: r.state.error.as_ref().map(QueryError::from_error_code),
         }
     }
 

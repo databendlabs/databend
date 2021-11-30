@@ -29,9 +29,9 @@ use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::Table;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContext;
+use crate::storages::Table;
 
 pub struct ProcessesTable {
     table_info: TableInfo,

@@ -34,6 +34,12 @@ pub struct DatabaseMeta {
     pub engine: String,
 }
 
+impl DatabaseInfo {
+    pub fn engine(&self) -> &str {
+        &self.meta.engine
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateDatabaseReq {
     pub if_not_exists: bool,
