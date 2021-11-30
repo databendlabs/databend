@@ -23,7 +23,7 @@ use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_explain_interpreter() -> Result<()> {
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
 
     static TEST_QUERY: &str = "\
         EXPLAIN SELECT number FROM numbers_mt(10) \

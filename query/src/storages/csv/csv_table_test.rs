@@ -40,8 +40,8 @@ async fn test_csv_table() -> Result<()> {
     .cloned()
     .collect();
 
-    let ctx = crate::tests::try_create_context()?;
-    let table = CsvTable::try_create(crate::tests::try_create_storage_context()?, TableInfo {
+    let ctx = crate::tests::create_query_context()?;
+    let table = CsvTable::try_create(crate::tests::create_storage_context()?, TableInfo {
         desc: "'default'.'test_csv'".into(),
         name: "test_csv".into(),
         ident: Default::default(),
@@ -96,9 +96,9 @@ async fn test_csv_table_parse_error() -> Result<()> {
     .cloned()
     .collect();
 
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
 
-    let table = CsvTable::try_create(crate::tests::try_create_storage_context()?, TableInfo {
+    let table = CsvTable::try_create(crate::tests::create_storage_context()?, TableInfo {
         desc: "'default'.'test_csv'".into(),
         name: "test_csv".into(),
         ident: Default::default(),

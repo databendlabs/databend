@@ -17,7 +17,7 @@ use common_exception::Result;
 use crate::catalogs::DatabaseCatalog;
 use crate::configs::Config;
 
-pub fn try_create_catalog() -> Result<DatabaseCatalog> {
+pub fn create_catalog() -> Result<DatabaseCatalog> {
     futures::executor::block_on(async move {
         let conf = Config::default();
         DatabaseCatalog::try_create_with_config(conf).await

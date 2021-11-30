@@ -172,7 +172,7 @@ async fn test_local_pipeline_builds() -> Result<()> {
         },
     ];
 
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
     for test in tests {
         // Plan build check.
         let plan = parse_query(test.query, &ctx)?;

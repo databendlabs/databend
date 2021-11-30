@@ -25,7 +25,7 @@ use crate::tests::parse_query;
 async fn test_create_database_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
 
     if let PlanNode::CreateDatabase(plan) = parse_query("create database db1", &ctx)? {
         let executor = CreateDatabaseInterpreter::try_create(ctx, plan.clone())?;

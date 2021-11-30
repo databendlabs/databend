@@ -27,12 +27,12 @@ use crate::storages::ToReadDataSourcePlan;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_null_table() -> Result<()> {
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", DataType::UInt64, false),
         DataField::new("b", DataType::UInt64, false),
     ]);
-    let table = NullTable::try_create(crate::tests::try_create_storage_context()?, TableInfo {
+    let table = NullTable::try_create(crate::tests::create_storage_context()?, TableInfo {
         desc: "'default'.'a'".into(),
         name: "a".into(),
         ident: Default::default(),

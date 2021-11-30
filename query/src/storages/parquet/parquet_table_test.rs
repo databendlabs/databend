@@ -39,7 +39,7 @@ async fn test_parquet_table() -> Result<()> {
     .cloned()
     .collect();
 
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
     let table_info = TableInfo {
         desc: "'default'.'test_parquet_table'".to_string(),
         ident: Default::default(),
@@ -50,7 +50,7 @@ async fn test_parquet_table() -> Result<()> {
             options,
         },
     };
-    let table = ParquetTable::try_create(crate::tests::try_create_storage_context()?, table_info)?;
+    let table = ParquetTable::try_create(crate::tests::create_storage_context()?, table_info)?;
 
     let source_plan = table.read_plan(ctx.clone(), None).await?;
     ctx.try_set_partitions(source_plan.parts.clone())?;

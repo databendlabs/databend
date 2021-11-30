@@ -26,7 +26,7 @@ use crate::pipelines::transforms::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_partial_group_by() -> Result<()> {
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
     // sum(number), avg(number)

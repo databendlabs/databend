@@ -23,7 +23,7 @@ use crate::tests::parse_query;
 
 #[tokio::test]
 async fn test_use_interpreter() -> Result<()> {
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
 
     if let PlanNode::UseDatabase(plan) = parse_query("USE default", &ctx)? {
         let interpreter = UseDatabaseInterpreter::try_create(ctx, plan)?;
@@ -40,7 +40,7 @@ async fn test_use_interpreter() -> Result<()> {
 
 #[tokio::test]
 async fn test_use_database_interpreter_error() -> Result<()> {
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
 
     if let PlanNode::UseDatabase(plan) = parse_query("USE xx", &ctx)? {
         let interpreter = UseDatabaseInterpreter::try_create(ctx, plan)?;

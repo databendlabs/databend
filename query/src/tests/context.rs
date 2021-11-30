@@ -28,7 +28,7 @@ use crate::storages::StorageContext;
 use crate::storages::StorageFactory;
 use crate::tests::SessionManagerBuilder;
 
-pub fn try_create_context() -> Result<Arc<QueryContext>> {
+pub fn create_query_context() -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create().build()?;
     let dummy_session = sessions.create_session("TestSession")?;
 
@@ -42,7 +42,7 @@ pub fn try_create_context() -> Result<Arc<QueryContext>> {
     Ok(context)
 }
 
-pub fn try_create_context_with_config(config: Config) -> Result<Arc<QueryContext>> {
+pub fn create_query_context_with_config(config: Config) -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create().build()?;
     let dummy_session = sessions.create_session("TestSession")?;
 
@@ -54,6 +54,29 @@ pub fn try_create_context_with_config(config: Config) -> Result<Arc<QueryContext
 
     context.get_settings().set_max_threads(8)?;
     Ok(context)
+}
+
+pub fn create_catalog_context() -> Result<CatalogContext> {
+    let meta_embedded = futures::executor::block_on(MetaEmbedded::new_temp()).unwrap();
+    let meta = meta_embedded;
+    let storage_factory = StorageFactory::create(Config::default());
+    let database_factory = DatabaseFactory::create(Config::default());
+
+    Ok(CatalogContext {
+        meta: Arc::new(meta),
+        storage_factory: Arc::new(storage_factory),
+        database_factory: Arc::new(database_factory),
+        in_memory_data: Arc::new(Default::default()),
+    })
+}
+
+pub fn create_storage_context() -> Result<StorageContext> {
+    let meta_embedded = futures::executor::block_on(MetaEmbedded::new_temp()).unwrap();
+
+    Ok(StorageContext {
+        meta: Arc::new(meta_embedded),
+        in_memory_data: Arc::new(Default::default()),
+    })
 }
 
 pub struct ClusterDescriptor {
@@ -92,7 +115,7 @@ impl Default for ClusterDescriptor {
     }
 }
 
-pub fn try_create_cluster_context(desc: ClusterDescriptor) -> Result<Arc<QueryContext>> {
+pub fn create_query_context_with_cluster(desc: ClusterDescriptor) -> Result<Arc<QueryContext>> {
     let sessions = SessionManagerBuilder::create().build()?;
     let dummy_session = sessions.create_session("TestSession")?;
 
@@ -107,27 +130,4 @@ pub fn try_create_cluster_context(desc: ClusterDescriptor) -> Result<Arc<QueryCo
 
     context.get_settings().set_max_threads(8)?;
     Ok(context)
-}
-
-pub fn try_create_catalog_context() -> Result<CatalogContext> {
-    let meta_embedded = futures::executor::block_on(MetaEmbedded::new_temp()).unwrap();
-    let meta = meta_embedded;
-    let storage_factory = StorageFactory::create(Config::default());
-    let database_factory = DatabaseFactory::create(Config::default());
-
-    Ok(CatalogContext {
-        meta: Arc::new(meta),
-        storage_factory: Arc::new(storage_factory),
-        database_factory: Arc::new(database_factory),
-        in_memory_data: Arc::new(Default::default()),
-    })
-}
-
-pub fn try_create_storage_context() -> Result<StorageContext> {
-    let meta_embedded = futures::executor::block_on(MetaEmbedded::new_temp()).unwrap();
-
-    Ok(StorageContext {
-        meta: Arc::new(meta_embedded),
-        in_memory_data: Arc::new(Default::default()),
-    })
 }
