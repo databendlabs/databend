@@ -49,7 +49,7 @@ mod tests {
     #[test]
     fn test_literal_false_filter() -> Result<()> {
         let query = "select * from numbers_mt(10) where 1 + 2 = 2";
-        let ctx = crate::tests::try_create_context()?;
+        let ctx = crate::tests::create_query_context()?;
 
         let plan = crate::tests::parse_query(query, &ctx)?;
         let mut optimizer = Optimizers::without_scatters(ctx);
@@ -105,7 +105,7 @@ mod tests {
         ];
 
         for test in tests {
-            let ctx = crate::tests::try_create_context()?;
+            let ctx = crate::tests::create_query_context()?;
             let plan = crate::tests::parse_query(test.query, &ctx)?;
             let mut optimizer = Optimizers::without_scatters(ctx);
 

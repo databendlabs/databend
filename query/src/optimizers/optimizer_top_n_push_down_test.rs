@@ -19,7 +19,7 @@ use crate::optimizers::*;
 #[test]
 fn test_simple() -> Result<()> {
     let query = "select number from numbers(1000) order by number limit 10;";
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
 
     let plan = crate::tests::parse_query(query, &ctx)?;
 
@@ -40,7 +40,7 @@ fn test_simple() -> Result<()> {
 #[test]
 fn test_simple_with_offset() -> Result<()> {
     let query = "select number from numbers(1000) order by number limit 10 offset 5;";
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
 
     let plan = crate::tests::parse_query(query, &ctx)?;
 
@@ -62,7 +62,7 @@ fn test_simple_with_offset() -> Result<()> {
 fn test_nested_projection() -> Result<()> {
     let query =
         "select number from (select * from numbers(1000) order by number limit 11) limit 10;";
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
 
     let plan = crate::tests::parse_query(query, &ctx)?;
 
@@ -86,7 +86,7 @@ fn test_nested_projection() -> Result<()> {
 fn test_aggregate() -> Result<()> {
     let query =
         "select sum(number) FROM numbers(1000) group by number % 10 order by sum(number) limit 5;";
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
 
     let plan = crate::tests::parse_query(query, &ctx)?;
 
@@ -140,7 +140,7 @@ fn test_monotonic_function() -> Result<()> {
     ];
 
     for test in tests {
-        let ctx = crate::tests::try_create_context()?;
+        let ctx = crate::tests::create_query_context()?;
         let plan = crate::tests::parse_query(test.query, &ctx)?;
         let mut optimizer = Optimizers::without_scatters(ctx);
 

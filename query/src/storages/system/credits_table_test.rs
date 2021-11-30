@@ -24,7 +24,7 @@ use crate::storages::ToReadDataSourcePlan;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_credits_table() -> Result<()> {
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
 
     let table: Arc<dyn Table> = Arc::new(CreditsTable::create(1));
     let source_plan = table.read_plan(ctx.clone(), None).await?;

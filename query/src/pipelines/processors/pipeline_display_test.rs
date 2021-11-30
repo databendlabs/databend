@@ -21,7 +21,7 @@ use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_pipeline_display() -> Result<()> {
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
 
     static TEST_EXPLAIN_QUERY: &str = "\
         EXPLAIN PIPELINE SELECT \

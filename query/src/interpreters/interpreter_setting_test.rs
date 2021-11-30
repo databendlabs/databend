@@ -23,7 +23,7 @@ use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_setting_interpreter() -> Result<()> {
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
 
     if let PlanNode::SetVariable(plan) = parse_query("SET max_block_size=1", &ctx)? {
         let executor = SettingInterpreter::try_create(ctx, plan)?;
@@ -40,7 +40,7 @@ async fn test_setting_interpreter() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_setting_interpreter_error() -> Result<()> {
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
 
     if let PlanNode::SetVariable(plan) = parse_query("SET xx = 1", &ctx)? {
         let executor = SettingInterpreter::try_create(ctx, plan)?;

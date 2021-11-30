@@ -24,8 +24,8 @@ use crate::api::rpc::flight_tickets::StreamTicket;
 use crate::api::rpc::DatabendQueryFlightDispatcher;
 use crate::api::FlightAction;
 use crate::api::ShuffleAction;
+use crate::tests::create_query_context;
 use crate::tests::parse_query;
-use crate::tests::try_create_context;
 use crate::tests::SessionManagerBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -49,7 +49,7 @@ async fn test_get_stream_with_non_exists_stream() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
     if let (Some(query_id), Some(stage_id), Some(stream_id)) = generate_uuids(3) {
-        let ctx = try_create_context()?;
+        let ctx = create_query_context()?;
         let flight_dispatcher = DatabendQueryFlightDispatcher::create();
 
         let sessions = SessionManagerBuilder::create().build()?;
@@ -94,7 +94,7 @@ async fn test_run_shuffle_action_with_no_scatters() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_run_shuffle_action_with_scatter() -> Result<()> {
     if let (Some(query_id), Some(stage_id), None) = generate_uuids(2) {
-        let ctx = try_create_context()?;
+        let ctx = create_query_context()?;
         let flight_dispatcher = DatabendQueryFlightDispatcher::create();
 
         let sessions = SessionManagerBuilder::create().build()?;

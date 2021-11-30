@@ -19,7 +19,7 @@ use crate::functions::ContextFunction;
 #[test]
 fn test_context_function_build_arg_from_ctx() -> Result<()> {
     use pretty_assertions::assert_eq;
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
 
     // Ok.
     {
