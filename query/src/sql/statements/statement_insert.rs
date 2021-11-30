@@ -193,7 +193,8 @@ impl DfInsertStatement {
 
         let statement = DfQueryStatement::try_from(source.clone())?;
         let select_plan =
-            PlanParser::build_plan(vec![DfStatement::Query(Box::new(statement))], ctx.clone()).await?;
+            PlanParser::build_plan(vec![DfStatement::Query(Box::new(statement))], ctx.clone())
+                .await?;
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::InsertInto(
             InsertIntoPlan::insert_select(
                 db,
