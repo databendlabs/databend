@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
 use enumflags2::BitFlags;
 
-use crate::UserPrivilege;
 use crate::UserPrivilegeType;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -34,6 +32,20 @@ pub struct GrantEntry {
 }
 
 impl GrantEntry {
+    pub fn new(
+        user: String,
+        host_pattern: String,
+        object: GrantObject,
+        privileges: BitFlags<UserPrivilegeType>,
+    ) -> Self {
+        Self {
+            user,
+            host_pattern,
+            object,
+            privileges,
+        }
+    }
+
     pub fn verify_global_privilege(
         &self,
         user: &str,
@@ -44,11 +56,11 @@ impl GrantEntry {
             return false;
         }
 
-        if &self.object != GrantObject::Global {
+        if self.object != GrantObject::Global {
             return false;
         }
 
-        self.privileges.contains(&privilege)
+        self.privileges.contains(privilege)
     }
 
     pub fn verify_database_privilege(
@@ -64,13 +76,13 @@ impl GrantEntry {
 
         if !match &self.object {
             GrantObject::Global => true,
-            GrantObject::Database(&expected_db) => expected_db == db,
+            GrantObject::Database(ref expected_db) => expected_db == db,
             _ => false,
         } {
             return false;
         }
 
-        self.privileges.contains(&privilege)
+        self.privileges.contains(privilege)
     }
 
     pub fn verify_table_privilege(
@@ -87,19 +99,19 @@ impl GrantEntry {
 
         if !match &self.object {
             GrantObject::Global => true,
-            GrantObject::Database(&expected_db) => expected_db == db,
-            GrantObject::Table(&expected_db, &expected_table) => {
+            GrantObject::Database(ref expected_db) => expected_db == db,
+            GrantObject::Table(ref expected_db, ref expected_table) => {
                 expected_db == db && expected_table == table
             }
         } {
             return false;
         }
 
-        self.privileges.contains(&privilege)
+        self.privileges.contains(privilege)
     }
 
     pub fn matches_entry(&self, user: &str, host_pattern: &str, object: &GrantObject) -> bool {
-        return self.user == user && self.host_pattern == host_pattern && self.object == object;
+        self.user == user && self.host_pattern == host_pattern && &self.object == object
     }
 
     fn matches_user_host(&self, user: &str, host: &str) -> bool {
@@ -111,7 +123,7 @@ impl GrantEntry {
         if host_pattern == "%" {
             return true;
         }
-        return host_pattern == host;
+        host_pattern == host
     }
 }
 
@@ -121,6 +133,14 @@ pub struct UserGrantSet {
 }
 
 impl UserGrantSet {
+    pub fn empty() -> Self {
+        Self { grants: vec![] }
+    }
+
+    pub fn entries(&self) -> &[GrantEntry] {
+        &self.grants
+    }
+
     pub fn verify_global_privilege(
         &self,
         user: &str,
@@ -157,44 +177,44 @@ impl UserGrantSet {
             .any(|e| e.verify_table_privilege(user, host, db, table, privilege))
     }
 
-    pub fn grant(
-        &self,
+    pub fn grant_privileges(
+        &mut self,
         user: &str,
         host_pattern: &str,
         object: &GrantObject,
         privileges: BitFlags<UserPrivilegeType>,
-    ) -> UserGrantSet {
+    ) {
         let mut new_grants: Vec<GrantEntry> = vec![];
         let mut changed = false;
 
-        for grant in self.grants {
+        for grant in self.grants.iter() {
             let mut grant = grant.clone();
             if grant.matches_entry(user, host_pattern, object) {
-                grant.privileges |= &privileges;
+                grant.privileges |= privileges;
                 changed = true;
             }
             new_grants.push(grant);
         }
 
         if !changed {
-            new_grants.push(GrantEntry {
-                user: user.into(),
-                host_pattern: host_pattern.into(),
-                object: object.clone(),
-                privileges: privileges.clone(),
-            })
+            new_grants.push(GrantEntry::new(
+                user.into(),
+                host_pattern.into(),
+                object.clone(),
+                privileges,
+            ))
         }
 
-        Self { grants: new_grants }
+        self.grants = new_grants;
     }
 
-    pub fn revoke(
-        self,
+    pub fn revoke_privileges(
+        &mut self,
         user: &str,
         host_pattern: &str,
         object: &GrantObject,
         privileges: BitFlags<UserPrivilegeType>,
-    ) -> UserGrantSet {
+    ) {
         let grants = self
             .grants
             .iter()
@@ -209,6 +229,6 @@ impl UserGrantSet {
             })
             .filter(|e| e.privileges != BitFlags::empty())
             .collect::<Vec<_>>();
-        Self { grants }
+        self.grants = grants;
     }
 }
