@@ -440,6 +440,24 @@ fn show_databases_test() -> Result<()> {
         }),
     )?;
 
+    expect_parse_ok(
+        "SHOW DATABASES LIKE POSITION('012345' IN 'abcdef')",
+        DfStatement::ShowDatabases(DfShowDatabases {
+            where_opt: Some(Expr::BinaryOp {
+                left: Box::new(Expr::Identifier(Ident::new("name"))),
+                op: BinaryOperator::Like,
+                right: Box::new(Expr::Position {
+                    substr_expr: Box::new(Expr::Value(Value::SingleQuotedString(
+                        "012345".to_string(),
+                    ))),
+                    str_expr: Box::new(Expr::Value(Value::SingleQuotedString(
+                        "abcdef".to_string(),
+                    ))),
+                }),
+            }),
+        }),
+    )?;
+
     Ok(())
 }
 

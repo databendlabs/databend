@@ -399,6 +399,10 @@ impl ExprRPNBuilder {
             Expr::Function(function) => self.visit_function(function),
             Expr::Cast { expr, data_type } => self.visit_cast(expr, data_type),
             Expr::TypedString { data_type, value } => self.visit_typed_string(data_type, value),
+            Expr::Position {
+                substr_expr,
+                str_expr,
+            } => self.visit_position(substr_expr, str_expr),
             Expr::Substring {
                 expr,
                 substring_from,
@@ -535,6 +539,14 @@ impl ExprRPNBuilder {
         self.visit(low)?;
         self.visit(high)?;
         self.rpn.push(ExprRPNItem::Between(*negated));
+        Ok(())
+    }
+
+    fn visit_position(&mut self, substr_expr: &Expr, str_expr: &Expr) -> Result<()> {
+        self.visit(substr_expr)?;
+        self.visit(str_expr)?;
+        let name = String::from("position");
+        self.rpn.push(ExprRPNItem::function(name, 2));
         Ok(())
     }
 
