@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Lfloor.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ use common_exception::Result;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
+use crate::scalars::Monotonicity;
 
 #[derive(Clone)]
 pub struct CeilFunction {
@@ -92,6 +93,12 @@ impl Function for CeilFunction {
             .apply_cast_numeric(|v| v.ceil());
         let column: DataColumn = result.into();
         Ok(column)
+    }
+
+    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
+        // Ceil function should be monotonically positive. For val_1 > val2, we should have ceil(val_1) >= ceil(val_2), and vise versa.
+        // So we return the monotonicity same as the input.
+        Ok(Monotonicity::clone_without_range(&args[0]))
     }
 }
 

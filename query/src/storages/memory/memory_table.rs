@@ -28,14 +28,12 @@ use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
-use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use futures::stream::StreamExt;
 
-use crate::catalogs::Table;
 use crate::sessions::QueryContext;
 use crate::storages::memory::MemoryTableStream;
 use crate::storages::StorageContext;
+use crate::storages::Table;
 
 pub struct MemoryTable {
     table_info: TableInfo,
@@ -160,18 +158,26 @@ impl Table for MemoryTable {
     async fn append_data(
         &self,
         _ctx: Arc<QueryContext>,
-        mut stream: SendableDataBlockStream,
+        stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
-        while let Some(block) = stream.next().await {
-            let block = block?;
+        Ok(Box::pin(stream))
+    }
+
+    async fn commit(
+        &self,
+        _ctx: Arc<QueryContext>,
+        operations: Vec<DataBlock>,
+        overwrite: bool,
+    ) -> Result<()> {
+        if overwrite {
             let mut blocks = self.blocks.write();
+            blocks.clear();
+        }
+        let mut blocks = self.blocks.write();
+        for block in operations {
             blocks.push(block);
         }
-        Ok(Box::pin(DataBlockStream::create(
-            std::sync::Arc::new(DataSchema::empty()),
-            None,
-            vec![],
-        )))
+        Ok(())
     }
 
     async fn truncate(

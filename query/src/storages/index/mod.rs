@@ -27,6 +27,8 @@ mod range_filter;
 pub use index_min_max::MinMaxIndex;
 pub use index_sparse::SparseIndex;
 pub use index_sparse::SparseIndexValue;
+pub use range_filter::BlockStatistics;
+pub use range_filter::ColumnStatistics;
 pub use range_filter::RangeFilter;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]

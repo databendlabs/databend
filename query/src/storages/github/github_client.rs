@@ -27,7 +27,7 @@ pub fn create_github_client() -> Result<Octocrab> {
     if let Err(e) = github_token_res {
         return Err(ErrorCode::SecretKeyNotSet(format!(
             "Github Access Token is not set, see how to set at https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token, {}",
-            e.to_string()
+            e
         )));
     }
     let github_token = github_token_res.unwrap();
@@ -37,7 +37,7 @@ pub fn create_github_client() -> Result<Octocrab> {
         .map_err(|err| {
             ErrorCode::UnexpectedError(format!(
                 "Error Occured when creating octorab client, err: {}",
-                err.to_string()
+                err
             ))
         })
 }

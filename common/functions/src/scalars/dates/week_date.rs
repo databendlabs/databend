@@ -28,6 +28,7 @@ use common_exception::Result;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
+use crate::scalars::Monotonicity;
 
 #[derive(Clone, Debug)]
 pub struct WeekFunction<T, R> {
@@ -194,6 +195,14 @@ where
                 self.name()))),
         }?;
         Ok(number_array)
+    }
+
+    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
+        if T::MAYBE_MONOTONIC {
+            // all the week functions here with MAYBE_MONOTONIC true happens to be monotonically positive.
+            return Ok(Monotonicity::clone_without_range(&args[0]));
+        }
+        Ok(Monotonicity::default())
     }
 }
 

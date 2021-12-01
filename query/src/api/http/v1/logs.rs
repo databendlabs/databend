@@ -22,9 +22,9 @@ use poem::web::Data;
 use poem::IntoResponse;
 use tokio_stream::StreamExt;
 
-use crate::catalogs::ToReadDataSourcePlan;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
+use crate::storages::ToReadDataSourcePlan;
 
 // read log files from cfg.log.log_dir
 #[poem::handler]

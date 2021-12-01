@@ -92,7 +92,7 @@ impl Interpreter for CopyInterpreter {
             .await?
             .try_collect()
             .await?;
-        table.commit(self.ctx.clone(), r).await?;
+        table.commit(self.ctx.clone(), r, false).await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
@@ -120,5 +120,6 @@ fn get_dal_by_stage(ctx: Arc<QueryContext>, _stage_name: &str) -> Result<Arc<dyn
         &conf.bucket,
         &conf.access_key_id,
         &conf.secret_access_key,
+        conf.enable_pod_iam_policy,
     )?))
 }

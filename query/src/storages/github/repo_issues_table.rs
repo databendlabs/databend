@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,6 @@ use common_streams::SendableDataBlockStream;
 use octocrab::models;
 use octocrab::params;
 
-use crate::catalogs::Table;
 use crate::sessions::QueryContext;
 use crate::storages::github::github_client::create_github_client;
 use crate::storages::github::github_client::get_own_repo_from_table_info;
@@ -36,6 +35,7 @@ use crate::storages::github::GITHUB_REPO_ISSUES_ENGINE;
 use crate::storages::github::OWNER;
 use crate::storages::github::REPO;
 use crate::storages::StorageContext;
+use crate::storages::Table;
 
 const NUMBER: &str = "number";
 const TITLE: &str = "title";

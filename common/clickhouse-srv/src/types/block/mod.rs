@@ -23,9 +23,9 @@ use std::os::raw::c_char;
 use byteorder::LittleEndian;
 use byteorder::WriteBytesExt;
 use chrono_tz::Tz;
-use clickhouse_rs_cityhash_sys::city_hash_128;
 use lz4::liblz4::LZ4_compressBound;
 use lz4::liblz4::LZ4_compress_default;
+use naive_cityhash::cityhash128;
 
 pub use self::block_info::BlockInfo;
 pub use self::builder::RCons;
@@ -364,7 +364,7 @@ impl<K: ColumnType> Block<K> {
                 cursor.write_u32::<LittleEndian>(tmp.len() as u32).unwrap();
             }
 
-            let hash = city_hash_128(&buf);
+            let hash = cityhash128(&buf);
             encoder.write(hash.lo);
             encoder.write(hash.hi);
             encoder.write_bytes(buf.as_ref());

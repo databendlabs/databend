@@ -20,8 +20,8 @@ use common_planners::TruncateTablePlan;
 use futures::TryStreamExt;
 
 use crate::catalogs::Catalog;
-use crate::catalogs::ToReadDataSourcePlan;
 use crate::storages::fuse::table_test_fixture::TestFixture;
+use crate::storages::ToReadDataSourcePlan;
 
 #[tokio::test]
 async fn test_fuse_table_simple_case() -> Result<()> {
@@ -41,14 +41,16 @@ async fn test_fuse_table_simple_case() -> Result<()> {
         )
         .await?;
 
-    // insert 10 blocks
+    // insert 5 blocks
     let num_blocks = 5;
     let stream = Box::pin(futures::stream::iter(TestFixture::gen_block_stream(
-        num_blocks,
+        num_blocks, 1,
     )));
 
     let r = table.append_data(ctx.clone(), stream).await?;
-    table.commit(ctx.clone(), r.try_collect().await?).await?;
+    table
+        .commit(ctx.clone(), r.try_collect().await?, false)
+        .await?;
 
     // get the latest tbl
     let prev_version = table.get_table_info().ident.version;
@@ -68,7 +70,7 @@ async fn test_fuse_table_simple_case() -> Result<()> {
     ctx.try_set_partitions(parts)?;
 
     let stream = table
-        .read(ctx, &ReadDataSourcePlan {
+        .read(ctx.clone(), &ReadDataSourcePlan {
             table_info: Default::default(),
             scan_fields: None,
             parts: Default::default(),
@@ -101,6 +103,74 @@ async fn test_fuse_table_simple_case() -> Result<()> {
         "| 3  |", //
         "| 3  |", //
         "| 3  |", //
+        "+----+", //
+    ];
+    common_datablocks::assert_blocks_sorted_eq(expected, blocks.as_slice());
+
+    // test commit with overwrite
+
+    // insert overwrite 5 blocks
+    let num_blocks = 5;
+    let stream = Box::pin(futures::stream::iter(TestFixture::gen_block_stream(
+        num_blocks, 4,
+    )));
+
+    let r = table.append_data(ctx.clone(), stream).await?;
+    table
+        .commit(ctx.clone(), r.try_collect().await?, true)
+        .await?;
+
+    // get the latest tbl
+    let prev_version = table.get_table_info().ident.version;
+    let table = catalog
+        .get_table(
+            fixture.default_db().as_str(),
+            fixture.default_table().as_str(),
+        )
+        .await?;
+    assert_ne!(prev_version, table.get_table_info().ident.version);
+
+    let (stats, parts) = table.read_partitions(ctx.clone(), None).await?;
+    assert_eq!(parts.len(), num_blocks as usize);
+    assert_eq!(stats.read_rows, num_blocks as usize * 3);
+
+    // inject partitions to current ctx
+    ctx.try_set_partitions(parts)?;
+
+    let stream = table
+        .read(ctx.clone(), &ReadDataSourcePlan {
+            table_info: Default::default(),
+            scan_fields: None,
+            parts: Default::default(),
+            statistics: Default::default(),
+            description: "".to_string(),
+            tbl_args: None,
+            push_downs: None,
+        })
+        .await?;
+    let blocks = stream.try_collect::<Vec<_>>().await?;
+    let rows: usize = blocks.iter().map(|block| block.num_rows()).sum();
+    assert_eq!(rows, num_blocks as usize * 3);
+
+    let expected = vec![
+        "+----+", //
+        "| id |", //
+        "+----+", //
+        "| 4  |", //
+        "| 4  |", //
+        "| 4  |", //
+        "| 4  |", //
+        "| 4  |", //
+        "| 5  |", //
+        "| 5  |", //
+        "| 5  |", //
+        "| 5  |", //
+        "| 5  |", //
+        "| 6  |", //
+        "| 6  |", //
+        "| 6  |", //
+        "| 6  |", //
+        "| 6  |", //
         "+----+", //
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, blocks.as_slice());
@@ -145,11 +215,13 @@ async fn test_fuse_table_truncate() -> Result<()> {
     // 2. truncate table which has data
     let num_blocks = 10;
     let stream = Box::pin(futures::stream::iter(TestFixture::gen_block_stream(
-        num_blocks,
+        num_blocks, 1,
     )));
 
     let r = table.append_data(ctx.clone(), stream).await?;
-    table.commit(ctx.clone(), r.try_collect().await?).await?;
+    table
+        .commit(ctx.clone(), r.try_collect().await?, false)
+        .await?;
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
     // get the latest tbl

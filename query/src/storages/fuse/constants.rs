@@ -13,23 +13,12 @@
 //  limitations under the License.
 //
 
-use std::sync::Arc;
+pub const TBL_OPT_KEY_SNAPSHOT_LOC: &str = "SNAPSHOT_LOC";
+pub const TBL_OPT_KEY_CHUNK_BLOCK_NUM: &str = "CHUNK_BLOCK_NUM";
+pub const TBL_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD: &str = "BLOCK_SIZE_THRESHOLD";
+pub const FUSE_TBL_BLOCK_PREFIX: &str = "_b";
+pub const FUSE_TBL_SEGMENT_PREFIX: &str = "_sg";
+pub const FUSE_TBL_SNAPSHOT_PREFIX: &str = "_ss";
 
-use common_dal::DataAccessor;
-use common_datavalues::DataSchemaRef;
-use common_exception::Result;
-use common_planners::Extras;
-
-use crate::storages::fuse::index::MinMaxIndex;
-use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::meta::TableSnapshot;
-
-pub async fn range_filter(
-    table_snapshot: &TableSnapshot,
-    schema: DataSchemaRef,
-    push_down: Option<Extras>,
-    data_accessor: Arc<dyn DataAccessor>,
-) -> Result<Vec<BlockMeta>> {
-    let range_index = MinMaxIndex::new(table_snapshot, data_accessor);
-    range_index.apply(schema, push_down).await
-}
+pub const DEFAULT_CHUNK_BLOCK_NUM: usize = 1000;
+pub const DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD: usize = 100 * 1024 * 1024;

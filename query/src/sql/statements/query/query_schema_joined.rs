@@ -26,8 +26,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Extras;
 
-use crate::catalogs::Table;
 use crate::sql::statements::QueryAnalyzeState;
+use crate::storages::Table;
 
 #[derive(Clone)]
 pub struct JoinedSchema {

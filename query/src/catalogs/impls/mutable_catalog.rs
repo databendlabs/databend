@@ -39,14 +39,15 @@ use common_tracing::tracing;
 
 use crate::catalogs::backends::MetaRemote;
 use crate::catalogs::catalog::Catalog;
-use crate::catalogs::database::Database;
 use crate::catalogs::CatalogContext;
-use crate::catalogs::DefaultDatabase;
-use crate::catalogs::Table;
 use crate::common::MetaClientProvider;
 use crate::configs::Config;
+use crate::databases::Database;
+use crate::databases::DatabaseContext;
+use crate::databases::DatabaseFactory;
 use crate::storages::StorageContext;
 use crate::storages::StorageFactory;
+use crate::storages::Table;
 
 /// Catalog based on MetaStore
 /// - System Database NOT included
@@ -79,8 +80,8 @@ impl MutableCatalog {
             tracing::info!("use embedded meta");
             // TODO(xp): This can only be used for test: data will be removed when program quit.
 
-            let meta_embedded = MetaEmbedded::new_temp().await?;
-            Arc::new(meta_embedded)
+            let meta_embedded = MetaEmbedded::get_meta().await?;
+            meta_embedded
         } else {
             tracing::info!("use remote meta");
 
@@ -99,19 +100,29 @@ impl MutableCatalog {
         };
         meta.create_database(req).await?;
 
+        // Storage factory.
         let storage_factory = StorageFactory::create(conf.clone());
+
+        // Database factory.
+        let database_factory = DatabaseFactory::create(conf.clone());
+
         let ctx = CatalogContext {
             meta,
             storage_factory: Arc::new(storage_factory),
+            database_factory: Arc::new(database_factory),
             in_memory_data: Arc::new(Default::default()),
         };
         Ok(MutableCatalog { ctx })
     }
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
-        let db = DefaultDatabase::new(&db_info.db);
-        let db = Arc::new(db);
-        Ok(db)
+        let ctx = DatabaseContext {
+            meta: self.ctx.meta.clone(),
+            in_memory_data: self.ctx.in_memory_data.clone(),
+        };
+        self.ctx
+            .database_factory
+            .get_database(ctx, &db_info.db, &db_info.meta.engine)
     }
 }
 
@@ -137,7 +148,23 @@ impl Catalog for MutableCatalog {
     }
 
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
-        self.ctx.meta.create_database(req).await
+        // Create database.
+        let res = self.ctx.meta.create_database(req.clone()).await?;
+        tracing::error!("db name: {}, engine: {}", &req.db, &req.engine);
+
+        // Initial the database after creating.
+        let db_ctx = DatabaseContext {
+            meta: self.ctx.meta.clone(),
+            in_memory_data: self.ctx.in_memory_data.clone(),
+        };
+        let database = self
+            .ctx
+            .database_factory
+            .get_database(db_ctx, &req.db, &req.engine)?;
+        database.init_database().await?;
+        Ok(CreateDatabaseReply {
+            database_id: res.database_id,
+        })
     }
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<()> {

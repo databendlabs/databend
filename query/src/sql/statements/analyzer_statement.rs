@@ -29,7 +29,7 @@ use crate::sql::DfStatement;
 
 #[allow(clippy::enum_variant_names)]
 pub enum AnalyzedResult {
-    SimpleQuery(PlanNode),
+    SimpleQuery(Box<PlanNode>),
     SelectQuery(Box<QueryAnalyzeState>),
     ExplainQuery((ExplainType, Box<QueryAnalyzeState>)),
 }

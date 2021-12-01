@@ -20,7 +20,6 @@ mod accumulator;
 mod block_meta_acc;
 mod util;
 
-pub use accumulator::BlockStats;
 pub use accumulator::StatisticsAccumulator;
 pub use block_meta_acc::BlockMetaAccumulator;
 pub use util::merge_append_operations;

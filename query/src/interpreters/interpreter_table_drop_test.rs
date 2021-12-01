@@ -23,7 +23,7 @@ use crate::tests::parse_query;
 
 #[tokio::test]
 async fn test_drop_table_interpreter() -> Result<()> {
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
 
     // Create table.
     {

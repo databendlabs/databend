@@ -82,6 +82,8 @@ impl AnalyzableStatement for DfCopy {
             options,
         };
 
-        Ok(AnalyzedResult::SimpleQuery(PlanNode::Copy(plan_node)))
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Copy(
+            plan_node,
+        ))))
     }
 }

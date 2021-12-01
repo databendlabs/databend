@@ -30,9 +30,10 @@ use common_planners::Extras;
 use futures::TryStreamExt;
 
 use crate::catalogs::Catalog;
-use crate::storages::fuse::index::range_filter;
-use crate::storages::fuse::io::TBL_OPT_KEY_SNAPSHOT_LOC;
+use crate::storages::fuse::index::min_max::apply_range_filter;
 use crate::storages::fuse::table_test_fixture::TestFixture;
+use crate::storages::fuse::TBL_OPT_KEY_CHUNK_BLOCK_NUM;
+use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 
 #[tokio::test]
 async fn test_min_max_index() -> Result<()> {
@@ -53,7 +54,8 @@ async fn test_min_max_index() -> Result<()> {
         table_meta: TableMeta {
             schema: test_schema.clone(),
             engine: "FUSE".to_string(),
-            options: Default::default(),
+            // make sure blocks will not be merged
+            options: [(TBL_OPT_KEY_CHUNK_BLOCK_NUM.to_owned(), "1".to_owned())].into(),
         },
     };
 
@@ -80,7 +82,9 @@ async fn test_min_max_index() -> Result<()> {
     let da = ctx.get_data_accessor()?;
     let stream = Box::pin(futures::stream::iter(blocks));
     let r = table.append_data(ctx.clone(), stream).await?;
-    table.commit(ctx.clone(), r.try_collect().await?).await?;
+    table
+        .commit(ctx.clone(), r.try_collect().await?, false)
+        .await?;
 
     // get the latest tbl
     let table = catalog
@@ -96,7 +100,7 @@ async fn test_min_max_index() -> Result<()> {
 
     // no pruning
     let push_downs = None;
-    let blocks = range_filter(
+    let blocks = apply_range_filter(
         &snapshot,
         table.get_table_info().schema(),
         push_downs,
@@ -112,7 +116,7 @@ async fn test_min_max_index() -> Result<()> {
     let pred = col("a").gt(lit(30));
     extra.filters = vec![pred];
 
-    let blocks = range_filter(
+    let blocks = apply_range_filter(
         &snapshot,
         table.get_table_info().schema(),
         Some(extra),
@@ -126,7 +130,8 @@ async fn test_min_max_index() -> Result<()> {
     let pred = col("a").gt(lit(3)).and(col("b").gt(lit(3)));
     extra.filters = vec![pred];
 
-    let blocks = range_filter(&snapshot, table.get_table_info().schema(), Some(extra), da).await?;
+    let blocks =
+        apply_range_filter(&snapshot, table.get_table_info().schema(), Some(extra), da).await?;
     assert_eq!(num - 1, blocks.len() as u64);
 
     Ok(())

@@ -23,17 +23,17 @@ use common_meta_types::TableMeta;
 use common_planners::*;
 use futures::TryStreamExt;
 
-use crate::catalogs::ToReadDataSourcePlan;
 use crate::storages::memory::MemoryTable;
+use crate::storages::ToReadDataSourcePlan;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_memorytable() -> Result<()> {
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", DataType::UInt32, false),
         DataField::new("b", DataType::UInt64, false),
     ]);
-    let table = MemoryTable::try_create(crate::tests::try_create_storage_context()?, TableInfo {
+    let table = MemoryTable::try_create(crate::tests::create_storage_context()?, TableInfo {
         desc: "'default'.'a'".into(),
         name: "a".into(),
         ident: Default::default(),
@@ -57,10 +57,14 @@ async fn test_memorytable() -> Result<()> {
         let blocks = vec![Ok(block), Ok(block2)];
 
         let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks.clone());
-        table
+        let r = table
             .append_data(ctx.clone(), Box::pin(input_stream))
             .await
             .unwrap();
+        // with overwrite false
+        table
+            .commit(ctx.clone(), r.try_collect().await?, false)
+            .await?;
     }
 
     // read tests
@@ -131,6 +135,52 @@ async fn test_memorytable() -> Result<()> {
             // statistics
             assert_eq!(expected_statistics, source_plan.statistics);
         }
+    }
+
+    // overwrite
+    {
+        let block = DataBlock::create_by_array(schema.clone(), vec![
+            Series::new(vec![5u64, 6]),
+            Series::new(vec![55u64, 66]),
+        ]);
+        let block2 = DataBlock::create_by_array(schema.clone(), vec![
+            Series::new(vec![7u64, 8]),
+            Series::new(vec![77u64, 88]),
+        ]);
+        let blocks = vec![Ok(block), Ok(block2)];
+
+        let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks.clone());
+        let r = table
+            .append_data(ctx.clone(), Box::pin(input_stream))
+            .await
+            .unwrap();
+        // with overwrite = true
+        table
+            .commit(ctx.clone(), r.try_collect().await?, true)
+            .await?;
+    }
+
+    // read overwrite
+    {
+        let source_plan = table.read_plan(ctx.clone(), None).await?;
+        ctx.try_set_partitions(source_plan.parts.clone())?;
+        assert_eq!(table.engine(), "Memory");
+
+        let stream = table.read(ctx.clone(), &source_plan).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        assert_blocks_sorted_eq(
+            vec![
+                "+---+----+",
+                "| a | b  |",
+                "+---+----+",
+                "| 5 | 55 |",
+                "| 6 | 66 |",
+                "| 7 | 77 |",
+                "| 8 | 88 |",
+                "+---+----+",
+            ],
+            &result,
+        );
     }
 
     // truncate.

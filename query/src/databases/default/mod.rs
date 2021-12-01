@@ -13,12 +13,6 @@
 //  limitations under the License.
 //
 
-use common_datavalues::DataValue;
+mod default_database;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-pub struct ColumnStats {
-    pub min: DataValue,
-    pub max: DataValue,
-    pub null_count: u64,
-    pub in_memory_size: u64,
-}
+pub use default_database::DefaultDatabase;

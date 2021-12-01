@@ -23,11 +23,11 @@ common-io = {path = "../io"}
 dyn-clone = "1.0.4"
 indexmap = "1.7.0"
 lazy_static = "1.4.0"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde = { version = "1.0.130", features = ["derive"] }
+serde_json = "1.0.72"
 bytes = "1.1.0"
-num = "^0.4"
-ordered-float = "2.8"
+num = "0.4.0"
+ordered-float = "2.8.0"
 crc32fast = "1.2.2"
 sha1 = "0.6.0"
 sha2 = "0.9.8"
@@ -35,9 +35,10 @@ md5 = "0.7.0"
 rand = "0.8.4"
 hex = "0.4.3"
 base64 = "0.13.0"
+itertools = "0.10.1"
 
 [dev-dependencies]
 bumpalo = "3.8.0"
 common-datablocks = {path = "../datablocks"}
-pretty_assertions = "1.0"
+pretty_assertions = "1.0.0"
 float-cmp = "0.9.0"

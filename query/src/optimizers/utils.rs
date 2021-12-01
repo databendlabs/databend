@@ -19,6 +19,7 @@ use common_datavalues::prelude::DataColumnWithField;
 use common_datavalues::DataField;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::Function;
 use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::Monotonicity;
 use common_planners::col;
@@ -101,6 +102,26 @@ impl MonotonicityCheckVisitor {
         }
     }
 
+    fn try_calculate_boundary(
+        func: &dyn Function,
+        args: Vec<Option<DataColumnWithField>>,
+    ) -> Result<Option<DataColumnWithField>> {
+        let res = if args.iter().any(|col| col.is_none()) {
+            Ok(None)
+        } else {
+            let input_columns = args
+                .into_iter()
+                .map(|col_opt| col_opt.unwrap())
+                .collect::<Vec<_>>();
+
+            let col = func.eval(input_columns.as_ref(), 1)?;
+            let data_field = DataField::new("", col.data_type(), false);
+            let data_column_field = DataColumnWithField::new(col, data_field);
+            Ok(Some(data_column_field))
+        };
+        res
+    }
+
     fn visit_func_args(
         self,
         op: &str,
@@ -141,38 +162,30 @@ impl MonotonicityCheckVisitor {
             return Ok(MonotonicityCheckVisitor::empty());
         }
 
-        // lambda to convert data column to data column with field
-        let data_column_to_column_field = |data_column: DataColumn| -> Option<DataColumnWithField> {
-            let data_field = DataField::new("", data_column.data_type(), false);
-            let data_column_field = DataColumnWithField::new(data_column, data_field);
-            Some(data_column_field)
+        // Function's eval is allowed to return error, but we don't want the monotonicity optimization to fail on this.
+        // We log the error for left/right calculating and move on with NO monotonicity information.
+        match Self::try_calculate_boundary(func.as_ref(), left_vec) {
+            Err(err) => {
+                log::error!("Failed on calculate left bound for monotonicity. {:?}", err);
+                return Ok(MonotonicityCheckVisitor::empty());
+            }
+            Ok(l) => {
+                root_mono.left = l;
+            }
         };
 
-        // if any one left boundary is None(unknown), we set new_left as None too.
-        let new_left: Option<DataColumnWithField> = if left_vec.iter().any(|col| col.is_none()) {
-            None
-        } else {
-            let args = left_vec
-                .into_iter()
-                .map(|col_opt| col_opt.unwrap())
-                .collect::<Vec<_>>();
-            let new_left_data_column = func.eval(&args, 1)?;
-            data_column_to_column_field(new_left_data_column)
+        match Self::try_calculate_boundary(func.as_ref(), right_vec) {
+            Err(err) => {
+                log::error!(
+                    "Failed on calculate right bound for monotonicity. {:?}",
+                    err
+                );
+                return Ok(MonotonicityCheckVisitor::empty());
+            }
+            Ok(r) => {
+                root_mono.right = r;
+            }
         };
-
-        let new_right: Option<DataColumnWithField> = if right_vec.iter().any(|col| col.is_none()) {
-            None
-        } else {
-            let args = right_vec
-                .into_iter()
-                .map(|col_opt| col_opt.unwrap())
-                .collect::<Vec<_>>();
-            let new_right_data_column = func.eval(&args, 1)?;
-            data_column_to_column_field(new_right_data_column)
-        };
-
-        root_mono.left = new_left;
-        root_mono.right = new_right;
 
         Ok(MonotonicityCheckVisitor {
             mono: Some(root_mono),

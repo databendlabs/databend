@@ -15,6 +15,8 @@
 use common_base::tokio;
 use common_exception::Result;
 use common_meta_types::AuthType;
+use common_meta_types::GrantObject;
+use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilege;
 use common_planners::*;
@@ -28,7 +30,7 @@ use crate::sql::PlanParser;
 async fn test_grant_privilege_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
     let name = "test";
     let hostname = "localhost";
     let password = "test";
@@ -38,21 +40,26 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
         Vec::from(password),
         AuthType::PlainText,
     );
-    assert_eq!(user_info.privileges, UserPrivilege::empty());
+    assert_eq!(user_info.grants, UserGrantSet::empty());
     let user_mgr = ctx.get_sessions_manager().get_user_manager();
     user_mgr.add_user(user_info).await?;
 
-    let test_query = format!("GRANT ALL ON * TO '{}'@'{}'", name, hostname);
+    let test_query = format!("GRANT ALL ON *.* TO '{}'@'{}'", name, hostname);
     if let PlanNode::GrantPrivilege(plan) = PlanParser::parse(&test_query, ctx.clone()).await? {
         let executor = GrantPrivilegeInterpreter::try_create(ctx, plan.clone())?;
         assert_eq!(executor.name(), "GrantPrivilegeInterpreter");
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
         let new_user = user_mgr.get_user(name, hostname).await?;
-        assert_eq!(new_user.privileges, {
-            let mut privileges = UserPrivilege::empty();
-            privileges.set_all_privileges();
-            privileges
+        assert_eq!(new_user.grants, {
+            let mut grants = UserGrantSet::empty();
+            grants.grant_privileges(
+                name,
+                hostname,
+                &GrantObject::Global,
+                UserPrivilege::all_privileges(),
+            );
+            grants
         })
     } else {
         panic!()

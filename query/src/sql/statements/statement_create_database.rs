@@ -44,13 +44,13 @@ impl AnalyzableStatement for DfCreateDatabase {
         let options = self.database_options();
         let if_not_exists = self.if_not_exists;
 
-        Ok(AnalyzedResult::SimpleQuery(PlanNode::CreateDatabase(
-            CreateDatabasePlan {
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            PlanNode::CreateDatabase(CreateDatabasePlan {
                 db,
                 engine,
                 options,
                 if_not_exists,
-            },
+            }),
         )))
     }
 }

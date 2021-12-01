@@ -29,12 +29,12 @@ use common_planners::TruncateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::catalogs::Table;
 use crate::sessions::QueryContext;
-use crate::storages::fuse::io::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
+use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::StorageContext;
+use crate::storages::Table;
 
 pub struct FuseTable {
     pub(crate) table_info: TableInfo,
@@ -86,24 +86,29 @@ impl Table for FuseTable {
         stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
         let log = self.append_trunks(ctx, stream).await?;
-        let blocks = match log {
-            Some(op_log) => vec![DataBlock::try_from(op_log)?],
-            _ => vec![],
-        };
+        let entries = log
+            .into_iter()
+            .map(DataBlock::try_from)
+            .collect::<Result<Vec<_>>>()?;
         Ok(Box::pin(DataBlockStream::create(
             AppendOperationLogEntry::schema(),
             None,
-            blocks,
+            entries,
         )))
     }
 
-    async fn commit(&self, _ctx: Arc<QueryContext>, operations: Vec<DataBlock>) -> Result<()> {
+    async fn commit(
+        &self,
+        _ctx: Arc<QueryContext>,
+        operations: Vec<DataBlock>,
+        overwrite: bool,
+    ) -> Result<()> {
         // only append operation supported currently
         let append_log_entries = operations
             .iter()
             .map(AppendOperationLogEntry::try_from)
             .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
-        self.do_commit(_ctx, append_log_entries).await
+        self.do_commit(_ctx, append_log_entries, overwrite).await
     }
 
     async fn truncate(

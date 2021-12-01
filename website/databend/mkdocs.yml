@@ -225,6 +225,8 @@ nav:
               - SUBSTRING: sqlstatement/string-functions/substring.md
               - TO_BASE64: sqlstatement/string-functions/to_base64.md
               - FROM_BASE64: sqlstatement/string-functions/from_base64.md
+              - LOCATE: sqlstatement/string-functions/locate.md
+              - INSERT: sqlstatement/string-functions/insert.md
           - Test Functions:
               - SLEEP: sqlstatement/test-functions/sleep.md
               - CRASHME: sqlstatement/test-functions/crashme.md
@@ -232,6 +234,9 @@ nav:
               - ToTypeName: sqlstatement/other-functions/totypename.md
               - runningDifference: sqlstatement/other-functions/running-difference.md
           - System Tables: system/system-tables.md
+          - Data Loading:
+              - COPY DATA: sqlstatement/data-loading/copy-data-from-stage.md
+              - HTTP Streaming Load: sqlstatement/data-loading/http-streaming-load.md
           - User Management:
               - CREATE USER: sqlstatement/user-management/user-management-create-user.md
       - API:

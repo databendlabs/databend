@@ -32,6 +32,7 @@ use uuid::Uuid;
 use crate::catalogs::Catalog;
 use crate::configs::Config;
 use crate::sessions::QueryContext;
+use crate::storages::fuse::TBL_OPT_KEY_CHUNK_BLOCK_NUM;
 
 pub struct TestFixture {
     _tmp_dir: TempDir,
@@ -48,7 +49,7 @@ impl TestFixture {
         // use `TempDir` as root path (auto clean)
         config.storage.disk.data_path = tmp_dir.path().to_str().unwrap().to_string();
         config.storage.disk.temp_data_path = tmp_dir.path().to_str().unwrap().to_string();
-        let ctx = crate::tests::try_create_context_with_config(config).unwrap();
+        let ctx = crate::tests::create_query_context_with_config(config).unwrap();
 
         let random_prefix: String = Uuid::new_v4().to_simple().to_string();
         // prepare a randomly named default database
@@ -95,19 +96,22 @@ impl TestFixture {
             table_meta: TableMeta {
                 schema: TestFixture::default_schema(),
                 engine: "FUSE".to_string(),
-                options: Default::default(),
+                // make sure blocks will not be merged
+                options: [(TBL_OPT_KEY_CHUNK_BLOCK_NUM.to_owned(), "1".to_owned())].into(),
             },
         }
     }
 
-    pub fn gen_block_stream(num: u32) -> Vec<Result<DataBlock>> {
+    pub fn gen_block_stream(num: u32, start: i32) -> Vec<Result<DataBlock>> {
         (0..num)
             .into_iter()
             .map(|_v| {
                 let schema =
                     DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
                 Ok(DataBlock::create_by_array(schema, vec![Series::new(vec![
-                    1, 2, 3,
+                    start,
+                    start + 1,
+                    start + 2,
                 ])]))
             })
             .collect()

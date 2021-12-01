@@ -18,13 +18,13 @@ use common_base::tokio;
 use common_exception::Result;
 use futures::TryStreamExt;
 
-use crate::catalogs::Table;
-use crate::catalogs::ToReadDataSourcePlan;
 use crate::storages::system::ClustersTable;
+use crate::storages::Table;
+use crate::storages::ToReadDataSourcePlan;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_clusters_table() -> Result<()> {
-    let ctx = crate::tests::try_create_context()?;
+    let ctx = crate::tests::create_query_context()?;
     let table: Arc<dyn Table> = Arc::new(ClustersTable::create(1));
 
     let source_plan = table.read_plan(ctx.clone(), None).await?;

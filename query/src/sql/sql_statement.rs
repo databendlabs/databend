@@ -48,7 +48,7 @@ use crate::sql::statements::DfUseDatabase;
 #[derive(Debug, Clone, PartialEq)]
 pub enum DfStatement {
     // ANSI SQL AST node
-    Query(DfQueryStatement),
+    Query(Box<DfQueryStatement>),
     Explain(DfExplain),
 
     // Databases.

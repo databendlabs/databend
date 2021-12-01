@@ -14,13 +14,11 @@
 //
 
 mod block;
-mod column_stats;
 mod segment;
 mod snapshot;
 
 pub use block::BlockLocation;
 pub use block::BlockMeta;
-pub use column_stats::ColumnStats;
 pub use segment::SegmentInfo;
 pub use snapshot::ColumnId;
 pub use snapshot::Location;

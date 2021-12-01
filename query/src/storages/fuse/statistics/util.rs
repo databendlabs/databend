@@ -26,10 +26,10 @@ use common_exception::Result;
 use crate::storages::fuse::meta::ColumnId;
 use crate::storages::fuse::meta::Stats;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
-use crate::storages::fuse::BlockStats;
-use crate::storages::fuse::ColumnStats;
+use crate::storages::index::BlockStatistics;
+use crate::storages::index::ColumnStatistics;
 
-pub fn block_stats(data_block: &DataBlock) -> Result<BlockStats> {
+pub fn block_stats(data_block: &DataBlock) -> Result<BlockStatistics> {
     // NOTE:
     // column id is FAKED, this is OK as long as table schema is NOT changed (which is not realistic)
     // we should extend DataField with column_id ...
@@ -60,7 +60,7 @@ pub fn block_stats(data_block: &DataBlock) -> Result<BlockStats> {
 
             let in_memory_size = col.get_array_memory_size() as u64;
 
-            let col_stats = ColumnStats {
+            let col_stats = ColumnStatistics {
                 min,
                 max,
                 null_count,
@@ -72,17 +72,17 @@ pub fn block_stats(data_block: &DataBlock) -> Result<BlockStats> {
         .collect()
 }
 
-pub fn reduce_block_stats<T: Borrow<BlockStats>>(
+pub fn reduce_block_stats<T: Borrow<BlockStatistics>>(
     stats: &[T],
     schema: &DataSchema,
-) -> Result<BlockStats> {
+) -> Result<BlockStatistics> {
     let len = stats.len();
 
     // transpose Vec<HashMap<_,(_,_)>> to HashMap<_, (_, Vec<_>)>
     let col_stat_list = stats.iter().fold(HashMap::new(), |acc, item| {
         item.borrow().iter().fold(
             acc,
-            |mut acc: HashMap<ColumnId, Vec<&ColumnStats>>, (col_id, stats)| {
+            |mut acc: HashMap<ColumnId, Vec<&ColumnStatistics>>, (col_id, stats)| {
                 let entry = acc.entry(*col_id);
                 match entry {
                     Entry::Occupied(_) => {
@@ -129,7 +129,7 @@ pub fn reduce_block_stats<T: Borrow<BlockStats>>(
                 common_datavalues::DataValue::try_into_data_array(max_stats.as_slice(), data_type)?
                     .max()?;
 
-            acc.insert(*id, ColumnStats {
+            acc.insert(*id, ColumnStatistics {
                 min,
                 max,
                 null_count,

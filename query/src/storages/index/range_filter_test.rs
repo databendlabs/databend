@@ -19,12 +19,12 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;
 
-use crate::storages::fuse::BlockStats;
-use crate::storages::fuse::ColumnStats;
 use crate::storages::index::range_filter::build_verifiable_expr;
 use crate::storages::index::range_filter::left_bound_for_like_pattern;
 use crate::storages::index::range_filter::right_bound_for_like_pattern;
+use crate::storages::index::range_filter::BlockStatistics;
 use crate::storages::index::range_filter::StatColumns;
+use crate::storages::index::ColumnStatistics;
 use crate::storages::index::RangeFilter;
 
 #[test]
@@ -35,20 +35,20 @@ fn test_range_filter() -> Result<()> {
         DataField::new("c", DataType::String, false),
     ]);
 
-    let mut stats: BlockStats = HashMap::new();
-    stats.insert(0u32, ColumnStats {
+    let mut stats: BlockStatistics = HashMap::new();
+    stats.insert(0u32, ColumnStatistics {
         min: DataValue::Int64(Some(1)),
         max: DataValue::Int64(Some(20)),
         null_count: 1,
         in_memory_size: 0,
     });
-    stats.insert(1u32, ColumnStats {
+    stats.insert(1u32, ColumnStatistics {
         min: DataValue::Int32(Some(3)),
         max: DataValue::Int32(Some(10)),
         null_count: 0,
         in_memory_size: 0,
     });
-    stats.insert(2u32, ColumnStats {
+    stats.insert(2u32, ColumnStatistics {
         min: DataValue::String(Some("abc".as_bytes().to_vec())),
         max: DataValue::String(Some("bcd".as_bytes().to_vec())),
         null_count: 0,

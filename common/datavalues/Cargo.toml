@@ -21,18 +21,18 @@ common-mem-allocator = { path = "../mem-allocator" }
 # Github dependencies
 
 # Crates.io dependencies
-num = "^0.4"
-ordered-float = "2.8"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+num = "0.4.0"
+ordered-float = "2.8.0"
+serde = { version = "1.0.130", features = ["derive"] }
+serde_json = "1.0.72"
 ahash = "0.7.6"
-comfy-table = "4.1.1"
+comfy-table = "5.0.0"
 strength_reduce = "0.2.3"
 lexical-core = "0.8.2"
-chrono = "0.4.0"
-chrono-tz = "0.6"
-regex = "^1.3"
+chrono = "0.4.19"
+chrono-tz = "0.6.0"
+regex = "1.5.4"
 simdutf8 = "0.1.3"
 
 [dev-dependencies]
-pretty_assertions = "1.0"
+pretty_assertions = "1.0.0"

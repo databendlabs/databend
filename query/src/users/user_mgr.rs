@@ -15,6 +15,7 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::AuthType;
+use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilege;
 use sha2::Digest;
@@ -92,23 +93,24 @@ impl UserApiProvider {
         }
     }
 
-    pub async fn set_user_privileges(
+    pub async fn grant_user_privileges(
         &self,
         username: &str,
         hostname: &str,
+        object: GrantObject,
         privileges: UserPrivilege,
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client();
-        let set_user_privileges = client.set_user_privileges(
-            username.to_string(),
-            hostname.to_string(),
-            privileges,
-            None,
-        );
-        match set_user_privileges.await {
-            Ok(res) => Ok(res),
-            Err(failure) => Err(failure.add_message_back("(while set user privileges)")),
-        }
+        client
+            .grant_user_privileges(
+                username.to_string(),
+                hostname.to_string(),
+                object,
+                privileges,
+                None,
+            )
+            .await
+            .map_err(|failure| failure.add_message_back("(while set user privileges)"))
     }
 
     // Drop a user by name and hostname.

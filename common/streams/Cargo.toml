@@ -25,13 +25,12 @@ common-io = {path = "../io"}
 
 # Crates.io dependencies
 async-stream = "0.3.2"
-async-trait = "0.1"
-crossbeam = "0.8"
+async-trait = "0.1.51"
 csv-async = {git = "https://github.com/datafuse-extras/csv-async", rev = "cb521c7"}
-futures = "0.3"
-pin-project-lite = "^0.2"
+futures = "0.3.18"
+pin-project-lite = "0.2.7"
 tempfile = "3.2.0"
-tokio-stream = {version = "0.1", features = ["net"]}
+tokio-stream = { version = "0.1.8", features = ["net"] }
 
 [dev-dependencies]
-pretty_assertions = "1.0"
+pretty_assertions = "1.0.0"

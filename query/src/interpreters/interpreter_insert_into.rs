@@ -1,4 +1,4 @@
-// Copyright 2020 Datafuse Labs.
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,7 +34,6 @@ use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
 
-use crate::catalogs::Table;
 use crate::interpreters::plan_scheduler_ext;
 use crate::interpreters::utils::apply_plan_rewrite;
 use crate::interpreters::Interpreter;
@@ -42,6 +41,7 @@ use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
 use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
+use crate::storages::Table;
 
 pub struct InsertIntoInterpreter {
     ctx: Arc<QueryContext>,
@@ -103,7 +103,11 @@ impl Interpreter for InsertIntoInterpreter {
 
         // feed back the append operation logs to table
         table
-            .commit(self.ctx.clone(), append_op_logs.try_collect().await?)
+            .commit(
+                self.ctx.clone(),
+                append_op_logs.try_collect().await?,
+                self.plan.overwrite,
+            )
             .await?;
 
         Ok(Box::pin(DataBlockStream::create(

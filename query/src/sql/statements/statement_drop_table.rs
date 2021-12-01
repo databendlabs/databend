@@ -38,13 +38,13 @@ impl AnalyzableStatement for DfDropTable {
         let if_exists = self.if_exists;
         let (db, table) = self.resolve_table(ctx)?;
 
-        Ok(AnalyzedResult::SimpleQuery(PlanNode::DropTable(
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::DropTable(
             DropTablePlan {
                 if_exists,
                 db,
                 table,
             },
-        )))
+        ))))
     }
 }
 

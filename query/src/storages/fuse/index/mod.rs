@@ -17,7 +17,5 @@
 mod min_max_test;
 
 mod min_max;
-mod range;
 
-pub use min_max::MinMaxIndex;
-pub use range::range_filter;
+pub use min_max::apply_range_filter;

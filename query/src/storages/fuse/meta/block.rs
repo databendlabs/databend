@@ -17,7 +17,7 @@ use std::collections::HashMap;
 
 use crate::storages::fuse::meta::ColumnId;
 use crate::storages::fuse::meta::Location;
-use crate::storages::fuse::ColumnStats;
+use crate::storages::index::ColumnStatistics;
 
 /// Meta information of a block (currently, the parquet file)
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -25,7 +25,7 @@ pub struct BlockMeta {
     /// Pointer of the data Block
     pub row_count: u64,
     pub block_size: u64,
-    pub col_stats: HashMap<ColumnId, ColumnStats>,
+    pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     pub location: BlockLocation,
 }
 

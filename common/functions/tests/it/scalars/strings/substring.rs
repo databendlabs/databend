@@ -14,10 +14,9 @@
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
-use pretty_assertions::assert_eq;
-
 use common_functions::scalars::Function;
 use common_functions::scalars::SubstringFunction;
+use pretty_assertions::assert_eq;
 
 #[test]
 fn test_substring_function() -> Result<()> {
@@ -118,27 +117,27 @@ fn test_substring_function() -> Result<()> {
             .collect();
 
         if let Err(e) = func.eval(&columns, rows) {
-            assert_eq!(t.error, e.to_string());
+            assert_eq!(t.error, e.to_string(), "case: {}", t.name);
         }
         func.eval(&columns, rows)?;
 
         // Display check.
         let expect_display = t.display.to_string();
         let actual_display = format!("{}", func);
-        assert_eq!(expect_display, actual_display);
+        assert_eq!(expect_display, actual_display, "case: {}", t.name);
 
         // Nullable check.
         let expect_null = t.nullable;
         let actual_null = func.nullable(&schema)?;
-        assert_eq!(expect_null, actual_null);
+        assert_eq!(expect_null, actual_null, "case: {}", t.name);
 
         let v = &(func.eval(&columns, rows)?);
 
         // Type check.
         let expect_type = func.return_type(&args)?;
         let actual_type = v.data_type();
-        assert_eq!(expect_type, actual_type);
-        assert_eq!(v, &t.expect);
+        assert_eq!(expect_type, actual_type, "case: {}", t.name);
+        assert_eq!(v, &t.expect, "case: {}", t.name);
     }
     Ok(())
 }

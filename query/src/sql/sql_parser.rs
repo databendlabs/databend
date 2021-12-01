@@ -253,9 +253,9 @@ impl<'a> DfParser<'a> {
     fn parse_query(&mut self) -> Result<DfStatement, ParserError> {
         // self.parser.prev_token();
         let native_query = self.parser.parse_query()?;
-        Ok(DfStatement::Query(DfQueryStatement::try_from(
+        Ok(DfStatement::Query(Box::new(DfQueryStatement::try_from(
             native_query,
-        )?))
+        )?)))
     }
 
     fn parse_set(&mut self) -> Result<DfStatement, ParserError> {

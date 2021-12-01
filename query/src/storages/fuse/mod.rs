@@ -18,14 +18,13 @@ mod table_test;
 #[cfg(test)]
 mod table_test_fixture;
 
+mod constants;
 mod index;
+mod io;
 mod meta;
+mod operations;
 mod statistics;
 mod table;
 
-pub mod io;
-pub mod operations;
-
-pub use meta::ColumnStats;
-pub use statistics::BlockStats;
+pub use constants::*;
 pub use table::FuseTable;

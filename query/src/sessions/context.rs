@@ -44,7 +44,6 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
-use crate::catalogs::Table;
 use crate::clusters::Cluster;
 use crate::configs::AzureStorageBlobConfig;
 use crate::configs::Config;
@@ -52,6 +51,7 @@ use crate::servers::http::v1::query::HttpQueryHandle;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionManager;
 use crate::sessions::Settings;
+use crate::storages::Table;
 
 pub struct QueryContext {
     version: String,
@@ -261,6 +261,7 @@ impl QueryContext {
                     &conf.bucket,
                     &conf.access_key_id,
                     &conf.secret_access_key,
+                    conf.enable_pod_iam_policy,
                 )?)
             }
             StorageScheme::AzureStorageBlob => {

@@ -60,6 +60,7 @@ impl TestFixture {
             self.bucket_name.as_str(),
             "",
             "",
+            false,
         )
     }
 }

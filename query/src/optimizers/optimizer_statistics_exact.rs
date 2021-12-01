@@ -24,9 +24,9 @@ use common_planners::PlanBuilder;
 use common_planners::PlanNode;
 use common_planners::PlanRewriter;
 
-use crate::catalogs::ToReadDataSourcePlan;
 use crate::optimizers::Optimizer;
 use crate::sessions::QueryContext;
+use crate::storages::ToReadDataSourcePlan;
 
 struct StatisticsExactImpl<'a> {
     ctx: &'a Arc<QueryContext>,
