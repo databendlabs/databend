@@ -14,18 +14,8 @@
 
 #![no_std]
 
-use core::num::Wrapping;
-
-type W64 = Wrapping<u64>;
-type W32 = Wrapping<u32>;
-
-const fn w64(v: u64) -> W64 {
-    Wrapping(v)
-}
-
-const fn w32(v: u32) -> W32 {
-    Wrapping(v)
-}
+use core::mem::size_of;
+use core::ptr::read_unaligned;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct U128 {
@@ -48,10 +38,6 @@ impl U128 {
     pub const fn hi(&self) -> u64 {
         self.hi
     }
-
-    const fn from_w64(lo: W64, hi: W64) -> Self {
-        Self { lo: lo.0, hi: hi.0 }
-    }
 }
 
 impl From<u128> for U128 {
@@ -69,229 +55,262 @@ impl From<U128> for u128 {
     }
 }
 
-const K0: W64 = w64(0xc3a5c85c97cb3127u64);
-const K1: W64 = w64(0xb492b66fbe98f273u64);
-const K2: W64 = w64(0x9ae16a3b2f90404fu64);
-const K3: W64 = w64(0xc949d7c7509e6557u64);
+const K0: u64 = 0xc3a5c85c97cb3127u64;
+const K1: u64 = 0xb492b66fbe98f273u64;
+const K2: u64 = 0x9ae16a3b2f90404fu64;
+const K3: u64 = 0xc949d7c7509e6557u64;
 
+#[cfg(target_endian = "little")]
 #[inline]
-fn fetch64(s: *const u8) -> W64 {
-    w64(unsafe { (s as *const u64).read_unaligned().to_le() })
+pub fn fetch64(data: &[u8]) -> u64 {
+    debug_assert!(data.len() >= size_of::<u64>());
+    let ptr = data.as_ptr() as *const u64;
+    unsafe { read_unaligned(ptr) }
 }
 
+#[cfg(target_endian = "little")]
 #[inline]
-fn fetch32(s: *const u8) -> W32 {
-    w32(unsafe { (s as *const u32).read_unaligned().to_le() })
+fn fetch32(data: &[u8]) -> u32 {
+    debug_assert!(data.len() >= size_of::<u32>());
+    let ptr = data.as_ptr() as *const u32;
+    unsafe { read_unaligned(ptr) }
 }
 
+#[cfg(not(target_endian = "little"))]
 #[inline]
-fn rotate(v: W64, n: u32) -> W64 {
-    debug_assert!(n > 0);
-    w64(v.0.rotate_right(n))
+fn fetch64(data: &[u8]) -> u64 {
+    debug_assert!(data.len() >= mem::size_of::<u64>());
+    let ptr = data.as_ptr() as *const u64;
+    let data = unsafe { read_unaligned(ptr) };
+    data.swap_bytes()
 }
 
-fn hash_len16(u: W64, v: W64) -> W64 {
+#[cfg(not(target_endian = "little"))]
+#[inline]
+fn fetch32(data: &[u8]) -> u32 {
+    debug_assert!(data.len() >= size_of::<u32>());
+    let ptr = data.as_ptr() as *const u32;
+    let data = unsafe { read_unaligned(ptr) };
+    data.swap_bytes()
+}
+
+// rotate, but `shift` must not be eq 0
+#[inline(always)]
+fn rotate_least(val: u64, shift: u64) -> u64 {
+    (val >> shift) | (val << (64 - shift))
+}
+
+#[inline(always)]
+fn shift_mix(val: u64) -> u64 {
+    val ^ (val >> 47)
+}
+
+fn hash_len16(u: u64, v: u64) -> u64 {
     hash128_to_64(u, v)
 }
 
-#[inline]
-fn hash128_to_64(l: W64, h: W64) -> W64 {
-    const K_MUL: W64 = w64(0x9ddfea08eb382d69u64);
-    let mut a = (h ^ l) * K_MUL;
+#[inline(always)]
+fn hash128_to_64(l: u64, h: u64) -> u64 {
+    const K_MUL: u64 = 0x9ddfea08eb382d69u64;
+    let mut a = (h ^ l).wrapping_mul(K_MUL);
     a ^= a >> 47;
-    let mut b = (h ^ a) * K_MUL;
+    let mut b = (h ^ a).wrapping_mul(K_MUL);
     b ^= b >> 47;
-    b * K_MUL
+    b.wrapping_mul(K_MUL)
 }
 
-fn hash_len0to16(data: &[u8]) -> W64 {
-    let len = data.len();
-    let s = data.as_ptr();
-
+fn hash_len0to16(data: &[u8]) -> u64 {
     if data.len() > 8 {
-        unsafe {
-            let a = fetch64(s);
-            let b = fetch64(s.add(len).sub(8));
-            b ^ hash_len16(a, rotate(b + w64(len as u64), len as u32))
-        }
-    } else if len >= 4 {
-        unsafe {
-            let a = fetch32(s).0 as u64;
+        let a = fetch64(data);
+        let b = fetch64(&data[data.len() - 8..]);
+        b ^ hash_len16(
+            a,
+            rotate_least(b.wrapping_add(data.len() as u64), data.len() as u64),
+        )
+    } else if data.len() >= 4 {
+        let a = fetch32(data) as u64;
 
-            hash_len16(
-                w64((len as u64) + (a << 3)),
-                w64(fetch32(s.add(len).sub(4)).0.into()),
-            )
-        }
-    } else if len > 0 {
+        hash_len16(
+            (a << 3).wrapping_add(data.len() as u64),
+            fetch32(&data[data.len() - 4..]) as u64,
+        )
+    } else if !data.is_empty() {
         let a: u8 = data[0];
-        let b: u8 = data[len >> 1];
-        let c: u8 = data[len - 1];
-        let y = w64(a as u64) + w64((b as u64) << 8);
-        let z = w64(((len as u32) + ((c as u32) << 2)) as u64);
+        let b: u8 = data[data.len() >> 1];
+        let c: u8 = data[data.len() - 1];
+        let y = (a as u64).wrapping_add((b as u64) << 8);
+        let z = (data.len() as u64).wrapping_add((c as u64) << 2);
 
-        shift_mix((y * K2) ^ (z * K3)) * K2
+        shift_mix(y.wrapping_mul(K2) ^ z.wrapping_mul(K3)).wrapping_mul(K2)
     } else {
         K2
     }
 }
 
-unsafe fn weak_hash_len32_with_seeds(s: *const u8, a: W64, b: W64) -> (W64, W64) {
-    weak_hash_len32_with_seeds_(
-        fetch64(s),
-        fetch64(s.add(8)),
-        fetch64(s.add(16)),
-        fetch64(s.add(24)),
+fn weak_hash_len32_with_seeds(data: &[u8], a: u64, b: u64) -> (u64, u64) {
+    _weak_hash_len32_with_seeds(
+        fetch64(data),
+        fetch64(&data[8..]),
+        fetch64(&data[16..]),
+        fetch64(&data[24..]),
         a,
         b,
     )
 }
 
-fn weak_hash_len32_with_seeds_(
-    w: W64,
-    x: W64,
-    y: W64,
-    z: W64,
-    mut a: W64,
-    mut b: W64,
-) -> (W64, W64) {
-    a += w;
-    b = rotate(b + a + z, 21);
+#[inline(always)]
+fn _weak_hash_len32_with_seeds(
+    w: u64,
+    x: u64,
+    y: u64,
+    z: u64,
+    mut a: u64,
+    mut b: u64,
+) -> (u64, u64) {
+    a = a.wrapping_add(w);
+    b = rotate_least(b.wrapping_add(a).wrapping_add(z), 21);
     let c = a;
-    a += x + y;
-    b += rotate(a, 44);
-    (a + z, b + c)
+    a = a.wrapping_add(x).wrapping_add(y);
+    b = b.wrapping_add(rotate_least(a, 44));
+    (a.wrapping_add(z), b.wrapping_add(c))
 }
 
-fn shift_mix(val: W64) -> W64 {
-    val ^ (val >> 47)
-}
+fn city_murmur(mut data: &[u8], seed: U128) -> U128 {
+    let mut a = seed.lo;
+    let mut b = seed.hi;
+    let mut c: u64;
+    let mut d: u64;
 
-fn city_murmur(data: &[u8], seed: U128) -> U128 {
-    let mut s = data.as_ptr();
-    let len = data.len();
-
-    let mut a = w64(seed.lo);
-    let mut b = w64(seed.hi);
-    let mut c: W64;
-    let mut d: W64;
-    let mut l = (len as isize) - 16;
-
-    if l <= 0 {
-        a = shift_mix(a * K1) * K1;
-        c = b * K1 + hash_len0to16(data);
-        d = shift_mix(a + (if len >= 8 { fetch64(s) } else { c }));
+    if data.len() <= 16 {
+        a = shift_mix(a.wrapping_mul(K1)).wrapping_mul(K1);
+        c = b.wrapping_mul(K1).wrapping_add(hash_len0to16(data));
+        d = if data.len() >= 8 { fetch64(data) } else { c };
+        d = shift_mix(a.wrapping_add(d));
     } else {
-        unsafe {
-            c = hash_len16(fetch64(s.add(len).sub(8)) + K1, a);
-            d = hash_len16(b + w64(len as u64), c + fetch64(s.add(len).sub(16)));
-            a += d;
-            loop {
-                a ^= shift_mix(fetch64(s) * K1) * K1;
-                a *= K1;
-                b ^= a;
-                c ^= shift_mix(fetch64(s.add(8)) * K1) * K1;
-                c *= K1;
-                d ^= c;
-                s = s.add(16);
-                l -= 16;
-                if l <= 0 {
-                    break;
-                }
-            }
-        }
-    }
-    a = hash_len16(a, c);
-    b = hash_len16(d, b);
-    U128::from_w64(a ^ b, hash_len16(b, a))
-}
-
-fn cityhash128_with_seed(data: &[u8], seed: U128) -> U128 {
-    let mut s = data.as_ptr();
-    let mut len = data.len();
-
-    unsafe {
-        if len < 128 {
-            return city_murmur(data, seed);
-        }
-
-        let mut x = w64(seed.lo);
-        let mut y = w64(seed.hi);
-        let mut z = w64(len as u64) * K1;
-        let mut v = (w64(0), w64(0));
-        v.0 = rotate(y ^ K1, 49) * K1 + fetch64(s);
-        v.1 = rotate(v.0, 42) * K1 + fetch64(s.add(8));
-        let mut w = (
-            rotate(y + z, 35) * K1 + x,
-            rotate(x + fetch64(s.add(88)), 53) * K1,
+        c = hash_len16(fetch64(&data[data.len() - 8..]).wrapping_add(K1), a);
+        d = hash_len16(
+            b.wrapping_add(data.len() as u64),
+            c.wrapping_add(fetch64(&data[data.len() - 16..])),
         );
-
+        a = a.wrapping_add(d);
         loop {
-            x = rotate(x + y + v.0 + fetch64(s.add(16)), 37) * K1;
-            y = rotate(y + v.1 + fetch64(s.add(48)), 42) * K1;
-            x ^= w.1;
-            y ^= v.0;
-            z = rotate(z ^ w.0, 33);
-            v = weak_hash_len32_with_seeds(s, v.1 * K1, x + w.0);
-            w = weak_hash_len32_with_seeds(s.add(32), z + w.1, y);
-            core::mem::swap(&mut z, &mut x);
-            s = s.add(64);
-            x = rotate(x + y + v.0 + fetch64(s.add(16)), 37) * K1;
-            y = rotate(y + v.1 + fetch64(s.add(48)), 42) * K1;
-            x ^= w.1;
-            y ^= v.0;
-            z = rotate(z ^ w.0, 33);
-            v = weak_hash_len32_with_seeds(s, v.1 * K1, x + w.0);
-            w = weak_hash_len32_with_seeds(s.add(32), z + w.1, y);
-            core::mem::swap(&mut z, &mut x);
-            s = s.add(64);
-            len -= 128;
-
-            if len < 128 {
+            a ^= shift_mix(fetch64(data).wrapping_mul(K1)).wrapping_mul(K1);
+            a = a.wrapping_mul(K1);
+            b ^= a;
+            c ^= shift_mix(fetch64(&data[8..]).wrapping_mul(K1)).wrapping_mul(K1);
+            c = c.wrapping_mul(K1);
+            d ^= c;
+            data = &data[16..];
+            if data.len() <= 16 {
                 break;
             }
         }
+    }
 
-        y += rotate(w.0, 37) * K0 + z;
-        x += rotate(v.0 + z, 49) * K0;
+    a = hash_len16(a, c);
+    b = hash_len16(d, b);
+    U128::new(a ^ b, hash_len16(b, a))
+}
 
-        let mut tail_done: usize = 0;
-        while tail_done < len {
-            tail_done += 32;
-            y = rotate(y - x, 42) * K0 + v.1;
-            w.0 += fetch64(s.add(len).sub(tail_done).add(16));
-            x = rotate(x, 49) * K0 + w.0;
-            w.0 += v.0;
-            v = weak_hash_len32_with_seeds(s.add(len).sub(tail_done), v.0, v.1);
+fn cityhash128_with_seed(mut data: &[u8], seed: U128) -> U128 {
+    if data.len() < 128 {
+        return city_murmur(data, seed);
+    }
+
+    let mut x = seed.lo;
+    let mut y = seed.hi;
+    let mut z = K1.wrapping_mul(data.len() as u64);
+    let t: u64 = K1
+        .wrapping_mul(rotate_least(y ^ K1, 49))
+        .wrapping_add(fetch64(data));
+    let mut v = (
+        t,
+        K1.wrapping_mul(rotate_least(t, 42))
+            .wrapping_add(fetch64(&data[8..])),
+    );
+    let mut w = (
+        K1.wrapping_mul(rotate_least(y.wrapping_add(z), 35))
+            .wrapping_add(x),
+        K1.wrapping_mul(rotate_least(x.wrapping_add(fetch64(&data[88..])), 53)),
+    );
+
+    loop {
+        x = K1.wrapping_mul(rotate_least(
+            x.wrapping_add(y)
+                .wrapping_add(v.0)
+                .wrapping_add(fetch64(&data[16..])),
+            37,
+        ));
+        y = K1.wrapping_mul(rotate_least(
+            y.wrapping_add(v.1).wrapping_add(fetch64(&data[48..])),
+            42,
+        ));
+        x ^= w.1;
+        y ^= v.0;
+        z = rotate_least(z ^ w.0, 33);
+        v = weak_hash_len32_with_seeds(data, K1.wrapping_mul(v.1), x.wrapping_add(w.0));
+        w = weak_hash_len32_with_seeds(&data[32..], z.wrapping_add(w.1), y);
+        core::mem::swap(&mut z, &mut x);
+
+        data = &data[64..];
+        x = K1.wrapping_mul(rotate_least(
+            x.wrapping_add(y)
+                .wrapping_add(v.0)
+                .wrapping_add(fetch64(&data[16..])),
+            37,
+        ));
+        y = K1.wrapping_mul(rotate_least(
+            y.wrapping_add(v.1).wrapping_add(fetch64(&data[48..])),
+            42,
+        ));
+        x ^= w.1;
+        y ^= v.0;
+        z = rotate_least(z ^ w.0, 33);
+        v = weak_hash_len32_with_seeds(data, K1.wrapping_mul(v.1), x.wrapping_add(w.0));
+        w = weak_hash_len32_with_seeds(&data[32..], z.wrapping_add(w.1), y);
+        core::mem::swap(&mut z, &mut x);
+        if data.len() < (128 + 64) {
+            break;
         }
+        data = &data[64..];
+    }
 
-        x = hash_len16(x, v.0);
-        y = hash_len16(y, w.0);
+    y = y.wrapping_add(K0.wrapping_mul(rotate_least(w.0, 37)).wrapping_add(z));
+    x = x.wrapping_add(K0.wrapping_mul(rotate_least(v.0.wrapping_add(z), 49)));
 
-        U128::from_w64(hash_len16(x + v.1, w.1) + y, hash_len16(x + w.1, y + v.1))
+    while data.len() > 64 {
+        y = K0
+            .wrapping_mul(rotate_least(y.wrapping_sub(x), 42))
+            .wrapping_add(v.1);
+        w.0 = w.0.wrapping_add(fetch64(&data[data.len() - 16..]));
+        x = K0.wrapping_mul(rotate_least(x, 49)).wrapping_add(w.0);
+        w.0 = w.0.wrapping_add(v.0);
+        v = weak_hash_len32_with_seeds(&data[data.len() - 32..], v.0, v.1);
+        data = &data[0..data.len() - 32];
+    }
+
+    x = hash_len16(x, v.0);
+    y = hash_len16(y, w.0);
+
+    U128 {
+        lo: hash_len16(x.wrapping_add(v.1), w.1).wrapping_add(y),
+        hi: hash_len16(x.wrapping_add(w.1), y.wrapping_add(v.1)),
     }
 }
 
 #[inline]
 pub fn cityhash128(data: &[u8]) -> U128 {
-    let s = data.as_ptr();
-    let len = data.len();
-    unsafe {
-        if len >= 16 {
-            cityhash128_with_seed(
-                &data[16..],
-                U128::from_w64(fetch64(s) ^ K3, fetch64(s.add(8))),
-            )
-        } else if data.len() >= 8 {
-            cityhash128_with_seed(
-                b"",
-                U128::from_w64(
-                    fetch64(s) ^ (w64(len as u64) * K0),
-                    fetch64(s.add(len).sub(8)) ^ K1,
-                ),
-            )
-        } else {
-            cityhash128_with_seed(data, U128::from_w64(K0, K1))
-        }
+    if data.len() >= 16 {
+        cityhash128_with_seed(&data[16..], U128 {
+            lo: fetch64(data) ^ K3,
+            hi: fetch64(&data[8..]),
+        })
+    } else if data.len() >= 8 {
+        cityhash128_with_seed(b"", U128 {
+            lo: fetch64(data) ^ (K0.wrapping_mul(data.len() as u64)),
+            hi: fetch64(&data[data.len() - 8..]) ^ K1,
+        })
+    } else {
+        cityhash128_with_seed(data, U128 { lo: K0, hi: K1 })
     }
 }
