@@ -539,13 +539,11 @@ impl StateMachine {
                 value: value_op,
                 value_meta,
             } => {
-                // TODO(ariesdevil): need refactor !!!
                 let r: Result<(Option<SeqV>, Option<SeqV>), TransactionError<Infallible>> =
                     self.sm_tree.txn(true, |tree| {
                         let sub_tree = tree.key_space::<GenericKV>();
                         let (p, r) = self.sub_txn_tree_upsert(
                             &sub_tree,
-                            &tree,
                             key,
                             seq,
                             value_op.clone(),
@@ -688,7 +686,6 @@ impl StateMachine {
     fn sub_txn_tree_upsert<'s, V, KS>(
         &'s self,
         sub_tree: &AsTxnKeySpace<'s, KS>,
-        txn_tree: &TransactionSledTree,
         key: &KS::K,
         seq: &MatchSeq,
         value_op: Operation<V>,
@@ -708,14 +705,7 @@ impl StateMachine {
         }
 
         // result is the state after applying an operation.
-        let result = self.sub_txn_tree_do_update(
-            sub_tree,
-            txn_tree,
-            key,
-            prev.clone(),
-            value_meta,
-            value_op,
-        );
+        let result = self.sub_txn_tree_do_update(sub_tree, key, prev.clone(), value_meta, value_op);
 
         tracing::debug!("applied upsert: {} {:?}", key, result);
         (prev, result)
@@ -727,7 +717,6 @@ impl StateMachine {
     fn sub_txn_tree_do_update<'s, V, KS>(
         &'s self,
         sub_tree: &AsTxnKeySpace<'s, KS>,
-        txn_tree: &TransactionSledTree,
         key: &KS::K,
         prev: Option<SeqV<V>>,
         value_meta: Option<KVMeta>,
@@ -749,7 +738,7 @@ impl StateMachine {
             },
         };
 
-        seq_kv_value.seq = self.txn_incr_seq(KS::NAME, txn_tree);
+        seq_kv_value.seq = self.txn_incr_seq(KS::NAME, &*sub_tree);
 
         sub_tree.insert(key, &seq_kv_value).unwrap();
 

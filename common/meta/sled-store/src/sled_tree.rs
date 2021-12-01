@@ -15,6 +15,7 @@
 use std::fmt::Display;
 use std::marker::PhantomData;
 use std::ops::Bound;
+use std::ops::Deref;
 use std::ops::RangeBounds;
 
 use common_exception::ErrorCode;
@@ -562,6 +563,14 @@ impl<'a, KV: SledKeySpace> AsTxnKeySpace<'a, KV> {
 
     pub fn remove(&self, key: &KV::K) -> Result<Option<KV::V>, UnabortableTransactionError> {
         self.inner.remove::<KV>(key)
+    }
+}
+
+impl<'a, KV: SledKeySpace> Deref for AsTxnKeySpace<'a, KV> {
+    type Target = &'a TransactionSledTree<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
     }
 }
 
