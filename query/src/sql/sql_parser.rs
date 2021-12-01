@@ -58,6 +58,7 @@ use crate::sql::statements::DfGrantStatement;
 use crate::sql::statements::DfInsertStatement;
 use crate::sql::statements::DfKillStatement;
 use crate::sql::statements::DfQueryStatement;
+use crate::sql::statements::DfRevokeStatement;
 use crate::sql::statements::DfSetVariable;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfShowDatabases;
@@ -231,6 +232,10 @@ impl<'a> DfParser<'a> {
                     Keyword::GRANT => {
                         self.parser.next_token();
                         self.parse_grant()
+                    }
+                    Keyword::REVOKE => {
+                        self.parser.next_token();
+                        self.parse_revoke()
                     }
                     Keyword::COPY => {
                         self.parser.next_token();
@@ -793,12 +798,7 @@ impl<'a> DfParser<'a> {
         if !self.parser.parse_keyword(Keyword::TO) {
             return self.expected("keyword TO", self.parser.peek_token());
         }
-        let name = self.parser.parse_literal_string()?;
-        let hostname = if self.consume_token("@") {
-            self.parser.parse_literal_string()?
-        } else {
-            String::from("%")
-        };
+        let (name, hostname) = self.parse_user_identity()?;
         let grant = DfGrantStatement {
             name,
             hostname,
@@ -806,6 +806,35 @@ impl<'a> DfParser<'a> {
             priv_types: privileges,
         };
         Ok(DfStatement::GrantPrivilege(grant))
+    }
+
+    fn parse_revoke(&mut self) -> Result<DfStatement, ParserError> {
+        let privileges = self.parse_privileges()?;
+        if !self.parser.parse_keyword(Keyword::ON) {
+            return self.expected("keyword ON", self.parser.peek_token());
+        }
+        let (username, hostname) = self.parse_user_identity()?;
+        let on = self.parse_grant_object()?;
+        if !self.parser.parse_keyword(Keyword::TO) {
+            return self.expected("keyword FROM", self.parser.peek_token());
+        }
+        let revoke = DfRevokeStatement {
+            username,
+            hostname,
+            on,
+            priv_types: privileges,
+        };
+        Ok(DfStatement::RevokePrivilege(revoke))
+    }
+
+    fn parse_user_identity(&mut self) -> Result<(String, String), ParserError> {
+        let username = self.parser.parse_literal_string()?;
+        let hostname = if self.consume_token("@") {
+            self.parser.parse_literal_string()?
+        } else {
+            String::from("%")
+        };
+        Ok((username, hostname))
     }
 
     /// Parse a possibly qualified, possibly quoted identifier or wild card, e.g.
