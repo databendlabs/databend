@@ -891,6 +891,7 @@ impl<'a> DfParser<'a> {
     }
 
     fn parse_compact(&mut self) -> Result<DfStatement, ParserError> {
+        self.consume_token("COMPACT");
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::TABLE => {

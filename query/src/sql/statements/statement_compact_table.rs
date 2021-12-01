@@ -35,7 +35,7 @@ impl AnalyzableStatement for DfCompactTable {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let (db, table) = self.resolve_table(ctx.clone())?;
         let table = format!("{}.{}", db, table);
-        let rewritten_query = format!("INSERT OVERWRITE {} FROM SELECT * from {}", table, table);
+        let rewritten_query = format!("INSERT OVERWRITE {} SELECT * FROM {}", table, table);
         let rewritten_plan = PlanParser::parse(rewritten_query.as_str(), ctx).await?;
         Ok(AnalyzedResult::SimpleQuery(Box::new(rewritten_plan)))
     }
