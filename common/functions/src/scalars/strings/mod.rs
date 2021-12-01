@@ -41,6 +41,7 @@ pub use string2number::String2NumberFunction;
 pub use substring::SubstringFunction;
 pub use trim::LTrimFunction;
 pub use trim::RTrimFunction;
+pub use trim::TrimFunction;
 pub use unhex::UnhexFunction;
 
 pub use self::hex::HexFunction;
