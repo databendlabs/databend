@@ -29,29 +29,48 @@ impl DataValue {
     }
 
     pub fn try_from_literal(literal: &str) -> Result<DataValue> {
-        match literal.parse::<i64>() {
+        let mut s = literal;
+        let negative_flag = s.starts_with("-");
+        if negative_flag {
+            s = &s[1..];
+        }
+
+        match s.parse::<u64>() {
             Ok(n) => {
-                if n >= 0 {
-                    let n = literal.parse::<u64>()?;
-                    if n <= u8::MAX as u64 {
-                        return Ok(DataValue::UInt8(Some(n as u8)));
-                    } else if n <= u16::MAX as u64 {
-                        return Ok(DataValue::UInt16(Some(n as u16)));
-                    } else if n <= u32::MAX as u64 {
-                        return Ok(DataValue::UInt32(Some(n as u32)));
+                if negative_flag {
+                    // when the real number is i8::MIN or i16::MIN or i32::MIN or i64::MIN
+                    // execute `n as i8`、`n as i16`、`n as i32`、`n as i64`,
+                    // rust will automatically convert it to a negative number
+                    if n == i8::MAX as u64 + 1 {
+                        return Ok(DataValue::Int8(Some(n as i8)));
+                    } else if n == i16::MAX as u64 + 1 {
+                        return Ok(DataValue::Int16(Some(n as i16)));
+                    } else if n == i32::MAX as u64 + 1 {
+                        return Ok(DataValue::Int32(Some(n as i32)));
+                    } else if n == i64::MAX as u64 + 1 {
+                        return Ok(DataValue::Int64(Some(n as i64)));
+                    }
+
+                    let num = -(n as i64);
+                    if num >= i8::MIN as i64 {
+                        return Ok(DataValue::Int8(Some(num as i8)));
+                    } else if num >= u16::MIN as i64 {
+                        return Ok(DataValue::Int16(Some(num as i16)));
+                    } else if num >= u32::MIN as i64 {
+                        return Ok(DataValue::Int32(Some(num as i32)));
                     } else {
-                        return Ok(DataValue::UInt64(Some(n as u64)));
+                        return Ok(DataValue::Int64(Some(num as i64)));
                     }
                 }
 
-                if n >= i8::MIN as i64 {
-                    Ok(DataValue::Int8(Some(n as i8)))
-                } else if n >= u16::MIN as i64 {
-                    Ok(DataValue::Int16(Some(n as i16)))
-                } else if n >= u32::MIN as i64 {
-                    Ok(DataValue::Int32(Some(n as i32)))
+                if n <= u8::MAX as u64 {
+                    return Ok(DataValue::UInt8(Some(n as u8)));
+                } else if n <= u16::MAX as u64 {
+                    return Ok(DataValue::UInt16(Some(n as u16)));
+                } else if n <= u32::MAX as u64 {
+                    return Ok(DataValue::UInt32(Some(n as u32)));
                 } else {
-                    Ok(DataValue::Int64(Some(n as i64)))
+                    return Ok(DataValue::UInt64(Some(n as u64)));
                 }
             }
             Err(_) => Ok(DataValue::Float64(Some(literal.parse::<f64>()?))),
