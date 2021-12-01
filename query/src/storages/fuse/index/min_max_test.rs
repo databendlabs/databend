@@ -49,7 +49,7 @@ async fn test_min_max_index() -> Result<()> {
     // create test table
     let crate_table_plan = CreateTableReq {
         if_not_exists: false,
-        db: fixture.default_db(),
+        db: fixture.default_db_name(),
         table: test_tbl_name.to_string(),
         table_meta: TableMeta {
             schema: test_schema.clone(),
@@ -64,7 +64,7 @@ async fn test_min_max_index() -> Result<()> {
 
     // get table
     let table = catalog
-        .get_table(fixture.default_db().as_str(), test_tbl_name)
+        .get_table(fixture.default_db_name().as_str(), test_tbl_name)
         .await?;
 
     // prepare test blocks
@@ -88,7 +88,7 @@ async fn test_min_max_index() -> Result<()> {
 
     // get the latest tbl
     let table = catalog
-        .get_table(fixture.default_db().as_str(), test_tbl_name)
+        .get_table(fixture.default_db_name().as_str(), test_tbl_name)
         .await?;
 
     let snapshot_loc = table
