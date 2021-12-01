@@ -22,6 +22,7 @@ use common_planners::PlanNode;
 use common_tracing::tracing;
 
 use crate::sessions::QueryContext;
+use crate::sql::parser::ast::Query;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
@@ -40,6 +41,26 @@ pub enum DfGrantObject {
     Table(Option<String>, String),
 }
 
+impl DfGrantObject {
+    pub fn convert_with_context(&self, ctx: Arc<QueryContext>) -> GrantObject {
+        match self {
+            DfGrantObject::Global => GrantObject::Global,
+            DfGrantObject::Table(database_name, table_name) => {
+                let database_name = database_name
+                    .clone()
+                    .unwrap_or_else(|| ctx.get_current_database());
+                GrantObject::Table(database_name, table_name.clone())
+            }
+            DfGrantObject::Database(database_name) => {
+                let database_name = database_name
+                    .clone()
+                    .unwrap_or_else(|| ctx.get_current_database());
+                GrantObject::Database(database_name)
+            }
+        }
+    }
+}
+
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfGrantStatement {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
@@ -48,21 +69,7 @@ impl AnalyzableStatement for DfGrantStatement {
             PlanNode::GrantPrivilege(GrantPrivilegePlan {
                 name: self.name.clone(),
                 hostname: self.hostname.clone(),
-                on: match &self.on {
-                    DfGrantObject::Global => GrantObject::Global,
-                    DfGrantObject::Table(database_name, table_name) => {
-                        let database_name = database_name
-                            .clone()
-                            .unwrap_or_else(|| ctx.get_current_database());
-                        GrantObject::Table(database_name, table_name.clone())
-                    }
-                    DfGrantObject::Database(database_name) => {
-                        let database_name = database_name
-                            .clone()
-                            .unwrap_or_else(|| ctx.get_current_database());
-                        GrantObject::Database(database_name)
-                    }
-                },
+                on: self.on.convert_with_context(ctx),
                 priv_types: self.priv_types,
             }),
         )))
