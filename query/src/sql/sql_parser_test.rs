@@ -351,7 +351,7 @@ fn copy_test() -> Result<()> {
     let name = ObjectName(v);
 
     expect_parse_ok(
-        "copy into test_csv from '@my_ext_stage/tutorials/sample.csv' format csv csv_header = 1 csv_delimitor = ',';",
+        "copy into test_csv from '@my_ext_stage/tutorials/sample.csv' format csv csv_header = 1 field_delimitor = ',';",
         DfStatement::Copy(DfCopy {
             name,
             columns: vec![],
@@ -362,7 +362,7 @@ fn copy_test() -> Result<()> {
                 value: Value::Number("1".to_owned(), false),
             },
             SqlOption {
-                name: Ident::new("csv_delimitor".to_string()),
+                name: Ident::new("field_delimitor".to_string()),
                 value: Value::SingleQuotedString(",".into()),
             }],
         }),

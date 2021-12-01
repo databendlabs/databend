@@ -100,10 +100,11 @@ impl TableFunctionFactory {
 
     pub fn get(&self, func_name: &str, tbl_args: TableArgs) -> Result<Arc<dyn TableFunction>> {
         let lock = self.creators.read();
-        let (id, factory) = lock.get(func_name).ok_or_else(|| {
+        let func_name = func_name.to_lowercase();
+        let (id, factory) = lock.get(&func_name).ok_or_else(|| {
             ErrorCode::UnknownTable(format!("Unknown table function {}", func_name))
         })?;
-        let func = factory.try_create("", func_name, *id, tbl_args)?;
+        let func = factory.try_create("", &func_name, *id, tbl_args)?;
         Ok(func)
     }
 }

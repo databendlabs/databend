@@ -17,6 +17,7 @@ use crate::scalars::AsciiFunction;
 use crate::scalars::Base64DecodeFunction;
 use crate::scalars::Base64EncodeFunction;
 use crate::scalars::HexFunction;
+use crate::scalars::InsertFunction;
 use crate::scalars::LTrimFunction;
 use crate::scalars::LocateFunction;
 use crate::scalars::OctFunction;
@@ -44,5 +45,6 @@ impl StringFunction {
         factory.register("from_base64", Base64DecodeFunction::desc());
         factory.register("locate", LocateFunction::desc());
         factory.register("position", LocateFunction::desc());
+        factory.register("insert", InsertFunction::desc());
     }
 }

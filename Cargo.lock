@@ -890,16 +890,6 @@ dependencies = [
 
 [[package]]
 name = "chrono-tz"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2554a3155fec064362507487171dcc4edc3df60cb10f3a1fb10ed8094822b120"
-dependencies = [
- "chrono",
- "parse-zoneinfo",
-]
-
-[[package]]
-name = "chrono-tz"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "64c01c1c607d25c71bbaa67c113d6c6b36c434744b4fd66691d711b5b1bc0c8b"
@@ -995,12 +985,11 @@ dependencies = [
 [[package]]
 name = "clickhouse-rs"
 version = "1.0.0-alpha.1"
-source = "git+https://github.com/datafuse-extras/clickhouse-rs?rev=c4743a9#c4743a920e744a0adf672262f6714ccfa429bcd4"
+source = "git+https://github.com/datafuse-extras/clickhouse-rs?rev=fe0406b#fe0406b1599572341b3141801acfc011c28737d6"
 dependencies = [
  "byteorder",
  "chrono",
- "chrono-tz 0.5.3",
- "clickhouse-rs-cityhash-sys",
+ "chrono-tz",
  "combine",
  "crossbeam 0.8.1",
  "futures-core",
@@ -1010,20 +999,12 @@ dependencies = [
  "lazy_static",
  "log",
  "lz4",
+ "naive-cityhash",
  "pin-project",
  "thiserror",
  "tokio",
  "url",
  "uuid",
-]
-
-[[package]]
-name = "clickhouse-rs-cityhash-sys"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4baf9d4700a28d6cb600e17ed6ae2b43298a5245f1f76b4eab63027ebfd592b9"
-dependencies = [
- "cc",
 ]
 
 [[package]]
@@ -1145,8 +1126,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "chrono",
- "chrono-tz 0.6.0",
- "clickhouse-rs-cityhash-sys",
+ "chrono-tz",
  "combine",
  "common-io",
  "env_logger 0.9.0",
@@ -1158,6 +1138,7 @@ dependencies = [
  "lazy_static",
  "log",
  "lz4",
+ "naive-cityhash",
  "native-tls",
  "pin-project",
  "rand 0.8.4",
@@ -1217,7 +1198,7 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "chrono",
- "chrono-tz 0.6.0",
+ "chrono-tz",
  "comfy-table",
  "common-arrow",
  "common-exception",
@@ -2057,7 +2038,7 @@ dependencies = [
  "cargo-license",
  "cargo_metadata 0.14.1",
  "chrono",
- "chrono-tz 0.6.0",
+ "chrono-tz",
  "clickhouse-rs",
  "common-arrow",
  "common-base",
@@ -4177,6 +4158,12 @@ dependencies = [
  "time 0.2.27",
  "uuid",
 ]
+
+[[package]]
+name = "naive-cityhash"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e5641a0f564cf7c57a008d3ade6de749729f4eadf74e9222560c6a3a0d38cd2"
 
 [[package]]
 name = "named_pipe"
