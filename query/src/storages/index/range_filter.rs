@@ -209,12 +209,17 @@ impl StatColumn {
             self.column_field.clone(),
         ));
 
-        let monotonicity =
-            MonotonicityCheckVisitor::check_expression(&self.expr, variable_left, variable_right)?;
+        let monotonicity = MonotonicityCheckVisitor::check_expression(
+            &self.expr,
+            variable_left,
+            variable_right,
+            self.column_field.name(),
+        )?;
         if !monotonicity.is_monotonic {
-            return Err(ErrorCode::UnknownException(
-                "The expression in range is not monotonic",
-            ));
+            return Err(ErrorCode::UnknownException(format!(
+                "Expression in range:[{:?}, {:?}] is not monotonic",
+                column_stats.min, column_stats.max
+            )));
         }
 
         let column_with_field_opt = match self.stat_type {

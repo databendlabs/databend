@@ -12,15 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnWithField;
-use common_datavalues::DataField;
 use common_datavalues::DataType;
-use common_datavalues::DataValue;
+use common_exception::ErrorCode;
 use common_exception::Result;
-
-use crate::scalars::ComparisonGtEqFunction;
-use crate::scalars::ComparisonLtEqFunction;
 
 #[derive(Clone)]
 pub struct Monotonicity {
@@ -90,78 +85,44 @@ impl Monotonicity {
         }
     }
 
-    /// Compare self.left and self.right, return true when left >= right; false when left < right.
-    /// If either left or right is None, return None.
-    pub fn compare_left_right(&self) -> Result<Option<bool>> {
-        if let (Some(left_val), Some(right_val)) = (&self.left, &self.right) {
-            let cmp_func = ComparisonGtEqFunction::try_create_func(">=")?;
-            let res_col = cmp_func.eval(&[left_val.clone(), right_val.clone()], 1)?;
-            let res = res_col.try_get(0)?.as_bool()?;
-            Ok(Some(res))
+    /// Check whether the range cross zero.
+    /// 1 means the range interval [left, right] >= 0.
+    /// -1 means the range interval [left, right] <= 0.
+    /// 0 means the range interval [left, right] covering 0.
+    pub fn compare_with_zero(&self) -> Result<i8> {
+        if !self.is_monotonic {
+            return Err(ErrorCode::UnknownException("Request monotonicity function"));
+        }
+
+        let (min, max) = if self.is_positive {
+            (self.left.clone(), self.right.clone())
         } else {
-            Ok(None)
-        }
-    }
+            (self.right.clone(), self.left.clone())
+        };
 
-    /// Check whether the range greater than or equal to the target.
-    /// True means the min(left, right) >= the target.
-    /// False means the range interval may be unknown, covering the target or both < target.
-    pub fn gt_eq(&self, target: DataColumnWithField) -> Result<bool> {
-        match self.compare_left_right()? {
-            None => Ok(false),
-            Some(val) => {
-                let min_val = if val {
-                    self.right.clone().unwrap()
-                } else {
-                    self.left.clone().unwrap()
-                };
-                let cmp_func = ComparisonGtEqFunction::try_create_func(">=")?;
-                let res_col = cmp_func.eval(&[min_val, target], 1)?;
-                let res = res_col.try_get(0)?.as_bool()?;
-                Ok(res)
+        if let (Some(max), Some(min)) = (max, min) {
+            let min_val = min
+                .column()
+                .cast_with_type(&DataType::Float64)?
+                .try_get(0)?
+                .as_f64()?;
+            if min_val >= 0.0 {
+                return Ok(1);
+            }
+
+            if self.is_constant {
+                return Ok(-1);
+            }
+
+            let max_val = max
+                .column()
+                .cast_with_type(&DataType::Float64)?
+                .try_get(0)?
+                .as_f64()?;
+            if max_val <= 0.0 {
+                return Ok(-1);
             }
         }
+        Ok(0)
     }
-
-    /// Check whether the range less than or equal to the target.
-    /// True means the max(left, right) <= the target.
-    /// False means the range interval may be unknown, covering the target or > target.
-    pub fn lt_eq(&self, target: DataColumnWithField) -> Result<bool> {
-        match self.compare_left_right()? {
-            None => Ok(false),
-            Some(val) => {
-                let max_val = if val {
-                    self.left.clone().unwrap()
-                } else {
-                    self.right.clone().unwrap()
-                };
-                let cmp_func = ComparisonLtEqFunction::try_create_func("<=")?;
-                let res_col = cmp_func.eval(&[max_val, target], 1)?;
-                let res = res_col.try_get(0)?.as_bool()?;
-                Ok(res)
-            }
-        }
-    }
-
-    /// Check whether the range greater than or equal to zero.
-    /// True means the range interval [left, right] or [right, left] >= 0.
-    /// False means the range interval may be unknown, covering 0 or < 0.
-    pub fn gt_eq_zero(&self) -> Result<bool> {
-        let zero = DataColumn::Constant(DataValue::Int8(Some(0)), 1);
-        let zero_column_field =
-            DataColumnWithField::new(zero, DataField::new("", DataType::Int8, false));
-        self.gt_eq(zero_column_field)
-    }
-
-    /// Check whether the range less than or equal to zero.
-    /// True means the range interval [left, right] or [right, left] <= 0.
-    /// False means the range interval may be unknown, covering 0 or >  0.
-    pub fn lt_eq_zero(&self) -> Result<bool> {
-        let zero = DataColumn::Constant(DataValue::Int8(Some(0)), 1);
-        let zero_column_field =
-            DataColumnWithField::new(zero, DataField::new("", DataType::Int8, false));
-        self.lt_eq(zero_column_field)
-    }
-
-    
 }

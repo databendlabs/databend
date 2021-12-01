@@ -90,31 +90,16 @@ pub struct MonotonicityCheckVisitor {
 }
 
 impl MonotonicityCheckVisitor {
-    fn try_create(
+    fn create(
         variable_left: Option<DataColumnWithField>,
         variable_right: Option<DataColumnWithField>,
-    ) -> Result<Self> {
-        let column_name = match (variable_left.clone(), variable_right.clone()) {
-            (Some(l), Some(r)) => {
-                if l.field().name() != r.field().name() {
-                    return Err(ErrorCode::MonotonicityCheckError(format!(
-                        "variable_left and variable_right should have the same name, but got {} and {}",
-                        l.field().name(),
-                        r.field().name()
-                    )));
-                }
-                l.field().name().clone()
-            }
-            (Some(l), None) => l.field().name().clone(),
-            (None, Some(r)) => r.field().name().clone(),
-            _ => String::new(),
-        };
-
-        Ok(Self {
+        column_name: String,
+    ) -> Self {
+        Self {
             variable_left,
             variable_right,
             column_name,
-        })
+        }
     }
 
     fn try_calculate_boundary(
@@ -127,12 +112,8 @@ impl MonotonicityCheckVisitor {
         } else {
             let input_columns = args
                 .into_iter()
-                .map(|col_opt| {
-                    col_opt.ok_or_else(|| {
-                        ErrorCode::UnknownException("Unable to get DataColumnWithField")
-                    })
-                })
-                .collect::<Result<Vec<_>>>()?;
+                .map(|col_opt| col_opt.unwrap())
+                .collect::<Vec<_>>();
 
             let col = func.eval(input_columns.as_ref(), 1)?;
             let data_field = DataField::new(expr_name, col.data_type(), false);
@@ -234,8 +215,9 @@ impl MonotonicityCheckVisitor {
         expr: &Expression,
         left: Option<DataColumnWithField>,
         right: Option<DataColumnWithField>,
+        column_name: &str,
     ) -> Result<Monotonicity> {
-        let mut visitor = Self::try_create(left, right)?;
+        let mut visitor = Self::create(left, right, column_name.to_string());
         visitor.visit(expr)
     }
 
@@ -246,6 +228,7 @@ impl MonotonicityCheckVisitor {
         sort_expr: &Expression,
         left: Option<DataColumnWithField>,
         right: Option<DataColumnWithField>,
+        column_name: &str,
     ) -> Result<Expression> {
         if let Expression::Sort {
             expr: _,
@@ -254,9 +237,7 @@ impl MonotonicityCheckVisitor {
             origin_expr,
         } = sort_expr
         {
-            let mut visitor = Self::try_create(left, right)?;
-            let mono = visitor
-                .visit(origin_expr)
+            let mono = Self::check_expression(origin_expr, left, right, column_name)
                 .unwrap_or_else(|_| Monotonicity::default());
             if !mono.is_monotonic {
                 return Ok(sort_expr.clone());
@@ -265,7 +246,7 @@ impl MonotonicityCheckVisitor {
             // need to flip the asc when is_positive is false
             let new_asc = if mono.is_positive { *asc } else { !*asc };
             return Ok(Expression::Sort {
-                expr: Box::new(col(&visitor.column_name)),
+                expr: Box::new(col(column_name)),
                 asc: new_asc,
                 nulls_first: *nulls_first,
                 origin_expr: origin_expr.clone(),

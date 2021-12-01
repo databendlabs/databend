@@ -27,7 +27,6 @@ use crate::storages::index::range_filter::StatColumns;
 use crate::storages::index::ColumnStatistics;
 use crate::storages::index::RangeFilter;
 
-/*
 #[test]
 fn test_range_filter() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
@@ -137,7 +136,7 @@ fn test_range_filter() -> Result<()> {
 
     Ok(())
 }
-*/
+
 #[test]
 fn test_build_verifiable_function() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![

@@ -173,7 +173,8 @@ impl TopNPushDownImpl {
                     Some((l, r)) => (l.clone(), r.clone()),
                 };
 
-                match MonotonicityCheckVisitor::extract_sort_column(expr, left, right) {
+                match MonotonicityCheckVisitor::extract_sort_column(expr, left, right, column_name)
+                {
                     Ok(new_expr) => Ok(new_expr),
                     Err(error) => {
                         tracing::error!(
