@@ -30,7 +30,7 @@ impl DataValue {
 
     pub fn try_from_literal(literal: &str) -> Result<DataValue> {
         let mut s = literal;
-        let negative_flag = s.starts_with("-");
+        let negative_flag = s.starts_with(`'-'`);
         if negative_flag {
             s = &s[1..];
         }
@@ -64,13 +64,13 @@ impl DataValue {
                 }
 
                 if n <= u8::MAX as u64 {
-                    return Ok(DataValue::UInt8(Some(n as u8)));
+                    (DataValue::UInt8(Some(n as u8)))
                 } else if n <= u16::MAX as u64 {
-                    return Ok(DataValue::UInt16(Some(n as u16)));
+                    (DataValue::UInt16(Some(n as u16)))
                 } else if n <= u32::MAX as u64 {
-                    return Ok(DataValue::UInt32(Some(n as u32)));
+                    (DataValue::UInt32(Some(n as u32)))
                 } else {
-                    return Ok(DataValue::UInt64(Some(n as u64)));
+                    (DataValue::UInt64(Some(n as u64)))
                 }
             }
             Err(_) => Ok(DataValue::Float64(Some(literal.parse::<f64>()?))),
