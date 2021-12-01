@@ -44,6 +44,7 @@ impl StringFunction {
         factory.register("to_base64", Base64EncodeFunction::desc());
         factory.register("from_base64", Base64DecodeFunction::desc());
         factory.register("locate", LocateFunction::desc());
+        factory.register("position", LocateFunction::desc());
         factory.register("insert", InsertFunction::desc());
     }
 }
