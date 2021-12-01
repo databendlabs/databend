@@ -48,7 +48,7 @@ common-tracing = { path = "../common/tracing" }
 # Github dependencies
 clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "c4743a9" }
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "e4c8f3d" }
-sqlparser = { git = "https://github.com/mshauneu/sqlparser-rs", rev = "51079cb" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "b0efbfe" }
 
 # Crates.io dependencies
 ahash = "0.7.6"

@@ -25,4 +25,4 @@ paste = "1.0.6"
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1",default-features = false }
 
 # Github dependencies
-sqlparser = { git = "https://github.com/mshauneu/sqlparser-rs", rev = "51079cb" }
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "b0efbfe" }
