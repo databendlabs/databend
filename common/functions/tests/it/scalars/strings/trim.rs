@@ -23,7 +23,6 @@ use pretty_assertions::assert_eq;
 #[test]
 fn test_trim_function() -> Result<()> {
      struct Test {
-        name: &'static str,
         display: &'static str,
         nullable: bool,
         arg_names: Vec<&'static str>,
@@ -41,7 +40,6 @@ fn test_trim_function() -> Result<()> {
 
     let tests = vec![
         Test {
-            name: "trim-abc-passed",
             display: "ltrim",
             nullable: true,
             arg_names: vec!["a"],
@@ -53,7 +51,6 @@ fn test_trim_function() -> Result<()> {
             error: "",
         },
         Test {
-            name: "trim-abc-passed",
             display: "rtrim",
             nullable: true,
             arg_names: vec!["a"],
@@ -65,7 +62,6 @@ fn test_trim_function() -> Result<()> {
             error: "",
         },
         Test {
-            name: "trim-abc-passed",
             display: "trim",
             nullable: true,
             arg_names: vec!["a"],
@@ -77,7 +73,6 @@ fn test_trim_function() -> Result<()> {
             error: "",
         },
         Test {
-            name: "trim-abc-passed",
             display: "trim",
             nullable: true,
             arg_names: vec!["a"],
