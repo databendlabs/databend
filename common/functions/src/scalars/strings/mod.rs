@@ -15,6 +15,7 @@
 mod ascii;
 mod base_64;
 mod hex;
+mod insert;
 mod locate;
 mod oct;
 mod quote;
@@ -29,6 +30,7 @@ mod unhex;
 pub use ascii::AsciiFunction;
 pub use base_64::Base64DecodeFunction;
 pub use base_64::Base64EncodeFunction;
+pub use insert::InsertFunction;
 pub use locate::LocateFunction;
 pub use oct::OctFunction;
 pub use quote::QuoteFunction;
