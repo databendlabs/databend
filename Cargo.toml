@@ -6,7 +6,6 @@ members = [
     "common/building",
     "common/cache",
     "common/clickhouse-srv",
-    "common/clickhouse-srv/naive-cityhash",
     "common/dal",
     "common/datablocks",
     "common/datavalues",

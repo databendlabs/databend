@@ -20,9 +20,9 @@ use std::os::raw::c_int;
 
 use byteorder::LittleEndian;
 use byteorder::WriteBytesExt;
-use common_naive_cityhash::cityhash128;
-use common_naive_cityhash::U128;
 use lz4::liblz4::LZ4_decompress_safe;
+use naive_cityhash::cityhash128;
+use naive_cityhash::U128;
 
 use crate::binary::ReadEx;
 use crate::errors::Error;

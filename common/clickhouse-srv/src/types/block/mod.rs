@@ -23,9 +23,9 @@ use std::os::raw::c_char;
 use byteorder::LittleEndian;
 use byteorder::WriteBytesExt;
 use chrono_tz::Tz;
-use common_naive_cityhash::cityhash128;
 use lz4::liblz4::LZ4_compressBound;
 use lz4::liblz4::LZ4_compress_default;
+use naive_cityhash::cityhash128;
 
 pub use self::block_info::BlockInfo;
 pub use self::builder::RCons;
