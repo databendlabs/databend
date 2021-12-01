@@ -1146,9 +1146,9 @@ dependencies = [
  "bytes",
  "chrono",
  "chrono-tz 0.6.0",
- "clickhouse-rs-cityhash-sys",
  "combine",
  "common-io",
+ "common-naive-cityhash",
  "env_logger 0.9.0",
  "futures",
  "futures-core",
@@ -1502,6 +1502,10 @@ dependencies = [
  "prometheus-parse",
  "serde",
 ]
+
+[[package]]
+name = "common-naive-cityhash"
+version = "0.1.0"
 
 [[package]]
 name = "common-planners"
