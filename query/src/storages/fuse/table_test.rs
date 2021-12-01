@@ -273,7 +273,11 @@ async fn test_fuse_table_compact() -> Result<()> {
     let plan = PlanParser::parse(&query, ctx.clone()).await?;
     let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
 
-    // set the value of setting `max_threads` to be 1, so that pipeline_builder will
+    // `PipelineBuilder` will parallelize the table reading according to value of setting `max_threads`,
+    // and `Table::read` will also try to de-queue read jobs preemptively. thus, the number of blocks
+    // that `Table::append` takes are not deterministic (`append` is also executed parallelly in this case),
+    // therefore, the final number of blocks varies.
+    // To avoid flaky test, the value of setting `max_threads` is set to be 1, so that pipeline_builder will
     // only arrange one worker for the `ReadDataSourcePlan`.
     ctx.get_settings().set_max_threads(1)?;
     let data_stream = interpreter.execute(None).await?;
