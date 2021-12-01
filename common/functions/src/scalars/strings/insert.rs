@@ -215,7 +215,7 @@ impl Function for InsertFunction {
                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                     for s_p_l in izip!(s_series.string()?, p_series.i64()?, l_series.i64()?) {
                         r_array.append_option(match s_p_l {
-                            (Some(s), Some(p), Some(l)) => Some(instr(&s, p, l, &ss)),
+                            (Some(s), Some(p), Some(l)) => Some(instr(s, p, l, &ss)),
                             _ => None,
                         });
                     }
@@ -405,5 +405,5 @@ fn instr<'a>(srcstr: &'a [u8], pos: &i64, len: &i64, substr: &'a [u8]) -> Vec<u8
         return [&srcstr[0..p], substr].concat();
     }
     let l = *len as usize;
-    return [&srcstr[0..p], substr, &srcstr[p + l..]].concat();
+    [&srcstr[0..p], substr, &srcstr[p + l..]].concat()
 }
