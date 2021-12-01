@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::columns::DataColumn;
-use common_datavalues::DataSchema;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_meta_types::TableInfo;
