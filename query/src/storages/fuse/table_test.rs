@@ -20,6 +20,8 @@ use common_planners::TruncateTablePlan;
 use futures::TryStreamExt;
 
 use crate::catalogs::Catalog;
+use crate::interpreters::InterpreterFactory;
+use crate::sql::PlanParser;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 use crate::storages::ToReadDataSourcePlan;
 
@@ -260,6 +262,59 @@ async fn test_fuse_table_truncate() -> Result<()> {
     // cleared?
     assert_eq!(parts.len(), 0);
     assert_eq!(stats.read_rows, 0);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_fuse_table_compact() -> Result<()> {
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+
+    // create test table
+    let create_table_plan = fixture.default_crate_table_plan();
+    let tbl_name = create_table_plan.table.clone();
+    let db_name = create_table_plan.db.clone();
+    let catalog = ctx.get_catalog();
+    catalog.create_table(create_table_plan.into()).await?;
+
+    // get table
+    let table = catalog
+        .get_table(
+            fixture.default_db().as_str(),
+            fixture.default_table().as_str(),
+        )
+        .await?;
+
+    // insert 5 blocks
+    let num_blocks = 5;
+    let stream = Box::pin(futures::stream::iter(TestFixture::gen_block_stream(
+        num_blocks, 1,
+    )));
+
+    let r = table.append_data(ctx.clone(), stream).await?;
+    table
+        .commit(ctx.clone(), r.try_collect().await?, false)
+        .await?;
+
+    // do compact
+    let query = format!("compact table {}.{}", db_name, tbl_name);
+    let plan = PlanParser::parse(&query, ctx.clone()).await?;
+    let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
+    let data_stream = interpreter.execute(None).await?;
+    let _ = data_stream.try_collect::<Vec<_>>();
+
+    // verify compaction
+    let table = catalog
+        .get_table(
+            fixture.default_db().as_str(),
+            fixture.default_table().as_str(),
+        )
+        .await?;
+    let (stats, parts) = table.read_partitions(ctx.clone(), None).await?;
+    // blocks are so tiny, they should be compacted into one
+    assert_eq!(parts.len(), 1);
+    assert_eq!(stats.read_rows, num_blocks as usize * 3);
 
     Ok(())
 }

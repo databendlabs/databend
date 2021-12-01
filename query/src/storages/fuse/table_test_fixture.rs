@@ -81,7 +81,7 @@ impl TestFixture {
     }
 
     pub fn default_table(&self) -> String {
-        format!("{}_test_tbl", self.prefix)
+        format!("t_{}_test_tbl", self.prefix)
     }
 
     pub fn default_schema() -> DataSchemaRef {
@@ -119,5 +119,5 @@ impl TestFixture {
 }
 
 fn gen_db_name(prefix: &str) -> String {
-    format!("{}_default", prefix)
+    format!("db_{}_default", prefix)
 }
