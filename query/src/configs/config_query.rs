@@ -189,7 +189,13 @@ pub struct QueryConfig {
     #[serde(default)]
     pub table_engine_parquet_enabled: bool,
 
-    #[structopt(long, env, help = "Table engine memory enabled")]
+    #[structopt(
+        long,
+        env,
+        parse(try_from_str),
+        default_value = "true",
+        help = "Table engine memory enabled"
+    )]
     #[serde(default)]
     pub table_engine_memory_enabled: bool,
 
