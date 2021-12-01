@@ -237,6 +237,7 @@ nav:
               - CREATE USER: sqlstatement/user-management/user-management-create-user.md
       - API:
           - Config: api/config.md
+          - HTTP Handler: api/http-handler.md
   - CLI: cli/cli.md
   - Development:
       - Contributing: development/contributing.md

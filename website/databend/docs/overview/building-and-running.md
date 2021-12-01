@@ -105,13 +105,13 @@ This document describes how to build and run [DatabendQuery](https://github.com/
     ```
     {
         "id": "93114794-a532-4706-84c9-61a137398fb8",
-        "nextUri": null,
+        "next_uri": null,
         "data": [
             [
                 499999999.5
             ]
         ],
-        "columns": {
+        "schema": {
             "fields": [
                 {
                     "name": "avg(number)",
@@ -123,9 +123,12 @@ This document describes how to build and run [DatabendQuery](https://github.com/
         },
         "error": null,
         "stats": {
-            "read_rows": 1000000000,
-            "read_bytes": 8000000000,
-            "total_rows_to_read": 0
+            "progress": {
+                "read_rows": 1000000000,
+                "read_bytes": 8000000000,
+                "total_rows_to_read": 0
+            },
+            "wall_time_ms": 2
         }
     }
     ```
