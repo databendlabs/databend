@@ -85,29 +85,7 @@ impl RangeFilter {
                         c.column_id
                     ))
                 })?;
-                let val = match c.stat_type {
-                    StatType::Max | StatType::Min => {
-                        let left = Some(DataColumnWithField::new(
-                            DataColumn::Constant(stat.min.clone(), 1),
-                            c.column_field.clone(),
-                        ));
-                        let right = Some(DataColumnWithField::new(
-                            DataColumn::Constant(stat.max.clone(), 1),
-                            c.column_field.clone(),
-                        ));
-                        let monotonicity =
-                            MonotonicityCheckVisitor::check_expression(&c.expr, left, right)?;
-                        if !monotonicity.is_monotonic {
-                            return Err(ErrorCode::UnknownException(
-                                "The expression in range is not monotonic",
-                            ));
-                        }
-
-                        stat.max.clone()
-                    }
-                    StatType::Nulls => DataValue::UInt64(Some(stat.null_count as u64)),
-                };
-                val.to_array()
+                c.apply_stat_value(stat)?.to_array()
             })
             .collect::<Result<Vec<_>>>()?;
         let data_block = DataBlock::create_by_array(self.schema.clone(), columns);
@@ -217,23 +195,54 @@ impl StatColumn {
         }
     }
 
-    fn apply_stat_value(&self, left: DataValue, right: DataValue) -> Result<Monotonicity> {
+    fn apply_stat_value(&self, column_stats: &ColumnStatistics) -> Result<DataValue> {
+        if self.stat_type == StatType::Nulls {
+            return Ok(DataValue::UInt64(Some(column_stats.null_count)));
+        }
+
         let variable_left = Some(DataColumnWithField::new(
-            DataColumn::Constant(left.clone(), 1),
+            DataColumn::Constant(column_stats.min.clone(), 1),
             self.column_field.clone(),
         ));
         let variable_right = Some(DataColumnWithField::new(
-            DataColumn::Constant(right.max.clone(), 1),
+            DataColumn::Constant(column_stats.max.clone(), 1),
             self.column_field.clone(),
         ));
+
         let monotonicity =
-            MonotonicityCheckVisitor::check_expression(self.expr, variable_left, variable_right)?;
+            MonotonicityCheckVisitor::check_expression(&self.expr, variable_left, variable_right)?;
         if !monotonicity.is_monotonic {
             return Err(ErrorCode::UnknownException(
                 "The expression in range is not monotonic",
             ));
         }
-        Ok(monotonicity)
+
+        let column_with_field_opt = match self.stat_type {
+            StatType::Min => {
+                if monotonicity.is_positive {
+                    monotonicity.left
+                } else {
+                    monotonicity.right
+                }
+            }
+            StatType::Max => {
+                if monotonicity.is_positive {
+                    monotonicity.right
+                } else {
+                    monotonicity.left
+                }
+            }
+            _ => unreachable!(),
+        };
+
+        column_with_field_opt
+            .ok_or_else(|| {
+                ErrorCode::UnknownException(
+                    "Cannot get data value from column, because column is none",
+                )
+            })?
+            .column()
+            .try_get(0)
     }
 }
 
@@ -243,7 +252,7 @@ struct VerifiableExprBuilder<'a> {
     op: &'a str,
     args: Expressions,
     column_id: u32,
-    column_field: DataField,
+    column_field: &'a DataField,
     field: DataField,
     stat_columns: &'a mut StatColumns,
 }
@@ -439,7 +448,7 @@ impl<'a> VerifiableExprBuilder<'a> {
         if !self.stat_columns.iter().any(|c| {
             c.column_id == self.column_id
                 && c.stat_type == stat_type
-                && c.field.name() == self.field.name()
+                && c.stat_field.name() == self.field.name()
         }) {
             self.stat_columns.push(stat_col.clone());
         }

@@ -21,8 +21,8 @@ use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
 use crate::scalars::dates::IntervalFunctionFactory;
-use crate::scalars::function::Monotonicity;
 use crate::scalars::function_factory::FunctionFactory;
+use crate::scalars::Monotonicity;
 use crate::scalars::ArithmeticDivFunction;
 use crate::scalars::ArithmeticIntDivFunction;
 use crate::scalars::ArithmeticMinusFunction;
