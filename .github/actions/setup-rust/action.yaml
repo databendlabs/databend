@@ -1,0 +1,12 @@
+name: 'Setup rust'
+description: 'Setup rust environment for databend'
+runs:
+  using: "composite"
+  steps:
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v1
+
+    - name: Rust setup
+      shell: bash
+      run: |
+        bash ./scripts/setup/dev_setup.sh
