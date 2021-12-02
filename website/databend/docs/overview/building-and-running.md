@@ -50,7 +50,7 @@ numbers(N) – A table for test with the single `number` column (UInt64) that co
 mysql -h127.0.0.1 -uroot -P3307
 ```
 
-```
+```text
 mysql> SELECT avg(number) FROM numbers(1000000000);
 +-------------+
 | avg(number) |
@@ -68,7 +68,7 @@ mysql> SELECT avg(number) FROM numbers(1000000000);
 clickhouse client --host 0.0.0.0 --port 9001
 ```
 
-```
+```text
 datafuse :) SELECT avg(number) FROM numbers(1000000000);
 
 SELECT avg(number)

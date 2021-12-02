@@ -4,7 +4,6 @@
 const lightCodeTheme = require('prism-react-renderer/themes/github');
 const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 
-
 /** @type {import('@docusaurus/types').Config} */
 const config = {
     title: 'Databend',
@@ -22,6 +21,11 @@ const config = {
             '@docusaurus/preset-classic',
             /** @type {import('@docusaurus/preset-classic').Options} */
             ({
+                docs:  {
+                    path: './docs/overview',
+                    sidebarPath: require.resolve('./docs/overview/sidebars.js'),
+                    editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
+                },
                 blog: {
                     showReadingTime: true,
                     editUrl:
@@ -33,18 +37,18 @@ const config = {
             }),
         ],
     ],
-    plugins: [
-        [
-            '@docusaurus/plugin-content-docs',
-            /** @type {import('@docusaurus/plugin-content-docs').Options} */
-            {
-                id: 'overview',
-                path: 'docs/overview',
-                sidebarPath: require.resolve('./docs/overview/sidebars.js'),
-                editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
-            },
-        ]
-    ],
+    // plugins: [
+    //     [
+    //         '@docusaurus/plugin-content-docs',
+    //         /** @type {import('@docusaurus/plugin-content-docs').Options} */
+    //         {
+    //             id: 'x',
+    //             path: 'docs/overview',
+    //             sidebarPath: require.resolve('./docs/overview/sidebars.js'),
+    //             editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
+    //         },
+    //     ]
+    // ],
     themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
         ({
@@ -58,7 +62,7 @@ const config = {
                     {
                         type: 'doc',
                         position: 'left',
-                        docId: 'overview/architecture',
+                        docId: 'architecture',
                         label: 'Docs',
                     },
                     {to: '/blog', label: 'Blog', position: 'left'},
