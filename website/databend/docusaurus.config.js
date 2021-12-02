@@ -186,6 +186,15 @@ const config = {
                 theme: lightCodeTheme,
                 darkTheme: darkCodeTheme,
             },
+            algolia: {
+                apiKey: 'TBD',
+                indexName: 'TBD',
+                contextualSearch: true,
+                searchParameters: {},
+            },
+            gtag: {
+                trackingID: 'TBD',
+            },
         }),
 };
 
