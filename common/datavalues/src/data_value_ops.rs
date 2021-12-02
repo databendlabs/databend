@@ -64,13 +64,13 @@ impl DataValue {
                 }
 
                 if n <= u8::MAX as u64 {
-                    (DataValue::UInt8(Some(n as u8)))
+                    Ok(DataValue::UInt8(Some(n as u8)))
                 } else if n <= u16::MAX as u64 {
-                    (DataValue::UInt16(Some(n as u16)))
+                    Ok(DataValue::UInt16(Some(n as u16)))
                 } else if n <= u32::MAX as u64 {
-                    (DataValue::UInt32(Some(n as u32)))
+                    Ok(DataValue::UInt32(Some(n as u32)))
                 } else {
-                    (DataValue::UInt64(Some(n as u64)))
+                    Ok(DataValue::UInt64(Some(n as u64)))
                 }
             }
             Err(_) => Ok(DataValue::Float64(Some(literal.parse::<f64>()?))),
