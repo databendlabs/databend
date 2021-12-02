@@ -54,10 +54,24 @@ pub trait DataAccessor: Send + Sync {
     ) -> Result<()>;
 
     async fn read(&self, location: &str) -> Result<Vec<u8>> {
-        let mut input_stream = self.get_input_stream(location, None)?;
         let mut buffer = vec![];
-        input_stream.read_to_end(&mut buffer).await?;
+        let cache = self.get_data_from_cache(location).await;
+        if let Some(data) = cache {
+            buffer = data;
+        } else {
+            let mut input_stream = self.get_input_stream(location, None)?;
+            input_stream.read_to_end(&mut buffer).await?;
+            self.put_data_to_cache(location, buffer.clone()).await?;
+        }
         Ok(buffer)
+    }
+
+    async fn get_data_from_cache(&self, _location: &str) -> Option<Vec<u8>> {
+        None
+    }
+
+    async fn put_data_to_cache(&self, _location: &str, _data: Vec<u8>) -> Result<()> {
+        Ok(())
     }
 }
 

@@ -21,6 +21,9 @@ use std::path::PathBuf;
 
 use async_compat::CompatExt;
 use common_base::tokio;
+use common_base::tokio::sync::RwLock;
+use common_cache::Cache;
+use common_cache::LruCache;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::Stream;
@@ -30,18 +33,25 @@ use tokio::io::AsyncWriteExt;
 use crate::DataAccessor;
 use crate::InputStream;
 
+const DEFAULT_CACHE_SIZE: u64 = 128 * 1024 * 1024;
+
 pub struct Local {
     root: PathBuf,
+    cache: RwLock<LruCache<String, Vec<u8>>>,
 }
 
 impl Local {
     pub fn new(root: &str) -> Local {
         Local {
             root: PathBuf::from(root),
+            cache: RwLock::new(LruCache::new(DEFAULT_CACHE_SIZE)),
         }
     }
     pub fn with_path(root_path: PathBuf) -> Local {
-        Local { root: root_path }
+        Local {
+            root: root_path,
+            cache: RwLock::new(LruCache::new(DEFAULT_CACHE_SIZE)),
+        }
     }
 
     pub fn prefix_with_root(&self, path: &str) -> Result<PathBuf> {
@@ -106,6 +116,19 @@ impl DataAccessor for Local {
             new_file.write_all(&v).await?
         }
         new_file.flush().await?;
+        Ok(())
+    }
+
+    async fn get_data_from_cache(&self, location: &str) -> Option<Vec<u8>> {
+        let mut cache = self.cache.write().await;
+        if let Some(data) = cache.get(location) {
+            return Some(data.clone());
+        }
+        None
+    }
+
+    async fn put_data_to_cache(&self, location: &str, data: Vec<u8>) -> Result<()> {
+        self.cache.write().await.put(location.to_string(), data);
         Ok(())
     }
 }

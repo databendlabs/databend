@@ -14,6 +14,7 @@ test = false
 common-base = {path = "../base"}
 common-datablocks = {path = "../datablocks"}
 common-exception = {path = "../exception"}
+common-cache = {path = "../cache"}
 common-infallible = {path = "../infallible"}
 
 async-compat = "0.2.1"

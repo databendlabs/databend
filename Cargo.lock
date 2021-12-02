@@ -1161,6 +1161,7 @@ dependencies = [
  "azure_storage_mirror",
  "bytes",
  "common-base",
+ "common-cache",
  "common-datablocks",
  "common-exception",
  "common-infallible",
