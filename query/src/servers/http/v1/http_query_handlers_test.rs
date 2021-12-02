@@ -60,7 +60,7 @@ async fn test_simple_sql() -> Result<()> {
     assert!(result.next_uri.is_none(), "{:?}", result);
     assert!(result.error.is_none());
     assert!(result.stats.progress.is_some());
-    assert!(result.columns.is_some());
+    assert!(result.schema.is_some());
     Ok(())
 }
 
@@ -73,7 +73,7 @@ async fn test_bad_sql() -> Result<()> {
     assert_eq!(result.state, ExecuteStateName::Failed);
     assert!(result.error.is_some());
     assert!(result.stats.progress.is_none());
-    assert!(result.columns.is_none());
+    assert!(result.schema.is_none());
     Ok(())
 }
 
@@ -91,7 +91,7 @@ async fn test_async() -> Result<()> {
     assert_eq!(result.data.len(), 0);
     assert_eq!(result.next_uri, Some(next_uri));
     assert!(result.stats.progress.is_some());
-    assert!(result.columns.is_some());
+    assert!(result.schema.is_some());
     assert!(result.error.is_none());
     assert_eq!(result.state, ExecuteStateName::Running,);
 
@@ -103,7 +103,7 @@ async fn test_async() -> Result<()> {
         assert_eq!(status, StatusCode::OK);
         assert_eq!(result.data.len(), 1);
         assert!(result.next_uri.is_none());
-        assert!(result.columns.is_none());
+        assert!(result.schema.is_none());
         assert!(result.error.is_none());
         assert!(result.stats.progress.is_some());
         assert_eq!(result.state, ExecuteStateName::Succeeded);
@@ -115,7 +115,7 @@ async fn test_async() -> Result<()> {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(result.data.len(), 0);
     assert!(result.next_uri.is_none());
-    assert!(result.columns.is_none());
+    assert!(result.schema.is_none());
     assert!(result.error.is_none());
     assert!(result.stats.progress.is_some());
     assert_eq!(result.state, ExecuteStateName::Succeeded);
