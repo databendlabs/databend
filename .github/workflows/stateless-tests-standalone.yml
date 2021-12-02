@@ -11,6 +11,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  PROTOC: protoc
 
 jobs:
   build:
@@ -26,6 +27,9 @@ jobs:
           - { os: macos-latest, toolchain: stable, target: x86_64-apple-darwin, cross: false }
     steps:
       - uses: actions/checkout@v2
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
 
       - name: Rust setup
         run: |
