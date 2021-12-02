@@ -109,6 +109,35 @@ async fn test_user_manager() -> Result<()> {
             hostname,
             UserPrivilegeType::Create
         ));
+        user_mgr.drop_user(user, hostname, true).await?;
+    }
+
+    // revoke privileges
+    {
+        let user_info = User::new(user, hostname, pwd, AuthType::PlainText);
+        user_mgr.add_user(user_info.into()).await?;
+        user_mgr
+            .grant_user_privileges(
+                user,
+                hostname,
+                GrantObject::Global,
+                UserPrivilege::all_privileges(),
+            )
+            .await?;
+        let user_info = user_mgr.get_user(user, hostname).await?;
+        assert_eq!(user_info.grants.entries().len(), 1);
+
+        user_mgr
+            .revoke_user_privileges(
+                user,
+                hostname,
+                GrantObject::Global,
+                UserPrivilege::all_privileges(),
+            )
+            .await?;
+        let user_info = user_mgr.get_user(user, hostname).await?;
+        assert_eq!(user_info.grants.entries().len(), 0);
+        user_mgr.drop_user(user, hostname, true).await?;
     }
 
     // alter.

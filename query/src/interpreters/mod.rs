@@ -27,6 +27,8 @@ mod interpreter_insert_into_test;
 #[cfg(test)]
 mod interpreter_interceptor_test;
 #[cfg(test)]
+mod interpreter_revoke_previlege_test;
+#[cfg(test)]
 mod interpreter_select_test;
 #[cfg(test)]
 mod interpreter_setting_test;
@@ -60,6 +62,7 @@ mod interpreter_grant_privilege;
 mod interpreter_insert_into;
 mod interpreter_interceptor;
 mod interpreter_kill;
+mod interpreter_revoke_privilege;
 mod interpreter_select;
 mod interpreter_setting;
 mod interpreter_show_create_table;
@@ -87,6 +90,7 @@ pub use interpreter_grant_privilege::GrantPrivilegeInterpreter;
 pub use interpreter_insert_into::InsertIntoInterpreter;
 pub use interpreter_interceptor::InterceptorInterpreter;
 pub use interpreter_kill::KillInterpreter;
+pub use interpreter_revoke_privilege::RevokePrivilegeInterpreter;
 pub use interpreter_select::SelectInterpreter;
 pub use interpreter_setting::SettingInterpreter;
 pub use interpreter_show_create_table::ShowCreateTableInterpreter;

@@ -42,6 +42,7 @@ use crate::LimitPlan;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
+use crate::RevokePrivilegePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateTablePlan;
@@ -88,6 +89,7 @@ pub enum PlanNode {
     AlterUser(AlterUserPlan),
     DropUser(DropUserPlan),
     GrantPrivilege(GrantPrivilegePlan),
+    RevokePrivilege(RevokePrivilegePlan),
 }
 
 impl PlanNode {
@@ -126,6 +128,7 @@ impl PlanNode {
             PlanNode::AlterUser(v) => v.schema(),
             PlanNode::DropUser(v) => v.schema(),
             PlanNode::GrantPrivilege(v) => v.schema(),
+            PlanNode::RevokePrivilege(v) => v.schema(),
             PlanNode::Sink(v) => v.schema(),
             PlanNode::Copy(v) => v.schema(),
         }
@@ -165,6 +168,7 @@ impl PlanNode {
             PlanNode::AlterUser(_) => "AlterUser",
             PlanNode::DropUser(_) => "DropUser",
             PlanNode::GrantPrivilege(_) => "GrantPrivilegePlan",
+            PlanNode::RevokePrivilege(_) => "RevokePrivilegePlan",
             PlanNode::Sink(_) => "SinkPlan",
             PlanNode::Copy(_) => "CopyPlan",
         }

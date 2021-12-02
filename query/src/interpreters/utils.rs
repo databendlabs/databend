@@ -12,11 +12,45 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
+use common_meta_types::GrantObject;
 use common_planners::PlanNode;
 
+use crate::catalogs::Catalog;
 use crate::optimizers::Optimizers;
+use crate::sessions::QueryContext;
 
 pub fn apply_plan_rewrite(mut optimizer: Optimizers, plan: &PlanNode) -> Result<PlanNode> {
     optimizer.optimize(plan)
+}
+
+pub(crate) async fn grant_object_exists_or_err(
+    ctx: Arc<QueryContext>,
+    object: &GrantObject,
+) -> Result<()> {
+    let catalog = ctx.get_catalog();
+
+    match &object {
+        GrantObject::Table(database_name, table_name) => {
+            if !catalog.exists_table(database_name, table_name).await? {
+                return Err(common_exception::ErrorCode::UnknownTable(format!(
+                    "table {}.{} not exists",
+                    database_name, table_name,
+                )));
+            }
+        }
+        GrantObject::Database(database_name) => {
+            if !catalog.exists_database(database_name).await? {
+                return Err(common_exception::ErrorCode::UnknownDatabase(format!(
+                    "database {} not exists",
+                    database_name,
+                )));
+            }
+        }
+        GrantObject::Global => (),
+    }
+
+    Ok(())
 }

@@ -42,6 +42,7 @@ use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
+use crate::RevokePrivilegePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateTablePlan;
@@ -128,6 +129,7 @@ pub trait PlanVisitor {
             PlanNode::AlterUser(plan) => self.visit_alter_user(plan),
             PlanNode::DropUser(plan) => self.visit_drop_user(plan),
             PlanNode::GrantPrivilege(plan) => self.visit_grant_privilege(plan),
+            PlanNode::RevokePrivilege(plan) => self.visit_revoke_privilege(plan),
             PlanNode::Sink(plan) => self.visit_append(plan),
         }
     }
@@ -261,6 +263,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_grant_privilege(&mut self, _: &GrantPrivilegePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_revoke_privilege(&mut self, _: &RevokePrivilegePlan) -> Result<()> {
         Ok(())
     }
 
