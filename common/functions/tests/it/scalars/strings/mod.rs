@@ -14,3 +14,4 @@
 
 mod locate;
 mod substring;
+mod trim;

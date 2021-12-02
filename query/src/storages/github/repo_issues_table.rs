@@ -31,7 +31,7 @@ use octocrab::params;
 use crate::sessions::QueryContext;
 use crate::storages::github::github_client::create_github_client;
 use crate::storages::github::github_client::get_own_repo_from_table_info;
-use crate::storages::github::GITHUB_REPO_ISSUES_ENGINE;
+use crate::storages::github::GITHUB_REPO_ISSUES_TABLE_ENGINE;
 use crate::storages::github::OWNER;
 use crate::storages::github::REPO;
 use crate::storages::StorageContext;
@@ -65,7 +65,7 @@ impl RepoIssuesTable {
             table: repo.clone() + "_issues",
             table_meta: TableMeta {
                 schema: RepoIssuesTable::schema(),
-                engine: GITHUB_REPO_ISSUES_ENGINE.into(),
+                engine: GITHUB_REPO_ISSUES_TABLE_ENGINE.into(),
                 options,
             },
         };

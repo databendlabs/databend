@@ -75,7 +75,7 @@ impl Interpreter for InsertIntoInterpreter {
                 .await?
         } else {
             let input_stream = if self.plan.value_exprs_opt.is_some() {
-                // if values are provided in SQL
+                // if values are provided as value expressions
                 // e.g. `insert into ... value(...), ...`
                 let values_exprs = self.plan.value_exprs_opt.clone().take().unwrap();
                 let blocks = self.block_from_values_exprs(values_exprs)?;

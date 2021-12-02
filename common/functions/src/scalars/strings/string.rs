@@ -17,6 +17,7 @@ use crate::scalars::AsciiFunction;
 use crate::scalars::Base64DecodeFunction;
 use crate::scalars::Base64EncodeFunction;
 use crate::scalars::HexFunction;
+use crate::scalars::InsertFunction;
 use crate::scalars::LTrimFunction;
 use crate::scalars::LocateFunction;
 use crate::scalars::OctFunction;
@@ -24,6 +25,7 @@ use crate::scalars::QuoteFunction;
 use crate::scalars::RTrimFunction;
 use crate::scalars::RepeatFunction;
 use crate::scalars::SubstringFunction;
+use crate::scalars::TrimFunction;
 use crate::scalars::UnhexFunction;
 
 #[derive(Clone)]
@@ -36,6 +38,7 @@ impl StringFunction {
         factory.register("repeat", RepeatFunction::desc());
         factory.register("ltrim", LTrimFunction::desc());
         factory.register("rtrim", RTrimFunction::desc());
+        factory.register("trim", TrimFunction::desc());
         factory.register("hex", HexFunction::desc());
         factory.register("unhex", UnhexFunction::desc());
         factory.register("quote", QuoteFunction::desc());
@@ -43,5 +46,7 @@ impl StringFunction {
         factory.register("to_base64", Base64EncodeFunction::desc());
         factory.register("from_base64", Base64DecodeFunction::desc());
         factory.register("locate", LocateFunction::desc());
+        factory.register("position", LocateFunction::desc());
+        factory.register("insert", InsertFunction::desc());
     }
 }

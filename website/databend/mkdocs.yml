@@ -226,6 +226,8 @@ nav:
               - TO_BASE64: sqlstatement/string-functions/to_base64.md
               - FROM_BASE64: sqlstatement/string-functions/from_base64.md
               - LOCATE: sqlstatement/string-functions/locate.md
+              - POSITION: sqlstatement/string-functions/position.md
+              - INSERT: sqlstatement/string-functions/insert.md
           - Test Functions:
               - SLEEP: sqlstatement/test-functions/sleep.md
               - CRASHME: sqlstatement/test-functions/crashme.md
@@ -240,6 +242,7 @@ nav:
               - CREATE USER: sqlstatement/user-management/user-management-create-user.md
       - API:
           - Config: api/config.md
+          - HTTP Handler: api/http-handler.md
   - CLI: cli/cli.md
   - Development:
       - Contributing: development/contributing.md

@@ -33,6 +33,7 @@ mod monotonicity_check {
         left: Option<DataColumnWithField>,
         right: Option<DataColumnWithField>,
         expect_mono: Monotonicity,
+        error: &'static str,
     }
 
     fn create_data(d: f64) -> Option<DataColumnWithField> {
@@ -51,7 +52,15 @@ mod monotonicity_check {
     }
 
     fn verify_test(t: Test) -> Result<()> {
-        let (mono, column) = MonotonicityCheckVisitor::check_expression(&t.expr, t.left, t.right)?;
+        let mono =
+            match MonotonicityCheckVisitor::check_expression(&t.expr, t.left, t.right, t.column) {
+                Ok(mono) => mono,
+                Err(e) => {
+                    assert_eq!(t.error, e.to_string(), "{}", t.name);
+                    return Ok(());
+                }
+            };
+
         assert_eq!(
             mono.is_monotonic, t.expect_mono.is_monotonic,
             "{} is_monotonic",
@@ -69,7 +78,6 @@ mod monotonicity_check {
                 "{} is_positive",
                 t.name
             );
-            assert_eq!(column, t.column, "{} column", t.name);
         }
 
         if t.expect_mono.is_monotonic || t.expect_mono.is_constant {
@@ -128,6 +136,7 @@ mod monotonicity_check {
                     left: None,
                     right: None,
                 },
+                error: "",
             },
             Test {
                 name: "f(x) = -x + 12",
@@ -145,6 +154,7 @@ mod monotonicity_check {
                     left: None,
                     right: None,
                 },
+                error: "",
             },
             Test {
                 name: "f(x,y) = x + y", // multi-variable function is not supported,
@@ -159,6 +169,7 @@ mod monotonicity_check {
                     left: None,
                     right: None,
                 },
+                error: "Code: 6, displayText = expect column name \"x\", get \"y\".",
             },
             Test {
                 name: "f(x) = (-x + 12) - x + (1 - x)",
@@ -184,6 +195,7 @@ mod monotonicity_check {
                     left: None,
                     right: None,
                 },
+                error: "",
             },
             Test {
                 name: "f(x) = (x + 12) - x + (1 - x)",
@@ -206,6 +218,7 @@ mod monotonicity_check {
                     left: None,
                     right: None,
                 },
+                error: "",
             },
         ];
 
@@ -231,6 +244,7 @@ mod monotonicity_check {
                     left: None,
                     right: None,
                 },
+                error: "",
             },
             Test {
                 name: "f(x) = -1/x",
@@ -245,6 +259,7 @@ mod monotonicity_check {
                     left: create_data(-0.2),
                     right: create_data(-0.1),
                 },
+                error: "",
             },
             Test {
                 name: "f(x) = x/10",
@@ -259,6 +274,7 @@ mod monotonicity_check {
                     left: None,
                     right: None,
                 },
+                error: "",
             },
             Test {
                 name: "f(x) = x * (x-12) where x in [10-1000]",
@@ -276,6 +292,7 @@ mod monotonicity_check {
                     left: None,
                     right: None,
                 },
+                error: "",
             },
             Test {
                 name: "f(x) = x * (x-12) where x in [12, 100]",
@@ -293,6 +310,7 @@ mod monotonicity_check {
                     left: create_data(0.0),
                     right: create_data(8800.0),
                 },
+                error: "",
             },
             Test {
                 name: "f(x) = x/(1/x) where  x >= 1",
@@ -310,6 +328,7 @@ mod monotonicity_check {
                     left: create_data(1.0),
                     right: create_data(4.0),
                 },
+                error: "",
             },
             Test {
                 name: "f(x) = -x/(2/(x-2)) where  x in [0-10]",
@@ -330,6 +349,7 @@ mod monotonicity_check {
                     left: None,
                     right: None,
                 },
+                error: "",
             },
             Test {
                 name: "f(x) = -x/(2/(x-2)) where  x in [4-10]",
@@ -350,6 +370,7 @@ mod monotonicity_check {
                     left: create_data(-4.0),
                     right: create_data(-40.0),
                 },
+                error: "",
             },
         ];
 
@@ -377,6 +398,7 @@ mod monotonicity_check {
                     left: None,
                     right: None,
                 },
+                error: "",
             },
             Test {
                 name: "f(x) = abs(x) where  0 <= x <= 10",
@@ -391,6 +413,7 @@ mod monotonicity_check {
                     left: create_data(0.0),
                     right: create_data(10.0),
                 },
+                error: "",
             },
             Test {
                 name: "f(x) = abs(x) where  -10 <= x <= -2",
@@ -405,6 +428,7 @@ mod monotonicity_check {
                     left: create_data(10.0),
                     right: create_data(2.0),
                 },
+                error: "",
             },
             Test {
                 name: "f(x) = abs(x) where -5 <= x <= 5", // should NOT be monotonic
@@ -419,6 +443,7 @@ mod monotonicity_check {
                     left: None,
                     right: None,
                 },
+                error: "",
             },
             Test {
                 name: "f(x) = abs(x + 12) where -12 <= x <= 1000",
@@ -435,6 +460,7 @@ mod monotonicity_check {
                     left: create_data(0.0),
                     right: create_data(1012.0),
                 },
+                error: "",
             },
             Test {
                 name: "f(x) = abs(x + 12) where -14 <=  x <= 20", // should NOT be monotonic
@@ -451,6 +477,7 @@ mod monotonicity_check {
                     left: None,
                     right: None,
                 },
+                error: "",
             },
             Test {
                 name: "f(x) = abs( (x - 7) + (x - 3) ) where 5 <= x <= 100",
@@ -470,6 +497,7 @@ mod monotonicity_check {
                     left: create_data(0.0),
                     right: create_data(190.0),
                 },
+                error: "",
             },
             Test {
                 name: "f(x) = abs( (-x + 8) - x) where -100 <= x <= 4",
@@ -492,6 +520,7 @@ mod monotonicity_check {
                     left: create_data(208.0),
                     right: create_data(0.0),
                 },
+                error: "",
             },
         ];
 

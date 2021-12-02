@@ -89,29 +89,29 @@ cluster_stop:
 	@if find ./.databend/local/configs/local/ -maxdepth 0 -empty | read v ; then echo there is no cluster exists; else ./target/release/bendctl cluster stop --databend_dir ./.databend --group local; fi
 
 embedded-meta-test: build-debug
-	rm -rf ./_meta_embedded
+	rm -rf ./_meta_embedded*
 	bash ./scripts/ci/ci-run-tests-embedded-meta.sh
 
 stateless-test: build-debug
-	rm -rf ./_meta/
+	rm -rf ./_meta*/
 	ulimit -n 10000; bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
 
 stateful-test:
-	rm -rf ./_meta/
+	rm -rf ./_meta*/
 	rm -rf ./.databend/
 	ulimit -n 10000; bash ./scripts/ci/ci-run-stateful-tests-standalone.sh
 
 stateful-cluster-test:
-	rm -rf ./_meta/
+	rm -rf ./_meta*/
 	rm -rf ./.databend/
 	bash ./scripts/ci/ci-run-stateful-tests-cluster.sh
 
 stateless-cluster-test: build-debug
-	rm -rf ./_meta/
+	rm -rf ./_meta*/
 	bash ./scripts/ci/ci-run-stateless-tests-cluster.sh
 
 stateless-cluster-test-tls: build-debug
-	rm -rf ./_meta/
+	rm -rf ./_meta*/
 	bash ./scripts/ci/ci-run-stateless-tests-cluster-tls.sh
 
 test: unit-test stateless-test
@@ -146,7 +146,7 @@ profile:
 clean:
 	cargo clean
 	rm -f ./nohup.out ./tests/suites/0_stateless/*.stdout-e
-	rm -rf ./_meta/ ./_logs/ ./query/_logs/ ./metasrv/_logs/
+	rm -rf ./_meta*/ ./_logs/ ./query/_logs/ ./metasrv/_logs/
 	rm -rf ./common/base/_logs/ ./common/meta/raft-store/_logs/ ./common/meta/sled-store/_logs/
 
 .PHONY: setup test run build fmt lint docker clean

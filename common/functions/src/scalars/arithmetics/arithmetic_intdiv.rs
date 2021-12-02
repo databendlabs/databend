@@ -30,7 +30,7 @@ impl ArithmeticIntDivFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create_func))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().monotonicity())
     }
 
     pub fn get_monotonicity(_args: &[Monotonicity]) -> Result<Monotonicity> {

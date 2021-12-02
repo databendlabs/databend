@@ -118,26 +118,28 @@ impl Function for AbsFunction {
             return Ok(Monotonicity::default());
         }
 
-        if args[0].gt_eq_zero()? {
-            // the range is >= 0, abs function do nothing
-            Ok(Monotonicity {
-                is_monotonic: true,
-                is_positive: args[0].is_positive,
-                is_constant: false,
-                left: None,
-                right: None,
-            })
-        } else if args[0].lt_eq_zero()? {
-            // the range is <= 0, abs function flip the is_positive
-            Ok(Monotonicity {
-                is_monotonic: true,
-                is_positive: !args[0].is_positive,
-                is_constant: false,
-                left: None,
-                right: None,
-            })
-        } else {
-            Ok(Monotonicity::default())
+        match args[0].compare_with_zero()? {
+            1 => {
+                // the range is >= 0, abs function do nothing
+                Ok(Monotonicity {
+                    is_monotonic: true,
+                    is_positive: args[0].is_positive,
+                    is_constant: false,
+                    left: None,
+                    right: None,
+                })
+            }
+            -1 => {
+                // the range is <= 0, abs function flip the is_positive
+                Ok(Monotonicity {
+                    is_monotonic: true,
+                    is_positive: !args[0].is_positive,
+                    is_constant: false,
+                    left: None,
+                    right: None,
+                })
+            }
+            _ => Ok(Monotonicity::default()),
         }
     }
 }

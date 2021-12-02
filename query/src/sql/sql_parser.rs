@@ -45,6 +45,7 @@ use sqlparser::tokenizer::Whitespace;
 
 use super::statements::DfCopy;
 use crate::sql::statements::DfAlterUser;
+use crate::sql::statements::DfCompactTable;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfCreateUser;
@@ -245,6 +246,7 @@ impl<'a> DfParser<'a> {
                         // Use database
                         "USE" => self.parse_use_database(),
                         "KILL" => self.parse_kill_query(),
+                        "COMPACT" => self.parse_compact(),
                         _ => self.expected("Keyword", self.parser.peek_token()),
                     },
                     _ => self.expected("an SQL statement", Token::Word(w)),
@@ -915,6 +917,21 @@ impl<'a> DfParser<'a> {
             options.push(SqlOption { name, value });
         }
         Ok(options)
+    }
+
+    fn parse_compact(&mut self) -> Result<DfStatement, ParserError> {
+        self.parser.next_token();
+        match self.parser.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::TABLE => {
+                    let table_name = self.parser.parse_object_name()?;
+                    let compact = DfCompactTable { name: table_name };
+                    Ok(DfStatement::CompactTable(compact))
+                }
+                _ => self.expected("TABLE", Token::Word(w)),
+            },
+            unexpected => self.expected("compact statement", unexpected),
+        }
     }
 
     fn consume_token(&mut self, expected: &str) -> bool {

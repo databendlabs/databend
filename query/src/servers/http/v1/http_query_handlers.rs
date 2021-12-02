@@ -82,7 +82,7 @@ pub struct QueryStats {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct QueryResponse {
     pub id: String,
-    pub columns: Option<DataSchemaRef>,
+    pub schema: Option<DataSchemaRef>,
     pub data: JsonBlockRef,
     pub state: ExecuteStateName,
     // only sql query error
@@ -111,7 +111,7 @@ impl QueryResponse {
         QueryResponse {
             data,
             state: r.state.state,
-            columns,
+            schema: columns,
             stats,
             id: id.clone(),
             next_uri: next_url,
@@ -127,7 +127,7 @@ impl QueryResponse {
             stats: QueryStats::default(),
             state: ExecuteStateName::Failed,
             data: Arc::new(vec![]),
-            columns: None,
+            schema: None,
             next_uri: None,
             stats_uri: None,
             final_uri: None,

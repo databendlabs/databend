@@ -279,7 +279,7 @@ pub async fn execute_query_json(
                 ans.error.unwrap()
             )));
         }
-        Ok((ans.columns, ans.data, ans.stats))
+        Ok((ans.schema, ans.data, ans.stats))
     }
 }
 

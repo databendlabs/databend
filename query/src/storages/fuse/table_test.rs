@@ -20,7 +20,10 @@ use common_planners::TruncateTablePlan;
 use futures::TryStreamExt;
 
 use crate::catalogs::Catalog;
+use crate::interpreters::InterpreterFactory;
+use crate::sql::PlanParser;
 use crate::storages::fuse::table_test_fixture::TestFixture;
+use crate::storages::fuse::TBL_OPT_KEY_CHUNK_BLOCK_NUM;
 use crate::storages::ToReadDataSourcePlan;
 
 #[tokio::test]
@@ -34,12 +37,7 @@ async fn test_fuse_table_simple_case() -> Result<()> {
     catalog.create_table(create_table_plan.into()).await?;
 
     // get table
-    let table = catalog
-        .get_table(
-            fixture.default_db().as_str(),
-            fixture.default_table().as_str(),
-        )
-        .await?;
+    let table = fixture.latest_default_table().await?;
 
     // insert 5 blocks
     let num_blocks = 5;
@@ -54,12 +52,7 @@ async fn test_fuse_table_simple_case() -> Result<()> {
 
     // get the latest tbl
     let prev_version = table.get_table_info().ident.version;
-    let table = catalog
-        .get_table(
-            fixture.default_db().as_str(),
-            fixture.default_table().as_str(),
-        )
-        .await?;
+    let table = fixture.latest_default_table().await?;
     assert_ne!(prev_version, table.get_table_info().ident.version);
 
     let (stats, parts) = table.read_partitions(ctx.clone(), None).await?;
@@ -122,12 +115,7 @@ async fn test_fuse_table_simple_case() -> Result<()> {
 
     // get the latest tbl
     let prev_version = table.get_table_info().ident.version;
-    let table = catalog
-        .get_table(
-            fixture.default_db().as_str(),
-            fixture.default_table().as_str(),
-        )
-        .await?;
+    let table = fixture.latest_default_table().await?;
     assert_ne!(prev_version, table.get_table_info().ident.version);
 
     let (stats, parts) = table.read_partitions(ctx.clone(), None).await?;
@@ -187,13 +175,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
     let catalog = ctx.get_catalog();
     catalog.create_table(create_table_plan.into()).await?;
 
-    let table = catalog
-        .get_table(
-            fixture.default_db().as_str(),
-            fixture.default_table().as_str(),
-        )
-        .await?;
-
+    let table = fixture.latest_default_table().await?;
     let truncate_plan = TruncateTablePlan {
         db: "".to_string(),
         table: "".to_string(),
@@ -202,12 +184,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
     // 1. truncate empty table
     let prev_version = table.get_table_info().ident.version;
     let r = table.truncate(ctx.clone(), truncate_plan.clone()).await;
-    let table = catalog
-        .get_table(
-            fixture.default_db().as_str(),
-            fixture.default_table().as_str(),
-        )
-        .await?;
+    let table = fixture.latest_default_table().await?;
     // no side effects
     assert_eq!(prev_version, table.get_table_info().ident.version);
     assert!(r.is_ok());
@@ -226,12 +203,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     // get the latest tbl
     let prev_version = table.get_table_info().ident.version;
-    let table = catalog
-        .get_table(
-            fixture.default_db().as_str(),
-            fixture.default_table().as_str(),
-        )
-        .await?;
+    let table = fixture.latest_default_table().await?;
     assert_ne!(prev_version, table.get_table_info().ident.version);
 
     // ensure data ingested
@@ -247,12 +219,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     // get the latest tbl
     let prev_version = table.get_table_info().ident.version;
-    let table = catalog
-        .get_table(
-            fixture.default_db().as_str(),
-            fixture.default_table().as_str(),
-        )
-        .await?;
+    let table = fixture.latest_default_table().await?;
     assert_ne!(prev_version, table.get_table_info().ident.version);
     let (stats, parts) = table
         .read_partitions(ctx.clone(), source_plan.push_downs.clone())
@@ -260,6 +227,67 @@ async fn test_fuse_table_truncate() -> Result<()> {
     // cleared?
     assert_eq!(parts.len(), 0);
     assert_eq!(stats.read_rows, 0);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_fuse_table_compact() -> Result<()> {
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+
+    let mut create_table_plan = fixture.default_crate_table_plan();
+    // set chunk size to 100
+    create_table_plan
+        .table_meta
+        .options
+        .insert(TBL_OPT_KEY_CHUNK_BLOCK_NUM.to_owned(), 100.to_string());
+
+    // create test table
+    let tbl_name = create_table_plan.table.clone();
+    let db_name = create_table_plan.db.clone();
+    let catalog = ctx.get_catalog();
+    catalog.create_table(create_table_plan.into()).await?;
+
+    // insert 5 times
+    let n = 5;
+    for _ in 0..n {
+        let table = fixture.latest_default_table().await?;
+        let num_blocks = 1;
+        let stream = Box::pin(futures::stream::iter(TestFixture::gen_block_stream(
+            num_blocks, 1,
+        )));
+        let r = table.append_data(ctx.clone(), stream).await?;
+        table
+            .commit(ctx.clone(), r.try_collect().await?, false)
+            .await?;
+    }
+
+    // there will be 5 blocks
+    let table = fixture.latest_default_table().await?;
+    let (_, parts) = table.read_partitions(ctx.clone(), None).await?;
+    assert_eq!(parts.len(), n);
+
+    // do compact
+    let query = format!("compact table {}.{}", db_name, tbl_name);
+    let plan = PlanParser::parse(&query, ctx.clone()).await?;
+    let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
+
+    // `PipelineBuilder` will parallelize the table reading according to value of setting `max_threads`,
+    // and `Table::read` will also try to de-queue read jobs preemptively. thus, the number of blocks
+    // that `Table::append` takes are not deterministic (`append` is also executed parallelly in this case),
+    // therefore, the final number of blocks varies.
+    // To avoid flaky test, the value of setting `max_threads` is set to be 1, so that pipeline_builder will
+    // only arrange one worker for the `ReadDataSourcePlan`.
+    ctx.get_settings().set_max_threads(1)?;
+    let data_stream = interpreter.execute(None).await?;
+    let _ = data_stream.try_collect::<Vec<_>>();
+
+    // verify compaction
+    let table = fixture.latest_default_table().await?;
+    let (_, parts) = table.read_partitions(ctx.clone(), None).await?;
+    // blocks are so tiny, they should be compacted into one
+    assert_eq!(parts.len(), 1);
 
     Ok(())
 }
