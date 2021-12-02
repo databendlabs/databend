@@ -31,7 +31,7 @@ use octocrab::params;
 use crate::sessions::QueryContext;
 use crate::storages::github::github_client::create_github_client;
 use crate::storages::github::github_client::get_own_repo_from_table_info;
-use crate::storages::github::GITHUB_REPO_PRS_ENGINE;
+use crate::storages::github::GITHUB_REPO_PRS_TABLE_ENGINE;
 use crate::storages::github::OWNER;
 use crate::storages::github::REPO;
 use crate::storages::StorageContext;
@@ -64,7 +64,7 @@ impl RepoPrsTable {
             table: repo.clone() + "_prs",
             table_meta: TableMeta {
                 schema: RepoPrsTable::schema(),
-                engine: GITHUB_REPO_PRS_ENGINE.into(),
+                engine: GITHUB_REPO_PRS_TABLE_ENGINE.into(),
                 options,
             },
         };
