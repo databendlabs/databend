@@ -25,8 +25,8 @@ use crate::scalars::QuoteFunction;
 use crate::scalars::RTrimFunction;
 use crate::scalars::RepeatFunction;
 use crate::scalars::SubstringFunction;
-use crate::scalars::UnhexFunction;
 use crate::scalars::TrimFunction;
+use crate::scalars::UnhexFunction;
 
 #[derive(Clone)]
 pub struct StringFunction;
