@@ -26,8 +26,8 @@ pub fn apply_plan_rewrite(mut optimizer: Optimizers, plan: &PlanNode) -> Result<
     optimizer.optimize(plan)
 }
 
-pub(crate) async fn grant_object_exists_or_err(
-    ctx: Arc<QueryContext>,
+pub async fn grant_object_exists_or_err(
+    ctx: &Arc<QueryContext>,
     object: &GrantObject,
 ) -> Result<()> {
     let catalog = ctx.get_catalog();
