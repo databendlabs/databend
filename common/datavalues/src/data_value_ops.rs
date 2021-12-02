@@ -30,7 +30,7 @@ impl DataValue {
 
     pub fn try_from_literal(literal: &str) -> Result<DataValue> {
         let mut s = literal;
-        let negative_flag = s.starts_with(`'-'`);
+        let negative_flag = s.starts_with('-');
         if negative_flag {
             s = &s[1..];
         }
