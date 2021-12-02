@@ -813,11 +813,11 @@ impl<'a> DfParser<'a> {
         if !self.parser.parse_keyword(Keyword::ON) {
             return self.expected("keyword ON", self.parser.peek_token());
         }
-        let (username, hostname) = self.parse_user_identity()?;
         let on = self.parse_grant_object()?;
-        if !self.parser.parse_keyword(Keyword::TO) {
+        if !self.parser.parse_keyword(Keyword::FROM) {
             return self.expected("keyword FROM", self.parser.peek_token());
         }
+        let (username, hostname) = self.parse_user_identity()?;
         let revoke = DfRevokeStatement {
             username,
             hostname,

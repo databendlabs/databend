@@ -57,7 +57,7 @@ impl Interpreter for RevokePrivilegeInterpreter {
 
         let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
         user_mgr
-            .grant_user_privileges(&plan.username, &plan.hostname, plan.on, plan.priv_types)
+            .revoke_user_privileges(&plan.username, &plan.hostname, plan.on, plan.priv_types)
             .await?;
 
         Ok(Box::pin(DataBlockStream::create(

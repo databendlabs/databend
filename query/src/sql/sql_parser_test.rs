@@ -776,7 +776,11 @@ fn grant_privilege_test() -> Result<()> {
             name: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Table(Some("db1".into()), "tb1".into()),
-            priv_types: UserPrivilege::all_privileges(),
+            priv_types: {
+                let mut privileges = UserPrivilege::empty();
+                privileges.set_privilege(UserPrivilegeType::Insert);
+                privileges
+            },
         }),
     )?;
 
@@ -786,7 +790,11 @@ fn grant_privilege_test() -> Result<()> {
             name: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Table(None, "tb1".into()),
-            priv_types: UserPrivilege::all_privileges(),
+            priv_types: {
+                let mut privileges = UserPrivilege::empty();
+                privileges.set_privilege(UserPrivilegeType::Insert);
+                privileges
+            },
         }),
     )?;
 
@@ -796,7 +804,11 @@ fn grant_privilege_test() -> Result<()> {
             name: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(Some("db1".into())),
-            priv_types: UserPrivilege::all_privileges(),
+            priv_types: {
+                let mut privileges = UserPrivilege::empty();
+                privileges.set_privilege(UserPrivilegeType::Insert);
+                privileges
+            },
         }),
     )?;
 
@@ -807,10 +819,10 @@ fn grant_privilege_test() -> Result<()> {
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
             priv_types: {
-                let mut user_priv = UserPrivilege::empty();
-                user_priv.set_privilege(UserPrivilegeType::Select);
-                user_priv.set_privilege(UserPrivilegeType::Create);
-                user_priv
+                let mut privileges = UserPrivilege::empty();
+                privileges.set_privilege(UserPrivilegeType::Select);
+                privileges.set_privilege(UserPrivilegeType::Create);
+                privileges
             },
         }),
     )?;
@@ -847,16 +859,6 @@ fn grant_privilege_test() -> Result<()> {
 fn revoke_privilege_test() -> Result<()> {
     expect_parse_ok(
         "REVOKE ALL ON * FROM 'test'@'localhost'",
-        DfStatement::RevokePrivilege(DfRevokeStatement {
-            username: String::from("test"),
-            hostname: String::from("localhost"),
-            on: DfGrantObject::Database(None),
-            priv_types: UserPrivilege::all_privileges(),
-        }),
-    )?;
-
-    expect_parse_ok(
-        "REVOKE ALL PRIVILEGES ON * FROM 'test'@'localhost'",
         DfStatement::RevokePrivilege(DfRevokeStatement {
             username: String::from("test"),
             hostname: String::from("localhost"),

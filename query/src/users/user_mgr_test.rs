@@ -109,6 +109,7 @@ async fn test_user_manager() -> Result<()> {
             hostname,
             UserPrivilegeType::Create
         ));
+        user_mgr.drop_user(user, hostname, true).await?;
     }
 
     // revoke privileges
@@ -136,6 +137,7 @@ async fn test_user_manager() -> Result<()> {
             .await?;
         let user_info = user_mgr.get_user(user, hostname).await?;
         assert_eq!(user_info.grants.entries().len(), 0);
+        user_mgr.drop_user(user, hostname, true).await?;
     }
 
     // alter.
