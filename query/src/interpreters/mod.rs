@@ -27,6 +27,8 @@ mod interpreter_insert_into_test;
 #[cfg(test)]
 mod interpreter_interceptor_test;
 #[cfg(test)]
+mod interpreter_revoke_previlege_test;
+#[cfg(test)]
 mod interpreter_select_test;
 #[cfg(test)]
 mod interpreter_setting_test;
