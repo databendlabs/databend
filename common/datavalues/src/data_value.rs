@@ -303,6 +303,25 @@ impl DataValue {
             ))),
         }
     }
+
+    pub fn as_f64(&self) -> Result<f64> {
+        match self {
+            DataValue::Int8(Some(v)) => Ok(*v as f64),
+            DataValue::Int16(Some(v)) => Ok(*v as f64),
+            DataValue::Int32(Some(v)) => Ok(*v as f64),
+            DataValue::Int64(Some(v)) => Ok(*v as f64),
+            DataValue::UInt8(Some(v)) => Ok(*v as f64),
+            DataValue::UInt16(Some(v)) => Ok(*v as f64),
+            DataValue::UInt32(Some(v)) => Ok(*v as f64),
+            DataValue::UInt64(Some(v)) => Ok(*v as f64),
+            DataValue::Float32(Some(v)) => Ok(*v as f64),
+            DataValue::Float64(Some(v)) => Ok(*v),
+            other => Result::Err(ErrorCode::BadDataValueType(format!(
+                "Unexpected type:{:?} to get f64 number",
+                other.data_type()
+            ))),
+        }
+    }
 }
 
 // Did not use std::convert:TryFrom
