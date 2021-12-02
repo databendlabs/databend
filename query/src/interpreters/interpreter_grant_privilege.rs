@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_types::GrantObject;
 use common_planners::GrantPrivilegePlan;
+use common_planners::RevokePrivilegePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
@@ -50,27 +51,11 @@ impl Interpreter for GrantPrivilegeInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
-        let catalog = self.ctx.get_catalog();
 
-        match &plan.on {
-            GrantObject::Table(database_name, table_name) => {
-                if !catalog.exists_table(database_name, table_name).await? {
-                    return Err(common_exception::ErrorCode::UnknownTable(format!(
-                        "table {}.{} not exists",
-                        database_name, table_name,
-                    )));
-                }
-            }
-            GrantObject::Database(database_name) => {
-                if !catalog.exists_database(database_name).await? {
-                    return Err(common_exception::ErrorCode::UnknownDatabase(format!(
-                        "database {} not exists",
-                        database_name,
-                    )));
-                }
-            }
-            GrantObject::Global => (),
-        }
+        grant_object_exists_or_err(self.ctx.clone(), &plan.on).await?;
+
+        // TODO: check user existence
+        // TODO: check privilege on granting on the grant object
 
         let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
         user_mgr
@@ -83,4 +68,73 @@ impl Interpreter for GrantPrivilegeInterpreter {
             vec![],
         )))
     }
+}
+
+#[derive(Debug)]
+pub struct RevokePrivilegeInterpreter {
+    ctx: Arc<QueryContext>,
+    plan: RevokePrivilegePlan,
+}
+
+impl RevokePrivilegeInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: RevokePrivilegePlan) -> Result<InterpreterPtr> {
+        Ok(Arc::new(RevokePrivilegeInterpreter { ctx, plan }))
+    }
+}
+
+#[async_trait::async_trait]
+impl Interpreter for RevokePrivilegeInterpreter {
+    fn name(&self) -> &str {
+        "RevokePrivilegeInterpreter"
+    }
+
+    #[tracing::instrument(level = "info", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
+    async fn execute(
+        &self,
+        _input_stream: Option<SendableDataBlockStream>,
+    ) -> Result<SendableDataBlockStream> {
+        let plan = self.plan.clone();
+
+        grant_object_exists_or_err(self.ctx.clone(), &plan.on).await?;
+
+        // TODO: check user existence
+        // TODO: check privilege on granting on the grant object
+
+        let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
+        user_mgr
+            .grant_user_privileges(&plan.username, &plan.hostname, plan.on, plan.priv_types)
+            .await?;
+
+        Ok(Box::pin(DataBlockStream::create(
+            self.plan.schema(),
+            None,
+            vec![],
+        )))
+    }
+}
+
+async fn grant_object_exists_or_err(ctx: Arc<QueryContext>, object: &GrantObject) -> Result<()> {
+    let catalog = ctx.get_catalog();
+
+    match &object {
+        GrantObject::Table(database_name, table_name) => {
+            if !catalog.exists_table(database_name, table_name).await? {
+                return Err(common_exception::ErrorCode::UnknownTable(format!(
+                    "table {}.{} not exists",
+                    database_name, table_name,
+                )));
+            }
+        }
+        GrantObject::Database(database_name) => {
+            if !catalog.exists_database(database_name).await? {
+                return Err(common_exception::ErrorCode::UnknownDatabase(format!(
+                    "database {} not exists",
+                    database_name,
+                )));
+            }
+        }
+        GrantObject::Global => (),
+    }
+
+    Ok(())
 }
