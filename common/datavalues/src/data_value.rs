@@ -322,6 +322,26 @@ impl DataValue {
             ))),
         }
     }
+
+    pub fn as_string(&self) -> Result<Vec<u8>> {
+        match self {
+            DataValue::Int8(Some(v)) => Ok(Vec::<u8>::from((*v).to_string())),
+            DataValue::Int16(Some(v)) => Ok(Vec::<u8>::from((*v).to_string())),
+            DataValue::Int32(Some(v)) => Ok(Vec::<u8>::from((*v).to_string())),
+            DataValue::Int64(Some(v)) => Ok(Vec::<u8>::from((*v).to_string())),
+            DataValue::UInt8(Some(v)) => Ok(Vec::<u8>::from((*v).to_string())),
+            DataValue::UInt16(Some(v)) => Ok(Vec::<u8>::from((*v).to_string())),
+            DataValue::UInt32(Some(v)) => Ok(Vec::<u8>::from((*v).to_string())),
+            DataValue::UInt64(Some(v)) => Ok(Vec::<u8>::from((*v).to_string())),
+            DataValue::Float32(Some(v)) => Ok(Vec::<u8>::from((*v).to_string())),
+            DataValue::Float64(Some(v)) => Ok(Vec::<u8>::from((*v).to_string())),
+            DataValue::String(Some(v)) => Ok(v.to_owned()),
+            other => Result::Err(ErrorCode::BadDataValueType(format!(
+                "Unexpected type:{:?} to get string",
+                other.data_type()
+            ))),
+        }
+    }
 }
 
 // Did not use std::convert:TryFrom

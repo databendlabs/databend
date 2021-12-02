@@ -82,7 +82,7 @@ impl Function for EltFunction {
                         let n = *on as usize;
                         if n > 0 && n < columns.len() {
                             match columns[n].column().try_get(i) {
-                                Ok(v) => r_array.append_value(v.to_string()),
+                                Ok(v) => r_array.append_value(v.as_string()?),
                                 Err(_) => r_array.append_null(),
                             }
                         } else {
