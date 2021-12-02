@@ -48,10 +48,9 @@ mod interpreter_user_alter_test;
 mod interpreter_user_create_test;
 #[cfg(test)]
 mod interpreter_user_drop_test;
-#[cfg(test)]
-mod plan_scheduler_test;
 
 mod interpreter;
+mod interpreter_common;
 mod interpreter_copy;
 mod interpreter_database_create;
 mod interpreter_database_drop;
@@ -73,10 +72,7 @@ mod interpreter_use_database;
 mod interpreter_user_alter;
 mod interpreter_user_create;
 mod interpreter_user_drop;
-#[allow(clippy::needless_range_loop)]
-mod plan_scheduler;
-mod plan_scheduler_ext;
-mod utils;
+mod plan_schedulers;
 
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
@@ -101,3 +97,4 @@ pub use interpreter_use_database::UseDatabaseInterpreter;
 pub use interpreter_user_alter::AlterUserInterpreter;
 pub use interpreter_user_create::CreatUserInterpreter;
 pub use interpreter_user_drop::DropUserInterpreter;
+pub use plan_schedulers::PlanScheduler;
