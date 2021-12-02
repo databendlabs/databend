@@ -1,14 +1,14 @@
 ---
-id: performance
 title: Performance
 ---
 
-!!! note
-    * **Memory SIMD-Vector processing performance only**
-    * Dataset: 100,000,000,000 (100 Billion)
-    * Hardware: AMD Ryzen 7 PRO 4750U, 8 CPU Cores, 16 Threads
-    * Rust: rustc 1.56.0-nightly (e3b1c12be 2021-08-02)
-    * Build with Link-time Optimization and Using CPU Specific Instructions
+:::note
+* **Memory SIMD-Vector processing performance only**
+* Dataset: 100,000,000,000 (100 Billion)
+* Hardware: AMD Ryzen 7 PRO 4750U, 8 CPU Cores, 16 Threads
+* Rust: rustc 1.56.0-nightly (e3b1c12be 2021-08-02)
+* Build with Link-time Optimization and Using CPU Specific Instructions
+:::
 
 | Query                                                        | DatabendQuery (v0.4.76-nightly)                         |
 | ------------------------------------------------------------ | --------------------------------------------------- |
@@ -23,9 +23,9 @@ title: Performance
 | SELECT number FROM numbers_mt(10000000000) ORDER BY number DESC LIMIT 10 | 3.164 s.<br /> (3.16 billion rows/s., 25.28 GB/s.)|
 | SELECT max(number), sum(number) FROM numbers_mt(1000000000) GROUP BY number % 3, number % 4, number % 5 LIMIT 10| 1.657 s.<br /> (603.62 million rows/s., 4.83 GB/s.)|
 
-!!! note "Notes"
- 
-    DatabendQuery system.numbers_mt is <b>16-way</b> parallelism processing, [gist](https://gist.github.com/BohuTANG/ab211a47c1493b9ecd01bf99a7731037)
+:::note Notes
+DatabendQuery system.numbers_mt is **16-way** parallelism processing, [gist](https://gist.github.com/BohuTANG/ab211a47c1493b9ecd01bf99a7731037)
+:::
 
 <figure>
   <img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/datafuse-avg-100b.gif"/>
