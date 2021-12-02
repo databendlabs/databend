@@ -43,5 +43,19 @@ impl StringOperator for RTrim {
     }
 }
 
+#[derive(Clone, Default)]
+pub struct Trim;
+
+impl StringOperator for Trim {
+    fn apply<'a>(&'a mut self, s: &'a [u8]) -> Option<&'a [u8]> {
+        let start_index = s.iter().position(|ch| *ch != b' ' && *ch != b'\t');
+        let end_index = s.iter().rev().position(|ch| *ch != b' ' && *ch != b'\t');
+        start_index
+            .and_then(|start| end_index.map(|end| &s[start..s.len() - end]))
+            .or(Some(b""))
+    }
+}
+
 pub type LTrimFunction = String2StringFunction<LTrim>;
 pub type RTrimFunction = String2StringFunction<RTrim>;
+pub type TrimFunction = String2StringFunction<Trim>;

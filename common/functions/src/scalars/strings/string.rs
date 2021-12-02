@@ -25,6 +25,7 @@ use crate::scalars::QuoteFunction;
 use crate::scalars::RTrimFunction;
 use crate::scalars::RepeatFunction;
 use crate::scalars::SubstringFunction;
+use crate::scalars::TrimFunction;
 use crate::scalars::UnhexFunction;
 
 #[derive(Clone)]
@@ -37,6 +38,7 @@ impl StringFunction {
         factory.register("repeat", RepeatFunction::desc());
         factory.register("ltrim", LTrimFunction::desc());
         factory.register("rtrim", RTrimFunction::desc());
+        factory.register("trim", TrimFunction::desc());
         factory.register("hex", HexFunction::desc());
         factory.register("unhex", UnhexFunction::desc());
         factory.register("quote", QuoteFunction::desc());
