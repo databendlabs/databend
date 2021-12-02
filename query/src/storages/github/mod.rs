@@ -24,9 +24,9 @@ pub use repo_info_table::RepoInfoTable;
 pub use repo_issues_table::RepoIssuesTable;
 pub use repo_prs_table::RepoPrsTable;
 
-pub const GITHUB_REPO_INFO_ENGINE: &str = "GITHUB_REPO_INFO_ENGINE";
-pub const GITHUB_REPO_ISSUES_ENGINE: &str = "GITHUB_REPO_ISSUES_ENGINE";
-pub const GITHUB_REPO_PRS_ENGINE: &str = "GITHUB_REPO_PRS_ENGINE";
-pub const GITHUB_REPO_COMMENTS_ENGINE: &str = "GITHUB_REPO_COMMENTS_ENGINE";
+pub const GITHUB_REPO_INFO_TABLE_ENGINE: &str = "GITHUB_REPO_INFO_TABLE_ENGINE";
+pub const GITHUB_REPO_ISSUES_TABLE_ENGINE: &str = "GITHUB_REPO_ISSUES_TABLE_ENGINE";
+pub const GITHUB_REPO_PRS_TABLE_ENGINE: &str = "GITHUB_REPO_PRS_TABLE_ENGINE";
+pub const GITHUB_REPO_COMMENTS_TABLE_ENGINE: &str = "GITHUB_REPO_COMMENTS_TABLE_ENGINE";
 pub const OWNER: &str = "owner";
 pub const REPO: &str = "repo";

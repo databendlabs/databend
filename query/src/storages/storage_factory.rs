@@ -23,6 +23,7 @@ use common_meta_types::TableInfo;
 use crate::configs::Config;
 use crate::storages::csv::CsvTable;
 use crate::storages::fuse::FuseTable;
+use crate::storages::github;
 use crate::storages::memory::MemoryTable;
 use crate::storages::null::NullTable;
 use crate::storages::parquet::ParquetTable;
@@ -65,6 +66,26 @@ impl StorageFactory {
         // Register parquet table engine.
         if conf.query.table_engine_parquet_enabled {
             creators.insert("PARQUET".to_string(), Arc::new(ParquetTable::try_create));
+        }
+
+        // Register github table engine;
+        {
+            creators.insert(
+                github::GITHUB_REPO_COMMENTS_TABLE_ENGINE.to_string(),
+                Arc::new(github::RepoCommentsTable::try_create),
+            );
+            creators.insert(
+                github::GITHUB_REPO_INFO_TABLE_ENGINE.to_string(),
+                Arc::new(github::RepoInfoTable::try_create),
+            );
+            creators.insert(
+                github::GITHUB_REPO_ISSUES_TABLE_ENGINE.to_string(),
+                Arc::new(github::RepoIssuesTable::try_create),
+            );
+            creators.insert(
+                github::GITHUB_REPO_PRS_TABLE_ENGINE.to_string(),
+                Arc::new(github::RepoPrsTable::try_create),
+            );
         }
 
         // Register NULL table engine.
