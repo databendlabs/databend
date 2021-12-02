@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::GrantPrivilegePlan;
+use common_planners::RevokePrivilegePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
@@ -26,21 +26,21 @@ use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]
-pub struct GrantPrivilegeInterpreter {
+pub struct RevokePrivilegeInterpreter {
     ctx: Arc<QueryContext>,
-    plan: GrantPrivilegePlan,
+    plan: RevokePrivilegePlan,
 }
 
-impl GrantPrivilegeInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: GrantPrivilegePlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(GrantPrivilegeInterpreter { ctx, plan }))
+impl RevokePrivilegeInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: RevokePrivilegePlan) -> Result<InterpreterPtr> {
+        Ok(Arc::new(RevokePrivilegeInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for GrantPrivilegeInterpreter {
+impl Interpreter for RevokePrivilegeInterpreter {
     fn name(&self) -> &str {
-        "GrantPrivilegeInterpreter"
+        "RevokePrivilegeInterpreter"
     }
 
     #[tracing::instrument(level = "info", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
@@ -57,7 +57,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
 
         let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
         user_mgr
-            .grant_user_privileges(&plan.name, &plan.hostname, plan.on, plan.priv_types)
+            .grant_user_privileges(&plan.username, &plan.hostname, plan.on, plan.priv_types)
             .await?;
 
         Ok(Box::pin(DataBlockStream::create(
