@@ -22,7 +22,8 @@ const config = {
             /** @type {import('@docusaurus/preset-classic').Options} */
             ({
                 docs:  {
-                    path: './docs/overview',
+                    path: 'docs/overview',
+                    routeBasePath: 'docs/overview',
                     sidebarPath: require.resolve('./docs/overview/sidebars.js'),
                     editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
                 },
@@ -42,7 +43,7 @@ const config = {
     //         '@docusaurus/plugin-content-docs',
     //         /** @type {import('@docusaurus/plugin-content-docs').Options} */
     //         {
-    //             id: 'x',
+    //             id: 'overview',
     //             path: 'docs/overview',
     //             sidebarPath: require.resolve('./docs/overview/sidebars.js'),
     //             editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
@@ -76,15 +77,6 @@ const config = {
             footer: {
                 style: 'dark',
                 links: [
-                    {
-                        title: 'Docs',
-                        items: [
-                            {
-                                label: 'Tutorial',
-                                to: '/docs/intro',
-                            },
-                        ],
-                    },
                     {
                         title: 'Community',
                         items: [
