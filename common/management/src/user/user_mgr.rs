@@ -47,6 +47,41 @@ impl UserMgr {
             user_prefix: format!("{}/{}", USER_API_KEY_PREFIX, tenant),
         }
     }
+
+    async fn upsert_user_info(
+        &self,
+        user_info: &UserInfo,
+        seq: Option<u64>,
+    ) -> common_exception::Result<u64> {
+        let user_key = format_user_key(&user_info.name, &user_info.hostname);
+        let key = format!("{}/{}", self.user_prefix, user_key);
+        let value = serde_json::to_vec(&user_info)?;
+
+        let match_seq = match seq {
+            None => MatchSeq::GE(1),
+            Some(s) => MatchSeq::Exact(s),
+        };
+
+        let kv_api = self.kv_api.clone();
+        let upsert_kv = async move {
+            kv_api
+                .upsert_kv(UpsertKVAction::new(
+                    &key,
+                    match_seq,
+                    Operation::Update(value),
+                    None,
+                ))
+                .await
+        };
+        let res = upsert_kv.await?;
+        match res.result {
+            Some(SeqV { seq: s, .. }) => Ok(s),
+            None => Err(ErrorCode::UnknownUser(format!(
+                "unknown user, or seq not match {}",
+                user_info.name
+            ))),
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -177,35 +212,25 @@ impl UserMgrApi for UserMgr {
         user_info
             .grants
             .grant_privileges(&username, &hostname, &object, privileges);
+        let seq = self.upsert_user_info(&user_info, seq).await?;
+        Ok(Some(seq))
+    }
 
-        let user_key = format_user_key(&user_info.name, &user_info.hostname);
-        let key = format!("{}/{}", self.user_prefix, user_key);
-        let value = serde_json::to_vec(&user_info)?;
-
-        let match_seq = match seq {
-            None => MatchSeq::GE(1),
-            Some(s) => MatchSeq::Exact(s),
-        };
-
-        let kv_api = self.kv_api.clone();
-        let upsert_kv = async move {
-            kv_api
-                .upsert_kv(UpsertKVAction::new(
-                    &key,
-                    match_seq,
-                    Operation::Update(value),
-                    None,
-                ))
-                .await
-        };
-        let res = upsert_kv.await?;
-        match res.result {
-            Some(SeqV { seq: s, .. }) => Ok(Some(s)),
-            None => Err(ErrorCode::UnknownUser(format!(
-                "unknown user, or seq not match {}",
-                username
-            ))),
-        }
+    async fn revoke_user_privileges(
+        &self,
+        username: String,
+        hostname: String,
+        object: GrantObject,
+        privileges: UserPrivilege,
+        seq: Option<u64>,
+    ) -> Result<Option<u64>> {
+        let user_val_seq = self.get_user(username.clone(), hostname.clone(), seq);
+        let mut user_info = user_val_seq.await?.data;
+        user_info
+            .grants
+            .revoke_privileges(&username, &hostname, &object, privileges);
+        let seq = self.upsert_user_info(&user_info, seq).await?;
+        Ok(Some(seq))
     }
 
     async fn drop_user(&self, username: String, hostname: String, seq: Option<u64>) -> Result<()> {
