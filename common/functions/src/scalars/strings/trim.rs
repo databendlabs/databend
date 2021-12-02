@@ -48,13 +48,11 @@ pub struct Trim;
 
 impl StringOperator for Trim {
     fn apply<'a>(&'a mut self, s: &'a [u8]) -> Option<&'a [u8]> {
-        let start_index= s.iter().position(|ch| *ch != b' ' && *ch != b'\t');
+        let start_index = s.iter().position(|ch| *ch != b' ' && *ch != b'\t');
         let end_index = s.iter().rev().position(|ch| *ch != b' ' && *ch != b'\t');
-        start_index.and_then(|start| {
-            end_index.map(|end| {
-                &s[start..s.len() - end]
-            })
-        }).or(Some(b""))
+        start_index
+            .and_then(|start| end_index.map(|end| &s[start..s.len() - end]))
+            .or(Some(b""))
     }
 }
 
