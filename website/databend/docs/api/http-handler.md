@@ -61,7 +61,7 @@ example:
 fields need explain:
 
 | field  | type       | description                              |
-| ------ | ---------- | ---------------------------------------- |
+|--------|------------|------------------------------------------|
 | state  | string     | choices: "Running","Failed", "Succeeded" |
 | error  | QueryError | error of the sql parsing or execution    |
 | id     | string     | a uniq query_id for this POST request    |
@@ -71,14 +71,14 @@ fields need explain:
 Schema
 
 | field    | type   | description                                               |
-| -------- | ------ | --------------------------------------------------------- |
+|----------|--------|-----------------------------------------------------------|
 | fields   | array  | An ordered sequence of Field                              |
 | metadata | object | A map of key-value pairs containing additional meta data. |
 
 Field
 
 | field     | type   |
-| --------- | ------ |
+|-----------|--------|
 | name      | string |
 | data_type | string |
 | nullable  | bool   |
@@ -86,14 +86,14 @@ Field
 QueryStats
 
 | field        | type          | description          |
-| ------------ | ------------- | -------------------- |
+|--------------|---------------|----------------------|
 | wall_time_ms | int           | query execution time |
 | progress     | QueryProgress | query progress       |
 
 QueryProgress
 
 | field              | type |
-| ------------------ | ---- |
+|--------------------|------|
 | read_rows          | int  |
 | read_bytes         | int  |
 | total_rows_to_read | int  |
@@ -101,7 +101,7 @@ QueryProgress
 QueryError
 
 | field     | type   | description                     |
-| --------- | ------ | ------------------------------- |
+|-----------|--------|---------------------------------|
 | stats     | int    | error code used inside databend |
 | message   | string | error message                   |
 | backtrace | string |                                 |
@@ -111,7 +111,7 @@ QueryError
 the usage of status code for different kinds of errors:
 
 | code | error                                                                       |
-| ---- | --------------------------------------------------------------------------- |
+|------|-----------------------------------------------------------------------------|
 | 200  | if sql is invalid or failed, the detail is in the `error` field of the JSON |
 | 404  | "query_id" or "page" not found                                              |
 | 400  | invalid request format                                                      |
@@ -128,12 +128,12 @@ check the response body for error reason as a string when status code is not 200
 
 /v1/statement
 
-```
+```shell
 curl --request POST '127.0.0.1:8001/v1/statement/' --header 'Content-Type: text/plain' --data-raw 'SELECT avg(number) FROM numbers(100000000)'
 ```
 
 /v1/query
 
-```
+```shell
 curl --request POST '127.0.0.1:8001/v1/query/' --header 'Content-Type: application/json' --data-raw '{"sql": "SELECT avg(number) FROM numbers(100000000)"}'"#
 ```
