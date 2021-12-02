@@ -22,7 +22,7 @@ use pretty_assertions::assert_eq;
 
 #[test]
 fn test_trim_function() -> Result<()> {
-     struct Test {
+    struct Test {
         display: &'static str,
         nullable: bool,
         arg_names: Vec<&'static str>,
@@ -43,9 +43,7 @@ fn test_trim_function() -> Result<()> {
             display: "ltrim",
             nullable: true,
             arg_names: vec!["a"],
-            columns: vec![
-                Series::new(vec!["  abc"]).into(),
-            ],
+            columns: vec![Series::new(vec!["  abc"]).into()],
             func: LTrimFunction::try_create("ltrim")?,
             expect: Series::new(vec!["abc"]).into(),
             error: "",
@@ -54,9 +52,7 @@ fn test_trim_function() -> Result<()> {
             display: "rtrim",
             nullable: true,
             arg_names: vec!["a"],
-            columns: vec![
-                Series::new(vec!["abc  "]).into(),
-            ],
+            columns: vec![Series::new(vec!["abc  "]).into()],
             func: RTrimFunction::try_create("rtrim")?,
             expect: Series::new(vec!["abc"]).into(),
             error: "",
@@ -65,9 +61,7 @@ fn test_trim_function() -> Result<()> {
             display: "trim",
             nullable: true,
             arg_names: vec!["a"],
-            columns: vec![
-                Series::new(vec!["   abc  "]).into(),
-            ],
+            columns: vec![Series::new(vec!["   abc  "]).into()],
             func: TrimFunction::try_create("trim")?,
             expect: Series::new(vec!["abc"]).into(),
             error: "",
@@ -76,9 +70,7 @@ fn test_trim_function() -> Result<()> {
             display: "trim",
             nullable: true,
             arg_names: vec!["a"],
-            columns: vec![
-                Series::new(vec!["     "]).into(),
-            ],
+            columns: vec![Series::new(vec!["     "]).into()],
             func: TrimFunction::try_create("trim")?,
             expect: Series::new(vec![""]).into(),
             error: "",
