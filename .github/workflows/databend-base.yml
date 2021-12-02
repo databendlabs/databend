@@ -11,6 +11,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  PROTOC: protoc
 
 jobs:
   lint_and_build:
@@ -24,6 +25,9 @@ jobs:
         with:
           file_or_dir: ./
           config_file: .yamllint.yml
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
 
       - name: Rust setup
         run: |
