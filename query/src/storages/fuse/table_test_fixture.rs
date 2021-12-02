@@ -33,6 +33,7 @@ use crate::catalogs::Catalog;
 use crate::configs::Config;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::TBL_OPT_KEY_CHUNK_BLOCK_NUM;
+use crate::storages::Table;
 
 pub struct TestFixture {
     _tmp_dir: TempDir,
@@ -76,12 +77,12 @@ impl TestFixture {
         self.ctx.clone()
     }
 
-    pub fn default_db(&self) -> String {
+    pub fn default_db_name(&self) -> String {
         gen_db_name(&self.prefix)
     }
 
-    pub fn default_table(&self) -> String {
-        format!("{}_test_tbl", self.prefix)
+    pub fn default_table_name(&self) -> String {
+        format!("tbl_{}", self.prefix)
     }
 
     pub fn default_schema() -> DataSchemaRef {
@@ -91,8 +92,8 @@ impl TestFixture {
     pub fn default_crate_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
             if_not_exists: false,
-            db: self.default_db(),
-            table: self.default_table(),
+            db: self.default_db_name(),
+            table: self.default_table_name(),
             table_meta: TableMeta {
                 schema: TestFixture::default_schema(),
                 engine: "FUSE".to_string(),
@@ -116,8 +117,18 @@ impl TestFixture {
             })
             .collect()
     }
+
+    pub async fn latest_default_table(&self) -> Result<Arc<dyn Table>> {
+        self.ctx
+            .get_catalog()
+            .get_table(
+                self.default_db_name().as_str(),
+                self.default_table_name().as_str(),
+            )
+            .await
+    }
 }
 
 fn gen_db_name(prefix: &str) -> String {
-    format!("{}_default", prefix)
+    format!("db_{}", prefix)
 }
