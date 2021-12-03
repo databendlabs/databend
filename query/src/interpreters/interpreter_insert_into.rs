@@ -66,11 +66,11 @@ impl Interpreter for InsertIntoInterpreter {
         &self,
         input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let database = &self.plan.db_name;
-        let table = &self.plan.tbl_name;
+        let database = &self.plan.database_name;
+        let table = &self.plan.table_name;
         let table = self.ctx.get_table(database, table).await?;
         let append_op_logs = match &self.plan.source {
-            InputSource::ExpressionValues(values_exprs) => {
+            InputSource::Expressions(values_exprs) => {
                 let exec = StreamExec {
                     ctx: &self.ctx,
                     schema: &self.plan.schema,
@@ -78,7 +78,7 @@ impl Interpreter for InsertIntoInterpreter {
                 };
                 exec.append_value_exprs(values_exprs).await
             }
-            InputSource::InputStreamValues(_) => {
+            InputSource::StreamingWithFormat(_) => {
                 let exec = StreamExec {
                     ctx: &self.ctx,
                     schema: &self.plan.schema,

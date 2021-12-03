@@ -21,15 +21,15 @@ use crate::PlanNode;
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub enum InputSource {
     SelectPlan(Box<PlanNode>),
-    ExpressionValues(Vec<Vec<Expression>>),
-    InputStreamValues(String),
+    Expressions(Vec<Vec<Expression>>),
+    StreamingWithFormat(String),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct InsertIntoPlan {
-    pub db_name: String,
-    pub tbl_name: String,
-    pub tbl_id: MetaId,
+    pub database_name: String,
+    pub table_name: String,
+    pub table_id: MetaId,
     pub schema: DataSchemaRef,
     pub overwrite: bool,
     pub source: InputSource,
@@ -37,8 +37,8 @@ pub struct InsertIntoPlan {
 
 impl PartialEq for InsertIntoPlan {
     fn eq(&self, other: &Self) -> bool {
-        self.db_name == other.db_name
-            && self.tbl_name == other.tbl_name
+        self.database_name == other.database_name
+            && self.table_name == other.table_name
             && self.schema == other.schema
     }
 }
@@ -57,9 +57,9 @@ impl InsertIntoPlan {
         select_plan: PlanNode,
     ) -> InsertIntoPlan {
         InsertIntoPlan {
-            db_name: db,
-            tbl_name: table,
-            tbl_id: table_meta_id,
+            database_name: db,
+            table_name: table,
+            table_id: table_meta_id,
             schema,
             overwrite,
             source: InputSource::SelectPlan(Box::new(select_plan)),
@@ -75,12 +75,12 @@ impl InsertIntoPlan {
         values: Vec<Vec<Expression>>,
     ) -> InsertIntoPlan {
         InsertIntoPlan {
-            db_name: db,
-            tbl_name: table,
-            tbl_id: table_meta_id,
+            database_name: db,
+            table_name: table,
+            table_id: table_meta_id,
             schema,
             overwrite,
-            source: InputSource::ExpressionValues(values),
+            source: InputSource::Expressions(values),
         }
     }
 
@@ -93,12 +93,12 @@ impl InsertIntoPlan {
         format: String,
     ) -> InsertIntoPlan {
         InsertIntoPlan {
-            db_name: db,
-            tbl_name: table,
-            tbl_id: table_meta_id,
+            database_name: db,
+            table_name: table,
+            table_id: table_meta_id,
             schema,
             overwrite,
-            source: InputSource::InputStreamValues(format),
+            source: InputSource::StreamingWithFormat(format),
         }
     }
 }
