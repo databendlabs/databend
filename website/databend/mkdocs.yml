@@ -226,6 +226,7 @@ nav:
               - TO_BASE64: sqlstatement/string-functions/to_base64.md
               - FROM_BASE64: sqlstatement/string-functions/from_base64.md
               - LOCATE: sqlstatement/string-functions/locate.md
+              - INSTR: sqlstatement/string-functions/instr.md
               - POSITION: sqlstatement/string-functions/position.md
               - INSERT: sqlstatement/string-functions/insert.md
               - FIELD: sqlstatement/string-functions/field.md

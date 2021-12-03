@@ -22,14 +22,22 @@ use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
+const FUNC_LOCATE: u8 = 1;
+const FUNC_POSITION: u8 = 2;
+const FUNC_INSTR: u8 = 3;
+
+pub type LocateFunction = LocatingFunction<FUNC_LOCATE>;
+pub type PositionFunction = LocatingFunction<FUNC_POSITION>;
+pub type InstrFunction = LocatingFunction<FUNC_INSTR>;
+
 #[derive(Clone)]
-pub struct LocateFunction {
+pub struct LocatingFunction<const T: u8> {
     display_name: String,
 }
 
-impl LocateFunction {
+impl<const T: u8> LocatingFunction<T> {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(LocateFunction {
+        Ok(Box::new(LocatingFunction::<T> {
             display_name: display_name.to_string(),
         }))
     }
@@ -40,17 +48,17 @@ impl LocateFunction {
     }
 }
 
-impl Function for LocateFunction {
+impl<const T: u8> Function for LocatingFunction<T> {
     fn name(&self) -> &str {
         &*self.display_name
     }
 
-    fn num_arguments(&self) -> usize {
-        0
-    }
-
     fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((2, 3))
+        if T == FUNC_LOCATE {
+            Some((2, 3))
+        } else {
+            Some((2, 2))
+        }
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
@@ -62,9 +70,19 @@ impl Function for LocateFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let ss_column = columns[0].column().cast_with_type(&DataType::String)?;
-        let s_column = columns[1].column().cast_with_type(&DataType::String)?;
-        let p_column = if columns.len() == 3 {
+        let (ss_column, s_column) = if T == FUNC_INSTR {
+            (
+                columns[1].column().cast_with_type(&DataType::String)?,
+                columns[0].column().cast_with_type(&DataType::String)?,
+            )
+        } else {
+            (
+                columns[0].column().cast_with_type(&DataType::String)?,
+                columns[1].column().cast_with_type(&DataType::String)?,
+            )
+        };
+
+        let p_column = if T == FUNC_LOCATE && columns.len() == 3 {
             columns[2].column().cast_with_type(&DataType::UInt64)?
         } else {
             DataColumn::Constant(DataValue::UInt64(Some(1)), input_rows)
@@ -223,7 +241,7 @@ impl Function for LocateFunction {
     }
 }
 
-impl fmt::Display for LocateFunction {
+impl<const T: u8> fmt::Display for LocatingFunction<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }
