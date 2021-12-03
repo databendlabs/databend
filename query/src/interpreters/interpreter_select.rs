@@ -21,8 +21,8 @@ use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
-use super::utils::apply_plan_rewrite;
-use crate::interpreters::plan_scheduler_ext;
+use super::interpreter_common::apply_plan_rewrite;
+use crate::interpreters::plan_schedulers;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::optimizers::Optimizers;
@@ -49,6 +49,10 @@ impl Interpreter for SelectInterpreter {
         "SelectInterpreter"
     }
 
+    fn schema(&self) -> DataSchemaRef {
+        self.select.schema()
+    }
+
     #[tracing::instrument(level = "info", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(
         &self,
@@ -56,10 +60,6 @@ impl Interpreter for SelectInterpreter {
     ) -> Result<SendableDataBlockStream> {
         // TODO: maybe panic?
         let optimized_plan = self.rewrite_plan()?;
-        plan_scheduler_ext::schedule_query(&self.ctx, &optimized_plan).await
-    }
-
-    fn schema(&self) -> DataSchemaRef {
-        self.select.schema()
+        plan_schedulers::schedule_query(&self.ctx, &optimized_plan).await
     }
 }

@@ -14,10 +14,12 @@
 
 mod ascii;
 mod base_64;
+mod field;
 mod hex;
 mod insert;
 mod locate;
 mod oct;
+mod octet_length;
 mod quote;
 mod repeat;
 mod string;
@@ -30,9 +32,13 @@ mod unhex;
 pub use ascii::AsciiFunction;
 pub use base_64::Base64DecodeFunction;
 pub use base_64::Base64EncodeFunction;
+pub use field::FieldFunction;
 pub use insert::InsertFunction;
+pub use locate::InstrFunction;
 pub use locate::LocateFunction;
+pub use locate::PositionFunction;
 pub use oct::OctFunction;
+pub use octet_length::OctetLengthFunction;
 pub use quote::QuoteFunction;
 pub use repeat::RepeatFunction;
 pub use string::StringFunction;
