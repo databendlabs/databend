@@ -27,6 +27,7 @@ use crate::scalars::RepeatFunction;
 use crate::scalars::SubstringFunction;
 use crate::scalars::TrimFunction;
 use crate::scalars::UnhexFunction;
+use crate::scalars::BitLengthFunction;
 
 #[derive(Clone)]
 pub struct StringFunction;
@@ -48,5 +49,6 @@ impl StringFunction {
         factory.register("locate", LocateFunction::desc());
         factory.register("position", LocateFunction::desc());
         factory.register("insert", InsertFunction::desc());
+        factory.register("bit_length", BitLengthFunction::desc());
     }
 }
