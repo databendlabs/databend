@@ -42,7 +42,7 @@ use crate::Expressions;
 use crate::FilterPlan;
 use crate::GrantPrivilegePlan;
 use crate::HavingPlan;
-use crate::InsertIntoPlan;
+use crate::InsertPlan;
 use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
@@ -336,7 +336,7 @@ pub trait PlanRewriter {
         Ok(PlanNode::DropDatabase(plan.clone()))
     }
 
-    fn rewrite_insert_into(&mut self, plan: &InsertIntoPlan) -> Result<PlanNode> {
+    fn rewrite_insert_into(&mut self, plan: &InsertPlan) -> Result<PlanNode> {
         Ok(PlanNode::InsertInto(plan.clone()))
     }
 

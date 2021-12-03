@@ -30,13 +30,13 @@ use crate::optimizers::Optimizers;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 
-pub struct InsertIntoWithPlan<'a> {
+pub struct InsertWithPlan<'a> {
     pub ctx: &'a Arc<QueryContext>,
     pub schema: &'a Arc<DataSchema>,
     pub plan_node: &'a PlanNode,
 }
 
-impl<'a> InsertIntoWithPlan<'a> {
+impl<'a> InsertWithPlan<'a> {
     pub fn new(
         ctx: &'a Arc<QueryContext>,
         schema: &'a Arc<DataSchema>,

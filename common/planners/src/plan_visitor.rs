@@ -34,7 +34,7 @@ use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::GrantPrivilegePlan;
 use crate::HavingPlan;
-use crate::InsertIntoPlan;
+use crate::InsertPlan;
 use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
@@ -286,7 +286,7 @@ pub trait PlanVisitor {
         Ok(())
     }
 
-    fn visit_insert_into(&mut self, _: &InsertIntoPlan) -> Result<()> {
+    fn visit_insert_into(&mut self, _: &InsertPlan) -> Result<()> {
         Ok(())
     }
 

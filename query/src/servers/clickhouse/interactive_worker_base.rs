@@ -28,7 +28,7 @@ use common_clickhouse_srv::CHContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planners::InsertIntoPlan;
+use common_planners::InsertPlan;
 use common_planners::PlanNode;
 use futures::channel::mpsc;
 use futures::channel::mpsc::Receiver;
@@ -109,7 +109,7 @@ impl InteractiveWorkerBase {
     }
 
     pub async fn process_insert_query(
-        insert: InsertIntoPlan,
+        insert: InsertPlan,
         ch_ctx: &mut CHContext,
         ctx: Arc<QueryContext>,
     ) -> Result<Receiver<BlockItem>> {

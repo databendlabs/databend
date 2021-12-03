@@ -85,7 +85,7 @@ pub use interpreter_describe_table::DescribeTableInterpreter;
 pub use interpreter_explain::ExplainInterpreter;
 pub use interpreter_factory::InterpreterFactory;
 pub use interpreter_grant_privilege::GrantPrivilegeInterpreter;
-pub use interpreter_insert_into::InsertIntoInterpreter;
+pub use interpreter_insert_into::InsertInterpreter;
 pub use interpreter_interceptor::InterceptorInterpreter;
 pub use interpreter_kill::KillInterpreter;
 pub use interpreter_revoke_privilege::RevokePrivilegeInterpreter;

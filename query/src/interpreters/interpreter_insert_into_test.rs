@@ -46,7 +46,7 @@ async fn test_insert_into_interpreter() -> Result<()> {
     {
         static TEST_QUERY: &str = "insert into default.input_table values(1,1,1,1,1), (2,2,2,2,2)";
         if let PlanNode::InsertInto(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
-            let executor = InsertIntoInterpreter::try_create(ctx.clone(), plan.clone())?;
+            let executor = InsertInterpreter::try_create(ctx.clone(), plan.clone())?;
             let _ = executor.execute(None).await?;
         }
     }

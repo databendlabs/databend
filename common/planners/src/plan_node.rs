@@ -35,7 +35,7 @@ use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::GrantPrivilegePlan;
 use crate::HavingPlan;
-use crate::InsertIntoPlan;
+use crate::InsertPlan;
 use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
@@ -80,7 +80,7 @@ pub enum PlanNode {
     TruncateTable(TruncateTablePlan),
     UseDatabase(UseDatabasePlan),
     SetVariable(SettingPlan),
-    InsertInto(InsertIntoPlan),
+    InsertInto(InsertPlan),
     Copy(CopyPlan),
     ShowCreateTable(ShowCreateTablePlan),
     SubQueryExpression(SubQueriesSetPlan),

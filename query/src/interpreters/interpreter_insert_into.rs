@@ -17,31 +17,31 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::InsertInputSource;
-use common_planners::InsertIntoPlan;
+use common_planners::InsertPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
 
 use super::interpreter_insert_into_with_stream::SendableWithSchema;
-use crate::interpreters::interpreter_insert_into_with_plan::InsertIntoWithPlan;
+use crate::interpreters::interpreter_insert_into_with_plan::InsertWithPlan;
 use crate::interpreters::interpreter_insert_into_with_stream::InsertWithStream;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
-pub struct InsertIntoInterpreter {
+pub struct InsertInterpreter {
     ctx: Arc<QueryContext>,
-    plan: InsertIntoPlan,
+    plan: InsertPlan,
 }
 
-impl InsertIntoInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: InsertIntoPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(InsertIntoInterpreter { ctx, plan }))
+impl InsertInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: InsertPlan) -> Result<InterpreterPtr> {
+        Ok(Arc::new(InsertInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for InsertIntoInterpreter {
+impl Interpreter for InsertInterpreter {
     fn name(&self) -> &str {
         "InsertIntoInterpreter"
     }
@@ -58,7 +58,7 @@ impl Interpreter for InsertIntoInterpreter {
 
         let append_logs = match &self.plan.source {
             InsertInputSource::SelectPlan(plan_node) => {
-                let with_plan = InsertIntoWithPlan::new(&self.ctx, &self.plan.schema, plan_node);
+                let with_plan = InsertWithPlan::new(&self.ctx, &self.plan.schema, plan_node);
                 with_plan.execute(table.as_ref()).await
             }
             InsertInputSource::Expressions(values_exprs) => {

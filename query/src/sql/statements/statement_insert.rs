@@ -20,7 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
 use common_planners::InsertInputSource;
-use common_planners::InsertIntoPlan;
+use common_planners::InsertPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::Expr;
@@ -84,7 +84,7 @@ impl AnalyzableStatement for DfInsertStatement {
         }?;
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::InsertInto(
-            InsertIntoPlan {
+            InsertPlan {
                 database_name,
                 table_name,
                 table_id,

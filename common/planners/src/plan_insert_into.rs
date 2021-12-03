@@ -26,7 +26,7 @@ pub enum InsertInputSource {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
-pub struct InsertIntoPlan {
+pub struct InsertPlan {
     pub database_name: String,
     pub table_name: String,
     pub table_id: MetaId,
@@ -35,7 +35,7 @@ pub struct InsertIntoPlan {
     pub source: InsertInputSource,
 }
 
-impl PartialEq for InsertIntoPlan {
+impl PartialEq for InsertPlan {
     fn eq(&self, other: &Self) -> bool {
         self.database_name == other.database_name
             && self.table_name == other.table_name
@@ -43,7 +43,7 @@ impl PartialEq for InsertIntoPlan {
     }
 }
 
-impl InsertIntoPlan {
+impl InsertPlan {
     pub fn schema(&self) -> DataSchemaRef {
         self.schema.clone()
     }
