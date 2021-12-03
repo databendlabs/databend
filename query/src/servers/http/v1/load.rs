@@ -17,7 +17,7 @@ use std::sync::Arc;
 use async_compat::CompatExt;
 use async_stream::stream;
 use common_base::ProgressValues;
-use common_planners::InputSource;
+use common_planners::InsertInputSource;
 use common_planners::PlanNode;
 use common_streams::CsvSource;
 use common_streams::Source;
@@ -67,10 +67,10 @@ pub async fn streaming_load(
 
     let plan = PlanParser::parse(insert_sql, context.clone()).await?;
 
-    // valid plan
+    // validate plan
     match &plan {
         PlanNode::InsertInto(insert) => match &insert.source {
-            InputSource::StreamingWithFormat(format) => {
+            InsertInputSource::StreamingWithFormat(format) => {
                 if format.to_lowercase().as_str() == "csv" {
                     Ok(())
                 } else {

@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_planners::InputSource;
+use common_planners::InsertInputSource;
 use common_planners::InsertIntoPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -57,16 +57,16 @@ impl Interpreter for InsertIntoInterpreter {
             .await?;
 
         let append_logs = match &self.plan.source {
-            InputSource::SelectPlan(plan_node) => {
+            InsertInputSource::SelectPlan(plan_node) => {
                 let with_plan = InsertIntoWithPlan::new(&self.ctx, &self.plan.schema, plan_node);
                 with_plan.execute(table.as_ref()).await
             }
-            InputSource::Expressions(values_exprs) => {
+            InsertInputSource::Expressions(values_exprs) => {
                 let stream = values_exprs.to_stream(self.plan.schema.clone())?;
                 let with_stream = InsertWithStream::new(&self.ctx, &table);
                 with_stream.append_stream(stream).await
             }
-            InputSource::StreamingWithFormat(_) => {
+            InsertInputSource::StreamingWithFormat(_) => {
                 let stream = input_stream
                     .take()
                     .ok_or_else(|| ErrorCode::EmptyData("input stream not exist or consumed"))?;

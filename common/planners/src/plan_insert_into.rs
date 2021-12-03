@@ -19,7 +19,7 @@ use crate::Expression;
 use crate::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
-pub enum InputSource {
+pub enum InsertInputSource {
     SelectPlan(Box<PlanNode>),
     Expressions(Vec<Vec<Expression>>),
     StreamingWithFormat(String),
@@ -32,7 +32,7 @@ pub struct InsertIntoPlan {
     pub table_id: MetaId,
     pub schema: DataSchemaRef,
     pub overwrite: bool,
-    pub source: InputSource,
+    pub source: InsertInputSource,
 }
 
 impl PartialEq for InsertIntoPlan {

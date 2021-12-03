@@ -19,7 +19,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
-use common_planners::InputSource;
+use common_planners::InsertInputSource;
 use common_planners::InsertIntoPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
@@ -72,13 +72,13 @@ impl AnalyzableStatement for DfInsertStatement {
         let table_id = write_table.get_id();
         let schema = self.insert_schema(write_table)?;
 
-        let source = match &self.source {
+        let input_source = match &self.source {
             None => self.analyze_insert_without_source().await,
             Some(source) => match &source.body {
                 SetExpr::Values(v) => self.analyze_insert_values(ctx.clone(), v, &schema).await,
                 SetExpr::Select(_) => self.analyze_insert_select(ctx.clone(), source).await,
                 _ => Err(ErrorCode::SyntaxException(
-                    "Insert must be have values or select.",
+                    "Insert must be have values or select source.",
                 )),
             },
         }?;
@@ -90,7 +90,7 @@ impl AnalyzableStatement for DfInsertStatement {
                 table_id,
                 schema,
                 overwrite: self.overwrite,
-                source,
+                source: input_source,
             },
         ))))
     }
@@ -135,7 +135,7 @@ impl DfInsertStatement {
         ctx: Arc<QueryContext>,
         values: &Values,
         schema: &DataSchemaRef,
-    ) -> Result<InputSource> {
+    ) -> Result<InsertInputSource> {
         tracing::debug!("{:?}", values);
 
         let expression_analyzer = ExpressionAnalyzer::create(ctx);
@@ -160,25 +160,25 @@ impl DfInsertStatement {
             value_exprs.push(exprs);
         }
 
-        Ok(InputSource::Expressions(value_exprs))
+        Ok(InsertInputSource::Expressions(value_exprs))
     }
 
-    async fn analyze_insert_without_source(&self) -> Result<InputSource> {
+    async fn analyze_insert_without_source(&self) -> Result<InsertInputSource> {
         let format = self.format.as_ref().ok_or_else(|| {
             ErrorCode::SyntaxException("FORMAT must be specified in streaming insertion")
         })?;
-        Ok(InputSource::StreamingWithFormat(format.clone()))
+        Ok(InsertInputSource::StreamingWithFormat(format.clone()))
     }
 
     async fn analyze_insert_select(
         &self,
         ctx: Arc<QueryContext>,
         source: &Query,
-    ) -> Result<InputSource> {
+    ) -> Result<InsertInputSource> {
         let statement = DfQueryStatement::try_from(source.clone())?;
         let select_plan =
             PlanParser::build_plan(vec![DfStatement::Query(Box::new(statement))], ctx).await?;
-        Ok(InputSource::SelectPlan(Box::new(select_plan)))
+        Ok(InsertInputSource::SelectPlan(Box::new(select_plan)))
     }
 
     fn insert_schema(&self, read_table: Arc<dyn Table>) -> Result<DataSchemaRef> {
