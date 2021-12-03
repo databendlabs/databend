@@ -37,6 +37,9 @@ pub struct StringFunction;
 
 impl StringFunction {
     pub fn register(factory: &mut FunctionFactory) {
+        factory.register("mid", SubstringFunction::desc());
+        factory.register("substr", SubstringFunction::desc());
+        factory.register("substring", SubstringFunction::desc());
         factory.register("substring", SubstringFunction::desc());
         factory.register("oct", OctFunction::desc());
         factory.register("repeat", RepeatFunction::desc());
