@@ -23,24 +23,17 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::TableInfo;
 use common_planners::Expression;
 use common_planners::InputSource;
 use common_planners::InsertIntoPlan;
-use common_planners::PlanNode;
-use common_planners::SelectPlan;
-use common_planners::SinkPlan;
-use common_planners::StagePlan;
 use common_streams::DataBlockStream;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
 
-use crate::interpreters::interpreter_common::apply_plan_rewrite;
-use crate::interpreters::plan_schedulers;
+use crate::interpreters::interpreter_insert_into_with_plan::InsertIntoWithPlan;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::optimizers::Optimizers;
 use crate::pipelines::transforms::ExpressionExecutor;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
@@ -70,6 +63,13 @@ impl Interpreter for InsertIntoInterpreter {
         let table = &self.plan.table_name;
         let table = self.ctx.get_table(database, table).await?;
         let append_op_logs = match &self.plan.source {
+            InputSource::SelectPlan(plan_node) => {
+                let executor = InsertIntoWithPlan {
+                    ctx: &self.ctx,
+                    schema: &self.plan.schema,
+                };
+                executor.execute(plan_node, table.as_ref()).await
+            }
             InputSource::Expressions(values_exprs) => {
                 let exec = StreamExec {
                     ctx: &self.ctx,
@@ -85,14 +85,6 @@ impl Interpreter for InsertIntoInterpreter {
                     table: &table,
                 };
                 exec.append_stream(input_stream).await
-            }
-            InputSource::SelectPlan(plan_node) => {
-                let exec = SelectPlanExec {
-                    ctx: &self.ctx,
-                    schema: &self.plan.schema,
-                };
-                exec.insert_with_select_plan(plan_node, table.as_ref())
-                    .await
             }
         }?;
 
@@ -170,80 +162,5 @@ impl<'a> StreamExec<'a> {
             .take()
             .ok_or_else(|| ErrorCode::EmptyData("input stream not exist or consumed"))?;
         self.do_append(stream).await
-    }
-}
-
-struct SelectPlanExec<'a> {
-    ctx: &'a Arc<QueryContext>,
-    schema: &'a DataSchemaRef,
-}
-impl<'a> SelectPlanExec<'a> {
-    async fn insert_with_select_plan(
-        &self,
-        plan_node: &PlanNode,
-        table: &dyn Table,
-    ) -> Result<SendableDataBlockStream> {
-        if let PlanNode::Select(sel) = plan_node {
-            let optimized_plan = self.rewrite_plan(sel, table.get_table_info())?;
-            plan_schedulers::schedule_query(self.ctx, &optimized_plan).await
-        } else {
-            Err(ErrorCode::UnknownTypeOfQuery(format!(
-                "Unsupported select query plan for insert_into interpreter, {}",
-                plan_node.name()
-            )))
-        }
-    }
-
-    fn check_schema_cast(&self, select_plan: &SelectPlan) -> Result<bool> {
-        let output_schema = self.schema;
-        let select_schema = select_plan.schema();
-
-        // validate schema
-        if select_schema.fields().len() < output_schema.fields().len() {
-            return Err(ErrorCode::BadArguments(
-                "Fields in select statement is less than expected",
-            ));
-        }
-
-        // check if cast needed
-        let cast_needed = select_schema != *output_schema;
-        Ok(cast_needed)
-    }
-
-    fn rewrite_plan(&self, select_plan: &SelectPlan, table_info: &TableInfo) -> Result<PlanNode> {
-        let cast_needed = self.check_schema_cast(select_plan)?;
-
-        // optimize and rewrite the SelectPlan.input
-        let optimized_plan =
-            apply_plan_rewrite(Optimizers::create(self.ctx.clone()), &select_plan.input)?;
-
-        // rewrite the optimized the plan
-        let rewritten_plan = match optimized_plan {
-            // if it is a StagePlan Node, we insert the a SinkPlan in between the Stage and Stage.input
-            // i.e.
-            //    StagePlan <~ PlanNodeA  => StagePlan <~ Sink <~ PlanNodeA
-            PlanNode::Stage(r) => {
-                let prev_input = r.input.clone();
-                let sink = PlanNode::Sink(SinkPlan {
-                    table_info: table_info.clone(),
-                    input: prev_input,
-                    cast_needed,
-                });
-                PlanNode::Stage(StagePlan {
-                    kind: r.kind,
-                    input: Arc::new(sink),
-                    scatters_expr: r.scatters_expr,
-                })
-            }
-            // otherwise, we just prepend a SinkPlan
-            // i.e.
-            //    node <~ PlanNodeA  => Sink<~ node <~ PlanNodeA
-            node => PlanNode::Sink(SinkPlan {
-                table_info: table_info.clone(),
-                input: Arc::new(node),
-                cast_needed,
-            }),
-        };
-        Ok(rewritten_plan)
     }
 }
