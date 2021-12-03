@@ -15,10 +15,12 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
 ) ENGINE = engine
 ```
 
-!!! note
-    Local engine is one of `Memory`, `Parquet`, `JSONEachRow`, `Null` or `CSV`, data will be stored in the DatabendQuery memory/disk locally.
+:::note
+Local engine is one of `Memory`, `Parquet`, `JSONEachRow`, `Null` or `CSV`, data will be stored in the DatabendQuery memory/disk locally.
 
-    Remote engine is `remote`, will be stored in the remote DatabendStore cluster.
+Remote engine is `remote`, will be stored in the remote DatabendStore cluster.
+:::
+
 
 ## Examples
 

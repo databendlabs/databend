@@ -25,8 +25,9 @@ argMin(arg, val)
 
 ## Examples
 
-!!! note
-    numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
+:::note
+numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
+:::
 
     Input table:
     ```

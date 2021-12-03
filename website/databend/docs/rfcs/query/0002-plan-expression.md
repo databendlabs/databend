@@ -19,14 +19,15 @@ In the standard SQL protocol, aliasing can work in:
 - Order By: eg: ```select a + 3 as b from table order by b```
 
 
-!!! note "Notes"
-    ClickHouse has extended the usage of expression alias, it can be work in:
+:::note Notes
+ClickHouse has extended the usage of expression alias, it can be work in:
 
-    - recursive alias expression: eg: `select a + 1 as b, b + 1 as c`
+- recursive alias expression: eg: `select a + 1 as b, b + 1 as c`
 
-    - filter: eg: `select a + 1 as b, b + 1 as c  from table where c > 0`
+- filter: eg: `select a + 1 as b, b + 1 as c  from table where c > 0`
 
-    Note Currently we do not support clickhouse style alias expression. It can be implemented later.
+Note Currently we do not support clickhouse style alias expression. It can be implemented later.
+:::
 
 For expression alias, we only handle it at last, in projection stage. But We have to replace the alias of the expression as early as possible to prevent ambiguity later.
 

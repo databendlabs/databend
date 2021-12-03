@@ -5,11 +5,14 @@ title: STDDEV_POP
 Aggregate function.
 
 The STDDEV_POP() function returns the population standard deviation(the square root of VAR_POP()) of an expression. 
-!!! note
-    STD() or STDDEV() can also be used, which are equivalent but not standard SQL.
 
-!!! warning
-    NULL values are not counted.
+:::note
+STD() or STDDEV() can also be used, which are equivalent but not standard SQL.
+:::
+
+:::caution
+NULL values are not counted.
+:::
 
 ## Syntax
 
@@ -31,8 +34,9 @@ double
 
 ## Examples
 
-!!! note
-    numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
+:::note
+numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
+:::
 
 ```
 mysql> SELECT STDDEV_POP(number) FROM numbers(10000);

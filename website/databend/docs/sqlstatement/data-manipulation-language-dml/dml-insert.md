@@ -12,10 +12,11 @@ INSERT INTO [db.]table [(c1, c2, c3)] VALUES (v11, v12, v13), (v21, v22, v23), .
 ```
 
 
-!!! note
-    Local engine is one of `Memory`, `Parquet`, `JSONEachRow`, `Null` or `CSV`, data will be stored in the DatabendQuery memory/disk locally.
+:::note
+Local engine is one of `Memory`, `Parquet`, `JSONEachRow`, `Null` or `CSV`, data will be stored in the DatabendQuery memory/disk locally.
 
-    Remote engine is `remote`, will be stored in the remote DatabendStore cluster.
+Remote engine is `remote`, will be stored in the remote DatabendStore cluster.
+:::
 
 ### Examples
 
@@ -43,10 +44,12 @@ mysql> SELECT * FROM test;
 ```
 INSERT INTO [db.]table [(c1, c2, c3)] SELECT ...
 ```
-!!! note
-    Columns are mapped according to their position in the SELECT clause, So the number of columns in SELECT should be greater or equal to the INSERT table.
 
-    The data type of columns in the SELECT and INSERT table could be different, if necessary, type casting will be performed. 
+:::note
+Columns are mapped according to their position in the SELECT clause, So the number of columns in SELECT should be greater or equal to the INSERT table.
+
+The data type of columns in the SELECT and INSERT table could be different, if necessary, type casting will be performed. 
+:::
 
 ### Examples
 
