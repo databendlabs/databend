@@ -8,7 +8,7 @@ Writing data.
 ### Syntax
 
 ```
-INSERT INTO [db.]table [(c1, c2, c3)] VALUES (v11, v12, v13), (v21, v22, v23), ...
+INSERT INTO|OVERWRITE [db.]table [(c1, c2, c3)] VALUES (v11, v12, v13), (v21, v22, v23), ...
 ```
 
 
@@ -35,6 +35,14 @@ mysql> SELECT * FROM test;
 +------+-------+
 |  888 | stars |
 | 1024 | stars |
++------+-------+
+
+mysql> INSERT OVERWRITE test values(2048, 'stars');
+mysql> SELECT * FROM test;
++------+-------+
+| a    | b     |
++------+-------+
+| 2048 | stars |
 +------+-------+
 ```
 

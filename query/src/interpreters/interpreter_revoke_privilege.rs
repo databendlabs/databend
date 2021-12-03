@@ -14,43 +14,33 @@
 
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planners::PlanNode;
-use common_planners::SelectPlan;
+use common_planners::RevokePrivilegePlan;
+use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
-use super::interpreter_common::apply_plan_rewrite;
-use crate::interpreters::plan_schedulers;
+use crate::interpreters::interpreter_common::grant_object_exists_or_err;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::optimizers::Optimizers;
 use crate::sessions::QueryContext;
 
-pub struct SelectInterpreter {
+#[derive(Debug)]
+pub struct RevokePrivilegeInterpreter {
     ctx: Arc<QueryContext>,
-    select: SelectPlan,
+    plan: RevokePrivilegePlan,
 }
 
-impl SelectInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, select: SelectPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(SelectInterpreter { ctx, select }))
-    }
-
-    fn rewrite_plan(&self) -> Result<PlanNode> {
-        apply_plan_rewrite(Optimizers::create(self.ctx.clone()), &self.select.input)
+impl RevokePrivilegeInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: RevokePrivilegePlan) -> Result<InterpreterPtr> {
+        Ok(Arc::new(RevokePrivilegeInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for SelectInterpreter {
+impl Interpreter for RevokePrivilegeInterpreter {
     fn name(&self) -> &str {
-        "SelectInterpreter"
-    }
-
-    fn schema(&self) -> DataSchemaRef {
-        self.select.schema()
+        "RevokePrivilegeInterpreter"
     }
 
     #[tracing::instrument(level = "info", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
@@ -58,8 +48,22 @@ impl Interpreter for SelectInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        // TODO: maybe panic?
-        let optimized_plan = self.rewrite_plan()?;
-        plan_schedulers::schedule_query(&self.ctx, &optimized_plan).await
+        let plan = self.plan.clone();
+
+        grant_object_exists_or_err(&self.ctx, &plan.on).await?;
+
+        // TODO: check user existence
+        // TODO: check privilege on granting on the grant object
+
+        let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
+        user_mgr
+            .revoke_user_privileges(&plan.username, &plan.hostname, plan.on, plan.priv_types)
+            .await?;
+
+        Ok(Box::pin(DataBlockStream::create(
+            self.plan.schema(),
+            None,
+            vec![],
+        )))
     }
 }

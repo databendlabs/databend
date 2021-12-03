@@ -15,58 +15,31 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::GrantObject;
 use common_meta_types::UserPrivilege;
-use common_planners::GrantPrivilegePlan;
 use common_planners::PlanNode;
+use common_planners::RevokePrivilegePlan;
 use common_tracing::tracing;
 
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
+use crate::sql::statements::DfGrantObject;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DfGrantStatement {
-    pub name: String,
+pub struct DfRevokeStatement {
+    pub username: String,
     pub hostname: String,
     pub priv_types: UserPrivilege,
     pub on: DfGrantObject,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum DfGrantObject {
-    Global,
-    Database(Option<String>),
-    Table(Option<String>, String),
-}
-
-impl DfGrantObject {
-    pub fn convert_to_grant_object(&self, ctx: Arc<QueryContext>) -> GrantObject {
-        match self {
-            DfGrantObject::Global => GrantObject::Global,
-            DfGrantObject::Table(database_name, table_name) => {
-                let database_name = database_name
-                    .clone()
-                    .unwrap_or_else(|| ctx.get_current_database());
-                GrantObject::Table(database_name, table_name.clone())
-            }
-            DfGrantObject::Database(database_name) => {
-                let database_name = database_name
-                    .clone()
-                    .unwrap_or_else(|| ctx.get_current_database());
-                GrantObject::Database(database_name)
-            }
-        }
-    }
-}
-
 #[async_trait::async_trait]
-impl AnalyzableStatement for DfGrantStatement {
+impl AnalyzableStatement for DfRevokeStatement {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         Ok(AnalyzedResult::SimpleQuery(Box::new(
-            PlanNode::GrantPrivilege(GrantPrivilegePlan {
-                name: self.name.clone(),
+            PlanNode::RevokePrivilege(RevokePrivilegePlan {
+                username: self.username.clone(),
                 hostname: self.hostname.clone(),
                 on: self.on.convert_to_grant_object(ctx),
                 priv_types: self.priv_types,

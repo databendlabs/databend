@@ -51,5 +51,14 @@ pub trait UserMgrApi: Sync + Send {
         seq: Option<u64>,
     ) -> Result<Option<u64>>;
 
+    async fn revoke_user_privileges(
+        &self,
+        username: String,
+        hostname: String,
+        object: GrantObject,
+        privileges: UserPrivilege,
+        seq: Option<u64>,
+    ) -> Result<Option<u64>>;
+
     async fn drop_user(&self, username: String, hostname: String, seq: Option<u64>) -> Result<()>;
 }

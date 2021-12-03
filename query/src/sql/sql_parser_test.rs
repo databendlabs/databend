@@ -29,6 +29,7 @@ use crate::sql::statements::DfDropTable;
 use crate::sql::statements::DfDropUser;
 use crate::sql::statements::DfGrantObject;
 use crate::sql::statements::DfGrantStatement;
+use crate::sql::statements::DfRevokeStatement;
 use crate::sql::statements::DfShowDatabases;
 use crate::sql::statements::DfShowTables;
 use crate::sql::statements::DfTruncateTable;
@@ -773,11 +774,7 @@ fn grant_privilege_test() -> Result<()> {
             name: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
-            priv_types: {
-                let mut user_priv = UserPrivilege::empty();
-                user_priv.set_all_privileges();
-                user_priv
-            },
+            priv_types: UserPrivilege::all_privileges(),
         }),
     )?;
 
@@ -787,11 +784,7 @@ fn grant_privilege_test() -> Result<()> {
             name: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
-            priv_types: {
-                let mut user_priv = UserPrivilege::empty();
-                user_priv.set_all_privileges();
-                user_priv
-            },
+            priv_types: UserPrivilege::all_privileges(),
         }),
     )?;
 
@@ -802,9 +795,9 @@ fn grant_privilege_test() -> Result<()> {
             hostname: String::from("localhost"),
             on: DfGrantObject::Table(Some("db1".into()), "tb1".into()),
             priv_types: {
-                let mut user_priv = UserPrivilege::empty();
-                user_priv.set_privilege(UserPrivilegeType::Insert);
-                user_priv
+                let mut privileges = UserPrivilege::empty();
+                privileges.set_privilege(UserPrivilegeType::Insert);
+                privileges
             },
         }),
     )?;
@@ -816,9 +809,9 @@ fn grant_privilege_test() -> Result<()> {
             hostname: String::from("localhost"),
             on: DfGrantObject::Table(None, "tb1".into()),
             priv_types: {
-                let mut user_priv = UserPrivilege::empty();
-                user_priv.set_privilege(UserPrivilegeType::Insert);
-                user_priv
+                let mut privileges = UserPrivilege::empty();
+                privileges.set_privilege(UserPrivilegeType::Insert);
+                privileges
             },
         }),
     )?;
@@ -830,9 +823,9 @@ fn grant_privilege_test() -> Result<()> {
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(Some("db1".into())),
             priv_types: {
-                let mut user_priv = UserPrivilege::empty();
-                user_priv.set_privilege(UserPrivilegeType::Insert);
-                user_priv
+                let mut privileges = UserPrivilege::empty();
+                privileges.set_privilege(UserPrivilegeType::Insert);
+                privileges
             },
         }),
     )?;
@@ -844,10 +837,10 @@ fn grant_privilege_test() -> Result<()> {
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
             priv_types: {
-                let mut user_priv = UserPrivilege::empty();
-                user_priv.set_privilege(UserPrivilegeType::Select);
-                user_priv.set_privilege(UserPrivilegeType::Create);
-                user_priv
+                let mut privileges = UserPrivilege::empty();
+                privileges.set_privilege(UserPrivilegeType::Select);
+                privileges.set_privilege(UserPrivilegeType::Create);
+                privileges
             },
         }),
     )?;
@@ -875,6 +868,26 @@ fn grant_privilege_test() -> Result<()> {
     expect_parse_err(
         "GRANT INSERT ON *.`tb1` TO 'test'@'localhost'",
         String::from("sql parser error: Expected whitespace, found: ."),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn revoke_privilege_test() -> Result<()> {
+    expect_parse_ok(
+        "REVOKE ALL ON * FROM 'test'@'localhost'",
+        DfStatement::RevokePrivilege(DfRevokeStatement {
+            username: String::from("test"),
+            hostname: String::from("localhost"),
+            on: DfGrantObject::Database(None),
+            priv_types: UserPrivilege::all_privileges(),
+        }),
+    )?;
+
+    expect_parse_err(
+        "REVOKE SELECT ON * 'test'@'localhost'",
+        String::from("sql parser error: Expected keyword FROM, found: 'test'"),
     )?;
 
     Ok(())

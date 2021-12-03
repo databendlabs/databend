@@ -20,7 +20,7 @@ use common_exception::Result;
 use common_planners::*;
 
 use crate::api::FlightAction;
-use crate::interpreters::plan_scheduler::PlanScheduler;
+use crate::interpreters::PlanScheduler;
 use crate::sessions::QueryContext;
 use crate::tests::create_query_context_with_cluster;
 use crate::tests::ClusterDescriptor;

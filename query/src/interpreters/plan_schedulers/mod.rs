@@ -12,11 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
-use common_planners::PlanNode;
+#[cfg(test)]
+mod plan_scheduler_test;
 
-use crate::optimizers::Optimizers;
+#[allow(clippy::needless_range_loop)]
+mod plan_scheduler;
+mod plan_scheduler_error;
+mod plan_scheduler_query;
+mod plan_scheduler_stream;
 
-pub fn apply_plan_rewrite(mut optimizer: Optimizers, plan: &PlanNode) -> Result<PlanNode> {
-    optimizer.optimize(plan)
-}
+pub use plan_scheduler::PlanScheduler;
+pub use plan_scheduler_error::handle_error;
+pub use plan_scheduler_query::schedule_query;
+pub use plan_scheduler_stream::Scheduled;
+pub use plan_scheduler_stream::ScheduledStream;
