@@ -16,9 +16,10 @@ use common_base::tokio;
 use common_exception::Result;
 use common_planners::PlanNode;
 use criterion::Criterion;
+use databend_query::configs::Config;
 use databend_query::interpreters::SelectInterpreter;
+use databend_query::sessions::SessionManager;
 use databend_query::sql::PlanParser;
-use databend_query::tests::SessionManagerBuilder;
 use futures::StreamExt;
 
 pub mod bench_aggregate_query_sql;
@@ -27,11 +28,11 @@ pub mod bench_limit_query_sql;
 pub mod bench_sort_query_sql;
 
 pub async fn select_executor(sql: &str) -> Result<()> {
-    let sessions = SessionManagerBuilder::create().build()?;
+    let sessions = SessionManager::from_conf(Config::default()).await?;
     let executor_session = sessions.create_session("Benches")?;
     let ctx = executor_session.create_context().await?;
 
-    if let PlanNode::Select(plan) = PlanParser::parse(sql, ctx.clone).await? {
+    if let PlanNode::Select(plan) = PlanParser::parse(sql, ctx.clone()).await? {
         let executor = SelectInterpreter::try_create(ctx, plan)?;
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
