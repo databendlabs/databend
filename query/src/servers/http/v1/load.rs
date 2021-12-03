@@ -17,6 +17,7 @@ use std::sync::Arc;
 use async_compat::CompatExt;
 use async_stream::stream;
 use common_base::ProgressValues;
+use common_planners::InsertInputSource;
 use common_planners::PlanNode;
 use common_streams::CsvSource;
 use common_streams::Source;
@@ -65,21 +66,34 @@ pub async fn streaming_load(
         .eq_ignore_ascii_case("1");
 
     let plan = PlanParser::parse(insert_sql, context.clone()).await?;
+
+    // validate plan
+    match &plan {
+        PlanNode::Insert(insert) => match &insert.source {
+            InsertInputSource::StreamingWithFormat(format) => {
+                if format.to_lowercase().as_str() == "csv" {
+                    Ok(())
+                } else {
+                    Err(BadRequest(format!(
+                        "Streaming load only supports csv format, but got {}",
+                        format
+                    )))
+                }
+            }
+            _non_supported_source => Err(BadRequest(
+                "Only supports streaming upload. e.g. INSERT INTO $table FORMAT CSV",
+            )),
+        },
+        non_insert_plan => Err(BadRequest(format!(
+            "Only supports INSERT statement in streaming load, but got {}",
+            non_insert_plan.name()
+        ))),
+    }?;
+
     let max_block_size = context.get_settings().get_max_block_size()? as usize;
     let interpreter = InterpreterFactory::get(context.clone(), plan.clone())?;
 
     context.attach_query_str(insert_sql);
-    if let PlanNode::InsertInto(insert) = &plan {
-        if insert.format.is_none() {
-            return Err(BadRequest(
-                "Streaming load only support csv format, but got none",
-            ));
-        }
-
-        if insert.format.as_ref().unwrap().to_lowercase().as_str() != "csv" {
-            return Err(BadRequest("Streaming load only support csv format"));
-        }
-    }
 
     let stream = stream! {
         while let Ok(Some(field)) = multipart.next_field().await {
