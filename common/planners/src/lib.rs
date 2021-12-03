@@ -113,6 +113,7 @@ pub use plan_extras::Extras;
 pub use plan_filter::FilterPlan;
 pub use plan_grant_privilege::GrantPrivilegePlan;
 pub use plan_having::HavingPlan;
+pub use plan_insert_into::InputSource;
 pub use plan_insert_into::InsertIntoPlan;
 pub use plan_kill::KillPlan;
 pub use plan_limit::LimitPlan;

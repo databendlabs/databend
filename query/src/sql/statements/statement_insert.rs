@@ -168,6 +168,9 @@ impl DfInsertStatement {
         let write_table = ctx.get_table(&db, &table).await?;
         let table_meta_id = write_table.get_id();
         let table_schema = self.insert_schema(write_table)?;
+        let format = self.format.as_ref().ok_or_else(|| {
+            ErrorCode::SyntaxException("FORMAT must be specified in streaming insertion")
+        })?;
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::InsertInto(
             InsertIntoPlan::insert_without_source(
@@ -176,7 +179,7 @@ impl DfInsertStatement {
                 table_meta_id,
                 table_schema,
                 self.overwrite,
-                self.format.clone(),
+                format.clone(),
             ),
         ))))
     }

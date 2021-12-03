@@ -18,12 +18,14 @@ use common_datablocks::DataBlock;
 use common_datavalues::series::Series;
 use common_datavalues::series::SeriesFrom;
 use common_datavalues::DataField;
+use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Expression;
+use common_planners::InputSource;
 use common_planners::InsertIntoPlan;
 use common_planners::PlanNode;
 use common_planners::SelectPlan;
@@ -62,44 +64,37 @@ impl Interpreter for InsertIntoInterpreter {
 
     async fn execute(
         &self,
-        mut input_stream: Option<SendableDataBlockStream>,
+        input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let database = &self.plan.db_name;
         let table = &self.plan.tbl_name;
         let table = self.ctx.get_table(database, table).await?;
-
-        let append_op_logs = if let Some(plan_node) = &self.plan.select_plan {
-            // if there is a PlanNode that provides values
-            // e.g. `insert into ... as select ...`
-            self.insert_with_select_plan(plan_node.as_ref(), table.as_ref())
-                .await?
-        } else {
-            let input_stream = if self.plan.value_exprs_opt.is_some() {
-                // if values are provided as value expressions
-                // e.g. `insert into ... value(...), ...`
-                let values_exprs = self.plan.value_exprs_opt.clone().take().unwrap();
-                let blocks = self.block_from_values_exprs(values_exprs)?;
-                let stream: SendableDataBlockStream =
-                    Box::pin(futures::stream::iter(vec![DataBlock::concat_blocks(
-                        &blocks,
-                    )]));
-
-                Ok(stream)
-            } else {
-                // if values are provided as a block stream
-                // e.g. using clickhouse client
-                input_stream
-                    .take()
-                    .ok_or_else(|| ErrorCode::EmptyData("input stream not exist or consumed"))
-            }?;
-
-            let progress_stream = Box::pin(ProgressStream::try_create(
-                input_stream,
-                self.ctx.progress_callback()?,
-            )?);
-
-            table.append_data(self.ctx.clone(), progress_stream).await?
-        };
+        let append_op_logs = match &self.plan.source {
+            InputSource::ExpressionValues(values_exprs) => {
+                let exec = StreamExec {
+                    ctx: &self.ctx,
+                    schema: &self.plan.schema,
+                    table: &table,
+                };
+                exec.append_value_exprs(values_exprs).await
+            }
+            InputSource::InputStreamValues(_) => {
+                let exec = StreamExec {
+                    ctx: &self.ctx,
+                    schema: &self.plan.schema,
+                    table: &table,
+                };
+                exec.append_stream(input_stream).await
+            }
+            InputSource::SelectPlan(plan_node) => {
+                let exec = SelectPlanExec {
+                    ctx: &self.ctx,
+                    schema: &self.plan.schema,
+                };
+                exec.insert_with_select_plan(plan_node, table.as_ref())
+                    .await
+            }
+        }?;
 
         // feed back the append operation logs to table
         table
@@ -118,7 +113,71 @@ impl Interpreter for InsertIntoInterpreter {
     }
 }
 
-impl InsertIntoInterpreter {
+struct StreamExec<'a> {
+    ctx: &'a Arc<QueryContext>,
+    table: &'a Arc<dyn Table>,
+    schema: &'a DataSchemaRef,
+}
+
+impl<'a> StreamExec<'a> {
+    fn block_from_values_exprs(&self, values_exprs: &[Vec<Expression>]) -> Result<Vec<DataBlock>> {
+        let dummy = DataSchemaRefExt::create(vec![DataField::new("dummy", DataType::UInt8, false)]);
+        let one_row_block = DataBlock::create_by_array(dummy.clone(), vec![Series::new(vec![1u8])]);
+        values_exprs
+            .iter()
+            .map(|exprs| {
+                let executor = ExpressionExecutor::try_create(
+                    "Insert into from values",
+                    dummy.clone(),
+                    self.schema.clone(),
+                    exprs.clone(),
+                    true,
+                )?;
+                executor.execute(&one_row_block)
+            })
+            .collect::<Result<Vec<_>>>()
+    }
+
+    async fn do_append(
+        &self,
+        input_stream: SendableDataBlockStream,
+    ) -> Result<SendableDataBlockStream> {
+        let progress_stream = Box::pin(ProgressStream::try_create(
+            input_stream,
+            self.ctx.progress_callback()?,
+        )?);
+        self.table
+            .append_data(self.ctx.clone(), progress_stream)
+            .await
+    }
+    async fn append_value_exprs(
+        &self,
+        values_exprs: &[Vec<Expression>],
+    ) -> Result<SendableDataBlockStream> {
+        let blocks = self.block_from_values_exprs(values_exprs)?;
+        let stream: SendableDataBlockStream =
+            Box::pin(futures::stream::iter(vec![DataBlock::concat_blocks(
+                &blocks,
+            )]));
+        self.do_append(stream).await
+    }
+
+    async fn append_stream(
+        &self,
+        mut input_stream: Option<SendableDataBlockStream>,
+    ) -> Result<SendableDataBlockStream> {
+        let stream = input_stream
+            .take()
+            .ok_or_else(|| ErrorCode::EmptyData("input stream not exist or consumed"))?;
+        self.do_append(stream).await
+    }
+}
+
+struct SelectPlanExec<'a> {
+    ctx: &'a Arc<QueryContext>,
+    schema: &'a DataSchemaRef,
+}
+impl<'a> SelectPlanExec<'a> {
     async fn insert_with_select_plan(
         &self,
         plan_node: &PlanNode,
@@ -126,7 +185,7 @@ impl InsertIntoInterpreter {
     ) -> Result<SendableDataBlockStream> {
         if let PlanNode::Select(sel) = plan_node {
             let optimized_plan = self.rewrite_plan(sel, table.get_table_info())?;
-            plan_schedulers::schedule_query(&self.ctx, &optimized_plan).await
+            plan_schedulers::schedule_query(self.ctx, &optimized_plan).await
         } else {
             Err(ErrorCode::UnknownTypeOfQuery(format!(
                 "Unsupported select query plan for insert_into interpreter, {}",
@@ -135,8 +194,8 @@ impl InsertIntoInterpreter {
         }
     }
 
-    fn rewrite_plan(&self, select_plan: &SelectPlan, table_info: &TableInfo) -> Result<PlanNode> {
-        let output_schema = self.plan.schema();
+    fn check_schema_cast(&self, select_plan: &SelectPlan) -> Result<bool> {
+        let output_schema = self.schema;
         let select_schema = select_plan.schema();
 
         // validate schema
@@ -147,7 +206,12 @@ impl InsertIntoInterpreter {
         }
 
         // check if cast needed
-        let cast_needed = select_schema != output_schema;
+        let cast_needed = select_schema != *output_schema;
+        Ok(cast_needed)
+    }
+
+    fn rewrite_plan(&self, select_plan: &SelectPlan, table_info: &TableInfo) -> Result<PlanNode> {
+        let cast_needed = self.check_schema_cast(select_plan)?;
 
         // optimize and rewrite the SelectPlan.input
         let optimized_plan =
@@ -181,27 +245,5 @@ impl InsertIntoInterpreter {
             }),
         };
         Ok(rewritten_plan)
-    }
-
-    fn block_from_values_exprs(
-        &self,
-        values_exprs: Vec<Vec<Expression>>,
-    ) -> Result<Vec<DataBlock>> {
-        let dummy = DataSchemaRefExt::create(vec![DataField::new("dummy", DataType::UInt8, false)]);
-        let one_row_block = DataBlock::create_by_array(dummy.clone(), vec![Series::new(vec![1u8])]);
-
-        values_exprs
-            .iter()
-            .map(|exprs| {
-                let executor = ExpressionExecutor::try_create(
-                    "Insert into from values",
-                    dummy.clone(),
-                    self.plan.schema(),
-                    exprs.clone(),
-                    true,
-                )?;
-                executor.execute(&one_row_block)
-            })
-            .collect::<Result<Vec<_>>>()
     }
 }

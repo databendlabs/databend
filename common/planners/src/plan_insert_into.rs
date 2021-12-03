@@ -19,16 +19,20 @@ use crate::Expression;
 use crate::PlanNode;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub enum InputSource {
+    SelectPlan(Box<PlanNode>),
+    ExpressionValues(Vec<Vec<Expression>>),
+    InputStreamValues(String),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct InsertIntoPlan {
     pub db_name: String,
     pub tbl_name: String,
     pub tbl_id: MetaId,
     pub schema: DataSchemaRef,
     pub overwrite: bool,
-
-    pub select_plan: Option<Box<PlanNode>>,
-    pub value_exprs_opt: Option<Vec<Vec<Expression>>>,
-    pub format: Option<String>,
+    pub source: InputSource,
 }
 
 impl PartialEq for InsertIntoPlan {
@@ -58,9 +62,7 @@ impl InsertIntoPlan {
             tbl_id: table_meta_id,
             schema,
             overwrite,
-            select_plan: Some(Box::new(select_plan)),
-            value_exprs_opt: None,
-            format: None,
+            source: InputSource::SelectPlan(Box::new(select_plan)),
         }
     }
 
@@ -78,9 +80,7 @@ impl InsertIntoPlan {
             tbl_id: table_meta_id,
             schema,
             overwrite,
-            select_plan: None,
-            value_exprs_opt: Some(values),
-            format: None,
+            source: InputSource::ExpressionValues(values),
         }
     }
 
@@ -90,7 +90,7 @@ impl InsertIntoPlan {
         table_meta_id: MetaId,
         schema: DataSchemaRef,
         overwrite: bool,
-        format: Option<String>,
+        format: String,
     ) -> InsertIntoPlan {
         InsertIntoPlan {
             db_name: db,
@@ -98,9 +98,7 @@ impl InsertIntoPlan {
             tbl_id: table_meta_id,
             schema,
             overwrite,
-            select_plan: None,
-            value_exprs_opt: None,
-            format,
+            source: InputSource::InputStreamValues(format),
         }
     }
 }
