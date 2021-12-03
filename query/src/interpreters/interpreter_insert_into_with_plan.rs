@@ -33,21 +33,33 @@ use crate::storages::Table;
 pub struct InsertIntoWithPlan<'a> {
     pub ctx: &'a Arc<QueryContext>,
     pub schema: &'a Arc<DataSchema>,
+    pub plan_node: &'a PlanNode,
 }
 
 impl<'a> InsertIntoWithPlan<'a> {
+    pub fn new(
+        ctx: &'a Arc<QueryContext>,
+        schema: &'a Arc<DataSchema>,
+        plan_node: &'a PlanNode,
+    ) -> Self {
+        Self {
+            ctx,
+            schema,
+            plan_node,
+        }
+    }
+
     pub async fn execute(
         &self,
-        plan_node: &PlanNode,
         table: &dyn Table,
     ) -> common_exception::Result<SendableDataBlockStream> {
-        if let PlanNode::Select(sel) = plan_node {
+        if let PlanNode::Select(sel) = self.plan_node {
             let optimized_plan = self.rewrite_plan(sel, table.get_table_info())?;
             plan_schedulers::schedule_query(self.ctx, &optimized_plan).await
         } else {
             Err(ErrorCode::UnknownTypeOfQuery(format!(
                 "Unsupported select query plan for insert_into interpreter, {}",
-                plan_node.name()
+                self.plan_node.name()
             )))
         }
     }

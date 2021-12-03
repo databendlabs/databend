@@ -60,6 +60,7 @@ mod interpreter_factory;
 mod interpreter_grant_privilege;
 mod interpreter_insert_into;
 mod interpreter_insert_into_with_plan;
+mod interpreter_insert_into_with_stream;
 mod interpreter_interceptor;
 mod interpreter_kill;
 mod interpreter_revoke_privilege;
