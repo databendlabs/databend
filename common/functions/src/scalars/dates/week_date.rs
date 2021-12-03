@@ -28,6 +28,7 @@ use common_exception::Result;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
+use crate::scalars::FunctionFactory;
 use crate::scalars::Monotonicity;
 
 #[derive(Clone, Debug)]
@@ -39,7 +40,7 @@ pub struct WeekFunction<T, R> {
 
 pub trait WeekResultFunction<R> {
     const IS_DETERMINISTIC: bool;
-    const MAYBE_MONOTONIC: bool;
+    const FACTOR_OP: &'static str;
 
     fn return_type() -> Result<DataType>;
     fn to_number(_value: DateTime<Utc>, mode: Option<u64>) -> R;
@@ -51,7 +52,7 @@ pub struct ToStartOfWeek;
 
 impl WeekResultFunction<u32> for ToStartOfWeek {
     const IS_DETERMINISTIC: bool = true;
-    const MAYBE_MONOTONIC: bool = true;
+    const FACTOR_OP: &'static str = "none";
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
@@ -88,14 +89,10 @@ where
     }
 
     pub fn desc() -> FunctionDescription {
-        let mut features = FunctionFeatures::default();
+        let mut features = FunctionFeatures::default().monotonicity();
 
         if T::IS_DETERMINISTIC {
             features = features.deterministic();
-        }
-
-        if T::MAYBE_MONOTONIC {
-            features = features.monotonicity();
         }
 
         FunctionDescription::creator(Box::new(Self::try_create)).features(features)
@@ -198,10 +195,24 @@ where
     }
 
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
-        if T::MAYBE_MONOTONIC {
-            // all the week functions here with MAYBE_MONOTONIC true happens to be monotonically positive.
+        if T::FACTOR_OP == "none" {
             return Ok(Monotonicity::clone_without_range(&args[0]));
         }
+
+        if args[0].left.is_none() || args[0].right.is_none() {
+            return Ok(Monotonicity::default());
+        }
+
+        let func = FunctionFactory::instance().get(T::FACTOR_OP)?;
+        let left_val = func.eval(&[args[0].left.clone().unwrap()], 1)?.try_get(0)?;
+        let right_val = func
+            .eval(&[args[0].right.clone().unwrap()], 1)?
+            .try_get(0)?;
+        // The function is monotonous, if the factor eval returns the same values for them.
+        if left_val == right_val {
+            return Ok(Monotonicity::clone_without_range(&args[0]));
+        }
+
         Ok(Monotonicity::default())
     }
 }

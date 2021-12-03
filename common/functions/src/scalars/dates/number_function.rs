@@ -27,6 +27,7 @@ use common_exception::Result;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
+use crate::scalars::FunctionFactory;
 use crate::scalars::Monotonicity;
 
 #[derive(Clone, Debug)]
@@ -38,7 +39,7 @@ pub struct NumberFunction<T, R> {
 
 pub trait NumberResultFunction<R> {
     const IS_DETERMINISTIC: bool;
-    const MAYBE_MONOTONIC: bool;
+    const FACTOR_OP: &'static str;
 
     fn return_type() -> Result<DataType>;
     fn to_number(_value: DateTime<Utc>) -> R;
@@ -50,7 +51,7 @@ pub struct ToYYYYMM;
 
 impl NumberResultFunction<u32> for ToYYYYMM {
     const IS_DETERMINISTIC: bool = true;
-    const MAYBE_MONOTONIC: bool = true;
+    const FACTOR_OP: &'static str = "none";
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt32)
@@ -69,7 +70,7 @@ pub struct ToYYYYMMDD;
 
 impl NumberResultFunction<u32> for ToYYYYMMDD {
     const IS_DETERMINISTIC: bool = true;
-    const MAYBE_MONOTONIC: bool = true;
+    const FACTOR_OP: &'static str = "none";
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt32)
@@ -88,7 +89,7 @@ pub struct ToYYYYMMDDhhmmss;
 
 impl NumberResultFunction<u64> for ToYYYYMMDDhhmmss {
     const IS_DETERMINISTIC: bool = true;
-    const MAYBE_MONOTONIC: bool = true;
+    const FACTOR_OP: &'static str = "none";
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt64)
@@ -113,7 +114,7 @@ pub struct ToStartOfYear;
 
 impl NumberResultFunction<u16> for ToStartOfYear {
     const IS_DETERMINISTIC: bool = true;
-    const MAYBE_MONOTONIC: bool = true;
+    const FACTOR_OP: &'static str = "none";
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
@@ -133,7 +134,7 @@ pub struct ToStartOfISOYear;
 
 impl NumberResultFunction<u16> for ToStartOfISOYear {
     const IS_DETERMINISTIC: bool = true;
-    const MAYBE_MONOTONIC: bool = true;
+    const FACTOR_OP: &'static str = "none";
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
@@ -158,7 +159,7 @@ pub struct ToStartOfQuarter;
 
 impl NumberResultFunction<u16> for ToStartOfQuarter {
     const IS_DETERMINISTIC: bool = true;
-    const MAYBE_MONOTONIC: bool = true;
+    const FACTOR_OP: &'static str = "none";
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
@@ -179,7 +180,7 @@ pub struct ToStartOfMonth;
 
 impl NumberResultFunction<u16> for ToStartOfMonth {
     const IS_DETERMINISTIC: bool = true;
-    const MAYBE_MONOTONIC: bool = true;
+    const FACTOR_OP: &'static str = "none";
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
@@ -202,7 +203,7 @@ impl NumberResultFunction<u8> for ToMonth {
 
     // ToMonth is NOT a monotonic function in general, unless the time range is within the same year.
     // For example, date(2020-12-01) < date(2021-5-5), while ToMonth(2020-12-01) > ToMonth(2021-5-5).
-    const MAYBE_MONOTONIC: bool = false;
+    const FACTOR_OP: &'static str = "toStartOfYear";
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt8)
@@ -224,7 +225,7 @@ impl NumberResultFunction<u16> for ToDayOfYear {
 
     // ToDayOfYear is NOT a monotonic function in general, unless the time range is within the same year.
     // For example, date(2020-12-01) < date(2021-5-5), while ToDayOfYear(2020-12-01) > ToDayOfYear(2021-5-5).
-    const MAYBE_MONOTONIC: bool = false;
+    const FACTOR_OP: &'static str = "toStartOfYear";
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt16)
@@ -245,8 +246,8 @@ impl NumberResultFunction<u8> for ToDayOfMonth {
     const IS_DETERMINISTIC: bool = true;
 
     // ToDayOfMonth is not a monotonic function in general, unless the time range is within the same month.
-    // For example, date(2021-11-20) < date(2021-12-01), while ToDayOfMonth((2021-11-20) > ToDayOfMonth(2021-12-01).
-    const MAYBE_MONOTONIC: bool = false;
+    // For example, date(2021-11-20) < date(2021-12-01), while ToDayOfMonth(2021-11-20) > ToDayOfMonth(2021-12-01).
+    const FACTOR_OP: &'static str = "toStartOfMonth";
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt8)
@@ -267,7 +268,7 @@ impl NumberResultFunction<u8> for ToDayOfWeek {
     const IS_DETERMINISTIC: bool = true;
 
     // ToDayOfWeek is NOT a monotonic function in general, unless the time range is within the same week.
-    const MAYBE_MONOTONIC: bool = false;
+    const FACTOR_OP: &'static str = "toMonday";
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt8)
@@ -288,7 +289,7 @@ impl NumberResultFunction<u8> for ToHour {
     const IS_DETERMINISTIC: bool = true;
 
     // ToHour is NOT a monotonic function in general, unless the time range is within the same day.
-    const MAYBE_MONOTONIC: bool = false;
+    const FACTOR_OP: &'static str = "toDate";
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt8)
@@ -309,7 +310,7 @@ impl NumberResultFunction<u8> for ToMinute {
     const IS_DETERMINISTIC: bool = true;
 
     // ToMinute is NOT a monotonic function in general, unless the time range is within the same hour.
-    const MAYBE_MONOTONIC: bool = false;
+    const FACTOR_OP: &'static str = "toStartOfHour";
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt8)
@@ -330,7 +331,7 @@ impl NumberResultFunction<u8> for ToSecond {
     const IS_DETERMINISTIC: bool = true;
 
     // ToSecond is NOT a monotonic function in general, unless the time range is within the same minute.
-    const MAYBE_MONOTONIC: bool = false;
+    const FACTOR_OP: &'static str = "toStartOfMinute";
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::UInt8)
@@ -349,7 +350,7 @@ pub struct ToMonday;
 
 impl NumberResultFunction<u16> for ToMonday {
     const IS_DETERMINISTIC: bool = true;
-    const MAYBE_MONOTONIC: bool = true;
+    const FACTOR_OP: &'static str = "none";
 
     fn return_type() -> Result<DataType> {
         Ok(DataType::Date16)
@@ -379,14 +380,10 @@ where
     }
 
     pub fn desc() -> FunctionDescription {
-        let mut features = FunctionFeatures::default();
+        let mut features = FunctionFeatures::default().monotonicity();
 
         if T::IS_DETERMINISTIC {
             features = features.deterministic();
-        }
-
-        if T::MAYBE_MONOTONIC {
-            features = features.monotonicity();
         }
 
         FunctionDescription::creator(Box::new(Self::try_create)).features(features)
@@ -478,10 +475,24 @@ where
     }
 
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
-        if T::MAYBE_MONOTONIC {
-            // all the number functions here with MAYBE_MONOTONIC true happens to be monotonically positive.
+        if T::FACTOR_OP == "none" {
             return Ok(Monotonicity::clone_without_range(&args[0]));
         }
+
+        if args[0].left.is_none() || args[0].right.is_none() {
+            return Ok(Monotonicity::default());
+        }
+
+        let func = FunctionFactory::instance().get(T::FACTOR_OP)?;
+        let left_val = func.eval(&[args[0].left.clone().unwrap()], 1)?.try_get(0)?;
+        let right_val = func
+            .eval(&[args[0].right.clone().unwrap()], 1)?
+            .try_get(0)?;
+        // The function is monotonous, if the factor eval returns the same values for them.
+        if left_val == right_val {
+            return Ok(Monotonicity::clone_without_range(&args[0]));
+        }
+
         Ok(Monotonicity::default())
     }
 }
