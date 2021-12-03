@@ -42,7 +42,7 @@ async fn test_truncate_table_interpreter() -> Result<()> {
     // Insert into.
     {
         static TEST_INSERT_QUERY: &str = "INSERT INTO default.a VALUES('1,1', '2,2')";
-        if let PlanNode::InsertInto(plan) = parse_query(TEST_INSERT_QUERY, &ctx)? {
+        if let PlanNode::Insert(plan) = parse_query(TEST_INSERT_QUERY, &ctx)? {
             let executor = InsertInterpreter::try_create(ctx.clone(), plan.clone())?;
             let _ = executor.execute(None).await?;
         }

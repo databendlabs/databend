@@ -57,7 +57,7 @@ impl InterpreterFactory {
             PlanNode::TruncateTable(v) => TruncateTableInterpreter::try_create(ctx_clone, v),
             PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx_clone, v),
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx_clone, v),
-            PlanNode::InsertInto(v) => InsertInterpreter::try_create(ctx_clone, v),
+            PlanNode::Insert(v) => InsertInterpreter::try_create(ctx_clone, v),
             PlanNode::ShowCreateTable(v) => ShowCreateTableInterpreter::try_create(ctx_clone, v),
             PlanNode::Kill(v) => KillInterpreter::try_create(ctx_clone, v),
             PlanNode::CreateUser(v) => CreatUserInterpreter::try_create(ctx_clone, v),

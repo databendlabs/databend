@@ -69,7 +69,7 @@ pub async fn streaming_load(
 
     // validate plan
     match &plan {
-        PlanNode::InsertInto(insert) => match &insert.source {
+        PlanNode::Insert(insert) => match &insert.source {
             InsertInputSource::StreamingWithFormat(format) => {
                 if format.to_lowercase().as_str() == "csv" {
                     Ok(())

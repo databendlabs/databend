@@ -83,7 +83,7 @@ impl AnalyzableStatement for DfInsertStatement {
             },
         }?;
 
-        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::InsertInto(
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Insert(
             InsertPlan {
                 database_name,
                 table_name,
