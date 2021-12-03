@@ -123,6 +123,8 @@ const config = {
                         label: 'Overview',
                     },
                     {to: '/cli/cli', label: 'CLI', position: 'left'},
+                    {to: '/api/config', label: 'API', position: 'left'},
+                    {to: '/sqlstatement/index', label: 'SQL Statement', position: 'left'},
                     {to: '/development/contributing', label: 'Development', position: 'left'},
                     {to: '/blog', label: 'Blog', position: 'left'},
                     {
