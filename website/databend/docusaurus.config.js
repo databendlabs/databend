@@ -87,17 +87,6 @@ const config = {
             '@docusaurus/plugin-content-docs',
             /** @type {import('@docusaurus/plugin-content-docs').Options} */
             {
-                id: 'rfcs',
-                path: 'docs/rfcs',
-                routeBasePath: 'rfcs',
-                sidebarPath: require.resolve('./docs/rfcs/sidebars.js'),
-                editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
-            },
-        ],
-        [
-            '@docusaurus/plugin-content-docs',
-            /** @type {import('@docusaurus/plugin-content-docs').Options} */
-            {
                 id: 'sqlstatement',
                 path: 'docs/sqlstatement',
                 routeBasePath: 'sqlstatement',
