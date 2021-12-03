@@ -76,7 +76,7 @@ impl AnalyzableStatement for DfInsertStatement {
             None => self.analyze_insert_without_source().await,
             Some(source) => match &source.body {
                 SetExpr::Values(v) => self.analyze_insert_values(ctx.clone(), v, &schema).await,
-                SetExpr::Select(_) => self.analyze_insert_select(&ctx, source).await,
+                SetExpr::Select(_) => self.analyze_insert_select(ctx.clone(), source).await,
                 _ => Err(ErrorCode::SyntaxException(
                     "Insert must be have values or select.",
                 )),
@@ -172,13 +172,12 @@ impl DfInsertStatement {
 
     async fn analyze_insert_select(
         &self,
-        ctx: &Arc<QueryContext>,
+        ctx: Arc<QueryContext>,
         source: &Query,
     ) -> Result<InputSource> {
         let statement = DfQueryStatement::try_from(source.clone())?;
         let select_plan =
-            PlanParser::build_plan(vec![DfStatement::Query(Box::new(statement))], ctx.clone())
-                .await?;
+            PlanParser::build_plan(vec![DfStatement::Query(Box::new(statement))], ctx).await?;
         Ok(InputSource::SelectPlan(Box::new(select_plan)))
     }
 
