@@ -23,6 +23,7 @@ use crate::scalars::InstrFunction;
 use crate::scalars::LTrimFunction;
 use crate::scalars::LocateFunction;
 use crate::scalars::OctFunction;
+use crate::scalars::OctetLengthFunction;
 use crate::scalars::PositionFunction;
 use crate::scalars::QuoteFunction;
 use crate::scalars::RTrimFunction;
@@ -53,5 +54,6 @@ impl StringFunction {
         factory.register("instr", InstrFunction::desc());
         factory.register("insert", InsertFunction::desc());
         factory.register("field", FieldFunction::desc());
+        factory.register("octet_length", OctetLengthFunction::desc());
     }
 }
