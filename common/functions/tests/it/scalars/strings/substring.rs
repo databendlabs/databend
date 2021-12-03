@@ -16,12 +16,11 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::SubstringFunction;
 
-use super::{Test, run_tests};
-
+use super::run_tests;
+use super::Test;
 
 #[test]
 fn test_substring_function() -> Result<()> {
-    
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("a", DataType::String, false),
         DataField::new("b", DataType::Int64, false),
@@ -89,4 +88,3 @@ fn test_substring_function() -> Result<()> {
     ];
     run_tests(tests, schema)
 }
-

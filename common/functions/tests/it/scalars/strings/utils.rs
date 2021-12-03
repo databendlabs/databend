@@ -11,12 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use std::sync::Arc;
+
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::Function;
-
 use pretty_assertions::assert_eq;
-use std::sync::Arc;
 
 pub struct Test {
     pub name: &'static str,

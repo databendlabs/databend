@@ -18,8 +18,8 @@ use common_functions::scalars::LTrimFunction;
 use common_functions::scalars::RTrimFunction;
 use common_functions::scalars::TrimFunction;
 
-use super::Test;
 use super::run_tests;
+use super::Test;
 
 #[test]
 fn test_trim_function() -> Result<()> {
