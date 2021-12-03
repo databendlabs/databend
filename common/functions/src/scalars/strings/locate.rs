@@ -26,44 +26,12 @@ const FUNC_LOCATE: u8 = 1;
 const FUNC_POSITION: u8 = 2;
 const FUNC_INSTR: u8 = 3;
 
-pub struct LocateFunction {}
-
-impl LocateFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        LocatingFunction::<FUNC_LOCATE>::try_create(display_name)
-    }
-
-    pub fn desc() -> FunctionDescription {
-        LocatingFunction::<FUNC_LOCATE>::desc()
-    }
-}
-
-pub struct InstrFunction {}
-
-impl InstrFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        LocatingFunction::<FUNC_INSTR>::try_create(display_name)
-    }
-
-    pub fn desc() -> FunctionDescription {
-        LocatingFunction::<FUNC_INSTR>::desc()
-    }
-}
-
-pub struct PositionFunction {}
-
-impl PositionFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        LocatingFunction::<FUNC_POSITION>::try_create(display_name)
-    }
-
-    pub fn desc() -> FunctionDescription {
-        LocatingFunction::<FUNC_POSITION>::desc()
-    }
-}
+pub type LocateFunction = LocatingFunction<FUNC_LOCATE>;
+pub type PositionFunction = LocatingFunction<FUNC_POSITION>;
+pub type InstrFunction = LocatingFunction<FUNC_INSTR>;
 
 #[derive(Clone)]
-struct LocatingFunction<const T: u8> {
+pub struct LocatingFunction<const T: u8> {
     display_name: String,
 }
 
