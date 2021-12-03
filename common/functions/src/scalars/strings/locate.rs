@@ -62,8 +62,18 @@ impl Function for LocateFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let ss_column = columns[0].column().cast_with_type(&DataType::String)?;
-        let s_column = columns[1].column().cast_with_type(&DataType::String)?;
+        let (ss_column, s_column) = if *self.display_name.to_uppercase() == "INSTR".to_owned() {
+            (
+                columns[1].column().cast_with_type(&DataType::String)?,
+                columns[0].column().cast_with_type(&DataType::String)?,
+            )
+        } else {
+            (
+                columns[0].column().cast_with_type(&DataType::String)?,
+                columns[1].column().cast_with_type(&DataType::String)?,
+            )
+        };
+
         let p_column = if columns.len() == 3 {
             columns[2].column().cast_with_type(&DataType::UInt64)?
         } else {
