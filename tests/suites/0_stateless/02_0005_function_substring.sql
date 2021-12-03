@@ -40,3 +40,7 @@ SELECT SUBSTRING(number * 100 + number, number, number) FROM numbers(7) ORDER BY
 SELECT '=== forms ===';
 SELECT SUBSTRING('12345' FROM 2);
 SELECT SUBSTRING('12345' FROM 2 FOR 1);
+
+SELECT '=== synonyms ===';
+SELECT MID('12345', 2, 1);
+SELECT SUBSTR('12345', 2, 1);

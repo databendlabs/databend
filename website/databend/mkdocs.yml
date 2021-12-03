@@ -222,6 +222,8 @@ nav:
               - TRUNCATE: sqlstatement/numeric-functions/truncate.md
               - RAND: sqlstatement/numeric-functions/rand.md
           - String Functions:
+              - MID: sqlstatement/string-functions/mid.md
+              - SUBSTR: sqlstatement/string-functions/substr.md
               - SUBSTRING: sqlstatement/string-functions/substring.md
               - TO_BASE64: sqlstatement/string-functions/to_base64.md
               - FROM_BASE64: sqlstatement/string-functions/from_base64.md
