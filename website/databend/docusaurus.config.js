@@ -135,9 +135,6 @@ const config = {
                     },
                     {to: '/cli/cli', label: 'CLI', position: 'left'},
                     {to: '/development/contributing', label: 'Development', position: 'left'},
-                    {to: '/overview/performance', label: 'Performance', position: 'left'},
-                    {to: '/overview/architecture', label: 'Whitepapers', position: 'left'},
-                    {to: 'https://weekly.databend.rs/', label: 'Weekly', position: 'left'},
                     {to: '/blog', label: 'Blog', position: 'left'},
                     {
                         href: 'https://github.com/datafuselabs/databend',
@@ -149,6 +146,19 @@ const config = {
             footer: {
                 style: 'dark',
                 links: [
+                    {
+                        title: 'Resources',
+                        items: [
+                            {
+                                label: 'Performance',
+                                to: '/overview/performance'
+                            },
+                            {
+                                label: 'Whitepapers',
+                                to: '/overview/architecture'
+                            }
+                        ]
+                    },
                     {
                         title: 'Community',
                         items: [
@@ -172,6 +182,10 @@ const config = {
                             {
                                 label: 'Blog',
                                 to: '/blog',
+                            },
+                            {
+                                label: 'Weekly',
+                                href: 'https://weekly.databend.rs/'
                             },
                             {
                                 label: 'GitHub',
