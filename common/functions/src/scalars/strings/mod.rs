@@ -14,6 +14,7 @@
 
 mod ascii;
 mod base_64;
+mod bit_length;
 mod field;
 mod hex;
 mod insert;
@@ -28,11 +29,11 @@ mod string2string;
 mod substring;
 mod trim;
 mod unhex;
-mod bit_length;
 
 pub use ascii::AsciiFunction;
 pub use base_64::Base64DecodeFunction;
 pub use base_64::Base64EncodeFunction;
+pub use bit_length::BitLengthFunction;
 pub use field::FieldFunction;
 pub use insert::InsertFunction;
 pub use locate::InstrFunction;
@@ -50,6 +51,5 @@ pub use trim::LTrimFunction;
 pub use trim::RTrimFunction;
 pub use trim::TrimFunction;
 pub use unhex::UnhexFunction;
-pub use bit_length::BitLengthFunction;
 
 pub use self::hex::HexFunction;
