@@ -1,5 +1,4 @@
 ---
-id: aggregate-count-distinct
 title: Aggregate Function Combinators
 ---
 

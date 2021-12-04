@@ -1,5 +1,4 @@
 ---
-id: ddl-create-database
 title: CREATE DATABASE
 ---
 

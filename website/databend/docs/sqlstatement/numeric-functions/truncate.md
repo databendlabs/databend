@@ -1,5 +1,4 @@
 ---
-id: numeric-truncate
 title: TRUNCATE
 ---
 

@@ -1,5 +1,4 @@
 ---
-id: development-tracing
 title: Tracing in Databend
 ---
 

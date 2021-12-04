@@ -14,6 +14,7 @@
 
 mod ascii;
 mod base_64;
+mod bit_length;
 mod concat;
 mod field;
 mod hex;
@@ -33,6 +34,7 @@ mod unhex;
 pub use ascii::AsciiFunction;
 pub use base_64::Base64DecodeFunction;
 pub use base_64::Base64EncodeFunction;
+pub use bit_length::BitLengthFunction;
 pub use concat::ConcatFunction;
 pub use field::FieldFunction;
 pub use insert::InsertFunction;

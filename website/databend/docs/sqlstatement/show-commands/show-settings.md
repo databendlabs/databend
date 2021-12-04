@@ -1,5 +1,4 @@
 ---
-id: show-settings
 title: SHOW SETTINGS
 ---
 

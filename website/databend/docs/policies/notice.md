@@ -1,3 +1,7 @@
+---
+title: Notice
+---
+
 # Databend includes some code from
 
 - [arrow/datafusion](https://github.com/apache/arrow-datafusion/)

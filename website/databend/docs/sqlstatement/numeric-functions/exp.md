@@ -1,5 +1,4 @@
 ---
-id: numeric-exp
 title: EXP
 ---
 

@@ -1,5 +1,4 @@
 ---
-id: numeric-tan
 title: TAN
 ---
 

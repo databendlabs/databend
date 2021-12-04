@@ -1,5 +1,4 @@
 ---
-id: running-difference
 title: runningDifference
 ---
 

@@ -1,5 +1,4 @@
 ---
-id: ddl-drop-database
 title: DROP DATABASE
 ---
 

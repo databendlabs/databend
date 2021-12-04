@@ -1,5 +1,4 @@
 ---
-id: show-databases
 title: SHOW DATABASES
 ---
 

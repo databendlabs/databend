@@ -1,5 +1,4 @@
 ---
-id: aggregate-windowfunnel
 title: windowFunnel
 ---
 

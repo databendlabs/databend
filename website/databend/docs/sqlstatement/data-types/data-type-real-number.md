@@ -1,5 +1,4 @@
 ---
-id: data-type-real-number
 title: Real Numbers
 ---
 

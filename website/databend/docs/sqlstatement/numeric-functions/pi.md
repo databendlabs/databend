@@ -1,5 +1,4 @@
 ---
-id: numeric-pi
 title: PI
 ---
 

@@ -1,5 +1,4 @@
 ---
-id: datetime-tostartofisoyear
 title: toStartOfISOYear
 ---
 

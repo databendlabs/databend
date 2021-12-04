@@ -1,5 +1,4 @@
 ---
-id: string-to_base64
 title: TO_BASE64
 ---
 

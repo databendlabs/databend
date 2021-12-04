@@ -1,5 +1,4 @@
 ---
-id: datetime-tostartofyear
 title: toStartOfYear
 ---
 

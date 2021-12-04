@@ -1,5 +1,4 @@
 ---
-id: aggregate-covar-samp
 title: covar-samp
 ---
 

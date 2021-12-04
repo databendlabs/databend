@@ -1,5 +1,4 @@
 ---
-id: ddl-truncate-table
 title: TRUNCATE TABLE
 ---
 

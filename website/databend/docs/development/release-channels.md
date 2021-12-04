@@ -1,5 +1,4 @@
 ---
-id: development-release-channels
 title: Databend release channels
 ---
 

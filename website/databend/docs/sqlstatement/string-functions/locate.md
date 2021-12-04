@@ -1,5 +1,4 @@
 ---
-id: string-locate
 title: LOCATE
 ---
 

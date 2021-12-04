@@ -1,5 +1,4 @@
 ---
-id: conditional-if
 title: IF
 ---
 

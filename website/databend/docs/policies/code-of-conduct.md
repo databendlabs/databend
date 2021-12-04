@@ -1,5 +1,4 @@
 ---
-id: code-of-conduct
 title: Contributor Covenant Code of Conduct
 ---
 

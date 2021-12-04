@@ -1,5 +1,4 @@
 ---
-id: hash-siphash
 title: SIPHASH
 ---
 

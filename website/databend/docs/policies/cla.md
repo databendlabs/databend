@@ -1,5 +1,4 @@
 ---
-id: cla
 title: Contributor License Agreement
 ---
 

@@ -1,5 +1,4 @@
 ---
-id: copy-data-from-stage
 title: COPY DATA FROM STAGE
 ---
 

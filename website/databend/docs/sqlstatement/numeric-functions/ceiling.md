@@ -1,5 +1,4 @@
 ---
-id: numeric-ceiling
 title: CEILING
 ---
 
