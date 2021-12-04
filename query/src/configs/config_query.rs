@@ -32,7 +32,7 @@ pub const QUERY_FLIGHT_API_ADDRESS: &str = "QUERY_FLIGHT_API_ADDRESS";
 pub const QUERY_HTTP_API_ADDRESS: &str = "QUERY_HTTP_API_ADDRESS";
 pub const QUERY_METRICS_API_ADDRESS: &str = "QUERY_METRIC_API_ADDRESS";
 pub const QUERY_WAIT_TIMEOUT_MILLS: &str = "QUERY_WAIT_TIMEOUT_MILLS";
-pub const MAX_QUERY_LOG_SIZE: &str = "MAX_QUERY_LOG_SIZE";
+pub const QUERY_MAX_QUERY_LOG_SIZE: &str = "QUERY_MAX_QUERY_LOG_SIZE";
 const QUERY_API_TLS_SERVER_CERT: &str = "QUERY_API_TLS_SERVER_CERT";
 const QUERY_API_TLS_SERVER_KEY: &str = "QUERY_API_TLS_SERVER_KEY";
 const QUERY_API_TLS_SERVER_ROOT_CA_CERT: &str = "QUERY_API_TLS_SERVER_ROOT_CA_CERT";
@@ -210,7 +210,7 @@ pub struct QueryConfig {
 
     #[structopt(
     long,
-    env = MAX_QUERY_LOG_SIZE,
+    env = QUERY_MAX_QUERY_LOG_SIZE,
     default_value = "10000"
     )]
     #[serde(default)]
@@ -370,7 +370,7 @@ impl QueryConfig {
             query,
             max_query_log_size,
             usize,
-            MAX_QUERY_LOG_SIZE
+            QUERY_MAX_QUERY_LOG_SIZE
         );
     }
 }
