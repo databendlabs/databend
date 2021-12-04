@@ -23,7 +23,7 @@ mod interpreter_explain_test;
 #[cfg(test)]
 mod interpreter_grant_privilege_test;
 #[cfg(test)]
-mod interpreter_insert_into_test;
+mod interpreter_insert_test;
 #[cfg(test)]
 mod interpreter_interceptor_test;
 #[cfg(test)]
@@ -58,7 +58,9 @@ mod interpreter_describe_table;
 mod interpreter_explain;
 mod interpreter_factory;
 mod interpreter_grant_privilege;
-mod interpreter_insert_into;
+mod interpreter_insert;
+mod interpreter_insert_with_plan;
+mod interpreter_insert_with_stream;
 mod interpreter_interceptor;
 mod interpreter_kill;
 mod interpreter_revoke_privilege;
@@ -83,7 +85,7 @@ pub use interpreter_describe_table::DescribeTableInterpreter;
 pub use interpreter_explain::ExplainInterpreter;
 pub use interpreter_factory::InterpreterFactory;
 pub use interpreter_grant_privilege::GrantPrivilegeInterpreter;
-pub use interpreter_insert_into::InsertIntoInterpreter;
+pub use interpreter_insert::InsertInterpreter;
 pub use interpreter_interceptor::InterceptorInterpreter;
 pub use interpreter_kill::KillInterpreter;
 pub use interpreter_revoke_privilege::RevokePrivilegeInterpreter;

@@ -42,7 +42,7 @@ use crate::Expressions;
 use crate::FilterPlan;
 use crate::GrantPrivilegePlan;
 use crate::HavingPlan;
-use crate::InsertIntoPlan;
+use crate::InsertPlan;
 use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
@@ -106,7 +106,7 @@ pub trait PlanRewriter {
             PlanNode::DescribeTable(plan) => self.rewrite_describe_table(plan),
             PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
             PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
-            PlanNode::InsertInto(plan) => self.rewrite_insert_into(plan),
+            PlanNode::Insert(plan) => self.rewrite_insert_into(plan),
             PlanNode::Copy(plan) => self.rewrite_copy(plan),
             PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
             PlanNode::SubQueryExpression(plan) => self.rewrite_sub_queries_sets(plan),
@@ -336,8 +336,8 @@ pub trait PlanRewriter {
         Ok(PlanNode::DropDatabase(plan.clone()))
     }
 
-    fn rewrite_insert_into(&mut self, plan: &InsertIntoPlan) -> Result<PlanNode> {
-        Ok(PlanNode::InsertInto(plan.clone()))
+    fn rewrite_insert_into(&mut self, plan: &InsertPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Insert(plan.clone()))
     }
 
     fn rewrite_copy(&mut self, plan: &CopyPlan) -> Result<PlanNode> {

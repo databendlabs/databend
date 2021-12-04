@@ -35,7 +35,7 @@ use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::GrantPrivilegePlan;
 use crate::HavingPlan;
-use crate::InsertIntoPlan;
+use crate::InsertPlan;
 use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
@@ -80,7 +80,7 @@ pub enum PlanNode {
     TruncateTable(TruncateTablePlan),
     UseDatabase(UseDatabasePlan),
     SetVariable(SettingPlan),
-    InsertInto(InsertIntoPlan),
+    Insert(InsertPlan),
     Copy(CopyPlan),
     ShowCreateTable(ShowCreateTablePlan),
     SubQueryExpression(SubQueriesSetPlan),
@@ -120,7 +120,7 @@ impl PlanNode {
             PlanNode::SetVariable(v) => v.schema(),
             PlanNode::Sort(v) => v.schema(),
             PlanNode::UseDatabase(v) => v.schema(),
-            PlanNode::InsertInto(v) => v.schema(),
+            PlanNode::Insert(v) => v.schema(),
             PlanNode::ShowCreateTable(v) => v.schema(),
             PlanNode::SubQueryExpression(v) => v.schema(),
             PlanNode::Kill(v) => v.schema(),
@@ -160,7 +160,7 @@ impl PlanNode {
             PlanNode::SetVariable(_) => "SetVariablePlan",
             PlanNode::Sort(_) => "SortPlan",
             PlanNode::UseDatabase(_) => "UseDatabasePlan",
-            PlanNode::InsertInto(_) => "InsertIntoPlan",
+            PlanNode::Insert(_) => "InsertPlan",
             PlanNode::ShowCreateTable(_) => "ShowCreateTablePlan",
             PlanNode::SubQueryExpression(_) => "CreateSubQueriesSets",
             PlanNode::Kill(_) => "KillQuery",

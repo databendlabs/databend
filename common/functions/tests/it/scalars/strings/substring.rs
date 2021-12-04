@@ -40,8 +40,8 @@ fn test_substring_function() -> Result<()> {
     let tests = vec![
         Test {
             name: "substring-abcde-passed",
-            display: "SUBSTRING",
-            nullable: false,
+            display: "substring",
+            nullable: true,
             arg_names: vec!["a", "b", "c"],
             columns: vec![
                 Series::new(vec!["abcde"]).into(),
@@ -54,8 +54,8 @@ fn test_substring_function() -> Result<()> {
         },
         Test {
             name: "substring-abcde-passed",
-            display: "SUBSTRING",
-            nullable: false,
+            display: "substring",
+            nullable: true,
             arg_names: vec!["a", "b", "c"],
             columns: vec![
                 Series::new(vec!["abcde"]).into(),
@@ -68,8 +68,8 @@ fn test_substring_function() -> Result<()> {
         },
         Test {
             name: "substring-abcde-passed",
-            display: "SUBSTRING",
-            nullable: false,
+            display: "substring",
+            nullable: true,
             arg_names: vec!["a", "b"],
             columns: vec![
                 Series::new(vec!["abcde"]).into(),
@@ -82,8 +82,8 @@ fn test_substring_function() -> Result<()> {
         },
         Test {
             name: "substring-1234567890-passed",
-            display: "SUBSTRING",
-            nullable: false,
+            display: "substring",
+            nullable: true,
             arg_names: vec!["a", "b", "c"],
             columns: vec![
                 Series::new(vec!["1234567890"]).into(),

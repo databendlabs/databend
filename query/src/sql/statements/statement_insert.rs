@@ -19,7 +19,8 @@ use common_datavalues::DataSchemaRefExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
-use common_planners::InsertIntoPlan;
+use common_planners::InsertInputSource;
+use common_planners::InsertPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::Expr;
@@ -66,16 +67,32 @@ impl AnalyzableStatement for DfInsertStatement {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         self.is_supported()?;
 
-        match &self.source {
-            None => self.analyze_insert_without_source(&ctx).await,
+        let (database_name, table_name) = self.resolve_table(&ctx)?;
+        let write_table = ctx.get_table(&database_name, &table_name).await?;
+        let table_id = write_table.get_id();
+        let schema = self.insert_schema(write_table)?;
+
+        let input_source = match &self.source {
+            None => self.analyze_insert_without_source().await,
             Some(source) => match &source.body {
-                SetExpr::Values(v) => self.analyze_insert_values(ctx.clone(), v).await,
-                SetExpr::Select(_) => self.analyze_insert_select(&ctx, source).await,
+                SetExpr::Values(v) => self.analyze_insert_values(ctx.clone(), v, &schema).await,
+                SetExpr::Select(_) => self.analyze_insert_select(ctx.clone(), source).await,
                 _ => Err(ErrorCode::SyntaxException(
-                    "Insert must be have values or select.",
+                    "Insert must be have values or select source.",
                 )),
             },
-        }
+        }?;
+
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Insert(
+            InsertPlan {
+                database_name,
+                table_name,
+                table_id,
+                schema,
+                overwrite: self.overwrite,
+                source: input_source,
+            },
+        ))))
     }
 }
 
@@ -100,13 +117,13 @@ impl DfInsertStatement {
     fn is_supported(&self) -> Result<()> {
         if self.partitioned.is_some() {
             return Err(ErrorCode::SyntaxException(
-                "Unsupport insert ... partition statement.",
+                "Unsupported insert ... partition statement.",
             ));
         }
 
         if !self.after_columns.is_empty() {
             return Err(ErrorCode::SyntaxException(
-                "Unsupport specify columns after partitions.",
+                "Unsupported specify columns after partitions.",
             ));
         }
 
@@ -117,22 +134,17 @@ impl DfInsertStatement {
         &self,
         ctx: Arc<QueryContext>,
         values: &Values,
-    ) -> Result<AnalyzedResult> {
+        schema: &DataSchemaRef,
+    ) -> Result<InsertInputSource> {
         tracing::debug!("{:?}", values);
-
-        let (db, table) = self.resolve_table(&ctx)?;
-        let write_table = ctx.get_table(&db, &table).await?;
-        let table_meta_id = write_table.get_id();
-        let schema = self.insert_schema(write_table)?;
 
         let expression_analyzer = ExpressionAnalyzer::create(ctx);
         let mut value_exprs = Vec::with_capacity(values.0.len());
-
         for value in &values.0 {
             let mut exprs = Vec::with_capacity(value.len());
             for (i, v) in value.iter().enumerate() {
                 let expr = expression_analyzer.analyze(v).await?;
-                let expr = if &expr.to_data_type(&schema)? != schema.field(i).data_type() {
+                let expr = if &expr.to_data_type(schema)? != schema.field(i).data_type() {
                     Expression::Cast {
                         expr: Box::new(expr),
                         data_type: schema.field(i).data_type().clone(),
@@ -148,63 +160,25 @@ impl DfInsertStatement {
             value_exprs.push(exprs);
         }
 
-        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::InsertInto(
-            InsertIntoPlan::insert_values(
-                db,
-                table,
-                table_meta_id,
-                schema,
-                self.overwrite,
-                value_exprs,
-            ),
-        ))))
+        Ok(InsertInputSource::Expressions(value_exprs))
     }
 
-    async fn analyze_insert_without_source(
-        &self,
-        ctx: &Arc<QueryContext>,
-    ) -> Result<AnalyzedResult> {
-        let (db, table) = self.resolve_table(ctx)?;
-        let write_table = ctx.get_table(&db, &table).await?;
-        let table_meta_id = write_table.get_id();
-        let table_schema = self.insert_schema(write_table)?;
-
-        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::InsertInto(
-            InsertIntoPlan::insert_without_source(
-                db,
-                table,
-                table_meta_id,
-                table_schema,
-                self.overwrite,
-                self.format.clone(),
-            ),
-        ))))
+    async fn analyze_insert_without_source(&self) -> Result<InsertInputSource> {
+        let format = self.format.as_ref().ok_or_else(|| {
+            ErrorCode::SyntaxException("FORMAT must be specified in streaming insertion")
+        })?;
+        Ok(InsertInputSource::StreamingWithFormat(format.clone()))
     }
 
     async fn analyze_insert_select(
         &self,
-        ctx: &Arc<QueryContext>,
+        ctx: Arc<QueryContext>,
         source: &Query,
-    ) -> Result<AnalyzedResult> {
-        let (db, table) = self.resolve_table(ctx)?;
-        let write_table = ctx.get_table(&db, &table).await?;
-        let table_meta_id = write_table.get_id();
-        let table_schema = self.insert_schema(write_table)?;
-
+    ) -> Result<InsertInputSource> {
         let statement = DfQueryStatement::try_from(source.clone())?;
         let select_plan =
-            PlanParser::build_plan(vec![DfStatement::Query(Box::new(statement))], ctx.clone())
-                .await?;
-        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::InsertInto(
-            InsertIntoPlan::insert_select(
-                db,
-                table,
-                table_meta_id,
-                table_schema,
-                self.overwrite,
-                select_plan,
-            ),
-        ))))
+            PlanParser::build_plan(vec![DfStatement::Query(Box::new(statement))], ctx).await?;
+        Ok(InsertInputSource::SelectPlan(Box::new(select_plan)))
     }
 
     fn insert_schema(&self, read_table: Arc<dyn Table>) -> Result<DataSchemaRef> {
