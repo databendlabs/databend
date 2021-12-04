@@ -1,5 +1,4 @@
 ---
-id: data-type-time-date-types
 title: Time and Date Types
 
 ---

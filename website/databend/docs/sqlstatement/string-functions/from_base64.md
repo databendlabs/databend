@@ -1,5 +1,4 @@
 ---
-id: string-from_base64
 title: FROM_BASE64
 ---
 

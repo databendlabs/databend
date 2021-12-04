@@ -1,5 +1,4 @@
 ---
-id: datetime-tomorrow
 title: TOMORROW
 ---
 

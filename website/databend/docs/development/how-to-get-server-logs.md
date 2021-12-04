@@ -1,5 +1,4 @@
 ---
-id: development-get-server-logs
 title: How to get server logs
 ---
 

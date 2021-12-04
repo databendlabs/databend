@@ -1,5 +1,4 @@
 ---
-id: numeric-cot
 title: COT
 ---
 

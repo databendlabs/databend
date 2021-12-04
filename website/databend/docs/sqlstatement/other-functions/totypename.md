@@ -1,5 +1,4 @@
 ---
-id: to-type-name
 title: ToTypeName
 ---
 

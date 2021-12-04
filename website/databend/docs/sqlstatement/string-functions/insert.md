@@ -1,5 +1,4 @@
 ---
-id: string-insert
 title: INSERT
 ---
 

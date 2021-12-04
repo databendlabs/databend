@@ -1,5 +1,4 @@
 ---
-id: datetime-toyyyymmdd
 title: toYYYYMMDD
 ---
 

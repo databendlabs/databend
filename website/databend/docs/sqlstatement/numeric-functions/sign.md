@@ -1,5 +1,4 @@
 ---
-id: numeric-sign
 title: SIGN
 ---
 

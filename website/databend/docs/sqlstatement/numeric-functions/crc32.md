@@ -1,5 +1,4 @@
 ---
-id: numeric-crc32
 title: CRC32
 ---
 

@@ -1,5 +1,4 @@
 ---
-id: user-management-create-user
 title: CREATE USER
 ---
 

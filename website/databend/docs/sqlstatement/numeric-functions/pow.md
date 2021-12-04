@@ -1,5 +1,4 @@
 ---
-id: numeric-pow
 title: POW
 ---
 

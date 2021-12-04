@@ -1,5 +1,4 @@
 ---
-id: aggregate-count-distinct
 title: countDistinct
 ---
 

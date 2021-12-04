@@ -1,5 +1,4 @@
 ---
-id: version
 title: VERSION
 ---
 

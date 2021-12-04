@@ -1,5 +1,4 @@
 ---
-id: architecture
 title: Whitepapers
 ---
 

@@ -1,5 +1,4 @@
 ---
-id: numeric-acos
 title: ACOS
 ---
 

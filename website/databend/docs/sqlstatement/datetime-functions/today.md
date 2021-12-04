@@ -1,5 +1,4 @@
 ---
-id: datetime-today
 title: YESTERDAY
 ---
 

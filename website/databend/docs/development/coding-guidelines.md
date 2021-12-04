@@ -1,5 +1,4 @@
 ---
-id: development-codingguidelines
 title: Coding Guidelines
 ---
 

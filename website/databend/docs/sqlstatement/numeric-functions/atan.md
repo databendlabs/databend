@@ -1,5 +1,4 @@
 ---
-id: numeric-atan
 title: ATAN
 ---
 

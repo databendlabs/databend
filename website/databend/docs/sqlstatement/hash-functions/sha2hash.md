@@ -1,5 +1,4 @@
 ---
-id: hash-sha2hash
 title: SHA2
 ---
 

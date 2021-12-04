@@ -1,5 +1,4 @@
 ---
-id: string-substring
 title: SUBSTRING
 ---
 
@@ -31,6 +30,20 @@ SUBSTRING(str FROM pos FOR len)
 ## Return Type
 
 String
+
+:::note
+In SUBSTRING, the starting index point of a string is 1 (not 0).
+
+In the following example, the starting index 3 represents the third character in the string, because the index starts from 1.
+```
+mysql> SELECT SUBSTRING('1234567890' FROM 3 FOR 3);
++---------------------------+
+| SUBSTRING(1234567890,3,3) |
++---------------------------+
+| 345                       |
++---------------------------+
+```
+:::
 
 ## Examples
 

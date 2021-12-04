@@ -1,5 +1,4 @@
 ---
-id: numeric-ceil
 title: CEIL
 ---
 

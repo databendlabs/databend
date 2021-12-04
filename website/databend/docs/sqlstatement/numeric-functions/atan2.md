@@ -1,5 +1,4 @@
 ---
-id: numeric-atan2
 title: ATAN2
 ---
 

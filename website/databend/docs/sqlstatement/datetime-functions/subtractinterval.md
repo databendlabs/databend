@@ -1,5 +1,4 @@
 ---
-id: datetime-subtractinterval
 title: subtractYEARS/MONTHS/DAYS/HOURS/MINUTES/SECONDS
 ---
 

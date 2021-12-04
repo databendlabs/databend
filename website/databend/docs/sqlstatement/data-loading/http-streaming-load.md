@@ -1,5 +1,4 @@
 ---
-id: http-streaming-load
 title: streaming load data into table
 ---
 
@@ -18,9 +17,9 @@ curl -u user:passwd -H <options>  -F  "upload=@<files_location>"  -XPUT http://l
   * `insert_sql`: must be specified in options, eg: `insert into table_name (a,b,c) format CSV`
   * `files_location`: local file path, eg: `/tmp/data.csv`
 
-!!! note "Notes"
-
-  Currently, only csv format is supported for streaming load.
+:::note Notes
+Currently, only csv format is supported for streaming load.
+:::
 
 ### Response
 ```

@@ -1,5 +1,4 @@
 ---
-id: cli
 title: Databend CLI Reference
 ---
 
@@ -10,17 +9,17 @@ It also supports to port forward webUI, monitoring dashboard on local and run SQ
 
 ## 1. Install
 
-```markdown
+```shell
 curl -fsS https://repo.databend.rs/databend/install-bendctl.sh | bash
 ```
 
-```markdown
+```shell
 export PATH="${HOME}/.databend/bin:${PATH}"
 ```
 
 ## 2. Help
 
-```markdown
+```shell
 $ bendctl
 [local] [sql]> help
 [ok] ✅ Mode switch commands:
@@ -39,7 +38,7 @@ $ bendctl
 
 ## 3. Setting up a cluster
 
-```markdown
+```shell
 [local] [sql]> \admin
 Mode switched to admin mode
 [local] [admin]> cluster create
@@ -57,78 +56,76 @@ Mode switched to admin mode
 
 ## 4. Query Example
 
-=== "bendctl"
+:::note
+numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
+:::
 
-    !!! note
-        numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
 
-    ```
-    [local] [admin]> \sql
-    Mode switched to SQL query mode
-    [local] [sql]> SELECT avg(number) FROM numbers(1000000000);
-    +-------------+
-    | avg(number) |
-    +-------------+
-    | 499999999.5 |
-    +-------------+
-    [ok] read rows: 1,000,000,000, read bytes: 8.00 GB, rows/sec: 1,259,445,843 (rows/sec), bytes/sec: 10.07556675 (GB/sec)
-    [local] [sql]>
-    ```
+<Tabs>
+<TabItem value="bendctl" label="bendctl" default>
 
-=== "MySQL Client"
+```
+[local] [admin]> \sql
+Mode switched to SQL query mode
+[local] [sql]> SELECT avg(number) FROM numbers(1000000000);
++-------------+
+| avg(number) |
++-------------+
+| 499999999.5 |
++-------------+
+[ok] read rows: 1,000,000,000, read bytes: 8.00 GB, rows/sec: 1,259,445,843 (rows/sec), bytes/sec: 10.07556675 (GB/sec)
+[local] [sql]>
+```
+</TabItem>
+<TabItem value="mysql" label="MySQL Client">
 
-    !!! note
-        numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
+```
+mysql -h127.0.0.1 -uroot -P3307
+```
+```markdown
+mysql> SELECT avg(number) FROM numbers(1000000000);
++-------------+
+| avg(number) |
++-------------+
+| 499999999.5 |
++-------------+
+1 row in set (0.05 sec)
+```
+</TabItem>
+<TabItem value="clickhouse" label="ClickHouse Client">
 
-    ```
-    mysql -h127.0.0.1 -uroot -P3307
-    ```
-    ```markdown
-    mysql> SELECT avg(number) FROM numbers(1000000000);
-    +-------------+
-    | avg(number) |
-    +-------------+
-    | 499999999.5 |
-    +-------------+
-    1 row in set (0.05 sec)
-    ```
+```
+clickhouse client --host 0.0.0.0 --port 9001
+```
 
-=== "ClickHouse Client"
+```
+databend :) SELECT avg(number) FROM numbers(1000000000);
 
-    !!! note
-        numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
+SELECT avg(number)
+  FROM numbers(1000000000)
 
-    ```
-    clickhouse client --host 0.0.0.0 --port 9001
-    ```
+Query id: 89e06fba-1d57-464d-bfb0-238df85a2e66
 
-    ```
-    databend :) SELECT avg(number) FROM numbers(1000000000);
+┌─avg(number)─┐
+│ 499999999.5 │
+└─────────────┘
 
-    SELECT avg(number)
-      FROM numbers(1000000000)
+1 rows in set. Elapsed: 0.062 sec. Processed 1.00 billion rows, 8.01 GB (16.16 billion rows/s., 129.38 GB/s.)
+```
+</TabItem>
+<TabItem value="http" label="HTTP Client">
 
-    Query id: 89e06fba-1d57-464d-bfb0-238df85a2e66
+```
+curl --location --request POST '127.0.0.1:8001/v1/statement/' --header 'Content-Type: text/plain' --data-raw 'SELECT avg(number) FROM numbers(1000000000)'
+```
 
-    ┌─avg(number)─┐
-    │ 499999999.5 │
-    └─────────────┘
-
-    1 rows in set. Elapsed: 0.062 sec. Processed 1.00 billion rows, 8.01 GB (16.16 billion rows/s., 129.38 GB/s.)
-    ```
-
-=== "HTTP Client"
-
-    !!! note
-        numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
-
-    ```
-    curl --location --request POST '127.0.0.1:8001/v1/statement/' --header 'Content-Type: text/plain' --data-raw 'SELECT avg(number) FROM numbers(1000000000)'
-    ```
-
-    ```
-    {"id":"efca332b-13f4-4b8c-982d-cebf91626214","nextUri":null,"data":[[499999999.5]],"columns":{"fields":[{"name":"avg(number)","data_type":"Float64","nullable":false}],"metadata":{}},"error":null,"stats":{"read_rows":1000000000,"read_bytes":8000000000,"total_rows_to_read":0}}
-    ```
+```
+{"id":"efca332b-13f4-4b8c-982d-cebf91626214","nextUri":null,"data":[[499999999.5]],"columns":{"fields":[{"name":"avg(number)","data_type":"Float64","nullable":false}],"metadata":{}},"error":null,"stats":{"read_rows":1000000000,"read_bytes":8000000000,"total_rows_to_read":0}}
+```
+</TabItem>
+</Tabs>
 
 ## 5. Stop a cluster
 
@@ -143,8 +140,4 @@ Mode switched to admin mode
 
 ## 6. Demo
 
-<figure>
-  <img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/bendctl-how-to-use.gif"/>
-  <figcaption>bendctl on AWS arm64-server</figcaption>
-</figure>
-
+![bendctl on AWS arm64-server](images/bendctl-how-to-use.gif)

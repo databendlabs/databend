@@ -1,5 +1,4 @@
 ---
-id: show-tables
 title: SHOW TABLES
 ---
 
