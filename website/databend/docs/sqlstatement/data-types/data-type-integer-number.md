@@ -1,5 +1,4 @@
 ---
-id: data-type-integer-number
 title: Integer Numbers
 ---
 | Data Type        | Size      | Min Value              | Max Value   |

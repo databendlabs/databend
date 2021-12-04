@@ -1,5 +1,4 @@
 ---
-id: kill-query
 title: KILL QUERY
 ---
 

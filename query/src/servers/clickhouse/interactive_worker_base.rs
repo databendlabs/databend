@@ -28,7 +28,7 @@ use common_clickhouse_srv::CHContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-use common_planners::InsertIntoPlan;
+use common_planners::InsertPlan;
 use common_planners::PlanNode;
 use futures::channel::mpsc;
 use futures::channel::mpsc::Receiver;
@@ -67,7 +67,7 @@ impl InteractiveWorkerBase {
         let plan = PlanParser::parse(query, ctx.clone()).await?;
 
         match plan {
-            PlanNode::InsertInto(insert) => Self::process_insert_query(insert, ch_ctx, ctx).await,
+            PlanNode::Insert(insert) => Self::process_insert_query(insert, ch_ctx, ctx).await,
             _ => {
                 let start = Instant::now();
                 let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
@@ -109,7 +109,7 @@ impl InteractiveWorkerBase {
     }
 
     pub async fn process_insert_query(
-        insert: InsertIntoPlan,
+        insert: InsertPlan,
         ch_ctx: &mut CHContext,
         ctx: Arc<QueryContext>,
     ) -> Result<Receiver<BlockItem>> {
@@ -124,7 +124,7 @@ impl InteractiveWorkerBase {
             schema: sc,
         };
 
-        let interpreter = InterpreterFactory::get(ctx.clone(), PlanNode::InsertInto(insert))?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), PlanNode::Insert(insert))?;
         let name = interpreter.name().to_string();
 
         let (mut tx, rx) = mpsc::channel(20);

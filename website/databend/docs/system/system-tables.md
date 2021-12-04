@@ -1,5 +1,4 @@
 ---
-id: system-tables
 title: System Tables
 ---
 

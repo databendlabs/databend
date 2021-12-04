@@ -1,5 +1,4 @@
 ---
-id: api-config
 title: Config
 ---
 

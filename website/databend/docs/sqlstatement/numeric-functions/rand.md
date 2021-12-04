@@ -1,5 +1,4 @@
 ---
-id: numeric-rand
 title: PI
 ---
 

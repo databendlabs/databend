@@ -1,5 +1,4 @@
 ---
-id: development-contributing
 title: Contribution Guide
 ---
 
@@ -11,10 +10,11 @@ Our goal is to make contributing to the Databend project easy and transparent.
 
 Thank you.
 
-!!! note "Notes"
-    Once the code been merged, your name will be stoned in the `system.contributors` table forever.
+:::note Notes
+Once the code been merged, your name will be stoned in the `system.contributors` table forever.
 
-    `SELECT * FROM system.contributors`
+`SELECT * FROM system.contributors`
+:::
 
 ## Contributing
 
@@ -48,7 +48,7 @@ To submit your pull request:
 8. Watch out the replies from the @datafuse-bots, she will be your guide.
 
 ## Code of Conduct
-Please refer to the [Code of Conduct](../policies/code-of-conduct.md), which describes the expectations for interactions within the community.
+Please refer to the [Code of Conduct](/policies/code-of-conduct), which describes the expectations for interactions within the community.
 
 ## Issues
 

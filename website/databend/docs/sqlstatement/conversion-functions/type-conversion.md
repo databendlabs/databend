@@ -1,5 +1,4 @@
 ---
-id: type-conversion
 title: Type Conversion
 ---
 

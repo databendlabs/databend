@@ -1,90 +1,46 @@
 {
-  "name": "mkdocs-material",
-  "version": "7.1.4",
-  "description": "A Material Design theme for MkDocs",
-  "keywords": [
-    "mkdocs",
-    "documentation",
-    "theme"
-  ],
-  "homepage": "https://squidfunk.github.io/mkdocs-material/",
-  "bugs": {
-    "url": "https://github.com/squidfunk/mkdocs-material/issues",
-    "email": "martin.donath@squidfunk.com"
-  },
-  "license": "MIT",
+  "name": "databend",
+  "version": "0.0.0",
   "private": true,
-  "author": {
-    "name": "Martin Donath",
-    "email": "martin.donath@squidfunk.com"
-  },
-  "contributors": [],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/squidfunk/mkdocs-material.git"
-  },
   "scripts": {
-    "build": "rimraf material && ts-node -T tools/build --optimize",
-    "build:dirty": "ts-node -T tools/build --dirty",
-    "clean": "rimraf material",
-    "lint": "npm run lint:scss && npm run lint:ts",
-    "lint:scss": "stylelint \"src/assets/**/*.scss\"",
-    "lint:ts": "eslint --cache \"src/**/*.ts\"",
-    "start": "ts-node -T tools/build --verbose --dirty --watch"
+    "docusaurus": "docusaurus",
+    "start": "docusaurus start",
+    "build": "docusaurus build",
+    "swizzle": "docusaurus swizzle",
+    "deploy": "docusaurus deploy",
+    "clear": "docusaurus clear",
+    "serve": "docusaurus serve",
+    "write-translations": "docusaurus write-translations",
+    "write-heading-ids": "docusaurus write-heading-ids",
+    "typecheck": "tsc"
   },
   "dependencies": {
-    "clipboard": "^2.0.8",
-    "escape-html": "^1.0.3",
-    "focus-visible": "^5.2.0",
-    "fuzzaldrin-plus": "^0.6.0",
-    "lunr": "^2.3.9",
-    "lunr-languages": "^1.4.0",
-    "rxjs": "^7.0.0"
+    "@docusaurus/core": "2.0.0-beta.9",
+    "@docusaurus/preset-classic": "2.0.0-beta.9",
+    "@mdx-js/react": "^1.6.21",
+    "@svgr/webpack": "^5.5.0",
+    "clsx": "^1.1.1",
+    "file-loader": "^6.2.0",
+    "prism-react-renderer": "^1.2.1",
+    "react": "^17.0.1",
+    "react-dom": "^17.0.1",
+    "url-loader": "^4.1.1"
   },
   "devDependencies": {
-    "@fortawesome/fontawesome-free": "^5.15.3",
-    "@mdi/svg": "^5.9.55",
-    "@primer/octicons": "^13.0.0",
-    "@types/clipboard": "^2.0.1",
-    "@types/escape-html": "1.0.1",
-    "@types/fuzzaldrin-plus": "^0.6.1",
-    "@types/html-minifier": "^4.0.0",
-    "@types/lunr": "^2.3.3",
-    "@types/node": "^15.0.1",
-    "@types/resize-observer-browser": "^0.1.5",
-    "@types/sass": "^1.16.0",
-    "@typescript-eslint/eslint-plugin": "^4.22.0",
-    "@typescript-eslint/parser": "^4.22.0",
-    "autoprefixer": "^10.2.5",
-    "chokidar": "^3.5.1",
-    "cssnano": "^5.0.2",
-    "esbuild": "^0.11.18",
-    "eslint": "^7.25.0",
-    "eslint-plugin-eslint-comments": "^3.2.0",
-    "eslint-plugin-import": "^2.22.1",
-    "eslint-plugin-jsdoc": "^33.0.0",
-    "eslint-plugin-no-null": "^1.0.2",
-    "github-types": "^1.0.0",
-    "gitlab": "^14.2.2",
-    "html-minifier": "^4.0.0",
-    "material-design-color": "^2.3.2",
-    "material-shadows": "^3.0.1",
-    "postcss": "^8.2.13",
-    "postcss-inline-svg": "^5.0.0",
-    "preact": "^10.5.13",
-    "rimraf": "^3.0.2",
-    "sass": "^1.32.12",
-    "stylelint": "^7.7.0",
-    "stylelint-config-rational-order": "^0.0.3",
-    "stylelint-config-recommended": "^2.2.0",
-    "stylelint-config-standard": "^18.3.0",
-    "stylelint-scss": "^3.19.0",
-    "svgo": "^2.3.0",
-    "tiny-glob": "^0.2.8",
-    "ts-node": "^9.1.1",
-    "typescript": "^4.2.4"
+    "@docusaurus/module-type-aliases": "2.0.0-beta.9",
+    "@tsconfig/docusaurus": "^1.0.4",
+    "typescript": "^4.3.5"
   },
-  "engines": {
-    "node": ">= 14"
+  "browserslist": {
+    "production": [
+      ">0.5%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
   }
 }

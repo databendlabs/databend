@@ -1,5 +1,4 @@
 ---
-id: string-position
 title: POSITION
 ---
 

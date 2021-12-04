@@ -1,5 +1,4 @@
 ---
-id: datetime-now
 title: NOW
 ---
 

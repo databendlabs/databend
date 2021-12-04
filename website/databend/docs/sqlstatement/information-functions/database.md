@@ -1,5 +1,4 @@
 ---
-id: database
 title: DATABASE
 ---
 

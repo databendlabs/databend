@@ -1,5 +1,4 @@
 ---
-id: numeric-cos
 title: COS
 ---
 

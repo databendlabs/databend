@@ -1,5 +1,4 @@
 ---
-id: license
 title: License
 ---
 

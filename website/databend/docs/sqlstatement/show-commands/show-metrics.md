@@ -1,5 +1,4 @@
 ---
-id: show-metrics
 title: SHOW METRICS
 ---
 

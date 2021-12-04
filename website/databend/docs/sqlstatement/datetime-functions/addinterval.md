@@ -1,5 +1,4 @@
 ---
-id: datetime-addinterval
 title: addYEARS/MONTHS/DAYS/HOURS/MINUTES/SECONDS
 ---
 

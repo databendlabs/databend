@@ -1,5 +1,4 @@
 ---
-id: numeric-sqrt
 title: SQRT
 ---
 

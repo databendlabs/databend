@@ -1,5 +1,4 @@
 ---
-id: ddl-drop-table
 title: DROP TABLE
 ---
 

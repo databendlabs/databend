@@ -1,5 +1,4 @@
 ---
-id: show-processlist
 title: SHOW PROCESSLIST
 ---
 

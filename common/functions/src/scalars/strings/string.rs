@@ -16,6 +16,7 @@ use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::AsciiFunction;
 use crate::scalars::Base64DecodeFunction;
 use crate::scalars::Base64EncodeFunction;
+use crate::scalars::BitLengthFunction;
 use crate::scalars::FieldFunction;
 use crate::scalars::HexFunction;
 use crate::scalars::InsertFunction;
@@ -37,6 +38,9 @@ pub struct StringFunction;
 
 impl StringFunction {
     pub fn register(factory: &mut FunctionFactory) {
+        factory.register("mid", SubstringFunction::desc());
+        factory.register("substr", SubstringFunction::desc());
+        factory.register("substring", SubstringFunction::desc());
         factory.register("substring", SubstringFunction::desc());
         factory.register("oct", OctFunction::desc());
         factory.register("repeat", RepeatFunction::desc());
@@ -55,5 +59,6 @@ impl StringFunction {
         factory.register("insert", InsertFunction::desc());
         factory.register("field", FieldFunction::desc());
         factory.register("octet_length", OctetLengthFunction::desc());
+        factory.register("bit_length", BitLengthFunction::desc());
     }
 }

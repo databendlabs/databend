@@ -34,7 +34,7 @@ use crate::ExpressionPlan;
 use crate::FilterPlan;
 use crate::GrantPrivilegePlan;
 use crate::HavingPlan;
-use crate::InsertIntoPlan;
+use crate::InsertPlan;
 use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
@@ -120,7 +120,7 @@ pub trait PlanVisitor {
             PlanNode::Remote(plan) => self.visit_remote(plan),
             PlanNode::Having(plan) => self.visit_having(plan),
             PlanNode::Expression(plan) => self.visit_expression(plan),
-            PlanNode::InsertInto(plan) => self.visit_insert_into(plan),
+            PlanNode::Insert(plan) => self.visit_insert_into(plan),
             PlanNode::Copy(plan) => self.visit_copy(plan),
             PlanNode::ShowCreateTable(plan) => self.visit_show_create_table(plan),
             PlanNode::SubQueryExpression(plan) => self.visit_sub_queries_sets(plan),
@@ -286,7 +286,7 @@ pub trait PlanVisitor {
         Ok(())
     }
 
-    fn visit_insert_into(&mut self, _: &InsertIntoPlan) -> Result<()> {
+    fn visit_insert_into(&mut self, _: &InsertPlan) -> Result<()> {
         Ok(())
     }
 

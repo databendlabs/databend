@@ -1,5 +1,4 @@
 ---
-id: numeric-sin
 title: SIN
 ---
 

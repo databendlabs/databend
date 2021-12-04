@@ -1,5 +1,4 @@
 ---
-id: nullable-isnull
 title: isNull
 ---
 

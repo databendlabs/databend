@@ -1,5 +1,4 @@
 ---
-id: describe-table
 title: DESCRIBE TABLE
 ---
 
