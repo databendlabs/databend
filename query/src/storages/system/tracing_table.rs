@@ -86,12 +86,7 @@ impl Table for TracingTable {
             .sort_by_key(|file| file.file_name().to_owned())
         {
             let entry = entry.map_err(|e| ErrorCode::UnknownException(format!("{}", e)))?;
-            if !entry.path().is_dir()
-                && entry
-                    .file_name()
-                    .to_string_lossy()
-                    .starts_with("databend-query")
-            {
+            if !entry.path().is_dir() {
                 log_files.push(entry.path().display().to_string());
             }
         }
