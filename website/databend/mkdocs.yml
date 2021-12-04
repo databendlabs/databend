@@ -232,6 +232,7 @@ nav:
               - POSITION: sqlstatement/string-functions/position.md
               - INSERT: sqlstatement/string-functions/insert.md
               - FIELD: sqlstatement/string-functions/field.md
+              - BIT_LENGTH: sqlstatement/string-functions/bit_length.md
           - Test Functions:
               - SLEEP: sqlstatement/test-functions/sleep.md
               - CRASHME: sqlstatement/test-functions/crashme.md
