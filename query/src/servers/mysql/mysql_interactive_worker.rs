@@ -346,7 +346,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     }
 
     fn do_init(&mut self, database_name: &str) -> Result<()> {
-        let init_query = format!("USE {};", database_name);
+        let init_query = format!("USE `{}`;", database_name);
         let do_query = self.do_query(&init_query);
 
         match Self::build_runtime() {
