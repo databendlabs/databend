@@ -31,4 +31,5 @@ pub use storage_factory::StorageCreator;
 pub use storage_factory::StorageFactory;
 pub use storage_table::Table;
 pub use storage_table_read_plan::ToReadDataSourcePlan;
+pub use system::QueryLogMemoryStore;
 pub use system::SystemDatabase;

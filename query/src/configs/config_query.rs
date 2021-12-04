@@ -32,6 +32,7 @@ pub const QUERY_FLIGHT_API_ADDRESS: &str = "QUERY_FLIGHT_API_ADDRESS";
 pub const QUERY_HTTP_API_ADDRESS: &str = "QUERY_HTTP_API_ADDRESS";
 pub const QUERY_METRICS_API_ADDRESS: &str = "QUERY_METRIC_API_ADDRESS";
 pub const QUERY_WAIT_TIMEOUT_MILLS: &str = "QUERY_WAIT_TIMEOUT_MILLS";
+pub const QUERY_MAX_QUERY_LOG_SIZE: &str = "QUERY_MAX_QUERY_LOG_SIZE";
 const QUERY_API_TLS_SERVER_CERT: &str = "QUERY_API_TLS_SERVER_CERT";
 const QUERY_API_TLS_SERVER_KEY: &str = "QUERY_API_TLS_SERVER_KEY";
 const QUERY_API_TLS_SERVER_ROOT_CA_CERT: &str = "QUERY_API_TLS_SERVER_ROOT_CA_CERT";
@@ -206,6 +207,14 @@ pub struct QueryConfig {
     )]
     #[serde(default)]
     pub wait_timeout_mills: u64,
+
+    #[structopt(
+    long,
+    env = QUERY_MAX_QUERY_LOG_SIZE,
+    default_value = "10000"
+    )]
+    #[serde(default)]
+    pub max_query_log_size: usize,
 }
 
 impl QueryConfig {
@@ -235,6 +244,7 @@ impl QueryConfig {
             table_engine_parquet_enabled: false,
             table_engine_memory_enabled: true,
             wait_timeout_mills: 5000,
+            max_query_log_size: 10000,
         }
     }
 
@@ -354,6 +364,13 @@ impl QueryConfig {
             wait_timeout_mills,
             u64,
             QUERY_WAIT_TIMEOUT_MILLS
+        );
+        env_helper!(
+            mut_config,
+            query,
+            max_query_log_size,
+            usize,
+            QUERY_MAX_QUERY_LOG_SIZE
         );
     }
 }

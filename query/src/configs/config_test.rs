@@ -61,6 +61,7 @@ table_engine_csv_enabled = false
 table_engine_parquet_enabled = false
 table_engine_memory_enabled = true
 wait_timeout_mills = 5000
+max_query_log_size = 10000
 
 [log]
 log_level = \"INFO\"
