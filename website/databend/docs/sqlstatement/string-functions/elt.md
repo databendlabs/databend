@@ -1,5 +1,4 @@
 ---
-id: string-elt
 title: ELT
 ---
 
