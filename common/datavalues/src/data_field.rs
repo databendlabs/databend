@@ -45,6 +45,11 @@ impl DataField {
             nullable,
         }
     }
+
+    pub fn with_default_expression(&mut self, default_expr: Option<Expression> ) -> Self {
+        self.default_expr = default_expr;
+    }
+
     pub fn name(&self) -> &String {
         &self.name
     }
