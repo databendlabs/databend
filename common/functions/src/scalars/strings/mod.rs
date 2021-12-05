@@ -31,6 +31,7 @@ mod string;
 mod string2number;
 mod string2string;
 mod substring;
+mod substring_index;
 mod trim;
 mod unhex;
 
@@ -55,6 +56,7 @@ pub use string::StringFunction;
 pub use string2number::NumberResultFunction;
 pub use string2number::String2NumberFunction;
 pub use substring::SubstringFunction;
+pub use substring_index::SubstringIndexFunction;
 pub use trim::LTrimFunction;
 pub use trim::RTrimFunction;
 pub use trim::TrimFunction;

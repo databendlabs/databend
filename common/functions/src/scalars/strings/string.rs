@@ -34,6 +34,7 @@ use crate::scalars::ReplaceFunction;
 use crate::scalars::ReverseFunction;
 use crate::scalars::StrcmpFunction;
 use crate::scalars::SubstringFunction;
+use crate::scalars::SubstringIndexFunction;
 use crate::scalars::TrimFunction;
 use crate::scalars::UnhexFunction;
 
@@ -45,7 +46,7 @@ impl StringFunction {
         factory.register("mid", SubstringFunction::desc());
         factory.register("substr", SubstringFunction::desc());
         factory.register("substring", SubstringFunction::desc());
-        factory.register("substring", SubstringFunction::desc());
+        factory.register("substring_index", SubstringIndexFunction::desc());
         factory.register("oct", OctFunction::desc());
         factory.register("repeat", RepeatFunction::desc());
         factory.register("ltrim", LTrimFunction::desc());
