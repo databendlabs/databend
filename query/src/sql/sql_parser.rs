@@ -690,24 +690,15 @@ impl<'a> DfParser<'a> {
         let (columns, _) = self.parse_columns()?;
         let engine = self.parse_table_engine()?;
 
-        let mut table_properties = vec![];
-
         // parse table options: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
-        if self.consume_token("LOCATION") {
-            self.parser.expect_token(&Token::Eq)?;
-            let value = self.parse_value()?;
-            table_properties.push(SqlOption {
-                name: Ident::new("LOCATION"),
-                value,
-            })
-        }
+        let options = self.parse_options()?;
 
         let create = DfCreateTable {
             if_not_exists,
             name: table_name,
             columns,
             engine,
-            options: table_properties,
+            options,
         };
 
         Ok(DfStatement::CreateTable(create))
