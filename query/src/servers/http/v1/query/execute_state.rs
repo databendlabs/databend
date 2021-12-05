@@ -38,12 +38,12 @@ use crate::sql::PlanParser;
 #[derive(Deserialize, Debug)]
 pub struct HttpQueryRequest {
     #[serde(default)]
-    pub session: SessionConf,
+    pub session: HttpSessionConf,
     pub sql: String,
 }
 
 #[derive(Deserialize, Debug, Default)]
-pub struct SessionConf {
+pub struct HttpSessionConf {
     pub database: Option<String>,
 }
 

@@ -47,7 +47,7 @@ use crate::catalogs::DatabaseCatalog;
 use crate::clusters::Cluster;
 use crate::configs::AzureStorageBlobConfig;
 use crate::configs::Config;
-use crate::servers::http::v1::query::HttpQueryHandle;
+use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionManager;
 use crate::sessions::Settings;
