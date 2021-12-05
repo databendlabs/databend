@@ -23,6 +23,7 @@ use crate::scalars::HexFunction;
 use crate::scalars::InsertFunction;
 use crate::scalars::InstrFunction;
 use crate::scalars::LTrimFunction;
+use crate::scalars::LeftFunction;
 use crate::scalars::LocateFunction;
 use crate::scalars::OctFunction;
 use crate::scalars::OctetLengthFunction;
@@ -32,6 +33,7 @@ use crate::scalars::RTrimFunction;
 use crate::scalars::RepeatFunction;
 use crate::scalars::ReplaceFunction;
 use crate::scalars::ReverseFunction;
+use crate::scalars::RightFunction;
 use crate::scalars::StrcmpFunction;
 use crate::scalars::SubstringFunction;
 use crate::scalars::SubstringIndexFunction;
@@ -69,5 +71,7 @@ impl StringFunction {
         factory.register("replace", ReplaceFunction::desc());
         factory.register("reverse", ReverseFunction::desc());
         factory.register("strcmp", StrcmpFunction::desc());
+        factory.register("left", LeftFunction::desc());
+        factory.register("right", RightFunction::desc());
     }
 }
