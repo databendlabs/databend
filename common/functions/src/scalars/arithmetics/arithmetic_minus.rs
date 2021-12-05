@@ -45,13 +45,11 @@ impl ArithmeticMinusFunction {
         // unary operation like '-f(x)', just flip the is_positive.
         // also pass the is_constant, in case the input is a constant value.
         if args.len() == 1 {
-            return Ok(Monotonicity {
-                is_monotonic: args[0].is_monotonic || args[0].is_constant,
-                is_positive: !args[0].is_positive,
-                is_constant: args[0].is_constant,
-                left: None,
-                right: None,
-            });
+            return Ok(Monotonicity::create(
+                args[0].is_monotonic || args[0].is_constant,
+                !args[0].is_positive,
+                args[0].is_constant,
+            ));
         }
 
         // For expression f(x) - g(x), only when both f(x) and g(x) are monotonic and have
@@ -61,24 +59,20 @@ impl ArithmeticMinusFunction {
 
         // case of 12 - g(x)
         if f_x.is_constant {
-            return Ok(Monotonicity {
-                is_monotonic: g_x.is_monotonic || g_x.is_constant,
-                is_positive: !g_x.is_positive,
-                is_constant: g_x.is_constant,
-                left: None,
-                right: None,
-            });
+            return Ok(Monotonicity::create(
+                g_x.is_monotonic || g_x.is_constant,
+                !g_x.is_positive,
+                g_x.is_constant,
+            ));
         }
 
         // case of f(x) - 12
         if g_x.is_constant {
-            return Ok(Monotonicity {
-                is_monotonic: f_x.is_monotonic,
-                is_positive: f_x.is_positive,
-                is_constant: f_x.is_constant,
-                left: None,
-                right: None,
-            });
+            return Ok(Monotonicity::create(
+                f_x.is_monotonic,
+                f_x.is_positive,
+                f_x.is_constant,
+            ));
         }
 
         // if either one is non-monotonic, return non-monotonic
@@ -91,12 +85,6 @@ impl ArithmeticMinusFunction {
             return Ok(Monotonicity::default());
         }
 
-        Ok(Monotonicity {
-            is_monotonic: true,
-            is_positive: f_x.is_positive,
-            is_constant: false,
-            left: None,
-            right: None,
-        })
+        Ok(Monotonicity::create(true, f_x.is_positive, false))
     }
 }

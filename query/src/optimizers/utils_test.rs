@@ -22,7 +22,6 @@ mod monotonicity_check {
     use common_exception::Result;
     use common_functions::scalars::Monotonicity;
     use common_planners::*;
-    use float_cmp::approx_eq;
 
     use crate::optimizers::MonotonicityCheckVisitor;
 
@@ -36,19 +35,22 @@ mod monotonicity_check {
         error: &'static str,
     }
 
-    fn create_data(d: f64) -> Option<DataColumnWithField> {
+    fn create_f64(d: f64) -> Option<DataColumnWithField> {
         let data_field = DataField::new("x", DataType::Float64, false);
         let data_column = DataColumn::Constant(DataValue::Float64(Some(d)), 1);
         Some(DataColumnWithField::new(data_column, data_field))
     }
 
-    fn extract_data(data_column_field: DataColumnWithField) -> Result<f64> {
-        let arr = data_column_field
-            .column()
-            .to_minimal_array()?
-            .cast_with_type(&DataType::Float64)?;
-        let val = arr.f64()?.into_iter().next().unwrap();
-        Ok(*val.unwrap())
+    fn create_u8(d: u8) -> Option<DataColumnWithField> {
+        let data_field = DataField::new("x", DataType::UInt8, false);
+        let data_column = DataColumn::Constant(DataValue::UInt8(Some(d)), 1);
+        Some(DataColumnWithField::new(data_column, data_field))
+    }
+
+    fn create_datetime(d: u32) -> Option<DataColumnWithField> {
+        let data_field = DataField::new("x", DataType::DateTime32(None), false);
+        let data_column = DataColumn::Constant(DataValue::UInt32(Some(d)), 1);
+        Some(DataColumnWithField::new(data_column, data_field))
     }
 
     fn verify_test(t: Test) -> Result<()> {
@@ -90,31 +92,17 @@ mod monotonicity_check {
             if expected_left.is_none() {
                 assert!(left.is_none(), "{} left", t.name);
             } else {
-                assert!(
-                    approx_eq!(
-                        f64,
-                        extract_data(left.unwrap())?,
-                        extract_data(expected_left.unwrap())?,
-                        epsilon = 0.000001
-                    ),
-                    "{} left",
-                    t.name
-                );
+                let left_val = left.unwrap().column().try_get(0)?;
+                let expected_left_val = expected_left.unwrap().column().try_get(0)?;
+                assert!(left_val == expected_left_val, "{}", t.name);
             }
 
             if expected_right.is_none() {
                 assert!(right.is_none(), "{} right", t.name);
             } else {
-                assert!(
-                    approx_eq!(
-                        f64,
-                        extract_data(right.unwrap())?,
-                        extract_data(expected_right.unwrap())?,
-                        epsilon = 0.000001
-                    ),
-                    "{} right",
-                    t.name
-                );
+                let right_val = right.unwrap().column().try_get(0)?;
+                let expected_right_val = expected_right.unwrap().column().try_get(0)?;
+                assert!(right_val == expected_right_val, "{}", t.name);
             }
         }
         Ok(())
@@ -250,14 +238,14 @@ mod monotonicity_check {
                 name: "f(x) = -1/x",
                 expr: Expression::create_binary_expression("/", vec![lit(-1_i8), col("x")]),
                 column: "x",
-                left: create_data(5.0),
-                right: create_data(10.0),
+                left: create_f64(5.0),
+                right: create_f64(10.0),
                 expect_mono: Monotonicity {
                     is_monotonic: true,
                     is_positive: true,
                     is_constant: false,
-                    left: create_data(-0.2),
-                    right: create_data(-0.1),
+                    left: create_f64(-0.2),
+                    right: create_f64(-0.1),
                 },
                 error: "",
             },
@@ -283,8 +271,8 @@ mod monotonicity_check {
                     Expression::create_binary_expression("-", vec![col("x"), lit(12_i64)]),
                 ]),
                 column: "x",
-                left: create_data(10.0),
-                right: create_data(1000.0),
+                left: create_f64(10.0),
+                right: create_f64(1000.0),
                 expect_mono: Monotonicity {
                     is_monotonic: false,
                     is_positive: false,
@@ -301,14 +289,14 @@ mod monotonicity_check {
                     Expression::create_binary_expression("-", vec![col("x"), lit(12_i64)]),
                 ]),
                 column: "x",
-                left: create_data(12.0),
-                right: create_data(100.0),
+                left: create_f64(12.0),
+                right: create_f64(100.0),
                 expect_mono: Monotonicity {
                     is_monotonic: true,
                     is_positive: true,
                     is_constant: false,
-                    left: create_data(0.0),
-                    right: create_data(8800.0),
+                    left: create_f64(0.0),
+                    right: create_f64(8800.0),
                 },
                 error: "",
             },
@@ -319,14 +307,14 @@ mod monotonicity_check {
                     Expression::create_binary_expression("/", vec![lit(1_i8), col("x")]),
                 ]),
                 column: "x",
-                left: create_data(1.0),
-                right: create_data(2.0),
+                left: create_f64(1.0),
+                right: create_f64(2.0),
                 expect_mono: Monotonicity {
                     is_monotonic: true,
                     is_positive: true,
                     is_constant: false,
-                    left: create_data(1.0),
-                    right: create_data(4.0),
+                    left: create_f64(1.0),
+                    right: create_f64(4.0),
                 },
                 error: "",
             },
@@ -340,8 +328,8 @@ mod monotonicity_check {
                     ]),
                 ]),
                 column: "x",
-                left: create_data(0.0),
-                right: create_data(10.0),
+                left: create_f64(0.0),
+                right: create_f64(10.0),
                 expect_mono: Monotonicity {
                     is_monotonic: false,
                     is_positive: false,
@@ -361,14 +349,14 @@ mod monotonicity_check {
                     ]),
                 ]),
                 column: "x",
-                left: create_data(4.0),
-                right: create_data(10.0),
+                left: create_f64(4.0),
+                right: create_f64(10.0),
                 expect_mono: Monotonicity {
                     is_monotonic: true,
                     is_positive: false,
                     is_constant: false,
-                    left: create_data(-4.0),
-                    right: create_data(-40.0),
+                    left: create_f64(-4.0),
+                    right: create_f64(-40.0),
                 },
                 error: "",
             },
@@ -404,14 +392,14 @@ mod monotonicity_check {
                 name: "f(x) = abs(x) where  0 <= x <= 10",
                 expr: Expression::create_scalar_function("abs", vec![col("x")]),
                 column: "x",
-                left: create_data(0.0),
-                right: create_data(10.0),
+                left: create_f64(0.0),
+                right: create_f64(10.0),
                 expect_mono: Monotonicity {
                     is_monotonic: true,
                     is_positive: true,
                     is_constant: false,
-                    left: create_data(0.0),
-                    right: create_data(10.0),
+                    left: create_f64(0.0),
+                    right: create_f64(10.0),
                 },
                 error: "",
             },
@@ -419,14 +407,14 @@ mod monotonicity_check {
                 name: "f(x) = abs(x) where  -10 <= x <= -2",
                 expr: Expression::create_scalar_function("abs", vec![col("x")]),
                 column: "x",
-                left: create_data(-10.0),
-                right: create_data(-2.0),
+                left: create_f64(-10.0),
+                right: create_f64(-2.0),
                 expect_mono: Monotonicity {
                     is_monotonic: true,
                     is_positive: false,
                     is_constant: false,
-                    left: create_data(10.0),
-                    right: create_data(2.0),
+                    left: create_f64(10.0),
+                    right: create_f64(2.0),
                 },
                 error: "",
             },
@@ -434,8 +422,8 @@ mod monotonicity_check {
                 name: "f(x) = abs(x) where -5 <= x <= 5", // should NOT be monotonic
                 expr: Expression::create_scalar_function("abs", vec![col("x")]),
                 column: "x",
-                left: create_data(-5.0),
-                right: create_data(5.0),
+                left: create_f64(-5.0),
+                right: create_f64(5.0),
                 expect_mono: Monotonicity {
                     is_monotonic: false,
                     is_positive: false,
@@ -451,14 +439,14 @@ mod monotonicity_check {
                     Expression::create_binary_expression("+", vec![col("x"), lit(12i32)]),
                 ]),
                 column: "x",
-                left: create_data(-12.0),
-                right: create_data(1000.0),
+                left: create_f64(-12.0),
+                right: create_f64(1000.0),
                 expect_mono: Monotonicity {
                     is_monotonic: true,
                     is_positive: true,
                     is_constant: false,
-                    left: create_data(0.0),
-                    right: create_data(1012.0),
+                    left: create_f64(0.0),
+                    right: create_f64(1012.0),
                 },
                 error: "",
             },
@@ -468,8 +456,8 @@ mod monotonicity_check {
                     Expression::create_binary_expression("+", vec![col("x"), lit(12i32)]),
                 ]),
                 column: "x",
-                left: create_data(-14.0),
-                right: create_data(20.0),
+                left: create_f64(-14.0),
+                right: create_f64(20.0),
                 expect_mono: Monotonicity {
                     is_monotonic: false,
                     is_positive: true,
@@ -488,14 +476,14 @@ mod monotonicity_check {
                     ]),
                 ]),
                 column: "x",
-                left: create_data(5.0),
-                right: create_data(100.0),
+                left: create_f64(5.0),
+                right: create_f64(100.0),
                 expect_mono: Monotonicity {
                     is_monotonic: true,
                     is_positive: true,
                     is_constant: false,
-                    left: create_data(0.0),
-                    right: create_data(190.0),
+                    left: create_f64(0.0),
+                    right: create_f64(190.0),
                 },
                 error: "",
             },
@@ -511,14 +499,117 @@ mod monotonicity_check {
                     ]),
                 ]),
                 column: "x",
-                left: create_data(-100.0),
-                right: create_data(4.0),
+                left: create_f64(-100.0),
+                right: create_f64(4.0),
                 expect_mono: Monotonicity {
                     is_monotonic: true,
                     is_positive: false,
                     is_constant: false,
-                    left: create_data(208.0),
-                    right: create_data(0.0),
+                    left: create_f64(208.0),
+                    right: create_f64(0.0),
+                },
+                error: "",
+            },
+        ];
+
+        for t in test_suite.into_iter() {
+            verify_test(t)?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_dates_function() -> Result<()> {
+        let test_suite = vec![
+            Test {
+                name: "f(x) = toStartOfWeek(x+12)",
+                expr: Expression::create_scalar_function("toStartOfWeek", vec![
+                    Expression::create_binary_expression("+", vec![col("x"), lit(12i32)]),
+                ]),
+                column: "x",
+                left: None,
+                right: None,
+                expect_mono: Monotonicity {
+                    is_monotonic: true,
+                    is_positive: true,
+                    is_constant: false,
+                    left: None,
+                    right: None,
+                },
+                error: "",
+            },
+            Test {
+                name: "f(x) = toMonday(x)",
+                expr: Expression::create_scalar_function("toMonday", vec![col("x")]),
+                column: "x",
+                left: None,
+                right: None,
+                expect_mono: Monotonicity {
+                    is_monotonic: true,
+                    is_positive: true,
+                    is_constant: false,
+                    left: None,
+                    right: None,
+                },
+                error: "",
+            },
+            Test {
+                name: "f(x) = toSecond(x)",
+                expr: Expression::create_scalar_function("toSecond", vec![col("x")]),
+                column: "x",
+                left: None,
+                right: None,
+                expect_mono: Monotonicity {
+                    is_monotonic: false,
+                    is_positive: true,
+                    is_constant: false,
+                    left: None,
+                    right: None,
+                },
+                error: "",
+            },
+            Test {
+                name: "f(x) = toSecond(x)",
+                expr: Expression::create_scalar_function("toSecond", vec![col("x")]),
+                column: "x",
+                left: create_datetime(1638288000),
+                right: create_datetime(1638288059),
+                expect_mono: Monotonicity {
+                    is_monotonic: true,
+                    is_positive: true,
+                    is_constant: false,
+                    left: create_u8(0),
+                    right: create_u8(59),
+                },
+                error: "",
+            },
+            Test {
+                name: "f(x) = toDayOfYear(x)",
+                expr: Expression::create_scalar_function("toDayOfYear", vec![col("x")]),
+                column: "x",
+                left: create_datetime(1606752119),
+                right: create_datetime(1638288059),
+                expect_mono: Monotonicity {
+                    is_monotonic: false,
+                    is_positive: true,
+                    is_constant: false,
+                    left: None,
+                    right: None,
+                },
+                error: "",
+            },
+            Test {
+                name: "f(x) = toStartOfHour(x)",
+                expr: Expression::create_scalar_function("toStartOfHour", vec![col("x")]),
+                column: "x",
+                left: None,
+                right: None,
+                expect_mono: Monotonicity {
+                    is_monotonic: true,
+                    is_positive: true,
+                    is_constant: false,
+                    left: None,
+                    right: None,
                 },
                 error: "",
             },
