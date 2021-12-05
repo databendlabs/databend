@@ -54,9 +54,9 @@ impl DataValue {
                     let num = -(n as i64);
                     if num >= i8::MIN as i64 {
                         return Ok(DataValue::Int8(Some(num as i8)));
-                    } else if num >= u16::MIN as i64 {
+                    } else if num >= i16::MIN as i64 {
                         return Ok(DataValue::Int16(Some(num as i16)));
-                    } else if num >= u32::MIN as i64 {
+                    } else if num >= i32::MIN as i64 {
                         return Ok(DataValue::Int32(Some(num as i32)));
                     } else {
                         return Ok(DataValue::Int64(Some(num as i64)));

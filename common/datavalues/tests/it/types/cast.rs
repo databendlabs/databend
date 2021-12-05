@@ -30,8 +30,8 @@ fn test_cast_by_str() -> Result<()> {
         },
         Test {
             name: "negative",
-            literal: "-31",
-            value: DataValue::Int8(Some(-31)),
+            literal: "-1",
+            value: DataValue::Int8(Some(-1)),
         },
         Test {
             name: "i8::MIN",
@@ -75,7 +75,7 @@ fn test_cast_by_str() -> Result<()> {
         },
         Test {
             name: "f64",
-            literal: "1844674407370955200000",
+            literal: "1844674407370955244444",
             value: DataValue::Float64(Some(1844674407370955200000.0f64)),
         },
     ];
@@ -83,6 +83,8 @@ fn test_cast_by_str() -> Result<()> {
     for test in tests {
         let literal = test.literal;
         let result = DataValue::try_from_literal(literal)?;
+        
+        assert_eq!(result.data_type(), test.value.data_type());
         assert_eq!(&result, &test.value, "test with {}", test.name);
     }
 
