@@ -1,5 +1,4 @@
 ---
-id: string-replace
 title: REPLACE
 ---
 
@@ -21,7 +20,7 @@ REPLACE(str,from_str,to_str)
 
 ## Return Type
 
-A number data type value.
+A String data type value.
 
 ## Examples
 
