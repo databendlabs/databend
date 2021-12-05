@@ -1,0 +1,60 @@
+=== LEFT null ===
+NULL
+NULL
+NULL
+=== LEFT const, const ===
+
+
+
+1
+12
+123
+123
+=== LEFT const, series ===
+
+1
+12
+123
+123
+=== LEFT series, const ===
+0
+1
+2
+3
+4
+=== LEFT series, series ===
+
+1
+20
+300
+4000
+=== RIGHT null ===
+NULL
+NULL
+NULL
+=== RIGHT const, const ===
+
+
+
+3
+23
+123
+123
+=== RIGHT const, series ===
+
+3
+23
+123
+123
+=== RIGHT series, const ===
+0
+0
+0
+0
+0
+=== RIGHT series, series ===
+
+0
+00
+000
+0000
