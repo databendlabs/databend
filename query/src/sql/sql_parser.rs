@@ -16,10 +16,15 @@
 // See notice.md
 
 use std::convert::TryFrom;
+use std::str::FromStr;
 use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_meta_types::AuthType;
+use common_meta_types::Compression;
+use common_meta_types::Credentials;
+use common_meta_types::FileFormat;
+use common_meta_types::StageParams;
 use common_meta_types::UserPrivilege;
 use common_meta_types::UserPrivilegeType;
 use common_planners::ExplainType;
@@ -47,6 +52,7 @@ use super::statements::DfCopy;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCompactTable;
 use crate::sql::statements::DfCreateDatabase;
+use crate::sql::statements::DfCreateStage;
 use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfDescribeTable;
@@ -466,12 +472,18 @@ impl<'a> DfParser<'a> {
 
     fn parse_create(&mut self) -> Result<DfStatement, ParserError> {
         match self.parser.next_token() {
-            Token::Word(w) => match w.keyword {
-                Keyword::TABLE => self.parse_create_table(),
-                Keyword::DATABASE => self.parse_create_database(),
-                Keyword::USER => self.parse_create_user(),
-                _ => self.expected("create statement", Token::Word(w)),
-            },
+            Token::Word(w) => {
+                if w.value.to_uppercase() == "STAGE" {
+                    self.parse_create_stage()
+                } else {
+                    match w.keyword {
+                        Keyword::TABLE => self.parse_create_table(),
+                        Keyword::DATABASE => self.parse_create_database(),
+                        Keyword::USER => self.parse_create_user(),
+                        _ => self.expected("create statement", Token::Word(w)),
+                    }
+                }
+            }
             unexpected => self.expected("create statement", unexpected),
         }
     }
@@ -680,6 +692,139 @@ impl<'a> DfParser<'a> {
                 return parser_err!("Expected keyword BY");
             }
         }
+    }
+
+    fn parse_stage_file_format(&mut self) -> Result<Option<FileFormat>, ParserError> {
+        let file_format = if self.consume_token("FILE_FORMAT") {
+            self.parser.expect_token(&Token::Eq)?;
+            self.parser.expect_token(&Token::LParen)?;
+
+            let format = if self.consume_token("FORMAT") {
+                self.parser.expect_token(&Token::Eq)?;
+                self.parser.parse_literal_string()?
+            } else {
+                return parser_err!("Missing FORMAT");
+            };
+            let file_format = match format.to_uppercase().as_str() {
+                "CSV" | "PARQUET" => {
+                    let compression = if self.consume_token("COMPRESSION") {
+                        self.parser.expect_token(&Token::Eq)?;
+                        //TODO:check compression value correctness
+                        let value = self.parser.parse_literal_string()?;
+                        Compression::from_str(value.as_str())
+                            .map_err(|e| ParserError::ParserError(e.to_string()))?
+                    } else {
+                        Compression::None
+                    };
+                    let file_format = if "CSV" == format.to_uppercase().as_str() {
+                        let file_format = if self.consume_token("RECORD_DELIMITER") {
+                            self.parser.expect_token(&Token::Eq)?;
+                            let value = self.parser.parse_literal_string()?;
+                            let record_delimiter = match value.to_uppercase().as_str() {
+                                "NONE" => String::from(""),
+                                _ => value,
+                            };
+                            Some(FileFormat::Csv {
+                                compression,
+                                record_delimiter,
+                            })
+                        } else {
+                            Some(FileFormat::Csv {
+                                compression,
+                                record_delimiter: String::from(""),
+                            })
+                        };
+
+                        file_format
+                    } else {
+                        Some(FileFormat::Parquet { compression })
+                    };
+
+                    file_format
+                }
+                "JSON" => Some(FileFormat::Json),
+                unexpected => {
+                    return parser_err!(format!(
+                        "Expected format type {}, found: {}",
+                        "'CSV'|'PARQUET'|'JSON'", unexpected
+                    ))
+                }
+            };
+
+            self.parser.expect_token(&Token::RParen)?;
+            file_format
+        } else {
+            None
+        };
+
+        Ok(file_format)
+    }
+
+    fn parse_stage_credentials(&mut self, url: String) -> Result<Credentials, ParserError> {
+        if !self.consume_token("CREDENTIALS") {
+            return parser_err!("Missing CREDENTIALS");
+        }
+        self.parser.expect_token(&Token::Eq)?;
+        self.parser.expect_token(&Token::LParen)?;
+
+        let credentials = if url.to_uppercase().starts_with("S3") {
+            //TODO: current credential field order is hard code
+            let access_key_id = if self.consume_token("ACCESS_KEY_ID") {
+                self.parser.expect_token(&Token::Eq)?;
+                self.parser.parse_literal_string()?
+            } else {
+                return parser_err!("Missing S3 ACCESS_KEY_ID");
+            };
+
+            let secret_access_key = if self.consume_token("SECRET_ACCESS_KEY") {
+                self.parser.expect_token(&Token::Eq)?;
+                self.parser.parse_literal_string()?
+            } else {
+                return parser_err!("Missing S3 SECRET_ACCESS_KEY");
+            };
+            Credentials::S3 {
+                access_key_id,
+                secret_access_key,
+            }
+        } else {
+            return parser_err!("Not supported storage");
+        };
+        self.parser.expect_token(&Token::RParen)?;
+        Ok(credentials)
+    }
+
+    fn parse_create_stage(&mut self) -> Result<DfStatement, ParserError> {
+        let if_not_exists =
+            self.parser
+                .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let name = self.parser.parse_literal_string()?;
+        let url = if self.consume_token("URL") {
+            self.parser.expect_token(&Token::Eq)?;
+            self.parser.parse_literal_string()?
+        } else {
+            return parser_err!("Missing URL");
+        };
+
+        let credentials = self.parse_stage_credentials(url.clone())?;
+        let stage_params = StageParams::new(url.as_str(), credentials);
+        let file_format = self.parse_stage_file_format()?;
+
+        let comments = if self.consume_token("COMMENTS") {
+            self.parser.expect_token(&Token::Eq)?;
+            self.parser.parse_literal_string()?
+        } else {
+            String::from("")
+        };
+
+        let create = DfCreateStage {
+            if_not_exists,
+            stage_name: name,
+            stage_params,
+            file_format,
+            comments,
+        };
+
+        Ok(DfStatement::CreateStage(create))
     }
 
     fn parse_create_table(&mut self) -> Result<DfStatement, ParserError> {

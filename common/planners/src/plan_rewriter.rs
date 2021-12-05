@@ -30,6 +30,7 @@ use crate::CopyPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
 use crate::CreateUserPlan;
+use crate::CreateUserStagePlan;
 use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
@@ -117,6 +118,7 @@ pub trait PlanRewriter {
             PlanNode::DropUser(plan) => self.drop_user(plan),
             PlanNode::GrantPrivilege(plan) => self.grant_privilege(plan),
             PlanNode::RevokePrivilege(plan) => self.revoke_privilege(plan),
+            PlanNode::CreateUserStage(plan) => self.rewrite_create_stage(plan),
             PlanNode::Sink(plan) => self.rewrite_sink(plan),
         }
     }
@@ -374,6 +376,10 @@ pub trait PlanRewriter {
 
     fn revoke_privilege(&mut self, plan: &RevokePrivilegePlan) -> Result<PlanNode> {
         Ok(PlanNode::RevokePrivilege(plan.clone()))
+    }
+
+    fn rewrite_create_stage(&mut self, plan: &CreateUserStagePlan) -> Result<PlanNode> {
+        Ok(PlanNode::CreateUserStage(plan.clone()))
     }
 
     fn rewrite_sink(&mut self, plan: &SinkPlan) -> Result<PlanNode> {

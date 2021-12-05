@@ -12,24 +12,118 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct StageParams {
+    pub url: String,
+    pub credentials: Credentials,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum Credentials {
+    S3 {
+        access_key_id: String,
+        secret_access_key: String,
+    },
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum FileFormat {
+    Csv {
+        compression: Compression,
+        record_delimiter: String,
+    },
+    Parquet {
+        compression: Compression,
+    },
+    Json,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum Compression {
+    Auto,
+    Gzip,
+    Bz2,
+    Brotli,
+    Zstd,
+    Deflate,
+    RawDeflate,
+    Lzo,
+    Snappy,
+    None,
+}
+
+impl FromStr for Compression {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> std::result::Result<Compression, &'static str> {
+        let s = s.to_uppercase();
+        match s.as_str() {
+            "AUTO" => Ok(Compression::Auto),
+            "GZIP" => Ok(Compression::Gzip),
+            "BZ2" => Ok(Compression::Bz2),
+            "BROTLI" => Ok(Compression::Brotli),
+            "ZSTD" => Ok(Compression::Zstd),
+            "DEFLATE" => Ok(Compression::Deflate),
+            "RAW_DEFLATE" => Ok(Compression::RawDeflate),
+            "NONE" => Ok(Compression::None),
+            _ => Err("no match for compression"),
+        }
+    }
+}
+
+// impl FromStr for FileFormat {
+//     type Err = &'static str;
+//
+//     fn from_str(s: &str) -> std::result::Result<FileFormat, &'static str> {
+//         let s = s.to_uppercase();
+//         match s.as_str() {
+//             "CSV" => Ok(FileFormat::Csv),
+//             "PARQUET" => Ok(FileFormat::Parquet),
+//             "JSON" => Ok(FileFormat::Json),
+//             _ => Err("no match for file format"),
+//         }
+//     }
+// }
+
+impl StageParams {
+    pub fn new(url: &str, credentials: Credentials) -> Self {
+        StageParams {
+            url: url.to_string(),
+            credentials,
+        }
+    }
+}
 /// Stage for data stage location.
 /// Need to add more fields by need.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct UserStageInfo {
     #[serde(default)]
     pub stage_name: String,
+
+    pub stage_params: StageParams,
+    #[serde(default)]
+    pub file_format: Option<FileFormat>,
     #[serde(default)]
     pub comments: String,
 }
 
 impl UserStageInfo {
-    pub fn new(stage_name: &str, comments: &str) -> Self {
+    pub fn new(
+        stage_name: &str,
+        comments: &str,
+        stage_params: StageParams,
+        file_format: Option<FileFormat>,
+    ) -> Self {
         UserStageInfo {
             stage_name: stage_name.to_string(),
             comments: comments.to_string(),
+            stage_params,
+            file_format,
         }
     }
 }
