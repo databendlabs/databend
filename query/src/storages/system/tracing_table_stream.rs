@@ -78,7 +78,7 @@ impl TracingTableStream {
                 break;
             }
 
-            let entry: LogEntry = serde_json::from_str(line.unwrap().as_str()).unwrap();
+            let entry: LogEntry = serde_json::from_str(line.unwrap().as_str())?;
             version_col.push(entry.v);
             name_col.push(entry.name);
             msg_col.push(entry.msg);
