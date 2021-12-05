@@ -1,0 +1,51 @@
+=== null ===
+NULL
+NULL
+NULL
+NULL
+=== const, const, const ===
+bbbb123bbb456bb7b
+aaaa123aaa456aa7a
+1234567
+=== const, const, series ===
+a0b
+a1b
+a2b
+a3b
+a4b
+=== const, series, const ===
+a1b
+a7b
+a1b
+a1b
+a1b
+=== const, series, series ===
+a1b
+a2b
+a1b
+a1b
+a1b
+=== series, const, const ===
+1
+11
+21
+31
+41
+=== series, const, series ===
+0
+11
+22
+33
+44
+=== series, series, const ===
+1
+10
+10
+10
+10
+=== series, series, series ===
+0
+10
+20
+30
+40

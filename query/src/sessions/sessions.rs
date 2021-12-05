@@ -31,8 +31,7 @@ use futures::StreamExt;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
 use crate::configs::Config;
-use crate::servers::http::v1::query::HttpQueryManager;
-use crate::servers::http::v1::query::HttpQueryManagerRef;
+use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
 use crate::storages::QueryLogMemoryStore;
@@ -43,7 +42,7 @@ pub struct SessionManager {
     pub(in crate::sessions) discovery: Arc<ClusterDiscovery>,
     pub(in crate::sessions) catalog: Arc<DatabaseCatalog>,
     pub(in crate::sessions) user: Arc<UserApiProvider>,
-    pub(in crate::sessions) http_query_manager: HttpQueryManagerRef,
+    pub(in crate::sessions) http_query_manager: Arc<HttpQueryManager>,
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
@@ -84,7 +83,7 @@ impl SessionManager {
         self.discovery.clone()
     }
 
-    pub fn get_http_query_manager(self: &Arc<Self>) -> HttpQueryManagerRef {
+    pub fn get_http_query_manager(self: &Arc<Self>) -> Arc<HttpQueryManager> {
         self.http_query_manager.clone()
     }
 

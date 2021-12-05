@@ -32,7 +32,7 @@ use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::Cluster;
 use crate::configs::Config;
-use crate::servers::http::v1::query::HttpQueryHandle;
+use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::Session;
 use crate::sessions::Settings;
 use crate::storages::Table;

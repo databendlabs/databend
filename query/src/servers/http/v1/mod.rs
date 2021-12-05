@@ -12,19 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_to_json;
-
 #[cfg(test)]
 mod block_to_json_test;
-pub mod http_query_handlers;
 #[cfg(test)]
 mod http_query_handlers_test;
-pub mod load;
-pub(crate) mod query;
-pub mod statement;
 #[cfg(test)]
 mod statement_test;
 
-pub(super) use http_query_handlers::query_route;
-pub(super) use load::streaming_load;
-pub(super) use statement::statement_router;
+mod block_to_json;
+mod http_query_handlers;
+mod load;
+mod query;
+mod statement;
+
+pub(crate) use block_to_json::block_to_json;
+pub(crate) use block_to_json::JsonBlock;
+pub(crate) use block_to_json::JsonBlockRef;
+pub use http_query_handlers::make_final_uri;
+pub use http_query_handlers::make_page_uri;
+pub use http_query_handlers::make_state_uri;
+pub use http_query_handlers::query_route;
+pub use http_query_handlers::QueryResponse;
+pub use http_query_handlers::QueryStats;
+pub use load::streaming_load;
+pub use load::LoadResponse;
+pub use query::ExecuteStateName;
+pub use query::HttpQueryHandle;
+pub use query::HttpQueryManager;
+pub use statement::statement_router;

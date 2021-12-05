@@ -23,9 +23,9 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::servers::http::v1::block_to_json::block_to_json;
-use crate::servers::http::v1::block_to_json::JsonBlock;
-use crate::servers::http::v1::block_to_json::JsonBlockRef;
+use crate::servers::http::v1::block_to_json;
+use crate::servers::http::v1::JsonBlock;
+use crate::servers::http::v1::JsonBlockRef;
 
 const TARGET_ROWS_PER_PAGE: usize = 10000;
 

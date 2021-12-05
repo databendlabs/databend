@@ -12,11 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(super) mod execute_state;
-pub(super) mod http_query;
+mod execute_state;
+mod http_query;
 mod http_query_manager;
-pub(super) mod result_data_manager;
+mod result_data_manager;
 
+pub(crate) use execute_state::ExecuteState;
+pub use execute_state::ExecuteStateName;
+pub(crate) use execute_state::Executor;
+pub(crate) use execute_state::ExecutorRef;
 pub use execute_state::HttpQueryHandle;
+pub use execute_state::HttpQueryRequest;
+pub use execute_state::HttpSessionConf;
+pub use http_query::HttpQuery;
+pub use http_query::HttpQueryRef;
+pub use http_query::HttpQueryResponseInternal;
+pub use http_query::ResponseInitialState;
+pub use http_query::ResponseState;
 pub use http_query_manager::HttpQueryManager;
-pub use http_query_manager::HttpQueryManagerRef;
+pub use result_data_manager::Page;
+pub use result_data_manager::ResponseData;
+pub use result_data_manager::ResultDataManager;
+pub use result_data_manager::Wait;

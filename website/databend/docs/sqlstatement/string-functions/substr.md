@@ -1,5 +1,4 @@
 ---
-id: string-substr
 title: SUBSTR
 ---
 
