@@ -245,7 +245,7 @@ pub async fn execute_query_json(
 ) -> Result<(
     Option<DataSchemaRef>,
     Arc<Vec<Vec<Value>>>,
-    databend_query::servers::http::v1::http_query_handlers::QueryStats,
+    databend_query::servers::http::v1::QueryStats,
 )> {
     let ans = cli
         .post(url)
@@ -253,7 +253,7 @@ pub async fn execute_query_json(
         .send()
         .await
         .expect("cannot post to http handler")
-        .json::<databend_query::servers::http::v1::http_query_handlers::QueryResponse>()
+        .json::<databend_query::servers::http::v1::QueryResponse>()
         .await;
     if let Err(e) = ans {
         return Err(CliError::Unknown(format!(
@@ -325,7 +325,7 @@ pub async fn execute_load(
         .send()
         .await
         .expect("cannot post to http handler")
-        .json::<databend_query::servers::http::v1::load::LoadResponse>()
+        .json::<databend_query::servers::http::v1::LoadResponse>()
         .await;
     match resp {
         Ok(v) => Ok(v.stats),

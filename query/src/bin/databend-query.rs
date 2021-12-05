@@ -24,7 +24,6 @@ use databend_query::api::HttpService;
 use databend_query::api::RpcService;
 use databend_query::configs::Config;
 use databend_query::metrics::MetricService;
-use databend_query::servers::http::HTTP_HANDLER_USAGE;
 use databend_query::servers::ClickHouseHandler;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::MySQLHandler;
@@ -117,9 +116,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let listening = srv.start(listening.parse()?).await?;
         shutdown_handle.add_service(srv);
 
-        let http_handler_usage = HTTP_HANDLER_USAGE
-            .to_string()
-            .replace("8001", conf.query.http_handler_port.to_string().as_str());
+        let http_handler_usage = HttpHandler::usage(listening);
         info!(
             "Http handler listening on {} {}",
             listening, http_handler_usage

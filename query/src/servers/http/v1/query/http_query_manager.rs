@@ -25,10 +25,8 @@ pub struct HttpQueryManager {
     pub(crate) queries: Arc<RwLock<HashMap<String, HttpQueryRef>>>,
 }
 
-pub type HttpQueryManagerRef = Arc<HttpQueryManager>;
-
 impl HttpQueryManager {
-    pub async fn create_global(_cfg: Config) -> Result<HttpQueryManagerRef> {
+    pub async fn create_global(_cfg: Config) -> Result<Arc<HttpQueryManager>> {
         Ok(Arc::new(HttpQueryManager {
             queries: Arc::new(RwLock::new(HashMap::new())),
         }))

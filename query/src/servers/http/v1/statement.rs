@@ -24,11 +24,11 @@ use poem::Endpoint;
 use poem::Route;
 use serde::Deserialize;
 
-use crate::servers::http::v1::http_query_handlers::QueryResponse;
-use crate::servers::http::v1::query::execute_state::HttpQueryRequest;
-use crate::servers::http::v1::query::execute_state::SessionConf;
-use crate::servers::http::v1::query::http_query::HttpQuery;
-use crate::servers::http::v1::query::result_data_manager::Wait;
+use crate::servers::http::v1::query::HttpQuery;
+use crate::servers::http::v1::query::HttpQueryRequest;
+use crate::servers::http::v1::query::HttpSessionConf;
+use crate::servers::http::v1::query::Wait;
+use crate::servers::http::v1::QueryResponse;
 use crate::sessions::SessionManager;
 
 #[derive(Deserialize)]
@@ -45,7 +45,7 @@ pub(crate) async fn statement_handler(
     let session_manager = sessions_extension.0;
     let http_query_manager = session_manager.get_http_query_manager();
     let query_id = http_query_manager.next_query_id();
-    let session = SessionConf {
+    let session = HttpSessionConf {
         database: params.db.filter(|x| !x.is_empty()),
     };
     let req = HttpQueryRequest { sql, session };
