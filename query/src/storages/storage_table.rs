@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -44,6 +45,10 @@ pub trait Table: Sync + Send {
 
     fn schema(&self) -> DataSchemaRef {
         self.get_table_info().schema()
+    }
+
+    fn options(&self) -> &HashMap<String, String> {
+        self.get_table_info().options()
     }
 
     fn get_id(&self) -> MetaId {
