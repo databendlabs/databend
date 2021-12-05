@@ -31,6 +31,7 @@ use crate::scalars::QuoteFunction;
 use crate::scalars::RTrimFunction;
 use crate::scalars::RepeatFunction;
 use crate::scalars::ReplaceFunction;
+use crate::scalars::ReverseFunction;
 use crate::scalars::StrcmpFunction;
 use crate::scalars::SubstringFunction;
 use crate::scalars::TrimFunction;
@@ -65,6 +66,7 @@ impl StringFunction {
         factory.register("concat", ConcatFunction::desc());
         factory.register("bit_length", BitLengthFunction::desc());
         factory.register("replace", ReplaceFunction::desc());
+        factory.register("reverse", ReverseFunction::desc());
         factory.register("strcmp", StrcmpFunction::desc());
     }
 }
