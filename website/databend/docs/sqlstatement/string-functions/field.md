@@ -1,5 +1,4 @@
 ---
-id: string-field
 title: FIELD
 ---
 

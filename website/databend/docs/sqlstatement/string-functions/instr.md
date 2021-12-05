@@ -1,5 +1,4 @@
 ---
-id: string-instr
 title: INSTR
 ---
 
