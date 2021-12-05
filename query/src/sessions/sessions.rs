@@ -35,6 +35,7 @@ use crate::servers::http::v1::query::HttpQueryManager;
 use crate::servers::http::v1::query::HttpQueryManagerRef;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
+use crate::storages::QueryLogMemoryStore;
 use crate::users::UserApiProvider;
 
 pub struct SessionManager {
@@ -46,6 +47,7 @@ pub struct SessionManager {
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
+    pub(in crate::sessions) query_log_memory_store: Arc<QueryLogMemoryStore>,
 }
 
 impl SessionManager {
@@ -61,6 +63,7 @@ impl SessionManager {
         let http_query_manager = HttpQueryManager::create_global(conf.clone()).await?;
 
         let max_active_sessions = conf.query.max_active_sessions as usize;
+        let max_query_log_size = conf.query.max_query_log_size;
         Ok(Arc::new(SessionManager {
             catalog,
             conf,
@@ -69,6 +72,7 @@ impl SessionManager {
             http_query_manager,
             max_sessions: max_active_sessions,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
+            query_log_memory_store: Arc::new(QueryLogMemoryStore::create(max_query_log_size)),
         }))
     }
 
@@ -91,6 +95,10 @@ impl SessionManager {
 
     pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
         self.catalog.clone()
+    }
+
+    pub fn get_query_log_memory_store(self: &Arc<Self>) -> Arc<QueryLogMemoryStore> {
+        self.query_log_memory_store.clone()
     }
 
     pub fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {
