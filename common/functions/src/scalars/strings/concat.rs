@@ -38,60 +38,78 @@ impl ConcatFunction {
             .features(FunctionFeatures::default().deterministic())
     }
 
-    fn concat_column(lhs: DataColumn, rhs: &DataColumnWithField) -> Result<DataColumn> {
+    fn concat_column(lhs: DataColumn, columns: &DataColumnsWithField) -> Result<DataColumn> {
+        if lhs.data_type().is_null() {
+            return Ok(lhs);
+        }
         let lhs = lhs.cast_with_type(&DataType::String)?;
-        let rhs = rhs.column().cast_with_type(&DataType::String)?;
-        let array = match (lhs, rhs) {
+        if columns.is_empty() {
+            return Ok(lhs);
+        }
+        let rhs = columns[0].column();
+        if rhs.data_type().is_null() {
+            return Ok(rhs.clone());
+        }
+        let rhs = rhs.cast_with_type(&DataType::String)?;
+        let column = match (lhs, rhs) {
             (DataColumn::Array(lhs), DataColumn::Array(rhs)) => {
                 let l_array = lhs.string()?;
                 let r_array = rhs.string()?;
-                DFStringArray::new_from_iter_validity(
+                let array = DFStringArray::new_from_iter_validity(
                     l_array
                         .into_no_null_iter()
                         .zip(r_array.into_no_null_iter())
                         .map(|(l, r)| [l, r].concat()),
                     combine_validities(l_array.inner().validity(), r_array.inner().validity()),
-                )
+                );
+                DataColumn::Array(array.into_series())
             }
-            (DataColumn::Array(l_array), DataColumn::Constant(rhs, len)) => {
-                let l_array = l_array.string()?;
-                let r_array = rhs.to_series_with_size(len)?;
-                let r_array = r_array.string()?;
-                DFStringArray::new_from_iter_validity(
-                    l_array
-                        .into_no_null_iter()
-                        .zip(r_array.into_no_null_iter())
-                        .map(|(l, r)| [l, r].concat()),
-                    combine_validities(l_array.inner().validity(), r_array.inner().validity()),
-                )
-            }
-            (DataColumn::Constant(l_array, len), DataColumn::Array(rhs)) => {
-                let l_array = l_array.to_series_with_size(len)?;
-                let l_array = l_array.string()?;
-                let r_array = rhs.string()?;
-                DFStringArray::new_from_iter_validity(
-                    l_array
-                        .into_no_null_iter()
-                        .zip(r_array.into_no_null_iter())
-                        .map(|(l, r)| [l, r].concat()),
-                    combine_validities(l_array.inner().validity(), r_array.inner().validity()),
-                )
-            }
-            (DataColumn::Constant(l_array, l_len), DataColumn::Constant(rhs, r_len)) => {
-                let l_array = l_array.to_series_with_size(l_len)?;
-                let l_array = l_array.string()?;
-                let r_array = rhs.to_series_with_size(r_len)?;
-                let r_array = r_array.string()?;
-                DFStringArray::new_from_iter_validity(
-                    l_array
-                        .into_no_null_iter()
-                        .zip(r_array.into_no_null_iter())
-                        .map(|(l, r)| [l, r].concat()),
-                    combine_validities(l_array.inner().validity(), r_array.inner().validity()),
-                )
-            }
+            (DataColumn::Array(lhs), DataColumn::Constant(rhs, len)) => match rhs {
+                DataValue::String(Some(r_value)) => {
+                    let l_array = lhs.string()?;
+                    let mut builder = StringArrayBuilder::with_capacity(len);
+                    let iter = l_array.into_iter();
+                    for val in iter {
+                        if let Some(val) = val {
+                            builder.append_value([val, r_value.as_slice()].concat());
+                        } else {
+                            builder.append_null();
+                        }
+                    }
+                    let array = builder.finish();
+                    DataColumn::Array(array.into_series())
+                }
+                _ => DataColumn::Array(DFStringArray::full_null(len).into_series()),
+            },
+            (DataColumn::Constant(lhs, len), DataColumn::Array(rhs)) => match lhs {
+                DataValue::String(Some(l_value)) => {
+                    let r_array = rhs.string()?;
+                    let mut builder = StringArrayBuilder::with_capacity(len);
+                    let iter = r_array.into_iter();
+                    for val in iter {
+                        if let Some(val) = val {
+                            builder.append_value([val, l_value.as_slice()].concat());
+                        } else {
+                            builder.append_null();
+                        }
+                    }
+                    let array = builder.finish();
+                    DataColumn::Array(array.into_series())
+                }
+                _ => DataColumn::Array(DFStringArray::full_null(len).into_series()),
+            },
+            (DataColumn::Constant(lhs, len), DataColumn::Constant(rhs, _)) => match lhs {
+                DataValue::String(Some(l_val)) => match rhs {
+                    DataValue::String(Some(r_val)) => DataColumn::Constant(
+                        DataValue::String(Some([l_val.as_slice(), r_val.as_slice()].concat())),
+                        len,
+                    ),
+                    _ => DataColumn::Constant(DataValue::Null, len),
+                },
+                _ => DataColumn::Constant(DataValue::Null, len),
+            },
         };
-        let result = DataColumn::Array(array.into_series());
+        let result = Self::concat_column(column, &columns[1..])?;
         Ok(result)
     }
 }
@@ -119,11 +137,7 @@ impl Function for ConcatFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        let len = columns[0].column().len();
-        let mut result = DataColumn::Constant(DataValue::String(Some(vec![0u8; 0])), len);
-        for column in columns {
-            result = Self::concat_column(result, column)?;
-        }
+        let result = Self::concat_column(columns[0].column().clone(), &columns[1..])?;
         Ok(result)
     }
 }
