@@ -17,6 +17,7 @@ use crate::scalars::AsciiFunction;
 use crate::scalars::Base64DecodeFunction;
 use crate::scalars::Base64EncodeFunction;
 use crate::scalars::BitLengthFunction;
+use crate::scalars::ConcatFunction;
 use crate::scalars::FieldFunction;
 use crate::scalars::HexFunction;
 use crate::scalars::InsertFunction;
@@ -61,6 +62,7 @@ impl StringFunction {
         factory.register("insert", InsertFunction::desc());
         factory.register("field", FieldFunction::desc());
         factory.register("octet_length", OctetLengthFunction::desc());
+        factory.register("concat", ConcatFunction::desc());
         factory.register("bit_length", BitLengthFunction::desc());
         factory.register("replace", ReplaceFunction::desc());
         factory.register("strcmp", StrcmpFunction::desc());
