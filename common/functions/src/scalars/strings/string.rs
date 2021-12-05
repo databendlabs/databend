@@ -29,6 +29,7 @@ use crate::scalars::PositionFunction;
 use crate::scalars::QuoteFunction;
 use crate::scalars::RTrimFunction;
 use crate::scalars::RepeatFunction;
+use crate::scalars::StrcmpFunction;
 use crate::scalars::SubstringFunction;
 use crate::scalars::TrimFunction;
 use crate::scalars::UnhexFunction;
@@ -60,5 +61,6 @@ impl StringFunction {
         factory.register("field", FieldFunction::desc());
         factory.register("octet_length", OctetLengthFunction::desc());
         factory.register("bit_length", BitLengthFunction::desc());
+        factory.register("strcmp", StrcmpFunction::desc());
     }
 }
