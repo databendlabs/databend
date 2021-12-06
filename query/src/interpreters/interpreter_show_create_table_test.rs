@@ -30,7 +30,7 @@ async fn interpreter_show_create_table_test() -> Result<()> {
         static TEST_CREATE_QUERY: &str = "\
             CREATE TABLE default.a(\
                 a bigint, b int, c varchar(255), d smallint, e Date\
-            ) Engine = Null\
+            ) Engine = Null COMMENT = 'test create'\
         ";
 
         if let PlanNode::CreateTable(plan) = parse_query(TEST_CREATE_QUERY, &ctx)? {
@@ -47,17 +47,17 @@ async fn interpreter_show_create_table_test() -> Result<()> {
             let stream = executor.execute(None).await?;
             let result = stream.try_collect::<Vec<_>>().await?;
             let expected = vec![
-                "+-------+--------------------+",
-                "| Table | Create Table       |",
-                "+-------+--------------------+",
-                "| a     | CREATE TABLE `a` ( |",
-                "|       |   `a` Int64,       |",
-                "|       |   `b` Int32,       |",
-                "|       |   `c` String,      |",
-                "|       |   `d` Int16,       |",
-                "|       |   `e` Date16,      |",
-                "|       | ) ENGINE=Null      |",
-                "+-------+--------------------+",
+                "+-------+-------------------------------------+",
+                "| Table | Create Table                        |",
+                "+-------+-------------------------------------+",
+                "| a     | CREATE TABLE `a` (                  |",
+                "|       |   `a` Int64,                        |",
+                "|       |   `b` Int32,                        |",
+                "|       |   `c` String,                       |",
+                "|       |   `d` Int16,                        |",
+                "|       |   `e` Date16,                       |",
+                "|       | ) ENGINE=Null COMMENT='test create' |",
+                "+-------+-------------------------------------+",
             ];
             common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
         } else {
