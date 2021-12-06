@@ -718,8 +718,8 @@ impl<'a> DfParser<'a> {
                     } else {
                         Compression::None
                     };
-                    let file_format = if "CSV" == format.to_uppercase().as_str() {
-                        let file_format = if self.consume_token("RECORD_DELIMITER") {
+                    if "CSV" == format.to_uppercase().as_str() {
+                        if self.consume_token("RECORD_DELIMITER") {
                             self.parser.expect_token(&Token::Eq)?;
 
                             let record_delimiter = match self.parser.next_token() {
@@ -746,14 +746,10 @@ impl<'a> DfParser<'a> {
                                 compression,
                                 record_delimiter: String::from(""),
                             })
-                        };
-
-                        file_format
+                        }
                     } else {
                         Some(FileFormat::Parquet { compression })
-                    };
-
-                    file_format
+                    }
                 }
                 "JSON" => Some(FileFormat::Json),
                 unexpected => {
