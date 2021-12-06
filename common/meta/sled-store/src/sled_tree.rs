@@ -21,8 +21,7 @@ use std::ops::RangeBounds;
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
 use common_tracing::tracing;
-use sled::transaction::ConflictableTransactionError;
-use sled::transaction::TransactionError;
+use sled::transaction::TransactionResult;
 use sled::transaction::TransactionalTree;
 use sled::transaction::UnabortableTransactionError;
 
@@ -89,20 +88,22 @@ impl SledTree {
         }
     }
 
-    pub fn txn<T, E>(
+    pub fn txn<T>(
         &self,
         sync: bool,
-        f: impl Fn(TransactionSledTree<'_>) -> Result<T, ConflictableTransactionError<E>>,
-    ) -> Result<T, TransactionError<E>> {
+        f: impl Fn(TransactionSledTree<'_>) -> Result<T, UnabortableTransactionError>,
+    ) -> Result<T, ErrorCode> {
         // use map_err_to_code
-        (&self.tree).transaction(move |tree| {
-            let txn_sled_tree = TransactionSledTree { txn_tree: tree };
-            let r = f(txn_sled_tree.clone())?;
-            if sync {
-                txn_sled_tree.txn_tree.flush();
-            }
-            Ok(r)
-        })
+        let result: TransactionResult<T, UnabortableTransactionError> =
+            (&self.tree).transaction(move |tree| {
+                let txn_sled_tree = TransactionSledTree { txn_tree: tree };
+                let r = f(txn_sled_tree.clone())?;
+                if sync {
+                    txn_sled_tree.txn_tree.flush();
+                }
+                Ok(r)
+            });
+        result.map_err(ErrorCode::from)
     }
 
     /// Return true if the tree contains the key.
