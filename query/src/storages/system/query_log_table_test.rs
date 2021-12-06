@@ -15,11 +15,13 @@
 use std::sync::Arc;
 
 use common_base::tokio;
+use common_datablocks::assert_blocks_sorted_eq;
+use common_datablocks::DataBlock;
+use common_datavalues::prelude::Series;
+use common_datavalues::prelude::SeriesFrom;
 use common_exception::Result;
 use futures::TryStreamExt;
-use pretty_assertions::assert_eq;
 
-use crate::storages::system::QueryLog;
 use crate::storages::system::QueryLogTable;
 use crate::storages::Table;
 use crate::storages::ToReadDataSourcePlan;
@@ -28,94 +30,41 @@ use crate::storages::ToReadDataSourcePlan;
 async fn test_query_log_table() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
     ctx.get_settings().set_max_threads(2)?;
-    ctx.get_sessions_manager()
-        .get_query_log_memory_store()
-        .append_query_log(QueryLog {
-            query_log_type: 0,
-            tenant_id: String::from("tenant_id"),
-            cluster_id: String::from("cluster_id"),
-            sql_user: String::from("sql_user"),
-            sql_user_privileges: String::from("sql_user_privileges"),
-            sql_user_quota: String::from("sql_user_quota"),
-            client_address: String::from("client_address"),
-            query_id: String::from("query_id"),
-            query_text: String::from("query_text"),
-            /// A 32-bit datetime representing the elapsed time since UNIX epoch (1970-01-01)
-            /// in seconds, it's physical type is UInt32
-            query_start_time: 0,
-            /// A 32-bit datetime representing the elapsed time since UNIX epoch (1970-01-01)
-            /// in seconds, it's physical type is UInt32
-            query_end_time: 0,
-            written_rows: 0,
-            written_bytes: 0,
-            read_rows: 0,
-            read_bytes: 0,
-            result_rows: 0,
-            result_result: 0,
-            memory_usage: 0,
-            cpu_usage: 0,
-            exception_code: 0,
-            exception: String::from("exception"),
-            client_info: String::from("client_info"),
-            current_database: String::from("current_database"),
-            databases: String::from("databases"),
-            columns: String::from("columns"),
-            projections: String::from("projections"),
-            server_version: String::from("server_version"),
-        });
 
-    ctx.get_sessions_manager()
-        .get_query_log_memory_store()
-        .append_query_log(QueryLog {
-            query_log_type: 0,
-            tenant_id: String::from("tenant_id"),
-            cluster_id: String::from("cluster_id"),
-            sql_user: String::from("sql_user"),
-            sql_user_privileges: String::from("sql_user_privileges"),
-            sql_user_quota: String::from("sql_user_quota"),
-            client_address: String::from("client_address"),
-            query_id: String::from("query_id"),
-            query_text: String::from("query_text"),
-            /// A 32-bit datetime representing the elapsed time since UNIX epoch (1970-01-01)
-            /// in seconds, it's physical type is UInt32
-            query_start_time: 0,
-            /// A 32-bit datetime representing the elapsed time since UNIX epoch (1970-01-01)
-            /// in seconds, it's physical type is UInt32
-            query_end_time: 0,
-            written_rows: 10,
-            written_bytes: 10,
-            read_rows: 0,
-            read_bytes: 0,
-            result_rows: 0,
-            result_result: 0,
-            memory_usage: 0,
-            cpu_usage: 0,
-            exception_code: 0,
-            exception: String::from("exception"),
-            client_info: String::from("client_info"),
-            current_database: String::from("current_database"),
-            databases: String::from("databases"),
-            columns: String::from("columns"),
-            projections: String::from("projections"),
-            server_version: String::from("server_version"),
-        });
+    let mut query_log = QueryLogTable::create(0);
+    query_log.set_max_rows(2);
+    let schema = query_log.schema();
+    let table: Arc<dyn Table> = Arc::new(query_log);
 
-    let table: Arc<dyn Table> = Arc::new(QueryLogTable::create(10));
-    let source_plan = table.read_plan(ctx.clone(), None).await?;
+    // Insert.
+    {
+        let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1u32])]);
+        let block2 = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![2u32])]);
+        let block3 = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![3u32])]);
+        let blocks = vec![Ok(block), Ok(block2), Ok(block3)];
+        let input_stream = futures::stream::iter::<Vec<Result<DataBlock>>>(blocks.clone());
+        table
+            .append_data(ctx.clone(), Box::pin(input_stream))
+            .await?;
+    }
 
-    let stream = table.read(ctx, &source_plan).await?;
-    let result = stream.try_collect::<Vec<_>>().await?;
-    let block = &result[0];
-    assert_eq!(block.num_columns(), 27);
+    // Check
+    {
+        let source_plan = table.read_plan(ctx.clone(), None).await?;
+        let stream = table.read(ctx.clone(), &source_plan).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        assert_blocks_sorted_eq(
+            vec![
+                "+----------+-----------+------------+----------+----------------+---------------------+----------+------------+------------------+----------------+--------------+---------------+-----------+------------+-------------+--------------+-----------+--------------+-------------+----------------+------------------+-----------+--------+---------+-------------+----------------+----------------+-------------+----------------+-------+",
+                "| log_type | tenant_id | cluster_id | sql_user | sql_user_quota | sql_user_privileges | query_id | query_text | query_start_time | query_end_time | written_rows | written_bytes | read_rows | read_bytes | result_rows | result_bytes | cpu_usage | memory_usage | client_info | client_address | current_database | databases | tables | columns | projections | exception_code | exception_text | stack_trace | server_version | extra |",
+                "+----------+-----------+------------+----------+----------------+---------------------+----------+------------+------------------+----------------+--------------+---------------+-----------+------------+-------------+--------------+-----------+--------------+-------------+----------------+------------------+-----------+--------+---------+-------------+----------------+----------------+-------------+----------------+-------+",
+                "| 2        |           |            |          |                |                     |          |            |                  |                |              |               |           |            |             |              |           |              |             |                |                  |           |        |         |             |                |                |             |                |       |",
+                "| 3        |           |            |          |                |                     |          |            |                  |                |              |               |           |            |             |              |           |              |             |                |                  |           |        |         |             |                |                |             |                |       |",
+                "+----------+-----------+------------+----------+----------------+---------------------+----------+------------+------------------+----------------+--------------+---------------+-----------+------------+-------------+--------------+-----------+--------------+-------------+----------------+------------------+-----------+--------+---------+-------------+----------------+----------------+-------------+----------------+-------+",
+            ],
+            &result,
+        );
+    }
 
-    let expected = vec![
-        "+------+-----------+------------+----------+---------------------+----------------+----------------+----------+------------+------------------+----------------+--------------+---------------+-----------+------------+-------------+---------------+--------------+-----------+----------------+-----------+-------------+------------------+-----------+---------+-------------+----------------+",
-        "| type | tenant_id | cluster_id | sql_user | sql_user_privileges | sql_user_quota | client_address | query_id | query_text | query_start_time | query_end_time | written_rows | written_bytes | read_rows | read_bytes | result_rows | result_result | memory_usage | cpu_usage | exception_code | exception | client_info | current_database | databases | columns | projections | server_version |",
-        "+------+-----------+------------+----------+---------------------+----------------+----------------+----------+------------+------------------+----------------+--------------+---------------+-----------+------------+-------------+---------------+--------------+-----------+----------------+-----------+-------------+------------------+-----------+---------+-------------+----------------+",
-        "| 0    | tenant_id | cluster_id | sql_user | sql_user_privileges | sql_user_quota | client_address | query_id | query_text | 0                | 0              | 0            | 0             | 0         | 0          | 0           | 0             | 0            | 0         | 0              | exception | client_info | current_database | databases | columns | projections | server_version |",
-        "| 0    | tenant_id | cluster_id | sql_user | sql_user_privileges | sql_user_quota | client_address | query_id | query_text | 0                | 0              | 10           | 10            | 0         | 0          | 0           | 0             | 0            | 0         | 0              | exception | client_info | current_database | databases | columns | projections | server_version |",
-        "+------+-----------+------------+----------+---------------------+----------------+----------------+----------+------------+------------------+----------------+--------------+---------------+-----------+------------+-------------+---------------+--------------+-----------+----------------+-----------+-------------+------------------+-----------+---------+-------------+----------------+",
-    ];
-    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     Ok(())
 }

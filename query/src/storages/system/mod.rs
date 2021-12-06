@@ -29,8 +29,6 @@ mod functions_table_test;
 #[cfg(test)]
 mod metrics_table_test;
 #[cfg(test)]
-mod query_log_memory_store_test;
-#[cfg(test)]
 mod query_log_table_test;
 #[cfg(test)]
 mod settings_table_test;
@@ -52,7 +50,6 @@ mod functions_table;
 mod metrics_table;
 mod one_table;
 mod processes_table;
-mod query_log_memory_store;
 mod query_log_table;
 mod settings_table;
 mod tables_table;
@@ -71,8 +68,6 @@ pub use functions_table::FunctionsTable;
 pub use metrics_table::MetricsTable;
 pub use one_table::OneTable;
 pub use processes_table::ProcessesTable;
-pub use query_log_memory_store::QueryLog;
-pub use query_log_memory_store::QueryLogMemoryStore;
 pub use query_log_table::QueryLogTable;
 pub use settings_table::SettingsTable;
 pub use tables_table::TablesTable;

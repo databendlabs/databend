@@ -31,6 +31,14 @@ pub trait Interpreter: Sync + Send {
         input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream>;
 
+    /// Do some start work for the interpreter.
+    async fn start(&self) -> Result<()> {
+        Err(ErrorCode::UnImplement(format!(
+            "UnImplement start method for {:?}",
+            self.name()
+        )))
+    }
+
     /// Do some finish work for the interpreter.
     /// Such as get the metrics and write to query log etc.
     async fn finish(&self) -> Result<()> {
