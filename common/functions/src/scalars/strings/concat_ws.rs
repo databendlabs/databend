@@ -78,14 +78,10 @@ impl ConcatWsFunction {
                                 // current row is NULL, do not add separator
                                 builder.append_value(l);
                             }
-                            (None, Some(r)) => {
-                                if is_last {
-                                    builder.append_value([r].concat());
-                                } else {
-                                    builder.append_value([r, sep.as_slice()].concat());
-                                }
+                            // acc column could never be null
+                            (None, _) => {
+                                return Err(ErrorCode::UnexpectedError("CONCAT_WS internal error"));
                             }
-                            (None, None) => {}
                         }
                     }
                     Ok(DataColumn::Array(builder.finish().into_series()))
@@ -106,9 +102,7 @@ impl ConcatWsFunction {
                                 }
                             } else {
                                 // this never happens, acc column could never be null
-                                return Err(ErrorCode::UnexpectedError(
-                                    "CONCAT_WS internal error",
-                                ));
+                                return Err(ErrorCode::UnexpectedError("CONCAT_WS internal error"));
                             }
                         }
                         let array = builder.finish();
@@ -138,7 +132,8 @@ impl ConcatWsFunction {
                         let array = builder.finish();
                         Ok(DataColumn::Array(array.into_series()))
                     }
-                    _ => Ok(DataColumn::Array(rhs)),
+                    // acc column could never be null
+                    _ => Err(ErrorCode::UnexpectedError("CONCAT_WS internal error")),
                 },
                 (DataColumn::Constant(lhs, _), DataColumn::Constant(rhs, _)) => match &lhs {
                     DataValue::String(Some(l_val)) => match rhs {
@@ -159,9 +154,7 @@ impl ConcatWsFunction {
                         _ => Ok(DataColumn::Constant(lhs.clone(), len)),
                     },
                     // acc column could never be NULL
-                    _ => Err(ErrorCode::UnexpectedError(
-                        "CONCAT_WS internal error",
-                    )),
+                    _ => Err(ErrorCode::UnexpectedError("CONCAT_WS internal error")),
                 },
             },
             // seprator must be DataColumn::Constant(DataValue::String(Some(x)))
@@ -208,6 +201,6 @@ impl Function for ConcatWsFunction {
 
 impl fmt::Display for ConcatWsFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "CONCAT")
+        write!(f, "CONCAT_WS")
     }
 }
