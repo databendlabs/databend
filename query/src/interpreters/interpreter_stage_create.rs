@@ -51,14 +51,15 @@ impl Interpreter for CreatStageInterpreter {
         let plan = self.plan.clone();
         let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
         let user_stage = plan.user_stage_info;
-        let stage_name = user_stage.stage_name.clone();
         let create_stage = user_mgr.add_stage(user_stage).await;
         if plan.if_not_exists {
-            create_stage.map_err(|_e| {
-                ErrorCode::StageAlreadyExists(format!(
-                    "Stage already exists, name [{}]",
-                    stage_name
-                ))
+            create_stage.or_else(|e| {
+                // StageAlreadyExists(4061)
+                if e.code() == 4061 {
+                    Ok(u64::MIN)
+                } else {
+                    Err(e)
+                }
             })?;
         } else {
             create_stage?;

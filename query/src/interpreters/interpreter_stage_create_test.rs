@@ -53,5 +53,51 @@ async fn test_create_stage_interpreter() -> Result<()> {
         panic!()
     }
 
+    if let PlanNode::CreateUserStage(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
+        let executor = CreatStageInterpreter::try_create(ctx.clone(), plan.clone())?;
+        assert_eq!(executor.name(), "CreatStageInterpreter");
+        let is_err = executor.execute(None).await.is_err();
+        assert!(!is_err);
+        let stage = ctx
+            .get_sessions_manager()
+            .get_user_manager()
+            .get_stage("test_stage")
+            .await?;
+
+        assert_eq!(
+            stage.file_format.clone(),
+            Some(FileFormat::Csv {
+                compression: Compression::Gzip,
+                record_delimiter: ",".to_string()
+            })
+        );
+        assert_eq!(stage.comments.clone(), String::from("test"))
+    } else {
+        panic!()
+    }
+
+    static TEST_QUERY1: &str = "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP record_delimiter=',') comments='test'";
+    if let PlanNode::CreateUserStage(plan) = PlanParser::parse(TEST_QUERY1, ctx.clone()).await? {
+        let executor = CreatStageInterpreter::try_create(ctx.clone(), plan.clone())?;
+        assert_eq!(executor.name(), "CreatStageInterpreter");
+        let is_err = executor.execute(None).await.is_err();
+        assert!(is_err);
+        let stage = ctx
+            .get_sessions_manager()
+            .get_user_manager()
+            .get_stage("test_stage")
+            .await?;
+
+        assert_eq!(
+            stage.file_format.clone(),
+            Some(FileFormat::Csv {
+                compression: Compression::Gzip,
+                record_delimiter: ",".to_string()
+            })
+        );
+        assert_eq!(stage.comments.clone(), String::from("test"))
+    } else {
+        panic!()
+    }
     Ok(())
 }
