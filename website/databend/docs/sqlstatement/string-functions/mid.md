@@ -1,5 +1,4 @@
 ---
-id: string-mid
 title: MID
 ---
 

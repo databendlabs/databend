@@ -35,12 +35,12 @@ use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::servers::http::v1::block_to_json::JsonBlockRef;
-use crate::servers::http::v1::query::execute_state::ExecuteStateName;
-use crate::servers::http::v1::query::execute_state::HttpQueryRequest;
-use crate::servers::http::v1::query::http_query::HttpQuery;
-use crate::servers::http::v1::query::http_query::HttpQueryResponseInternal;
-use crate::servers::http::v1::query::result_data_manager::Wait;
+use crate::servers::http::v1::query::ExecuteStateName;
+use crate::servers::http::v1::query::HttpQuery;
+use crate::servers::http::v1::query::HttpQueryRequest;
+use crate::servers::http::v1::query::HttpQueryResponseInternal;
+use crate::servers::http::v1::query::Wait;
+use crate::servers::http::v1::JsonBlockRef;
 use crate::sessions::SessionManager;
 
 pub fn make_page_uri(query_id: &str, page_no: usize) -> String {

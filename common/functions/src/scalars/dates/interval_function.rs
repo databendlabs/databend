@@ -89,9 +89,10 @@ where T: IntegerTypedArithmetic + Clone + Sync + Send + 'static
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        if !(matches!(self.op, DataValueArithmeticOperator::Plus)
-            || matches!(self.op, DataValueArithmeticOperator::Minus))
-        {
+        if !(matches!(
+            self.op,
+            DataValueArithmeticOperator::Plus | DataValueArithmeticOperator::Minus
+        )) {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Illegal operation {:?} between interval and date time.",
                 self.op,

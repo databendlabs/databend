@@ -135,14 +135,14 @@ fn create_table() -> Result<()> {
         columns: vec![make_column_def("c1", DataType::Int(None))],
         engine: "CSV".to_string(),
         options: vec![SqlOption {
-            name: Ident::new("LOCATION".to_string()),
+            name: Ident::new("location".to_string()),
             value: Value::SingleQuotedString("/data/33.csv".into()),
         }],
     });
     expect_parse_ok(sql, expected)?;
 
     // positive case: it is ok for parquet files not to have columns specified
-    let sql = "CREATE TABLE t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Parquet location = 'foo.parquet' ";
+    let sql = "CREATE TABLE t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Parquet location = 'foo.parquet' comment = 'foo'";
     let expected = DfStatement::CreateTable(DfCreateTable {
         if_not_exists: false,
         name: ObjectName(vec![Ident::new("t")]),
@@ -152,10 +152,16 @@ fn create_table() -> Result<()> {
             make_column_def("c3", DataType::Varchar(Some(255))),
         ],
         engine: "Parquet".to_string(),
-        options: vec![SqlOption {
-            name: Ident::new("LOCATION".to_string()),
-            value: Value::SingleQuotedString("foo.parquet".into()),
-        }],
+        options: vec![
+            SqlOption {
+                name: Ident::new("location".to_string()),
+                value: Value::SingleQuotedString("foo.parquet".into()),
+            },
+            SqlOption {
+                name: Ident::new("comment".to_string()),
+                value: Value::SingleQuotedString("foo".into()),
+            },
+        ],
     });
     expect_parse_ok(sql, expected)?;
 

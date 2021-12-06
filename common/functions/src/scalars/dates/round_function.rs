@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::Function;
+use crate::scalars::Monotonicity;
 
 #[derive(Clone)]
 pub struct RoundFunction {
@@ -86,6 +87,10 @@ impl Function for RoundFunction {
 
     fn num_arguments(&self) -> usize {
         1
+    }
+
+    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
+        Ok(Monotonicity::clone_without_range(&args[0]))
     }
 }
 

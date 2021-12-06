@@ -17,6 +17,7 @@ use crate::scalars::AsciiFunction;
 use crate::scalars::Base64DecodeFunction;
 use crate::scalars::Base64EncodeFunction;
 use crate::scalars::BitLengthFunction;
+use crate::scalars::ConcatFunction;
 use crate::scalars::FieldFunction;
 use crate::scalars::HexFunction;
 use crate::scalars::InsertFunction;
@@ -29,7 +30,11 @@ use crate::scalars::PositionFunction;
 use crate::scalars::QuoteFunction;
 use crate::scalars::RTrimFunction;
 use crate::scalars::RepeatFunction;
+use crate::scalars::ReplaceFunction;
+use crate::scalars::ReverseFunction;
+use crate::scalars::StrcmpFunction;
 use crate::scalars::SubstringFunction;
+use crate::scalars::SubstringIndexFunction;
 use crate::scalars::TrimFunction;
 use crate::scalars::UnhexFunction;
 
@@ -41,7 +46,7 @@ impl StringFunction {
         factory.register("mid", SubstringFunction::desc());
         factory.register("substr", SubstringFunction::desc());
         factory.register("substring", SubstringFunction::desc());
-        factory.register("substring", SubstringFunction::desc());
+        factory.register("substring_index", SubstringIndexFunction::desc());
         factory.register("oct", OctFunction::desc());
         factory.register("repeat", RepeatFunction::desc());
         factory.register("ltrim", LTrimFunction::desc());
@@ -59,6 +64,10 @@ impl StringFunction {
         factory.register("insert", InsertFunction::desc());
         factory.register("field", FieldFunction::desc());
         factory.register("octet_length", OctetLengthFunction::desc());
+        factory.register("concat", ConcatFunction::desc());
         factory.register("bit_length", BitLengthFunction::desc());
+        factory.register("replace", ReplaceFunction::desc());
+        factory.register("reverse", ReverseFunction::desc());
+        factory.register("strcmp", StrcmpFunction::desc());
     }
 }

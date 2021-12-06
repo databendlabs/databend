@@ -1,0 +1,57 @@
+=== null ===
+NULL
+NULL
+NULL
+NULL
+NULL
+=== const, const, const ===
+www
+www__databend
+www__databend__shauneu
+www__databend__shauneu__mike
+mike
+shauneu__mike
+databend__shauneu__mike
+www__databend__shauneu__mike
+=== const, const, series ===
+
+www
+www__databend
+www__databend__shauneu
+www__databend__shauneu__mike
+=== const, series, const ===
+www_1_databend_2_shauneu_3_mike
+www_
+www_1_databend_
+www_1_databend_2_shauneu_
+www_1_databend_2_shauneu_3_mike
+=== const, series, series ===
+
+www_
+www_1_databend_2_shauneu_3_mike
+www_1_databend_2_shauneu_3_mike
+www_1_databend_2_shauneu_3_mike
+=== series, const, const ===
+1
+11
+12
+13
+14
+=== series, const, series ===
+
+11
+12
+13
+14
+=== series, series, const ===
+1
+
+1
+1
+1
+=== series, series, series ===
+
+
+12
+13
+14

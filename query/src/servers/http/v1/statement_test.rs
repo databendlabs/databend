@@ -23,8 +23,8 @@ use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
 
-use crate::servers::http::v1::http_query_handlers::QueryResponse;
 use crate::servers::http::v1::statement::statement_handler;
+use crate::servers::http::v1::QueryResponse;
 use crate::tests::SessionManagerBuilder;
 
 #[tokio::test]
