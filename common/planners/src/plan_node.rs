@@ -18,6 +18,7 @@ use common_datavalues::DataSchemaRef;
 
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
+use crate::plan_user_stage_create::CreateUserStagePlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
@@ -90,6 +91,7 @@ pub enum PlanNode {
     DropUser(DropUserPlan),
     GrantPrivilege(GrantPrivilegePlan),
     RevokePrivilege(RevokePrivilegePlan),
+    CreateUserStage(CreateUserStagePlan),
 }
 
 impl PlanNode {
@@ -131,6 +133,7 @@ impl PlanNode {
             PlanNode::RevokePrivilege(v) => v.schema(),
             PlanNode::Sink(v) => v.schema(),
             PlanNode::Copy(v) => v.schema(),
+            PlanNode::CreateUserStage(v) => v.schema(),
         }
     }
 
@@ -171,6 +174,7 @@ impl PlanNode {
             PlanNode::RevokePrivilege(_) => "RevokePrivilegePlan",
             PlanNode::Sink(_) => "SinkPlan",
             PlanNode::Copy(_) => "CopyPlan",
+            PlanNode::CreateUserStage(_) => "CreateUserStagePlan",
         }
     }
 

@@ -172,6 +172,7 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::RevokePrivilege(v) => v.analyze(ctx).await,
             DfStatement::DropUser(v) => v.analyze(ctx).await,
             DfStatement::Copy(v) => v.analyze(ctx).await,
+            DfStatement::CreateStage(v) => v.analyze(ctx).await,
         }
     }
 }

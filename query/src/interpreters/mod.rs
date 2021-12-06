@@ -35,6 +35,8 @@ mod interpreter_setting_test;
 #[cfg(test)]
 mod interpreter_show_create_table_test;
 #[cfg(test)]
+mod interpreter_stage_create_test;
+#[cfg(test)]
 mod interpreter_table_create_test;
 #[cfg(test)]
 mod interpreter_table_drop_test;
@@ -67,6 +69,7 @@ mod interpreter_revoke_privilege;
 mod interpreter_select;
 mod interpreter_setting;
 mod interpreter_show_create_table;
+mod interpreter_stage_create;
 mod interpreter_table_create;
 mod interpreter_table_drop;
 mod interpreter_truncate_table;
@@ -92,6 +95,7 @@ pub use interpreter_revoke_privilege::RevokePrivilegeInterpreter;
 pub use interpreter_select::SelectInterpreter;
 pub use interpreter_setting::SettingInterpreter;
 pub use interpreter_show_create_table::ShowCreateTableInterpreter;
+pub use interpreter_stage_create::CreatStageInterpreter;
 pub use interpreter_table_create::CreateTableInterpreter;
 pub use interpreter_table_drop::DropTableInterpreter;
 pub use interpreter_truncate_table::TruncateTableInterpreter;

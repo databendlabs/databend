@@ -23,6 +23,7 @@ use super::statements::DfCopy;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCompactTable;
 use crate::sql::statements::DfCreateDatabase;
+use crate::sql::statements::DfCreateStage;
 use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfDescribeTable;
@@ -98,6 +99,9 @@ pub enum DfStatement {
     // Grant
     GrantPrivilege(DfGrantStatement),
     RevokePrivilege(DfRevokeStatement),
+
+    // Stage
+    CreateStage(DfCreateStage),
 }
 
 /// Comment hints from SQL.

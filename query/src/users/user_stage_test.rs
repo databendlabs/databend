@@ -14,6 +14,8 @@
 
 use common_base::tokio;
 use common_exception::Result;
+use common_meta_types::Credentials;
+use common_meta_types::StageParams;
 use common_meta_types::UserStageInfo;
 use pretty_assertions::assert_eq;
 
@@ -32,13 +34,29 @@ async fn test_user_stage() -> Result<()> {
 
     // add 1.
     {
-        let stage_info = UserStageInfo::new(stage_name1, comments);
+        let stage_info = UserStageInfo::new(
+            stage_name1,
+            comments,
+            StageParams::new("test", Credentials::S3 {
+                access_key_id: String::from("test"),
+                secret_access_key: String::from("test"),
+            }),
+            None,
+        );
         user_mgr.add_stage(stage_info).await?;
     }
 
     // add 2.
     {
-        let stage_info = UserStageInfo::new(stage_name2, comments);
+        let stage_info = UserStageInfo::new(
+            stage_name2,
+            comments,
+            StageParams::new("test", Credentials::S3 {
+                access_key_id: String::from("test"),
+                secret_access_key: String::from("test"),
+            }),
+            None,
+        );
         user_mgr.add_stage(stage_info).await?;
     }
 
