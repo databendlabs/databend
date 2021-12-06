@@ -29,13 +29,13 @@ use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::index::BlockStatistics;
 use crate::storages::index::RangeFilter;
 
-pub struct MinMaxIndex {
+pub struct BlockPruner {
     table_snapshot_loc: String,
     da: Arc<dyn DataAccessor>,
 }
 
 type Pred = Box<dyn Fn(&BlockStatistics) -> Result<bool> + Send + Sync + Unpin>;
-impl MinMaxIndex {
+impl BlockPruner {
     pub fn new(table_snapshot: &TableSnapshot, da: Arc<dyn DataAccessor>) -> Self {
         Self {
             table_snapshot_loc: snapshot_location(
@@ -105,13 +105,13 @@ impl MinMaxIndex {
     }
 }
 
-pub async fn apply_range_filter(
+pub async fn apply_block_pruning(
     table_snapshot: &TableSnapshot,
     schema: DataSchemaRef,
     push_down: Option<Extras>,
     data_accessor: Arc<dyn DataAccessor>,
 ) -> Result<Vec<BlockMeta>> {
-    MinMaxIndex::new(table_snapshot, data_accessor)
+    BlockPruner::new(table_snapshot, data_accessor)
         .apply(schema, push_down)
         .await
 }

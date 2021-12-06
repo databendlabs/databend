@@ -24,7 +24,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use tempfile::TempDir;
 
-use crate::storages::fuse::io::BlockAppender;
+use crate::storages::fuse::io::BlockStreamWriter;
 use crate::storages::fuse::DEFAULT_CHUNK_BLOCK_NUM;
 
 #[tokio::test]
@@ -37,7 +37,7 @@ async fn test_fuse_table_block_appender() {
     // single segments
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
     let block_stream = futures::stream::iter(vec![Ok(block)]);
-    let r = BlockAppender::append_blocks(
+    let r = BlockStreamWriter::write_block_stream(
         local_fs.clone(),
         Box::pin(block_stream),
         schema.as_ref(),
@@ -55,7 +55,7 @@ async fn test_fuse_table_block_appender() {
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
     let blocks = std::iter::repeat(Ok(block)).take(number_of_blocks);
     let block_stream = futures::stream::iter(blocks);
-    let r = BlockAppender::append_blocks(
+    let r = BlockStreamWriter::write_block_stream(
         local_fs.clone(),
         Box::pin(block_stream),
         schema.as_ref(),
@@ -69,7 +69,7 @@ async fn test_fuse_table_block_appender() {
 
     // empty blocks
     let block_stream = futures::stream::iter(vec![]);
-    let r = BlockAppender::append_blocks(
+    let r = BlockStreamWriter::write_block_stream(
         local_fs,
         Box::pin(block_stream),
         schema.as_ref(),
@@ -90,14 +90,14 @@ fn test_fuse_table_block_appender_reshape() -> common_exception::Result<()> {
     // 1 empty blocks
     // 1.1 empty block, zero block_size_threshold
     let blocks = vec![];
-    let r = BlockAppender::reshape_blocks(blocks, 0);
+    let r = BlockStreamWriter::reshape_blocks(blocks, 0);
     assert!(r.is_ok(), "oops, unexpected result: {:?}", r);
     let r = r.unwrap();
     assert_eq!(r.len(), 0);
 
     // 1.2 empty block, arbitrary block_size_threshold
     let blocks = vec![];
-    let r = BlockAppender::reshape_blocks(blocks, 100);
+    let r = BlockStreamWriter::reshape_blocks(blocks, 100);
     assert!(r.is_ok(), "oops, unexpected result: {:?}", r);
     let r = r.unwrap();
     assert_eq!(r.len(), 0);
@@ -106,7 +106,7 @@ fn test_fuse_table_block_appender_reshape() -> common_exception::Result<()> {
     // 2.1 several blocks into exactly one block
     let block_num = 10;
     let (blocks, block_size_threshold) = gen_blocks(&sample_block, block_num);
-    let r = BlockAppender::reshape_blocks(blocks.collect(), block_size_threshold)?;
+    let r = BlockStreamWriter::reshape_blocks(blocks.collect(), block_size_threshold)?;
     assert_eq!(r.len(), 1);
     assert_eq!(r[0].memory_size(), block_size_threshold);
 
@@ -116,7 +116,7 @@ fn test_fuse_table_block_appender_reshape() -> common_exception::Result<()> {
     let (blocks, block_size_threshold) = gen_blocks(&sample_block, block_num);
     // push back an extra block
     let blocks = blocks.chain(std::iter::once(sample_block.clone()));
-    let r = BlockAppender::reshape_blocks(blocks.collect(), block_size_threshold)?;
+    let r = BlockStreamWriter::reshape_blocks(blocks.collect(), block_size_threshold)?;
     assert_eq!(r.len(), 2);
     assert_eq!(r[0].memory_size(), block_size_threshold);
     assert_eq!(r[1].memory_size(), sample_block_size);
@@ -133,7 +133,7 @@ fn test_fuse_table_block_appender_reshape() -> common_exception::Result<()> {
     // push back the large block
     let blocks = blocks.chain(std::iter::once(large_block));
 
-    let r = BlockAppender::reshape_blocks(blocks.collect(), block_size_threshold)?;
+    let r = BlockStreamWriter::reshape_blocks(blocks.collect(), block_size_threshold)?;
     assert_eq!(r.len(), 2);
     // blocks are sorted (DESC by size) during reshape, thus we get the large_block at head
     assert_eq!(r[0].memory_size(), large_block_size);

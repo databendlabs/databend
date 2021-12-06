@@ -23,15 +23,15 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 
 use crate::storages::fuse::statistics::accumulator;
-use crate::storages::fuse::statistics::block_meta_acc;
 use crate::storages::fuse::statistics::util;
+use crate::storages::fuse::statistics::StatisticsAccumulator;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[test]
 fn test_ft_stats_block_stats() -> common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
     let block = DataBlock::create_by_array(schema, vec![Series::new(vec![1, 2, 3])]);
-    let r = util::block_stats(&block)?;
+    let r = StatisticsAccumulator::block_stats(&block)?;
     assert_eq!(1, r.len());
     let col_stats = r.get(&0).unwrap();
     assert_eq!(col_stats.min, DataValue::Int32(Some(1)));
@@ -45,7 +45,7 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
     let col_stats = blocks
         .iter()
-        .map(|b| util::block_stats(&b.clone().unwrap()))
+        .map(|b| StatisticsAccumulator::block_stats(&b.clone().unwrap()))
         .collect::<common_exception::Result<Vec<_>>>()?;
     let r = util::reduce_block_stats(&col_stats, &schema);
     assert!(r.is_ok());
@@ -61,7 +61,7 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
 fn test_ft_stats_accumulator() -> common_exception::Result<()> {
     let blocks = TestFixture::gen_block_stream(10, 1);
     let mut stats_acc = accumulator::StatisticsAccumulator::new();
-    let mut meta_acc = block_meta_acc::BlockMetaAccumulator::new();
+    let mut meta_acc = accumulator::BlockMetaAccumulator::new();
     blocks.iter().try_for_each(|item| {
         let item = item.clone().unwrap();
         stats_acc.acc(&item)?;

@@ -16,10 +16,11 @@
 use std::collections::HashMap;
 
 use common_datablocks::DataBlock;
+use common_datavalues::prelude::DataColumn;
 
+use crate::storages::fuse::meta::BlockLocation;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::ColumnId;
-use crate::storages::fuse::statistics::util;
 use crate::storages::index::BlockStatistics;
 use crate::storages::index::ColumnStatistics;
 
@@ -40,9 +41,7 @@ impl StatisticsAccumulator {
     pub fn new() -> Self {
         Default::default()
     }
-}
 
-impl StatisticsAccumulator {
     pub fn acc(&mut self, block: &DataBlock) -> common_exception::Result<()> {
         let row_count = block.num_rows() as u64;
         let block_in_memory_size = block.memory_size() as u64;
@@ -52,9 +51,73 @@ impl StatisticsAccumulator {
         self.in_memory_size += block_in_memory_size;
         self.last_block_rows = block.num_rows() as u64;
         self.last_block_size = block.memory_size() as u64;
-        let block_stats = util::block_stats(block)?;
+        let block_stats = Self::block_stats(block)?;
         self.last_block_col_stats = Some(block_stats.clone());
         self.blocks_stats.push(block_stats);
         Ok(())
+    }
+
+    pub(crate) fn block_stats(data_block: &DataBlock) -> common_exception::Result<BlockStatistics> {
+        (0..)
+            .into_iter()
+            .zip(data_block.columns().iter())
+            .map(|(idx, col)| {
+                let min = match col {
+                    DataColumn::Array(s) => s.min(),
+                    DataColumn::Constant(v, _) => Ok(v.clone()),
+                }?;
+
+                let max = match col {
+                    DataColumn::Array(s) => s.max(),
+                    DataColumn::Constant(v, _) => Ok(v.clone()),
+                }?;
+
+                let null_count = match col {
+                    DataColumn::Array(s) => s.null_count(),
+                    DataColumn::Constant(v, _) => {
+                        if v.is_null() {
+                            1
+                        } else {
+                            0
+                        }
+                    }
+                } as u64;
+
+                let in_memory_size = col.get_array_memory_size() as u64;
+
+                let col_stats = ColumnStatistics {
+                    min,
+                    max,
+                    null_count,
+                    in_memory_size,
+                };
+
+                Ok((idx, col_stats))
+            })
+            .collect()
+    }
+}
+
+#[derive(Default)]
+pub struct BlockMetaAccumulator {
+    pub blocks_metas: Vec<BlockMeta>,
+}
+
+impl BlockMetaAccumulator {
+    pub fn new() -> Self {
+        Default::default()
+    }
+    pub fn acc(&mut self, file_size: u64, location: String, stats: &mut StatisticsAccumulator) {
+        stats.file_size += file_size;
+        let block_meta = BlockMeta {
+            location: BlockLocation {
+                location,
+                meta_size: 0,
+            },
+            row_count: stats.last_block_rows,
+            block_size: stats.last_block_size,
+            col_stats: stats.last_block_col_stats.take().unwrap_or_default(),
+        };
+        self.blocks_metas.push(block_meta);
     }
 }

@@ -17,11 +17,10 @@
 mod statistics_test;
 
 mod accumulator;
-mod block_meta_acc;
 mod util;
 
+pub use accumulator::BlockMetaAccumulator;
 pub use accumulator::StatisticsAccumulator;
-pub use block_meta_acc::BlockMetaAccumulator;
 pub use util::merge_append_operations;
 pub use util::merge_stats;
 pub use util::reduce_block_stats;

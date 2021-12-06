@@ -19,10 +19,10 @@ mod table_test;
 mod table_test_fixture;
 
 mod constants;
-mod index;
 mod io;
 mod meta;
 mod operations;
+mod pruning;
 mod statistics;
 mod table;
 

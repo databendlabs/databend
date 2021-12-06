@@ -17,8 +17,6 @@ use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
-use common_datablocks::DataBlock;
-use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -28,49 +26,6 @@ use crate::storages::fuse::meta::Stats;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::index::BlockStatistics;
 use crate::storages::index::ColumnStatistics;
-
-pub fn block_stats(data_block: &DataBlock) -> Result<BlockStatistics> {
-    // NOTE:
-    // column id is FAKED, this is OK as long as table schema is NOT changed (which is not realistic)
-    // we should extend DataField with column_id ...
-    (0..)
-        .into_iter()
-        .zip(data_block.columns().iter())
-        .map(|(idx, col)| {
-            let min = match col {
-                DataColumn::Array(s) => s.min(),
-                DataColumn::Constant(v, _) => Ok(v.clone()),
-            }?;
-
-            let max = match col {
-                DataColumn::Array(s) => s.max(),
-                DataColumn::Constant(v, _) => Ok(v.clone()),
-            }?;
-
-            let null_count = match col {
-                DataColumn::Array(s) => s.null_count(),
-                DataColumn::Constant(v, _) => {
-                    if v.is_null() {
-                        1
-                    } else {
-                        0
-                    }
-                }
-            } as u64;
-
-            let in_memory_size = col.get_array_memory_size() as u64;
-
-            let col_stats = ColumnStatistics {
-                min,
-                max,
-                null_count,
-                in_memory_size,
-            };
-
-            Ok((idx, col_stats))
-        })
-        .collect()
-}
 
 pub fn reduce_block_stats<T: Borrow<BlockStatistics>>(
     stats: &[T],
