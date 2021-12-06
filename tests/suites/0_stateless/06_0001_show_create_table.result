@@ -1,0 +1,2 @@
+a	CREATE TABLE `a` (\n  `a` Int64,\n  `b` Int32,\n  `c` String,\n  `d` Int16,\n  `e` Date16,\n) ENGINE=Null
+b	CREATE TABLE `b` (\n  `a` Int64,\n  `b` Int32,\n  `c` String,\n  `d` Int16,\n  `e` Date16,\n) ENGINE=Null COMMENT='test b'
