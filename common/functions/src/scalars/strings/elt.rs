@@ -15,6 +15,7 @@
 use std::fmt;
 
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
@@ -56,18 +57,39 @@ impl Function for EltFunction {
         Ok(true)
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+        if !args[0].is_numeric() && args[0] != DataType::String && args[0] != DataType::Null {
+            return Err(ErrorCode::IllegalDataType(format!(
+                "Expected string or null, but got {}",
+                args[0]
+            )));
+        }
+        for arg in &args[1..] {
+            if !arg.is_numeric() && *arg != DataType::String && *arg != DataType::Null {
+                return Err(ErrorCode::IllegalDataType(format!(
+                    "Expected string or null, but got {}",
+                    arg
+                )));
+            }
+        }
         Ok(DataType::String)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let n_column = columns[0].column().cast_with_type(&DataType::Int64)?;
+
+        let columns = columns[1..]
+            .iter()
+            .map(|c| c.column())
+            .map(|c| c.cast_with_type(&DataType::String).unwrap())
+            .collect::<Vec<DataColumn>>();
+
         let r_column = match n_column {
             DataColumn::Constant(DataValue::Int64(num), _) => {
                 if let Some(num) = num {
                     let n = num as usize;
-                    if n > 0 && n < columns.len() {
-                        columns[n].column().cast_with_type(&DataType::String)?
+                    if n > 0 && n <= columns.len() {
+                        columns[n - 1].clone()
                     } else {
                         DataColumn::Constant(DataValue::Null, input_rows)
                     }
@@ -80,17 +102,20 @@ impl Function for EltFunction {
                 for (i, on) in n_series.i64()?.iter().enumerate() {
                     if let Some(on) = on {
                         let n = *on as usize;
-                        if n > 0 && n < columns.len() {
-                            match columns[n].column().try_get(i) {
-                                Ok(v) => {
-                                    if v.is_null() {
-                                        r_array.append_null();
-                                    } else {
-                                        r_array.append_value(v.as_string()?);
-                                    }
+                        if n > 0 && n <= columns.len() {
+                            match columns[n - 1].clone() {
+                                DataColumn::Constant(DataValue::String(s), _) => {
+                                    r_array.append_option(s);
                                 }
-                                Err(_) => r_array.append_null(),
-                            }
+                                DataColumn::Array(s_series) => {
+                                    r_array.append_option(
+                                        s_series.try_get(i).map(|v| v.as_string().unwrap()).ok(),
+                                    );
+                                }
+                                _ => {
+                                    r_array.append_null();
+                                }
+                            };
                         } else {
                             r_array.append_null();
                         }
