@@ -24,11 +24,10 @@ use futures::stream::TryChunksError;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
+use super::block_writer;
 use crate::storages::fuse::io::locations::gen_block_location;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Stats;
-use crate::storages::fuse::statistics;
-use crate::storages::fuse::statistics::BlockMetaAccumulator;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
 
 pub struct BlockStreamWriter;
@@ -53,29 +52,26 @@ impl BlockStreamWriter {
             let blocks = item.map_err(|TryChunksError(_, e)| e)?;
             // re-shape the blocks
             let blocks = Self::reshape_blocks(blocks, block_size_threshold)?;
-            let mut stats_acc = StatisticsAccumulator::new();
-            let mut block_meta_acc = BlockMetaAccumulator::new();
+            let mut acc = StatisticsAccumulator::new();
 
             for block in blocks.into_iter() {
-                stats_acc.acc(&block)?;
+                let block_acc = acc.accumulate(&block)?;
                 let schema = block.schema().to_arrow();
                 let location = gen_block_location();
                 let file_size =
-                    super::block_writer::write_block(&schema, block, &data_accessor, &location)
-                        .await?;
-                block_meta_acc.acc(file_size, location, &mut stats_acc);
+                    block_writer::write_block(&schema, block, &data_accessor, &location).await?;
+                acc = block_acc.accumulate(file_size, location);
             }
 
             // summary and generate a segment
-            let block_metas = block_meta_acc.blocks_metas;
-            let summary = statistics::reduce_block_stats(&stats_acc.blocks_stats, data_schema)?;
+            let summary = acc.summary(data_schema)?;
             let seg = SegmentInfo {
-                blocks: block_metas,
+                blocks: acc.blocks_metas,
                 summary: Stats {
-                    row_count: stats_acc.summary_row_count,
-                    block_count: stats_acc.summary_block_count,
-                    uncompressed_byte_size: stats_acc.in_memory_size,
-                    compressed_byte_size: stats_acc.file_size,
+                    row_count: acc.summary_row_count,
+                    block_count: acc.summary_block_count,
+                    uncompressed_byte_size: acc.in_memory_size,
+                    compressed_byte_size: acc.file_size,
                     col_stats: summary,
                 },
             };

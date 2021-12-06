@@ -31,7 +31,7 @@ use crate::storages::fuse::table_test_fixture::TestFixture;
 fn test_ft_stats_block_stats() -> common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
     let block = DataBlock::create_by_array(schema, vec![Series::new(vec![1, 2, 3])]);
-    let r = StatisticsAccumulator::block_stats(&block)?;
+    let r = StatisticsAccumulator::acc_columns(&block)?;
     assert_eq!(1, r.len());
     let col_stats = r.get(&0).unwrap();
     assert_eq!(col_stats.min, DataValue::Int32(Some(1)));
@@ -45,7 +45,7 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
     let col_stats = blocks
         .iter()
-        .map(|b| StatisticsAccumulator::block_stats(&b.clone().unwrap()))
+        .map(|b| StatisticsAccumulator::acc_columns(&b.clone().unwrap()))
         .collect::<common_exception::Result<Vec<_>>>()?;
     let r = util::reduce_block_stats(&col_stats, &schema);
     assert!(r.is_ok());
@@ -68,7 +68,7 @@ fn test_ft_stats_accumulator() -> common_exception::Result<()> {
         meta_acc.acc(1, "".to_owned(), &mut stats_acc);
         Ok::<_, ErrorCode>(())
     })?;
-    assert_eq!(10, stats_acc.blocks_stats.len());
+    assert_eq!(10, stats_acc.blocks_statistics.len());
     // TODO more cases here pls
     Ok(())
 }

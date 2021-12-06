@@ -17,6 +17,7 @@ use std::collections::HashMap;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::DataColumn;
+use common_datavalues::DataSchema;
 
 use crate::storages::fuse::meta::BlockLocation;
 use crate::storages::fuse::meta::BlockMeta;
@@ -27,14 +28,11 @@ use crate::storages::index::ColumnStatistics;
 #[derive(Default)]
 pub struct StatisticsAccumulator {
     pub blocks_metas: Vec<BlockMeta>,
-    pub blocks_stats: Vec<BlockStatistics>,
+    pub blocks_statistics: Vec<BlockStatistics>,
     pub summary_row_count: u64,
     pub summary_block_count: u64,
     pub in_memory_size: u64,
     pub file_size: u64,
-    pub last_block_rows: u64,
-    pub last_block_size: u64,
-    pub last_block_col_stats: Option<HashMap<ColumnId, ColumnStatistics>>,
 }
 
 impl StatisticsAccumulator {
@@ -42,22 +40,28 @@ impl StatisticsAccumulator {
         Default::default()
     }
 
-    pub fn acc(&mut self, block: &DataBlock) -> common_exception::Result<()> {
+    pub fn accumulate(mut self, block: &DataBlock) -> common_exception::Result<BlockAccumulator> {
         let row_count = block.num_rows() as u64;
         let block_in_memory_size = block.memory_size() as u64;
 
         self.summary_block_count += 1;
         self.summary_row_count += row_count;
         self.in_memory_size += block_in_memory_size;
-        self.last_block_rows = block.num_rows() as u64;
-        self.last_block_size = block.memory_size() as u64;
-        let block_stats = Self::block_stats(block)?;
-        self.last_block_col_stats = Some(block_stats.clone());
-        self.blocks_stats.push(block_stats);
-        Ok(())
+        let block_stats = Self::acc_columns(block)?;
+        self.blocks_statistics.push(block_stats.clone());
+        Ok(BlockAccumulator {
+            accumulator: self,
+            block_row_count: block.num_rows() as u64,
+            block_size: block.memory_size() as u64,
+            block_column_statistics: block_stats,
+        })
     }
 
-    pub(crate) fn block_stats(data_block: &DataBlock) -> common_exception::Result<BlockStatistics> {
+    pub fn summary(&self, schema: &DataSchema) -> common_exception::Result<BlockStatistics> {
+        super::reduce_block_stats(&self.blocks_statistics, schema)
+    }
+
+    pub(crate) fn acc_columns(data_block: &DataBlock) -> common_exception::Result<BlockStatistics> {
         (0..)
             .into_iter()
             .zip(data_block.columns().iter())
@@ -99,25 +103,26 @@ impl StatisticsAccumulator {
 }
 
 #[derive(Default)]
-pub struct BlockMetaAccumulator {
-    pub blocks_metas: Vec<BlockMeta>,
+pub struct BlockAccumulator {
+    accumulator: StatisticsAccumulator,
+    block_row_count: u64,
+    block_size: u64,
+    block_column_statistics: HashMap<ColumnId, ColumnStatistics>,
 }
-
-impl BlockMetaAccumulator {
-    pub fn new() -> Self {
-        Default::default()
-    }
-    pub fn acc(&mut self, file_size: u64, location: String, stats: &mut StatisticsAccumulator) {
+impl BlockAccumulator {
+    pub fn accumulate(mut self, file_size: u64, location: String) -> StatisticsAccumulator {
+        let mut stats = &mut self.accumulator;
         stats.file_size += file_size;
         let block_meta = BlockMeta {
             location: BlockLocation {
                 location,
                 meta_size: 0,
             },
-            row_count: stats.last_block_rows,
-            block_size: stats.last_block_size,
-            col_stats: stats.last_block_col_stats.take().unwrap_or_default(),
+            row_count: self.block_row_count,
+            block_size: self.block_size,
+            col_stats: self.block_column_statistics,
         };
-        self.blocks_metas.push(block_meta);
+        self.accumulator.blocks_metas.push(block_meta);
+        self.accumulator
     }
 }
