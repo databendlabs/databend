@@ -172,8 +172,8 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                 }
                                 (_, v) => {
                                     return Err(ErrorCode::BadDataValueType(format!(
-                                        "Unsupported column type:{:?}",
-                                        v.data_type()
+                                        "Unsupported column type:{:?}, expected type in schema: {:?}",
+                                        v.data_type(), data_type
                                     )));
                                 }
                             }
