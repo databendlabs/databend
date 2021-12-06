@@ -217,6 +217,7 @@ impl MetaApiTestSuite {
                     schema: schema.clone(),
                     engine: "JSON".to_string(),
                     options: options.clone(),
+                    .. Default::default(),
                 },
             };
 
@@ -234,6 +235,7 @@ impl MetaApiTestSuite {
                         schema: schema.clone(),
                         engine: "JSON".to_owned(),
                         options: options.clone(),
+                    .. Default::default(),
                     },
                 };
                 assert_eq!(want, got.as_ref().clone(), "get created table");
@@ -254,6 +256,8 @@ impl MetaApiTestSuite {
                         schema: schema.clone(),
                         engine: "JSON".to_owned(),
                         options: options.clone(),
+                    .. Default::default(),
+
                     },
                 };
                 assert_eq!(want, got.as_ref().clone(), "get created table");
@@ -283,6 +287,7 @@ impl MetaApiTestSuite {
                         schema: schema.clone(),
                         engine: "JSON".to_owned(),
                         options: options.clone(),
+                    .. Default::default(),
                     },
                 };
                 assert_eq!(want, got.as_ref().clone(), "get old table");

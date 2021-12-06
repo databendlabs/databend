@@ -50,7 +50,7 @@ pub struct DfCreateTable {
 impl AnalyzableStatement for DfCreateTable {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let table_meta = self.table_meta().await?;
+        let table_meta = self.table_meta(ctx.clone()).await?;
         let if_not_exists = self.if_not_exists;
         let (db, table) = self.resolve_table(ctx)?;
 
@@ -108,21 +108,17 @@ impl DfCreateTable {
         })
     }
 
-    async fn table_schema(&self, ctx: Arc<QueryContext>) -> Result<DataSchemaRef> {
+     fn table_schema(&self, ctx: Arc<QueryContext>) -> Result<DataSchemaRef> {
         let expr_analyzer = ExpressionAnalyzer::create(ctx);
         Ok(DataSchemaRefExt::create(
             self.columns
                 .iter()
                 .map(|column| {
                    let mut nullable = true;
-                   let mut default_expr = None;
                     for opt in column.options {
                         match opt.option {
                             ColumnOption::NotNull => {
                                 nullable = false;
-                            },
-                            ColumnOption::Default(expr) => {
-                                default_expr =  Some(expr_analyzer.analyze(&expr).await?);
                             },
                             _ => {}
                         }

@@ -97,8 +97,11 @@ pub struct TableInfo {
 pub struct TableMeta {
     pub schema: Arc<DataSchema>,
     pub engine: String,
+    pub column_options: HashMap<String, ColumnOption>,
+    // options for the table
     pub options: HashMap<String, String>,
 }
+
 
 impl TableInfo {
     /// Create a TableInfo with only db, table, schema
@@ -146,6 +149,7 @@ impl Default for TableMeta {
         TableMeta {
             schema: Arc::new(DataSchema::empty()),
             engine: "".to_string(),
+            column_options: HashMap::new(),
             options: HashMap::new(),
         }
     }
@@ -170,6 +174,14 @@ impl Display for TableInfo {
         )
     }
 }
+
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+struct ColumnOption {
+    default_expr: Option<Expression>,
+    collation: Option<String>,
+}
+
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateTableReq {
