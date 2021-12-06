@@ -78,11 +78,12 @@ impl Function for EltFunction {
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let n_column = columns[0].column().cast_with_type(&DataType::Int64)?;
 
-        let columns = columns[1..]
-            .iter()
-            .map(|c| c.column())
-            .map(|c| c.cast_with_type(&DataType::String).unwrap())
-            .collect::<Vec<DataColumn>>();
+        let columns = itertools::process_results(
+            columns[1..]
+                .iter()
+                .map(|c| c.column().cast_with_type(&DataType::String)),
+            |i| i.collect::<Vec<DataColumn>>(),
+        )?;
 
         let r_column = match n_column {
             DataColumn::Constant(DataValue::Int64(num), _) => {
@@ -107,11 +108,10 @@ impl Function for EltFunction {
                                 DataColumn::Constant(DataValue::String(s), _) => {
                                     r_array.append_option(s);
                                 }
-                                DataColumn::Array(s_series) => {
-                                    r_array.append_option(
-                                        s_series.try_get(i).map(|v| v.as_string().unwrap()).ok(),
-                                    );
-                                }
+                                DataColumn::Array(s_series) => match s_series.try_get(i) {
+                                    Ok(v) => r_array.append_value(v.as_string()?),
+                                    Err(_) => r_array.append_null(),
+                                },
                                 _ => {
                                     r_array.append_null();
                                 }
