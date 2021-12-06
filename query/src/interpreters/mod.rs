@@ -35,6 +35,8 @@ mod interpreter_setting_test;
 #[cfg(test)]
 mod interpreter_show_create_table_test;
 #[cfg(test)]
+mod interpreter_stage_create_test;
+#[cfg(test)]
 mod interpreter_table_create_test;
 #[cfg(test)]
 mod interpreter_table_drop_test;
