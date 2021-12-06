@@ -64,14 +64,7 @@ cross-compile-debug:
 	cross build --target aarch64-unknown-linux-gnu
 
 cross-compile-release:
-	cross build --target aarch64-unknown-linux-gnu --release
-ifeq ($(shell uname),Linux) # Macs don't have objcopy
-	# Reduce binary size by compressing binaries.
-	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/aarch64-unknown-linux-gnu/release/databend-query
-	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/aarch64-unknown-linux-gnu/release/databend-benchmark
-	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/aarch64-unknown-linux-gnu/release/databend-meta
-	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/aarch64-unknown-linux-gnu/release/bendctl
-endif
+	RUSTFLAGS="-C link-arg=-Wl,--compress-debug-sections=zlib-gabi" cross build --target aarch64-unknown-linux-gnu --release
 
 cli-build:
 	bash ./scripts/build/build-cli.sh build-cli

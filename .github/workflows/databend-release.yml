@@ -39,13 +39,7 @@ jobs:
               rustup target add aarch64-apple-darwin
           fi
           if [ ${{ matrix.config.cross }} = true ]; then
-              cross build --release --target=${{ matrix.config.target }}
-              if [ ${{ matrix.config.os }} = "ubuntu-latest" ]; then
-                  objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/databend-query
-                  objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/databend-benchmark
-                  objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/databend-meta
-                  objcopy --compress-debug-sections=zlib-gnu $./target/${{ matrix.config.target }}/release/bendctl
-              fi
+              RUSTFLAGS="-C link-arg=-Wl,--compress-debug-sections=zlib-gabi" cross build --release --target=${{ matrix.config.target }}
           else
               cargo build --release --target=${{ matrix.config.target }}
               if [ ${{ matrix.config.os }} = "ubuntu-latest" ]; then
