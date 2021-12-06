@@ -24,6 +24,11 @@ fn test_cast_by_str() -> Result<()> {
 
     let tests = vec![
         Test {
+            name: "zero",
+            literal: "0",
+            value: DataValue::UInt8(Some(0)),
+        },
+        Test {
             name: "positive",
             literal: "31",
             value: DataValue::UInt8(Some(31)),
