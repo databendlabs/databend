@@ -15,6 +15,8 @@ YAMLLINT_CONFIG ?= .yamllint.yml
 YAMLLINT_IMAGE ?= docker.io/cytopia/yamllint:latest
 YAMLLINT_DOCKER ?= docker $(YAML_DOCKER_ARGS) $(YAMLLINT_IMAGE)
 
+CARGO_TARGET_DIR ?= $(CURDIR)/target
+
 # Setup dev toolchain
 setup:
 	bash ./scripts/setup/dev_setup.sh
@@ -45,6 +47,12 @@ run-debug: build-debug
 
 build:
 	bash ./scripts/build/build-release.sh
+ifeq ($(shell uname),Linux) # Macs don't have objcopy
+	# Reduce binary size by compressing binaries.
+	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/release/databend-query
+	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/release/databend-benchmark
+	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/release/databend-meta
+endif
 
 build-native:
 	bash ./scripts/build/build-native.sh
@@ -57,9 +65,20 @@ cross-compile-debug:
 
 cross-compile-release:
 	cross build --target aarch64-unknown-linux-gnu --release
+ifeq ($(shell uname),Linux) # Macs don't have objcopy
+	# Reduce binary size by compressing binaries.
+	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/aarch64-unknown-linux-gnu/release/databend-query
+	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/aarch64-unknown-linux-gnu/release/databend-benchmark
+	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/aarch64-unknown-linux-gnu/release/databend-meta
+	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/aarch64-unknown-linux-gnu/release/bendctl
+endif
 
 cli-build:
 	bash ./scripts/build/build-cli.sh build-cli
+ifeq ($(shell uname),Linux) # Macs don't have objcopy
+	# Reduce binary size by compressing binaries.
+	objcopy --compress-debug-sections=zlib-gnu ${CARGO_TARGET_DIR}/release/bendctl
+endif
 
 cli-build-debug:
 	bash ./scripts/build/build-cli.sh build-cli-debug

@@ -51,8 +51,10 @@ jobs:
         run: |
           if [ ${{ matrix.config.cross }} = true ]; then
               cross build --release --target=${{ matrix.config.target }} --bin databend-benchmark
+              objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/databend-benchmark
           else
               cargo build --release --target=${{ matrix.config.target }} --bin databend-benchmark
+              objcopy --compress-debug-sections=zlib-gnu ./target/${{ matrix.config.target }}/release/databend-benchmark
           fi
           mkdir -p ./distro
           mv ./target/${{ matrix.config.target }}/release/databend-benchmark  ./distro
