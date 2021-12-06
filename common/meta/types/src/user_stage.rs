@@ -76,20 +76,6 @@ impl FromStr for Compression {
     }
 }
 
-// impl FromStr for FileFormat {
-//     type Err = &'static str;
-//
-//     fn from_str(s: &str) -> std::result::Result<FileFormat, &'static str> {
-//         let s = s.to_uppercase();
-//         match s.as_str() {
-//             "CSV" => Ok(FileFormat::Csv),
-//             "PARQUET" => Ok(FileFormat::Parquet),
-//             "JSON" => Ok(FileFormat::Json),
-//             _ => Err("no match for file format"),
-//         }
-//     }
-// }
-
 impl StageParams {
     pub fn new(url: &str, credentials: Credentials) -> Self {
         StageParams {
@@ -99,7 +85,6 @@ impl StageParams {
     }
 }
 /// Stage for data stage location.
-/// Need to add more fields by need.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct UserStageInfo {
     #[serde(default)]
