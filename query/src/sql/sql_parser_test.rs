@@ -14,6 +14,10 @@
 
 use common_exception::Result;
 use common_meta_types::AuthType;
+use common_meta_types::Compression;
+use common_meta_types::Credentials;
+use common_meta_types::FileFormat;
+use common_meta_types::StageParams;
 use common_meta_types::UserPrivilege;
 use common_meta_types::UserPrivilegeType;
 use sqlparser::ast::*;
@@ -21,6 +25,7 @@ use sqlparser::ast::*;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCopy;
 use crate::sql::statements::DfCreateDatabase;
+use crate::sql::statements::DfCreateStage;
 use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfDescribeTable;
@@ -888,6 +893,133 @@ fn revoke_privilege_test() -> Result<()> {
     expect_parse_err(
         "REVOKE SELECT ON * 'test'@'localhost'",
         String::from("sql parser error: Expected keyword FROM, found: 'test'"),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn create_stage_test() -> Result<()> {
+    expect_parse_ok(
+        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z')",
+        DfStatement::CreateStage(DfCreateStage {
+            if_not_exists: false,
+            stage_name: "test_stage".to_string(),
+            stage_params: StageParams::new("s3://load/files/", Credentials::S3 { access_key_id: "1a2b3c".to_string(), secret_access_key: "4x5y6z".to_string() }),
+            file_format: None,
+            comments: "".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z')",
+        DfStatement::CreateStage(DfCreateStage {
+            if_not_exists: true,
+            stage_name: "test_stage".to_string(),
+            stage_params: StageParams::new("s3://load/files/", Credentials::S3 { access_key_id: "1a2b3c".to_string(), secret_access_key: "4x5y6z".to_string() }),
+            file_format: None,
+            comments: "".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP record_delimiter=',')",
+        DfStatement::CreateStage(DfCreateStage {
+            if_not_exists: true,
+            stage_name: "test_stage".to_string(),
+            stage_params: StageParams::new("s3://load/files/", Credentials::S3 { access_key_id: "1a2b3c".to_string(), secret_access_key: "4x5y6z".to_string() }),
+            file_format: Some(FileFormat::Csv { compression: Compression::Gzip, record_delimiter: ",".to_string() }),
+            comments: "".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP record_delimiter=',') comments='test'",
+        DfStatement::CreateStage(DfCreateStage {
+            if_not_exists: true,
+            stage_name: "test_stage".to_string(),
+            stage_params: StageParams::new("s3://load/files/", Credentials::S3 { access_key_id: "1a2b3c".to_string(), secret_access_key: "4x5y6z".to_string() }),
+            file_format: Some(FileFormat::Csv { compression: Compression::Gzip, record_delimiter: ",".to_string() }),
+            comments: "test".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=Parquet compression=AUTO) comments='test'",
+        DfStatement::CreateStage(DfCreateStage {
+            if_not_exists: false,
+            stage_name: "test_stage".to_string(),
+            stage_params: StageParams::new("s3://load/files/", Credentials::S3 { access_key_id: "1a2b3c".to_string(), secret_access_key: "4x5y6z".to_string() }),
+            file_format: Some(FileFormat::Parquet { compression: Compression::Auto}),
+            comments: "test".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=csv compression=AUTO record_delimiter=NONE) comments='test'",
+        DfStatement::CreateStage(DfCreateStage {
+            if_not_exists: false,
+            stage_name: "test_stage".to_string(),
+            stage_params: StageParams::new("s3://load/files/", Credentials::S3 { access_key_id: "1a2b3c".to_string(), secret_access_key: "4x5y6z".to_string() }),
+            file_format: Some(FileFormat::Csv { compression: Compression::Auto, record_delimiter: "".to_string() }),
+            comments: "test".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=json) comments='test'",
+        DfStatement::CreateStage(DfCreateStage {
+            if_not_exists: false,
+            stage_name: "test_stage".to_string(),
+            stage_params: StageParams::new("s3://load/files/", Credentials::S3 { access_key_id: "1a2b3c".to_string(), secret_access_key: "4x5y6z".to_string() }),
+            file_format: Some(FileFormat::Json ),
+            comments: "test".to_string(),
+        }),
+    )?;
+
+    expect_parse_err(
+        "CREATE STAGE test_stage credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=csv compression=AUTO record_delimiter=NONE) comments='test'",
+        String::from("sql parser error: Missing URL"),
+    )?;
+
+    expect_parse_err(
+        "CREATE STAGE test_stage url='s3://load/files/' password=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=csv compression=AUTO record_delimiter=NONE) comments='test'",
+        String::from("sql parser error: Missing CREDENTIALS"),
+    )?;
+
+    expect_parse_err(
+        "CREATE STAGE test_stage url='s4://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=csv compression=AUTO record_delimiter=NONE) comments='test'",
+        String::from("sql parser error: Not supported storage"),
+    )?;
+
+    expect_parse_err(
+        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=csv compression=AUTO record_delimiter=NONE) comments='test'",
+        String::from("sql parser error: Missing S3 ACCESS_KEY_ID"),
+    )?;
+
+    expect_parse_err(
+        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' aecret_access_key='4x5y6z') file_format=(FORMAT=csv compression=AUTO record_delimiter=NONE) comments='test'",
+        String::from("sql parser error: Missing S3 SECRET_ACCESS_KEY"),
+    )?;
+
+    expect_parse_err(
+        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(type=csv compression=AUTO record_delimiter=NONE) comments='test'",
+        String::from("sql parser error: Missing FORMAT"),
+    )?;
+
+    expect_parse_err(
+        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(format=csv compression=AUTO1 record_delimiter=NONE) comments='test'",
+        String::from("sql parser error: no match for compression"),
+    )?;
+
+    expect_parse_err(
+        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(format=csv compression=AUTO record_delimiter=NONE1) comments='test'",
+        String::from("sql parser error: Expected record delimiter NONE, found: NONE1"),
+    )?;
+
+    expect_parse_err(
+        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(format=csv1 compression=AUTO record_delimiter=NONE) comments='test'",
+        String::from("sql parser error: Expected format type CSV|PARQUET|JSON, found: CSV1"),
     )?;
 
     Ok(())

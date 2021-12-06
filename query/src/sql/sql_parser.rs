@@ -473,6 +473,7 @@ impl<'a> DfParser<'a> {
     fn parse_create(&mut self) -> Result<DfStatement, ParserError> {
         match self.parser.next_token() {
             Token::Word(w) => {
+                //TODO:make stage to sql parser keyword
                 if w.value.to_uppercase() == "STAGE" {
                     self.parse_create_stage()
                 } else {
@@ -701,16 +702,17 @@ impl<'a> DfParser<'a> {
 
             let format = if self.consume_token("FORMAT") {
                 self.parser.expect_token(&Token::Eq)?;
-                self.parser.parse_literal_string()?
+                self.parser.next_token().to_string()
             } else {
                 return parser_err!("Missing FORMAT");
             };
+
             let file_format = match format.to_uppercase().as_str() {
                 "CSV" | "PARQUET" => {
                     let compression = if self.consume_token("COMPRESSION") {
                         self.parser.expect_token(&Token::Eq)?;
                         //TODO:check compression value correctness
-                        let value = self.parser.parse_literal_string()?;
+                        let value = self.parser.next_token().to_string();
                         Compression::from_str(value.as_str())
                             .map_err(|e| ParserError::ParserError(e.to_string()))?
                     } else {
@@ -719,11 +721,22 @@ impl<'a> DfParser<'a> {
                     let file_format = if "CSV" == format.to_uppercase().as_str() {
                         let file_format = if self.consume_token("RECORD_DELIMITER") {
                             self.parser.expect_token(&Token::Eq)?;
-                            let value = self.parser.parse_literal_string()?;
-                            let record_delimiter = match value.to_uppercase().as_str() {
-                                "NONE" => String::from(""),
-                                _ => value,
+
+                            let record_delimiter = match self.parser.next_token() {
+                                Token::Word(w) => match w.value.to_uppercase().as_str() {
+                                    "NONE" => String::from(""),
+                                    _ => {
+                                        return self
+                                            .expected("record delimiter NONE", Token::Word(w))
+                                    }
+                                },
+                                Token::SingleQuotedString(s) => s,
+                                unexpected => {
+                                    return self
+                                        .expected("not supported record delimiter", unexpected)
+                                }
                             };
+
                             Some(FileFormat::Csv {
                                 compression,
                                 record_delimiter,
@@ -746,7 +759,7 @@ impl<'a> DfParser<'a> {
                 unexpected => {
                     return parser_err!(format!(
                         "Expected format type {}, found: {}",
-                        "'CSV'|'PARQUET'|'JSON'", unexpected
+                        "CSV|PARQUET|JSON", unexpected
                     ))
                 }
             };
