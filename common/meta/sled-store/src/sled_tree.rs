@@ -567,6 +567,22 @@ impl<'a, KV: SledKeySpace> AsTxnKeySpace<'a, KV> {
     }
 }
 
+/// Some methods that take `&TransactionSledTree` as parameter need to be called
+/// in subTree method, since subTree(aka: AsTxnKeySpace) already ref to `TransactionSledTree`
+/// we impl deref here to fetch inner `&TransactionSledTree`.
+/// # Example:
+///
+/// ```
+/// fn txn_incr_seq(&self, key: &str, txn_tree: &TransactionSledTree) {}
+///
+/// fn sub_txn_tree_do_update<'s, KS>(
+///     &'s self,
+///     sub_tree: &AsTxnKeySpace<'s, KS>,
+/// ) {
+///     seq_kv_value.seq = self.txn_incr_seq(KS::NAME, &*sub_tree);
+///     sub_tree.insert(key, &seq_kv_value);
+/// }
+/// ```
 impl<'a, KV: SledKeySpace> Deref for AsTxnKeySpace<'a, KV> {
     type Target = &'a TransactionSledTree<'a>;
 
