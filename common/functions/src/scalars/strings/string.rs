@@ -36,6 +36,7 @@ use crate::scalars::RepeatFunction;
 use crate::scalars::ReplaceFunction;
 use crate::scalars::ReverseFunction;
 use crate::scalars::RightFunction;
+use crate::scalars::SpaceFunction;
 use crate::scalars::StrcmpFunction;
 use crate::scalars::SubstringFunction;
 use crate::scalars::SubstringIndexFunction;
@@ -77,5 +78,6 @@ impl StringFunction {
         factory.register("right", RightFunction::desc());
         factory.register("concat_ws", ConcatWsFunction::desc());
         factory.register("elt", EltFunction::desc());
+        factory.register("space", SpaceFunction::desc());
     }
 }
