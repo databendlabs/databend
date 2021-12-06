@@ -62,6 +62,9 @@ table_engine_memory_enabled = true
 table_engine_github_enabled = true
 wait_timeout_mills = 5000
 max_query_log_size = 10000
+table_cache_enabled = true
+table_cache_root = \"_cache\"
+table_cache_mb_size = 256
 
 [log]
 log_level = \"INFO\"
@@ -116,6 +119,9 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("QUERY_FLIGHT_API_ADDRESS", "1.2.3.4:9091");
     std::env::set_var("QUERY_HTTP_API_ADDRESS", "1.2.3.4:8081");
     std::env::set_var("QUERY_METRIC_API_ADDRESS", "1.2.3.4:7071");
+    std::env::set_var("QUERY_TABLE_CACHE_ENABLED", "true");
+    std::env::set_var("QUERY_TABLE_CACHE_ROOT", "_cache_env");
+    std::env::set_var("QUERY_TABLE_CACHE_MB_SIZE", "512");
     std::env::set_var("STORAGE_TYPE", "s3");
     std::env::set_var("DISK_STORAGE_DATA_PATH", "/tmp/test");
     std::env::set_var("S3_STORAGE_REGION", "us.region");
@@ -162,6 +168,10 @@ fn test_env_config() -> Result<()> {
     assert!(configured.query.table_engine_memory_enabled);
     assert!(!configured.query.table_engine_github_enabled);
 
+    assert!(configured.query.table_cache_enabled);
+    assert_eq!("_cache_env", configured.query.table_cache_root);
+    assert_eq!(512, configured.query.table_cache_mb_size);
+
     // clean up
     std::env::remove_var("LOG_LEVEL");
     std::env::remove_var("QUERY_TENANT_ID");
@@ -175,6 +185,9 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("QUERY_FLIGHT_API_ADDRESS");
     std::env::remove_var("QUERY_HTTP_API_ADDRESS");
     std::env::remove_var("QUERY_METRIC_API_ADDRESS");
+    std::env::remove_var("QUERY_TABLE_CACHE_ENABLED");
+    std::env::remove_var("QUERY_TABLE_CACHE_ROOT");
+    std::env::remove_var("QUERY_TABLE_CACHE_MB_SIZE");
     std::env::remove_var("STORAGE_TYPE");
     std::env::remove_var("DISK_STORAGE_DATA_PATH");
     std::env::remove_var("S3_STORAGE_REGION");
