@@ -84,12 +84,20 @@ impl DFStringArray {
 
     /// # Safety
     /// Note this doesn't do any bound checking, for performance reason.
+    #[inline]
     pub unsafe fn try_get(&self, index: usize) -> Result<DataValue> {
         let v = match self.array.is_null(index) {
             true => None,
             false => Some(self.array.value_unchecked(index).to_owned()),
         };
         Ok(v.into())
+    }
+
+    /// # Safety
+    /// Note this doesn't do any bound checking, for performance reason.
+    #[inline]
+    pub unsafe fn value_unchecked(&self, index: usize) -> &[u8] {
+        self.array.value_unchecked(index)
     }
 
     pub fn len(&self) -> usize {

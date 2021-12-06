@@ -16,6 +16,7 @@ mod ascii;
 mod base_64;
 mod bit_length;
 mod concat;
+mod concat_ws;
 mod elt;
 mod field;
 mod hex;

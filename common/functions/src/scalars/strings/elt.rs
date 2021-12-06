@@ -78,19 +78,12 @@ impl Function for EltFunction {
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let n_column = columns[0].column().cast_with_type(&DataType::Int64)?;
 
-        let columns = itertools::process_results(
-            columns[1..]
-                .iter()
-                .map(|c| c.column().cast_with_type(&DataType::String)),
-            |i| i.collect::<Vec<DataColumn>>(),
-        )?;
-
         let r_column = match n_column {
             DataColumn::Constant(DataValue::Int64(num), _) => {
                 if let Some(num) = num {
                     let n = num as usize;
                     if n > 0 && n <= columns.len() {
-                        columns[n - 1].clone()
+                        columns[n - 1].column().clone()
                     } else {
                         DataColumn::Constant(DataValue::Null, input_rows)
                     }
@@ -99,23 +92,29 @@ impl Function for EltFunction {
                 }
             }
             DataColumn::Array(n_series) => {
+                let series = columns[1..]
+                    .iter()
+                    .map(|c| c.column().cast_with_type(&DataType::String)?.to_array())
+                    .collect::<Result<Vec<Series>>>()?;
+
+                let columns = series
+                    .iter()
+                    .map(|s| s.string())
+                    .collect::<Result<Vec<&DFStringArray>>>()?;
+
                 let mut r_array = StringArrayBuilder::with_capacity(input_rows);
+
                 for (i, on) in n_series.i64()?.iter().enumerate() {
                     if let Some(on) = on {
                         let n = *on as usize;
                         if n > 0 && n <= columns.len() {
-                            match columns[n - 1].clone() {
-                                DataColumn::Constant(DataValue::String(s), _) => {
-                                    r_array.append_option(s);
+                            if columns[n - 1].is_null(n) {
+                                r_array.append_null();
+                            } else {
+                                unsafe {
+                                    r_array.append_value(columns[n - 1].value_unchecked(i));
                                 }
-                                DataColumn::Array(s_series) => match s_series.try_get(i) {
-                                    Ok(v) => r_array.append_value(v.as_string()?),
-                                    Err(_) => r_array.append_null(),
-                                },
-                                _ => {
-                                    r_array.append_null();
-                                }
-                            };
+                            }
                         } else {
                             r_array.append_null();
                         }
