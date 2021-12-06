@@ -82,8 +82,8 @@ impl Function for EltFunction {
             DataColumn::Constant(DataValue::Int64(num), _) => {
                 if let Some(num) = num {
                     let n = num as usize;
-                    if n > 0 && n <= columns.len() {
-                        columns[n - 1].column().clone()
+                    if n > 0 && n < columns.len() {
+                        columns[n].column().clone()
                     } else {
                         DataColumn::Constant(DataValue::Null, input_rows)
                     }
