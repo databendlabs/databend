@@ -42,13 +42,13 @@ async fn test_create_stage_interpreter() -> Result<()> {
             .await?;
 
         assert_eq!(
-            stage.file_format.clone(),
+            stage.file_format,
             Some(FileFormat::Csv {
                 compression: Compression::Gzip,
                 record_delimiter: ",".to_string()
             })
         );
-        assert_eq!(stage.comments.clone(), String::from("test"))
+        assert_eq!(stage.comments, String::from("test"))
     } else {
         panic!()
     }
@@ -65,13 +65,13 @@ async fn test_create_stage_interpreter() -> Result<()> {
             .await?;
 
         assert_eq!(
-            stage.file_format.clone(),
+            stage.file_format,
             Some(FileFormat::Csv {
                 compression: Compression::Gzip,
                 record_delimiter: ",".to_string()
             })
         );
-        assert_eq!(stage.comments.clone(), String::from("test"))
+        assert_eq!(stage.comments, String::from("test"))
     } else {
         panic!()
     }
@@ -89,13 +89,13 @@ async fn test_create_stage_interpreter() -> Result<()> {
             .await?;
 
         assert_eq!(
-            stage.file_format.clone(),
+            stage.file_format,
             Some(FileFormat::Csv {
                 compression: Compression::Gzip,
                 record_delimiter: ",".to_string()
             })
         );
-        assert_eq!(stage.comments.clone(), String::from("test"))
+        assert_eq!(stage.comments, String::from("test"))
     } else {
         panic!()
     }
