@@ -19,6 +19,7 @@ use crate::scalars::Base64EncodeFunction;
 use crate::scalars::BitLengthFunction;
 use crate::scalars::ConcatFunction;
 use crate::scalars::ConcatWsFunction;
+use crate::scalars::EltFunction;
 use crate::scalars::FieldFunction;
 use crate::scalars::HexFunction;
 use crate::scalars::InsertFunction;
@@ -72,8 +73,12 @@ impl StringFunction {
         factory.register("replace", ReplaceFunction::desc());
         factory.register("reverse", ReverseFunction::desc());
         factory.register("strcmp", StrcmpFunction::desc());
+<<<<<<< HEAD
         factory.register("left", LeftFunction::desc());
         factory.register("right", RightFunction::desc());
         factory.register("concat_ws", ConcatWsFunction::desc());
+=======
+        factory.register("elt", EltFunction::desc());
+>>>>>>> t2/elt
     }
 }
