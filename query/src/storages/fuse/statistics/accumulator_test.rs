@@ -22,7 +22,7 @@ use common_datavalues::DataType;
 use common_datavalues::DataValue;
 
 use crate::storages::fuse::statistics::accumulator;
-use crate::storages::fuse::statistics::util;
+use crate::storages::fuse::statistics::reducers;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
@@ -46,7 +46,7 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
         .iter()
         .map(|b| StatisticsAccumulator::acc_columns(&b.clone().unwrap()))
         .collect::<common_exception::Result<Vec<_>>>()?;
-    let r = util::reduce_block_stats(&col_stats, &schema);
+    let r = reducers::reduce_block_stats(&col_stats, &schema);
     assert!(r.is_ok());
     let r = r.unwrap();
     assert_eq!(1, r.len());
@@ -61,8 +61,8 @@ fn test_ft_stats_accumulator() -> common_exception::Result<()> {
     let blocks = TestFixture::gen_block_stream(10, 1);
     let mut stats_acc = accumulator::StatisticsAccumulator::new();
     for item in blocks {
-        let block_acc = stats_acc.accumulate(&item?)?;
-        stats_acc = block_acc.accumulate(1, "".to_owned());
+        let block_acc = stats_acc.begin(&item?)?;
+        stats_acc = block_acc.end(1, "".to_owned());
     }
     assert_eq!(10, stats_acc.blocks_statistics.len());
     // TODO more cases here pls

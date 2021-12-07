@@ -17,10 +17,9 @@
 mod accumulator_test;
 
 mod accumulator;
-mod util;
+mod reducers;
 
-pub use accumulator::BlockAccumulator;
+pub use accumulator::PartialAcc;
 pub use accumulator::StatisticsAccumulator;
-pub use util::merge_append_operations;
-pub use util::merge_stats;
-pub use util::reduce_block_stats;
+pub use reducers::merge_statistics;
+pub use reducers::reduce_block_stats;

@@ -27,7 +27,7 @@ use futures::TryStreamExt;
 use super::block_writer;
 use crate::storages::fuse::io::locations::gen_block_location;
 use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::Stats;
+use crate::storages::fuse::meta::Statistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
 
 pub struct BlockStreamWriter;
@@ -55,19 +55,19 @@ impl BlockStreamWriter {
             let mut acc = StatisticsAccumulator::new();
 
             for block in blocks.into_iter() {
-                let block_acc = acc.accumulate(&block)?;
+                let partial_acc = acc.begin(&block)?;
                 let schema = block.schema().to_arrow();
                 let location = gen_block_location();
                 let file_size =
                     block_writer::write_block(&schema, block, &data_accessor, &location).await?;
-                acc = block_acc.accumulate(file_size, location);
+                acc = partial_acc.end(file_size, location);
             }
 
             // summary and generate a segment
             let summary = acc.summary(data_schema)?;
             let seg = SegmentInfo {
                 blocks: acc.blocks_metas,
-                summary: Stats {
+                summary: Statistics {
                     row_count: acc.summary_row_count,
                     block_count: acc.summary_block_count,
                     uncompressed_byte_size: acc.in_memory_size,
