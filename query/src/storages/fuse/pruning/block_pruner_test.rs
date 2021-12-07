@@ -14,7 +14,6 @@
 //
 
 use common_base::tokio;
-use common_dal::read_obj;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::SeriesFrom;
 use common_datavalues::series::Series;
@@ -30,6 +29,7 @@ use common_planners::Extras;
 use futures::TryStreamExt;
 
 use crate::catalogs::Catalog;
+use crate::storages::fuse::io;
 use crate::storages::fuse::pruning::block_pruner::apply_block_pruning;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 use crate::storages::fuse::TBL_OPT_KEY_CHUNK_BLOCK_NUM;
@@ -96,14 +96,14 @@ async fn test_block_pruner() -> Result<()> {
         .options()
         .get(TBL_OPT_KEY_SNAPSHOT_LOC)
         .unwrap();
-    let snapshot = read_obj(da.as_ref(), snapshot_loc.clone()).await?;
+    let snapshot = io::read_obj(da.as_ref(), snapshot_loc.clone()).await?;
 
     // no pruning
     let push_downs = None;
     let blocks = apply_block_pruning(
         &snapshot,
         table.get_table_info().schema(),
-        push_downs,
+        &push_downs,
         da.clone(),
     )
     .await?;
@@ -119,7 +119,7 @@ async fn test_block_pruner() -> Result<()> {
     let blocks = apply_block_pruning(
         &snapshot,
         table.get_table_info().schema(),
-        Some(extra),
+        &Some(extra),
         da.clone(),
     )
     .await?;
@@ -131,7 +131,7 @@ async fn test_block_pruner() -> Result<()> {
     extra.filters = vec![pred];
 
     let blocks =
-        apply_block_pruning(&snapshot, table.get_table_info().schema(), Some(extra), da).await?;
+        apply_block_pruning(&snapshot, table.get_table_info().schema(), &Some(extra), da).await?;
     assert_eq!(num - 1, blocks.len() as u64);
 
     Ok(())

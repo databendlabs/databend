@@ -22,6 +22,7 @@ use common_planners::Extras;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
+use crate::storages::fuse::io;
 use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::SegmentInfo;
@@ -45,7 +46,6 @@ impl BlockPruner {
         }
     }
 
-    // Returns an iterator or stream would be better
     pub async fn apply(
         &self,
         schema: DataSchemaRef,
@@ -61,7 +61,7 @@ impl BlockPruner {
         };
 
         let snapshot: TableSnapshot =
-            common_dal::read_obj(self.da.as_ref(), self.table_snapshot_loc.as_str()).await?;
+            io::read_obj(self.da.as_ref(), self.table_snapshot_loc.as_str()).await?;
         let segment_num = snapshot.segments.len();
         let segment_locs = snapshot.segments;
 
@@ -71,8 +71,7 @@ impl BlockPruner {
 
         let res = futures::stream::iter(segment_locs)
             .map(|seg_loc| async {
-                let segment_info: SegmentInfo =
-                    common_dal::read_obj(self.da.as_ref(), seg_loc).await?;
+                let segment_info: SegmentInfo = io::read_obj(self.da.as_ref(), seg_loc).await?;
                 Self::filter_segment(segment_info, &block_pred)
             })
             // configuration of the max size of buffered futures

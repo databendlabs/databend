@@ -20,7 +20,6 @@ use futures::stream::Stream;
 use futures::AsyncRead;
 use futures::AsyncReadExt;
 use futures::AsyncSeek;
-use serde::de::DeserializeOwned;
 
 pub type Bytes = Vec<u8>;
 
@@ -58,13 +57,4 @@ pub trait DataAccessor: Send + Sync {
         input_stream.read_to_end(&mut buffer).await?;
         Ok(buffer)
     }
-}
-
-pub async fn read_obj<T: DeserializeOwned>(
-    da: &dyn DataAccessor,
-    loc: impl AsRef<str>,
-) -> Result<T> {
-    let bytes = da.read(loc.as_ref()).await?;
-    let r = serde_json::from_slice::<T>(&bytes)?;
-    Ok(r)
 }

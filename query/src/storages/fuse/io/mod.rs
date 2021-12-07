@@ -19,7 +19,9 @@ mod block_stream_writer_test;
 mod block_stream_writer;
 mod block_writer;
 mod locations;
+mod readers;
 
 pub use block_stream_writer::BlockStreamWriter;
 pub use locations::gen_segment_info_location;
 pub use locations::snapshot_location;
+pub use readers::read_obj;
