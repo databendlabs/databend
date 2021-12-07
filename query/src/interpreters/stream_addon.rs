@@ -33,6 +33,8 @@ use crate::pipelines::transforms::ExpressionExecutor;
 /// Add missing column into the block stream
 pub struct AddOnStream {
     input: SendableDataBlockStream,
+
+    default_expr_fields: Vec<DataField>,
     default_nonexpr_fields: Vec<DataField>,
 
     expression_executor: ExpressionExecutor,
@@ -66,14 +68,10 @@ impl AddOnStream {
                 } else {
                     default_nonexpr_fields.push(f.clone());
                 }
-            } else {
-                // this is used in executor to project columns
-                default_expr_fields.push(f.clone());
-                default_exprs.push(Expression::Column(f.name().to_string()));
             }
         }
 
-        let schema_after_default_expr = Arc::new(DataSchema::new(default_expr_fields));
+        let schema_after_default_expr = Arc::new(DataSchema::new(default_expr_fields.clone()));
         let expression_executor = ExpressionExecutor::try_create(
             "stream_addon",
             input_schema,
@@ -84,6 +82,7 @@ impl AddOnStream {
 
         Ok(AddOnStream {
             input,
+            default_expr_fields,
             default_nonexpr_fields,
             expression_executor,
             output_schema,
@@ -91,9 +90,15 @@ impl AddOnStream {
     }
 
     #[inline]
-    fn add_missing_column(&self, data_block: &DataBlock) -> Result<DataBlock> {
-        let num_rows = data_block.num_rows();
-        let mut block = self.expression_executor.execute(data_block)?;
+    fn add_missing_column(&self, mut block: DataBlock) -> Result<DataBlock> {
+        let num_rows = block.num_rows();
+
+        let expr_block = self.expression_executor.execute(&block)?;
+        for f in self.default_expr_fields.iter() {
+            block =
+                block.add_column(expr_block.try_column_by_name(f.name())?.clone(), f.clone())?;
+        }
+
         for f in &self.default_nonexpr_fields {
             let column = DataColumn::Constant(
                 DataValue::new_from_data_type(f.data_type(), f.is_nullable()),
@@ -101,7 +106,6 @@ impl AddOnStream {
             );
             block = block.add_column(column, f.clone())?;
         }
-
         block.resort(self.output_schema.clone())
     }
 }
@@ -114,7 +118,7 @@ impl Stream for AddOnStream {
         ctx: &mut Context<'_>,
     ) -> Poll<Option<Self::Item>> {
         self.input.poll_next_unpin(ctx).map(|x| match x {
-            Some(Ok(ref v)) => Some(self.add_missing_column(v)),
+            Some(Ok(v)) => Some(self.add_missing_column(v)),
             other => other,
         })
     }

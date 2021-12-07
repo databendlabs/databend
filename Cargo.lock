@@ -1518,8 +1518,6 @@ dependencies = [
  "futures",
  "pin-project-lite",
  "pretty_assertions",
- "serde",
- "serde_json",
  "tempfile",
  "tokio-stream",
 ]
