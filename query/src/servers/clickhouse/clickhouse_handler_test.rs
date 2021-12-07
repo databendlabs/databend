@@ -54,7 +54,7 @@ async fn test_clickhouse_insert_data() -> Result<()> {
     let listening = handler.start(listening).await?;
     let mut handler = create_conn(listening.port()).await?;
 
-    let query_str = "CREATE TABLE test(a UInt64, b String) Engine = Memory";
+    let query_str = "CREATE TABLE test(a UInt64 not null, b String not null) Engine = Memory";
     execute(&mut handler, query_str).await?;
 
     let block = Block::new();

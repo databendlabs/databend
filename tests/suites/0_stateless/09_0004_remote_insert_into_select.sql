@@ -34,11 +34,21 @@ create table s1(a String, b String);
 insert into s1 select number, number + 1 from numbers(10000);
 select sum(cast(a as uint64)), sum(cast(b as uint64)) from s1;
 
+
+-- default
+create table d1(n String, a UInt8 not null, b Int16 default a + 3, c String default 'c');
+insert into d1(a) values (1);
+insert into d1(b) values (2);
+select * from d1 order by a;
+
+
+
 DROP TABLE t1;
 DROP TABLE t3;
 DROP TABLE n1;
 DROP TABLE n2;
 DROP TABLE n3;
 DROP TABLE s1;
+DROP TABLE d1;
 
 DROP DATABASE db_09_004;

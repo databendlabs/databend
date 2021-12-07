@@ -79,7 +79,7 @@ where R: AsyncRead + Unpin + Send
             }
             for (col, deser) in desers.iter_mut().enumerate() {
                 match record.get(col) {
-                    Some(bytes) => deser.de_text(bytes).unwrap(),
+                    Some(bytes) => deser.de_text(bytes)?,
                     None => deser.de_null(),
                 }
             }

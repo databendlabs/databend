@@ -25,6 +25,7 @@ use futures::TryStreamExt;
 use super::interpreter_insert_with_stream::SendableWithSchema;
 use crate::interpreters::interpreter_insert_with_plan::InsertWithPlan;
 use crate::interpreters::interpreter_insert_with_stream::InsertWithStream;
+use crate::interpreters::AddOnStream;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
@@ -56,6 +57,8 @@ impl Interpreter for InsertInterpreter {
             .get_table(&plan.database_name, &plan.table_name)
             .await?;
 
+        let need_fill_missing_columns = table.schema() != self.plan.schema();
+
         let append_logs = match &self.plan.source {
             InsertInputSource::SelectPlan(plan_node) => {
                 let with_plan = InsertWithPlan::new(&self.ctx, &self.plan.schema, plan_node);
@@ -63,6 +66,16 @@ impl Interpreter for InsertInterpreter {
             }
             InsertInputSource::Expressions(values_exprs) => {
                 let stream = values_exprs.to_stream(self.plan.schema.clone())?;
+                let stream = if need_fill_missing_columns {
+                    Box::pin(AddOnStream::try_create(
+                        stream,
+                        self.plan.schema(),
+                        table.schema(),
+                    )?)
+                } else {
+                    stream
+                };
+
                 let with_stream = InsertWithStream::new(&self.ctx, &table);
                 with_stream.append_stream(stream).await
             }
@@ -70,11 +83,21 @@ impl Interpreter for InsertInterpreter {
                 let stream = input_stream
                     .take()
                     .ok_or_else(|| ErrorCode::EmptyData("input stream not exist or consumed"))?;
+
+                let stream = if need_fill_missing_columns {
+                    Box::pin(AddOnStream::try_create(
+                        stream,
+                        self.plan.schema(),
+                        table.schema(),
+                    )?)
+                } else {
+                    stream
+                };
+
                 let with_stream = InsertWithStream::new(&self.ctx, &table);
                 with_stream.append_stream(stream).await
             }
         }?;
-
         // feed back the append operation logs to table
         table
             .commit(

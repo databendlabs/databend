@@ -22,6 +22,7 @@ use common_arrow::arrow::record_batch::RecordBatch;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::series::IntoSeries;
 use common_datavalues::series::Series;
+use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
@@ -37,15 +38,18 @@ pub struct DataBlock {
 }
 
 impl DataBlock {
+    #[inline]
     pub fn create(schema: DataSchemaRef, columns: Vec<DataColumn>) -> Self {
         DataBlock { schema, columns }
     }
 
+    #[inline]
     pub fn create_by_array(schema: DataSchemaRef, arrays: Vec<Series>) -> Self {
         let columns = arrays.into_iter().map(DataColumn::Array).collect();
         DataBlock { schema, columns }
     }
 
+    #[inline]
     pub fn empty() -> Self {
         DataBlock {
             schema: Arc::new(DataSchema::empty()),
@@ -53,6 +57,7 @@ impl DataBlock {
         }
     }
 
+    #[inline]
     pub fn empty_with_schema(schema: DataSchemaRef) -> Self {
         let mut columns = vec![];
         for f in schema.fields().iter() {
@@ -63,14 +68,17 @@ impl DataBlock {
         DataBlock { schema, columns }
     }
 
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.num_columns() == 0 || self.num_rows() == 0
     }
 
+    #[inline]
     pub fn schema(&self) -> &DataSchemaRef {
         &self.schema
     }
 
+    #[inline]
     pub fn num_rows(&self) -> usize {
         if self.columns.is_empty() {
             0
@@ -79,23 +87,28 @@ impl DataBlock {
         }
     }
 
+    #[inline]
     pub fn num_columns(&self) -> usize {
         self.columns.len()
     }
 
     /// Data Block physical memory size
+    #[inline]
     pub fn memory_size(&self) -> usize {
         self.columns.iter().map(|x| x.get_array_memory_size()).sum()
     }
 
+    #[inline]
     pub fn column(&self, index: usize) -> &DataColumn {
         &self.columns[index]
     }
 
+    #[inline]
     pub fn columns(&self) -> &[DataColumn] {
         &self.columns
     }
 
+    #[inline]
     pub fn try_column_by_name(&self, name: &str) -> Result<&DataColumn> {
         if name == "*" {
             Ok(&self.columns[0])
@@ -105,6 +118,7 @@ impl DataBlock {
         }
     }
 
+    #[inline]
     pub fn try_array_by_name(&self, name: &str) -> Result<Series> {
         if name == "*" {
             self.columns[0].to_array()
@@ -115,17 +129,20 @@ impl DataBlock {
     }
 
     /// Take the first data value of the column.
+    #[inline]
     pub fn first(&self, col: &str) -> Result<DataValue> {
         let column = self.try_column_by_name(col)?;
         column.try_get(0)
     }
 
     /// Take the last data value of the column.
+    #[inline]
     pub fn last(&self, col: &str) -> Result<DataValue> {
         let column = self.try_column_by_name(col)?;
         column.try_get(column.len() - 1)
     }
 
+    #[inline]
     pub fn slice(&self, offset: usize, length: usize) -> Self {
         let rows = self.num_rows();
         if offset == 0 && length >= rows {
@@ -136,6 +153,49 @@ impl DataBlock {
             limited_columns.push(self.column(i).slice(offset, length));
         }
         DataBlock::create(self.schema().clone(), limited_columns)
+    }
+
+    #[inline]
+    pub fn add_column(self, column: DataColumn, field: DataField) -> Result<Self> {
+        let mut columns = self.columns.clone();
+        let mut fields = self.schema().fields().clone();
+
+        columns.push(column);
+        fields.push(field);
+
+        let new_schema = Arc::new(DataSchema::new(fields));
+
+        Ok(Self {
+            columns,
+            schema: new_schema,
+        })
+    }
+
+    #[inline]
+    pub fn remove_column(self, name: &str) -> Result<Self> {
+        let mut columns = self.columns.clone();
+        let mut fields = self.schema().fields().clone();
+
+        let idx = self.schema.index_of(name)?;
+        columns.remove(idx);
+        fields.remove(idx);
+        let new_schema = Arc::new(DataSchema::new(fields));
+
+        Ok(Self {
+            columns,
+            schema: new_schema,
+        })
+    }
+
+    #[inline]
+    pub fn resort(self, schema: DataSchemaRef) -> Result<Self> {
+        let mut columns = Vec::with_capacity(self.num_columns());
+        for f in schema.fields() {
+            let column = self.try_column_by_name(f.name())?;
+            columns.push(column.clone());
+        }
+
+        Ok(Self { columns, schema })
     }
 }
 
