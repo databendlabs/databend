@@ -18,11 +18,12 @@ use std::fs::File;
 use std::io::Read;
 use std::string::String;
 
-use common_base::{Stoppable, tokio};
+use common_base::tokio;
+use common_base::Stoppable;
 use common_meta_types::Node;
-use databend_meta::api::HttpService;
 use databend_meta::api::http::v1::cluster_state::nodes_handler;
 use databend_meta::api::http::v1::cluster_state::state_handler;
+use databend_meta::api::HttpService;
 use databend_meta::meta_service::MetaNode;
 use poem::get;
 use poem::http::Method;
@@ -105,7 +106,8 @@ async fn test_cluster_state() -> common_exception::Result<()> {
     assert_eq!(response.status(), StatusCode::OK);
 
     let body = response.into_body().into_vec().await.unwrap();
-    let state = serde_json::from_str::<serde_json::Value>((&String::from_utf8_lossy(&body)).as_ref())?;
+    let state =
+        serde_json::from_str::<serde_json::Value>((&String::from_utf8_lossy(&body)).as_ref())?;
     let voters = state["voters"].as_array().unwrap();
     let non_voters = state["non_voters"].as_array().unwrap();
     assert_eq!(voters.len(), 2);
@@ -117,7 +119,6 @@ async fn test_cluster_state() -> common_exception::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_http_service_cluster_state() -> common_exception::Result<()> {
-
     let addr_str = "127.0.0.1:0";
 
     let (_log_guards, ut_span) = init_meta_ut!();
@@ -132,7 +133,7 @@ async fn test_http_service_cluster_state() -> common_exception::Result<()> {
     tc1.config.admin_tls_server_key = TEST_SERVER_KEY.to_owned();
     tc1.config.admin_tls_server_cert = TEST_SERVER_CERT.to_owned();
 
-    let _= MetaNode::start(&tc0.config.raft_config).await?;
+    let _ = MetaNode::start(&tc0.config.raft_config).await?;
     let meta_node1 = MetaNode::start(&tc1.config.raft_config).await?;
 
     let mut srv = HttpService::create(tc1.config, meta_node1);
@@ -158,12 +159,17 @@ async fn test_http_service_cluster_state() -> common_exception::Result<()> {
         let resp = resp.unwrap();
         assert!(resp.status().is_success());
         assert_eq!("/v1/cluster/state", resp.url().path());
+        let state_json = resp.json::<serde_json::Value>().await.unwrap();
+        assert_eq!(state_json["voters"].as_array().unwrap().len(), 2);
+        assert_eq!(state_json["non_voters"].as_array().unwrap().len(), 0);
 
         let resp_nodes = client.get(node_url).send().await;
         assert!(resp_nodes.is_ok());
         let resp_nodes = resp_nodes.unwrap();
         assert!(resp_nodes.status().is_success());
         assert_eq!("/v1/cluster/nodes", resp_nodes.url().path());
+        let result = resp_nodes.json::<Vec<Node>>().await.unwrap();
+        assert_eq!(result.len(), 2);
     });
     Ok(())
 }
