@@ -24,6 +24,11 @@ fn test_cast_by_str() -> Result<()> {
 
     let tests = vec![
         Test {
+            name: "zero",
+            literal: "0",
+            value: DataValue::UInt8(Some(0)),
+        },
+        Test {
             name: "positive",
             literal: "31",
             value: DataValue::UInt8(Some(31)),
@@ -83,7 +88,6 @@ fn test_cast_by_str() -> Result<()> {
     for test in tests {
         let literal = test.literal;
         let result = DataValue::try_from_literal(literal)?;
-        
         assert_eq!(result.data_type(), test.value.data_type());
         assert_eq!(&result, &test.value, "test with {}", test.name);
     }
