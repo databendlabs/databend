@@ -43,10 +43,10 @@ const config = {
             '@docusaurus/plugin-content-docs',
             /** @type {import('@docusaurus/plugin-content-docs').Options} */
             {
-                id: 'api',
-                path: 'docs/api',
-                routeBasePath: 'api',
-                sidebarPath: require.resolve('./docs/api/sidebars.js'),
+                id: 'user',
+                path: 'docs/user',
+                routeBasePath: 'user',
+                sidebarPath: require.resolve('./docs/user/sidebars.js'),
                 editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
             },
         ],
@@ -54,54 +54,10 @@ const config = {
             '@docusaurus/plugin-content-docs',
             /** @type {import('@docusaurus/plugin-content-docs').Options} */
             {
-                id: 'cli',
-                path: 'docs/cli',
-                routeBasePath: 'cli',
-                sidebarPath: require.resolve('./docs/cli/sidebars.js'),
-                editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
-            },
-        ],
-        [
-            '@docusaurus/plugin-content-docs',
-            /** @type {import('@docusaurus/plugin-content-docs').Options} */
-            {
-                id: 'development',
-                path: 'docs/development',
-                routeBasePath: 'development',
-                sidebarPath: require.resolve('./docs/development/sidebars.js'),
-                editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
-            },
-        ],
-        [
-            '@docusaurus/plugin-content-docs',
-            /** @type {import('@docusaurus/plugin-content-docs').Options} */
-            {
-                id: 'policies',
-                path: 'docs/policies',
-                routeBasePath: 'policies',
-                sidebarPath: require.resolve('./docs/policies/sidebars.js'),
-                editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
-            },
-        ],
-        [
-            '@docusaurus/plugin-content-docs',
-            /** @type {import('@docusaurus/plugin-content-docs').Options} */
-            {
-                id: 'sqlstatement',
-                path: 'docs/sqlstatement',
-                routeBasePath: 'sqlstatement',
-                sidebarPath: require.resolve('./docs/sqlstatement/sidebars.js'),
-                editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
-            },
-        ],
-        [
-            '@docusaurus/plugin-content-docs',
-            /** @type {import('@docusaurus/plugin-content-docs').Options} */
-            {
-                id: 'system',
-                path: 'docs/system',
-                routeBasePath: 'system',
-                sidebarPath: require.resolve('./docs/system/sidebars.js'),
+                id: 'dev',
+                path: 'docs/dev',
+                routeBasePath: 'dev',
+                sidebarPath: require.resolve('./docs/dev/sidebars.js'),
                 editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
             },
         ]
@@ -117,15 +73,30 @@ const config = {
                 },
                 items: [
                     {
-                        type: 'doc',
-                        position: 'left',
-                        docId: 'architecture',
-                        label: 'Overview',
+                        position: 'left', label: 'Overview', items: [
+                            {label: 'Architecture', to: '/overview/architecture'},
+                            {label: 'Performance', to: '/overview/performance'}
+                        ]
                     },
-                    {to: '/cli/cli', label: 'CLI', position: 'left'},
-                    {to: '/api/config', label: 'API', position: 'left'},
-                    {to: '/sqlstatement/index', label: 'SQL Statement', position: 'left'},
-                    {to: '/development/contributing', label: 'Development', position: 'left'},
+                    {
+                        to: '/user/index', label: 'User Guide', position: 'left', items: [
+                            {label: 'Get Started', to: '/user/index'},
+                            {label: 'API', to: '/user/api/index'},
+                            {label: 'CLI', to: '/user/cli/index'},
+                            {label: 'SQL Statement', to: '/user/sqlstatement/index'},
+                            {label: 'System', to: '/user/system/index'}
+                        ]
+                    },
+                    {
+                        to: '/dev/index', label: 'Dev Guide', position: 'left', items: [
+                            {label: 'Get Started', to: '/dev/index'},
+                            {label: 'Roadmap', to: '/dev/roadmap'},
+                            {label: 'Building', to: '/dev/building/index'},
+                            {label: 'Contributing', to: '/dev/contributing/index'},
+                            {label: 'RFCs', to: '/dev/rfcs/index'},
+                            {label: 'Policies', to: '/dev/policies/index'}
+                        ]
+                    },
                     {to: '/blog', label: 'Blog', position: 'left'},
                     {
                         href: 'https://github.com/datafuselabs/databend',
