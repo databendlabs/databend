@@ -1,5 +1,5 @@
 ---
-title: Deploy
+title: Get Started
 ---
 
 import Tabs from '@theme/Tabs';
@@ -7,35 +7,13 @@ import TabItem from '@theme/TabItem';
 
 This document describes how to build and run [DatabendQuery](https://github.com/datafuselabs/databend/tree/main/query) as a distributed query engine.
 
-## 1. Deploy
-
-<Tabs>
-  <TabItem value="binary" label="Release binary" default>
-
-```shell
-$ curl -fsS https://repo.databend.rs/databend/install-bendctl.sh | bash
-$ export PATH="${HOME}/.databend/bin:${PATH}"
-$ bendctl cluster create
-```
-
-  </TabItem>
-  <TabItem value="docker" label="Run with Docker(Recommended)">
-
-```shell
-$ docker pull datafuselabs/databend
-$ docker run --init --rm -p 3307:3307 datafuselabs/databend
-```
-  </TabItem>
-  <TabItem value="source" label="From source">
+## 1. Build and run
 
 ```shell
 $ git clone https://github.com/datafuselabs/databend.git
 $ cd databend && make setup
 $ make run
 ```
-  </TabItem>
-</Tabs>
-
 
 ## 2. Client
 
