@@ -14,7 +14,6 @@
 
 use std::io::Read;
 use std::io::Seek;
-use std::sync::Arc;
 
 use common_exception::Result;
 use futures::stream::Stream;
@@ -61,8 +60,11 @@ pub trait DataAccessor: Send + Sync {
     }
 }
 
-pub async fn read_obj<T: DeserializeOwned>(da: Arc<dyn DataAccessor>, loc: String) -> Result<T> {
-    let bytes = da.read(&loc).await?;
+pub async fn read_obj<T: DeserializeOwned>(
+    da: &dyn DataAccessor,
+    loc: impl AsRef<str>,
+) -> Result<T> {
+    let bytes = da.read(loc.as_ref()).await?;
     let r = serde_json::from_slice::<T>(&bytes)?;
     Ok(r)
 }

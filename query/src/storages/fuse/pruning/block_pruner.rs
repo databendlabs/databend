@@ -60,9 +60,8 @@ impl BlockPruner {
             _ => Box::new(|_: &BlockStatistics| Ok(true)),
         };
 
-        let snapshot =
-            common_dal::read_obj::<TableSnapshot>(self.da.clone(), self.table_snapshot_loc.clone())
-                .await?;
+        let snapshot: TableSnapshot =
+            common_dal::read_obj(self.da.as_ref(), self.table_snapshot_loc.as_str()).await?;
         let segment_num = snapshot.segments.len();
         let segment_locs = snapshot.segments;
 
@@ -72,8 +71,8 @@ impl BlockPruner {
 
         let res = futures::stream::iter(segment_locs)
             .map(|seg_loc| async {
-                let segment_info =
-                    common_dal::read_obj::<SegmentInfo>(self.da.clone(), seg_loc).await?;
+                let segment_info: SegmentInfo =
+                    common_dal::read_obj(self.da.as_ref(), seg_loc).await?;
                 Self::filter_segment(segment_info, &block_pred)
             })
             // configuration of the max size of buffered futures

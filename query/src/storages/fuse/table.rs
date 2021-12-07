@@ -128,13 +128,10 @@ impl FuseTable {
             .cloned()
     }
 
-    pub(crate) async fn table_snapshot(
-        &self,
-        ctx: Arc<QueryContext>,
-    ) -> Result<Option<TableSnapshot>> {
+    pub(crate) async fn table_snapshot(&self, ctx: &QueryContext) -> Result<Option<TableSnapshot>> {
         if let Some(loc) = self.snapshot_loc() {
             let da = ctx.get_data_accessor()?;
-            Ok(Some(read_obj(da, loc.to_string()).await?))
+            Ok(Some(read_obj(da.as_ref(), loc.to_string()).await?))
         } else {
             Ok(None)
         }
