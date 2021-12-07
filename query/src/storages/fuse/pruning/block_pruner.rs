@@ -49,7 +49,7 @@ impl BlockPruner {
     pub async fn apply(
         &self,
         schema: DataSchemaRef,
-        push_down: Option<Extras>,
+        push_down: &Option<Extras>,
     ) -> Result<Vec<BlockMeta>> {
         let block_pred: Pred = match push_down {
             Some(exprs) if !exprs.filters.is_empty() => {
@@ -107,7 +107,7 @@ impl BlockPruner {
 pub async fn apply_block_pruning(
     table_snapshot: &TableSnapshot,
     schema: DataSchemaRef,
-    push_down: Option<Extras>,
+    push_down: &Option<Extras>,
     data_accessor: Arc<dyn DataAccessor>,
 ) -> Result<Vec<BlockMeta>> {
     BlockPruner::new(table_snapshot, data_accessor)

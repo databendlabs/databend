@@ -19,7 +19,7 @@ mod accumulator_test;
 mod accumulator;
 mod reducers;
 
-pub use accumulator::PartialAcc;
+pub use accumulator::PartiallyAccumulated;
 pub use accumulator::StatisticsAccumulator;
 pub use reducers::merge_statistics;
 pub use reducers::reduce_block_stats;

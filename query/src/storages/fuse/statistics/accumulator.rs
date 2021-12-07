@@ -40,7 +40,7 @@ impl StatisticsAccumulator {
         Default::default()
     }
 
-    pub fn begin(mut self, block: &DataBlock) -> common_exception::Result<PartialAcc> {
+    pub fn begin(mut self, block: &DataBlock) -> common_exception::Result<PartiallyAccumulated> {
         let row_count = block.num_rows() as u64;
         let block_in_memory_size = block.memory_size() as u64;
 
@@ -49,7 +49,7 @@ impl StatisticsAccumulator {
         self.in_memory_size += block_in_memory_size;
         let block_stats = Self::acc_columns(block)?;
         self.blocks_statistics.push(block_stats.clone());
-        Ok(PartialAcc {
+        Ok(PartiallyAccumulated {
             accumulator: self,
             block_row_count: block.num_rows() as u64,
             block_size: block.memory_size() as u64,
@@ -102,14 +102,14 @@ impl StatisticsAccumulator {
     }
 }
 
-// TODO rename this
-pub struct PartialAcc {
+pub struct PartiallyAccumulated {
     accumulator: StatisticsAccumulator,
     block_row_count: u64,
     block_size: u64,
     block_column_statistics: HashMap<ColumnId, ColumnStatistics>,
 }
-impl PartialAcc {
+
+impl PartiallyAccumulated {
     pub fn end(mut self, file_size: u64, location: String) -> StatisticsAccumulator {
         let mut stats = &mut self.accumulator;
         stats.file_size += file_size;
