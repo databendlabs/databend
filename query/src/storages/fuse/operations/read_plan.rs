@@ -16,7 +16,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_dal::read_obj;
 use common_exception::Result;
 use common_planners::Extras;
 use common_planners::Part;
@@ -24,8 +23,8 @@ use common_planners::Partitions;
 use common_planners::Statistics;
 
 use crate::sessions::QueryContext;
-use crate::storages::fuse::index::apply_range_filter;
 use crate::storages::fuse::meta::BlockMeta;
+use crate::storages::fuse::pruning::apply_block_pruning;
 use crate::storages::fuse::FuseTable;
 
 impl FuseTable {
@@ -35,17 +34,16 @@ impl FuseTable {
         ctx: Arc<QueryContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        let location = self.snapshot_loc();
-        if let Some(loc) = location {
-            let da = ctx.get_data_accessor()?;
-            let schema = self.table_info.schema();
-            let push_downs_c = push_downs.clone();
-            let snapshot = read_obj(da.clone(), loc).await?;
-            let block_metas = apply_range_filter(&snapshot, schema, push_downs_c, da).await?;
-            let (statistics, parts) = Self::to_partitions(&block_metas, push_downs);
-            Ok((statistics, parts))
-        } else {
-            Ok((Statistics::default(), vec![]))
+        let snapshot = self.table_snapshot(ctx.as_ref()).await?;
+        match snapshot {
+            Some(snapshot) => {
+                let da = ctx.get_data_accessor()?;
+                let schema = self.table_info.schema();
+                let block_metas = apply_block_pruning(&snapshot, schema, &push_downs, da).await?;
+                let (statistics, parts) = Self::to_partitions(&block_metas, push_downs);
+                Ok((statistics, parts))
+            }
+            None => Ok((Statistics::default(), vec![])),
         }
     }
 

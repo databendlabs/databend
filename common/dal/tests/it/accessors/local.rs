@@ -37,14 +37,6 @@ async fn local_read(loops: u32) -> common_exception::Result<()> {
     Ok(())
 }
 
-// enable this if need to re-produce issue #2997
-#[tokio::test]
-#[ignore]
-async fn test_da_local_hangs() -> common_exception::Result<()> {
-    let read_fut = local_read(100);
-    futures::executor::block_on(read_fut)
-}
-
 #[tokio::test]
 async fn test_da_local_normal() -> common_exception::Result<()> {
     let read_fut = local_read(1000);

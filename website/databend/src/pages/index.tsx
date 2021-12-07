@@ -14,12 +14,12 @@ function HomepageHeader() {
                 <p className="hero__subtitle">{siteConfig.tagline}</p>
                 <Link
                     className="button button--secondary button--lg"
-                    to="/overview/building-and-running/">
+                    to="/user/index">
                     Quick start
                 </Link>
                 <Link
                     className="button button--secondary button--lg"
-                    to="/overview/performance/">
+                    to="/overview/performance">
                     Performance
                 </Link>
             </div>

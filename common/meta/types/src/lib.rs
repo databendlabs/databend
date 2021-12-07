@@ -90,4 +90,8 @@ pub use user_info::UserInfo;
 pub use user_privilege::UserPrivilege;
 pub use user_privilege::UserPrivilegeType;
 pub use user_quota::UserQuota;
+pub use user_stage::Compression;
+pub use user_stage::Credentials;
+pub use user_stage::FileFormat;
+pub use user_stage::StageParams;
 pub use user_stage::UserStageInfo;

@@ -1174,8 +1174,6 @@ dependencies = [
  "rusoto_credential",
  "rusoto_s3",
  "rusoto_sts",
- "serde",
- "serde_json",
  "tempfile",
 ]
 
@@ -3003,9 +3001,9 @@ checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
 
 [[package]]
 name = "handlebars"
-version = "4.1.5"
+version = "4.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ad84da8f63da982543fc85fcabaee2ad1fdd809d99d64a48887e2e942ddfe46"
+checksum = "167fa173496c9eadd8749cca6f8339ac88e248f3ad2442791d0b743318a94fc0"
 dependencies = [
  "log",
  "pest",
@@ -6295,7 +6293,7 @@ dependencies = [
 [[package]]
 name = "sqlparser"
 version = "0.11.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=b0efbfe#b0efbfea12af034fee6fdb5aa1eeb702f5a3fb14"
+source = "git+https://github.com/datafuse-extras/sqlparser-rs?rev=b42ff01#b42ff010752d5fc4bce12f0b29d077d7e2fee023"
 dependencies = [
  "log",
 ]

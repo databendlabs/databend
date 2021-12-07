@@ -39,7 +39,7 @@ pub struct TableSnapshot {
     pub schema: DataSchema,
 
     /// Summary Statistics
-    pub summary: Stats,
+    pub summary: Statistics,
 
     /// Pointers to SegmentInfos (may be of different format)
     ///
@@ -57,7 +57,7 @@ impl TableSnapshot {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
-pub struct Stats {
+pub struct Statistics {
     pub row_count: u64,
     pub block_count: u64,
 

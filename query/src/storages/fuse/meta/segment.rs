@@ -14,7 +14,7 @@
 //
 
 use crate::storages::fuse::meta::BlockMeta;
-use crate::storages::fuse::meta::Stats;
+use crate::storages::fuse::meta::Statistics;
 
 /// A segment comprised of one or more blocks
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
@@ -25,5 +25,5 @@ pub struct SegmentInfo {
     pub blocks: Vec<BlockMeta>,
 
     /// summary statistics
-    pub summary: Stats,
+    pub summary: Statistics,
 }

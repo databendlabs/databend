@@ -23,6 +23,7 @@ use crate::CopyPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
 use crate::CreateUserPlan;
+use crate::CreateUserStagePlan;
 use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
@@ -131,6 +132,7 @@ pub trait PlanVisitor {
             PlanNode::GrantPrivilege(plan) => self.visit_grant_privilege(plan),
             PlanNode::RevokePrivilege(plan) => self.visit_revoke_privilege(plan),
             PlanNode::Sink(plan) => self.visit_append(plan),
+            PlanNode::CreateUserStage(plan) => self.visit_create_stage(plan),
         }
     }
 
@@ -306,6 +308,10 @@ pub trait PlanVisitor {
         Ok(())
     }
     fn visit_append(&mut self, _: &SinkPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_create_stage(&mut self, _: &CreateUserStagePlan) -> Result<()> {
         Ok(())
     }
 }

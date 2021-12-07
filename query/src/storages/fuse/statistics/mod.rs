@@ -14,14 +14,12 @@
 //
 
 #[cfg(test)]
-mod statistics_test;
+mod accumulator_test;
 
 mod accumulator;
-mod block_meta_acc;
-mod util;
+mod reducers;
 
+pub use accumulator::PartiallyAccumulated;
 pub use accumulator::StatisticsAccumulator;
-pub use block_meta_acc::BlockMetaAccumulator;
-pub use util::merge_append_operations;
-pub use util::merge_stats;
-pub use util::reduce_block_stats;
+pub use reducers::merge_statistics;
+pub use reducers::reduce_block_stats;

@@ -33,7 +33,7 @@ impl FuseTable {
         ctx: Arc<QueryContext>,
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
-        if let Some(prev_snapshot) = self.table_snapshot(ctx.clone()).await? {
+        if let Some(prev_snapshot) = self.table_snapshot(ctx.as_ref()).await? {
             let prev_id = prev_snapshot.snapshot_id;
             let mut new_snapshot = prev_snapshot;
             new_snapshot.segments = vec![];

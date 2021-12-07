@@ -62,6 +62,8 @@ jobs:
           export SCCACHE_DIR=/home/runner/.cache/sccache
           export RUSTC_WRAPPER=sccache
           cargo build --bin=databend-query --bin=databend-meta --target x86_64-unknown-linux-gnu --release
+          objcopy --compress-debug-sections=zlib-gnu ./target/x86_64-unknown-linux-gnu/release/databend-query
+          objcopy --compress-debug-sections=zlib-gnu ./target/x86_64-unknown-linux-gnu/release/databend-meta
           mkdir -p distro
           sccache --show-stats
           cp target/x86_64-unknown-linux-gnu/release/databend-query ./distro/databend-query
@@ -160,6 +162,8 @@ jobs:
           export SCCACHE_DIR=/home/runner/.cache/sccache
           export RUSTC_WRAPPER=sccache
           cargo build --bin=databend-query --bin=databend-meta --target x86_64-unknown-linux-gnu --release
+          objcopy --compress-debug-sections=zlib-gnu ./target/x86_64-unknown-linux-gnu/release/databend-query
+          objcopy --compress-debug-sections=zlib-gnu ./target/x86_64-unknown-linux-gnu/release/databend-meta
           mkdir -p distro
           sccache --show-stats
           cp target/x86_64-unknown-linux-gnu/release/databend-query ./distro/databend-query
