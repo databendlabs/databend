@@ -122,7 +122,7 @@ impl BlockAccumulator {
             block_size: self.block_size,
             col_stats: self.block_column_statistics,
         };
-        self.accumulator.blocks_metas.push(block_meta);
+        stats.blocks_metas.push(block_meta);
         self.accumulator
     }
 }

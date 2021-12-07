@@ -20,7 +20,6 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
-use common_exception::ErrorCode;
 
 use crate::storages::fuse::statistics::accumulator;
 use crate::storages::fuse::statistics::util;
@@ -61,13 +60,10 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
 fn test_ft_stats_accumulator() -> common_exception::Result<()> {
     let blocks = TestFixture::gen_block_stream(10, 1);
     let mut stats_acc = accumulator::StatisticsAccumulator::new();
-    let mut meta_acc = accumulator::BlockMetaAccumulator::new();
-    blocks.iter().try_for_each(|item| {
-        let item = item.clone().unwrap();
-        stats_acc.acc(&item)?;
-        meta_acc.acc(1, "".to_owned(), &mut stats_acc);
-        Ok::<_, ErrorCode>(())
-    })?;
+    for item in blocks {
+        let block_acc = stats_acc.accumulate(&item?)?;
+        stats_acc = block_acc.accumulate(1, "".to_owned());
+    }
     assert_eq!(10, stats_acc.blocks_statistics.len());
     // TODO more cases here pls
     Ok(())
