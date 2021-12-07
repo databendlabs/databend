@@ -33,13 +33,13 @@ impl DataValue {
         if literal.starts_with(char::from_u32(45).unwrap()) {
             result = match literal.parse::<i64>() {
                 Ok(n) => {
-                    if n <= i8::MAX as i64 && n >= i8::MIN as i64 {
+                    if n >= i8::MIN as i64 {
                         return Ok(DataValue::Int8(Some(n as i8)));
                     }
-                    if n <= i16::MAX as i64 && n >= i16::MIN as i64 {
+                    if n >= i16::MIN as i64 {
                         return Ok(DataValue::Int16(Some(n as i16)));
                     }
-                    if n <= i32::MAX as i64 && n >= i32::MIN as i64 {
+                    if n >= i32::MIN as i64 {
                         return Ok(DataValue::Int32(Some(n as i32)));
                     }
                     return Ok(DataValue::Int64(Some(n as i64)));
