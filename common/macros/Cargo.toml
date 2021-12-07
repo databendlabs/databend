@@ -12,6 +12,6 @@ test = false
 
 [dependencies]
 quote = "1.0.10"
-proc-macro2 = "1.0.32"
+proc-macro2 = "1.0.33"
 syn = { version = "1.0.82", features = ["full"] }
 synstructure = "0.12.6"
