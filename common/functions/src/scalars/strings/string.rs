@@ -26,6 +26,7 @@ use crate::scalars::InsertFunction;
 use crate::scalars::InstrFunction;
 use crate::scalars::LTrimFunction;
 use crate::scalars::LeftFunction;
+use crate::scalars::LeftPadFunction;
 use crate::scalars::LocateFunction;
 use crate::scalars::OctFunction;
 use crate::scalars::OctetLengthFunction;
@@ -36,6 +37,7 @@ use crate::scalars::RepeatFunction;
 use crate::scalars::ReplaceFunction;
 use crate::scalars::ReverseFunction;
 use crate::scalars::RightFunction;
+use crate::scalars::RightPadFunction;
 use crate::scalars::SpaceFunction;
 use crate::scalars::StrcmpFunction;
 use crate::scalars::SubstringFunction;
@@ -79,5 +81,7 @@ impl StringFunction {
         factory.register("concat_ws", ConcatWsFunction::desc());
         factory.register("elt", EltFunction::desc());
         factory.register("space", SpaceFunction::desc());
+        factory.register("lpad", LeftPadFunction::desc());
+        factory.register("rpad", RightPadFunction::desc());
     }
 }

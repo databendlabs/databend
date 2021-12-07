@@ -1,0 +1,118 @@
+=== LPAD null ===
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+=== LPAD const, const, const ===
+
+abcdeabcde
+
+
+1
+aaaaa12345
+abcab12345
+abcde12345
+=== LPAD series, const, const ===
+aa0
+aa1
+aa2
+aa3
+aa4
+=== LPAD const, series, const ===
+
+1
+a1
+aa1
+aaa1
+=== LPAD series, series, const ===
+
+1
+a2
+aa3
+aaa4
+=== LPAD const, const, series ===
+001
+111
+221
+331
+441
+=== LPAD series, const, series ===
+000
+111
+222
+333
+444
+=== LPAD const, series, series ===
+
+1
+21
+331
+4441
+=== LPAD series, series, series ===
+
+1
+22
+333
+4444
+=== RPAD null ===
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+=== RPAD const, const, const ===
+
+abcdeabcde
+
+
+1
+12345aaaaa
+12345abcab
+12345abcde
+=== RPAD series, const, const ===
+0aa
+1aa
+2aa
+3aa
+4aa
+=== RPAD const, series, const ===
+
+1
+1a
+1aa
+1aaa
+=== RPAD series, series, const ===
+
+1
+2a
+3aa
+4aaa
+=== RPAD const, const, series ===
+100
+111
+122
+133
+144
+=== RPAD series, const, series ===
+000
+111
+222
+333
+444
+=== RPAD const, series, series ===
+
+1
+12
+133
+1444
+=== RPAD series, series, series ===
+
+1
+22
+333
+4444
