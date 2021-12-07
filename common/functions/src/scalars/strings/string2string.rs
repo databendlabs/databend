@@ -18,12 +18,16 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+// use common_tracing::tracing;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
 pub trait StringOperator: Send + Sync + Clone + Default + 'static {
-    fn apply<'a>(&'a mut self, _: &'a [u8]) -> Option<&'a [u8]>;
+    fn apply<'a>(&'a mut self, _: &'a [u8], _: &mut [u8]) -> usize;
+    fn estimate_bytes(&self, array: &DFStringArray) -> usize {
+        array.inner().values().len()
+    }
 }
 
 /// A common function template that transform string column into string column
@@ -74,16 +78,33 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let mut op = T::default();
-        let column: DataColumn = columns[0]
+
+        let array = columns[0]
             .column()
             .cast_with_type(&DataType::String)?
-            .to_minimal_array()?
+            .to_minimal_array()?;
+
+        let estimate_bytes = op.estimate_bytes(array.string()?);
+        // tracing::error!("bytes_total: {}", estimate_bytes);
+
+        let column: DataColumn = array
             .string()?
+            // TODO(veeupup) use into_no_null_iter to make branch prediction works good
             .into_iter()
             .fold(
-                StringArrayBuilder::with_capacity(columns[0].column().len()),
+                EfficientStringArrayBuilder::with_capacity(
+                    columns[0].column().len(),
+                    estimate_bytes,
+                ),
                 |mut builder, s| {
-                    builder.append_option(s.and_then(|values| op.apply(values)));
+                    match s {
+                        Some(x) => {
+                            builder.write_values(|buffer| op.apply(x, buffer));
+                        }
+                        None => {
+                            builder.write_null();
+                        }
+                    }
                     builder
                 },
             )

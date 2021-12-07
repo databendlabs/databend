@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod builder;
+mod efficient_builder;
 mod iterator;
 
 pub use builder::*;
@@ -22,6 +23,7 @@ use common_arrow::arrow::compute::cast::binary_to_large_binary;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+pub use efficient_builder::*;
 pub use iterator::*;
 
 use crate::prelude::*;

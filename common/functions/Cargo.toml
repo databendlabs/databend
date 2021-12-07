@@ -16,6 +16,7 @@ common-arrow = {path = "../arrow"}
 common-datavalues = {path = "../datavalues"}
 common-exception = {path = "../exception"}
 common-io = {path = "../io"}
+common-tracing = {path = "../tracing"}
 
 # Github dependencies
 
