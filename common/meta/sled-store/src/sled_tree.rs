@@ -15,13 +15,13 @@
 use std::fmt::Display;
 use std::marker::PhantomData;
 use std::ops::Bound;
+use std::ops::Deref;
 use std::ops::RangeBounds;
 
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
 use common_tracing::tracing;
-use sled::transaction::ConflictableTransactionError;
-use sled::transaction::TransactionError;
+use sled::transaction::TransactionResult;
 use sled::transaction::TransactionalTree;
 use sled::transaction::UnabortableTransactionError;
 
@@ -88,20 +88,22 @@ impl SledTree {
         }
     }
 
-    pub fn txn<T, E>(
+    pub fn txn<T>(
         &self,
         sync: bool,
-        f: impl Fn(TransactionSledTree<'_>) -> Result<T, ConflictableTransactionError<E>>,
-    ) -> Result<T, TransactionError<E>> {
+        f: impl Fn(TransactionSledTree<'_>) -> Result<T, UnabortableTransactionError>,
+    ) -> Result<T, ErrorCode> {
         // use map_err_to_code
-        (&self.tree).transaction(move |tree| {
-            let txn_sled_tree = TransactionSledTree { txn_tree: tree };
-            let r = f(txn_sled_tree.clone())?;
-            if sync {
-                txn_sled_tree.txn_tree.flush();
-            }
-            Ok(r)
-        })
+        let result: TransactionResult<T, UnabortableTransactionError> =
+            (&self.tree).transaction(move |tree| {
+                let txn_sled_tree = TransactionSledTree { txn_tree: tree };
+                let r = f(txn_sled_tree.clone())?;
+                if sync {
+                    txn_sled_tree.txn_tree.flush();
+                }
+                Ok(r)
+            });
+        result.map_err(ErrorCode::from)
     }
 
     /// Return true if the tree contains the key.
@@ -498,17 +500,15 @@ impl TransactionSledTree<'_> {
         }
     }
 
-    // fn get<KV: SledKeySpace>(&self, key: &KV::K) -> common_exception::Result<Option<KV::V>> {
-    //     let got = self
-    //         .txn_tree
-    //         .get(KV::serialize_key(key)?)
-    //         .map_err_to_code(ErrorCode::MetaStoreDamaged, || format!("get: {}", key))?;
-    //     let v = match got {
-    //         None => None,
-    //         Some(v) => Some(KV::deserialize_value(v)?),
-    //     };
-    //     Ok(v)
-    // }
+    fn get<KV>(&self, key: &KV::K) -> Result<Option<KV::V>, UnabortableTransactionError>
+    where KV: SledKeySpace {
+        let k = KV::serialize_key(key).unwrap();
+        let got = self.txn_tree.get(k)?;
+
+        let v = got.map(|v| KV::deserialize_value(v).unwrap());
+
+        Ok(v)
+    }
 
     fn insert<KV>(
         &self,
@@ -525,6 +525,16 @@ impl TransactionSledTree<'_> {
         let prev = prev.map(|x| KV::deserialize_value(x).unwrap());
 
         Ok(prev)
+    }
+
+    fn remove<KV>(&self, key: &KV::K) -> Result<Option<KV::V>, UnabortableTransactionError>
+    where KV: SledKeySpace {
+        let k = KV::serialize_key(key).unwrap();
+        let removed = self.txn_tree.remove(k)?;
+
+        let removed = removed.map(|x| KV::deserialize_value(x).unwrap());
+
+        Ok(removed)
     }
 }
 
@@ -546,6 +556,38 @@ impl<'a, KV: SledKeySpace> AsTxnKeySpace<'a, KV> {
         value: &KV::V,
     ) -> Result<Option<KV::V>, UnabortableTransactionError> {
         self.inner.insert::<KV>(key, value)
+    }
+
+    pub fn get(&self, key: &KV::K) -> Result<Option<KV::V>, UnabortableTransactionError> {
+        self.inner.get::<KV>(key)
+    }
+
+    pub fn remove(&self, key: &KV::K) -> Result<Option<KV::V>, UnabortableTransactionError> {
+        self.inner.remove::<KV>(key)
+    }
+}
+
+/// Some methods that take `&TransactionSledTree` as parameter need to be called
+/// in subTree method, since subTree(aka: AsTxnKeySpace) already ref to `TransactionSledTree`
+/// we impl deref here to fetch inner `&TransactionSledTree`.
+/// # Example:
+///
+/// ```
+/// fn txn_incr_seq(&self, key: &str, txn_tree: &TransactionSledTree) {}
+///
+/// fn sub_txn_tree_do_update<'s, KS>(
+///     &'s self,
+///     sub_tree: &AsTxnKeySpace<'s, KS>,
+/// ) {
+///     seq_kv_value.seq = self.txn_incr_seq(KS::NAME, &*sub_tree);
+///     sub_tree.insert(key, &seq_kv_value);
+/// }
+/// ```
+impl<'a, KV: SledKeySpace> Deref for AsTxnKeySpace<'a, KV> {
+    type Target = &'a TransactionSledTree<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
     }
 }
 
