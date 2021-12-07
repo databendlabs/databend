@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt;
+use std::marker::PhantomData;
 
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -23,15 +24,52 @@ use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
-#[derive(Clone)]
-pub struct ReplaceFunction {
-    display_name: String,
+pub type ReplaceFunction = ReplaceImplFunction<Replace>;
+
+pub trait ReplaceOperator: Send + Sync + Clone + Default + 'static {
+    fn apply<'a>(&'a mut self, str: &'a [u8], from: &'a [u8], to: &'a [u8]) -> &'a [u8];
 }
 
-impl ReplaceFunction {
+#[derive(Clone, Default)]
+pub struct Replace {
+    buf: Vec<u8>,
+}
+
+impl ReplaceOperator for Replace {
+    #[inline]
+    fn apply<'a>(&'a mut self, str: &'a [u8], from: &'a [u8], to: &'a [u8]) -> &'a [u8] {
+        if from.is_empty() || from == to {
+            return str;
+        }
+        self.buf.clear();
+        let mut skip = 0;
+        for (p, w) in str.windows(from.len()).enumerate() {
+            if w == from {
+                self.buf.extend_from_slice(to);
+                skip = from.len();
+            } else if p + w.len() == str.len() {
+                self.buf.extend_from_slice(w);
+            } else if skip > 1 {
+                skip -= 1;
+            } else {
+                self.buf.extend_from_slice(&w[0..1]);
+            }
+        }
+        &self.buf
+    }
+}
+
+#[derive(Clone)]
+pub struct ReplaceImplFunction<T> {
+    display_name: String,
+    _marker: PhantomData<T>,
+}
+
+impl<T: ReplaceOperator> ReplaceImplFunction<T> {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(ReplaceFunction {
+        Ok(Box::new(Self {
             display_name: display_name.to_string(),
+            _marker: PhantomData,
         }))
     }
 
@@ -41,7 +79,7 @@ impl ReplaceFunction {
     }
 }
 
-impl Function for ReplaceFunction {
+impl<T: ReplaceOperator> Function for ReplaceImplFunction<T> {
     fn name(&self) -> &str {
         &*self.display_name
     }
@@ -77,6 +115,8 @@ impl Function for ReplaceFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
+        let mut o = T::default();
+
         let s_column = columns[0].column().cast_with_type(&DataType::String)?;
         let f_column = columns[1].column().cast_with_type(&DataType::String)?;
         let t_column = columns[2].column().cast_with_type(&DataType::String)?;
@@ -89,7 +129,10 @@ impl Function for ReplaceFunction {
                 DataColumn::Constant(DataValue::String(t), _),
             ) => {
                 if let (Some(s), Some(f), Some(t)) = (s, f, t) {
-                    DataColumn::Constant(DataValue::String(Some(replace(&s, &f, &t))), input_rows)
+                    DataColumn::Constant(
+                        DataValue::String(Some(o.apply(&s, &f, &t).to_owned())),
+                        input_rows,
+                    )
                 } else {
                     DataColumn::Constant(DataValue::Null, input_rows)
                 }
@@ -103,7 +146,7 @@ impl Function for ReplaceFunction {
                 if let (Some(f), Some(t)) = (f, t) {
                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                     for os in s_series.string()? {
-                        r_array.append_option(os.map(|s| replace(s, &f, &t)));
+                        r_array.append_option(os.map(|s| o.apply(s, &f, &t)));
                     }
                     r_array.finish().into()
                 } else {
@@ -119,7 +162,7 @@ impl Function for ReplaceFunction {
                 if let (Some(s), Some(t)) = (s, t) {
                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                     for of in f_series.string()? {
-                        r_array.append_option(of.map(|f| replace(&s, f, &t)));
+                        r_array.append_option(of.map(|f| o.apply(&s, f, &t)));
                     }
                     r_array.finish().into()
                 } else {
@@ -136,7 +179,7 @@ impl Function for ReplaceFunction {
                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                     for s_f in izip!(s_series.string()?, f_series.string()?) {
                         r_array.append_option(match s_f {
-                            (Some(s), Some(f)) => Some(replace(s, f, &t)),
+                            (Some(s), Some(f)) => Some(o.apply(s, f, &t)),
                             _ => None,
                         });
                     }
@@ -154,7 +197,7 @@ impl Function for ReplaceFunction {
                 if let (Some(s), Some(f)) = (s, f) {
                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                     for ot in t_series.string()? {
-                        r_array.append_option(ot.map(|t| replace(&s, &f, t)));
+                        r_array.append_option(ot.map(|t| o.apply(&s, &f, t)));
                     }
                     r_array.finish().into()
                 } else {
@@ -171,7 +214,7 @@ impl Function for ReplaceFunction {
                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                     for s_t in izip!(s_series.string()?, t_series.string()?) {
                         r_array.append_option(match s_t {
-                            (Some(s), Some(t)) => Some(replace(s, &f, t)),
+                            (Some(s), Some(t)) => Some(o.apply(s, &f, t)),
                             _ => None,
                         });
                     }
@@ -190,7 +233,7 @@ impl Function for ReplaceFunction {
                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                     for f_t in izip!(f_series.string()?, t_series.string()?) {
                         r_array.append_option(match f_t {
-                            (Some(f), Some(t)) => Some(replace(&s, f, t)),
+                            (Some(f), Some(t)) => Some(o.apply(&s, f, t)),
                             _ => None,
                         });
                     }
@@ -208,7 +251,7 @@ impl Function for ReplaceFunction {
                 let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                 for s_f_t in izip!(s_series.string()?, f_series.string()?, t_series.string()?) {
                     r_array.append_option(match s_f_t {
-                        (Some(s), Some(f), Some(t)) => Some(replace(s, f, t)),
+                        (Some(s), Some(f), Some(t)) => Some(o.apply(s, f, t)),
                         _ => None,
                     });
                 }
@@ -220,27 +263,8 @@ impl Function for ReplaceFunction {
     }
 }
 
-impl fmt::Display for ReplaceFunction {
+impl<F> fmt::Display for ReplaceImplFunction<F> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }
-}
-
-#[inline]
-fn replace<'a>(str: &'a [u8], from: &'a [u8], to: &'a [u8]) -> Vec<u8> {
-    let mut result = str.to_vec();
-    let from_len = from.len();
-    if from_len > 0 {
-        let to_len = to.len();
-        let mut i = 0;
-        while i + from_len <= result.len() {
-            if result[i..].starts_with(from) {
-                result.splice(i..i + from_len, to.iter().cloned());
-                i += to_len;
-            } else {
-                i += 1;
-            }
-        }
-    }
-    result
 }

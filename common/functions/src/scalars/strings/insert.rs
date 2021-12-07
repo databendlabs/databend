@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt;
+use std::marker::PhantomData;
 
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -23,15 +24,60 @@ use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
-#[derive(Clone)]
-pub struct InsertFunction {
-    display_name: String,
+pub type InsertFunction = InsFunction<Insert>;
+
+pub trait InsertOperator: Send + Sync + Clone + Default + 'static {
+    fn apply<'a>(
+        &'a mut self,
+        srcstr: &'a [u8],
+        pos: &i64,
+        len: &i64,
+        substr: &'a [u8],
+    ) -> &'a [u8];
 }
 
-impl InsertFunction {
+#[derive(Clone, Default)]
+pub struct Insert {
+    buf: Vec<u8>,
+}
+
+impl InsertOperator for Insert {
+    #[inline]
+    fn apply<'a>(
+        &'a mut self,
+        srcstr: &'a [u8],
+        pos: &i64,
+        len: &i64,
+        substr: &'a [u8],
+    ) -> &'a [u8] {
+        self.buf.clear();
+        let sl = srcstr.len() as i64;
+        if *pos < 1 || *pos > sl {
+            self.buf.extend_from_slice(srcstr);
+        } else {
+            let p = *pos as usize - 1;
+            self.buf.extend_from_slice(&srcstr[0..p]);
+            self.buf.extend_from_slice(substr);
+            if *len >= 0 && *pos + *len < sl {
+                let l = *len as usize;
+                self.buf.extend_from_slice(&srcstr[p + l..]);
+            }
+        }
+        &self.buf
+    }
+}
+
+#[derive(Clone)]
+pub struct InsFunction<T> {
+    display_name: String,
+    _marker: PhantomData<T>,
+}
+
+impl<T: InsertOperator> InsFunction<T> {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(InsertFunction {
+        Ok(Box::new(Self {
             display_name: display_name.to_string(),
+            _marker: PhantomData,
         }))
     }
 
@@ -41,7 +87,7 @@ impl InsertFunction {
     }
 }
 
-impl Function for InsertFunction {
+impl<T: InsertOperator> Function for InsFunction<T> {
     fn name(&self) -> &str {
         &*self.display_name
     }
@@ -71,6 +117,8 @@ impl Function for InsertFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
+        let mut o = T::default();
+
         let s_column = columns[0].column().cast_with_type(&DataType::String)?;
         let p_column = columns[1].column().cast_with_type(&DataType::Int64)?;
         let l_column = columns[2].column().cast_with_type(&DataType::Int64)?;
@@ -86,7 +134,7 @@ impl Function for InsertFunction {
             ) => {
                 if let (Some(s), Some(p), Some(l), Some(ss)) = (s, p, l, ss) {
                     DataColumn::Constant(
-                        DataValue::String(Some(instr(&s, &p, &l, &ss))),
+                        DataValue::String(Some(o.apply(&s, &p, &l, &ss).to_owned())),
                         input_rows,
                     )
                 } else {
@@ -103,7 +151,7 @@ impl Function for InsertFunction {
                 if let (Some(p), Some(l), Some(ss)) = (p, l, ss) {
                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                     for os in s_series.string()? {
-                        r_array.append_option(os.map(|s| instr(s, &p, &l, &ss)));
+                        r_array.append_option(os.map(|s| o.apply(s, &p, &l, &ss)));
                     }
                     r_array.finish().into()
                 } else {
@@ -120,7 +168,7 @@ impl Function for InsertFunction {
                 if let (Some(s), Some(l), Some(ss)) = (s, l, ss) {
                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                     for op in p_series.i64()? {
-                        r_array.append_option(op.map(|p| instr(&s, p, &l, &ss)));
+                        r_array.append_option(op.map(|p| o.apply(&s, p, &l, &ss)));
                     }
                     r_array.finish().into()
                 } else {
@@ -138,7 +186,7 @@ impl Function for InsertFunction {
                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                     for s_p in izip!(s_series.string()?, p_series.i64()?) {
                         r_array.append_option(match s_p {
-                            (Some(s), Some(p)) => Some(instr(s, p, &l, &ss)),
+                            (Some(s), Some(p)) => Some(o.apply(s, p, &l, &ss)),
                             _ => None,
                         });
                     }
@@ -157,7 +205,7 @@ impl Function for InsertFunction {
                 if let (Some(s), Some(p), Some(ss)) = (s, p, ss) {
                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                     for ol in l_series.i64()? {
-                        r_array.append_option(ol.map(|l| instr(&s, &p, l, &ss)));
+                        r_array.append_option(ol.map(|l| o.apply(&s, &p, l, &ss)));
                     }
                     r_array.finish().into()
                 } else {
@@ -175,7 +223,7 @@ impl Function for InsertFunction {
                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                     for s_l in izip!(s_series.string()?, l_series.i64()?) {
                         r_array.append_option(match s_l {
-                            (Some(s), Some(l)) => Some(instr(s, &p, l, &ss)),
+                            (Some(s), Some(l)) => Some(o.apply(s, &p, l, &ss)),
                             _ => None,
                         });
                     }
@@ -195,7 +243,7 @@ impl Function for InsertFunction {
                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                     for p_l in izip!(p_series.i64()?, l_series.i64()?) {
                         r_array.append_option(match p_l {
-                            (Some(p), Some(l)) => Some(instr(&s, p, l, &ss)),
+                            (Some(p), Some(l)) => Some(o.apply(&s, p, l, &ss)),
                             _ => None,
                         });
                     }
@@ -215,7 +263,7 @@ impl Function for InsertFunction {
                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                     for s_p_l in izip!(s_series.string()?, p_series.i64()?, l_series.i64()?) {
                         r_array.append_option(match s_p_l {
-                            (Some(s), Some(p), Some(l)) => Some(instr(s, p, l, &ss)),
+                            (Some(s), Some(p), Some(l)) => Some(o.apply(s, p, l, &ss)),
                             _ => None,
                         });
                     }
@@ -234,7 +282,7 @@ impl Function for InsertFunction {
                 if let (Some(s), Some(p), Some(l)) = (s, p, l) {
                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                     for oss in ss_series.string()? {
-                        r_array.append_option(oss.map(|ss| instr(&s, &p, &l, ss)));
+                        r_array.append_option(oss.map(|ss| o.apply(&s, &p, &l, ss)));
                     }
                     r_array.finish().into()
                 } else {
@@ -252,7 +300,7 @@ impl Function for InsertFunction {
                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                     for s_ss in izip!(s_series.string()?, ss_series.string()?) {
                         r_array.append_option(match s_ss {
-                            (Some(s), Some(ss)) => Some(instr(s, &p, &l, ss)),
+                            (Some(s), Some(ss)) => Some(o.apply(s, &p, &l, ss)),
                             _ => None,
                         });
                     }
@@ -272,7 +320,7 @@ impl Function for InsertFunction {
                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                     for p_ss in izip!(p_series.i64()?, ss_series.string()?) {
                         r_array.append_option(match p_ss {
-                            (Some(p), Some(ss)) => Some(instr(&s, p, &l, ss)),
+                            (Some(p), Some(ss)) => Some(o.apply(&s, p, &l, ss)),
                             _ => None,
                         });
                     }
@@ -292,7 +340,7 @@ impl Function for InsertFunction {
                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                     for s_p_ss in izip!(s_series.string()?, p_series.i64()?, ss_series.string()?) {
                         r_array.append_option(match s_p_ss {
-                            (Some(s), Some(p), Some(ss)) => Some(instr(s, p, &l, ss)),
+                            (Some(s), Some(p), Some(ss)) => Some(o.apply(s, p, &l, ss)),
                             _ => None,
                         });
                     }
@@ -312,7 +360,7 @@ impl Function for InsertFunction {
                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                     for l_ss in izip!(l_series.i64()?, ss_series.string()?) {
                         r_array.append_option(match l_ss {
-                            (Some(l), Some(ss)) => Some(instr(&s, &p, l, ss)),
+                            (Some(l), Some(ss)) => Some(o.apply(&s, &p, l, ss)),
                             _ => None,
                         });
                     }
@@ -332,7 +380,7 @@ impl Function for InsertFunction {
                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                     for s_l_ss in izip!(s_series.string()?, l_series.i64()?, ss_series.string()?) {
                         r_array.append_option(match s_l_ss {
-                            (Some(s), Some(l), Some(ss)) => Some(instr(s, &p, l, ss)),
+                            (Some(s), Some(l), Some(ss)) => Some(o.apply(s, &p, l, ss)),
                             _ => None,
                         });
                     }
@@ -352,7 +400,7 @@ impl Function for InsertFunction {
                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
                     for p_l_ss in izip!(p_series.i64()?, l_series.i64()?, ss_series.string()?) {
                         r_array.append_option(match p_l_ss {
-                            (Some(p), Some(l), Some(ss)) => Some(instr(&s, p, l, ss)),
+                            (Some(p), Some(l), Some(ss)) => Some(o.apply(&s, p, l, ss)),
                             _ => None,
                         });
                     }
@@ -376,7 +424,7 @@ impl Function for InsertFunction {
                     ss_series.string()?
                 ) {
                     r_array.append_option(match s_p_l_ss {
-                        (Some(s), Some(p), Some(l), Some(ss)) => Some(instr(s, p, l, ss)),
+                        (Some(s), Some(p), Some(l), Some(ss)) => Some(o.apply(s, p, l, ss)),
                         _ => None,
                     });
                 }
@@ -388,22 +436,8 @@ impl Function for InsertFunction {
     }
 }
 
-impl fmt::Display for InsertFunction {
+impl<F> fmt::Display for InsFunction<F> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }
-}
-
-#[inline]
-fn instr<'a>(srcstr: &'a [u8], pos: &i64, len: &i64, substr: &'a [u8]) -> Vec<u8> {
-    let sl = srcstr.len() as i64;
-    if *pos < 1 || *pos > sl {
-        return srcstr.to_vec();
-    }
-    let p = *pos as usize - 1;
-    if *len < 0 || *pos + *len >= sl {
-        return [&srcstr[0..p], substr].concat();
-    }
-    let l = *len as usize;
-    [&srcstr[0..p], substr, &srcstr[p + l..]].concat()
 }
