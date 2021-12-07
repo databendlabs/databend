@@ -29,33 +29,41 @@ impl DataValue {
     }
 
     pub fn try_from_literal(literal: &str) -> Result<DataValue> {
-        match literal.parse::<i64>() {
-            Ok(n) => {
-                if n >= 0 {
-                    let n = literal.parse::<u64>()?;
+        let result;
+        if literal.starts_with(char::from_u32(45).unwrap()) {
+            result = match literal.parse::<i64>() {
+                Ok(n) => {
+                    if n >= i8::MIN as i64 {
+                        return Ok(DataValue::Int8(Some(n as i8)));
+                    }
+                    if n >= i16::MIN as i64 {
+                        return Ok(DataValue::Int16(Some(n as i16)));
+                    }
+                    if n >= i32::MIN as i64 {
+                        return Ok(DataValue::Int32(Some(n as i32)));
+                    }
+                    return Ok(DataValue::Int64(Some(n as i64)));
+                }
+                Err(_) => Ok(DataValue::Float64(Some(literal.parse::<f64>()?))),
+            };
+        } else {
+            result = match literal.parse::<u64>() {
+                Ok(n) => {
                     if n <= u8::MAX as u64 {
                         return Ok(DataValue::UInt8(Some(n as u8)));
-                    } else if n <= u16::MAX as u64 {
-                        return Ok(DataValue::UInt16(Some(n as u16)));
-                    } else if n <= u32::MAX as u64 {
-                        return Ok(DataValue::UInt32(Some(n as u32)));
-                    } else {
-                        return Ok(DataValue::UInt64(Some(n as u64)));
                     }
+                    if n <= u16::MAX as u64 {
+                        return Ok(DataValue::UInt16(Some(n as u16)));
+                    }
+                    if n <= u32::MAX as u64 {
+                        return Ok(DataValue::UInt32(Some(n as u32)));
+                    }
+                    return Ok(DataValue::UInt64(Some(n as u64)));
                 }
-
-                if n >= i8::MIN as i64 {
-                    Ok(DataValue::Int8(Some(n as i8)))
-                } else if n >= u16::MIN as i64 {
-                    Ok(DataValue::Int16(Some(n as i16)))
-                } else if n >= u32::MIN as i64 {
-                    Ok(DataValue::Int32(Some(n as i32)))
-                } else {
-                    Ok(DataValue::Int64(Some(n as i64)))
-                }
-            }
-            Err(_) => Ok(DataValue::Float64(Some(literal.parse::<f64>()?))),
+                Err(_) => Ok(DataValue::Float64(Some(literal.parse::<f64>()?))),
+            };
         }
+        result
     }
 
     /// Convert data value vectors to data array.
