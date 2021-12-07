@@ -22,6 +22,7 @@ use common_planners::Extras;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
+use crate::storages::fuse::io;
 use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::SegmentInfo;
@@ -29,13 +30,13 @@ use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::index::BlockStatistics;
 use crate::storages::index::RangeFilter;
 
-pub struct MinMaxIndex {
+pub struct BlockPruner {
     table_snapshot_loc: String,
     da: Arc<dyn DataAccessor>,
 }
 
 type Pred = Box<dyn Fn(&BlockStatistics) -> Result<bool> + Send + Sync + Unpin>;
-impl MinMaxIndex {
+impl BlockPruner {
     pub fn new(table_snapshot: &TableSnapshot, da: Arc<dyn DataAccessor>) -> Self {
         Self {
             table_snapshot_loc: snapshot_location(
@@ -45,11 +46,10 @@ impl MinMaxIndex {
         }
     }
 
-    // Returns an iterator or stream would be better
     pub async fn apply(
         &self,
         schema: DataSchemaRef,
-        push_down: Option<Extras>,
+        push_down: &Option<Extras>,
     ) -> Result<Vec<BlockMeta>> {
         let block_pred: Pred = match push_down {
             Some(exprs) if !exprs.filters.is_empty() => {
@@ -60,9 +60,8 @@ impl MinMaxIndex {
             _ => Box::new(|_: &BlockStatistics| Ok(true)),
         };
 
-        let snapshot =
-            common_dal::read_obj::<TableSnapshot>(self.da.clone(), self.table_snapshot_loc.clone())
-                .await?;
+        let snapshot: TableSnapshot =
+            io::read_obj(self.da.as_ref(), self.table_snapshot_loc.as_str()).await?;
         let segment_num = snapshot.segments.len();
         let segment_locs = snapshot.segments;
 
@@ -72,8 +71,7 @@ impl MinMaxIndex {
 
         let res = futures::stream::iter(segment_locs)
             .map(|seg_loc| async {
-                let segment_info =
-                    common_dal::read_obj::<SegmentInfo>(self.da.clone(), seg_loc).await?;
+                let segment_info: SegmentInfo = io::read_obj(self.da.as_ref(), seg_loc).await?;
                 Self::filter_segment(segment_info, &block_pred)
             })
             // configuration of the max size of buffered futures
@@ -105,13 +103,13 @@ impl MinMaxIndex {
     }
 }
 
-pub async fn apply_range_filter(
+pub async fn apply_block_pruning(
     table_snapshot: &TableSnapshot,
     schema: DataSchemaRef,
-    push_down: Option<Extras>,
+    push_down: &Option<Extras>,
     data_accessor: Arc<dyn DataAccessor>,
 ) -> Result<Vec<BlockMeta>> {
-    MinMaxIndex::new(table_snapshot, data_accessor)
+    BlockPruner::new(table_snapshot, data_accessor)
         .apply(schema, push_down)
         .await
 }

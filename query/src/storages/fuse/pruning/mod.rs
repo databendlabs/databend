@@ -14,8 +14,8 @@
 //
 
 #[cfg(test)]
-mod min_max_test;
+mod block_pruner_test;
 
-mod min_max;
+mod block_pruner;
 
-pub use min_max::apply_range_filter;
+pub use block_pruner::apply_block_pruning;

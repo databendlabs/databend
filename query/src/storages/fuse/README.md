@@ -53,7 +53,7 @@ t this stage, we rely on background tasks to merge the data properly.
 
   In case of conflicts, "Coordinator" need to re-try the transaction.(OCC, Table level, READ-COMMITTED)
 
-  For this iteration, the "Coordinator" is the `Table` itself.
+  For this iteration, the "Coordinator" is the interpreter which execute the statement.
 
 
 **Scan Flow:**
@@ -65,5 +65,5 @@ t this stage, we rely on background tasks to merge the data properly.
 
 - `Table::read`
 
-  Prunes columns/roles by using the plan criteria, and statistics/index insides the parquet file.
+  Prunes columns/rows by using the plan criteria, and statistics/index insides the parquet file.
 

@@ -13,13 +13,15 @@
 //  limitations under the License.
 //
 
-#[cfg(test)]
-mod accumulator_test;
+use common_dal::DataAccessor;
+use common_exception::Result;
+use serde::de::DeserializeOwned;
 
-mod accumulator;
-mod reducers;
-
-pub use accumulator::PartiallyAccumulated;
-pub use accumulator::StatisticsAccumulator;
-pub use reducers::merge_statistics;
-pub use reducers::reduce_block_stats;
+pub async fn read_obj<T: DeserializeOwned>(
+    da: &dyn DataAccessor,
+    loc: impl AsRef<str>,
+) -> Result<T> {
+    let bytes = da.read(loc.as_ref()).await?;
+    let r = serde_json::from_slice::<T>(&bytes)?;
+    Ok(r)
+}

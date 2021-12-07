@@ -20,18 +20,17 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
-use common_exception::ErrorCode;
 
 use crate::storages::fuse::statistics::accumulator;
-use crate::storages::fuse::statistics::block_meta_acc;
-use crate::storages::fuse::statistics::util;
+use crate::storages::fuse::statistics::reducers;
+use crate::storages::fuse::statistics::StatisticsAccumulator;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[test]
 fn test_ft_stats_block_stats() -> common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
     let block = DataBlock::create_by_array(schema, vec![Series::new(vec![1, 2, 3])]);
-    let r = util::block_stats(&block)?;
+    let r = StatisticsAccumulator::acc_columns(&block)?;
     assert_eq!(1, r.len());
     let col_stats = r.get(&0).unwrap();
     assert_eq!(col_stats.min, DataValue::Int32(Some(1)));
@@ -45,9 +44,9 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
     let col_stats = blocks
         .iter()
-        .map(|b| util::block_stats(&b.clone().unwrap()))
+        .map(|b| StatisticsAccumulator::acc_columns(&b.clone().unwrap()))
         .collect::<common_exception::Result<Vec<_>>>()?;
-    let r = util::reduce_block_stats(&col_stats, &schema);
+    let r = reducers::reduce_block_stats(&col_stats, &schema);
     assert!(r.is_ok());
     let r = r.unwrap();
     assert_eq!(1, r.len());
@@ -61,14 +60,11 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
 fn test_ft_stats_accumulator() -> common_exception::Result<()> {
     let blocks = TestFixture::gen_block_stream(10, 1);
     let mut stats_acc = accumulator::StatisticsAccumulator::new();
-    let mut meta_acc = block_meta_acc::BlockMetaAccumulator::new();
-    blocks.iter().try_for_each(|item| {
-        let item = item.clone().unwrap();
-        stats_acc.acc(&item)?;
-        meta_acc.acc(1, "".to_owned(), &mut stats_acc);
-        Ok::<_, ErrorCode>(())
-    })?;
-    assert_eq!(10, stats_acc.blocks_stats.len());
+    for item in blocks {
+        let block_acc = stats_acc.begin(&item?)?;
+        stats_acc = block_acc.end(1, "".to_owned());
+    }
+    assert_eq!(10, stats_acc.blocks_statistics.len());
     // TODO more cases here pls
     Ok(())
 }

@@ -21,7 +21,7 @@ use common_streams::SendableDataBlockStream;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io;
-use crate::storages::fuse::io::BlockAppender;
+use crate::storages::fuse::io::BlockStreamWriter;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD;
@@ -43,7 +43,7 @@ impl FuseTable {
         );
 
         let da = ctx.get_data_accessor()?;
-        let segments = BlockAppender::append_blocks(
+        let segments = BlockStreamWriter::write_block_stream(
             da.clone(),
             stream,
             self.table_info.schema().as_ref(),

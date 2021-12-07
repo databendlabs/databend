@@ -17,60 +17,13 @@ use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
-use common_datablocks::DataBlock;
-use common_datavalues::columns::DataColumn;
 use common_datavalues::DataSchema;
-use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::storages::fuse::meta::ColumnId;
-use crate::storages::fuse::meta::Stats;
-use crate::storages::fuse::operations::AppendOperationLogEntry;
+use crate::storages::fuse::meta::Statistics;
 use crate::storages::index::BlockStatistics;
 use crate::storages::index::ColumnStatistics;
-
-pub fn block_stats(data_block: &DataBlock) -> Result<BlockStatistics> {
-    // NOTE:
-    // column id is FAKED, this is OK as long as table schema is NOT changed (which is not realistic)
-    // we should extend DataField with column_id ...
-    (0..)
-        .into_iter()
-        .zip(data_block.columns().iter())
-        .map(|(idx, col)| {
-            let min = match col {
-                DataColumn::Array(s) => s.min(),
-                DataColumn::Constant(v, _) => Ok(v.clone()),
-            }?;
-
-            let max = match col {
-                DataColumn::Array(s) => s.max(),
-                DataColumn::Constant(v, _) => Ok(v.clone()),
-            }?;
-
-            let null_count = match col {
-                DataColumn::Array(s) => s.null_count(),
-                DataColumn::Constant(v, _) => {
-                    if v.is_null() {
-                        1
-                    } else {
-                        0
-                    }
-                }
-            } as u64;
-
-            let in_memory_size = col.get_array_memory_size() as u64;
-
-            let col_stats = ColumnStatistics {
-                min,
-                max,
-                null_count,
-                in_memory_size,
-            };
-
-            Ok((idx, col_stats))
-        })
-        .collect()
-}
 
 pub fn reduce_block_stats<T: Borrow<BlockStatistics>>(
     stats: &[T],
@@ -139,8 +92,8 @@ pub fn reduce_block_stats<T: Borrow<BlockStatistics>>(
         })
 }
 
-pub fn merge_stats(schema: &DataSchema, l: &Stats, r: &Stats) -> Result<Stats> {
-    let s = Stats {
+pub fn merge_statistics(schema: &DataSchema, l: &Statistics, r: &Statistics) -> Result<Statistics> {
+    let s = Statistics {
         row_count: l.row_count + r.row_count,
         block_count: l.block_count + r.block_count,
         uncompressed_byte_size: l.uncompressed_byte_size + r.uncompressed_byte_size,
@@ -148,29 +101,4 @@ pub fn merge_stats(schema: &DataSchema, l: &Stats, r: &Stats) -> Result<Stats> {
         col_stats: reduce_block_stats(&[&l.col_stats, &r.col_stats], schema)?,
     };
     Ok(s)
-}
-
-pub fn merge_append_operations(
-    schema: &DataSchema,
-    append_log_entries: Vec<AppendOperationLogEntry>,
-) -> Result<(Vec<String>, Stats)> {
-    let (s, seg_locs) = append_log_entries.iter().try_fold(
-        (
-            Stats::default(),
-            Vec::with_capacity(append_log_entries.len()),
-        ),
-        |(mut acc, mut seg_acc), log_entry| {
-            let loc = &log_entry.segment_location;
-            let stats = &log_entry.segment_info.summary;
-            acc.row_count += stats.row_count;
-            acc.block_count += stats.block_count;
-            acc.uncompressed_byte_size += stats.uncompressed_byte_size;
-            acc.compressed_byte_size += stats.compressed_byte_size;
-            acc.col_stats = reduce_block_stats(&[&acc.col_stats, &stats.col_stats], schema)?;
-            seg_acc.push(loc.clone());
-            Ok::<_, ErrorCode>((acc, seg_acc))
-        },
-    )?;
-
-    Ok((seg_locs, s))
 }

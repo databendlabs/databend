@@ -23,5 +23,5 @@ pub use segment::SegmentInfo;
 pub use snapshot::ColumnId;
 pub use snapshot::Location;
 pub use snapshot::SnapshotId;
-pub use snapshot::Stats;
+pub use snapshot::Statistics;
 pub use snapshot::TableSnapshot;

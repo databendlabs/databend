@@ -14,14 +14,12 @@
 
 use std::io::Read;
 use std::io::Seek;
-use std::sync::Arc;
 
 use common_exception::Result;
 use futures::stream::Stream;
 use futures::AsyncRead;
 use futures::AsyncReadExt;
 use futures::AsyncSeek;
-use serde::de::DeserializeOwned;
 
 pub type Bytes = Vec<u8>;
 
@@ -59,10 +57,4 @@ pub trait DataAccessor: Send + Sync {
         input_stream.read_to_end(&mut buffer).await?;
         Ok(buffer)
     }
-}
-
-pub async fn read_obj<T: DeserializeOwned>(da: Arc<dyn DataAccessor>, loc: String) -> Result<T> {
-    let bytes = da.read(&loc).await?;
-    let r = serde_json::from_slice::<T>(&bytes)?;
-    Ok(r)
 }
