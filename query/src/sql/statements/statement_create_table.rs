@@ -25,16 +25,15 @@ use common_planners::CreateTablePlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::ColumnDef;
+use sqlparser::ast::ColumnOption;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::SqlOption;
-use   sqlparser::ast::ColumnOption;
 
+use super::analyzer_expr::ExpressionAnalyzer;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::SQLCommon;
-
-use super::analyzer_expr::ExpressionAnalyzer;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfCreateTable {
@@ -97,9 +96,9 @@ impl DfCreateTable {
             .collect()
     }
 
-    async fn table_meta(&self,ctx:  Arc<QueryContext>) -> Result<TableMeta> {
+    async fn table_meta(&self, ctx: Arc<QueryContext>) -> Result<TableMeta> {
         let engine = self.engine.clone();
-        let schema = self.table_schema(ctx)?;
+        let schema = self.table_schema(ctx).await?;
         let options = self.table_options();
         Ok(TableMeta {
             schema,
@@ -108,25 +107,31 @@ impl DfCreateTable {
         })
     }
 
-     fn table_schema(&self, ctx: Arc<QueryContext>) -> Result<DataSchemaRef> {
+    async fn table_schema(&self, ctx: Arc<QueryContext>) -> Result<DataSchemaRef> {
         let expr_analyzer = ExpressionAnalyzer::create(ctx);
-        Ok(DataSchemaRefExt::create(
-            self.columns
-                .iter()
-                .map(|column| {
-                   let mut nullable = true;
-                    for opt in column.options {
-                        match opt.option {
-                            ColumnOption::NotNull => {
-                                nullable = false;
-                            },
-                            _ => {}
-                        }
+        let mut fields = Vec::with_capacity(self.columns.len());
+
+        for column in &self.columns {
+            let mut nullable = true;
+            let mut default_expr = None;
+            for opt in &column.options {
+                match &opt.option {
+                    ColumnOption::NotNull => {
+                        nullable = false;
                     }
-                    SQLCommon::make_data_type(&column.data_type)
-                    .map(|data_type| DataField::new(&column.name.value, data_type, nullable))
-                })
-                .collect::<Result<Vec<DataField>>>()?,
-        ))
+                    ColumnOption::Default(expr) => {
+                        let expr = expr_analyzer.analyze(expr).await?;
+                        default_expr = Some(serde_json::to_vec(&expr)?);
+                    }
+                    _ => {}
+                }
+            }
+            let field = SQLCommon::make_data_type(&column.data_type).map(|data_type| {
+                DataField::new(&column.name.value, data_type, nullable)
+                    .with_default_expr(default_expr)
+            })?;
+            fields.push(field);
+        }
+        Ok(DataSchemaRefExt::create(fields))
     }
 }

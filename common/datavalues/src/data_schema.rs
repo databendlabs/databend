@@ -56,6 +56,16 @@ impl DataSchema {
         &self.fields
     }
 
+    #[inline]
+    pub fn has_field(&self, name: &str) -> bool {
+        for i in 0..self.fields.len() {
+            if self.fields[i].name() == name {
+                return true;
+            }
+        }
+        false
+    }
+
     pub fn fields_map(&self) -> BTreeMap<usize, DataField> {
         let x = self.fields().iter().cloned().enumerate();
         x.collect::<BTreeMap<_, _>>()

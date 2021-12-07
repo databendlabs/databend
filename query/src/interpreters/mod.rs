@@ -75,6 +75,7 @@ mod interpreter_user_alter;
 mod interpreter_user_create;
 mod interpreter_user_drop;
 mod plan_schedulers;
+mod stream_addon;
 
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
@@ -100,3 +101,4 @@ pub use interpreter_user_alter::AlterUserInterpreter;
 pub use interpreter_user_create::CreatUserInterpreter;
 pub use interpreter_user_drop::DropUserInterpreter;
 pub use plan_schedulers::PlanScheduler;
+pub use stream_addon::AddOnStream;

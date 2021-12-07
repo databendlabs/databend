@@ -20,21 +20,14 @@ use common_macros::MallocSizeOf;
 use crate::DataType;
 
 #[derive(
-    serde::Serialize,
-    serde::Deserialize,
-    Clone,
-    Debug,
-    PartialEq,
-    Hash,
-    Eq,
-    PartialOrd,
-    Ord,
-    MallocSizeOf,
+    serde::Serialize, serde::Deserialize, Clone, PartialEq, Hash, Eq, PartialOrd, Ord, MallocSizeOf,
 )]
 pub struct DataField {
     name: String,
     data_type: DataType,
     nullable: bool,
+    /// default_expr is serialized representation from PlanExpression
+    default_expr: Option<Vec<u8>>,
 }
 
 impl DataField {
@@ -43,11 +36,21 @@ impl DataField {
             name: name.to_string(),
             data_type,
             nullable,
+            default_expr: None,
         }
+    }
+
+    pub fn with_default_expr(mut self, default_expr: Option<Vec<u8>>) -> Self {
+        self.default_expr = default_expr;
+        self
     }
 
     pub fn name(&self) -> &String {
         &self.name
+    }
+
+    pub fn default_expr(&self) -> &Option<Vec<u8>> {
+        &self.default_expr
     }
 
     pub fn data_type(&self) -> &DataType {
@@ -120,6 +123,23 @@ impl From<&ArrowField> for DataField {
             }
         }
         DataField::new(f.name(), dt, f.is_nullable())
+    }
+}
+
+impl std::fmt::Debug for DataField {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut debug_struct = f.debug_struct("DataField");
+        debug_struct
+            .field("name", &self.name)
+            .field("data_type", &self.data_type)
+            .field("nullable", &self.nullable);
+        if let Some(ref default_expr) = self.default_expr {
+            debug_struct.field(
+                "default_expr",
+                &String::from_utf8(default_expr.to_owned()).unwrap(),
+            );
+        }
+        debug_struct.finish()
     }
 }
 

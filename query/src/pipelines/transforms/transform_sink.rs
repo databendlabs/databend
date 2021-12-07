@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_functions::scalars::CastFunction;
 use common_meta_types::TableInfo;
@@ -23,6 +24,7 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
 use crate::catalogs::Catalog;
+use crate::interpreters::AddOnStream;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
 use crate::sessions::QueryContext;
@@ -32,15 +34,22 @@ pub struct SinkTransform {
     table_info: TableInfo,
     input: Arc<dyn Processor>,
     cast_needed: bool,
+    input_schema: DataSchemaRef,
 }
 
 impl SinkTransform {
-    pub fn create(ctx: Arc<QueryContext>, table_info: TableInfo, cast_needed: bool) -> Self {
+    pub fn create(
+        ctx: Arc<QueryContext>,
+        table_info: TableInfo,
+        cast_needed: bool,
+        input_schema: DataSchemaRef,
+    ) -> Self {
         Self {
             ctx,
             table_info,
             input: Arc::new(EmptyProcessor::create()),
             cast_needed,
+            input_schema,
         }
     }
     fn table_info(&self) -> &TableInfo {
@@ -82,8 +91,20 @@ impl Processor for SinkTransform {
                     CastFunction::create("cast".to_string(), field.data_type().clone())?;
                 functions.push(cast_function);
             }
-            upstream = Box::pin(CastStream::try_create(upstream, output_schema, functions)?);
+            upstream = Box::pin(CastStream::try_create(
+                upstream,
+                output_schema.clone(),
+                functions,
+            )?);
         };
+
+        if self.input_schema != self.table_info.schema() {
+            upstream = Box::pin(AddOnStream::try_create(
+                upstream,
+                output_schema,
+                self.table_info.schema(),
+            )?)
+        }
 
         tbl.append_data(self.ctx.clone(), upstream).await
     }

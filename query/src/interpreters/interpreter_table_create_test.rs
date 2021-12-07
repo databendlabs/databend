@@ -26,7 +26,7 @@ async fn test_create_table_interpreter() -> Result<()> {
 
     static TEST_CREATE_QUERY: &str = "\
         CREATE TABLE default.a(\
-            a bigint, b int, c varchar(255), d smallint, e Date\
+            a bigint not null default 3, b int default a + 3, c varchar(255), d smallint, e Date\
         ) Engine = Null\
     ";
 
@@ -34,6 +34,20 @@ async fn test_create_table_interpreter() -> Result<()> {
         let interpreter = CreateTableInterpreter::try_create(ctx, plan.clone())?;
         let mut stream = interpreter.execute(None).await?;
         while let Some(_block) = stream.next().await {}
+
+        let schema = plan.schema();
+
+        let field_a = schema.field_with_name("a").unwrap();
+        assert_eq!(
+            format!("{:?}", field_a),
+            r#"DataField { name: "a", data_type: Int64, nullable: false, default_expr: "{\"Literal\":{\"value\":{\"UInt8\":3},\"column_name\":null,\"data_type\":\"UInt8\"}}" }"#
+        );
+
+        let field_b = schema.field_with_name("b").unwrap();
+        assert_eq!(
+            format!("{:?}", field_b),
+            r#"DataField { name: "b", data_type: Int32, nullable: true, default_expr: "{\"BinaryExpression\":{\"left\":{\"Column\":\"a\"},\"op\":\"+\",\"right\":{\"Literal\":{\"value\":{\"UInt8\":3},\"column_name\":null,\"data_type\":\"UInt8\"}}}}" }"#
+        );
     } else {
         panic!()
     }

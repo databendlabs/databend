@@ -322,6 +322,33 @@ impl DataValue {
             ))),
         }
     }
+
+    pub fn new_from_data_type(data_type: &DataType, nullable: bool) -> Self {
+        if nullable {
+            return data_type.into();
+        }
+        match data_type {
+            DataType::Null => DataValue::Null,
+            DataType::Boolean => DataValue::Boolean(Some(false)),
+            DataType::UInt8 => DataValue::UInt8(Some(0)),
+            DataType::UInt16 => DataValue::UInt16(Some(0)),
+            DataType::UInt32 => DataValue::UInt32(Some(0)),
+            DataType::UInt64 => DataValue::UInt64(Some(0)),
+            DataType::Int8 => DataValue::Int8(Some(0)),
+            DataType::Int16 => DataValue::Int16(Some(0)),
+            DataType::Int32 => DataValue::Int32(Some(0)),
+            DataType::Int64 => DataValue::Int64(Some(0)),
+            DataType::Float32 => DataValue::Float32(Some(0.0)),
+            DataType::Float64 => DataValue::Float64(Some(0.0)),
+            DataType::Date16 => DataValue::UInt16(Some(0)),
+            DataType::Date32 => DataValue::Int32(Some(0)),
+            DataType::DateTime32(_) => DataValue::UInt32(Some(0)),
+            DataType::Interval(_) => DataValue::Int64(Some(0)),
+            DataType::List(f) => DataValue::List(Some(vec![]), f.data_type().clone()),
+            DataType::Struct(_) => DataValue::Struct(vec![]),
+            DataType::String => DataValue::String(Some(vec![])),
+        }
+    }
 }
 
 // Did not use std::convert:TryFrom
