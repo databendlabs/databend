@@ -15,41 +15,25 @@
 use common_base::tokio;
 use common_exception::Result;
 use common_planners::*;
+use databend_query::interpreters::*;
+use databend_query::sql::*;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
 
-use crate::interpreters::*;
-use crate::tests::parse_query;
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_setting_interpreter() -> Result<()> {
+async fn test_create_user_interpreter() -> Result<()> {
+    common_tracing::init_default_ut_tracing();
+
     let ctx = crate::tests::create_query_context()?;
 
-    if let PlanNode::SetVariable(plan) = parse_query("SET max_block_size=1", &ctx)? {
-        let executor = SettingInterpreter::try_create(ctx, plan)?;
-        assert_eq!(executor.name(), "SettingInterpreter");
-
+    static TEST_QUERY: &str = "CREATE USER 'test'@'localhost' IDENTIFIED BY 'password'";
+    if let PlanNode::CreateUser(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
+        let executor = CreatUserInterpreter::try_create(ctx, plan.clone())?;
+        assert_eq!(executor.name(), "CreateUserInterpreter");
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
     } else {
         panic!()
-    }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_setting_interpreter_error() -> Result<()> {
-    let ctx = crate::tests::create_query_context()?;
-
-    if let PlanNode::SetVariable(plan) = parse_query("SET xx = 1", &ctx)? {
-        let executor = SettingInterpreter::try_create(ctx, plan)?;
-        if let Err(e) = executor.execute(None).await {
-            let expect = "Code: 20, displayText = Unknown variable: \"xx\".";
-            assert_eq!(expect, format!("{}", e));
-        } else {
-            panic!();
-        }
     }
 
     Ok(())

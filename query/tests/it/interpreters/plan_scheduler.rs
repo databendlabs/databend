@@ -19,9 +19,10 @@ use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::*;
 
-use crate::api::FlightAction;
-use crate::interpreters::PlanScheduler;
-use crate::sessions::QueryContext;
+use databend_query::api::FlightAction;
+use databend_query::interpreters::PlanScheduler;
+use databend_query::sessions::QueryContext;
+
 use crate::tests::create_query_context_with_cluster;
 use crate::tests::ClusterDescriptor;
 

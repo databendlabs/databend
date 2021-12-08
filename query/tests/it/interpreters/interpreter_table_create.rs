@@ -15,9 +15,9 @@
 use common_base::tokio;
 use common_exception::Result;
 use common_planners::*;
+use databend_query::interpreters::*;
 use futures::stream::StreamExt;
 
-use crate::interpreters::*;
 use crate::tests::parse_query;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

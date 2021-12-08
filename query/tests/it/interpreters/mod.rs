@@ -12,14 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[allow(clippy::needless_range_loop)]
-mod plan_scheduler;
-mod plan_scheduler_error;
-mod plan_scheduler_query;
-mod plan_scheduler_stream;
-
-pub use plan_scheduler::PlanScheduler;
-pub use plan_scheduler_error::handle_error;
-pub use plan_scheduler_query::schedule_query;
-pub use plan_scheduler_stream::Scheduled;
-pub use plan_scheduler_stream::ScheduledStream;
+mod interpreter_database_create;
+mod interpreter_database_drop;
+mod interpreter_describe_table;
+mod interpreter_explain;
+mod interpreter_grant_privilege;
+mod interpreter_insert;
+mod interpreter_interceptor;
+mod interpreter_select;
+mod interpreter_setting;
+mod interpreter_show_create_table;
+mod interpreter_stage_create;
+mod interpreter_table_create;
+mod interpreter_table_drop;
+mod interpreter_truncate_table;
+mod interpreter_use_database;
+mod interpreter_user_alter;
+mod interpreter_user_create;
+mod interpreter_user_drop;

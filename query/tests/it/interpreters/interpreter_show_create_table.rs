@@ -15,14 +15,14 @@
 use common_base::tokio;
 use common_exception::Result;
 use common_planners::*;
+use databend_query::interpreters::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
-use crate::interpreters::*;
 use crate::tests::parse_query;
 
 #[tokio::test]
-async fn test_drop_table_interpreter() -> Result<()> {
+async fn interpreter_show_create_table_test() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
     // Create table.
@@ -30,7 +30,7 @@ async fn test_drop_table_interpreter() -> Result<()> {
         static TEST_CREATE_QUERY: &str = "\
             CREATE TABLE default.a(\
                 a bigint, b int, c varchar(255), d smallint, e Date\
-            ) Engine = Null\
+            ) Engine = Null COMMENT = 'test create'\
         ";
 
         if let PlanNode::CreateTable(plan) = parse_query(TEST_CREATE_QUERY, &ctx)? {
@@ -39,14 +39,26 @@ async fn test_drop_table_interpreter() -> Result<()> {
         }
     }
 
-    // Drop table.
+    // Show create table.
     {
-        if let PlanNode::DropTable(plan) = parse_query("DROP TABLE a", &ctx)? {
-            let executor = DropTableInterpreter::try_create(ctx.clone(), plan.clone())?;
-            assert_eq!(executor.name(), "DropTableInterpreter");
+        if let PlanNode::ShowCreateTable(plan) = parse_query("SHOW CREATE TABLE a", &ctx)? {
+            let executor = ShowCreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
+            assert_eq!(executor.name(), "ShowCreateTableInterpreter");
             let stream = executor.execute(None).await?;
             let result = stream.try_collect::<Vec<_>>().await?;
-            let expected = vec!["++", "++"];
+            let expected = vec![
+                "+-------+-------------------------------------+",
+                "| Table | Create Table                        |",
+                "+-------+-------------------------------------+",
+                "| a     | CREATE TABLE `a` (                  |",
+                "|       |   `a` Int64,                        |",
+                "|       |   `b` Int32,                        |",
+                "|       |   `c` String,                       |",
+                "|       |   `d` Int16,                        |",
+                "|       |   `e` Date16,                       |",
+                "|       | ) ENGINE=Null COMMENT='test create' |",
+                "+-------+-------------------------------------+",
+            ];
             common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
         } else {
             panic!()

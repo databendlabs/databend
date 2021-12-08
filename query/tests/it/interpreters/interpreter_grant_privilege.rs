@@ -20,11 +20,10 @@ use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilege;
 use common_planners::*;
+use databend_query::interpreters::*;
+use databend_query::sql::PlanParser;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
-
-use crate::interpreters::*;
-use crate::sql::PlanParser;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_grant_privilege_interpreter() -> Result<()> {

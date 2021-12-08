@@ -21,8 +21,8 @@ use common_planners::*;
 use futures::stream::StreamExt;
 use pretty_assertions::assert_eq;
 
-use crate::interpreters::*;
-use crate::sql::PlanParser;
+use databend_query::interpreters::*;
+use databend_query::sql::PlanParser;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_revoke_privilege_interpreter() -> Result<()> {

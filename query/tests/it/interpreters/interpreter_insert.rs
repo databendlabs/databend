@@ -15,10 +15,9 @@
 use common_base::tokio;
 use common_exception::Result;
 use common_planners::*;
+use databend_query::interpreters::*;
+use databend_query::sql::*;
 use futures::TryStreamExt;
-
-use crate::interpreters::*;
-use crate::sql::*;
 
 #[tokio::test]
 async fn test_insert_into_interpreter() -> Result<()> {
