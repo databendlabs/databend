@@ -25,8 +25,8 @@ use common_planners::Partitions;
 use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_planners::TruncateTablePlan;
-use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use futures::StreamExt;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io;
@@ -85,16 +85,13 @@ impl Table for FuseTable {
         ctx: Arc<QueryContext>,
         stream: SendableDataBlockStream,
     ) -> Result<SendableDataBlockStream> {
-        let log = self.append_trunks(ctx, stream).await?;
-        let entries = log
-            .into_iter()
-            .map(DataBlock::try_from)
-            .collect::<Result<Vec<_>>>()?;
-        Ok(Box::pin(DataBlockStream::create(
-            AppendOperationLogEntry::schema(),
-            None,
-            entries,
-        )))
+        let log_entry_stream = self.append_trunks(ctx, stream).await?;
+        let data_block_stream =
+            log_entry_stream.map(|append_log_entry_res| match append_log_entry_res {
+                Ok(log_entry) => DataBlock::try_from(log_entry),
+                Err(err) => Err(err),
+            });
+        Ok(Box::pin(data_block_stream))
     }
 
     async fn commit(

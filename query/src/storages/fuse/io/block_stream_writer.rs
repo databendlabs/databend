@@ -15,6 +15,7 @@
 use std::cmp::Reverse;
 use std::sync::Arc;
 
+use async_stream::stream;
 use common_dal::DataAccessor;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchema;
@@ -30,54 +31,72 @@ use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::Statistics;
 use crate::storages::fuse::statistics::StatisticsAccumulator;
 
+pub type SegmentInfoStream =
+    std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<SegmentInfo>> + Send>>;
+
 pub struct BlockStreamWriter;
 
 impl BlockStreamWriter {
     pub async fn write_block_stream(
         data_accessor: Arc<dyn DataAccessor>,
         stream: SendableDataBlockStream,
-        data_schema: &DataSchema,
+        data_schema: Arc<DataSchema>,
         chunk_block_num: usize,
         block_size_threshold: usize,
-    ) -> Result<Vec<SegmentInfo>> {
-        // filter out empty blocks
-        let stream = stream.try_filter(|block| std::future::ready(block.num_rows() > 0));
+    ) -> SegmentInfoStream {
+        let s = stream! {
+            // filter out empty blocks
+            let stream = stream.try_filter(|block| std::future::ready(block.num_rows() > 0));
 
-        // chunks by chunk_block_num
-        let mut stream = stream.try_chunks(chunk_block_num);
+            // chunks by chunk_block_num
+            let mut stream = stream.try_chunks(chunk_block_num);
 
-        let mut segments = vec![];
-        // accumulate the stats and save the blocks
-        while let Some(item) = stream.next().await {
-            let blocks = item.map_err(|TryChunksError(_, e)| e)?;
-            // re-shape the blocks
-            let blocks = Self::reshape_blocks(blocks, block_size_threshold)?;
-            let mut acc = StatisticsAccumulator::new();
-
-            for block in blocks.into_iter() {
-                let partial_acc = acc.begin(&block)?;
-                let schema = block.schema().to_arrow();
-                let location = gen_block_location();
-                let file_size =
-                    block_writer::write_block(&schema, block, &data_accessor, &location).await?;
-                acc = partial_acc.end(file_size, location);
+            // accumulate the stats and save the blocks
+            while let Some(item) = stream.next().await {
+                match item.map_err(|TryChunksError(_, e)| e) {
+                    Err(e) => yield(Err(e)),
+                    Ok(blocks) => {
+                        let seg = Self::generate_segment(data_accessor.clone(), data_schema.clone(), blocks, block_size_threshold).await;
+                        yield(seg);
+                    }
+                }
             }
+        };
+        Box::pin(s)
+    }
 
-            // summary and generate a segment
-            let summary = acc.summary(data_schema)?;
-            let seg = SegmentInfo {
-                blocks: acc.blocks_metas,
-                summary: Statistics {
-                    row_count: acc.summary_row_count,
-                    block_count: acc.summary_block_count,
-                    uncompressed_byte_size: acc.in_memory_size,
-                    compressed_byte_size: acc.file_size,
-                    col_stats: summary,
-                },
-            };
-            segments.push(seg)
+    pub async fn generate_segment(
+        data_accessor: Arc<dyn DataAccessor>,
+        data_schema: Arc<DataSchema>,
+        blocks: Vec<DataBlock>,
+        block_size_threshold: usize,
+    ) -> Result<SegmentInfo> {
+        // re-shape the blocks
+        let blocks = Self::reshape_blocks(blocks, block_size_threshold)?;
+        let mut acc = StatisticsAccumulator::new();
+
+        for block in blocks.into_iter() {
+            let partial_acc = acc.begin(&block)?;
+            let schema = block.schema().to_arrow();
+            let location = gen_block_location();
+            let file_size =
+                block_writer::write_block(&schema, block, &data_accessor, &location).await?;
+            acc = partial_acc.end(file_size, location);
         }
-        Ok(segments)
+
+        // summary and generate a segment
+        let summary = acc.summary(data_schema.as_ref())?;
+        let seg = SegmentInfo {
+            blocks: acc.blocks_metas,
+            summary: Statistics {
+                row_count: acc.summary_row_count,
+                block_count: acc.summary_block_count,
+                uncompressed_byte_size: acc.in_memory_size,
+                compressed_byte_size: acc.file_size,
+                col_stats: summary,
+            },
+        };
+        Ok(seg)
     }
 
     // A simple strategy of merging small blocks into larger ones:
