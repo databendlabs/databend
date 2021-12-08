@@ -19,9 +19,9 @@ use common_base::tokio;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
+use databend_query::api::FlightAction;
+use databend_query::api::ShuffleAction;
 
-use crate::api::rpc::flight_actions::FlightAction;
-use crate::api::ShuffleAction;
 use crate::tests::create_query_context;
 use crate::tests::parse_query;
 

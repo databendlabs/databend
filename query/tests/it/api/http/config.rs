@@ -15,31 +15,34 @@
  *
  */
 use common_base::tokio;
+use databend_query::api::http::v1::config::config_handler;
+use databend_query::configs::Config;
 use poem::get;
 use poem::http::Method;
 use poem::http::StatusCode;
 use poem::http::Uri;
 use poem::Endpoint;
+use poem::EndpointExt;
 use poem::Request;
 use poem::Route;
-use pretty_assertions::assert_eq;
+use pretty_assertions::assert_eq; // for `app.oneshot()`
 
 #[tokio::test]
-async fn test_health() -> common_exception::Result<()> {
-    use crate::api::http::v1::health::health_handler;
+async fn test_config() -> common_exception::Result<()> {
+    let conf = Config::default();
+    let cluster_router = Route::new()
+        .at("/v1/config", get(config_handler))
+        .data(conf.clone());
 
-    let cluster_router = Route::new().at("/v1/health", get(health_handler));
-    // health check
     let response = cluster_router
         .call(
             Request::builder()
-                .uri(Uri::from_static("/v1/health"))
+                .uri(Uri::from_static("/v1/config"))
                 .method(Method::GET)
                 .finish(),
         )
         .await;
 
     assert_eq!(response.status(), StatusCode::OK);
-
     Ok(())
 }

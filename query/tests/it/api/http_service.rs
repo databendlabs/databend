@@ -12,17 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//use std::net::SocketAddr;
-//use std::sync::Arc;
-//
 use std::fs::File;
 use std::io::Read;
 
 use common_base::tokio;
 use common_exception::Result;
+use databend_query::api::HttpService;
+use databend_query::servers::Server;
 
-use crate::api::HttpService;
-use crate::servers::Server;
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;

@@ -17,13 +17,13 @@ use common_datablocks::assert_blocks_eq;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::Expression;
+use databend_query::api::DatabendQueryFlightDispatcher;
+use databend_query::api::FlightAction;
+use databend_query::api::ShuffleAction;
+use databend_query::api::StreamTicket;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
-use crate::api::rpc::flight_tickets::StreamTicket;
-use crate::api::rpc::DatabendQueryFlightDispatcher;
-use crate::api::FlightAction;
-use crate::api::ShuffleAction;
 use crate::tests::create_query_context;
 use crate::tests::parse_query;
 use crate::tests::SessionManagerBuilder;

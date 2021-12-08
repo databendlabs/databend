@@ -34,9 +34,9 @@ use crate::servers::Server as DatabendQueryServer;
 use crate::sessions::SessionManager;
 
 pub struct RpcService {
-    pub(crate) sessions: Arc<SessionManager>,
-    pub(crate) abort_notify: Arc<Notify>,
-    pub(crate) dispatcher: Arc<DatabendQueryFlightDispatcher>,
+    pub sessions: Arc<SessionManager>,
+    pub abort_notify: Arc<Notify>,
+    pub dispatcher: Arc<DatabendQueryFlightDispatcher>,
 }
 
 impl RpcService {

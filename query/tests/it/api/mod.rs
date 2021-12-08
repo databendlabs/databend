@@ -12,13 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod api;
-mod clusters;
-mod common;
-mod configs;
-mod metrics;
-mod servers;
-mod sessions;
-mod table_functions;
-mod tests;
-mod users;
+mod http;
+mod http_service;
+mod rpc;
+mod rpc_service;

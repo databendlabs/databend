@@ -25,11 +25,11 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_flight_rpc::ConnectionFactory;
 use common_flight_rpc::FlightClientTlsConfig;
+use databend_query::api::DatabendQueryFlightDispatcher;
+use databend_query::api::RpcService;
+use databend_query::servers::Server;
 use tokio_stream::wrappers::TcpListenerStream;
 
-use crate::api::rpc::DatabendQueryFlightDispatcher;
-use crate::api::RpcService;
-use crate::servers::Server;
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;
