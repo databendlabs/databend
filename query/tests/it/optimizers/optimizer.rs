@@ -40,40 +40,37 @@ pub fn generate_partitions(workers: u64, total: u64) -> Partitions {
     partitions
 }
 
-#[cfg(test)]
-mod tests {
-    use common_exception::Result;
+use common_exception::Result;
+use databend_query::optimizers::Optimizers;
 
-    use crate::optimizers::Optimizers;
+#[test]
+fn test_literal_false_filter() -> Result<()> {
+    let query = "select * from numbers_mt(10) where 1 + 2 = 2";
+    let ctx = crate::tests::create_query_context()?;
 
-    #[test]
-    fn test_literal_false_filter() -> Result<()> {
-        let query = "select * from numbers_mt(10) where 1 + 2 = 2";
-        let ctx = crate::tests::create_query_context()?;
+    let plan = crate::tests::parse_query(query, &ctx)?;
+    let mut optimizer = Optimizers::without_scatters(ctx);
+    let optimized = optimizer.optimize(&plan)?;
+    let actual = format!("{:?}", optimized);
 
-        let plan = crate::tests::parse_query(query, &ctx)?;
-        let mut optimizer = Optimizers::without_scatters(ctx);
-        let optimized = optimizer.optimize(&plan)?;
-        let actual = format!("{:?}", optimized);
-
-        let expect = "\
+    let expect = "\
         Projection: number:UInt64\
         \n  Filter: false\
         \n    ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0]]";
 
-        assert_eq!(actual, expect);
-        Ok(())
+    assert_eq!(actual, expect);
+    Ok(())
+}
+
+#[test]
+fn test_skip_read_data_source() -> Result<()> {
+    struct Test {
+        name: &'static str,
+        query: &'static str,
+        expect: &'static str,
     }
 
-    #[test]
-    fn test_skip_read_data_source() -> Result<()> {
-        struct Test {
-            name: &'static str,
-            query: &'static str,
-            expect: &'static str,
-        }
-
-        let tests: Vec<Test> = vec![
+    let tests: Vec<Test> = vec![
             Test {
                 name: "Filter with 'where 1 + 2 = 2' should skip the scan",
                 query: "select * from numbers_mt(10) where 1 + 2 = 2",
@@ -104,15 +101,14 @@ mod tests {
             },
         ];
 
-        for test in tests {
-            let ctx = crate::tests::create_query_context()?;
-            let plan = crate::tests::parse_query(test.query, &ctx)?;
-            let mut optimizer = Optimizers::without_scatters(ctx);
+    for test in tests {
+        let ctx = crate::tests::create_query_context()?;
+        let plan = crate::tests::parse_query(test.query, &ctx)?;
+        let mut optimizer = Optimizers::without_scatters(ctx);
 
-            let optimized_plan = optimizer.optimize(&plan)?;
-            let actual = format!("{:?}", optimized_plan);
-            assert_eq!(test.expect, actual, "{:#?}", test.name);
-        }
-        Ok(())
+        let optimized_plan = optimizer.optimize(&plan)?;
+        let actual = format!("{:?}", optimized_plan);
+        assert_eq!(test.expect, actual, "{:#?}", test.name);
     }
+    Ok(())
 }

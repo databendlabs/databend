@@ -12,14 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod api;
-mod clusters;
-mod common;
-mod configs;
-mod metrics;
-mod optimizers;
-mod servers;
-mod sessions;
-mod table_functions;
-mod tests;
-mod users;
+mod optimizer;
+mod optimizer_constant_folding;
+mod optimizer_expression_transform;
+mod optimizer_scatters;
+mod optimizer_statistics_exact;
+mod optimizer_top_n_push_down;
+mod utils;
