@@ -13,20 +13,5 @@
 //  limitations under the License.
 //
 
-#[cfg(test)]
-mod table_test;
-#[cfg(test)]
-mod table_test_fixture;
-
-mod constants;
-mod io;
-mod meta;
-mod operations;
-mod pruning;
-mod statistics;
-mod table;
-mod table_functions;
-
-pub use constants::*;
-pub use table::FuseTable;
-pub use table_functions::HistoriesTable;
+mod func_histories;
+pub use func_histories::HistoriesTable;

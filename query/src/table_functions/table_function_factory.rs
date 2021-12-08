@@ -24,6 +24,7 @@ use common_planners::Expression;
 
 use crate::catalogs::SYS_TBL_FUC_ID_END;
 use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
+use crate::storages::HistoriesTable;
 use crate::table_functions::NumbersTable;
 use crate::table_functions::TableFunction;
 
@@ -91,6 +92,11 @@ impl TableFunctionFactory {
         creators.insert(
             "numbers_local".to_string(),
             (next_id(), number_table_func_creator),
+        );
+
+        creators.insert(
+            "fuse_hist".to_string(),
+            (next_id(), Arc::new(HistoriesTable::create)),
         );
 
         TableFunctionFactory {
