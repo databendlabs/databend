@@ -60,6 +60,7 @@ rpc_tls_query_service_domain_name = \"localhost\"
 table_engine_csv_enabled = false
 table_engine_parquet_enabled = false
 table_engine_memory_enabled = true
+table_engine_github_enabled = true
 wait_timeout_mills = 5000
 max_query_log_size = 10000
 
@@ -124,9 +125,10 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("S3_STORAGE_SECRET_ACCESS_KEY", "us.key");
     std::env::set_var("S3_STORAGE_ENABLE_POD_IAM_POLICY", "true");
     std::env::set_var("S3_STORAGE_BUCKET", "us.bucket");
-    std::env::set_var("TABLE_ENGINE_CSV_ENABLED", "true");
-    std::env::set_var("TABLE_ENGINE_PARQUET_ENABLED", "true");
-    std::env::set_var("TABLE_ENGINE_MEMORY_ENABLED", "true");
+    std::env::set_var("QUERY_TABLE_ENGINE_CSV_ENABLED", "true");
+    std::env::set_var("QUERY_TABLE_ENGINE_PARQUET_ENABLED", "true");
+    std::env::set_var("QUERY_TABLE_ENGINE_MEMORY_ENABLED", "true");
+    std::env::set_var("QUERY_TABLE_ENGINE_GITHUB_ENABLED", "false");
     std::env::remove_var("CONFIG_FILE");
 
     let default = Config::default();
@@ -156,9 +158,10 @@ fn test_env_config() -> Result<()> {
     assert!(configured.storage.s3.enable_pod_iam_policy);
     assert_eq!("us.bucket", configured.storage.s3.bucket);
 
-    assert!(!configured.query.table_engine_csv_enabled);
-    assert!(!configured.query.table_engine_parquet_enabled);
+    assert!(configured.query.table_engine_csv_enabled);
+    assert!(configured.query.table_engine_parquet_enabled);
     assert!(configured.query.table_engine_memory_enabled);
+    assert!(!configured.query.table_engine_github_enabled);
 
     // clean up
     std::env::remove_var("LOG_LEVEL");
@@ -180,9 +183,10 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("S3_STORAGE_SECRET_ACCESS_KEY");
     std::env::remove_var("S3_STORAGE_BUCKET");
     std::env::remove_var("S3_STORAGE_ENABLE_POD_IAM_POLICY");
-    std::env::remove_var("TABLE_ENGINE_CSV_ENABLED");
-    std::env::remove_var("TABLE_ENGINE_PARQUET_ENABLED");
-    std::env::remove_var("TABLE_ENGINE_MEMORY_ENABLED");
+    std::env::remove_var("QUERY_TABLE_ENGINE_CSV_ENABLED");
+    std::env::remove_var("QUERY_TABLE_ENGINE_PARQUET_ENABLED");
+    std::env::remove_var("QUERY_TABLE_ENGINE_MEMORY_ENABLED");
+    std::env::remove_var("QUERY_TABLE_ENGINE_GITHUB_ENABLED");
     Ok(())
 }
 
