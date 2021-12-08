@@ -42,6 +42,11 @@ const QUERY_RPC_TLS_SERVER_KEY: &str = "QUERY_RPC_TLS_SERVER_KEY";
 const QUERY_RPC_TLS_SERVER_ROOT_CA_CERT: &str = "QUERY_RPC_TLS_SERVER_ROOT_CA_CERT";
 const QUERY_RPC_TLS_SERVICE_DOMAIN_NAME: &str = "QUERY_RPC_TLS_SERVICE_DOMAIN_NAME";
 
+const QUERY_TABLE_ENGINE_CSV_ENABLED: &str = "QUERY_TABLE_ENGINE_CSV_ENABLED";
+const QUERY_TABLE_ENGINE_PARQUET_ENABLED: &str = "QUERY_TABLE_ENGINE_PARQUET_ENABLED";
+const QUERY_TABLE_ENGINE_MEMORY_ENABLED: &str = "QUERY_TABLE_ENGINE_MEMORY_ENABLED";
+const QUERY_TABLE_ENGINE_GITHUB_ENABLED: &str = "QUERY_TABLE_ENGINE_GITHUB_ENABLED";
+
 /// Query config group.
 /// serde(default) make the toml de to default working.
 #[derive(
@@ -182,23 +187,33 @@ pub struct QueryConfig {
     #[serde(default)]
     pub rpc_tls_query_service_domain_name: String,
 
-    #[structopt(long, env, help = "Table engine csv enabled")]
+    #[structopt(long, env = QUERY_TABLE_ENGINE_CSV_ENABLED, help = "Table engine csv enabled")]
     #[serde(default)]
     pub table_engine_csv_enabled: bool,
 
-    #[structopt(long, env, help = "Table engine parquet enabled")]
+    #[structopt(long, env = QUERY_TABLE_ENGINE_PARQUET_ENABLED, help = "Table engine parquet enabled")]
     #[serde(default)]
     pub table_engine_parquet_enabled: bool,
 
     #[structopt(
         long,
-        env,
+        env = QUERY_TABLE_ENGINE_MEMORY_ENABLED,
         parse(try_from_str),
         default_value = "true",
         help = "Table engine memory enabled"
     )]
     #[serde(default)]
     pub table_engine_memory_enabled: bool,
+
+    #[structopt(
+        long,
+        env = QUERY_TABLE_ENGINE_GITHUB_ENABLED,
+        parse(try_from_str),
+        default_value = "true",
+        help = "Table engine github enabled"
+    )]
+    #[serde(default)]
+    pub table_engine_github_enabled: bool,
 
     #[structopt(
     long,
@@ -243,6 +258,7 @@ impl QueryConfig {
             table_engine_csv_enabled: false,
             table_engine_parquet_enabled: false,
             table_engine_memory_enabled: true,
+            table_engine_github_enabled: true,
             wait_timeout_mills: 5000,
             max_query_log_size: 10000,
         }
@@ -371,6 +387,34 @@ impl QueryConfig {
             max_query_log_size,
             usize,
             QUERY_MAX_QUERY_LOG_SIZE
+        );
+        env_helper!(
+            mut_config,
+            query,
+            table_engine_csv_enabled,
+            bool,
+            QUERY_TABLE_ENGINE_CSV_ENABLED
+        );
+        env_helper!(
+            mut_config,
+            query,
+            table_engine_parquet_enabled,
+            bool,
+            QUERY_TABLE_ENGINE_PARQUET_ENABLED
+        );
+        env_helper!(
+            mut_config,
+            query,
+            table_engine_memory_enabled,
+            bool,
+            QUERY_TABLE_ENGINE_MEMORY_ENABLED
+        );
+        env_helper!(
+            mut_config,
+            query,
+            table_engine_github_enabled,
+            bool,
+            QUERY_TABLE_ENGINE_GITHUB_ENABLED
         );
     }
 }
