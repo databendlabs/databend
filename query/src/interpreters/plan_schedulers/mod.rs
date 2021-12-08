@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod plan_scheduler_test;
-
 #[allow(clippy::needless_range_loop)]
 mod plan_scheduler;
 mod plan_scheduler_error;

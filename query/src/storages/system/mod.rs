@@ -12,33 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod clusters_table_test;
-#[cfg(test)]
-mod columns_table_test;
-#[cfg(test)]
-mod configs_table_test;
-#[cfg(test)]
-mod contributors_table_test;
-#[cfg(test)]
-mod credits_table_test;
-#[cfg(test)]
-mod databases_table_test;
-#[cfg(test)]
-mod functions_table_test;
-#[cfg(test)]
-mod metrics_table_test;
-#[cfg(test)]
-mod query_log_table_test;
-#[cfg(test)]
-mod settings_table_test;
-#[cfg(test)]
-mod tables_table_test;
-#[cfg(test)]
-mod tracing_table_test;
-#[cfg(test)]
-mod users_table_test;
-
 mod clusters_table;
 mod columns_table;
 mod configs_table;

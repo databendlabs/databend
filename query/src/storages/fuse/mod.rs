@@ -11,19 +11,13 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
-
-#[cfg(test)]
-mod table_test;
-#[cfg(test)]
-mod table_test_fixture;
 
 mod constants;
-mod io;
-mod meta;
+pub mod io;
+pub mod meta;
 mod operations;
-mod pruning;
-mod statistics;
+pub mod pruning;
+pub mod statistics;
 mod table;
 
 pub use constants::*;

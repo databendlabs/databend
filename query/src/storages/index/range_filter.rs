@@ -97,7 +97,7 @@ impl RangeFilter {
 
 /// convert expr to Verifiable Expression
 /// Rules: (section 5.2 of http://vldb.org/pvldb/vol14/p3083-edara.pdf)
-pub(crate) fn build_verifiable_expr(
+pub fn build_verifiable_expr(
     expr: &Expression,
     schema: &DataSchemaRef,
     stat_columns: &mut StatColumns,
@@ -162,7 +162,7 @@ impl fmt::Display for StatType {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct StatColumn {
+pub struct StatColumn {
     column_id: u32,
     column_field: DataField,
     stat_type: StatType,
@@ -251,7 +251,7 @@ impl StatColumn {
     }
 }
 
-pub(crate) type StatColumns = Vec<StatColumn>;
+pub type StatColumns = Vec<StatColumn>;
 
 struct VerifiableExprBuilder<'a> {
     op: &'a str,
@@ -477,7 +477,7 @@ fn is_like_pattern_escape(c: u8) -> bool {
     c == b'%' || c == b'_' || c == b'\\'
 }
 
-pub(crate) fn left_bound_for_like_pattern(pattern: &[u8]) -> Vec<u8> {
+pub fn left_bound_for_like_pattern(pattern: &[u8]) -> Vec<u8> {
     let mut index = 0;
     let len = pattern.len();
     let mut prefix: Vec<u8> = Vec::with_capacity(len);
@@ -500,7 +500,7 @@ pub(crate) fn left_bound_for_like_pattern(pattern: &[u8]) -> Vec<u8> {
     prefix
 }
 
-pub(crate) fn right_bound_for_like_pattern(prefix: Vec<u8>) -> Vec<u8> {
+pub fn right_bound_for_like_pattern(prefix: Vec<u8>) -> Vec<u8> {
     let mut res = prefix;
     while !res.is_empty() && *res.last().unwrap() == u8::MAX {
         res.pop();
