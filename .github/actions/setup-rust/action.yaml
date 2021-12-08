@@ -4,9 +4,10 @@ runs:
   using: "composite"
   steps:
     - name: Install Protoc
-      uses: arduino/setup-protoc@v1
-      with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
+      run: sudo apt install -y protobuf-compiler
+      shell: bash
+
+    - uses: ankane/setup-mysql@v1
 
     - name: Rust setup
       shell: bash
