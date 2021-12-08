@@ -29,7 +29,8 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v2
 
-      - uses: ./.github/actions/setup-rust
+      - name: Rust setup
+        run: bash ./scripts/setup/dev_setup.sh
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v1

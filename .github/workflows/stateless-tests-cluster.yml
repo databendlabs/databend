@@ -29,7 +29,9 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v2
 
-      - uses: ./.github/actions/setup-rust
+      - name: Rust setup
+        run: |
+          bash ./scripts/setup/dev_setup.sh -o -t
 
       - uses: ./.github/actions/cache-cargo-registry
         with:

@@ -26,7 +26,8 @@ jobs:
           file_or_dir: ./
           config_file: .yamllint.yml
 
-      - uses: ./.github/actions/setup-rust
+      - name: Rust setup
+        run: bash ./scripts/setup/dev_setup.sh
 
       - uses: ./.github/actions/cache-cargo-registry
         with:
