@@ -500,6 +500,36 @@ impl MetaRaftStore {
         sm.get_node(node_id)
     }
 
+    pub async fn get_voters(&self) -> common_exception::Result<Vec<Node>> {
+        let sm = self.state_machine.read().await;
+        let ms = self
+            .get_membership_config()
+            .await
+            .expect("get membership config");
+        let nodes = sm.nodes().range_kvs(..).expect("get nodes failed");
+        let voters = nodes
+            .into_iter()
+            .filter(|(node_id, _)| ms.contains(node_id))
+            .map(|(_, node)| node)
+            .collect();
+        Ok(voters)
+    }
+
+    pub async fn get_non_voters(&self) -> common_exception::Result<Vec<Node>> {
+        let sm = self.state_machine.read().await;
+        let ms = self
+            .get_membership_config()
+            .await
+            .expect("get membership config");
+        let nodes = sm.nodes().range_kvs(..).expect("get nodes failed");
+        let non_voters = nodes
+            .into_iter()
+            .filter(|(node_id, _)| !ms.contains(node_id))
+            .map(|(_, node)| node)
+            .collect();
+        Ok(non_voters)
+    }
+
     pub async fn get_node_addr(&self, node_id: &NodeId) -> common_exception::Result<String> {
         let addr = self
             .get_node(node_id)

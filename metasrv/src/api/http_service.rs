@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_base::tokio::sync::broadcast;
 use common_base::HttpShutdownHandler;
 use common_base::Stoppable;
@@ -24,17 +26,20 @@ use poem::EndpointExt;
 use poem::Route;
 
 use crate::configs::Config;
+use crate::meta_service::MetaNode;
 
 pub struct HttpService {
     cfg: Config,
     shutdown_handler: HttpShutdownHandler,
+    meta_node: Arc<MetaNode>,
 }
 
 impl HttpService {
-    pub fn create(cfg: Config) -> Box<Self> {
+    pub fn create(cfg: Config, meta_node: Arc<MetaNode>) -> Box<Self> {
         Box::new(HttpService {
             cfg,
             shutdown_handler: HttpShutdownHandler::create("http api".to_string()),
+            meta_node,
         })
     }
 
@@ -43,6 +48,14 @@ impl HttpService {
             .at("/v1/health", get(super::http::v1::health::health_handler))
             .at("/v1/config", get(super::http::v1::config::config_handler))
             .at(
+                "/v1/cluster/nodes",
+                get(super::http::v1::cluster_state::nodes_handler),
+            )
+            .at(
+                "/v1/cluster/state",
+                get(super::http::v1::cluster_state::state_handler),
+            )
+            .at(
                 "/debug/home",
                 get(super::http::debug::home::debug_home_handler),
             )
@@ -50,6 +63,7 @@ impl HttpService {
                 "/debug/pprof/profile",
                 get(super::http::debug::pprof::debug_pprof_handler),
             )
+            .data(self.meta_node.clone())
             .data(self.cfg.clone())
     }
 
