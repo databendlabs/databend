@@ -15,6 +15,7 @@
 mod ascii;
 mod base_64;
 mod bit_length;
+mod char_length;
 mod concat;
 mod concat_ws;
 mod elt;
@@ -45,6 +46,7 @@ pub use ascii::AsciiFunction;
 pub use base_64::Base64DecodeFunction;
 pub use base_64::Base64EncodeFunction;
 pub use bit_length::BitLengthFunction;
+pub use char_length::CharLengthFunction;
 pub use concat::ConcatFunction;
 pub use concat_ws::ConcatWsFunction;
 pub use elt::EltFunction;
