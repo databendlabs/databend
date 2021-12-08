@@ -17,15 +17,15 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_types::NodeInfo;
+use databend_query::catalogs::CatalogContext;
+use databend_query::clusters::Cluster;
+use databend_query::configs::Config;
+use databend_query::databases::DatabaseFactory;
+use databend_query::sessions::QueryContext;
+use databend_query::sessions::QueryContextShared;
+use databend_query::storages::StorageContext;
+use databend_query::storages::StorageFactory;
 
-use crate::catalogs::CatalogContext;
-use crate::clusters::Cluster;
-use crate::configs::Config;
-use crate::databases::DatabaseFactory;
-use crate::sessions::QueryContext;
-use crate::sessions::QueryContextShared;
-use crate::storages::StorageContext;
-use crate::storages::StorageFactory;
 use crate::tests::SessionManagerBuilder;
 
 pub fn create_query_context() -> Result<Arc<QueryContext>> {

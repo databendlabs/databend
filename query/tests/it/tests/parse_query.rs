@@ -12,24 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(hash_raw_entry)]
-#![feature(core_intrinsics)]
-#![feature(arbitrary_self_types)]
+use std::sync::Arc;
 
-pub mod api;
-pub mod catalogs;
-pub mod clusters;
-pub mod common;
-pub mod configs;
-pub mod databases;
-pub mod functions;
-pub mod interpreters;
-pub mod metrics;
-pub mod optimizers;
-pub mod pipelines;
-pub mod servers;
-pub mod sessions;
-pub mod sql;
-pub mod storages;
-pub mod table_functions;
-pub mod users;
+use common_exception::Result;
+use common_planners::PlanNode;
+use databend_query::sessions::QueryContext;
+use databend_query::sql::PlanParser;
+
+pub fn parse_query(query: impl ToString, ctx: &Arc<QueryContext>) -> Result<PlanNode> {
+    let query = query.to_string();
+    futures::executor::block_on(PlanParser::parse(&query, ctx.clone()))
+}

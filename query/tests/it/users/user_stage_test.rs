@@ -17,10 +17,9 @@ use common_exception::Result;
 use common_meta_types::Credentials;
 use common_meta_types::StageParams;
 use common_meta_types::UserStageInfo;
+use databend_query::configs::Config;
+use databend_query::users::UserApiProvider;
 use pretty_assertions::assert_eq;
-
-use crate::configs::Config;
-use crate::users::UserApiProvider;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_stage() -> Result<()> {

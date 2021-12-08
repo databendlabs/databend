@@ -13,9 +13,8 @@
 // limitations under the License.
 
 use common_exception::Result;
-
-use crate::catalogs::DatabaseCatalog;
-use crate::configs::Config;
+use databend_query::catalogs::DatabaseCatalog;
+use databend_query::configs::Config;
 
 pub fn create_catalog() -> Result<DatabaseCatalog> {
     futures::executor::block_on(async move {

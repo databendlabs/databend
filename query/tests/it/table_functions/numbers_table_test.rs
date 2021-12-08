@@ -17,10 +17,9 @@ use common_base::tokio;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_planners::*;
+use databend_query::storages::ToReadDataSourcePlan;
+use databend_query::table_functions::NumbersTable;
 use futures::TryStreamExt;
-
-use super::NumbersTable;
-use crate::storages::ToReadDataSourcePlan;
 
 #[tokio::test]
 async fn test_number_table() -> Result<()> {

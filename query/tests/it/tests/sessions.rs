@@ -18,9 +18,8 @@ use std::sync::Arc;
 use common_base::tokio::runtime::Runtime;
 use common_base::Thread;
 use common_exception::Result;
-
-use crate::configs::Config;
-use crate::sessions::SessionManager;
+use databend_query::configs::Config;
+use databend_query::sessions::SessionManager;
 
 async fn async_create_sessions(config: Config) -> Result<Arc<SessionManager>> {
     let sessions = SessionManager::from_conf(config.clone()).await?;

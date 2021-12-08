@@ -19,11 +19,10 @@ use common_meta_types::GrantObject;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserPrivilege;
 use common_meta_types::UserPrivilegeType;
+use databend_query::configs::Config;
+use databend_query::users::User;
+use databend_query::users::UserApiProvider;
 use pretty_assertions::assert_eq;
-
-use crate::configs::Config;
-use crate::users::User;
-use crate::users::UserApiProvider;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_user_manager() -> Result<()> {

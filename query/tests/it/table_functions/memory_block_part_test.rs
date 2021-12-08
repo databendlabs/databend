@@ -14,9 +14,8 @@
 
 use common_exception::Result;
 use common_planners::Part;
+use databend_query::table_functions::generate_block_parts;
 use pretty_assertions::assert_eq;
-
-use crate::table_functions::generate_block_parts;
 
 #[test]
 fn test_util_generate_parts() -> Result<()> {
