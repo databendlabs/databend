@@ -16,6 +16,7 @@ use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::AsciiFunction;
 use crate::scalars::Base64DecodeFunction;
 use crate::scalars::Base64EncodeFunction;
+use crate::scalars::BinFunction;
 use crate::scalars::BitLengthFunction;
 use crate::scalars::CharLengthFunction;
 use crate::scalars::ConcatFunction;
@@ -46,8 +47,6 @@ use crate::scalars::SubstringFunction;
 use crate::scalars::SubstringIndexFunction;
 use crate::scalars::TrimFunction;
 use crate::scalars::UnhexFunction;
-use crate::scalars::BinFunction;
-
 
 #[derive(Clone)]
 pub struct StringFunction;

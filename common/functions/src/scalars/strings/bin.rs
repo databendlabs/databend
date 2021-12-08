@@ -24,7 +24,7 @@ use crate::scalars::Function;
 
 #[derive(Clone)]
 pub struct BinFunction {
-    _display_name: String
+    _display_name: String,
 }
 
 impl BinFunction {
@@ -77,7 +77,7 @@ impl Function for BinFunction {
                 {
                     string_array.append_option(value.map(|n| format!("{:b}", n)));
                 }
-            },
+            }
             DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => {
                 for value in columns[0]
                     .column()
@@ -87,7 +87,7 @@ impl Function for BinFunction {
                 {
                     string_array.append_option(value.map(|n| format!("{:b}", n)));
                 }
-            },
+            }
             DataType::Float32 | DataType::Float64 => {
                 for value in columns[0]
                     .column()
@@ -97,13 +97,19 @@ impl Function for BinFunction {
                 {
                     string_array.append_option(value.map(|n| {
                         if n.ge(&0f64) {
-                            format!("{:b}", n.max(i64::MIN as f64).min(i64::MAX as f64).round() as i64)
+                            format!(
+                                "{:b}",
+                                n.max(i64::MIN as f64).min(i64::MAX as f64).round() as i64
+                            )
                         } else {
-                            format!("{:b}", n.max(u64::MIN as f64).min(u64::MAX as f64).round() as u64)
+                            format!(
+                                "{:b}",
+                                n.max(u64::MIN as f64).min(u64::MAX as f64).round() as u64
+                            )
                         }
                     }));
                 }
-            },
+            }
             _ => {
                 string_array.append_null();
             }

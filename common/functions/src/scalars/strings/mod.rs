@@ -14,6 +14,7 @@
 
 mod ascii;
 mod base_64;
+mod bin;
 mod bit_length;
 mod char_length;
 mod concat;
@@ -41,11 +42,11 @@ mod substring;
 mod substring_index;
 mod trim;
 mod unhex;
-mod bin;
 
 pub use ascii::AsciiFunction;
 pub use base_64::Base64DecodeFunction;
 pub use base_64::Base64EncodeFunction;
+pub use bin::BinFunction;
 pub use bit_length::BitLengthFunction;
 pub use char_length::CharLengthFunction;
 pub use concat::ConcatFunction;
@@ -78,6 +79,5 @@ pub use trim::LTrimFunction;
 pub use trim::RTrimFunction;
 pub use trim::TrimFunction;
 pub use unhex::UnhexFunction;
-pub use bin::BinFunction;
 
 pub use self::hex::HexFunction;
