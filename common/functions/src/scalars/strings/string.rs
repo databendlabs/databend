@@ -16,15 +16,34 @@ use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::AsciiFunction;
 use crate::scalars::Base64DecodeFunction;
 use crate::scalars::Base64EncodeFunction;
+use crate::scalars::BitLengthFunction;
+use crate::scalars::CharLengthFunction;
+use crate::scalars::ConcatFunction;
+use crate::scalars::ConcatWsFunction;
+use crate::scalars::EltFunction;
+use crate::scalars::FieldFunction;
 use crate::scalars::HexFunction;
 use crate::scalars::InsertFunction;
+use crate::scalars::InstrFunction;
 use crate::scalars::LTrimFunction;
+use crate::scalars::LeftFunction;
+use crate::scalars::LeftPadFunction;
 use crate::scalars::LocateFunction;
 use crate::scalars::OctFunction;
+use crate::scalars::OctetLengthFunction;
+use crate::scalars::OrdFunction;
+use crate::scalars::PositionFunction;
 use crate::scalars::QuoteFunction;
 use crate::scalars::RTrimFunction;
 use crate::scalars::RepeatFunction;
+use crate::scalars::ReplaceFunction;
+use crate::scalars::ReverseFunction;
+use crate::scalars::RightFunction;
+use crate::scalars::RightPadFunction;
+use crate::scalars::SpaceFunction;
+use crate::scalars::StrcmpFunction;
 use crate::scalars::SubstringFunction;
+use crate::scalars::SubstringIndexFunction;
 use crate::scalars::TrimFunction;
 use crate::scalars::UnhexFunction;
 
@@ -33,7 +52,10 @@ pub struct StringFunction;
 
 impl StringFunction {
     pub fn register(factory: &mut FunctionFactory) {
+        factory.register("mid", SubstringFunction::desc());
+        factory.register("substr", SubstringFunction::desc());
         factory.register("substring", SubstringFunction::desc());
+        factory.register("substring_index", SubstringIndexFunction::desc());
         factory.register("oct", OctFunction::desc());
         factory.register("repeat", RepeatFunction::desc());
         factory.register("ltrim", LTrimFunction::desc());
@@ -46,7 +68,25 @@ impl StringFunction {
         factory.register("to_base64", Base64EncodeFunction::desc());
         factory.register("from_base64", Base64DecodeFunction::desc());
         factory.register("locate", LocateFunction::desc());
-        factory.register("position", LocateFunction::desc());
+        factory.register("position", PositionFunction::desc());
+        factory.register("instr", InstrFunction::desc());
         factory.register("insert", InsertFunction::desc());
+        factory.register("field", FieldFunction::desc());
+        factory.register("octet_length", OctetLengthFunction::desc());
+        factory.register("concat", ConcatFunction::desc());
+        factory.register("bit_length", BitLengthFunction::desc());
+        factory.register("replace", ReplaceFunction::desc());
+        factory.register("reverse", ReverseFunction::desc());
+        factory.register("strcmp", StrcmpFunction::desc());
+        factory.register("left", LeftFunction::desc());
+        factory.register("right", RightFunction::desc());
+        factory.register("concat_ws", ConcatWsFunction::desc());
+        factory.register("elt", EltFunction::desc());
+        factory.register("space", SpaceFunction::desc());
+        factory.register("lpad", LeftPadFunction::desc());
+        factory.register("rpad", RightPadFunction::desc());
+        factory.register("char_length", CharLengthFunction::desc());
+        factory.register("character_length", CharLengthFunction::desc());
+        factory.register("ord", OrdFunction::desc());
     }
 }

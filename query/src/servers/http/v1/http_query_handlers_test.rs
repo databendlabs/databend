@@ -28,12 +28,12 @@ use poem::Route;
 use pretty_assertions::assert_eq;
 use serde_json;
 
-use crate::servers::http::v1::http_query_handlers::make_final_uri;
-use crate::servers::http::v1::http_query_handlers::make_page_uri;
-use crate::servers::http::v1::http_query_handlers::make_state_uri;
-use crate::servers::http::v1::http_query_handlers::query_route;
-use crate::servers::http::v1::http_query_handlers::QueryResponse;
-use crate::servers::http::v1::query::execute_state::ExecuteStateName;
+use crate::servers::http::v1::make_final_uri;
+use crate::servers::http::v1::make_page_uri;
+use crate::servers::http::v1::make_state_uri;
+use crate::servers::http::v1::query_route;
+use crate::servers::http::v1::ExecuteStateName;
+use crate::servers::http::v1::QueryResponse;
 use crate::sessions::SessionManager;
 use crate::tests::SessionManagerBuilder;
 

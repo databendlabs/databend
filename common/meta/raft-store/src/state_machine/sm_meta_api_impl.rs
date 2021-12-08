@@ -55,7 +55,10 @@ impl MetaApi for StateMachine {
             engine: req.engine.clone(),
         };
 
-        let res = self.apply_cmd(&cmd).await?;
+        let res = self.sm_tree.txn(true, |t| {
+            let r = self.apply_cmd(&cmd, &t).unwrap();
+            Ok(r)
+        })?;
 
         let mut ch: Change<DatabaseMeta> = res.try_into().unwrap();
         let db_id = ch.ident.take().expect("Some(db_id)");
@@ -78,7 +81,10 @@ impl MetaApi for StateMachine {
             name: req.db.clone(),
         };
 
-        let res = self.apply_cmd(&cmd).await?;
+        let res = self.sm_tree.txn(true, |t| {
+            let r = self.apply_cmd(&cmd, &t).unwrap();
+            Ok(r)
+        })?;
 
         assert!(res.result().is_none());
 
@@ -141,7 +147,11 @@ impl MetaApi for StateMachine {
             table_meta,
         };
 
-        let res = self.apply_cmd(&cr).await?;
+        let res = self.sm_tree.txn(true, |t| {
+            let r = self.apply_cmd(&cr, &t).unwrap();
+            Ok(r)
+        })?;
+
         let mut ch: Change<TableMeta, u64> = res.try_into().unwrap();
         let table_id = ch.ident.take().unwrap();
         let (prev, result) = ch.unpack_data();
@@ -168,7 +178,10 @@ impl MetaApi for StateMachine {
             table_name: table_name.clone(),
         };
 
-        let res = self.apply_cmd(&cr).await?;
+        let res = self.sm_tree.txn(true, |t| {
+            let r = self.apply_cmd(&cr, &t).unwrap();
+            Ok(r)
+        })?;
 
         assert!(res.result().is_none());
 
@@ -273,7 +286,10 @@ impl MetaApi for StateMachine {
     ) -> Result<UpsertTableOptionReply, ErrorCode> {
         let cmd = Cmd::UpsertTableOptions(req.clone());
 
-        let res = self.apply_cmd(&cmd).await?;
+        let res = self.sm_tree.txn(true, |t| {
+            let r = self.apply_cmd(&cmd, &t).unwrap();
+            Ok(r)
+        })?;
         if !res.changed() {
             let ch: Change<TableMeta> = res.try_into().unwrap();
             let (prev, _result) = ch.unwrap();

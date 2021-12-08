@@ -37,7 +37,8 @@ pub trait Command: DynClone + Send + Sync {
     async fn exec_matches(&self, writer: &mut Writer, args: Option<&ArgMatches>) -> Result<()>;
 
     async fn exec(&self, writer: &mut Writer, args: String) -> Result<()> {
-        match self.clap().try_get_matches_from(args.split(' ')) {
+        let split_args = args.split(' ').filter(|s| !s.is_empty());
+        match self.clap().try_get_matches_from(split_args) {
             Ok(matches) => {
                 return self.exec_matches(writer, Some(&matches)).await;
             }

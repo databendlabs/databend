@@ -113,6 +113,26 @@ impl UserApiProvider {
             .map_err(|failure| failure.add_message_back("(while set user privileges)"))
     }
 
+    pub async fn revoke_user_privileges(
+        &self,
+        username: &str,
+        hostname: &str,
+        object: GrantObject,
+        privileges: UserPrivilege,
+    ) -> Result<Option<u64>> {
+        let client = self.get_user_api_client();
+        client
+            .revoke_user_privileges(
+                username.to_string(),
+                hostname.to_string(),
+                object,
+                privileges,
+                None,
+            )
+            .await
+            .map_err(|failure| failure.add_message_back("(while revoke user privileges)"))
+    }
+
     // Drop a user by name and hostname.
     pub async fn drop_user(&self, username: &str, hostname: &str, if_exist: bool) -> Result<()> {
         let client = self.get_user_api_client();

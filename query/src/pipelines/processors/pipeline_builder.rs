@@ -331,6 +331,7 @@ impl PipelineBuilder {
                 self.ctx.clone(),
                 plan.table_info.clone(),
                 plan.cast_needed,
+                plan.input.schema(),
             )))
         })?;
         Ok(pipeline)

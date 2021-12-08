@@ -15,3 +15,6 @@
 mod locate;
 mod substring;
 mod trim;
+
+mod utils;
+pub use utils::*;

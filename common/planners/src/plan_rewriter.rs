@@ -30,6 +30,7 @@ use crate::CopyPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
 use crate::CreateUserPlan;
+use crate::CreateUserStagePlan;
 use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
@@ -42,7 +43,7 @@ use crate::Expressions;
 use crate::FilterPlan;
 use crate::GrantPrivilegePlan;
 use crate::HavingPlan;
-use crate::InsertIntoPlan;
+use crate::InsertPlan;
 use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
@@ -51,6 +52,7 @@ use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
+use crate::RevokePrivilegePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateTablePlan;
@@ -105,7 +107,7 @@ pub trait PlanRewriter {
             PlanNode::DescribeTable(plan) => self.rewrite_describe_table(plan),
             PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
             PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
-            PlanNode::InsertInto(plan) => self.rewrite_insert_into(plan),
+            PlanNode::Insert(plan) => self.rewrite_insert_into(plan),
             PlanNode::Copy(plan) => self.rewrite_copy(plan),
             PlanNode::ShowCreateTable(plan) => self.rewrite_show_create_table(plan),
             PlanNode::SubQueryExpression(plan) => self.rewrite_sub_queries_sets(plan),
@@ -115,6 +117,8 @@ pub trait PlanRewriter {
             PlanNode::AlterUser(plan) => self.alter_user(plan),
             PlanNode::DropUser(plan) => self.drop_user(plan),
             PlanNode::GrantPrivilege(plan) => self.grant_privilege(plan),
+            PlanNode::RevokePrivilege(plan) => self.revoke_privilege(plan),
+            PlanNode::CreateUserStage(plan) => self.rewrite_create_stage(plan),
             PlanNode::Sink(plan) => self.rewrite_sink(plan),
         }
     }
@@ -334,8 +338,8 @@ pub trait PlanRewriter {
         Ok(PlanNode::DropDatabase(plan.clone()))
     }
 
-    fn rewrite_insert_into(&mut self, plan: &InsertIntoPlan) -> Result<PlanNode> {
-        Ok(PlanNode::InsertInto(plan.clone()))
+    fn rewrite_insert_into(&mut self, plan: &InsertPlan) -> Result<PlanNode> {
+        Ok(PlanNode::Insert(plan.clone()))
     }
 
     fn rewrite_copy(&mut self, plan: &CopyPlan) -> Result<PlanNode> {
@@ -368,6 +372,14 @@ pub trait PlanRewriter {
 
     fn grant_privilege(&mut self, plan: &GrantPrivilegePlan) -> Result<PlanNode> {
         Ok(PlanNode::GrantPrivilege(plan.clone()))
+    }
+
+    fn revoke_privilege(&mut self, plan: &RevokePrivilegePlan) -> Result<PlanNode> {
+        Ok(PlanNode::RevokePrivilege(plan.clone()))
+    }
+
+    fn rewrite_create_stage(&mut self, plan: &CreateUserStagePlan) -> Result<PlanNode> {
+        Ok(PlanNode::CreateUserStage(plan.clone()))
     }
 
     fn rewrite_sink(&mut self, plan: &SinkPlan) -> Result<PlanNode> {

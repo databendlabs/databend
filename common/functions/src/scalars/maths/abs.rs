@@ -121,23 +121,11 @@ impl Function for AbsFunction {
         match args[0].compare_with_zero()? {
             1 => {
                 // the range is >= 0, abs function do nothing
-                Ok(Monotonicity {
-                    is_monotonic: true,
-                    is_positive: args[0].is_positive,
-                    is_constant: false,
-                    left: None,
-                    right: None,
-                })
+                Ok(Monotonicity::create(true, args[0].is_positive, false))
             }
             -1 => {
                 // the range is <= 0, abs function flip the is_positive
-                Ok(Monotonicity {
-                    is_monotonic: true,
-                    is_positive: !args[0].is_positive,
-                    is_constant: false,
-                    left: None,
-                    right: None,
-                })
+                Ok(Monotonicity::create(true, !args[0].is_positive, false))
             }
             _ => Ok(Monotonicity::default()),
         }

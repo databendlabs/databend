@@ -21,14 +21,14 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::servers::http::v1::query::execute_state::ExecuteState;
-use crate::servers::http::v1::query::execute_state::ExecuteStateName;
-use crate::servers::http::v1::query::execute_state::Executor;
-use crate::servers::http::v1::query::execute_state::ExecutorRef;
-use crate::servers::http::v1::query::execute_state::HttpQueryRequest;
-use crate::servers::http::v1::query::result_data_manager::ResponseData;
-use crate::servers::http::v1::query::result_data_manager::ResultDataManager;
-use crate::servers::http::v1::query::result_data_manager::Wait;
+use crate::servers::http::v1::query::ExecuteState;
+use crate::servers::http::v1::query::ExecuteStateName;
+use crate::servers::http::v1::query::Executor;
+use crate::servers::http::v1::query::ExecutorRef;
+use crate::servers::http::v1::query::HttpQueryRequest;
+use crate::servers::http::v1::query::ResponseData;
+use crate::servers::http::v1::query::ResultDataManager;
+use crate::servers::http::v1::query::Wait;
 use crate::sessions::SessionManager;
 
 pub struct ResponseInitialState {

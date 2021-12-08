@@ -1,4 +1,0 @@
-[target."x86_64-unknown-linux-gnu"]
-rustflags = ["-C", "link-arg=-Wl,--compress-debug-sections=zlib-gabi"]
-[target."aarch64-unknown-linux-gnu"]
-rustflags = ["-C", "link-arg=-Wl,--compress-debug-sections=zlib-gabi"]

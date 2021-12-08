@@ -13,11 +13,25 @@
 // limitations under the License.
 
 use common_exception::exception::Result;
+use common_meta_types::Compression;
+use common_meta_types::Credentials;
+use common_meta_types::FileFormat;
+use common_meta_types::StageParams;
 use common_meta_types::UserStageInfo;
 
 #[test]
 fn test_user_stage() -> Result<()> {
-    let stage = UserStageInfo::new("databend", "this is a comment");
+    let stage = UserStageInfo::new(
+        "databend",
+        "this is a comment",
+        StageParams::new("test", Credentials::S3 {
+            access_key_id: "test".to_string(),
+            secret_access_key: "test".to_string(),
+        }),
+        Some(FileFormat::Parquet {
+            compression: Compression::None,
+        }),
+    );
     let ser = serde_json::to_string(&stage)?;
 
     let de = UserStageInfo::try_from(ser.into_bytes())?;

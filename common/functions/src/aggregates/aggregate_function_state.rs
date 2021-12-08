@@ -100,25 +100,21 @@ impl From<StateAddr> for usize {
 /// # Safety
 /// layout must ensure to be aligned
 pub unsafe fn get_layout_offsets(funcs: &[AggregateFunctionRef]) -> (Layout, Vec<usize>) {
-    let mut align_aggregate_states = 0;
-    let mut total_size_aggregate_states = 0;
+    let mut max_align = 0;
+    let mut total_size = 0;
 
-    let mut offsets_aggregate_states = Vec::with_capacity(funcs.len());
-    for i in 0..funcs.len() {
-        offsets_aggregate_states.push(total_size_aggregate_states);
-        let layout = funcs[i].state_layout();
+    let mut offsets = Vec::with_capacity(funcs.len());
+    for func in funcs {
+        let layout = func.state_layout();
+        let align = layout.align();
 
-        total_size_aggregate_states += layout.size();
-        align_aggregate_states = align_aggregate_states.max(layout.align());
-        // Not the last aggregate_state
-        if i + 1 < funcs.len() {
-            let next_layout = funcs[i + 1].state_layout();
-            total_size_aggregate_states = (total_size_aggregate_states + next_layout.align() - 1)
-                / next_layout.align()
-                * next_layout.align();
-        }
+        total_size = (total_size + align - 1) / align * align;
+
+        offsets.push(total_size);
+
+        max_align = max_align.max(align);
+        total_size += layout.size();
     }
-    let layout =
-        Layout::from_size_align_unchecked(total_size_aggregate_states, align_aggregate_states);
-    (layout, offsets_aggregate_states)
+    let layout = Layout::from_size_align_unchecked(total_size, max_align);
+    (layout, offsets)
 }

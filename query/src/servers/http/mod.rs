@@ -14,5 +14,5 @@
 
 mod http_services;
 pub mod v1;
+
 pub use http_services::HttpHandler;
-pub use http_services::HTTP_HANDLER_USAGE;

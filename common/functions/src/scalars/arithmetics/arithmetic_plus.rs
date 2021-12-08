@@ -58,24 +58,20 @@ impl ArithmeticPlusFunction {
 
         // if f(x) is a constant value, return the monotonicity of g(x)
         if f_x.is_constant {
-            return Ok(Monotonicity {
-                is_monotonic: g_x.is_monotonic,
-                is_positive: g_x.is_positive,
-                is_constant: g_x.is_constant,
-                left: None,
-                right: None,
-            });
+            return Ok(Monotonicity::create(
+                g_x.is_monotonic,
+                g_x.is_positive,
+                g_x.is_constant,
+            ));
         }
 
         // if g(x) is a constant value, return the monotonicity of f(x)
         if g_x.is_constant {
-            return Ok(Monotonicity {
-                is_monotonic: f_x.is_monotonic,
-                is_positive: f_x.is_positive,
-                is_constant: f_x.is_constant,
-                left: None,
-                right: None,
-            });
+            return Ok(Monotonicity::create(
+                f_x.is_monotonic,
+                f_x.is_positive,
+                f_x.is_constant,
+            ));
         }
 
         // Now we have f(x) and g(x) both are non-constant.
@@ -84,12 +80,6 @@ impl ArithmeticPlusFunction {
             return Ok(Monotonicity::default());
         }
 
-        Ok(Monotonicity {
-            is_monotonic: true,
-            is_positive: f_x.is_positive,
-            is_constant: false,
-            left: None,
-            right: None,
-        })
+        Ok(Monotonicity::create(true, f_x.is_positive, false))
     }
 }

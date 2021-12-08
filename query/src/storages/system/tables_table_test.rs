@@ -47,6 +47,7 @@ async fn test_tables_table() -> Result<()> {
         "| system   | metrics      | SystemMetrics      |",
         "| system   | one          | SystemOne          |",
         "| system   | processes    | SystemProcesses    |",
+        "| system   | query_log    | SystemQueryLog     |",
         "| system   | settings     | SystemSettings     |",
         "| system   | tables       | SystemTables       |",
         "| system   | tracing      | SystemTracing      |",

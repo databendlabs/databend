@@ -14,6 +14,10 @@
 
 use common_exception::Result;
 use common_meta_types::AuthType;
+use common_meta_types::Compression;
+use common_meta_types::Credentials;
+use common_meta_types::FileFormat;
+use common_meta_types::StageParams;
 use common_meta_types::UserPrivilege;
 use common_meta_types::UserPrivilegeType;
 use sqlparser::ast::*;
@@ -21,6 +25,7 @@ use sqlparser::ast::*;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCopy;
 use crate::sql::statements::DfCreateDatabase;
+use crate::sql::statements::DfCreateStage;
 use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfDescribeTable;
@@ -29,6 +34,7 @@ use crate::sql::statements::DfDropTable;
 use crate::sql::statements::DfDropUser;
 use crate::sql::statements::DfGrantObject;
 use crate::sql::statements::DfGrantStatement;
+use crate::sql::statements::DfRevokeStatement;
 use crate::sql::statements::DfShowDatabases;
 use crate::sql::statements::DfShowTables;
 use crate::sql::statements::DfTruncateTable;
@@ -134,14 +140,14 @@ fn create_table() -> Result<()> {
         columns: vec![make_column_def("c1", DataType::Int(None))],
         engine: "CSV".to_string(),
         options: vec![SqlOption {
-            name: Ident::new("LOCATION".to_string()),
+            name: Ident::new("location".to_string()),
             value: Value::SingleQuotedString("/data/33.csv".into()),
         }],
     });
     expect_parse_ok(sql, expected)?;
 
     // positive case: it is ok for parquet files not to have columns specified
-    let sql = "CREATE TABLE t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Parquet location = 'foo.parquet' ";
+    let sql = "CREATE TABLE t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Parquet location = 'foo.parquet' comment = 'foo'";
     let expected = DfStatement::CreateTable(DfCreateTable {
         if_not_exists: false,
         name: ObjectName(vec![Ident::new("t")]),
@@ -151,10 +157,16 @@ fn create_table() -> Result<()> {
             make_column_def("c3", DataType::Varchar(Some(255))),
         ],
         engine: "Parquet".to_string(),
-        options: vec![SqlOption {
-            name: Ident::new("LOCATION".to_string()),
-            value: Value::SingleQuotedString("foo.parquet".into()),
-        }],
+        options: vec![
+            SqlOption {
+                name: Ident::new("location".to_string()),
+                value: Value::SingleQuotedString("foo.parquet".into()),
+            },
+            SqlOption {
+                name: Ident::new("comment".to_string()),
+                value: Value::SingleQuotedString("foo".into()),
+            },
+        ],
     });
     expect_parse_ok(sql, expected)?;
 
@@ -773,11 +785,7 @@ fn grant_privilege_test() -> Result<()> {
             name: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
-            priv_types: {
-                let mut user_priv = UserPrivilege::empty();
-                user_priv.set_all_privileges();
-                user_priv
-            },
+            priv_types: UserPrivilege::all_privileges(),
         }),
     )?;
 
@@ -787,11 +795,7 @@ fn grant_privilege_test() -> Result<()> {
             name: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
-            priv_types: {
-                let mut user_priv = UserPrivilege::empty();
-                user_priv.set_all_privileges();
-                user_priv
-            },
+            priv_types: UserPrivilege::all_privileges(),
         }),
     )?;
 
@@ -802,9 +806,9 @@ fn grant_privilege_test() -> Result<()> {
             hostname: String::from("localhost"),
             on: DfGrantObject::Table(Some("db1".into()), "tb1".into()),
             priv_types: {
-                let mut user_priv = UserPrivilege::empty();
-                user_priv.set_privilege(UserPrivilegeType::Insert);
-                user_priv
+                let mut privileges = UserPrivilege::empty();
+                privileges.set_privilege(UserPrivilegeType::Insert);
+                privileges
             },
         }),
     )?;
@@ -816,9 +820,9 @@ fn grant_privilege_test() -> Result<()> {
             hostname: String::from("localhost"),
             on: DfGrantObject::Table(None, "tb1".into()),
             priv_types: {
-                let mut user_priv = UserPrivilege::empty();
-                user_priv.set_privilege(UserPrivilegeType::Insert);
-                user_priv
+                let mut privileges = UserPrivilege::empty();
+                privileges.set_privilege(UserPrivilegeType::Insert);
+                privileges
             },
         }),
     )?;
@@ -830,9 +834,9 @@ fn grant_privilege_test() -> Result<()> {
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(Some("db1".into())),
             priv_types: {
-                let mut user_priv = UserPrivilege::empty();
-                user_priv.set_privilege(UserPrivilegeType::Insert);
-                user_priv
+                let mut privileges = UserPrivilege::empty();
+                privileges.set_privilege(UserPrivilegeType::Insert);
+                privileges
             },
         }),
     )?;
@@ -844,10 +848,10 @@ fn grant_privilege_test() -> Result<()> {
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
             priv_types: {
-                let mut user_priv = UserPrivilege::empty();
-                user_priv.set_privilege(UserPrivilegeType::Select);
-                user_priv.set_privilege(UserPrivilegeType::Create);
-                user_priv
+                let mut privileges = UserPrivilege::empty();
+                privileges.set_privilege(UserPrivilegeType::Select);
+                privileges.set_privilege(UserPrivilegeType::Create);
+                privileges
             },
         }),
     )?;
@@ -875,6 +879,153 @@ fn grant_privilege_test() -> Result<()> {
     expect_parse_err(
         "GRANT INSERT ON *.`tb1` TO 'test'@'localhost'",
         String::from("sql parser error: Expected whitespace, found: ."),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn revoke_privilege_test() -> Result<()> {
+    expect_parse_ok(
+        "REVOKE ALL ON * FROM 'test'@'localhost'",
+        DfStatement::RevokePrivilege(DfRevokeStatement {
+            username: String::from("test"),
+            hostname: String::from("localhost"),
+            on: DfGrantObject::Database(None),
+            priv_types: UserPrivilege::all_privileges(),
+        }),
+    )?;
+
+    expect_parse_err(
+        "REVOKE SELECT ON * 'test'@'localhost'",
+        String::from("sql parser error: Expected keyword FROM, found: 'test'"),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn create_stage_test() -> Result<()> {
+    expect_parse_ok(
+        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z')",
+        DfStatement::CreateStage(DfCreateStage {
+            if_not_exists: false,
+            stage_name: "test_stage".to_string(),
+            stage_params: StageParams::new("s3://load/files/", Credentials::S3 { access_key_id: "1a2b3c".to_string(), secret_access_key: "4x5y6z".to_string() }),
+            file_format: None,
+            comments: "".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z')",
+        DfStatement::CreateStage(DfCreateStage {
+            if_not_exists: true,
+            stage_name: "test_stage".to_string(),
+            stage_params: StageParams::new("s3://load/files/", Credentials::S3 { access_key_id: "1a2b3c".to_string(), secret_access_key: "4x5y6z".to_string() }),
+            file_format: None,
+            comments: "".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP record_delimiter=',')",
+        DfStatement::CreateStage(DfCreateStage {
+            if_not_exists: true,
+            stage_name: "test_stage".to_string(),
+            stage_params: StageParams::new("s3://load/files/", Credentials::S3 { access_key_id: "1a2b3c".to_string(), secret_access_key: "4x5y6z".to_string() }),
+            file_format: Some(FileFormat::Csv { compression: Compression::Gzip, record_delimiter: ",".to_string() }),
+            comments: "".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP record_delimiter=',') comments='test'",
+        DfStatement::CreateStage(DfCreateStage {
+            if_not_exists: true,
+            stage_name: "test_stage".to_string(),
+            stage_params: StageParams::new("s3://load/files/", Credentials::S3 { access_key_id: "1a2b3c".to_string(), secret_access_key: "4x5y6z".to_string() }),
+            file_format: Some(FileFormat::Csv { compression: Compression::Gzip, record_delimiter: ",".to_string() }),
+            comments: "test".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=Parquet compression=AUTO) comments='test'",
+        DfStatement::CreateStage(DfCreateStage {
+            if_not_exists: false,
+            stage_name: "test_stage".to_string(),
+            stage_params: StageParams::new("s3://load/files/", Credentials::S3 { access_key_id: "1a2b3c".to_string(), secret_access_key: "4x5y6z".to_string() }),
+            file_format: Some(FileFormat::Parquet { compression: Compression::Auto}),
+            comments: "test".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=csv compression=AUTO record_delimiter=NONE) comments='test'",
+        DfStatement::CreateStage(DfCreateStage {
+            if_not_exists: false,
+            stage_name: "test_stage".to_string(),
+            stage_params: StageParams::new("s3://load/files/", Credentials::S3 { access_key_id: "1a2b3c".to_string(), secret_access_key: "4x5y6z".to_string() }),
+            file_format: Some(FileFormat::Csv { compression: Compression::Auto, record_delimiter: "".to_string() }),
+            comments: "test".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=json) comments='test'",
+        DfStatement::CreateStage(DfCreateStage {
+            if_not_exists: false,
+            stage_name: "test_stage".to_string(),
+            stage_params: StageParams::new("s3://load/files/", Credentials::S3 { access_key_id: "1a2b3c".to_string(), secret_access_key: "4x5y6z".to_string() }),
+            file_format: Some(FileFormat::Json ),
+            comments: "test".to_string(),
+        }),
+    )?;
+
+    expect_parse_err(
+        "CREATE STAGE test_stage credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=csv compression=AUTO record_delimiter=NONE) comments='test'",
+        String::from("sql parser error: Missing URL"),
+    )?;
+
+    expect_parse_err(
+        "CREATE STAGE test_stage url='s3://load/files/' password=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=csv compression=AUTO record_delimiter=NONE) comments='test'",
+        String::from("sql parser error: Missing CREDENTIALS"),
+    )?;
+
+    expect_parse_err(
+        "CREATE STAGE test_stage url='s4://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=csv compression=AUTO record_delimiter=NONE) comments='test'",
+        String::from("sql parser error: Not supported storage"),
+    )?;
+
+    expect_parse_err(
+        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=csv compression=AUTO record_delimiter=NONE) comments='test'",
+        String::from("sql parser error: Missing S3 ACCESS_KEY_ID"),
+    )?;
+
+    expect_parse_err(
+        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' aecret_access_key='4x5y6z') file_format=(FORMAT=csv compression=AUTO record_delimiter=NONE) comments='test'",
+        String::from("sql parser error: Missing S3 SECRET_ACCESS_KEY"),
+    )?;
+
+    expect_parse_err(
+        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(type=csv compression=AUTO record_delimiter=NONE) comments='test'",
+        String::from("sql parser error: Missing FORMAT"),
+    )?;
+
+    expect_parse_err(
+        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(format=csv compression=AUTO1 record_delimiter=NONE) comments='test'",
+        String::from("sql parser error: no match for compression"),
+    )?;
+
+    expect_parse_err(
+        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(format=csv compression=AUTO record_delimiter=NONE1) comments='test'",
+        String::from("sql parser error: Expected record delimiter NONE, found: NONE1"),
+    )?;
+
+    expect_parse_err(
+        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(format=csv1 compression=AUTO record_delimiter=NONE) comments='test'",
+        String::from("sql parser error: Expected format type CSV|PARQUET|JSON, found: CSV1"),
     )?;
 
     Ok(())

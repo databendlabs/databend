@@ -67,6 +67,15 @@ impl Interpreter for ShowCreateTableInterpreter {
         }
         let table_engine = format!(") ENGINE={}", engine);
         table_info.push_str(table_engine.as_str());
+        table_info.push_str(
+            table
+                .options()
+                .iter()
+                .map(|(k, v)| format!(" {}='{}'", k.to_uppercase(), v))
+                .collect::<Vec<_>>()
+                .join("")
+                .as_str(),
+        );
 
         let show_fields = vec![
             DataField::new("Table", DataType::String, false),

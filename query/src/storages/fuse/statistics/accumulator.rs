@@ -16,45 +16,113 @@
 use std::collections::HashMap;
 
 use common_datablocks::DataBlock;
+use common_datavalues::prelude::DataColumn;
+use common_datavalues::DataSchema;
 
+use crate::storages::fuse::meta::BlockLocation;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::ColumnId;
-use crate::storages::fuse::statistics::util;
 use crate::storages::index::BlockStatistics;
 use crate::storages::index::ColumnStatistics;
 
 #[derive(Default)]
 pub struct StatisticsAccumulator {
     pub blocks_metas: Vec<BlockMeta>,
-    pub blocks_stats: Vec<BlockStatistics>,
+    pub blocks_statistics: Vec<BlockStatistics>,
     pub summary_row_count: u64,
     pub summary_block_count: u64,
     pub in_memory_size: u64,
     pub file_size: u64,
-    pub last_block_rows: u64,
-    pub last_block_size: u64,
-    pub last_block_col_stats: Option<HashMap<ColumnId, ColumnStatistics>>,
 }
 
 impl StatisticsAccumulator {
     pub fn new() -> Self {
         Default::default()
     }
-}
 
-impl StatisticsAccumulator {
-    pub fn acc(&mut self, block: &DataBlock) -> common_exception::Result<()> {
+    pub fn begin(mut self, block: &DataBlock) -> common_exception::Result<PartiallyAccumulated> {
         let row_count = block.num_rows() as u64;
         let block_in_memory_size = block.memory_size() as u64;
 
         self.summary_block_count += 1;
         self.summary_row_count += row_count;
         self.in_memory_size += block_in_memory_size;
-        self.last_block_rows = block.num_rows() as u64;
-        self.last_block_size = block.memory_size() as u64;
-        let block_stats = util::block_stats(block)?;
-        self.last_block_col_stats = Some(block_stats.clone());
-        self.blocks_stats.push(block_stats);
-        Ok(())
+        let block_stats = Self::acc_columns(block)?;
+        self.blocks_statistics.push(block_stats.clone());
+        Ok(PartiallyAccumulated {
+            accumulator: self,
+            block_row_count: block.num_rows() as u64,
+            block_size: block.memory_size() as u64,
+            block_column_statistics: block_stats,
+        })
+    }
+
+    pub fn summary(&self, schema: &DataSchema) -> common_exception::Result<BlockStatistics> {
+        super::reduce_block_stats(&self.blocks_statistics, schema)
+    }
+
+    pub(crate) fn acc_columns(data_block: &DataBlock) -> common_exception::Result<BlockStatistics> {
+        (0..)
+            .into_iter()
+            .zip(data_block.columns().iter())
+            .map(|(idx, col)| {
+                let min = match col {
+                    DataColumn::Array(s) => s.min(),
+                    DataColumn::Constant(v, _) => Ok(v.clone()),
+                }?;
+
+                let max = match col {
+                    DataColumn::Array(s) => s.max(),
+                    DataColumn::Constant(v, _) => Ok(v.clone()),
+                }?;
+
+                let null_count = match col {
+                    DataColumn::Array(s) => s.null_count(),
+                    DataColumn::Constant(v, _) => {
+                        if v.is_null() {
+                            1
+                        } else {
+                            0
+                        }
+                    }
+                } as u64;
+
+                let in_memory_size = col.get_array_memory_size() as u64;
+
+                let col_stats = ColumnStatistics {
+                    min,
+                    max,
+                    null_count,
+                    in_memory_size,
+                };
+
+                Ok((idx, col_stats))
+            })
+            .collect()
+    }
+}
+
+pub struct PartiallyAccumulated {
+    accumulator: StatisticsAccumulator,
+    block_row_count: u64,
+    block_size: u64,
+    block_column_statistics: HashMap<ColumnId, ColumnStatistics>,
+}
+
+impl PartiallyAccumulated {
+    pub fn end(mut self, file_size: u64, location: String) -> StatisticsAccumulator {
+        let mut stats = &mut self.accumulator;
+        stats.file_size += file_size;
+        let block_meta = BlockMeta {
+            location: BlockLocation {
+                location,
+                meta_size: 0,
+            },
+            row_count: self.block_row_count,
+            block_size: self.block_size,
+            col_stats: self.block_column_statistics,
+        };
+        stats.blocks_metas.push(block_meta);
+        self.accumulator
     }
 }

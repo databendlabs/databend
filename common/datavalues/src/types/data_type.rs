@@ -90,6 +90,11 @@ impl DataType {
     }
 
     #[inline]
+    pub fn is_null(&self) -> bool {
+        matches!(self, DataType::Null)
+    }
+
+    #[inline]
     pub fn is_integer(&self) -> bool {
         matches!(
             self,

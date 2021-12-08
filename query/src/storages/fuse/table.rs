@@ -17,7 +17,6 @@ use std::any::Any;
 use std::convert::TryFrom;
 use std::sync::Arc;
 
-use common_dal::read_obj;
 use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_meta_types::TableInfo;
@@ -30,6 +29,7 @@ use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
 use crate::sessions::QueryContext;
+use crate::storages::fuse::io;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
@@ -128,13 +128,10 @@ impl FuseTable {
             .cloned()
     }
 
-    pub(crate) async fn table_snapshot(
-        &self,
-        ctx: Arc<QueryContext>,
-    ) -> Result<Option<TableSnapshot>> {
+    pub(crate) async fn table_snapshot(&self, ctx: &QueryContext) -> Result<Option<TableSnapshot>> {
         if let Some(loc) = self.snapshot_loc() {
             let da = ctx.get_data_accessor()?;
-            Ok(Some(read_obj(da, loc.to_string()).await?))
+            Ok(Some(io::read_obj(da.as_ref(), loc.to_string()).await?))
         } else {
             Ok(None)
         }
