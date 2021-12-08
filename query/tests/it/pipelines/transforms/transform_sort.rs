@@ -21,8 +21,8 @@ use common_planners::{self};
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
-use crate::pipelines::processors::*;
-use crate::pipelines::transforms::*;
+use databend_query::pipelines::processors::*;
+use databend_query::pipelines::transforms::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_sort() -> Result<()> {

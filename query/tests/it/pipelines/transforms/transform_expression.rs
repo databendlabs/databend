@@ -17,11 +17,10 @@ use std::sync::Arc;
 use common_base::tokio;
 use common_exception::Result;
 use common_planners::*;
+use databend_query::pipelines::processors::*;
+use databend_query::pipelines::transforms::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
-
-use crate::pipelines::processors::*;
-use crate::pipelines::transforms::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_expression() -> Result<()> {
@@ -74,13 +73,6 @@ async fn test_transform_expression() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_expression_error() -> Result<()> {
-    use std::sync::Arc;
-
-    use common_planners::*;
-    use pretty_assertions::assert_eq;
-
-    use crate::pipelines::processors::*;
-
     let ctx = crate::tests::create_query_context()?;
     let test_source = crate::tests::NumberTestData::create(ctx.clone());
 

@@ -13,20 +13,9 @@
 // limitations under the License.
 
 mod pipe;
-mod pipeline;
 mod pipeline_builder;
 mod pipeline_display;
 mod pipeline_walker;
-mod processor;
 mod processor_empty;
 mod processor_merge;
 mod processor_mixed;
-
-pub use pipe::Pipe;
-pub use pipeline::Pipeline;
-pub use pipeline_builder::PipelineBuilder;
-pub use processor::FormatterSettings;
-pub use processor::Processor;
-pub use processor_empty::EmptyProcessor;
-pub use processor_merge::MergeProcessor;
-pub use processor_mixed::MixedProcessor;

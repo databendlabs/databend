@@ -16,21 +16,23 @@ use std::sync::Arc;
 
 use common_base::tokio;
 use common_exception::Result;
+use databend_query::pipelines::processors::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
-use crate::pipelines::processors::*;
-use crate::tests;
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_processor_merge() -> Result<()> {
+async fn transform_source_test() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
-    let test_source = tests::NumberTestData::create(ctx.clone());
+    let test_source = crate::tests::NumberTestData::create(ctx.clone());
 
-    let mut pipeline = Pipeline::create(ctx.clone());
+    let mut pipeline = Pipeline::create(ctx);
 
-    let source = test_source.number_source_transform_for_test(2)?;
-    pipeline.add_source(Arc::new(source))?;
+    let a = test_source.number_source_transform_for_test(1)?;
+    pipeline.add_source(Arc::new(a))?;
+
+    let b = test_source.number_source_transform_for_test(1)?;
+
+    pipeline.add_source(Arc::new(b))?;
     pipeline.merge_processor()?;
 
     let stream = pipeline.execute().await?;
@@ -43,7 +45,7 @@ async fn test_processor_merge() -> Result<()> {
         "| number |",
         "+--------+",
         "| 0      |",
-        "| 1      |",
+        "| 0      |",
         "+--------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

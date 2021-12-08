@@ -12,31 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_base::tokio;
 use common_exception::Result;
+use databend_query::pipelines::processors::*;
 use pretty_assertions::assert_eq;
 
-use crate::pipelines::processors::*;
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_pipe() -> Result<()> {
-    let mut pipe = Pipe::create();
-    let empty = Arc::new(EmptyProcessor::create());
-    pipe.add(empty.clone());
+async fn test_processor_empty() -> Result<()> {
+    let empty = EmptyProcessor::create();
 
-    let num = pipe.nums();
-    assert_eq!(1, num);
+    let expect_name = "EmptyProcessor";
+    let actual_name = empty.name();
+    assert_eq!(expect_name, actual_name);
 
-    let get_empty = pipe.processor_by_index(0);
-    assert_eq!(empty.name(), get_empty.name());
-
-    let first = pipe.first();
-    assert_eq!(empty.name(), first.name());
-
-    let processors = pipe.processors();
-    assert_eq!(empty.name(), processors[0].name());
-
+    empty.execute().await?;
     Ok(())
 }

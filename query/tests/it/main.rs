@@ -19,6 +19,7 @@ mod configs;
 mod interpreters;
 mod metrics;
 mod optimizers;
+mod pipelines;
 mod servers;
 mod sessions;
 mod table_functions;
