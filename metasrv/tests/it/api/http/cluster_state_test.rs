@@ -119,7 +119,7 @@ async fn test_cluster_state() -> common_exception::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_http_service_cluster_state() -> common_exception::Result<()> {
-    let addr_str = "127.0.0.1:0";
+    let addr_str = "127.0.0.1:30003";
 
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
@@ -139,37 +139,35 @@ async fn test_http_service_cluster_state() -> common_exception::Result<()> {
     let mut srv = HttpService::create(tc1.config, meta_node1);
 
     // test cert is issued for "localhost"
-    let state_url = format!("https://{}:0/v1/cluster/state", TEST_CN_NAME);
-    let node_url = format!("https://{}:0/v1/cluster/nodes", TEST_CN_NAME);
+    let state_url = format!("https://{}:30003/v1/cluster/state", TEST_CN_NAME);
+    let node_url = format!("https://{}:30003/v1/cluster/nodes", TEST_CN_NAME);
 
     // load cert
     let mut buf = Vec::new();
     File::open(TEST_CA_CERT)?.read_to_end(&mut buf)?;
     let cert = reqwest::Certificate::from_pem(&buf).unwrap();
 
-    tokio::spawn(async move {
-        srv.start().await.expect("HTTP: admin api error");
-        // kick off
-        let client = reqwest::Client::builder()
-            .add_root_certificate(cert)
-            .build()
-            .unwrap();
-        let resp = client.get(state_url).send().await;
-        assert!(resp.is_ok());
-        let resp = resp.unwrap();
-        assert!(resp.status().is_success());
-        assert_eq!("/v1/cluster/state", resp.url().path());
-        let state_json = resp.json::<serde_json::Value>().await.unwrap();
-        assert_eq!(state_json["voters"].as_array().unwrap().len(), 2);
-        assert_eq!(state_json["non_voters"].as_array().unwrap().len(), 0);
+    srv.start().await.expect("HTTP: admin api error");
+    // kick off
+    let client = reqwest::Client::builder()
+        .add_root_certificate(cert)
+        .build()
+        .unwrap();
+    let resp = client.get(state_url).send().await;
+    assert!(resp.is_ok());
+    let resp = resp.unwrap();
+    assert!(resp.status().is_success());
+    assert_eq!("/v1/cluster/state", resp.url().path());
+    let state_json = resp.json::<serde_json::Value>().await.unwrap();
+    assert_eq!(state_json["voters"].as_array().unwrap().len(), 2);
+    assert_eq!(state_json["non_voters"].as_array().unwrap().len(), 0);
 
-        let resp_nodes = client.get(node_url).send().await;
-        assert!(resp_nodes.is_ok());
-        let resp_nodes = resp_nodes.unwrap();
-        assert!(resp_nodes.status().is_success());
-        assert_eq!("/v1/cluster/nodes", resp_nodes.url().path());
-        let result = resp_nodes.json::<Vec<Node>>().await.unwrap();
-        assert_eq!(result.len(), 2);
-    });
+    let resp_nodes = client.get(node_url).send().await;
+    assert!(resp_nodes.is_ok());
+    let resp_nodes = resp_nodes.unwrap();
+    assert!(resp_nodes.status().is_success());
+    assert_eq!("/v1/cluster/nodes", resp_nodes.url().path());
+    let result = resp_nodes.json::<Vec<Node>>().await.unwrap();
+    assert_eq!(result.len(), 2);
     Ok(())
 }
