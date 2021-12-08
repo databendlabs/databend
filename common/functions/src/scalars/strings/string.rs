@@ -46,6 +46,8 @@ use crate::scalars::SubstringFunction;
 use crate::scalars::SubstringIndexFunction;
 use crate::scalars::TrimFunction;
 use crate::scalars::UnhexFunction;
+use crate::scalars::BinFunction;
+
 
 #[derive(Clone)]
 pub struct StringFunction;
@@ -88,5 +90,6 @@ impl StringFunction {
         factory.register("char_length", CharLengthFunction::desc());
         factory.register("character_length", CharLengthFunction::desc());
         factory.register("ord", OrdFunction::desc());
+        factory.register("bin", BinFunction::desc());
     }
 }
