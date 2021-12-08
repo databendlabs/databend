@@ -22,6 +22,7 @@ mod optimizers;
 mod pipelines;
 mod servers;
 mod sessions;
+mod sql;
 mod table_functions;
 mod tests;
 mod users;

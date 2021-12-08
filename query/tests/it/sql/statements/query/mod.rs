@@ -12,15 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod metrics;
-pub mod parser;
-mod plan_parser;
-mod sql_common;
-mod sql_parser;
-mod sql_statement;
-pub mod statements;
-
-pub use plan_parser::PlanParser;
-pub use sql_common::SQLCommon;
-pub use sql_parser::DfParser;
-pub use sql_statement::*;
+mod query_normalizer;
+mod query_qualified_rewriter;
+mod query_schema_joined_analyzer;

@@ -20,26 +20,25 @@ use common_meta_types::FileFormat;
 use common_meta_types::StageParams;
 use common_meta_types::UserPrivilege;
 use common_meta_types::UserPrivilegeType;
+use databend_query::sql::statements::DfAlterUser;
+use databend_query::sql::statements::DfCopy;
+use databend_query::sql::statements::DfCreateDatabase;
+use databend_query::sql::statements::DfCreateStage;
+use databend_query::sql::statements::DfCreateTable;
+use databend_query::sql::statements::DfCreateUser;
+use databend_query::sql::statements::DfDescribeTable;
+use databend_query::sql::statements::DfDropDatabase;
+use databend_query::sql::statements::DfDropTable;
+use databend_query::sql::statements::DfDropUser;
+use databend_query::sql::statements::DfGrantObject;
+use databend_query::sql::statements::DfGrantStatement;
+use databend_query::sql::statements::DfRevokeStatement;
+use databend_query::sql::statements::DfShowDatabases;
+use databend_query::sql::statements::DfShowTables;
+use databend_query::sql::statements::DfTruncateTable;
+use databend_query::sql::statements::DfUseDatabase;
+use databend_query::sql::*;
 use sqlparser::ast::*;
-
-use crate::sql::statements::DfAlterUser;
-use crate::sql::statements::DfCopy;
-use crate::sql::statements::DfCreateDatabase;
-use crate::sql::statements::DfCreateStage;
-use crate::sql::statements::DfCreateTable;
-use crate::sql::statements::DfCreateUser;
-use crate::sql::statements::DfDescribeTable;
-use crate::sql::statements::DfDropDatabase;
-use crate::sql::statements::DfDropTable;
-use crate::sql::statements::DfDropUser;
-use crate::sql::statements::DfGrantObject;
-use crate::sql::statements::DfGrantStatement;
-use crate::sql::statements::DfRevokeStatement;
-use crate::sql::statements::DfShowDatabases;
-use crate::sql::statements::DfShowTables;
-use crate::sql::statements::DfTruncateTable;
-use crate::sql::statements::DfUseDatabase;
-use crate::sql::*;
 
 fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
     let (statements, _) = DfParser::parse_sql(sql)?;
@@ -234,12 +233,11 @@ fn describe_table() -> Result<()> {
 
 #[test]
 fn show_queries() -> Result<()> {
+    use databend_query::sql::statements::DfShowSettings;
+    use databend_query::sql::statements::DfShowTables;
     use sqlparser::dialect::GenericDialect;
     use sqlparser::parser::Parser;
     use sqlparser::tokenizer::Tokenizer;
-
-    use crate::sql::statements::DfShowSettings;
-    use crate::sql::statements::DfShowTables;
 
     // positive case
     expect_parse_ok("SHOW TABLES", DfStatement::ShowTables(DfShowTables::All))?;
