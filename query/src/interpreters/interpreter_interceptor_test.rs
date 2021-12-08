@@ -14,7 +14,6 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
@@ -28,65 +27,54 @@ async fn test_interpreter_interceptor() -> Result<()> {
 
     {
         let query = "select number from numbers_mt(10)";
-        if let PlanNode::Select(plan) = PlanParser::parse(query, ctx.clone()).await? {
-            let select_executor = SelectInterpreter::try_create(ctx.clone(), plan)?;
-            let interceptor = InterceptorInterpreter::create(ctx.clone(), select_executor);
-            assert_eq!(interceptor.name(), "SelectInterpreter");
+        ctx.attach_query_str(query);
+        let plan = PlanParser::parse(query, ctx.clone()).await?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
+        interpreter.start().await?;
+        let stream = interpreter.execute(None).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
+        let block = &result[0];
+        assert_eq!(block.num_columns(), 1);
 
-            let stream = interceptor.execute(None).await?;
-            let result = stream.try_collect::<Vec<_>>().await?;
-            let block = &result[0];
-            assert_eq!(block.num_columns(), 1);
-
-            let expected = vec![
-                "+--------+",
-                "| number |",
-                "+--------+",
-                "| 0      |",
-                "| 1      |",
-                "| 2      |",
-                "| 3      |",
-                "| 4      |",
-                "| 5      |",
-                "| 6      |",
-                "| 7      |",
-                "| 8      |",
-                "| 9      |",
-                "+--------+",
-            ];
-            common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
-            interceptor.finish().await?;
-        } else {
-            panic!()
-        }
+        let expected = vec![
+            "+--------+",
+            "| number |",
+            "+--------+",
+            "| 0      |",
+            "| 1      |",
+            "| 2      |",
+            "| 3      |",
+            "| 4      |",
+            "| 5      |",
+            "| 6      |",
+            "| 7      |",
+            "| 8      |",
+            "| 9      |",
+            "+--------+",
+        ];
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+        interpreter.finish().await?;
     }
 
     // Check.
     {
-        let query = "select log_type, result_rows, result_bytes from system.query_log";
-        if let PlanNode::Select(plan) = PlanParser::parse(query, ctx.clone()).await? {
-            let select_executor = SelectInterpreter::try_create(ctx.clone(), plan)?;
-            let interceptor = InterceptorInterpreter::create(ctx, select_executor);
-            interceptor.start().await?;
+        let query = "select log_type, read_rows, read_bytes, written_rows, written_bytes, result_rows, result_bytes, query_kind, query_text from system.query_log";
+        let plan = PlanParser::parse(query, ctx.clone()).await?;
+        let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
 
-            let stream = interceptor.execute(None).await?;
-            let result = stream.try_collect::<Vec<_>>().await?;
-            let block = &result[0];
-            assert_eq!(block.num_columns(), 3);
+        let stream = interpreter.execute(None).await?;
+        let result = stream.try_collect::<Vec<_>>().await?;
 
-            let expected = vec![
-                "+----------+-------------+--------------+",
-                "| log_type | result_rows | result_bytes |",
-                "+----------+-------------+--------------+",
-                "| 1        | 0           | 0            |",
-                "| 2        | 10          | 80           |",
-                "+----------+-------------+--------------+",
-            ];
-            common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
-            interceptor.finish().await?;
-        } else {
-            panic!()
-        }
+        let expected = vec![
+            "+----------+-----------+------------+--------------+---------------+-------------+--------------+------------+-----------------------------------+",
+            "| log_type | read_rows | read_bytes | written_rows | written_bytes | result_rows | result_bytes | query_kind | query_text                        |",
+            "+----------+-----------+------------+--------------+---------------+-------------+--------------+------------+-----------------------------------+",
+            "| 1        | 0         | 0          | 0            | 0             | 0           | 0            | SelectPlan | select number from numbers_mt(10) |",
+            "| 2        | 0         | 0          | 0            | 0             | 10          | 80           | SelectPlan | select number from numbers_mt(10) |",
+            "+----------+-----------+------------+--------------+---------------+-------------+--------------+------------+-----------------------------------+",
+        ];
+
+        common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     }
 
     Ok(())

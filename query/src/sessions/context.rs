@@ -161,7 +161,7 @@ impl QueryContext {
     }
 
     pub fn attach_http_query(&self, handle: HttpQueryHandle) {
-        self.shared.attach_http_query(handle);
+        self.shared.attach_http_query_handle(handle);
     }
 
     pub fn attach_query_str(&self, query: &str) {
@@ -289,6 +289,11 @@ impl QueryContext {
     /// Get the data accessor metrics.
     pub fn get_dal_metrics(&self) -> DalMetrics {
         self.shared.dal_ctx.get_metrics()
+    }
+
+    /// Get the session running query.
+    pub fn get_query_str(&self) -> String {
+        self.shared.get_query_str()
     }
 }
 

@@ -87,12 +87,6 @@ impl Session {
         status
             .get_context_shared()
             .as_ref()
-            .and_then(|context_shared| {
-                context_shared
-                    .running_query
-                    .read()
-                    .as_ref()
-                    .map(Clone::clone)
-            })
+            .and_then(|context_shared| Some(context_shared.get_query_str()))
     }
 }

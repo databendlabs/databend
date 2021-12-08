@@ -50,6 +50,7 @@ impl QueryLogTable {
             DataField::new("sql_user_privileges", DataType::String, false),
             // Query.
             DataField::new("query_id", DataType::String, false),
+            DataField::new("query_kind", DataType::String, false),
             DataField::new("query_text", DataType::String, false),
             DataField::new("query_start_time", DataType::DateTime32(None), false),
             DataField::new("query_end_time", DataType::DateTime32(None), false),

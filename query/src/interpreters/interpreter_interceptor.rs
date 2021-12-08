@@ -18,6 +18,7 @@ use common_base::Progress;
 use common_base::ProgressCallback;
 use common_base::ProgressValues;
 use common_exception::Result;
+use common_planners::PlanNode;
 use common_streams::ProgressStream;
 use common_streams::SendableDataBlockStream;
 
@@ -33,10 +34,10 @@ pub struct InterceptorInterpreter {
 }
 
 impl InterceptorInterpreter {
-    pub fn create(ctx: Arc<QueryContext>, inner: InterpreterPtr) -> Self {
+    pub fn create(ctx: Arc<QueryContext>, inner: InterpreterPtr, plan: PlanNode) -> Self {
         InterceptorInterpreter {
             inner,
-            query_log: InterpreterQueryLog::create(ctx),
+            query_log: InterpreterQueryLog::create(ctx, plan),
             result_metric: Arc::new(Progress::create()),
         }
     }

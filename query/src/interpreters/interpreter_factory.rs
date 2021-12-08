@@ -47,7 +47,7 @@ pub struct InterpreterFactory;
 impl InterpreterFactory {
     pub fn get(ctx: Arc<QueryContext>, plan: PlanNode) -> Result<Arc<dyn Interpreter>> {
         let ctx_clone = ctx.clone();
-        let inner = match plan {
+        let inner = match plan.clone() {
             PlanNode::Select(v) => SelectInterpreter::try_create(ctx_clone, v),
             PlanNode::Explain(v) => ExplainInterpreter::try_create(ctx_clone, v),
             PlanNode::CreateDatabase(v) => CreateDatabaseInterpreter::try_create(ctx_clone, v),
@@ -73,6 +73,6 @@ impl InterpreterFactory {
                 plan.name()
             ))),
         }?;
-        Ok(Arc::new(InterceptorInterpreter::create(ctx, inner)))
+        Ok(Arc::new(InterceptorInterpreter::create(ctx, inner, plan)))
     }
 }

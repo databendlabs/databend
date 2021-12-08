@@ -19,6 +19,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::SeriesFrom;
 use common_datavalues::series::Series;
 use common_exception::Result;
+use common_planners::PlanNode;
 
 use crate::sessions::QueryContext;
 
@@ -43,6 +44,7 @@ pub struct LogEvent {
 
     // Query.
     pub query_id: String,
+    pub query_kind: String,
     pub query_text: String,
     pub query_start_time: u64,
     pub query_end_time: u64,
@@ -82,11 +84,12 @@ pub struct LogEvent {
 
 pub struct InterpreterQueryLog {
     ctx: Arc<QueryContext>,
+    plan: PlanNode,
 }
 
 impl InterpreterQueryLog {
-    pub fn create(ctx: Arc<QueryContext>) -> Self {
-        InterpreterQueryLog { ctx }
+    pub fn create(ctx: Arc<QueryContext>, plan: PlanNode) -> Self {
+        InterpreterQueryLog { ctx, plan }
     }
 
     async fn write_log(&self, event: &LogEvent) -> Result<()> {
@@ -104,6 +107,7 @@ impl InterpreterQueryLog {
             Series::new(vec![event.sql_user_quota.as_str()]),
             // Query.
             Series::new(vec![event.query_id.as_str()]),
+            Series::new(vec![event.query_kind.as_str()]),
             Series::new(vec![event.query_text.as_str()]),
             Series::new(vec![event.query_start_time as u64]),
             Series::new(vec![event.query_end_time as u64]),
@@ -151,7 +155,8 @@ impl InterpreterQueryLog {
 
         // Query.
         let query_id = self.ctx.get_id();
-        let query_text = "".to_string();
+        let query_kind = self.plan.name().to_string();
+        let query_text = self.ctx.get_query_str();
 
         // Stats.
         let query_start_time = Instant::now().elapsed().as_secs();
@@ -178,6 +183,7 @@ impl InterpreterQueryLog {
             sql_user_quota: "".to_string(),
             sql_user_privileges: "".to_string(),
             query_id,
+            query_kind,
             query_text,
             query_start_time,
             query_end_time,
@@ -214,7 +220,8 @@ impl InterpreterQueryLog {
 
         // Query.
         let query_id = self.ctx.get_id();
-        let query_text = "".to_string();
+        let query_kind = self.plan.name().to_string();
+        let query_text = self.ctx.get_query_str();
 
         // Stats.
         let query_start_time = 0;
@@ -241,6 +248,7 @@ impl InterpreterQueryLog {
             sql_user_quota: "".to_string(),
             sql_user_privileges: "".to_string(),
             query_id,
+            query_kind,
             query_text,
             query_start_time,
             query_end_time,

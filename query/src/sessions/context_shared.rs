@@ -174,13 +174,19 @@ impl QueryContextShared {
         }
     }
 
-    pub fn attach_http_query(&self, handle: HttpQueryHandle) {
+    pub fn attach_http_query_handle(&self, handle: HttpQueryHandle) {
         let mut http_query = self.http_query.write();
         *http_query = Some(handle);
     }
+
     pub fn attach_query_str(&self, query: &str) {
         let mut running_query = self.running_query.write();
         *running_query = Some(query.to_string());
+    }
+
+    pub fn get_query_str(&self) -> String {
+        let running_query = self.running_query.read();
+        running_query.as_ref().unwrap_or(&"".to_string()).clone()
     }
 
     pub fn attach_query_plan(&self, plan: &PlanNode) {
