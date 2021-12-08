@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use std::io::Write;
 
 use super::string2string::String2StringFunction;
 use super::string2string::StringOperator;
@@ -21,11 +20,11 @@ pub struct Reverse {}
 
 impl StringOperator for Reverse {
     #[inline]
-    fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], mut buffer: &mut [u8]) -> usize {
-        let mut tmp = Vec::new();
-        tmp.extend_from_slice(s);
-        tmp.reverse();
-        buffer.write(tmp.as_slice()).unwrap_or(0)
+    fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
+        let buffer = &mut buffer[0..s.len()];
+        buffer.copy_from_slice(s);
+        buffer.reverse();
+        s.len()
     }
 }
 

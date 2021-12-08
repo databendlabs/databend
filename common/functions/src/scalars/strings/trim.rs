@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use std::io::Write;
 
 use super::string2string::String2StringFunction;
 use super::string2string::StringOperator;
@@ -21,11 +20,13 @@ pub struct LTrim;
 
 impl StringOperator for LTrim {
     #[inline]
-    fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], mut buffer: &mut [u8]) -> usize {
+    fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
         for (idx, ch) in s.iter().enumerate() {
             if *ch != b' ' && *ch != b'\t' {
-                // return Some(&s[idx..]);
-                return buffer.write(&s[idx..]).unwrap_or(0);
+                let len = s.len() - idx;
+                let buffer = &mut buffer[0..s.len() - idx];
+                buffer.copy_from_slice(&s[idx..]);
+                return len;
             }
         }
         0
@@ -36,10 +37,13 @@ impl StringOperator for LTrim {
 pub struct RTrim;
 
 impl StringOperator for RTrim {
-    fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], mut buffer: &mut [u8]) -> usize {
+    fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
         for (idx, ch) in s.iter().rev().enumerate() {
             if *ch != b' ' && *ch != b'\t' {
-                return buffer.write(&s[..s.len() - idx]).unwrap_or(0);
+                let len = s.len() - idx;
+                let buffer = &mut buffer[0..len];
+                buffer.copy_from_slice(&s[..s.len() - idx]);
+                return len;
             }
         }
         0
@@ -50,17 +54,17 @@ impl StringOperator for RTrim {
 pub struct Trim;
 
 impl StringOperator for Trim {
-    fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], mut buffer: &mut [u8]) -> usize {
+    fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
         let start_index = s.iter().position(|ch| *ch != b' ' && *ch != b'\t');
         let end_index = s.iter().rev().position(|ch| *ch != b' ' && *ch != b'\t');
         match (start_index, end_index) {
-            (Some(start_index), Some(end_index)) => buffer
-                .write(&s[start_index..s.len() - end_index])
-                .unwrap_or(0),
-
-            (Some(start_index), None) => buffer.write(&s[start_index..]).unwrap_or(0),
-            (None, Some(end_index)) => buffer.write(&s[..s.len() - end_index]).unwrap_or(0),
-            (None, None) => 0,
+            (Some(start_index), Some(end_index)) => {
+                let len = s.len() - end_index - start_index;
+                let buffer = &mut buffer[0..len];
+                buffer.copy_from_slice(&s[start_index..s.len() - end_index]);
+                len
+            }
+            (_, _) => 0,
         }
     }
 }
