@@ -31,6 +31,7 @@ use crate::scalars::LeftPadFunction;
 use crate::scalars::LocateFunction;
 use crate::scalars::OctFunction;
 use crate::scalars::OctetLengthFunction;
+use crate::scalars::OrdFunction;
 use crate::scalars::PositionFunction;
 use crate::scalars::QuoteFunction;
 use crate::scalars::RTrimFunction;
@@ -86,5 +87,6 @@ impl StringFunction {
         factory.register("rpad", RightPadFunction::desc());
         factory.register("char_length", CharLengthFunction::desc());
         factory.register("character_length", CharLengthFunction::desc());
+        factory.register("ord", OrdFunction::desc());
     }
 }
