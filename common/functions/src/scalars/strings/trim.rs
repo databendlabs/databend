@@ -64,7 +64,7 @@ impl StringOperator for Trim {
             (None, Some(end_index)) => {
                 (buffer.write(&s[..s.len() - end_index]).unwrap_or(0), false)
             }
-            (None, None) => (buffer.write(s).unwrap(), false),
+            (None, None) => (0, false),
         }
     }
 }

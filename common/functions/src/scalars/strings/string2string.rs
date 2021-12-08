@@ -85,7 +85,6 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
             .to_minimal_array()?;
 
         let estimate_bytes = op.estimate_bytes(array.string()?);
-        // tracing::error!("bytes_total: {}", estimate_bytes);
 
         let column: DataColumn = transform(array.string()?, estimate_bytes, |val, buffer| {
             op.apply(val, buffer)
