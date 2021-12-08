@@ -17,10 +17,10 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use common_exception::Result;
+use databend_query::clusters::Cluster;
+use databend_query::sessions::MutableStatus;
+use databend_query::sessions::QueryContextShared;
 
-use crate::clusters::Cluster;
-use crate::sessions::MutableStatus;
-use crate::sessions::QueryContextShared;
 use crate::tests::SessionManagerBuilder;
 
 #[test]

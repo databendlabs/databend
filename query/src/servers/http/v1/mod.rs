@@ -14,10 +14,6 @@
 
 #[cfg(test)]
 mod block_to_json_test;
-#[cfg(test)]
-mod http_query_handlers_test;
-#[cfg(test)]
-mod statement_test;
 
 mod block_to_json;
 mod http_query_handlers;
@@ -39,4 +35,5 @@ pub use load::LoadResponse;
 pub use query::ExecuteStateName;
 pub use query::HttpQueryHandle;
 pub use query::HttpQueryManager;
+pub use statement::statement_handler;
 pub use statement::statement_router;

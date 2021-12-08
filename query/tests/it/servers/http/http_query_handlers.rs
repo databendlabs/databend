@@ -16,6 +16,13 @@ use std::sync::Arc;
 
 use common_base::tokio;
 use common_exception::Result;
+use databend_query::servers::http::v1::make_final_uri;
+use databend_query::servers::http::v1::make_page_uri;
+use databend_query::servers::http::v1::make_state_uri;
+use databend_query::servers::http::v1::query_route;
+use databend_query::servers::http::v1::ExecuteStateName;
+use databend_query::servers::http::v1::QueryResponse;
+use databend_query::sessions::SessionManager;
 use hyper::header;
 use poem::http::Method;
 use poem::http::StatusCode;
@@ -26,15 +33,7 @@ use poem::Request;
 use poem::Response;
 use poem::Route;
 use pretty_assertions::assert_eq;
-use serde_json;
 
-use crate::servers::http::v1::make_final_uri;
-use crate::servers::http::v1::make_page_uri;
-use crate::servers::http::v1::make_state_uri;
-use crate::servers::http::v1::query_route;
-use crate::servers::http::v1::ExecuteStateName;
-use crate::servers::http::v1::QueryResponse;
-use crate::sessions::SessionManager;
 use crate::tests::SessionManagerBuilder;
 
 // TODO(youngsofun): add test for

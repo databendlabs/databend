@@ -23,9 +23,9 @@ use common_base::tokio;
 use common_base::uuid::Uuid;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use databend_query::servers::ClickHouseHandler;
 use tempfile::TempDir;
 
-use crate::servers::ClickHouseHandler;
 use crate::tests::SessionManagerBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

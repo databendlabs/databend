@@ -16,10 +16,10 @@ use std::net::SocketAddr;
 
 use common_base::tokio;
 use common_metrics::init_default_metrics_recorder;
+use databend_query::metrics::MetricService;
+use databend_query::servers::Server;
 use metrics::counter;
 
-use crate::metrics::MetricService;
-use crate::servers::server::Server;
 use crate::tests::SessionManagerBuilder;
 
 pub static METRIC_TEST: &str = "metrics.test";

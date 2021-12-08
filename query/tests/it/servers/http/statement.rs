@@ -14,6 +14,8 @@
 
 use common_base::tokio;
 use common_exception::Result;
+use databend_query::servers::http::v1::statement_handler;
+use databend_query::servers::http::v1::QueryResponse;
 use poem::http::Method;
 use poem::http::StatusCode;
 use poem::post;
@@ -23,8 +25,6 @@ use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
 
-use crate::servers::http::v1::statement::statement_handler;
-use crate::servers::http::v1::QueryResponse;
 use crate::tests::SessionManagerBuilder;
 
 #[tokio::test]
