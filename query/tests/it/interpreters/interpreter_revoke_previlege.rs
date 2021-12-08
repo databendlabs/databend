@@ -18,11 +18,10 @@ use common_meta_types::AuthType;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_planners::*;
-use futures::stream::StreamExt;
-use pretty_assertions::assert_eq;
-
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
+use futures::stream::StreamExt;
+use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_revoke_privilege_interpreter() -> Result<()> {

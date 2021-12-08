@@ -18,11 +18,10 @@ use common_base::tokio;
 use common_exception::Result;
 use common_planners::*;
 use common_planners::{self};
-use futures::TryStreamExt;
-use pretty_assertions::assert_eq;
-
 use databend_query::pipelines::processors::*;
 use databend_query::pipelines::transforms::*;
+use futures::TryStreamExt;
+use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_transform_sort() -> Result<()> {

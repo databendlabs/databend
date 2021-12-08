@@ -21,4 +21,5 @@ mod transform_group_by_partial;
 mod transform_limit;
 mod transform_limit_by;
 mod transform_projection;
+mod transform_sort;
 mod transform_source;

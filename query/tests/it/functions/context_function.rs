@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_exception::Result;
-
 use databend_query::functions::ContextFunction;
 
 #[test]

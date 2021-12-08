@@ -18,7 +18,6 @@ use common_base::tokio;
 use common_datavalues::DataValue;
 use common_exception::Result;
 use common_planners::*;
-
 use databend_query::api::FlightAction;
 use databend_query::interpreters::PlanScheduler;
 use databend_query::sessions::QueryContext;

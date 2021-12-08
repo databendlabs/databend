@@ -16,6 +16,7 @@ mod api;
 mod clusters;
 mod common;
 mod configs;
+mod functions;
 mod interpreters;
 mod metrics;
 mod optimizers;
