@@ -98,8 +98,8 @@ impl TransformerSqlparser {
     fn transform_ddl(&self, orig_ast: &SqlparserStatement) -> Result<Statement> {
         match orig_ast {
             SqlparserStatement::Truncate { table_name, .. } => {
-                let (db, tpl) = self.get_database_and_table_from_idents(&table_name.0);
-                if let Some(table) = tpl {
+                let (db, tbl) = self.get_database_and_table_from_idents(&table_name.0);
+                if let Some(table) = tbl {
                     Ok(Statement::TruncateTable {
                         database: db,
                         table,
@@ -115,16 +115,26 @@ impl TransformerSqlparser {
                 if_not_exists,
                 name,
                 columns,
+                like,
                 ..
             } => {
-                let (db, tpl) = self.get_database_and_table_from_idents(&name.0);
-                let tpl = tpl.ok_or_else(|| {
+                let (db, tbl) = self.get_database_and_table_from_idents(&name.0);
+                let tbl = tbl.ok_or_else(|| {
                     ErrorCode::SyntaxException(format!(
                         "Unsupported SQL statement: {}",
                         self.orig_stmt
                     ))
                 })?;
-                if columns.is_empty() {
+
+                // statement of 'CREATE TABLE db1.table1 LIKE db2.table2'
+                let (like_db, like_table) = match like {
+                    Some(like_table_name) => {
+                        self.get_database_and_table_from_idents(&like_table_name.0)
+                    }
+                    None => (None, None),
+                };
+
+                if like_table.is_none() && columns.is_empty() {
                     return Err(ErrorCode::SyntaxException(format!(
                         "Unsupported SQL statement: {}",
                         self.orig_stmt
@@ -176,13 +186,16 @@ impl TransformerSqlparser {
                     };
                     cols.push(col);
                 }
+
                 Ok(Statement::CreateTable {
                     if_not_exists: *if_not_exists,
                     database: db,
-                    table: tpl,
+                    table: tbl,
                     columns: cols,
                     engine: "".to_string(),
                     options: vec![],
+                    like_db,
+                    like_table,
                 })
             }
             SqlparserStatement::AlterTable { .. } => {

@@ -841,7 +841,19 @@ impl<'a> DfParser<'a> {
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let table_name = self.parser.parse_object_name()?;
+
+        // Parse the table which we copy schema from. This is for create table like statement.
+        // https://dev.mysql.com/doc/refman/8.0/en/create-table-like.html
+        let mut table_like = None;
+        if self.parser.parse_keyword(Keyword::LIKE) {
+            table_like = Some(self.parser.parse_object_name()?);
+        }
+
         let (columns, _) = self.parse_columns()?;
+        if !columns.is_empty() && table_like.is_some() {
+            return parser_err!("mix create table like statement and column definition.");
+        }
+
         let engine = self.parse_table_engine()?;
 
         // parse table options: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
@@ -853,6 +865,7 @@ impl<'a> DfParser<'a> {
             columns,
             engine,
             options,
+            like: table_like,
         };
 
         Ok(DfStatement::CreateTable(create))
