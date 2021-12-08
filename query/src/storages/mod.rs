@@ -26,7 +26,8 @@ pub mod github;
 mod storage_table;
 mod storage_table_read_plan;
 
-pub use fuse::HistoriesTable;
+pub use fuse::FuseHistoriesTable;
+pub use fuse::FUSE_FUNC_HIST;
 pub use storage_context::StorageContext;
 pub use storage_factory::StorageCreator;
 pub use storage_factory::StorageFactory;

@@ -44,24 +44,15 @@ use crate::storages::Table;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
 
-pub struct HistoriesTable {
+pub const FUSE_FUNC_HIST: &str = "fuse$history";
+
+pub struct FuseHistoriesTable {
     table_info: TableInfo,
     arg_database_name: String,
     arg_table_name: String,
 }
 
-impl HistoriesTable {
-    fn string_value(expr: &Expression) -> Result<String> {
-        if let Expression::Literal { value, .. } = expr {
-            String::from_utf8(value.as_string()?)
-                .map_err(|e| ErrorCode::BadArguments(format!("invalid string. {}", e.to_string())))
-        } else {
-            Err(ErrorCode::BadArguments(format!(
-                "expecting string literal, but got {:?}",
-                expr
-            )))
-        }
-    }
+impl FuseHistoriesTable {
     pub fn create(
         database_name: &str,
         table_func_name: &str,
@@ -71,8 +62,9 @@ impl HistoriesTable {
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("snapshot_id", DataType::String, false),
             DataField::new("prev_snapshot_id", DataType::String, true),
-            DataField::new("row_count", DataType::UInt64, false),
+            DataField::new("segment_count", DataType::UInt64, false),
             DataField::new("block_count", DataType::UInt64, false),
+            DataField::new("row_count", DataType::UInt64, false),
             DataField::new("uncompressed_bytes", DataType::UInt64, false),
             DataField::new("compressed_bytes", DataType::UInt64, false),
         ]);
@@ -89,7 +81,7 @@ impl HistoriesTable {
             ))),
         }?;
 
-        let engine = "fuse_hist".to_owned();
+        let engine = FUSE_FUNC_HIST.to_owned();
 
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
@@ -102,30 +94,75 @@ impl HistoriesTable {
             },
         };
 
-        Ok(Arc::new(HistoriesTable {
+        Ok(Arc::new(FuseHistoriesTable {
             table_info,
             arg_database_name,
             arg_table_name,
         }))
     }
 
+    fn string_value(expr: &Expression) -> Result<String> {
+        if let Expression::Literal { value, .. } = expr {
+            String::from_utf8(value.as_string()?)
+                .map_err(|e| ErrorCode::BadArguments(format!("invalid string. {}", e)))
+        } else {
+            Err(ErrorCode::BadArguments(format!(
+                "expecting string literal, but got {:?}",
+                expr
+            )))
+        }
+    }
+
     async fn read_snapshots(
         da: &dyn DataAccessor,
         mut location: Option<String>,
-        snapshots: &mut Vec<TableSnapshot>,
-    ) -> Result<()> {
+    ) -> Result<Vec<TableSnapshot>> {
+        let mut snapshots = vec![];
         while let Some(loc) = &location {
             let snapshot: TableSnapshot = read_obj(da, loc).await?;
-            let prev = snapshot.prev_snapshot_id.clone();
+            let prev = snapshot.prev_snapshot_id;
             snapshots.push(snapshot);
             location = prev.map(|id| snapshot_location(id.to_simple().to_string().as_str()));
         }
-        Ok(())
+        Ok(snapshots)
+    }
+
+    fn snapshots_to_block(&self, snapshots: Vec<TableSnapshot>) -> DataBlock {
+        let len = snapshots.len();
+        let mut snapshot_ids: Vec<Vec<u8>> = Vec::with_capacity(len);
+        let mut prev_snapshot_ids: Vec<Option<Vec<u8>>> = Vec::with_capacity(len);
+        let mut segment_count: Vec<u64> = Vec::with_capacity(len);
+        let mut block_count: Vec<u64> = Vec::with_capacity(len);
+        let mut row_count: Vec<u64> = Vec::with_capacity(len);
+        let mut compressed: Vec<u64> = Vec::with_capacity(len);
+        let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
+        for s in snapshots {
+            snapshot_ids.push(s.snapshot_id.to_simple().to_string().into_bytes());
+            prev_snapshot_ids.push(
+                s.prev_snapshot_id
+                    .map(|v| v.to_simple().to_string().into_bytes()),
+            );
+            segment_count.push(s.segments.len() as u64);
+            block_count.push(s.summary.block_count);
+            row_count.push(s.summary.row_count);
+            compressed.push(s.summary.compressed_byte_size);
+            uncompressed.push(s.summary.uncompressed_byte_size);
+        }
+
+        DataBlock::create_by_array(self.table_info.schema(), vec![
+            Series::new(snapshot_ids),
+            Series::new(prev_snapshot_ids),
+            Series::new(segment_count),
+            Series::new(block_count),
+            Series::new(row_count),
+            Series::new(uncompressed),
+            Series::new(compressed),
+        ])
     }
 }
 
 #[async_trait::async_trait]
-impl Table for HistoriesTable {
+impl Table for FuseHistoriesTable {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -150,6 +187,7 @@ impl Table for HistoriesTable {
         ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
+        // TODO handle limit push_down (of plan)
         let tbl = ctx
             .get_catalog()
             .get_table(
@@ -158,55 +196,26 @@ impl Table for HistoriesTable {
             )
             .await?;
         let tbl_info = tbl.get_table_info();
-        let blocks = if let Some(loc) = tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC) {
-            let da = ctx.get_data_accessor()?;
-            let mut snapshots = vec![];
-            Self::read_snapshots(da.as_ref(), Some(loc.clone()), &mut snapshots).await?;
-            let snapshot_ids: Vec<Vec<u8>> = snapshots
-                .iter()
-                .map(|s| s.snapshot_id.to_simple().to_string().into_bytes())
-                .collect();
-
-            let prev_snapshot_ids: Vec<Option<Vec<u8>>> = snapshots
-                .iter()
-                .map(|s| {
-                    s.prev_snapshot_id
-                        .map(|ref p| p.to_simple().to_string().into_bytes())
-                })
-                .collect();
-
-            let row_count: Vec<u64> = snapshots.iter().map(|s| s.summary.row_count).collect();
-            let block_count: Vec<u64> = snapshots.iter().map(|s| s.summary.block_count).collect();
-            let uncompressed: Vec<u64> = snapshots
-                .iter()
-                .map(|s| s.summary.uncompressed_byte_size)
-                .collect();
-            let compressed: Vec<u64> = snapshots
-                .iter()
-                .map(|s| s.summary.compressed_byte_size)
-                .collect();
-
-            let block = DataBlock::create_by_array(self.table_info.schema(), vec![
-                Series::new(snapshot_ids),
-                Series::new(prev_snapshot_ids),
-                Series::new(row_count),
-                Series::new(block_count),
-                Series::new(uncompressed),
-                Series::new(compressed),
-            ]);
-            Ok::<_, ErrorCode>(vec![block])
-        } else {
-            Ok(vec![])
-        }?;
-        Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema(),
-            None,
-            blocks,
-        )))
+        match tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC) {
+            Some(loc) => {
+                let da = ctx.get_data_accessor()?;
+                let snapshots = Self::read_snapshots(da.as_ref(), Some(loc.clone())).await?;
+                let block = self.snapshots_to_block(snapshots);
+                Ok::<_, ErrorCode>(vec![block])
+            }
+            None => Ok(vec![]),
+        }
+        .map(|blocks| {
+            Box::pin(DataBlockStream::create(
+                self.table_info.schema(),
+                None,
+                blocks,
+            )) as SendableDataBlockStream
+        })
     }
 }
 
-impl TableFunction for HistoriesTable {
+impl TableFunction for FuseHistoriesTable {
     fn function_name(&self) -> &str {
         self.name()
     }
