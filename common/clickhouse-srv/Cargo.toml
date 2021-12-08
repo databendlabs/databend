@@ -21,7 +21,7 @@ common-io = { path = "../io" }
 
 lazy_static = "1.4.0"
 thiserror = "1.0.30"
-chrono-tz = "0.6.0"
+chrono-tz = "0.6.1"
 futures = "0.3.18"
 futures-core = "0.3.18"
 futures-sink = "0.3.18"

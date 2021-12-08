@@ -59,14 +59,14 @@ ahash = "0.7.6"
 async-compat = "0.2.1"
 async-trait = "0.1.51"
 async-stream = "0.3.2"
-poem = { version = "1.0.32", features = ["rustls", "multipart"] }
+poem = { version = "1.0.38", features = ["rustls", "multipart"] }
 bumpalo = "3.8.0"
 byteorder = "1.4.3"
 bytes = "1.1.0"
 cargo-license = "0.4.2"
 cargo_metadata = "0.14.1"
 chrono = "0.4.19"
-chrono-tz = "0.6.0"
+chrono-tz = "0.6.1"
 crossbeam = "0.8.1"
 crossbeam-queue = "0.3.2"
 ctrlc = { version = "3.2.1", features = ["termination"] }
