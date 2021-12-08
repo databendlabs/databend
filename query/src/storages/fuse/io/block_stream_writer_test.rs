@@ -22,6 +22,7 @@ use common_datavalues::series::Series;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
+use futures::StreamExt;
 use tempfile::TempDir;
 
 use crate::storages::fuse::io::BlockStreamWriter;
@@ -37,17 +38,24 @@ async fn test_fuse_table_block_appender() {
     // single segments
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
     let block_stream = futures::stream::iter(vec![Ok(block)]);
-    let r = BlockStreamWriter::write_block_stream(
+
+    let segments = BlockStreamWriter::write_block_stream(
         local_fs.clone(),
         Box::pin(block_stream),
-        schema.as_ref(),
+        schema.clone(),
         DEFAULT_CHUNK_BLOCK_NUM,
         0,
     )
+    .await
+    .collect::<Vec<_>>()
     .await;
-    assert!(r.is_ok(), "oops, unexpected result: {:?}", r);
-    let r = r.unwrap();
-    assert_eq!(r.len(), 1);
+
+    assert_eq!(segments.len(), 1);
+    assert!(
+        segments[0].is_ok(),
+        "oops, unexpected result: {:?}",
+        segments[0]
+    );
 
     // multiple segments
     let number_of_blocks = 30;
@@ -55,30 +63,38 @@ async fn test_fuse_table_block_appender() {
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
     let blocks = std::iter::repeat(Ok(block)).take(number_of_blocks);
     let block_stream = futures::stream::iter(blocks);
-    let r = BlockStreamWriter::write_block_stream(
+
+    let segments = BlockStreamWriter::write_block_stream(
         local_fs.clone(),
         Box::pin(block_stream),
-        schema.as_ref(),
+        schema.clone(),
         chunk_size,
         0,
     )
+    .await
+    .collect::<Vec<_>>()
     .await;
-    assert!(r.is_ok(), "oops, unexpected result: {:?}", r);
-    let r = r.unwrap();
-    assert_eq!(r.len(), number_of_blocks / chunk_size);
+
+    let len = number_of_blocks / chunk_size;
+    assert_eq!(segments.len(), len);
+    for segment in segments.iter() {
+        assert!(segment.is_ok(), "oops, unexpected result: {:?}", segment);
+    }
 
     // empty blocks
     let block_stream = futures::stream::iter(vec![]);
-    let r = BlockStreamWriter::write_block_stream(
+    let segments = BlockStreamWriter::write_block_stream(
         local_fs,
         Box::pin(block_stream),
-        schema.as_ref(),
+        schema,
         DEFAULT_CHUNK_BLOCK_NUM,
         0,
     )
+    .await
+    .collect::<Vec<_>>()
     .await;
-    assert!(r.is_ok(), "oops, unexpected result: {:?}", r);
-    assert!(r.unwrap().is_empty())
+
+    assert!(segments.is_empty())
 }
 
 #[test]
