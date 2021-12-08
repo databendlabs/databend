@@ -5,6 +5,8 @@ runs:
   steps:
     - name: Install Protoc
       uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Rust setup
       shell: bash
