@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::common::hashtable::hash_table_grower::Grower;
+use databend_query::common::Grower;
 
 #[test]
 fn test_hash_table_grower() {

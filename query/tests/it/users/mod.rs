@@ -12,5 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod user_mgr_test;
-mod user_stage_test;
+mod user_mgr;
+mod user_stage;

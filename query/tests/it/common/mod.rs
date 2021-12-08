@@ -12,7 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cluster;
-
-pub use cluster::Cluster;
-pub use cluster::ClusterDiscovery;
+mod hashtable;
