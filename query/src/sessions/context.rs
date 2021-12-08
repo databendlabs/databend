@@ -49,6 +49,7 @@ use crate::configs::AzureStorageBlobConfig;
 use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::QueryContextShared;
+use crate::sessions::Session;
 use crate::sessions::SessionManager;
 use crate::sessions::Settings;
 use crate::storages::Table;
@@ -242,6 +243,10 @@ impl QueryContext {
 
     pub fn get_sessions_manager(self: &Arc<Self>) -> Arc<SessionManager> {
         self.shared.session.get_sessions_manager()
+    }
+
+    pub fn get_session(self: &Arc<Self>) -> Arc<Session> {
+        self.shared.session.clone()
     }
 
     pub fn get_shared_runtime(&self) -> Result<Arc<Runtime>> {

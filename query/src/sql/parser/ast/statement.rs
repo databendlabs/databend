@@ -54,6 +54,8 @@ pub enum Statement {
         // Thus we have to check validity of engine in parser.
         engine: String,
         options: Vec<SQLProperty>,
+        like_db: Option<Identifier>,
+        like_table: Option<Identifier>,
     },
     // Describe schema of a table
     // Like `SHOW CREATE TABLE`
