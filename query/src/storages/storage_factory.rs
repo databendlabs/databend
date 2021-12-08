@@ -69,7 +69,7 @@ impl StorageFactory {
         }
 
         // Register github table engine;
-        {
+        if conf.query.table_engine_github_enabled {
             creators.insert(
                 github::GITHUB_REPO_COMMENTS_TABLE_ENGINE.to_string(),
                 Arc::new(github::RepoCommentsTable::try_create),

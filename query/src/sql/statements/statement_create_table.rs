@@ -43,6 +43,9 @@ pub struct DfCreateTable {
     pub columns: Vec<ColumnDef>,
     pub engine: String,
     pub options: Vec<SqlOption>,
+
+    // The table name after "create .. like" statement.
+    pub like: Option<ObjectName>,
 }
 
 #[async_trait::async_trait]
@@ -51,7 +54,7 @@ impl AnalyzableStatement for DfCreateTable {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let table_meta = self.table_meta(ctx.clone()).await?;
         let if_not_exists = self.if_not_exists;
-        let (db, table) = self.resolve_table(ctx)?;
+        let (db, table) = Self::resolve_table(ctx, &self.name)?;
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::CreateTable(CreateTablePlan {
@@ -65,11 +68,8 @@ impl AnalyzableStatement for DfCreateTable {
 }
 
 impl DfCreateTable {
-    fn resolve_table(&self, ctx: Arc<QueryContext>) -> Result<(String, String)> {
-        let DfCreateTable {
-            name: ObjectName(idents),
-            ..
-        } = self;
+    fn resolve_table(ctx: Arc<QueryContext>, table_name: &ObjectName) -> Result<(String, String)> {
+        let idents = &table_name.0;
         match idents.len() {
             0 => Err(ErrorCode::SyntaxException("Create table name is empty")),
             1 => Ok((ctx.get_current_database(), idents[0].value.clone())),
@@ -108,30 +108,45 @@ impl DfCreateTable {
     }
 
     async fn table_schema(&self, ctx: Arc<QueryContext>) -> Result<DataSchemaRef> {
-        let expr_analyzer = ExpressionAnalyzer::create(ctx);
-        let mut fields = Vec::with_capacity(self.columns.len());
+        match &self.like {
+            // For create table like statement, for example 'CREATE TABLE test2 LIKE db1.test1',
+            // we use the original table's schema.
+            Some(like_table_name) => {
+                // resolve database and table name from 'like statement'
+                let (origin_db_name, origin_table_name) =
+                    Self::resolve_table(ctx.clone(), like_table_name)?;
 
-        for column in &self.columns {
-            let mut nullable = true;
-            let mut default_expr = None;
-            for opt in &column.options {
-                match &opt.option {
-                    ColumnOption::NotNull => {
-                        nullable = false;
-                    }
-                    ColumnOption::Default(expr) => {
-                        let expr = expr_analyzer.analyze(expr).await?;
-                        default_expr = Some(serde_json::to_vec(&expr)?);
-                    }
-                    _ => {}
-                }
+                // use the origin table's schema for the table to create
+                let origin_table = ctx.get_table(&origin_db_name, &origin_table_name).await?;
+                Ok(origin_table.schema())
             }
-            let field = SQLCommon::make_data_type(&column.data_type).map(|data_type| {
-                DataField::new(&column.name.value, data_type, nullable)
-                    .with_default_expr(default_expr)
-            })?;
-            fields.push(field);
+            None => {
+                let expr_analyzer = ExpressionAnalyzer::create(ctx);
+                let mut fields = Vec::with_capacity(self.columns.len());
+
+                for column in &self.columns {
+                    let mut nullable = true;
+                    let mut default_expr = None;
+                    for opt in &column.options {
+                        match &opt.option {
+                            ColumnOption::NotNull => {
+                                nullable = false;
+                            }
+                            ColumnOption::Default(expr) => {
+                                let expr = expr_analyzer.analyze(expr).await?;
+                                default_expr = Some(serde_json::to_vec(&expr)?);
+                            }
+                            _ => {}
+                        }
+                    }
+                    let field = SQLCommon::make_data_type(&column.data_type).map(|data_type| {
+                        DataField::new(&column.name.value, data_type, nullable)
+                            .with_default_expr(default_expr)
+                    })?;
+                    fields.push(field);
+                }
+                Ok(DataSchemaRefExt::create(fields))
+            }
         }
-        Ok(DataSchemaRefExt::create(fields))
     }
 }

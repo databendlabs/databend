@@ -56,6 +56,8 @@ mod test {
             }],
             engine: "".to_string(),
             options: vec![],
+            like_db: None,
+            like_table: None,
         };
         assert_eq!(
             format!("{}", stmt),

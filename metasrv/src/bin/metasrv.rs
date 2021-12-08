@@ -70,7 +70,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
 
     // HTTP API service.
     {
-        let mut srv = HttpService::create(conf.clone());
+        let mut srv = HttpService::create(conf.clone(), meta_node.clone());
         tracing::info!("HTTP API server listening on {}", conf.admin_api_address);
         srv.start().await.expect("Failed to start http server");
         stop_handler.push(srv);

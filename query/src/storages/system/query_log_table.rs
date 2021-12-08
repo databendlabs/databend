@@ -13,55 +13,72 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_infallible::RwLock;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use futures::StreamExt;
 
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 
 pub struct QueryLogTable {
     table_info: TableInfo,
+    max_rows: i32,
+    data: RwLock<VecDeque<DataBlock>>,
 }
 
 impl QueryLogTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("type", DataType::Int8, false),
+            // Type.
+            DataField::new("log_type", DataType::Int8, false),
+            // User.
             DataField::new("tenant_id", DataType::String, false),
             DataField::new("cluster_id", DataType::String, false),
             DataField::new("sql_user", DataType::String, false),
-            DataField::new("sql_user_privileges", DataType::String, false),
             DataField::new("sql_user_quota", DataType::String, false),
-            DataField::new("client_address", DataType::String, false),
+            DataField::new("sql_user_privileges", DataType::String, false),
+            // Query.
             DataField::new("query_id", DataType::String, false),
             DataField::new("query_text", DataType::String, false),
             DataField::new("query_start_time", DataType::DateTime32(None), false),
             DataField::new("query_end_time", DataType::DateTime32(None), false),
+            // Stats.
             DataField::new("written_rows", DataType::UInt64, false),
             DataField::new("written_bytes", DataType::UInt64, false),
             DataField::new("read_rows", DataType::UInt64, false),
             DataField::new("read_bytes", DataType::UInt64, false),
             DataField::new("result_rows", DataType::UInt64, false),
-            DataField::new("result_result", DataType::UInt64, false),
-            DataField::new("memory_usage", DataType::UInt64, false),
+            DataField::new("result_bytes", DataType::UInt64, false),
             DataField::new("cpu_usage", DataType::UInt32, false),
-            DataField::new("exception_code", DataType::Int32, false),
-            DataField::new("exception", DataType::String, false),
+            DataField::new("memory_usage", DataType::UInt64, false),
+            // Client.
             DataField::new("client_info", DataType::String, false),
+            DataField::new("client_address", DataType::String, false),
+            // Schema.
             DataField::new("current_database", DataType::String, false),
             DataField::new("databases", DataType::String, false),
+            DataField::new("tables", DataType::String, false),
             DataField::new("columns", DataType::String, false),
             DataField::new("projections", DataType::String, false),
+            // Exception.
+            DataField::new("exception_code", DataType::Int32, false),
+            DataField::new("exception_text", DataType::String, false),
+            DataField::new("stack_trace", DataType::String, false),
+            // Server.
             DataField::new("server_version", DataType::String, false),
+            // Extra.
+            DataField::new("extra", DataType::String, false),
         ]);
 
         let table_info = TableInfo {
@@ -74,7 +91,16 @@ impl QueryLogTable {
                 ..Default::default()
             },
         };
-        QueryLogTable { table_info }
+        QueryLogTable {
+            table_info,
+            max_rows: 200000,
+            data: RwLock::new(VecDeque::new()),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn set_max_rows(&mut self, max: i32) {
+        self.max_rows = max;
     }
 }
 
@@ -90,92 +116,43 @@ impl Table for QueryLogTable {
 
     async fn read(
         &self,
-        ctx: Arc<QueryContext>,
+        _ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let query_logs = ctx
-            .get_sessions_manager()
-            .get_query_log_memory_store()
-            .list_query_logs();
-
-        let query_log_type_vec: Vec<i8> = query_logs.iter().map(|x| x.query_log_type).collect();
-        let tenant_id_vec: Vec<&str> = query_logs.iter().map(|x| x.tenant_id.as_str()).collect();
-        let cluster_id_vev: Vec<&str> = query_logs.iter().map(|x| x.cluster_id.as_str()).collect();
-        let sql_user_vec: Vec<&str> = query_logs.iter().map(|x| x.sql_user.as_str()).collect();
-        let sql_user_privileges_vec: Vec<&str> = query_logs
-            .iter()
-            .map(|x| x.sql_user_privileges.as_str())
-            .collect();
-        let sql_user_quota_vec: Vec<&str> = query_logs
-            .iter()
-            .map(|x| x.sql_user_quota.as_str())
-            .collect();
-        let client_address_vec: Vec<&str> = query_logs
-            .iter()
-            .map(|x| x.client_address.as_str())
-            .collect();
-        let query_id_vec: Vec<&str> = query_logs.iter().map(|x| x.query_id.as_str()).collect();
-        let query_text_vec: Vec<&str> = query_logs.iter().map(|x| x.query_text.as_str()).collect();
-        let query_start_time_vec: Vec<u32> =
-            query_logs.iter().map(|x| x.query_start_time).collect();
-        let query_end_time_vec: Vec<u32> = query_logs.iter().map(|x| x.query_end_time).collect();
-        let written_rows_vec: Vec<u64> = query_logs.iter().map(|x| x.written_rows).collect();
-        let written_bytes_vec: Vec<u64> = query_logs.iter().map(|x| x.written_bytes).collect();
-        let read_rows_vec: Vec<u64> = query_logs.iter().map(|x| x.read_rows).collect();
-        let read_bytes_vec: Vec<u64> = query_logs.iter().map(|x| x.read_bytes).collect();
-        let result_rows_vec: Vec<u64> = query_logs.iter().map(|x| x.result_rows).collect();
-        let result_result_vec: Vec<u64> = query_logs.iter().map(|x| x.result_result).collect();
-        let memory_usage_vec: Vec<u64> = query_logs.iter().map(|x| x.memory_usage).collect();
-        let cpu_usage_vec: Vec<u32> = query_logs.iter().map(|x| x.cpu_usage).collect();
-        let exception_code_vec: Vec<i32> = query_logs.iter().map(|x| x.exception_code).collect();
-        let exception_vec: Vec<&str> = query_logs.iter().map(|x| x.exception.as_str()).collect();
-        let client_info_vec: Vec<&str> =
-            query_logs.iter().map(|x| x.client_info.as_str()).collect();
-        let current_database_vec: Vec<&str> = query_logs
-            .iter()
-            .map(|x| x.current_database.as_str())
-            .collect();
-        let databases_vec: Vec<&str> = query_logs.iter().map(|x| x.databases.as_str()).collect();
-        let columns_vec: Vec<&str> = query_logs.iter().map(|x| x.columns.as_str()).collect();
-        let projections_vec: Vec<&str> =
-            query_logs.iter().map(|x| x.projections.as_str()).collect();
-        let server_version_vec: Vec<&str> = query_logs
-            .iter()
-            .map(|x| x.server_version.as_str())
-            .collect();
-        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
-            Series::new(query_log_type_vec),
-            Series::new(tenant_id_vec),
-            Series::new(cluster_id_vev),
-            Series::new(sql_user_vec),
-            Series::new(sql_user_privileges_vec),
-            Series::new(sql_user_quota_vec),
-            Series::new(client_address_vec),
-            Series::new(query_id_vec),
-            Series::new(query_text_vec),
-            Series::new(query_start_time_vec),
-            Series::new(query_end_time_vec),
-            Series::new(written_rows_vec),
-            Series::new(written_bytes_vec),
-            Series::new(read_rows_vec),
-            Series::new(read_bytes_vec),
-            Series::new(result_rows_vec),
-            Series::new(result_result_vec),
-            Series::new(memory_usage_vec),
-            Series::new(cpu_usage_vec),
-            Series::new(exception_code_vec),
-            Series::new(exception_vec),
-            Series::new(client_info_vec),
-            Series::new(current_database_vec),
-            Series::new(databases_vec),
-            Series::new(columns_vec),
-            Series::new(projections_vec),
-            Series::new(server_version_vec),
-        ]);
+        let data = self.data.read().clone();
+        let mut blocks = Vec::with_capacity(data.len());
+        for block in data {
+            blocks.push(block);
+        }
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),
             None,
-            vec![block],
+            blocks,
+        )))
+    }
+
+    async fn append_data(
+        &self,
+        _ctx: Arc<QueryContext>,
+        mut stream: SendableDataBlockStream,
+    ) -> Result<SendableDataBlockStream> {
+        while let Some(block) = stream.next().await {
+            let block = block?;
+            self.data.write().push_back(block);
+        }
+
+        // Check overflow.
+        let over = self.data.read().len() as i32 - self.max_rows;
+        if over > 0 {
+            for _x in 0..over {
+                self.data.write().pop_front();
+            }
+        }
+
+        Ok(Box::pin(DataBlockStream::create(
+            std::sync::Arc::new(DataSchema::empty()),
+            None,
+            vec![],
         )))
     }
 }
