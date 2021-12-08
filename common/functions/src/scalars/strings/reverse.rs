@@ -21,11 +21,11 @@ pub struct Reverse {}
 
 impl StringOperator for Reverse {
     #[inline]
-    fn apply<'a>(&'a mut self, s: &'a [u8], mut buffer: &mut [u8]) -> (usize, bool) {
+    fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], mut buffer: &mut [u8]) -> usize {
         let mut tmp = Vec::new();
         tmp.extend_from_slice(s);
         tmp.reverse();
-        (buffer.write(tmp.as_slice()).unwrap_or(0), false)
+        buffer.write(tmp.as_slice()).unwrap_or(0)
     }
 }
 

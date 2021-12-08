@@ -23,7 +23,7 @@ pub struct Quote {}
 
 impl StringOperator for Quote {
     #[inline]
-    fn apply<'a>(&'a mut self, value: &'a [u8], mut buffer: &mut [u8]) -> (usize, bool) {
+    fn apply_with_no_null<'a>(&'a mut self, value: &'a [u8], mut buffer: &mut [u8]) -> usize {
         let mut len = 0;
         for ch in value {
             match *ch {
@@ -38,7 +38,7 @@ impl StringOperator for Quote {
                 _ => len += buffer.write(&[*ch]).unwrap_or(0),
             };
         }
-        (len, false)
+        len
     }
 
     fn estimate_bytes(&self, array: &DFStringArray) -> usize {

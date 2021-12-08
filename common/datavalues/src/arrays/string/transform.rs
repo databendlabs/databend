@@ -19,7 +19,7 @@ use common_arrow::arrow::buffer::MutableBuffer;
 use crate::prelude::*;
 
 pub fn transform<F>(from: &DFStringArray, estimate_bytes: usize, mut f: F) -> DFStringArray
-where F: FnMut(&[u8], &mut [u8]) -> (usize, bool) {
+where F: FnMut(&[u8], &mut [u8]) -> Option<usize> {
     let mut values: MutableBuffer<u8> = MutableBuffer::with_capacity(estimate_bytes);
     let mut offsets: MutableBuffer<i64> = MutableBuffer::with_capacity(from.len() + 1);
     let mut validity = MutableBitmap::with_capacity(from.len());
@@ -31,14 +31,13 @@ where F: FnMut(&[u8], &mut [u8]) -> (usize, bool) {
         for x in from.into_no_null_iter() {
             let bytes =
                 std::slice::from_raw_parts_mut(values.as_mut_ptr(), values.capacity() - offset);
-            let (len, is_null) = f(x, bytes);
-
-            offset += len;
-            offsets.push(i64::from_isize(offset as isize).unwrap());
-            if is_null {
-                validity.push(false);
-            } else {
+            if let Some(len) = f(x, bytes) {
+                offset += len;
+                offsets.push(i64::from_isize(offset as isize).unwrap());
                 validity.push(true);
+            } else {
+                offsets.push(offset as i64);
+                validity.push(false);
             }
         }
         values.set_len(offset);
@@ -49,6 +48,41 @@ where F: FnMut(&[u8], &mut [u8]) -> (usize, bool) {
             offsets.into(),
             values.into(),
             validity,
+        );
+        DFStringArray::from_arrow_array(&array)
+    }
+}
+
+pub fn transform_with_no_null<F>(
+    from: &DFStringArray,
+    estimate_bytes: usize,
+    mut f: F,
+) -> DFStringArray
+where
+    F: FnMut(&[u8], &mut [u8]) -> usize,
+{
+    let mut values: MutableBuffer<u8> = MutableBuffer::with_capacity(estimate_bytes);
+    let mut offsets: MutableBuffer<i64> = MutableBuffer::with_capacity(from.len() + 1);
+    offsets.push(0);
+
+    let mut offset: usize = 0;
+
+    unsafe {
+        for x in from.into_no_null_iter() {
+            let bytes =
+                std::slice::from_raw_parts_mut(values.as_mut_ptr(), values.capacity() - offset);
+            let len = f(x, bytes);
+
+            offset += len;
+            offsets.push(i64::from_isize(offset as isize).unwrap());
+        }
+        values.set_len(offset);
+        values.shrink_to_fit();
+        let array = BinaryArray::<i64>::from_data_unchecked(
+            BinaryArray::<i64>::default_data_type(),
+            offsets.into(),
+            values.into(),
+            from.array.validity().cloned(),
         );
         DFStringArray::from_arrow_array(&array)
     }

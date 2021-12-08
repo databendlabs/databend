@@ -24,12 +24,9 @@ pub struct Encode {
 
 impl StringOperator for Encode {
     #[inline]
-    fn apply<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> (usize, bool) {
+    fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
         self.buf.resize(s.len() * 4 / 3 + 4, 0);
-        (
-            base64::encode_config_slice(s, base64::STANDARD, buffer),
-            false,
-        )
+        base64::encode_config_slice(s, base64::STANDARD, buffer)
     }
 
     fn estimate_bytes(&self, array: &DFStringArray) -> usize {
@@ -38,18 +35,19 @@ impl StringOperator for Encode {
 }
 
 #[derive(Clone, Default)]
-pub struct Decode {
-    buf: Vec<u8>,
-}
+pub struct Decode {}
 
 impl StringOperator for Decode {
     #[inline]
-    fn apply<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> (usize, bool) {
-        self.buf.resize((s.len() + 3) / 4 * 3, 0);
+    fn apply<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> Option<usize> {
         match base64::decode_config_slice(s, base64::STANDARD, buffer) {
-            Ok(len) => (len, false),
-            Err(_) => (0, true),
+            Ok(len) => Some(len),
+            Err(_) => None,
         }
+    }
+
+    fn may_turn_to_null(&self) -> bool {
+        true
     }
 
     fn estimate_bytes(&self, array: &DFStringArray) -> usize {

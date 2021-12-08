@@ -24,7 +24,15 @@ use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
 pub trait StringOperator: Send + Sync + Clone + Default + 'static {
-    fn apply<'a>(&'a mut self, _: &'a [u8], _: &mut [u8]) -> (usize, bool);
+    fn apply<'a>(&'a mut self, _: &'a [u8], _: &mut [u8]) -> Option<usize> {
+        None
+    }
+    fn apply_with_no_null<'a>(&'a mut self, _: &'a [u8], _: &mut [u8]) -> usize {
+        0
+    }
+    fn may_turn_to_null(&self) -> bool {
+        false
+    }
     fn estimate_bytes(&self, array: &DFStringArray) -> usize {
         array.inner().values().len()
     }
@@ -86,10 +94,17 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
 
         let estimate_bytes = op.estimate_bytes(array.string()?);
 
-        let column: DataColumn = transform(array.string()?, estimate_bytes, |val, buffer| {
-            op.apply(val, buffer)
-        })
-        .into();
+        let column: DataColumn = if op.may_turn_to_null() {
+            transform(array.string()?, estimate_bytes, |val, buffer| {
+                op.apply(val, buffer)
+            })
+            .into()
+        } else {
+            transform_with_no_null(array.string()?, estimate_bytes, |val, buffer| {
+                op.apply_with_no_null(val, buffer)
+            })
+            .into()
+        };
 
         Ok(column.resize_constant(input_rows))
     }
