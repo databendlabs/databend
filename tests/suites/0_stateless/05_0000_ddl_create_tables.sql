@@ -15,3 +15,12 @@ create table t2(a int,b int) engine=NotExists; -- {ErrorCode 4003}
 
 DROP TABLE IF EXISTS t;
 DROP TABLE IF EXISTS t2;
+
+CREATE DATABASE db1;
+CREATE DATABASE db2;
+CREATE TABLE db1.test1(a INT, b INT);
+CREATE TABLE db2.test2 LIKE db1.test1;
+INSERT INTO db2.test2 VALUES (3, 5);
+SELECT a+b FROM db2.test2;
+DROP DATABASE db1;
+DROP DATABASE db2;

@@ -143,6 +143,7 @@ fn create_table() -> Result<()> {
             name: Ident::new("location".to_string()),
             value: Value::SingleQuotedString("/data/33.csv".into()),
         }],
+        like: None,
     });
     expect_parse_ok(sql, expected)?;
 
@@ -167,6 +168,22 @@ fn create_table() -> Result<()> {
                 value: Value::SingleQuotedString("foo".into()),
             },
         ],
+        like: None,
+    });
+    expect_parse_ok(sql, expected)?;
+
+    // create table like statement
+    let sql = "CREATE TABLE db1.test1 LIKE db2.test2 ENGINE = Parquet location = 'batcave'";
+    let expected = DfStatement::CreateTable(DfCreateTable {
+        if_not_exists: false,
+        name: ObjectName(vec![Ident::new("db1"), Ident::new("test1")]),
+        columns: vec![],
+        engine: "Parquet".to_string(),
+        options: vec![SqlOption {
+            name: Ident::new("location".to_string()),
+            value: Value::SingleQuotedString("batcave".into()),
+        }],
+        like: Some(ObjectName(vec![Ident::new("db2"), Ident::new("test2")])),
     });
     expect_parse_ok(sql, expected)?;
 
