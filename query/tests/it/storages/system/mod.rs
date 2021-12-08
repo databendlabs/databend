@@ -12,18 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod api;
-mod clusters;
-mod common;
-mod configs;
-mod interpreters;
-mod metrics;
-mod optimizers;
-mod pipelines;
-mod servers;
-mod sessions;
-mod sql;
-mod storages;
-mod table_functions;
-mod tests;
-mod users;
+mod clusters_table;
+mod columns_table;
+mod configs_table;
+mod contributors_table;
+mod credits_table;
+mod databases_table;
+mod functions_table;
+mod metrics_table;
+mod query_log_table;
+mod settings_table;
+mod tables_table;
+mod tracing_table;
+mod users_table;

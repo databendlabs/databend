@@ -12,5 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod block_to_json;
 mod http_query_handlers;
 mod statement;

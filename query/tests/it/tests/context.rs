@@ -56,6 +56,7 @@ pub fn create_query_context_with_config(config: Config) -> Result<Arc<QueryConte
     Ok(context)
 }
 
+#[allow(dead_code)]
 pub fn create_catalog_context() -> Result<CatalogContext> {
     let meta_embedded = futures::executor::block_on(MetaEmbedded::new_temp()).unwrap();
     let meta = meta_embedded;

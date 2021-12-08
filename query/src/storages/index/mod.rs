@@ -11,18 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-
-#[cfg(test)]
-mod index_min_max_test;
-#[cfg(test)]
-mod index_sparse_test;
-#[cfg(test)]
-mod range_filter_test;
 
 mod index_min_max;
 mod index_sparse;
-mod range_filter;
+pub mod range_filter;
 
 pub use index_min_max::MinMaxIndex;
 pub use index_sparse::SparseIndex;

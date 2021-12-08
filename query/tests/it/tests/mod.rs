@@ -15,6 +15,7 @@
 mod catalog;
 mod context;
 mod number;
+#[allow(dead_code)]
 mod parquet;
 mod parse_query;
 mod sessions;

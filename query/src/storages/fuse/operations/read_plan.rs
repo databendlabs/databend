@@ -47,7 +47,7 @@ impl FuseTable {
         }
     }
 
-    pub(crate) fn to_partitions(
+    pub fn to_partitions(
         blocks_metas: &[BlockMeta],
         push_downs: Option<Extras>,
     ) -> (Statistics, Partitions) {

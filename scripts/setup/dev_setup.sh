@@ -341,7 +341,6 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 		;;
 	esac
 
-
 	install_rustup "$BATCH_MODE"
 	install_toolchain "$(cat ./rust-toolchain)"
 

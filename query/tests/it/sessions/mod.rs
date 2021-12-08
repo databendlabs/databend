@@ -12,18 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod api;
-mod clusters;
-mod common;
-mod configs;
-mod interpreters;
-mod metrics;
-mod optimizers;
-mod pipelines;
-mod servers;
-mod sessions;
-mod sql;
-mod storages;
-mod table_functions;
-mod tests;
-mod users;
+mod session;
+mod session_status;

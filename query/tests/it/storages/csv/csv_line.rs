@@ -12,18 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod api;
-mod clusters;
-mod common;
-mod configs;
-mod interpreters;
-mod metrics;
-mod optimizers;
-mod pipelines;
-mod servers;
-mod sessions;
-mod sql;
-mod storages;
-mod table_functions;
-mod tests;
-mod users;
+use std::env;
+
+use common_exception::Result;
+use databend_query::storages::csv::count_lines;
+use pretty_assertions::assert_eq;
+
+#[test]
+fn test_lines_count() -> Result<()> {
+    let file = env::current_dir()?
+        .join("../tests/data/sample.csv")
+        .display()
+        .to_string();
+
+    let lines = count_lines(std::fs::File::open(file.as_str())?)?;
+    assert_eq!(6, lines);
+    Ok(())
+}

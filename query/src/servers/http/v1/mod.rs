@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod block_to_json_test;
-
-mod block_to_json;
+pub mod block_to_json;
 mod http_query_handlers;
 mod load;
 mod query;

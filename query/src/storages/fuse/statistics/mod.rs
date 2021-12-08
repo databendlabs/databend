@@ -11,13 +11,9 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
 
-#[cfg(test)]
-mod accumulator_test;
-
-mod accumulator;
-mod reducers;
+pub mod accumulator;
+pub mod reducers;
 
 pub use accumulator::PartiallyAccumulated;
 pub use accumulator::StatisticsAccumulator;
