@@ -890,9 +890,9 @@ dependencies = [
 
 [[package]]
 name = "chrono-tz"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64c01c1c607d25c71bbaa67c113d6c6b36c434744b4fd66691d711b5b1bc0c8b"
+checksum = "58549f1842da3080ce63002102d5bc954c7bc843d4f47818e642abdc36253552"
 dependencies = [
  "chrono",
  "chrono-tz-build",
