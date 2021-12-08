@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
+
 use common_datavalues::prelude::DFStringArray;
 
 use super::string2string::String2StringFunction;
@@ -21,33 +23,26 @@ pub struct Quote {}
 
 impl StringOperator for Quote {
     #[inline]
-    fn apply<'a>(&'a mut self, value: &'a [u8], buffer: &mut [u8]) -> usize {
+    fn apply<'a>(&'a mut self, value: &'a [u8], mut buffer: &mut [u8]) -> (usize, bool) {
         let mut len = 0;
         for ch in value {
             match *ch {
-                0 | b'\'' | b'\"' | 8 | b'\n' | b'\r' | b'\t' | b'\\' => len += 2,
-                _ => len += 1,
-            };
-            match *ch {
-                0 => buffer.copy_from_slice(&[b'\\', b'0']),
-                b'\'' => buffer.copy_from_slice(&[b'\\', b'\'']),
-                b'\"' => buffer.copy_from_slice(&[b'\\', b'\"']),
-                8 => buffer.copy_from_slice(&[b'\\', b'b']),
-                b'\n' => buffer.copy_from_slice(&[b'\\', b'n']),
-                b'\r' => buffer.copy_from_slice(&[b'\\', b'r']),
-                b'\t' => buffer.copy_from_slice(&[b'\\', b't']),
-                b'\\' => buffer.copy_from_slice(&[b'\\', b'\\']),
-                _ => buffer.copy_from_slice(&[*ch]),
+                0 => len += buffer.write(&[b'\\', b'0']).unwrap_or(0),
+                b'\'' => len += buffer.write(&[b'\\', b'\'']).unwrap_or(0),
+                b'\"' => len += buffer.write(&[b'\\', b'\"']).unwrap_or(0),
+                8 => len += buffer.write(&[b'\\', b'b']).unwrap_or(0),
+                b'\n' => len += buffer.write(&[b'\\', b'n']).unwrap_or(0),
+                b'\r' => len += buffer.write(&[b'\\', b'r']).unwrap_or(0),
+                b'\t' => len += buffer.write(&[b'\\', b't']).unwrap_or(0),
+                b'\\' => len += buffer.write(&[b'\\', b'\\']).unwrap_or(0),
+                _ => len += buffer.write(&[*ch]).unwrap_or(0),
             };
         }
-        len
+        (len, false)
     }
 
     fn estimate_bytes(&self, array: &DFStringArray) -> usize {
-        array.into_no_null_iter().fold(0, |mut total_bytes, x| {
-            total_bytes += x.len() * 2;
-            total_bytes
-        })
+        array.inner().values().len() * 2
     }
 }
 

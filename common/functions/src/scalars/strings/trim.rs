@@ -21,14 +21,14 @@ pub struct LTrim;
 
 impl StringOperator for LTrim {
     #[inline]
-    fn apply<'a>(&'a mut self, s: &'a [u8], mut buffer: &mut [u8]) -> usize {
+    fn apply<'a>(&'a mut self, s: &'a [u8], mut buffer: &mut [u8]) -> (usize, bool) {
         for (idx, ch) in s.iter().enumerate() {
             if *ch != b' ' && *ch != b'\t' {
                 // return Some(&s[idx..]);
-                return buffer.write(&s[idx..]).unwrap_or(0);
+                return (buffer.write(&s[idx..]).unwrap_or(0), false);
             }
         }
-        0
+        (0, false)
     }
 }
 
@@ -36,14 +36,13 @@ impl StringOperator for LTrim {
 pub struct RTrim;
 
 impl StringOperator for RTrim {
-    fn apply<'a>(&'a mut self, s: &'a [u8], mut buffer: &mut [u8]) -> usize {
+    fn apply<'a>(&'a mut self, s: &'a [u8], mut buffer: &mut [u8]) -> (usize, bool) {
         for (idx, ch) in s.iter().rev().enumerate() {
             if *ch != b' ' && *ch != b'\t' {
-                // return Some(&s[..s.len() - idx]);
-                return buffer.write(&s[..s.len() - idx]).unwrap_or(0);
+                return (buffer.write(&s[..s.len() - idx]).unwrap_or(0), false);
             }
         }
-        0
+        (0, false)
     }
 }
 
@@ -51,12 +50,22 @@ impl StringOperator for RTrim {
 pub struct Trim;
 
 impl StringOperator for Trim {
-    fn apply<'a>(&'a mut self, s: &'a [u8], _: &mut [u8]) -> usize {
+    fn apply<'a>(&'a mut self, s: &'a [u8], mut buffer: &mut [u8]) -> (usize, bool) {
         let start_index = s.iter().position(|ch| *ch != b' ' && *ch != b'\t');
         let end_index = s.iter().rev().position(|ch| *ch != b' ' && *ch != b'\t');
-        start_index.and_then(|start| end_index.map(|end| &s[start..s.len() - end]));
-        // TODO(Veeupup) need to make trim done
-        1
+        match (start_index, end_index) {
+            (Some(start_index), Some(end_index)) => (
+                buffer
+                    .write(&s[start_index..s.len() - end_index])
+                    .unwrap_or(0),
+                false,
+            ),
+            (Some(start_index), None) => (buffer.write(&s[start_index..]).unwrap_or(0), false),
+            (None, Some(end_index)) => {
+                (buffer.write(&s[..s.len() - end_index]).unwrap_or(0), false)
+            }
+            (None, None) => (buffer.write(s).unwrap(), false),
+        }
     }
 }
 

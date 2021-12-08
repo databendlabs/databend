@@ -24,9 +24,12 @@ pub struct Encode {
 
 impl StringOperator for Encode {
     #[inline]
-    fn apply<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
+    fn apply<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> (usize, bool) {
         self.buf.resize(s.len() * 4 / 3 + 4, 0);
-        base64::encode_config_slice(s, base64::STANDARD, buffer)
+        (
+            base64::encode_config_slice(s, base64::STANDARD, buffer),
+            false,
+        )
     }
 
     fn estimate_bytes(&self, array: &DFStringArray) -> usize {
@@ -41,9 +44,12 @@ pub struct Decode {
 
 impl StringOperator for Decode {
     #[inline]
-    fn apply<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
+    fn apply<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> (usize, bool) {
         self.buf.resize((s.len() + 3) / 4 * 3, 0);
-        base64::decode_config_slice(s, base64::STANDARD, buffer).unwrap_or(0)
+        match base64::decode_config_slice(s, base64::STANDARD, buffer) {
+            Ok(len) => (len, false),
+            Err(_) => (0, true),
+        }
     }
 
     fn estimate_bytes(&self, array: &DFStringArray) -> usize {

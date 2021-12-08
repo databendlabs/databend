@@ -24,7 +24,7 @@ use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
 pub trait StringOperator: Send + Sync + Clone + Default + 'static {
-    fn apply<'a>(&'a mut self, _: &'a [u8], _: &mut [u8]) -> usize;
+    fn apply<'a>(&'a mut self, _: &'a [u8], _: &mut [u8]) -> (usize, bool);
     fn estimate_bytes(&self, array: &DFStringArray) -> usize {
         array.inner().values().len()
     }
@@ -87,29 +87,11 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
         let estimate_bytes = op.estimate_bytes(array.string()?);
         // tracing::error!("bytes_total: {}", estimate_bytes);
 
-        let column: DataColumn = array
-            .string()?
-            // TODO(veeupup) use into_no_null_iter to make branch prediction works good
-            .into_iter()
-            .fold(
-                EfficientStringArrayBuilder::with_capacity(
-                    columns[0].column().len(),
-                    estimate_bytes,
-                ),
-                |mut builder, s| {
-                    match s {
-                        Some(x) => {
-                            builder.write_values(|buffer| op.apply(x, buffer));
-                        }
-                        None => {
-                            builder.write_null();
-                        }
-                    }
-                    builder
-                },
-            )
-            .finish()
-            .into();
+        let column: DataColumn = transform(array.string()?, estimate_bytes, |val, buffer| {
+            op.apply(val, buffer)
+        })
+        .into();
+
         Ok(column.resize_constant(input_rows))
     }
 }

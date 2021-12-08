@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use common_datavalues::prelude::DFStringArray;
+use std::io::Write;
 
 use super::string2string::String2StringFunction;
 use super::string2string::StringOperator;
@@ -21,19 +21,11 @@ pub struct Reverse {}
 
 impl StringOperator for Reverse {
     #[inline]
-    fn apply<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
+    fn apply<'a>(&'a mut self, s: &'a [u8], mut buffer: &mut [u8]) -> (usize, bool) {
         let mut tmp = Vec::new();
-        tmp.copy_from_slice(s);
+        tmp.extend_from_slice(s);
         tmp.reverse();
-        buffer.copy_from_slice(tmp.as_slice());
-        s.len()
-    }
-
-    fn estimate_bytes(&self, array: &DFStringArray) -> usize {
-        array.into_no_null_iter().fold(0, |mut total_bytes, x| {
-            total_bytes += x.len();
-            total_bytes
-        })
+        (buffer.write(tmp.as_slice()).unwrap_or(0), false)
     }
 }
 
