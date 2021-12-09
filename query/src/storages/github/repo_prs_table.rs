@@ -43,6 +43,9 @@ const STATE: &str = "state";
 const USER: &str = "user";
 const LABELS: &str = "labels";
 const ASSIGNESS: &str = "assigness";
+const CREATED_AT: &str = "created_at";
+const UPDATED_AT: &str = "updated_at";
+const CLOSED_AT: &str = "closed_at";
 
 pub struct RepoPrsTable {
     table_info: TableInfo,
@@ -80,6 +83,9 @@ impl RepoPrsTable {
             DataField::new(USER, DataType::String, true),
             DataField::new(LABELS, DataType::String, true),
             DataField::new(ASSIGNESS, DataType::String, true),
+            DataField::new(CREATED_AT, DataType::DateTime32(None), true),
+            DataField::new(UPDATED_AT, DataType::DateTime32(None), true),
+            DataField::new(CLOSED_AT, DataType::DateTime32(None), true),
         ];
 
         Arc::new(DataSchema::new(fields))
@@ -94,6 +100,9 @@ impl RepoPrsTable {
         let mut user_array: Vec<Vec<u8>> = Vec::new();
         let mut labels_array: Vec<Vec<u8>> = Vec::new();
         let mut assigness_array: Vec<Vec<u8>> = Vec::new();
+        let mut created_at_array: Vec<Option<u32>> = Vec::new();
+        let mut updated_at_array: Vec<Option<u32>> = Vec::new();
+        let mut closed_at_array: Vec<Option<u32>> = Vec::new();
 
         // get owner repo info from table meta
         let (owner, repo) = get_own_repo_from_table_info(&self.table_info)?;
@@ -167,6 +176,18 @@ impl RepoPrsTable {
                 .unwrap_or_else(|| vec![b' ']);
             assignees_str.pop();
             assigness_array.push(assignees_str);
+            let created_at = pr
+                .created_at
+                .map(|created_at| (created_at.timestamp_millis() / 1000) as u32);
+            created_at_array.push(created_at);
+            let updated_at = pr
+                .updated_at
+                .map(|updated_at| (updated_at.timestamp_millis() / 1000) as u32);
+            updated_at_array.push(updated_at);
+            let closed_at = pr
+                .closed_at
+                .map(|closed_at| (closed_at.timestamp_millis() / 1000) as u32);
+            closed_at_array.push(closed_at);
         }
 
         Ok(vec![
@@ -176,6 +197,9 @@ impl RepoPrsTable {
             Series::new(user_array),
             Series::new(labels_array),
             Series::new(assigness_array),
+            Series::new(created_at_array),
+            Series::new(updated_at_array),
+            Series::new(closed_at_array),
         ])
     }
 }
