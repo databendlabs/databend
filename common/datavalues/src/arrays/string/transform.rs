@@ -71,8 +71,10 @@ where
 
     unsafe {
         for x in from.into_no_null_iter() {
-            let bytes =
-                std::slice::from_raw_parts_mut(values.as_mut_ptr(), values.capacity() - offset);
+            let bytes = std::slice::from_raw_parts_mut(
+                values.as_mut_ptr().add(offset),
+                values.capacity() - offset,
+            );
             let len = f(x, bytes);
 
             offset += len;
