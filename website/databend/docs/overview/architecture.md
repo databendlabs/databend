@@ -28,7 +28,7 @@ In current implementation, the meta service has many components:
 * Administration, which stores user info, user management, access control information, usage statistics, etc.
 * Security, which performs authorization and authentication to protect the privacy of users' data.
 
-The code of `Meta Service Layer` mainly resides in the `store` directory of the repository.
+The code of `Meta Service Layer` mainly resides in the `metasrv` directory of the repository.
 
 ## Compute Layer
 
