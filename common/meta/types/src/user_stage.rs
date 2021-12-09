@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::str::FromStr;
 
 use common_exception::ErrorCode;
@@ -33,11 +34,11 @@ pub enum Credentials {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct FileFormat {
-    format: Format,
-    record_delimiter: String,
-    field_delimiter: String,
-    csv_header: bool,
-    compression: Compression,
+    pub format: Format,
+    pub record_delimiter: String,
+    pub field_delimiter: String,
+    pub csv_header: bool,
+    pub compression: Compression,
 }
 
 impl Default for FileFormat {
@@ -48,6 +49,27 @@ impl Default for FileFormat {
             ..Default::default()
         }
     }
+}
+
+
+impl FileFormat {
+    pub fn inject_from_map(&mut self, map: HashMap<String, String>) -> Result<()> {
+        for (k,v) in map.iter_mut() {
+            let v = v.to_lowercase().trim_matches('\'').trim_matches('"').trim_matches('`');
+            match k.to_lowercase().as_str() {
+                "format" => self.format = Format::from_str(v)?,
+                "record_delimiter" => self.record_delimiter = v.to_string(),
+                "field_delimiter" => self.field_delimiter = v.to_string(),
+                "csv_header" => self.csv_header = v == "1" || v == "true",
+                "compression" => self.compression = Compression::from_str(v)?,
+                k =>  Err(format!("no match for key {}", k))?,
+            }
+        }
+
+        Ok(())
+    }
+}
+
 
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -60,6 +82,20 @@ pub enum Format {
 impl Default for Format {
     fn default() -> Self {
         Self::Csv
+    }
+}
+
+impl FromStr for Format {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> std::result::Result<Compression, &'static str> {
+        let s = s.to_lowercase();
+        match s.as_str() {
+            "csv" => Ok(Format::Csv),
+            "parquet" => Ok(Format::Parquet),
+            "json" => Ok(Compression::Json),
+            _ => Err("no match for format"),
+        }
     }
 }
 
@@ -89,16 +125,16 @@ impl FromStr for Compression {
     type Err = &'static str;
 
     fn from_str(s: &str) -> std::result::Result<Compression, &'static str> {
-        let s = s.to_uppercase();
+        let s = s.to_lowercase();
         match s.as_str() {
-            "AUTO" => Ok(Compression::Auto),
-            "GZIP" => Ok(Compression::Gzip),
-            "BZ2" => Ok(Compression::Bz2),
-            "BROTLI" => Ok(Compression::Brotli),
-            "ZSTD" => Ok(Compression::Zstd),
-            "DEFLATE" => Ok(Compression::Deflate),
-            "RAW_DEFLATE" => Ok(Compression::RawDeflate),
-            "NONE" => Ok(Compression::None),
+            "auto" => Ok(Compression::Auto),
+            "gzip" => Ok(Compression::Gzip),
+            "bz2" => Ok(Compression::Bz2),
+            "brotli" => Ok(Compression::Brotli),
+            "zstd" => Ok(Compression::Zstd),
+            "deflate" => Ok(Compression::Deflate),
+            "raw_deflate" => Ok(Compression::RawDeflate),
+            "none" => Ok(Compression::None),
             _ => Err("no match for compression"),
         }
     }

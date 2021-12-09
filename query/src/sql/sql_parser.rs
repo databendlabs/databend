@@ -50,6 +50,7 @@ use sqlparser::tokenizer::Whitespace;
 
 use super::statements::DfCopy;
 use super::statements::DfDescribeStage;
+use crate::common::HashMap;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCompactTable;
 use crate::sql::statements::DfCreateDatabase;
@@ -703,73 +704,15 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    fn parse_stage_file_format(&mut self) -> Result<Option<FileFormat>, ParserError> {
+    fn parse_stage_file_format(&mut self) -> Result<FileFormat, ParserError> {
         let mut file_format = FileFormat::default();
         if self.consume_token("FILE_FORMAT") {
             self.parser.expect_token(&Token::Eq)?;
             self.parser.expect_token(&Token::LParen)?;
-
-
-            let format = if self.consume_token("FORMAT") {
-                self.parser.expect_token(&Token::Eq)?;
-                self.parser.next_token().to_string()
-            };
-
-            let file_format = match format.to_uppercase().as_str() {
-                "CSV" | "PARQUET" => {
-                    let compression = if self.consume_token("COMPRESSION") {
-                        self.parser.expect_token(&Token::Eq)?;
-                        //TODO:check compression value correctness
-                        let value = self.parser.next_token().to_string();
-                        Compression::from_str(value.as_str())
-                            .map_err(|e| ParserError::ParserError(e.to_string()))?
-                    } else {
-                        Compression::None
-                    };
-                    if "CSV" == format.to_uppercase().as_str() {
-                        if self.consume_token("RECORD_DELIMITER") {
-                            self.parser.expect_token(&Token::Eq)?;
-
-                            let record_delimiter = match self.parser.next_token() {
-                                Token::Word(w) => match w.value.to_uppercase().as_str() {
-                                    "NONE" => String::from(""),
-                                    _ => {
-                                        return self
-                                            .expected("record delimiter NONE", Token::Word(w))
-                                    }
-                                },
-                                Token::SingleQuotedString(s) => s,
-                                unexpected => {
-                                    return self
-                                        .expected("not supported record delimiter", unexpected)
-                                }
-                            };
-
-                            Some(FileFormat::Csv {
-                                compression,
-                                record_delimiter,
-                            })
-                        } else {
-                            Some(FileFormat::Csv {
-                                compression,
-                                record_delimiter: String::from(""),
-                            })
-                        }
-                    } else {
-                        Some(FileFormat::Parquet { compression })
-                    }
-                }
-                "JSON" => Some(FileFormat::Json),
-                unexpected => {
-                    return parser_err!(format!(
-                        "Expected format type {}, found: {}",
-                        "CSV|PARQUET|JSON", unexpected
-                    ))
-                }
-            };
-
+            let options = self.parse_options_to_map()?;
             self.parser.expect_token(&Token::RParen)?;
-            file_format
+
+            file_format.inject_from_map(options);
         } else {
             None
         };
@@ -1081,6 +1024,22 @@ impl<'a> DfParser<'a> {
             self.parser.expect_token(&Token::Eq)?;
             let value = self.parse_value()?;
             options.push(SqlOption { name, value });
+        }
+        Ok(options)
+    }
+
+    fn parse_options_to_map(&mut self) -> Result<HashMap<String, String>, ParserError> {
+        let mut options = HashMap::new();
+        loop {
+            let name = self.parser.parse_identifier();
+            if name.is_err() {
+                break;
+            }
+            let name = name.unwrap();
+            self.parser.expect_token(&Token::Eq)?;
+            let value = self.parse_value()?;
+
+            options.insert(name.to_string(), value.to_string());
         }
         Ok(options)
     }
