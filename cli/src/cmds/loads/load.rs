@@ -119,34 +119,34 @@ impl LoadCommand {
             .arg(
                 Arg::new("profile")
                     .long("profile")
-                    .about("Profile to run queries")
+                    .help("Profile to run queries")
                     .required(false)
                     .possible_values(&["local"])
                     .default_value("local"),
             )
             .arg(
                 Arg::new("format").long("format")
-                    .about("the format of file, support csv")
+                    .help("the format of file, support csv")
                     .takes_value(true)
                     .required(false)
                     .default_value("csv"),
             )
             .arg(
                 Arg::new("schema").long("schema")
-                    .about("defined schema for table load, for example:\
+                    .help("defined schema for table load, for example:\
                     bendctl load --schema a:uint8, b:uint64, c:String")
                     .takes_value(true)
                     .required(false),
             )
             .arg(
                 Arg::new("load")
-                    .about("file to get loaded for example foo.csv")
+                    .help("file to get loaded for example foo.csv")
                     .takes_value(true)
                     .required(false),
             )
             .arg(
                 Arg::new("skip_header_lines").long("skip-header-lines")
-                    .about("state on whether CSV has dataset header for example: \
+                    .help("state on whether CSV has dataset header for example: \
                     bendctl load test.csv --with_header true would ignore the first ten lines in csv file")
                     .default_value("1")
                     .required(false)
@@ -154,7 +154,7 @@ impl LoadCommand {
             )
             .arg(
                 Arg::new("table").long("table")
-                .about("database table")
+                .help("database table")
                 .takes_value(true)
                 .required(true),
             );

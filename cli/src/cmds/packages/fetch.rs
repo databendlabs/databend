@@ -208,7 +208,7 @@ impl Command for FetchCommand {
     fn clap(&self) -> App<'static> {
         App::new("fetch").about(self.about()).arg(
             Arg::new("version")
-                .about("Version of databend package to fetch")
+                .help("Version of databend package to fetch")
                 .default_value("latest"),
         )
     }

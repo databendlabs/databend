@@ -54,7 +54,7 @@ impl Command for SwitchCommand {
     fn clap(&self) -> App<'static> {
         App::new("switch")
             .about(self.about())
-            .arg(Arg::new("version").required(true).about(
+            .arg(Arg::new("version").required(true).help(
             "Version of databend package, e.g. v0.4.69-nightly. Check the versions: package list",
         ))
     }

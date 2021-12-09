@@ -144,7 +144,7 @@ impl Command for StopCommand {
             .arg(
                 Arg::new("profile")
                     .long("profile")
-                    .about("Profile to delete, support local and clusters")
+                    .help("Profile to delete, support local and clusters")
                     .required(false)
                     .takes_value(true),
             )
@@ -152,7 +152,7 @@ impl Command for StopCommand {
                 Arg::new("purge")
                     .long("purge")
                     .takes_value(false)
-                    .about("Purge would delete both persist data and deploy instances"),
+                    .help("Purge would delete both persist data and deploy instances"),
             )
     }
 

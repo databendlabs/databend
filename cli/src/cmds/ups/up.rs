@@ -466,14 +466,14 @@ impl Command for UpCommand {
             .arg(
                 Arg::new("profile")
                     .long("profile")
-                    .about("Profile to run queries")
+                    .help("Profile to run queries")
                     .required(false)
                     .possible_values(&["local"])
                     .default_value("local"),
             )
             .arg(
                 Arg::new("dataset")
-                    .about("Prepared datasets")
+                    .help("Prepared datasets")
                     .takes_value(true)
                     .possible_values(&["ontime_mini"])
                     .default_value("ontime_mini")
