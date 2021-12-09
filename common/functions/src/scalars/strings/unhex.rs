@@ -66,32 +66,28 @@ impl Function for UnhexFunction {
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         const BUFFER_SIZE: usize = 32;
-        let mut buffer = [0; BUFFER_SIZE];
-        let mut string_array = StringArrayBuilder::with_capacity(columns[0].column().len());
 
-        for value in columns[0]
+        let array = columns[0]
             .column()
             .cast_with_type(&DataType::String)?
-            .to_minimal_array()?
-            .string()?
-        {
-            match value {
-                Some(value) => {
-                    if value.len() <= BUFFER_SIZE * 2 {
-                        let size = value.len() / 2;
-                        match hex::decode_to_slice(value, &mut buffer[..size]) {
-                            Ok(()) => string_array.append_value(&buffer[..size]),
-                            Err(_) => string_array.append_null(),
-                        }
-                    } else {
-                        string_array.append_option(hex::decode(value).ok())
-                    }
-                }
-                None => string_array.append_null(),
-            }
-        }
+            .to_minimal_array()?;
+        let c_array = array.string()?;
 
-        Ok(string_array.finish().into())
+        let column: DataColumn = transform(c_array, c_array.inner().values().len(), |x, buffer| {
+            if x.len() <= BUFFER_SIZE * 2 {
+                let size = x.len() / 2;
+
+                let buffer = &mut buffer[0..size];
+                match hex::decode_to_slice(x, buffer) {
+                    Ok(()) => Some(size),
+                    Err(_) => None,
+                }
+            } else {
+                None
+            }
+        })
+        .into();
+        Ok(column)
     }
 }
 

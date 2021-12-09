@@ -26,19 +26,25 @@ use crate::scalars::Function;
 pub type SpaceFunction = SpaceGenFunction<SpaceGen>;
 
 pub trait SpaceGenOperator: Send + Sync + Clone + Default + 'static {
-    fn apply<'a>(&'a mut self, c: &u64) -> &'a [u8];
+    fn apply<'a>(&'a mut self, c: &u64, _: &mut [u8]) -> usize;
+    fn apply_char(&self, c: &u64) -> Vec<u8>;
 }
 
 #[derive(Clone, Default)]
-pub struct SpaceGen {
-    buf: Vec<u8>,
-}
+pub struct SpaceGen {}
 
 impl SpaceGenOperator for SpaceGen {
     #[inline]
-    fn apply<'a>(&'a mut self, c: &u64) -> &'a [u8] {
-        self.buf.resize(*c as usize, 32);
-        &self.buf[..]
+    fn apply<'a>(&'a mut self, c: &u64, buffer: &mut [u8]) -> usize {
+        let len = *c as usize;
+        let buffer = &mut buffer[0..len];
+        buffer.copy_from_slice(vec![32; len].as_slice());
+        len
+    }
+
+    #[inline]
+    fn apply_char(&self, c: &u64) -> Vec<u8> {
+        vec![32; *c as usize]
     }
 }
 
@@ -94,21 +100,17 @@ impl<T: SpaceGenOperator> Function for SpaceGenFunction<T> {
         let r_column: DataColumn = match columns[0].column().cast_with_type(&DataType::UInt64)? {
             DataColumn::Constant(DataValue::UInt64(c), _) => {
                 if let Some(c) = c {
-                    DataColumn::Constant(
-                        DataValue::String(Some(op.apply(&c).to_owned())),
-                        input_rows,
-                    )
+                    DataColumn::Constant(DataValue::String(Some(op.apply_char(&c))), input_rows)
                 } else {
                     DataColumn::Constant(DataValue::Null, input_rows)
                 }
             }
-            DataColumn::Array(c_series) => {
-                let mut r_array = StringArrayBuilder::with_capacity(input_rows);
-                for oc in c_series.u64()? {
-                    r_array.append_option(oc.map(|c| op.apply(c)));
-                }
-                r_array.finish().into()
-            }
+            DataColumn::Array(c_series) => transform_from_primitive_with_no_null(
+                c_series.u64()?,
+                |x| *x as usize,
+                |x, buffer| op.apply(x, buffer),
+            )
+            .into(),
             _ => DataColumn::Constant(DataValue::Null, input_rows),
         };
         Ok(r_column)

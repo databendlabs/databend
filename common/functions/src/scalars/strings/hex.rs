@@ -101,28 +101,23 @@ impl Function for HexFunction {
                 Ok(column.resize_constant(columns[0].column().len()))
             }
             _ => {
-                const BUFFER_SIZE: usize = 32;
-                let mut buffer = [0; BUFFER_SIZE * 2];
-                let mut string_array = StringArrayBuilder::with_capacity(columns[0].column().len());
-                for value in columns[0]
+                let array = columns[0]
                     .column()
                     .cast_with_type(&DataType::String)?
-                    .to_minimal_array()?
-                    .string()?
-                {
-                    match value {
-                        Some(value) if value.len() <= BUFFER_SIZE => {
-                            let size = value.len() * 2;
-                            let _ = hex::encode_to_slice(value, &mut buffer[..size]);
-                            string_array.append_value(&buffer[..size])
-                        }
-                        Some(value) => string_array.append_value(hex::encode(value)),
-                        None => string_array.append_null(),
-                    }
-                }
+                    .to_minimal_array()?;
 
-                let column: DataColumn = string_array.finish().into();
-                Ok(column.resize_constant(columns[0].column().len()))
+                let array = array.string()?;
+
+                let column: DataColumn =
+                    transform_with_no_null(array, array.inner().values().len() * 2, |x, buffer| {
+                        let len = x.len() * 2;
+                        let buffer = &mut buffer[0..len];
+
+                        let _ = hex::encode_to_slice(x, buffer);
+                        len
+                    })
+                    .into();
+                Ok(column)
             }
         }
     }
