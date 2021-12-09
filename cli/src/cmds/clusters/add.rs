@@ -145,7 +145,7 @@ impl Command for AddCommand {
             )
             .arg(
                 Arg::new("log_level")
-                    .long("log-level")
+                    .long("log_level")
                     .help("Set logging level")
                     .takes_value(true)
                     .env(databend_query::configs::config_log::LOG_LEVEL)
