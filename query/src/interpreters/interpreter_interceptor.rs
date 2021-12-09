@@ -23,25 +23,26 @@ use common_streams::SendableDataBlockStream;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::interpreters::InterpreterQueryLog;
 use crate::sessions::QueryContext;
 
 pub struct InterceptorInterpreter {
-    ctx: Arc<QueryContext>,
     inner: InterpreterPtr,
+    query_log: InterpreterQueryLog,
     result_metric: Arc<Progress>,
 }
 
 impl InterceptorInterpreter {
     pub fn create(ctx: Arc<QueryContext>, inner: InterpreterPtr) -> Self {
         InterceptorInterpreter {
-            ctx,
             inner,
+            query_log: InterpreterQueryLog::create(ctx),
             result_metric: Arc::new(Progress::create()),
         }
     }
 
     /// Get the last sink stream progress values.
-    pub fn result_metric_callback(&self) -> Result<ProgressCallback> {
+    fn result_metric_callback(&self) -> Result<ProgressCallback> {
         let current = self.result_metric.clone();
         Ok(Box::new(move |value: &ProgressValues| {
             current.incr(value);
@@ -65,10 +66,17 @@ impl Interpreter for InterceptorInterpreter {
         Ok(Box::pin(metric_stream))
     }
 
-    /// Get the last metrics when the stream has been read out.
+    async fn start(&self) -> Result<()> {
+        self.query_log.log_start().await
+    }
+
     async fn finish(&self) -> Result<()> {
-        let _dal_metrics = self.ctx.get_dal_metrics();
-        let _result_metrics = self.result_metric.get_values();
-        Ok(())
+        let result_metrics = self.result_metric.get_values();
+        self.query_log
+            .log_finish(
+                result_metrics.read_rows as u64,
+                result_metrics.read_bytes as u64,
+            )
+            .await
     }
 }

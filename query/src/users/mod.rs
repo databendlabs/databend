@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod user_mgr_test;
-#[cfg(test)]
-mod user_stage_test;
-
 mod user;
 mod user_api;
 mod user_mgr;

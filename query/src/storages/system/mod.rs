@@ -12,35 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod clusters_table_test;
-#[cfg(test)]
-mod columns_table_test;
-#[cfg(test)]
-mod configs_table_test;
-#[cfg(test)]
-mod contributors_table_test;
-#[cfg(test)]
-mod credits_table_test;
-#[cfg(test)]
-mod databases_table_test;
-#[cfg(test)]
-mod functions_table_test;
-#[cfg(test)]
-mod metrics_table_test;
-#[cfg(test)]
-mod query_log_memory_store_test;
-#[cfg(test)]
-mod query_log_table_test;
-#[cfg(test)]
-mod settings_table_test;
-#[cfg(test)]
-mod tables_table_test;
-#[cfg(test)]
-mod tracing_table_test;
-#[cfg(test)]
-mod users_table_test;
-
 mod clusters_table;
 mod columns_table;
 mod configs_table;
@@ -52,7 +23,6 @@ mod functions_table;
 mod metrics_table;
 mod one_table;
 mod processes_table;
-mod query_log_memory_store;
 mod query_log_table;
 mod settings_table;
 mod tables_table;
@@ -71,8 +41,6 @@ pub use functions_table::FunctionsTable;
 pub use metrics_table::MetricsTable;
 pub use one_table::OneTable;
 pub use processes_table::ProcessesTable;
-pub use query_log_memory_store::QueryLog;
-pub use query_log_memory_store::QueryLogMemoryStore;
 pub use query_log_table::QueryLogTable;
 pub use settings_table::SettingsTable;
 pub use tables_table::TablesTable;

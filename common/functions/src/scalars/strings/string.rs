@@ -17,6 +17,7 @@ use crate::scalars::AsciiFunction;
 use crate::scalars::Base64DecodeFunction;
 use crate::scalars::Base64EncodeFunction;
 use crate::scalars::BitLengthFunction;
+use crate::scalars::CharLengthFunction;
 use crate::scalars::ConcatFunction;
 use crate::scalars::ConcatWsFunction;
 use crate::scalars::EltFunction;
@@ -30,6 +31,7 @@ use crate::scalars::LeftPadFunction;
 use crate::scalars::LocateFunction;
 use crate::scalars::OctFunction;
 use crate::scalars::OctetLengthFunction;
+use crate::scalars::OrdFunction;
 use crate::scalars::PositionFunction;
 use crate::scalars::QuoteFunction;
 use crate::scalars::RTrimFunction;
@@ -83,5 +85,8 @@ impl StringFunction {
         factory.register("space", SpaceFunction::desc());
         factory.register("lpad", LeftPadFunction::desc());
         factory.register("rpad", RightPadFunction::desc());
+        factory.register("char_length", CharLengthFunction::desc());
+        factory.register("character_length", CharLengthFunction::desc());
+        factory.register("ord", OrdFunction::desc());
     }
 }

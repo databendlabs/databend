@@ -16,9 +16,6 @@
 #![feature(core_intrinsics)]
 #![feature(arbitrary_self_types)]
 
-#[cfg(test)]
-pub mod tests;
-
 pub mod api;
 pub mod catalogs;
 pub mod clusters;

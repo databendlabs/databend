@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod csv;
-mod fuse;
-mod index;
-mod memory;
-mod null;
-mod parquet;
+pub mod csv;
+pub mod fuse;
+pub mod github;
+pub mod index;
+pub mod memory;
+pub mod null;
+pub mod parquet;
+pub mod system;
+
 mod storage_context;
 mod storage_factory;
-mod system;
-
-pub mod github;
 mod storage_table;
 mod storage_table_read_plan;
 
@@ -31,5 +31,4 @@ pub use storage_factory::StorageCreator;
 pub use storage_factory::StorageFactory;
 pub use storage_table::Table;
 pub use storage_table_read_plan::ToReadDataSourcePlan;
-pub use system::QueryLogMemoryStore;
 pub use system::SystemDatabase;

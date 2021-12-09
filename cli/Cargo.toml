@@ -22,7 +22,7 @@ path = "src/bin/bendctl.rs"
 databend-query = {path = "../query"}
 common-base = {path = "../common/base" }
 common-datavalues = { path = "../common/datavalues" }
-itertools = "0.10.1"
+itertools = "0.10.3"
 databend-meta = {path = "../metasrv" }
 common-meta-raft-store= {path = "../common/meta/raft-store"}
 colored = "2.0.0"
@@ -43,7 +43,7 @@ fs_extra = "1.2.0"
 serde = { version = "1.0.130", features = ["derive"] }
 serde_json = "1.0.72"
 sha2 = "0.9.8"
-sysinfo = "0.21.1"
+sysinfo = "0.21.2"
 tar = "0.4.37"
 thiserror = "1.0.30"
 ureq = { version = "2.3.1", features = ["json"] }

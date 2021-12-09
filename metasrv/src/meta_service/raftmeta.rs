@@ -478,6 +478,25 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_nodes(&self) -> common_exception::Result<Vec<Node>> {
+        // inconsistent get: from local state machine
+        let sm = self.sto.state_machine.read().await;
+        sm.get_nodes()
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_voters(&self) -> common_exception::Result<Vec<Node>> {
+        // inconsistent get: from local state machine
+        self.sto.get_voters().await
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn get_non_voters(&self) -> common_exception::Result<Vec<Node>> {
+        // inconsistent get: from local state machine
+        self.sto.get_non_voters().await
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn handle_admin_req(&self, req: AdminRequest) -> Result<AdminResponse, MetaError> {
         let forward = req.forward_to_leader;
 

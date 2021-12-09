@@ -37,7 +37,7 @@ fn test_trim_function() -> Result<()> {
             arg_names: vec!["a"],
             columns: vec![Series::new(vec!["  abc"]).into()],
             func: LTrimFunction::try_create("ltrim")?,
-            expect: Series::new(vec!["abc"]).into(),
+            expect: DataColumn::Constant(DataValue::String(Some("abc".as_bytes().to_vec())), 1),
             error: "",
         },
         Test {
@@ -47,7 +47,7 @@ fn test_trim_function() -> Result<()> {
             arg_names: vec!["a"],
             columns: vec![Series::new(vec!["abc  "]).into()],
             func: RTrimFunction::try_create("rtrim")?,
-            expect: Series::new(vec!["abc"]).into(),
+            expect: DataColumn::Constant(DataValue::String(Some("abc".as_bytes().to_vec())), 1),
             error: "",
         },
         Test {
@@ -57,7 +57,7 @@ fn test_trim_function() -> Result<()> {
             arg_names: vec!["a"],
             columns: vec![Series::new(vec!["   abc  "]).into()],
             func: TrimFunction::try_create("trim")?,
-            expect: Series::new(vec!["abc"]).into(),
+            expect: DataColumn::Constant(DataValue::String(Some("abc".as_bytes().to_vec())), 1),
             error: "",
         },
         Test {
@@ -67,7 +67,7 @@ fn test_trim_function() -> Result<()> {
             arg_names: vec!["a"],
             columns: vec![Series::new(vec!["     "]).into()],
             func: TrimFunction::try_create("trim")?,
-            expect: Series::new(vec![""]).into(),
+            expect: DataColumn::Constant(DataValue::String(Some("".as_bytes().to_vec())), 1),
             error: "",
         },
     ];

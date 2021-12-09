@@ -13,11 +13,6 @@
 //  limitations under the License.
 //
 
-#[cfg(test)]
-mod memory_block_part_test;
-#[cfg(test)]
-mod numbers_table_test;
-
 mod memory_block_part;
 mod numbers_stream;
 mod numbers_table;
