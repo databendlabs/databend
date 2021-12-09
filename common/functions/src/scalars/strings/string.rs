@@ -22,6 +22,7 @@ use crate::scalars::CharLengthFunction;
 use crate::scalars::ConcatFunction;
 use crate::scalars::ConcatWsFunction;
 use crate::scalars::EltFunction;
+use crate::scalars::ExportSetFunction;
 use crate::scalars::FieldFunction;
 use crate::scalars::HexFunction;
 use crate::scalars::InsertFunction;
@@ -90,5 +91,6 @@ impl StringFunction {
         factory.register("character_length", CharLengthFunction::desc());
         factory.register("ord", OrdFunction::desc());
         factory.register("bin", BinFunction::desc());
+        factory.register("export_set", ExportSetFunction::desc());
     }
 }
