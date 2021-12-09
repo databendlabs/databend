@@ -87,8 +87,8 @@ paste = "1.0.6"
 prost = "0.9.0"
 quantiles = "0.7.1"
 rand = "0.8.4"
-reqwest = "0.11.6"
-serde = { version = "1.0.130", features = ["derive"] }
+reqwest = "0.11.7"
+serde = { version = "1.0.131", features = ["derive"] }
 serde_json = "1.0.72"
 sha1 = "0.6.0"
 sha2 = "0.10.0"
@@ -108,7 +108,7 @@ criterion = "0.3.5"
 flaky_test = "0.1.0"
 mysql = "21.0.2"
 pretty_assertions = "1.0.0"
-reqwest = { version = "0.11.6", features = ["json", "native-tls"] }
+reqwest = { version = "0.11.7", features = ["json", "native-tls"] }
 tempfile = "3.2.0"
 float-cmp = "0.9.0"
 

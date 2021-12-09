@@ -35,6 +35,6 @@ tempfile = "3.2.0"
 
 
 [dev-dependencies]
-anyhow = "1.0.50"
+anyhow = "1.0.51"
 pretty_assertions = "1.0.0"
 
