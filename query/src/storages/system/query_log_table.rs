@@ -24,6 +24,7 @@ use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_planners::ReadDataSourcePlan;
+use common_planners::TruncateTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
@@ -156,5 +157,15 @@ impl Table for QueryLogTable {
             None,
             vec![],
         )))
+    }
+
+    async fn truncate(
+        &self,
+        _ctx: Arc<QueryContext>,
+        _truncate_plan: TruncateTablePlan,
+    ) -> Result<()> {
+        let mut data = self.data.write();
+        *data = VecDeque::new();
+        Ok(())
     }
 }

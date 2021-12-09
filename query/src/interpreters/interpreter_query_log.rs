@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::SeriesFrom;
@@ -99,7 +100,7 @@ impl InterpreterQueryLog {
 
         let block = DataBlock::create_by_array(schema.clone(), vec![
             // Type.
-            Series::new(vec![event.log_type as u8]),
+            Series::new(vec![event.log_type as i8]),
             Series::new(vec![event.handler_type.as_str()]),
             // User.
             Series::new(vec![event.tenant_id.as_str()]),
@@ -111,8 +112,8 @@ impl InterpreterQueryLog {
             Series::new(vec![event.query_id.as_str()]),
             Series::new(vec![event.query_kind.as_str()]),
             Series::new(vec![event.query_text.as_str()]),
-            Series::new(vec![event.query_start_time as u64]),
-            Series::new(vec![event.query_end_time as u64]),
+            Series::new(vec![event.query_start_time as u32]),
+            Series::new(vec![event.query_end_time as u32]),
             // Stats.
             Series::new(vec![event.written_rows as u64]),
             Series::new(vec![event.written_bytes as u64]),
@@ -165,7 +166,11 @@ impl InterpreterQueryLog {
         let query_text = self.ctx.get_query_str();
 
         // Stats.
-        let query_start_time = Instant::now().elapsed().as_secs();
+        let now = SystemTime::now();
+        let query_start_time = now
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs();
         let query_end_time = 0;
         let written_rows = 0u64;
         let written_bytes = 0u64;
@@ -237,7 +242,11 @@ impl InterpreterQueryLog {
 
         // Stats.
         let query_start_time = 0;
-        let query_end_time = Instant::now().elapsed().as_secs();
+        let now = SystemTime::now();
+        let query_end_time = now
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs();
         let written_rows = 0u64;
         let dal_metrics = self.ctx.get_dal_metrics();
         let written_bytes = dal_metrics.write_bytes as u64;

@@ -321,6 +321,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let instant = Instant::now();
 
         let interpreter = InterpreterFactory::get(context.clone(), plan?)?;
+        interpreter.start().await?;
         let data_stream = interpreter.execute(None).await?;
         histogram!(
             super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
@@ -329,6 +330,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
         let collector = data_stream.collect::<Result<Vec<DataBlock>>>();
         let query_result = collector.await;
+        interpreter.finish().await?;
         query_result.map(|data| (data, Self::extra_info(context, instant)))
     }
 
