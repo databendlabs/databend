@@ -57,7 +57,7 @@ sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "b4
 # Crates.io dependencies
 ahash = "0.7.6"
 async-compat = "0.2.1"
-async-trait = "0.1.51"
+async-trait = "0.1.52"
 async-stream = "0.3.2"
 poem = { version = "1.0.38", features = ["rustls", "multipart"] }
 bumpalo = "3.8.0"

@@ -56,7 +56,7 @@ portpicker = "0.1.1"
 reqwest = { version = "0.11.7", features = ["json", "native-tls", "multipart", "blocking", "tokio-rustls", "stream"] }
 libc = "0.2.109"
 lexical-util = "0.8.1"
-async-trait = "0.1.51"
+async-trait = "0.1.52"
 webbrowser = "0.5.5"
 async-std = "1.10.0"
 tryhard = "0.4.0"

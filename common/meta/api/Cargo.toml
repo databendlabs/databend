@@ -20,6 +20,6 @@ common-meta-types = {path= "../types" }
 common-tracing = { path = "../../tracing" }
 
 anyhow = "1.0.51"
-async-trait = "0.1.51"
+async-trait = "0.1.52"
 futures = "0.3.18"
 maplit = "1.0.2"

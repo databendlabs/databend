@@ -18,7 +18,7 @@ common-exception = { path = "../exception" }
 # Github dependencies
 
 # Crates.io dependencies
-async-trait = "0.1.51"
+async-trait = "0.1.52"
 ctrlc = { version = "3.2.1", features = ["termination"] }
 futures = "0.3.18"
 pprof = { version = "0.6.1", features = ["flamegraph", "protobuf"] }
