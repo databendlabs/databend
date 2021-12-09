@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::prelude::DFStringArray;
+
 use super::string2string::String2StringFunction;
 use super::string2string::StringOperator;
 
@@ -22,26 +24,34 @@ pub struct Encode {
 
 impl StringOperator for Encode {
     #[inline]
-    fn apply<'a>(&'a mut self, s: &'a [u8]) -> Option<&'a [u8]> {
+    fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
         self.buf.resize(s.len() * 4 / 3 + 4, 0);
-        let bytes_written = base64::encode_config_slice(s, base64::STANDARD, &mut self.buf);
-        Some(&self.buf[..bytes_written])
+        base64::encode_config_slice(s, base64::STANDARD, buffer)
+    }
+
+    fn estimate_bytes(&self, array: &DFStringArray) -> usize {
+        array.inner().values().len() * 4 / 3 + array.len() * 4
     }
 }
 
 #[derive(Clone, Default)]
-pub struct Decode {
-    buf: Vec<u8>,
-}
+pub struct Decode {}
 
 impl StringOperator for Decode {
     #[inline]
-    fn apply<'a>(&'a mut self, s: &'a [u8]) -> Option<&'a [u8]> {
-        self.buf.resize((s.len() + 3) / 4 * 3, 0);
-        match base64::decode_config_slice(s, base64::STANDARD, &mut self.buf) {
-            Ok(bw) => Some(&self.buf[..bw]),
+    fn apply<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> Option<usize> {
+        match base64::decode_config_slice(s, base64::STANDARD, buffer) {
+            Ok(len) => Some(len),
             Err(_) => None,
         }
+    }
+
+    fn may_turn_to_null(&self) -> bool {
+        true
+    }
+
+    fn estimate_bytes(&self, array: &DFStringArray) -> usize {
+        array.inner().values().len() * 4 / 3 + array.len() * 4
     }
 }
 

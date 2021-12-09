@@ -12,15 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod query_schema_joined_analyzer_test;
-
-#[cfg(test)]
-mod query_normalizer_test;
-
-#[cfg(test)]
-mod query_qualified_rewriter_test;
-
 mod query_ast_ir;
 mod query_collect_push_downs;
 mod query_normalizer;

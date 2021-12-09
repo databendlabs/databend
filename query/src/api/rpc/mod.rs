@@ -12,18 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod flight_dispatcher_test;
-
-#[cfg(test)]
-mod flight_service_test;
-
-#[cfg(test)]
-mod flight_actions_test;
-
-#[cfg(test)]
-mod flight_tickets_test;
-
 pub use flight_actions::BroadcastAction;
 pub use flight_actions::CancelAction;
 pub use flight_actions::FlightAction;
@@ -32,6 +20,7 @@ pub use flight_client::FlightClient;
 pub use flight_dispatcher::DatabendQueryFlightDispatcher;
 pub use flight_service::DatabendQueryFlightService;
 pub use flight_tickets::FlightTicket;
+pub use flight_tickets::StreamTicket;
 
 mod flight_actions;
 mod flight_client;

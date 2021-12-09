@@ -12,15 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod cluster_test;
-#[cfg(test)]
-mod config_test;
-#[cfg(test)]
-mod health_test;
-#[cfg(test)]
-mod logs_test;
-
 pub mod cluster;
 pub mod config;
 pub mod health;

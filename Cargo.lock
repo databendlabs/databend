@@ -556,7 +556,7 @@ dependencies = [
  "sha2",
  "structopt",
  "structopt-toml",
- "sysinfo 0.21.1",
+ "sysinfo 0.21.2",
  "tar",
  "tempfile",
  "thiserror",
@@ -890,9 +890,9 @@ dependencies = [
 
 [[package]]
 name = "chrono-tz"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64c01c1c607d25c71bbaa67c113d6c6b36c434744b4fd66691d711b5b1bc0c8b"
+checksum = "58549f1842da3080ce63002102d5bc954c7bc843d4f47818e642abdc36253552"
 dependencies = [
  "chrono",
  "chrono-tz-build",
@@ -6572,9 +6572,9 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.21.1"
+version = "0.21.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb6c2c4a6ca462f07ca89841a2618dca6e405304d19ae238997e64915d89f513"
+checksum = "8f88d66f3341b688163d3585037954ff276cf24a234d015b30025318a3e3449a"
 dependencies = [
  "cfg-if 1.0.0",
  "core-foundation-sys",
@@ -6946,9 +6946,9 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24203b79cf2d68909da91178db3026e77054effba0c5d93deb870d3ca7b35afa"
+checksum = "ff08f4649d10a70ffa3522ca559031285d8e421d727ac85c60825761818f5d0a"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -7380,9 +7380,9 @@ checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
 name = "vergen"
-version = "5.1.18"
+version = "5.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d48696c0fbbdafd9553e14c4584b4b9583931e9474a3ae506f1872b890d0b47"
+checksum = "b4a21b1fc04977357c3a6187a56ebd91ab60b98328956c1dda501f4e04c7afcb"
 dependencies = [
  "anyhow",
  "cfg-if 1.0.0",

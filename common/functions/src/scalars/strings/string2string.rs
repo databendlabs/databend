@@ -18,12 +18,24 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+// use common_tracing::tracing;
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
 pub trait StringOperator: Send + Sync + Clone + Default + 'static {
-    fn apply<'a>(&'a mut self, _: &'a [u8]) -> Option<&'a [u8]>;
+    fn apply<'a>(&'a mut self, _: &'a [u8], _: &mut [u8]) -> Option<usize> {
+        None
+    }
+    fn apply_with_no_null<'a>(&'a mut self, _: &'a [u8], _: &mut [u8]) -> usize {
+        0
+    }
+    fn may_turn_to_null(&self) -> bool {
+        false
+    }
+    fn estimate_bytes(&self, array: &DFStringArray) -> usize {
+        array.inner().values().len()
+    }
 }
 
 /// A common function template that transform string column into string column
@@ -74,21 +86,26 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let mut op = T::default();
-        let column: DataColumn = columns[0]
+
+        let array = columns[0]
             .column()
             .cast_with_type(&DataType::String)?
-            .to_minimal_array()?
-            .string()?
-            .into_iter()
-            .fold(
-                StringArrayBuilder::with_capacity(columns[0].column().len()),
-                |mut builder, s| {
-                    builder.append_option(s.and_then(|values| op.apply(values)));
-                    builder
-                },
-            )
-            .finish()
-            .into();
+            .to_minimal_array()?;
+
+        let estimate_bytes = op.estimate_bytes(array.string()?);
+
+        let column: DataColumn = if op.may_turn_to_null() {
+            transform(array.string()?, estimate_bytes, |val, buffer| {
+                op.apply(val, buffer)
+            })
+            .into()
+        } else {
+            transform_with_no_null(array.string()?, estimate_bytes, |val, buffer| {
+                op.apply_with_no_null(val, buffer)
+            })
+            .into()
+        };
+
         Ok(column.resize_constant(input_rows))
     }
 }

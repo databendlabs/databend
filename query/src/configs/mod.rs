@@ -15,9 +15,6 @@
 #[macro_use]
 mod macros;
 
-#[cfg(test)]
-mod config_test;
-
 mod config;
 pub mod config_log;
 pub mod config_meta;

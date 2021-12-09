@@ -30,7 +30,7 @@ comfy-table = "5.0.0"
 strength_reduce = "0.2.3"
 lexical-core = "0.8.2"
 chrono = "0.4.19"
-chrono-tz = "0.6.0"
+chrono-tz = "0.6.1"
 regex = "1.5.4"
 simdutf8 = "0.1.3"
 

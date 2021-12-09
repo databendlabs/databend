@@ -7,6 +7,10 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[lib]
+doctest = false
+test = false
+
 [[bin]]
 name = "databend-query"
 path = "src/bin/databend-query.rs"
@@ -62,7 +66,7 @@ bytes = "1.1.0"
 cargo-license = "0.4.2"
 cargo_metadata = "0.14.1"
 chrono = "0.4.19"
-chrono-tz = "0.6.0"
+chrono-tz = "0.6.1"
 crossbeam = "0.8.1"
 crossbeam-queue = "0.3.2"
 ctrlc = { version = "3.2.1", features = ["termination"] }
@@ -94,7 +98,7 @@ threadpool = "1.8.1"
 tokio-rustls = "0.23.1"
 tokio-stream = { version = "0.1.8", features = ["net"] }
 toml = "0.5.8"
-tonic = "0.6.1"
+tonic = "0.6.2"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
 parquet-format-async-temp= "0.2.0"

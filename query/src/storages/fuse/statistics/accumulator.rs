@@ -61,7 +61,7 @@ impl StatisticsAccumulator {
         super::reduce_block_stats(&self.blocks_statistics, schema)
     }
 
-    pub(crate) fn acc_columns(data_block: &DataBlock) -> common_exception::Result<BlockStatistics> {
+    pub fn acc_columns(data_block: &DataBlock) -> common_exception::Result<BlockStatistics> {
         (0..)
             .into_iter()
             .zip(data_block.columns().iter())

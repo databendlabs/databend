@@ -12,33 +12,71 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::prelude::DFStringArray;
+
 use super::string2string::String2StringFunction;
 use super::string2string::StringOperator;
 #[derive(Clone, Default)]
-pub struct Quote {
-    buffer: Vec<u8>,
-}
+pub struct Quote {}
 
 impl StringOperator for Quote {
     #[inline]
-    fn apply<'a>(&'a mut self, value: &'a [u8]) -> Option<&'a [u8]> {
-        self.buffer.clear();
-
+    fn apply_with_no_null<'a>(&'a mut self, value: &'a [u8], buffer: &mut [u8]) -> usize {
+        let mut offset = 0;
         for ch in value {
             match *ch {
-                0 => self.buffer.extend_from_slice(&[b'\\', b'0']),
-                b'\'' => self.buffer.extend_from_slice(&[b'\\', b'\'']),
-                b'\"' => self.buffer.extend_from_slice(&[b'\\', b'\"']),
-                8 => self.buffer.extend_from_slice(&[b'\\', b'b']),
-                b'\n' => self.buffer.extend_from_slice(&[b'\\', b'n']),
-                b'\r' => self.buffer.extend_from_slice(&[b'\\', b'r']),
-                b'\t' => self.buffer.extend_from_slice(&[b'\\', b't']),
-                b'\\' => self.buffer.extend_from_slice(&[b'\\', b'\\']),
-                _ => self.buffer.push(*ch),
-            }
+                0 => {
+                    let x = &mut buffer[offset..offset + 2];
+                    x.copy_from_slice(&[b'\\', b'0']);
+                    offset += 2;
+                }
+                b'\'' => {
+                    let x = &mut buffer[offset..offset + 2];
+                    x.copy_from_slice(&[b'\\', b'\'']);
+                    offset += 2;
+                }
+                b'\"' => {
+                    let x = &mut buffer[offset..offset + 2];
+                    x.copy_from_slice(&[b'\\', b'\"']);
+                    offset += 2;
+                }
+                8 => {
+                    let x = &mut buffer[offset..offset + 2];
+                    x.copy_from_slice(&[b'\\', b'b']);
+                    offset += 2;
+                }
+                b'\n' => {
+                    let x = &mut buffer[offset..offset + 2];
+                    x.copy_from_slice(&[b'\\', b'n']);
+                    offset += 2;
+                }
+                b'\r' => {
+                    let x = &mut buffer[offset..offset + 2];
+                    x.copy_from_slice(&[b'\\', b'r']);
+                    offset += 2;
+                }
+                b'\t' => {
+                    let x = &mut buffer[offset..offset + 2];
+                    x.copy_from_slice(&[b'\\', b't']);
+                    offset += 2;
+                }
+                b'\\' => {
+                    let x = &mut buffer[offset..offset + 2];
+                    x.copy_from_slice(&[b'\\', b'\\']);
+                    offset += 2;
+                }
+                _ => {
+                    let x = &mut buffer[offset..offset + 1];
+                    x.copy_from_slice(&[*ch]);
+                    offset += 1;
+                }
+            };
         }
+        offset
+    }
 
-        Some(&self.buffer[..self.buffer.len()])
+    fn estimate_bytes(&self, array: &DFStringArray) -> usize {
+        array.inner().values().len() * 2
     }
 }
 

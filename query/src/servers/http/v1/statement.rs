@@ -32,12 +32,12 @@ use crate::servers::http::v1::QueryResponse;
 use crate::sessions::SessionManager;
 
 #[derive(Deserialize)]
-pub(crate) struct StatementHandlerParams {
+pub struct StatementHandlerParams {
     db: Option<String>,
 }
 
 #[poem::handler]
-pub(crate) async fn statement_handler(
+pub async fn statement_handler(
     sessions_extension: Data<&Arc<SessionManager>>,
     sql: String,
     Query(params): Query<StatementHandlerParams>,
