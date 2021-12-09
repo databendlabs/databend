@@ -32,16 +32,37 @@ pub enum Credentials {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub enum FileFormat {
-    Csv {
-        compression: Compression,
-        record_delimiter: String,
-    },
-    Parquet {
-        compression: Compression,
-    },
+pub struct FileFormat {
+    format: Format,
+    record_delimiter: String,
+    field_delimiter: String,
+    csv_header: bool,
+    compression: Compression,
+}
+
+impl Default for FileFormat {
+    fn default() -> Self {
+        Self {
+            record_delimiter: "\n".to_string(),
+            field_delimiter: ",".to_string(),
+            ..Default::default()
+        }
+    }
+
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub enum Format {
+    Csv,
+    Parquet,
     Json,
 }
+
+impl Default for Format {
+    fn default() -> Self {
+        Self::Csv
+    }
+}
+
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum Compression {
@@ -56,6 +77,13 @@ pub enum Compression {
     Snappy,
     None,
 }
+
+impl Default for Compression {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
 
 impl FromStr for Compression {
     type Err = &'static str;
@@ -92,7 +120,7 @@ pub struct UserStageInfo {
 
     pub stage_params: StageParams,
     #[serde(default)]
-    pub file_format: Option<FileFormat>,
+    pub file_format: FileFormat,
     #[serde(default)]
     pub comments: String,
 }
@@ -102,7 +130,7 @@ impl UserStageInfo {
         stage_name: &str,
         comments: &str,
         stage_params: StageParams,
-        file_format: Option<FileFormat>,
+        file_format:  FileFormat,
     ) -> Self {
         UserStageInfo {
             stage_name: stage_name.to_string(),

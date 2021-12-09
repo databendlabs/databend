@@ -67,6 +67,7 @@ mod plan_user_create;
 mod plan_user_drop;
 mod plan_user_stage_create;
 mod plan_visitor;
+mod plan_describe_stage;
 
 pub use plan_aggregator_final::AggregatorFinalPlan;
 pub use plan_aggregator_partial::AggregatorPartialPlan;
@@ -77,6 +78,7 @@ pub use plan_database_create::CreateDatabasePlan;
 pub use plan_database_create::DatabaseOptions;
 pub use plan_database_drop::DropDatabasePlan;
 pub use plan_describe_table::DescribeTablePlan;
+pub use plan_describe_stage::DescribeStagePlan;
 pub use plan_empty::EmptyPlan;
 pub use plan_explain::ExplainPlan;
 pub use plan_explain::ExplainType;

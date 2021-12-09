@@ -21,6 +21,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::DescribeStagePlan;
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::AggregatorFinalPlan;
@@ -105,6 +106,7 @@ pub trait PlanRewriter {
             PlanNode::Having(plan) => self.rewrite_having(plan),
             PlanNode::Expression(plan) => self.rewrite_expression(plan),
             PlanNode::DescribeTable(plan) => self.rewrite_describe_table(plan),
+            PlanNode::DescribeStage(plan) => self.rewrite_describe_stage(plan),
             PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
             PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
             PlanNode::Insert(plan) => self.rewrite_insert_into(plan),
@@ -328,6 +330,10 @@ pub trait PlanRewriter {
 
     fn rewrite_describe_table(&mut self, plan: &DescribeTablePlan) -> Result<PlanNode> {
         Ok(PlanNode::DescribeTable(plan.clone()))
+    }
+
+    fn rewrite_describe_stage(&mut self, plan: &DescribeStagePlan) -> Result<PlanNode> {
+        Ok(PlanNode::DescribeStage(plan.clone()))
     }
 
     fn rewrite_drop_table(&mut self, plan: &DropTablePlan) -> Result<PlanNode> {

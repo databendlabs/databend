@@ -49,6 +49,7 @@ use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::Whitespace;
 
 use super::statements::DfCopy;
+use super::statements::DfDescribeStage;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCompactTable;
 use crate::sql::statements::DfCreateDatabase;
@@ -517,9 +518,16 @@ impl<'a> DfParser<'a> {
     }
 
     fn parse_describe(&mut self) -> Result<DfStatement, ParserError> {
-        let table_name = self.parser.parse_object_name()?;
-        let desc = DfDescribeTable { name: table_name };
-        Ok(DfStatement::DescribeTable(desc))
+        if self.consume_token("stage") {
+            let obj_name = self.parser.parse_object_name()?;
+            let desc = DfDescribeStage{name : obj_name};
+            Ok(DfStatement::DescribeStage(desc))
+        } else {
+            self.consume_token("table");
+            let table_name = self.parser.parse_object_name()?;
+            let desc = DfDescribeTable { name: table_name };
+            Ok(DfStatement::DescribeTable(desc))
+        }
     }
 
     /// Drop database/table.
@@ -696,15 +704,15 @@ impl<'a> DfParser<'a> {
     }
 
     fn parse_stage_file_format(&mut self) -> Result<Option<FileFormat>, ParserError> {
-        let file_format = if self.consume_token("FILE_FORMAT") {
+        let mut file_format = FileFormat::default();
+        if self.consume_token("FILE_FORMAT") {
             self.parser.expect_token(&Token::Eq)?;
             self.parser.expect_token(&Token::LParen)?;
+
 
             let format = if self.consume_token("FORMAT") {
                 self.parser.expect_token(&Token::Eq)?;
                 self.parser.next_token().to_string()
-            } else {
-                return parser_err!("Missing FORMAT");
             };
 
             let file_format = match format.to_uppercase().as_str() {

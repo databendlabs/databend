@@ -43,10 +43,10 @@ async fn test_create_stage_interpreter() -> Result<()> {
 
         assert_eq!(
             stage.file_format,
-            Some(FileFormat::Csv {
+            FileFormat::Csv {
                 compression: Compression::Gzip,
                 record_delimiter: ",".to_string()
-            })
+            }
         );
         assert_eq!(stage.comments, String::from("test"))
     } else {

@@ -48,6 +48,7 @@ mod statement_show_tables;
 mod statement_show_users;
 mod statement_truncate_table;
 mod statement_use_database;
+mod statement_describe_stage;
 
 pub use analyzer_statement::AnalyzableStatement;
 pub use analyzer_statement::AnalyzedResult;
@@ -62,6 +63,7 @@ pub use statement_create_stage::DfCreateStage;
 pub use statement_create_table::DfCreateTable;
 pub use statement_create_user::DfCreateUser;
 pub use statement_describe_table::DfDescribeTable;
+pub use statement_describe_stage::DfDescribeStage;
 pub use statement_drop_database::DfDropDatabase;
 pub use statement_drop_table::DfDropTable;
 pub use statement_drop_user::DfDropUser;
@@ -82,3 +84,4 @@ pub use statement_show_tables::DfShowTables;
 pub use statement_show_users::DfShowUsers;
 pub use statement_truncate_table::DfTruncateTable;
 pub use statement_use_database::DfUseDatabase;
+
