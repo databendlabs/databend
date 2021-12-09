@@ -35,6 +35,7 @@ use databend_query::sql::statements::DfDropTable;
 use databend_query::sql::statements::DfDropUser;
 use databend_query::sql::statements::DfGrantObject;
 use databend_query::sql::statements::DfGrantStatement;
+use databend_query::sql::statements::DfQueryStatement;
 use databend_query::sql::statements::DfRevokeStatement;
 use databend_query::sql::statements::DfShowDatabases;
 use databend_query::sql::statements::DfShowTables;
@@ -149,6 +150,7 @@ fn create_table() -> Result<()> {
         engine: "CSV".to_string(),
         options: maplit::hashmap! {"location".into() => "/data/33.csv".into()},
         like: None,
+        select: None,
     });
     expect_parse_ok(sql, expected)?;
 
@@ -169,6 +171,7 @@ fn create_table() -> Result<()> {
             "comment".into() => "foo".into(),
         },
         like: None,
+        select: None,
     });
     expect_parse_ok(sql, expected)?;
 
@@ -182,6 +185,7 @@ fn create_table() -> Result<()> {
 
         options: maplit::hashmap! {"location".into() => "batcave".into()},
         like: Some(ObjectName(vec![Ident::new("db2"), Ident::new("test2")])),
+        select: None,
     });
     expect_parse_ok(sql, expected)?;
 
@@ -383,11 +387,11 @@ fn copy_test() -> Result<()> {
             columns: vec![],
             location: "@my_ext_stage/tutorials/sample.csv".to_string(),
             format: "csv".to_string(),
-        options: maplit::hashmap! {
-            "csv_header".into() => "1".into(),
-            "field_delimitor".into() => ",".into(),
-     }
-    }
+            options: maplit::hashmap! {
+                "csv_header".into() => "1".into(),
+                "field_delimitor".into() => ",".into(),
+         }
+        }
         ),
 
 
@@ -1032,6 +1036,33 @@ fn create_stage_test() -> Result<()> {
     expect_parse_err_contains(
         "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(format=csv1 compression=AUTO record_delimiter=NONE) comments='test'",
         String::from("unknown variant `csv1`"),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn create_table_select() -> Result<()> {
+    expect_parse_ok(
+        "CREATE TABLE foo AS SELECT a, b FROM bar",
+        DfStatement::CreateTable(DfCreateTable {
+            if_not_exists: false,
+            name: ObjectName(vec![Ident::new("foo")]),
+            columns: vec![],
+            engine: "FUSE".to_string(),
+            options: maplit::hashmap! {},
+            like: None,
+            select: Some(DfQueryStatement {
+                from: vec![],
+                projection: vec![],
+                selection: None,
+                group_by: vec![],
+                having: None,
+                order_by: vec![],
+                limit: None,
+                offset: None,
+            }),
+        }),
     )?;
 
     Ok(())

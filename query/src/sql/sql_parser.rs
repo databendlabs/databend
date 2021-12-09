@@ -818,6 +818,19 @@ impl<'a> DfParser<'a> {
         // parse table options: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
         let options = self.parse_options()?;
 
+        let mut select = None;
+        if let Token::Word(w) = self.parser.peek_token() {
+            if w.keyword == Keyword::AS {
+                self.parser.expect_keyword(Keyword::AS)?
+            }
+            if w.keyword == Keyword::SELECT {
+                let native = self.parser.parse_query()?;
+                select = Some(DfQueryStatement::try_from(native)?);
+            } else {
+                // todo: incorrect syntax
+            }
+        }
+
         let create = DfCreateTable {
             if_not_exists,
             name: table_name,
@@ -825,6 +838,7 @@ impl<'a> DfParser<'a> {
             engine,
             options,
             like: table_like,
+            select,
         };
 
         Ok(DfStatement::CreateTable(create))
