@@ -14,6 +14,7 @@
 //
 
 use std::any::Any;
+use std::any::TypeId;
 use std::sync::Arc;
 
 use common_dal::DataAccessor;
@@ -39,6 +40,7 @@ use crate::sessions::QueryContext;
 use crate::storages::fuse::io::read_obj;
 use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::meta::TableSnapshot;
+use crate::storages::fuse::FuseTable;
 use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::Table;
 use crate::table_functions::TableArgs;
@@ -163,6 +165,20 @@ impl FuseHistoryTable {
             Series::new(compressed),
         ])
     }
+
+    fn check_table_compatibility(tbl: &dyn Table) -> Result<()> {
+        // since StorageFactory is free to choose the engine name,
+        // we use type_id to verify the compatibility here
+        let tid = tbl.as_any().type_id();
+        if tid != TypeId::of::<FuseTable>() {
+            Err(ErrorCode::BadArguments(format!(
+                "expecting fuse table, but got table of engine type: {}",
+                tbl.get_table_info().meta.engine
+            )))
+        } else {
+            Ok(())
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -194,6 +210,9 @@ impl Table for FuseHistoryTable {
                 self.arg_table_name.as_str(),
             )
             .await?;
+
+        Self::check_table_compatibility(tbl.as_ref())?;
+
         let tbl_info = tbl.get_table_info();
         match tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC) {
             Some(loc) => {

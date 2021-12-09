@@ -110,9 +110,9 @@ async fn test_fuse_history_table_read() -> Result<()> {
         .await?;
     }
 
-    // insert 5 blocks, 3 rows per block
-    append_sample_data(5, &fixture).await?;
     {
+        // insert 5 blocks, 3 rows per block
+        append_sample_data(5, &fixture).await?;
         let expected = vec![
             "+-------+",
             "| count |",
@@ -153,9 +153,9 @@ async fn test_fuse_history_table_read() -> Result<()> {
         .await?;
     }
 
-    append_sample_data(5, &fixture).await?;
-
     {
+        // another 5 blocks, 15 rows here
+        append_sample_data(5, &fixture).await?;
         let expected = vec![
             "+-----------+-------------+",
             "| row_count | block_count |",
@@ -174,6 +174,19 @@ async fn test_fuse_history_table_read() -> Result<()> {
             expected,
         )
         .await?;
+    }
+
+    {
+        // incompatible table engine
+        let qry = format!("create table {}.in_mem (a int) engine =Memory", db);
+        execute_query(qry.as_str(), ctx.clone()).await?;
+
+        let qry = format!("select * from fuse_history('{}', '{}')", db, "in_mem");
+        expects_err(
+            "check_row_and_block_count_after_append",
+            ErrorCode::bad_arguments_code(),
+            execute_query(qry.as_str(), ctx.clone()).await,
+        );
     }
 
     Ok(())
