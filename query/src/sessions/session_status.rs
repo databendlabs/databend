@@ -76,16 +76,16 @@ impl MutableStatus {
         *lock = db
     }
 
-    // Set the current user after authentication
-    pub fn set_current_user(&self, user: UserInfo) {
-        let mut lock = self.current_user.write();
-        *lock = Some(user);
-    }
-
     // Get current user
     pub fn get_current_user(&self) -> Option<UserInfo> {
         let lock = self.current_user.read();
         lock.clone()
+    }
+
+    // Set the current user after authentication
+    pub fn set_current_user(&self, user: UserInfo) {
+        let mut lock = self.current_user.write();
+        *lock = Some(user);
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {

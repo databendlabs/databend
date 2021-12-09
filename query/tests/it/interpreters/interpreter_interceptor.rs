@@ -23,9 +23,8 @@ use pretty_assertions::assert_eq;
 async fn test_interpreter_interceptor() -> Result<()> {
     common_tracing::init_default_ut_tracing();
     let ctx = crate::tests::create_query_context()?;
-
     {
-        let query = "select number from numbers_mt(10)";
+        let query = "select number from numbers_mt(100) where number > 90";
         ctx.attach_query_str(query);
         let plan = PlanParser::parse(query, ctx.clone()).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
@@ -39,16 +38,15 @@ async fn test_interpreter_interceptor() -> Result<()> {
             "+--------+",
             "| number |",
             "+--------+",
-            "| 0      |",
-            "| 1      |",
-            "| 2      |",
-            "| 3      |",
-            "| 4      |",
-            "| 5      |",
-            "| 6      |",
-            "| 7      |",
-            "| 8      |",
-            "| 9      |",
+            "| 91     |",
+            "| 92     |",
+            "| 93     |",
+            "| 94     |",
+            "| 95     |",
+            "| 96     |",
+            "| 97     |",
+            "| 98     |",
+            "| 99     |",
             "+--------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
@@ -57,7 +55,7 @@ async fn test_interpreter_interceptor() -> Result<()> {
 
     // Check.
     {
-        let query = "select log_type, read_rows, read_bytes, written_rows, written_bytes, result_rows, result_bytes, query_kind, query_text from system.query_log";
+        let query = "select log_type, handler_type, cpu_usage, memory_usage, read_rows, read_bytes, written_rows, written_bytes, result_rows, result_bytes, query_kind, query_text, sql_user, sql_user_quota, sql_user_privileges from system.query_log";
         let plan = PlanParser::parse(query, ctx.clone()).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
 
@@ -65,12 +63,12 @@ async fn test_interpreter_interceptor() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
 
         let expected = vec![
-            "+----------+-----------+------------+--------------+---------------+-------------+--------------+------------+-----------------------------------+",
-            "| log_type | read_rows | read_bytes | written_rows | written_bytes | result_rows | result_bytes | query_kind | query_text                        |",
-            "+----------+-----------+------------+--------------+---------------+-------------+--------------+------------+-----------------------------------+",
-            "| 1        | 0         | 0          | 0            | 0             | 0           | 0            | SelectPlan | select number from numbers_mt(10) |",
-            "| 2        | 10        | 80         | 0            | 0             | 10          | 80           | SelectPlan | select number from numbers_mt(10) |",
-            "+----------+-----------+------------+--------------+---------------+-------------+--------------+------------+-----------------------------------+",
+            "+----------+--------------+-----------+--------------+-----------+------------+--------------+---------------+-------------+--------------+------------+------------------------------------------------------+-----------+-----------------------------+---------------------------------------------------------------------------+",
+            "| log_type | handler_type | cpu_usage | memory_usage | read_rows | read_bytes | written_rows | written_bytes | result_rows | result_bytes | query_kind | query_text                                           | sql_user  | sql_user_quota              | sql_user_privileges                                                       |",
+            "+----------+--------------+-----------+--------------+-----------+------------+--------------+---------------+-------------+--------------+------------+------------------------------------------------------+-----------+-----------------------------+---------------------------------------------------------------------------+",
+            "| 1        | TestSession  | 8         | 3421         | 0         | 0          | 0            | 0             | 0           | 0            | SelectPlan | select number from numbers_mt(100) where number > 90 | test_user | UserGrantSet { grants: [] } | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
+            "| 2        | TestSession  | 8         | 3421         | 100       | 800        | 0            | 0             | 9           | 72           | SelectPlan | select number from numbers_mt(100) where number > 90 | test_user | UserGrantSet { grants: [] } | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
+            "+----------+--------------+-----------+--------------+-----------+------------+--------------+---------------+-------------+--------------+------------+------------------------------------------------------+-----------+-----------------------------+---------------------------------------------------------------------------+",
         ];
 
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

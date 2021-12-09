@@ -14,6 +14,7 @@
 
 use std::collections::VecDeque;
 use std::future::Future;
+use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
@@ -287,6 +288,11 @@ impl QueryContext {
     /// Get the session running query.
     pub fn get_query_str(&self) -> String {
         self.shared.get_query_str()
+    }
+
+    // Get the client socket address.
+    pub fn get_client_address(&self) -> Option<SocketAddr> {
+        self.shared.session.mutable_state.get_client_host()
     }
 }
 

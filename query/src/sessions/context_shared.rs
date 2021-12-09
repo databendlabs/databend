@@ -113,12 +113,12 @@ impl QueryContextShared {
         self.session.get_current_database()
     }
 
-    pub fn get_current_user(&self) -> Result<UserInfo> {
-        self.session.get_current_user()
-    }
-
     pub fn set_current_database(&self, new_database_name: String) {
         self.session.set_current_database(new_database_name);
+    }
+
+    pub fn get_current_user(&self) -> Result<UserInfo> {
+        self.session.get_current_user()
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {

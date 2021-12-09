@@ -42,6 +42,7 @@ impl QueryLogTable {
         let schema = DataSchemaRefExt::create(vec![
             // Type.
             DataField::new("log_type", DataType::Int8, false),
+            DataField::new("handler_type", DataType::String, false),
             // User.
             DataField::new("tenant_id", DataType::String, false),
             DataField::new("cluster_id", DataType::String, false),
