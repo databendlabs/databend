@@ -13,4 +13,5 @@
 //  limitations under the License.
 
 mod sled_tree;
+mod sled_txn_tree;
 mod testing;
