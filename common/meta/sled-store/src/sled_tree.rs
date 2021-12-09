@@ -25,6 +25,7 @@ use sled::transaction::TransactionResult;
 use sled::transaction::TransactionalTree;
 use sled::transaction::UnabortableTransactionError;
 
+use crate::store::Store;
 use crate::SledKeySpace;
 
 /// Extract key from a value of sled tree that includes its key.
@@ -536,16 +537,36 @@ impl TransactionSledTree<'_> {
 
         Ok(removed)
     }
+}
 
-    pub fn update_and_fetch<KV, F>(
-        &self,
-        key: &KV::K,
-        mut f: F,
-    ) -> Result<Option<KV::V>, UnabortableTransactionError>
-    where
-        KV: SledKeySpace,
-        F: FnMut(Option<KV::V>) -> Option<KV::V>,
-    {
+/// It borrows the internal SledTree with access limited to a specified namespace `KV`.
+pub struct AsKeySpace<'a, KV: SledKeySpace> {
+    inner: &'a SledTree,
+    phantom: PhantomData<KV>,
+}
+
+pub struct AsTxnKeySpace<'a, KV: SledKeySpace> {
+    inner: &'a TransactionSledTree<'a>,
+    phantom: PhantomData<KV>,
+}
+
+impl<'a, KV: SledKeySpace> Store<KV> for AsTxnKeySpace<'a, KV> {
+    type Error = UnabortableTransactionError;
+
+    fn insert(&self, key: &KV::K, value: &KV::V) -> Result<Option<KV::V>, Self::Error> {
+        self.inner.insert::<KV>(key, value)
+    }
+
+    fn get(&self, key: &KV::K) -> Result<Option<KV::V>, Self::Error> {
+        self.inner.get::<KV>(key)
+    }
+
+    fn remove(&self, key: &KV::K) -> Result<Option<KV::V>, Self::Error> {
+        self.inner.remove::<KV>(key)
+    }
+
+    fn update_and_fetch<F>(&self, key: &KV::K, mut f: F) -> Result<Option<KV::V>, Self::Error>
+    where F: FnMut(Option<KV::V>) -> Option<KV::V> {
         let key_ivec = KV::serialize_key(key).unwrap();
 
         let old_val_ivec = self.txn_tree.get(&key_ivec)?;
@@ -560,46 +581,6 @@ impl TransactionSledTree<'_> {
         };
 
         Ok(new_val)
-    }
-}
-
-/// It borrows the internal SledTree with access limited to a specified namespace `KV`.
-pub struct AsKeySpace<'a, KV: SledKeySpace> {
-    inner: &'a SledTree,
-    phantom: PhantomData<KV>,
-}
-
-pub struct AsTxnKeySpace<'a, KV: SledKeySpace> {
-    inner: &'a TransactionSledTree<'a>,
-    phantom: PhantomData<KV>,
-}
-
-impl<'a, KV: SledKeySpace> AsTxnKeySpace<'a, KV> {
-    pub fn insert(
-        &self,
-        key: &KV::K,
-        value: &KV::V,
-    ) -> Result<Option<KV::V>, UnabortableTransactionError> {
-        self.inner.insert::<KV>(key, value)
-    }
-
-    pub fn get(&self, key: &KV::K) -> Result<Option<KV::V>, UnabortableTransactionError> {
-        self.inner.get::<KV>(key)
-    }
-
-    pub fn remove(&self, key: &KV::K) -> Result<Option<KV::V>, UnabortableTransactionError> {
-        self.inner.remove::<KV>(key)
-    }
-
-    pub fn update_and_fetch<F>(
-        &self,
-        key: &KV::K,
-        f: F,
-    ) -> Result<Option<KV::V>, UnabortableTransactionError>
-    where
-        F: FnMut(Option<KV::V>) -> Option<KV::V>,
-    {
-        self.inner.update_and_fetch::<KV, _>(key, f)
     }
 }
 

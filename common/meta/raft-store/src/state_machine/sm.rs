@@ -30,6 +30,7 @@ use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::AsTxnKeySpace;
 use common_meta_sled_store::SledKeySpace;
 use common_meta_sled_store::SledTree;
+use common_meta_sled_store::Store;
 use common_meta_sled_store::TransactionSledTree;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
@@ -42,7 +43,6 @@ use common_meta_types::MatchSeqExt;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
-use common_meta_types::SeqNum;
 use common_meta_types::SeqV;
 use common_meta_types::TableMeta;
 use common_tracing::tracing;
@@ -766,9 +766,10 @@ impl StateMachine {
 
     fn txn_incr_seq(&self, key: &str, txn_tree: &TransactionSledTree) -> TxnResult<u64> {
         let seq_sub_tree = txn_tree.key_space::<Sequences>();
-        let old: Option<SeqNum> = seq_sub_tree.get(&key.to_string())?;
-        let curr = old.unwrap_or_default() + 1;
-        seq_sub_tree.insert(&key.to_string(), &curr)?;
+
+        let key = key.to_string();
+        let curr = seq_sub_tree.update_and_fetch(&key, |old| Some(old.unwrap_or_default() + 1))?;
+        let curr = curr.unwrap();
 
         tracing::debug!("applied IncrSeq: {}={}", key, curr);
 
