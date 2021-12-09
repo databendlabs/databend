@@ -29,7 +29,7 @@ fn test_context_function_build_arg_from_ctx() -> Result<()> {
     // Ok.
     {
         let args = ContextFunction::build_args_from_ctx("current_user", ctx.clone())?;
-        assert_eq!("", format!("{:?}", args[0]));
+        assert_eq!("test_user", format!("{:?}", args[0]));
     }
 
     // Error.
