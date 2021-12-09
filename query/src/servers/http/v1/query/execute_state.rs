@@ -154,6 +154,9 @@ impl ExecuteState {
         let schema = plan.schema();
 
         let interpreter = InterpreterFactory::get(context.clone(), plan.clone())?;
+        // Write Start to query log table.
+        interpreter.start().await?;
+
         let data_stream = interpreter.execute(None).await?;
         let mut data_stream = context.try_create_abortable(data_stream)?;
 
@@ -196,6 +199,9 @@ impl ExecuteState {
                 }
                 log::debug!("drop block sender!");
             })?;
+
+        // Write Finish to query log table.
+        interpreter.finish().await?;
         Ok((executor_clone, schema))
     }
 }

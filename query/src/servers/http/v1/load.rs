@@ -66,6 +66,7 @@ pub async fn streaming_load(
         .eq_ignore_ascii_case("1");
 
     let plan = PlanParser::parse(insert_sql, context.clone()).await?;
+    context.attach_query_str(insert_sql);
 
     // validate plan
     match &plan {
@@ -92,8 +93,8 @@ pub async fn streaming_load(
 
     let max_block_size = context.get_settings().get_max_block_size()? as usize;
     let interpreter = InterpreterFactory::get(context.clone(), plan.clone())?;
-
-    context.attach_query_str(insert_sql);
+    // Write Start to query log table.
+    interpreter.start().await?;
 
     let stream = stream! {
         while let Ok(Some(field)) = multipart.next_field().await {
@@ -114,6 +115,9 @@ pub async fn streaming_load(
     // this runs inside the runtime of poem, load is not cpu densive so it's ok
     let mut data_stream = interpreter.execute(Some(Box::pin(stream))).await?;
     while let Some(_block) = data_stream.next().await {}
+
+    // Write Finish to query log table.
+    interpreter.finish().await?;
 
     // TODO generate id
     // TODO duplicate by insert_label

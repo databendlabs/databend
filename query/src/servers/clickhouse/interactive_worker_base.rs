@@ -71,6 +71,9 @@ impl InteractiveWorkerBase {
             _ => {
                 let start = Instant::now();
                 let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
+                // Write start query log.
+                interpreter.start().await?;
+
                 let name = interpreter.name().to_string();
                 let async_data_stream = interpreter.execute(None);
                 let mut data_stream = async_data_stream.await?;
@@ -102,6 +105,8 @@ impl InteractiveWorkerBase {
 
                     cancel_clone.store(true, Ordering::Relaxed);
                 })?;
+                // Write final query log.
+                interpreter.finish().await?;
 
                 Ok(rx)
             }

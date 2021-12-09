@@ -321,6 +321,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let instant = Instant::now();
 
         let interpreter = InterpreterFactory::get(context.clone(), plan?)?;
+        // Write start query log.
         interpreter.start().await?;
         let data_stream = interpreter.execute(None).await?;
         histogram!(
@@ -330,6 +331,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
         let collector = data_stream.collect::<Result<Vec<DataBlock>>>();
         let query_result = collector.await;
+        // Write finish query log.
         interpreter.finish().await?;
         query_result.map(|data| (data, Self::extra_info(context, instant)))
     }
