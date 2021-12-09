@@ -44,6 +44,9 @@ const USER: &str = "user";
 const LABELS: &str = "labels";
 const ASSIGNESS: &str = "assigness";
 const COMMENTS: &str = "comments";
+const CREATED_AT: &str = "created_at";
+const UPDATED_AT: &str = "updated_at";
+const CLOSED_AT: &str = "closed_at";
 
 pub struct RepoIssuesTable {
     table_info: TableInfo,
@@ -83,6 +86,9 @@ impl RepoIssuesTable {
             DataField::new(LABELS, DataType::String, true),
             DataField::new(ASSIGNESS, DataType::String, true),
             DataField::new(COMMENTS, DataType::UInt32, true),
+            DataField::new(CREATED_AT, DataType::DateTime32(None), true),
+            DataField::new(UPDATED_AT, DataType::DateTime32(None), true),
+            DataField::new(CLOSED_AT, DataType::DateTime32(None), true),
         ];
 
         Arc::new(DataSchema::new(fields))
@@ -92,12 +98,14 @@ impl RepoIssuesTable {
         // init array
         let mut issue_numer_array: Vec<i64> = Vec::new();
         let mut title_array: Vec<Vec<u8>> = Vec::new();
-        // let mut body_array: Vec<Vec<u8>> = Vec::new();
         let mut state_array: Vec<Vec<u8>> = Vec::new();
         let mut user_array: Vec<Vec<u8>> = Vec::new();
         let mut labels_array: Vec<Vec<u8>> = Vec::new();
         let mut assigness_array: Vec<Vec<u8>> = Vec::new();
         let mut comments_number_array: Vec<u32> = Vec::new();
+        let mut created_at_array: Vec<u32> = Vec::new();
+        let mut updated_at_array: Vec<u32> = Vec::new();
+        let mut closed_at_array: Vec<Option<u32>> = Vec::new();
 
         // get owner repo info from table meta
         let (owner, repo) = get_own_repo_from_table_info(&self.table_info)?;
@@ -137,6 +145,14 @@ impl RepoIssuesTable {
             assigness_str.pop();
             assigness_array.push(assigness_str);
             comments_number_array.push(issue.comments);
+            let created_at = (issue.created_at.timestamp_millis() / 1000) as u32;
+            created_at_array.push(created_at);
+            let updated_at = (issue.updated_at.timestamp_millis() / 1000) as u32;
+            updated_at_array.push(updated_at);
+            let closed_at = issue
+                .closed_at
+                .map(|closed_at| (closed_at.timestamp_millis() / 1000) as u32);
+            closed_at_array.push(closed_at);
         }
 
         Ok(vec![
@@ -147,6 +163,9 @@ impl RepoIssuesTable {
             Series::new(labels_array),
             Series::new(assigness_array),
             Series::new(comments_number_array),
+            Series::new(created_at_array),
+            Series::new(updated_at_array),
+            Series::new(closed_at_array),
         ])
     }
 }
