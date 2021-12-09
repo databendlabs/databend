@@ -11,17 +11,8 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
+//
 
-mod constants;
-pub mod io;
-pub mod meta;
-mod operations;
-pub mod pruning;
-pub mod statistics;
-mod table;
-mod table_functions;
-
-pub use constants::*;
-pub use table::FuseTable;
-pub use table_functions::FuseHistoryTable;
-pub use table_functions::FUSE_FUNC_HIST;
+mod fuse_history_table;
+pub use fuse_history_table::FuseHistoryTable;
+pub use fuse_history_table::FUSE_FUNC_HIST;
