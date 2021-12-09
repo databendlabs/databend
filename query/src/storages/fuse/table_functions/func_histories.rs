@@ -44,7 +44,7 @@ use crate::storages::Table;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
 
-pub const FUSE_FUNC_HIST: &str = "fuse$history";
+pub const FUSE_FUNC_HIST: &str = "fuse_history";
 
 pub struct FuseHistoriesTable {
     table_info: TableInfo,
