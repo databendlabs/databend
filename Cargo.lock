@@ -542,7 +542,7 @@ dependencies = [
  "lexical-util",
  "libc",
  "log",
- "nix 0.23.0",
+ "nix",
  "num-format",
  "portpicker",
  "predicates 2.1.0",
@@ -1916,7 +1916,7 @@ version = "3.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a19c6cedffdc8c03a3346d723eb20bd85a13362bb96dc2ac000842c6381ec7bf"
 dependencies = [
- "nix 0.23.0",
+ "nix",
  "winapi",
 ]
 
@@ -4121,7 +4121,7 @@ dependencies = [
  "mysql_common",
  "named_pipe",
  "native-tls",
- "nix 0.23.0",
+ "nix",
  "once_cell",
  "pem",
  "percent-encoding",
@@ -4216,19 +4216,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77a5d83df9f36fe23f0c3648c6bbb8b0298bb5f1939c8f2704431371f4b84d43"
 dependencies = [
  "smallvec",
-]
-
-[[package]]
-name = "nix"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf1e25ee6b412c2a1e3fcb6a4499a5c1bfe7f43e014bdce9a6b6666e5aa2d187"
-dependencies = [
- "bitflags",
- "cc",
- "cfg-if 1.0.0",
- "libc",
- "memoffset 0.6.4",
 ]
 
 [[package]]
@@ -5026,7 +5013,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "log",
- "nix 0.23.0",
+ "nix",
  "parking_lot",
  "prost",
  "prost-build",
@@ -5790,9 +5777,9 @@ checksum = "61b3909d758bb75c79f23d4736fac9433868679d3ad2ea7a61e3c25cfda9a088"
 
 [[package]]
 name = "rustyline"
-version = "9.0.0"
+version = "9.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "790487c3881a63489ae77126f57048b42d62d3b2bafbf37453ea19eedb6340d6"
+checksum = "dec400b53af4f6551ad23214ba08af344125785a0508228af83a84d498a5ce33"
 dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
@@ -5802,7 +5789,7 @@ dependencies = [
  "libc",
  "log",
  "memchr",
- "nix 0.22.0",
+ "nix",
  "radix_trie",
  "scopeguard",
  "smallvec",
