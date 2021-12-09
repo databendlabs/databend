@@ -41,9 +41,7 @@ async fn test_fuse_table_simple_case() -> Result<()> {
 
     // insert 5 blocks
     let num_blocks = 5;
-    let stream = Box::pin(futures::stream::iter(TestFixture::gen_block_stream(
-        num_blocks, 1,
-    )));
+    let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
 
     let r = table.append_data(ctx.clone(), stream).await?;
     table
@@ -104,9 +102,7 @@ async fn test_fuse_table_simple_case() -> Result<()> {
 
     // insert overwrite 5 blocks
     let num_blocks = 5;
-    let stream = Box::pin(futures::stream::iter(TestFixture::gen_block_stream(
-        num_blocks, 4,
-    )));
+    let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 4);
 
     let r = table.append_data(ctx.clone(), stream).await?;
     table
@@ -191,9 +187,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     // 2. truncate table which has data
     let num_blocks = 10;
-    let stream = Box::pin(futures::stream::iter(TestFixture::gen_block_stream(
-        num_blocks, 1,
-    )));
+    let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
 
     let r = table.append_data(ctx.clone(), stream).await?;
     table
@@ -254,9 +248,7 @@ async fn test_fuse_table_compact() -> Result<()> {
     for _ in 0..n {
         let table = fixture.latest_default_table().await?;
         let num_blocks = 1;
-        let stream = Box::pin(futures::stream::iter(TestFixture::gen_block_stream(
-            num_blocks, 1,
-        )));
+        let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
         let r = table.append_data(ctx.clone(), stream).await?;
         table
             .commit(ctx.clone(), r.try_collect().await?, false)

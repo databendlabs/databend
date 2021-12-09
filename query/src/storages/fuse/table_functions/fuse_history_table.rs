@@ -46,13 +46,13 @@ use crate::table_functions::TableFunction;
 
 pub const FUSE_FUNC_HIST: &str = "fuse_history";
 
-pub struct FuseHistoriesTable {
+pub struct FuseHistoryTable {
     table_info: TableInfo,
     arg_database_name: String,
     arg_table_name: String,
 }
 
-impl FuseHistoriesTable {
+impl FuseHistoryTable {
     pub fn create(
         database_name: &str,
         table_func_name: &str,
@@ -76,7 +76,7 @@ impl FuseHistoriesTable {
                 Ok((db, tbl))
             }
             _ => Err(ErrorCode::BadArguments(format!(
-                "expecting two string literals, but got {:?}",
+                "expecting database and table name (as two string literals), but got {:?}",
                 table_args
             ))),
         }?;
@@ -94,7 +94,7 @@ impl FuseHistoriesTable {
             },
         };
 
-        Ok(Arc::new(FuseHistoriesTable {
+        Ok(Arc::new(FuseHistoryTable {
             table_info,
             arg_database_name,
             arg_table_name,
@@ -111,6 +111,10 @@ impl FuseHistoriesTable {
                 expr
             )))
         }
+    }
+
+    fn string_literal(val: &str) -> Expression {
+        Expression::create_literal(DataValue::String(Some(val.as_bytes().to_vec())))
     }
 
     async fn read_snapshots(
@@ -162,7 +166,7 @@ impl FuseHistoriesTable {
 }
 
 #[async_trait::async_trait]
-impl Table for FuseHistoriesTable {
+impl Table for FuseHistoryTable {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -173,12 +177,8 @@ impl Table for FuseHistoriesTable {
 
     fn table_args(&self) -> Option<Vec<Expression>> {
         Some(vec![
-            Expression::create_literal(DataValue::String(Some(
-                self.arg_database_name.as_bytes().to_vec(),
-            ))),
-            Expression::create_literal(DataValue::String(Some(
-                self.arg_table_name.as_bytes().to_vec(),
-            ))),
+            Self::string_literal(self.arg_database_name.as_str()),
+            Self::string_literal(self.arg_table_name.as_str()),
         ])
     }
 
@@ -187,7 +187,6 @@ impl Table for FuseHistoriesTable {
         ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        // TODO handle limit push_down (of plan)
         let tbl = ctx
             .get_catalog()
             .get_table(
@@ -215,7 +214,7 @@ impl Table for FuseHistoriesTable {
     }
 }
 
-impl TableFunction for FuseHistoriesTable {
+impl TableFunction for FuseHistoryTable {
     fn function_name(&self) -> &str {
         self.name()
     }

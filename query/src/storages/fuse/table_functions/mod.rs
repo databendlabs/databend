@@ -13,6 +13,6 @@
 //  limitations under the License.
 //
 
-mod func_histories;
-pub use func_histories::FuseHistoriesTable;
-pub use func_histories::FUSE_FUNC_HIST;
+mod fuse_history_table;
+pub use fuse_history_table::FuseHistoryTable;
+pub use fuse_history_table::FUSE_FUNC_HIST;

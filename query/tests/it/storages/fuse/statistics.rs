@@ -40,7 +40,7 @@ fn test_ft_stats_block_stats() -> common_exception::Result<()> {
 
 #[test]
 fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
-    let blocks = TestFixture::gen_block_stream(10, 1);
+    let blocks = TestFixture::gen_sample_blocks(10, 1);
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
     let col_stats = blocks
         .iter()
@@ -58,7 +58,7 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
 
 #[test]
 fn test_ft_stats_accumulator() -> common_exception::Result<()> {
-    let blocks = TestFixture::gen_block_stream(10, 1);
+    let blocks = TestFixture::gen_sample_blocks(10, 1);
     let mut stats_acc = accumulator::StatisticsAccumulator::new();
     for item in blocks {
         let block_acc = stats_acc.begin(&item?)?;
