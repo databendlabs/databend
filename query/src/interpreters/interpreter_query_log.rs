@@ -19,6 +19,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::SeriesFrom;
 use common_datavalues::series::Series;
 use common_exception::Result;
+use common_planners::PlanNode;
 
 use crate::sessions::QueryContext;
 
@@ -33,6 +34,7 @@ pub enum LogType {
 pub struct LogEvent {
     // Type.
     pub log_type: LogType,
+    pub handler_type: String,
 
     // User.
     pub tenant_id: String,
@@ -43,6 +45,7 @@ pub struct LogEvent {
 
     // Query.
     pub query_id: String,
+    pub query_kind: String,
     pub query_text: String,
     pub query_start_time: u64,
     pub query_end_time: u64,
@@ -82,11 +85,12 @@ pub struct LogEvent {
 
 pub struct InterpreterQueryLog {
     ctx: Arc<QueryContext>,
+    plan: PlanNode,
 }
 
 impl InterpreterQueryLog {
-    pub fn create(ctx: Arc<QueryContext>) -> Self {
-        InterpreterQueryLog { ctx }
+    pub fn create(ctx: Arc<QueryContext>, plan: PlanNode) -> Self {
+        InterpreterQueryLog { ctx, plan }
     }
 
     async fn write_log(&self, event: &LogEvent) -> Result<()> {
@@ -96,6 +100,7 @@ impl InterpreterQueryLog {
         let block = DataBlock::create_by_array(schema.clone(), vec![
             // Type.
             Series::new(vec![event.log_type as u8]),
+            Series::new(vec![event.handler_type.as_str()]),
             // User.
             Series::new(vec![event.tenant_id.as_str()]),
             Series::new(vec![event.cluster_id.as_str()]),
@@ -104,6 +109,7 @@ impl InterpreterQueryLog {
             Series::new(vec![event.sql_user_quota.as_str()]),
             // Query.
             Series::new(vec![event.query_id.as_str()]),
+            Series::new(vec![event.query_kind.as_str()]),
             Series::new(vec![event.query_text.as_str()]),
             Series::new(vec![event.query_start_time as u64]),
             Series::new(vec![event.query_end_time as u64]),
@@ -145,13 +151,18 @@ impl InterpreterQueryLog {
 
     pub async fn log_start(&self) -> Result<()> {
         // User.
+        let handler_type = self.ctx.get_session().get_type();
         let tenant_id = self.ctx.get_config().query.tenant_id;
         let cluster_id = self.ctx.get_config().query.cluster_id;
-        let sql_user = "".to_string();
+        let user = self.ctx.get_current_user()?;
+        let sql_user = user.name;
+        let sql_user_quota = format!("{:?}", user.quota);
+        let sql_user_privileges = format!("{:?}", user.grants);
 
         // Query.
         let query_id = self.ctx.get_id();
-        let query_text = "".to_string();
+        let query_kind = self.plan.name().to_string();
+        let query_text = self.ctx.get_query_str();
 
         // Stats.
         let query_start_time = Instant::now().elapsed().as_secs();
@@ -162,22 +173,25 @@ impl InterpreterQueryLog {
         let read_bytes = 0u64;
         let result_rows = 0u64;
         let result_bytes = 0u64;
+        let cpu_usage = self.ctx.get_settings().get_max_threads()? as u32;
+        let memory_usage = self.ctx.get_session().get_memory_usage() as u64;
+
+        // Client.
+        let client_address = format!("{:?}", self.ctx.get_client_address());
 
         // Schema.
         let current_database = self.ctx.get_current_database();
 
-        //
-        let cpu_usage = self.ctx.get_settings().get_max_threads()? as u32;
-        let memory_usage = 0u64;
-
         let log_event = LogEvent {
             log_type: LogType::Start,
+            handler_type,
             tenant_id,
             cluster_id,
             sql_user,
-            sql_user_quota: "".to_string(),
-            sql_user_privileges: "".to_string(),
+            sql_user_quota,
+            sql_user_privileges,
             query_id,
+            query_kind,
             query_text,
             query_start_time,
             query_end_time,
@@ -190,7 +204,7 @@ impl InterpreterQueryLog {
             cpu_usage,
             memory_usage,
             client_info: "".to_string(),
-            client_address: "".to_string(),
+            client_address,
             current_database,
             databases: "".to_string(),
             tables: "".to_string(),
@@ -208,13 +222,18 @@ impl InterpreterQueryLog {
 
     pub async fn log_finish(&self, result_rows: u64, result_bytes: u64) -> Result<()> {
         // User.
+        let handler_type = self.ctx.get_session().get_type();
         let tenant_id = self.ctx.get_config().query.tenant_id;
         let cluster_id = self.ctx.get_config().query.cluster_id;
-        let sql_user = "".to_string();
+        let user = self.ctx.get_current_user()?;
+        let sql_user = user.name;
+        let sql_user_quota = format!("{:?}", user.quota);
+        let sql_user_privileges = format!("{:?}", user.grants);
 
         // Query.
         let query_id = self.ctx.get_id();
-        let query_text = "".to_string();
+        let query_kind = self.plan.name().to_string();
+        let query_text = self.ctx.get_query_str();
 
         // Stats.
         let query_start_time = 0;
@@ -222,25 +241,27 @@ impl InterpreterQueryLog {
         let written_rows = 0u64;
         let dal_metrics = self.ctx.get_dal_metrics();
         let written_bytes = dal_metrics.write_bytes as u64;
-        let read_rows = 0u64;
-        let read_bytes = 0u64;
+        let read_rows = self.ctx.get_progress_value().read_rows as u64;
+        let read_bytes = self.ctx.get_progress_value().read_bytes as u64;
+        let cpu_usage = self.ctx.get_settings().get_max_threads()? as u32;
+        let memory_usage = self.ctx.get_session().get_memory_usage() as u64;
+
+        // Client.
+        let client_address = format!("{:?}", self.ctx.get_client_address());
 
         // Schema.
         let current_database = self.ctx.get_current_database();
 
-        // Stat.
-        let cpu_usage = self.ctx.get_settings().get_max_threads()? as u32;
-        let session = self.ctx.get_session();
-        let memory_usage = session.get_memory_usage() as u64;
-
         let log_event = LogEvent {
             log_type: LogType::Finish,
+            handler_type,
             tenant_id,
             cluster_id,
             sql_user,
-            sql_user_quota: "".to_string(),
-            sql_user_privileges: "".to_string(),
+            sql_user_quota,
+            sql_user_privileges,
             query_id,
+            query_kind,
             query_text,
             query_start_time,
             query_end_time,
@@ -253,7 +274,7 @@ impl InterpreterQueryLog {
             cpu_usage,
             memory_usage,
             client_info: "".to_string(),
-            client_address: "".to_string(),
+            client_address,
             current_database,
             databases: "".to_string(),
             tables: "".to_string(),

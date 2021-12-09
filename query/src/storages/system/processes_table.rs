@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -25,11 +26,11 @@ use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
+use common_meta_types::UserInfo;
 use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 
-use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContext;
 use crate::storages::Table;
 
@@ -64,16 +65,16 @@ impl ProcessesTable {
         ProcessesTable { table_info }
     }
 
-    fn process_host(process_info: &ProcessInfo) -> Option<Vec<u8>> {
-        let client_address = process_info.client_address;
+    fn process_host(client_address: &Option<SocketAddr>) -> Option<Vec<u8>> {
         client_address.as_ref().map(|s| s.to_string().into_bytes())
     }
 
-    fn process_extra_info(process_info: &ProcessInfo) -> Option<Vec<u8>> {
-        process_info
-            .session_extra_info
-            .clone()
-            .map(|s| s.into_bytes())
+    fn process_user_info(user_info: &Option<UserInfo>) -> Option<Vec<u8>> {
+        user_info.as_ref().map(|s| s.name.clone().into_bytes())
+    }
+
+    fn process_extra_info(session_extra_info: &Option<String>) -> Option<Vec<u8>> {
+        session_extra_info.clone().map(|s| s.into_bytes())
     }
 }
 
@@ -109,9 +110,11 @@ impl Table for ProcessesTable {
             processes_type.push(process_info.typ.clone().into_bytes());
             processes_state.push(process_info.state.clone().into_bytes());
             processes_database.push(process_info.database.clone().into_bytes());
-            processes_host.push(ProcessesTable::process_host(process_info));
-            processes_user.push(process_info.user.clone().into_bytes());
-            processes_extra_info.push(ProcessesTable::process_extra_info(process_info));
+            processes_host.push(ProcessesTable::process_host(&process_info.client_address));
+            processes_user.push(ProcessesTable::process_user_info(&process_info.user));
+            processes_extra_info.push(ProcessesTable::process_extra_info(
+                &process_info.session_extra_info,
+            ));
             processes_memory_usage.push(process_info.memory_usage);
         }
 
