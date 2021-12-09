@@ -2,7 +2,4 @@
 97
 98
 99
-2	MySQL	16	3415	0	0	0	0	0	0	TruncateTablePlan	truncate table system.query_log	default	UserGrantSet { grants: [] }	UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 }
-1	MySQL	16	3415	0	0	0	0	0	0	SelectPlan	select * from numbers(100) where number > 95	default	UserGrantSet { grants: [] }	UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 }
-2	MySQL	16	3415	100	800	0	0	4	32	SelectPlan	select * from numbers(100) where number > 95	default	UserGrantSet { grants: [] }	UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 }
-1	MySQL	16	3415	0	0	0	0	0	0	SelectPlan	select log_type, handler_type, cpu_usage, memory_usage, read_rows, read_bytes, written_rows, written_bytes, result_rows, result_bytes, query_kind, query_text, sql_user, sql_user_quota, sql_user_privileges from system.query_log	default	UserGrantSet { grants: [] }	UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 }
+1
