@@ -217,7 +217,7 @@ impl Command for ViewCommand {
             .arg(
                 Arg::new("profile")
                     .long("profile")
-                    .about("Profile to view, support local and clusters")
+                    .help("Profile to view, support local and clusters")
                     .required(false)
                     .takes_value(true),
             )

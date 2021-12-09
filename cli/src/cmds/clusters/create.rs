@@ -728,7 +728,7 @@ impl Command for CreateCommand {
             .arg(
                 Arg::new("profile")
                     .long("profile")
-                    .about("Profile for deployment, support local and cluster")
+                    .help("Profile for deployment, support local and cluster")
                     .required(false)
                     .takes_value(true)
                     .possible_values(&["local"]).default_value("local"),
@@ -736,14 +736,14 @@ impl Command for CreateCommand {
             .arg(
                 Arg::new("meta_address")
                     .long("meta-address")
-                    .about("Set endpoint to provide metastore service")
+                    .help("Set endpoint to provide metastore service")
                     .takes_value(true)
                     .env(databend_query::configs::config_meta::META_ADDRESS),
             )
             .arg(
                 Arg::new("log_level")
                     .long("log-level")
-                    .about("Set logging level")
+                    .help("Set logging level")
                     .takes_value(true)
                     .env(databend_query::configs::config_log::LOG_LEVEL)
                     .default_value("INFO"),
@@ -752,7 +752,7 @@ impl Command for CreateCommand {
                 Arg::new("version")
                     .long("version")
                     .takes_value(true)
-                    .about("Set databend version to run")
+                    .help("Set databend version to run")
                     .default_value("latest"),
             )
             .arg(
@@ -760,7 +760,7 @@ impl Command for CreateCommand {
                     .long("num-cpus")
                     .env(databend_query::configs::config_query::QUERY_NUM_CPUS)
                     .takes_value(true)
-                    .about("Set number of cpus for query instance to use")
+                    .help("Set number of cpus for query instance to use")
                     .default_value(""),
             )
             .arg(
@@ -768,7 +768,7 @@ impl Command for CreateCommand {
                     .long("query-cluster-id")
                     .env(databend_query::configs::config_query::QUERY_CLUSTER_ID)
                     .takes_value(true)
-                    .about("Set the cluster for query to work on")
+                    .help("Set the cluster for query to work on")
                     .default_value("test_cluster"),
             )
             .arg(
@@ -776,7 +776,7 @@ impl Command for CreateCommand {
                     .long("query-tenant-id")
                     .env(databend_query::configs::config_query::QUERY_TENANT_ID)
                     .takes_value(true)
-                    .about("Set the tenant id for query to work on")
+                    .help("Set the tenant id for query to work on")
                     .default_value("test"),
             )
             .arg(
@@ -784,7 +784,7 @@ impl Command for CreateCommand {
                     .long("mysql-handler-port")
                     .takes_value(true)
                     .env(databend_query::configs::config_query::QUERY_MYSQL_HANDLER_PORT)
-                    .about("Configure the port for mysql endpoint to run queries in mysql client")
+                    .help("Configure the port for mysql endpoint to run queries in mysql client")
                     .default_value("3307"),
             )
             .arg(
@@ -792,7 +792,7 @@ impl Command for CreateCommand {
                     .long("clickhouse-handler-port")
                     .env(databend_query::configs::config_query::QUERY_CLICKHOUSE_HANDLER_HOST)
                     .takes_value(true)
-                    .about("Configure the port clickhouse endpoint to run queries in clickhouse client")
+                    .help("Configure the port clickhouse endpoint to run queries in clickhouse client")
                     .default_value("9000"),
             )
             .arg(
@@ -800,7 +800,7 @@ impl Command for CreateCommand {
                     .long("storage-type")
                     .takes_value(true)
                     .env(databend_query::configs::config_storage::STORAGE_TYPE)
-                    .about("Set the storage medium to store datasets, support disk or s3 object storage ")
+                    .help("Set the storage medium to store datasets, support disk or s3 object storage ")
                     .possible_values(&["disk", "s3"]).default_value("disk"),
             )
             .arg(
@@ -808,14 +808,14 @@ impl Command for CreateCommand {
                     .long("disk-path")
                     .takes_value(true)
                     // .env(databend_query::configs::config_storage::DISK_STORAGE_DATA_PATH)
-                    .about("Set the root directory to store all datasets")
+                    .help("Set the root directory to store all datasets")
                     .value_hint(ValueHint::DirPath),
             )
             .arg(
                 Arg::new("force")
                     .long("force")
                     // .env(databend_query::configs::config_storage::DISK_STORAGE_DATA_PATH)
-                    .about("Delete existing cluster and install new cluster without check")
+                    .help("Delete existing cluster and install new cluster without check")
                     .takes_value(false),
             )
     }

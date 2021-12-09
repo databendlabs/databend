@@ -52,7 +52,7 @@ impl Command for RootCommand {
             .arg(
                 Arg::new("group")
                     .long("group")
-                    .about("Sets the group name for configuration")
+                    .help("Sets the group name for configuration")
                     .default_value("local")
                     .env("DATABEND_GROUP")
                     .global(true)
@@ -61,7 +61,7 @@ impl Command for RootCommand {
             .arg(
                 Arg::new("databend_dir")
                     .long("databend_dir")
-                    .about("Sets the directory to store databend binaries(query and store)")
+                    .help("Sets the directory to store databend binaries(query and store)")
                     .default_value("~/.databend")
                     .env("databend_dir")
                     .global(true)
@@ -71,7 +71,7 @@ impl Command for RootCommand {
             .arg(
                 Arg::new("download_url")
                     .long("download_url")
-                    .about("Sets the url to download databend binaries")
+                    .help("Sets the url to download databend binaries")
                     .default_value(config::REPO_DATABEND_URL)
                     .env("DOWNLOAD_URL")
                     .global(true)
@@ -80,7 +80,7 @@ impl Command for RootCommand {
             .arg(
                 Arg::new("tag_url")
                     .long("tag_url")
-                    .about("Sets the url to for databend tags")
+                    .help("Sets the url to for databend tags")
                     .default_value(config::REPO_DATABEND_TAG_URL)
                     .env("DOWNLOAD_URL")
                     .global(true)
@@ -89,7 +89,7 @@ impl Command for RootCommand {
             .arg(
                 Arg::new("validation_url")
                     .long("validation_url")
-                    .about("Sets the url to validate on custom download network connection")
+                    .help("Sets the url to validate on custom download network connection")
                     .env("DOWNLOAD_VALIDATION_URL")
                     .default_value(config::REPO_DATABEND_TAG_URL)
                     .global(true)
@@ -98,7 +98,7 @@ impl Command for RootCommand {
             .arg(
                 Arg::new("playground_url")
                     .long("playground_url")
-                    .about("Sets the url to download databend playground")
+                    .help("Sets the url to download databend playground")
                     .env("DOWNLOAD_PLAYGROUND_URL")
                     .default_value(config::REPO_PLAYGROUND_URL)
                     .global(true)
@@ -107,7 +107,7 @@ impl Command for RootCommand {
             .arg(
                 Arg::new("log_level")
                     .long("log-level")
-                    .about("Sets the log-level for current settings")
+                    .help("Sets the log-level for current settings")
                     .env("BEND_LOG_LEVEL")
                     .default_value("info")
                     .global(true)
