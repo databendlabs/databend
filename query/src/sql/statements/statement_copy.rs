@@ -21,7 +21,6 @@ use common_planners::CopyPlan;
 use common_planners::PlanNode;
 use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
-use sqlparser::ast::SqlOption;
 
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;

@@ -27,7 +27,6 @@ use common_tracing::tracing;
 use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ColumnOption;
 use sqlparser::ast::ObjectName;
-use sqlparser::ast::SqlOption;
 
 use super::analyzer_expr::ExpressionAnalyzer;
 use crate::sessions::QueryContext;

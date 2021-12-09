@@ -17,12 +17,10 @@
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::str::FromStr;
 use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_meta_types::AuthType;
-use common_meta_types::Compression;
 use common_meta_types::Credentials;
 use common_meta_types::FileFormat;
 use common_meta_types::StageParams;
@@ -35,7 +33,6 @@ use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ColumnOptionDef;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Ident;
-use sqlparser::ast::SqlOption;
 use sqlparser::ast::Statement;
 use sqlparser::ast::TableConstraint;
 use sqlparser::ast::Value;

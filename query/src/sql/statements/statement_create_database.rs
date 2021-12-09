@@ -21,7 +21,6 @@ use common_planners::CreateDatabasePlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
-use sqlparser::ast::SqlOption;
 
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
