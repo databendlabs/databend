@@ -70,7 +70,7 @@ async fn test_interpreter_interceptor() -> Result<()> {
             "| log_type | read_rows | read_bytes | written_rows | written_bytes | result_rows | result_bytes | query_kind | query_text                        |",
             "+----------+-----------+------------+--------------+---------------+-------------+--------------+------------+-----------------------------------+",
             "| 1        | 0         | 0          | 0            | 0             | 0           | 0            | SelectPlan | select number from numbers_mt(10) |",
-            "| 2        | 0         | 0          | 0            | 0             | 10          | 80           | SelectPlan | select number from numbers_mt(10) |",
+            "| 2        | 10        | 80         | 0            | 0             | 10          | 80           | SelectPlan | select number from numbers_mt(10) |",
             "+----------+-----------+------------+--------------+---------------+-------------+--------------+------------+-----------------------------------+",
         ];
 

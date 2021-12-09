@@ -229,8 +229,8 @@ impl InterpreterQueryLog {
         let written_rows = 0u64;
         let dal_metrics = self.ctx.get_dal_metrics();
         let written_bytes = dal_metrics.write_bytes as u64;
-        let read_rows = 0u64;
-        let read_bytes = 0u64;
+        let read_rows = self.ctx.get_progress_value().read_rows as u64;
+        let read_bytes = self.ctx.get_progress_value().read_bytes as u64;
 
         // Schema.
         let current_database = self.ctx.get_current_database();

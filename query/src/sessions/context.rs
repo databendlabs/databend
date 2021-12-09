@@ -119,14 +119,6 @@ impl QueryContext {
         self.shared.progress.as_ref().get_and_reset()
     }
 
-    // Some table can estimate the approx total rows, such as NumbersTable
-    pub fn add_total_rows_approx(&self, total_rows: usize) {
-        self.shared
-            .progress
-            .as_ref()
-            .add_total_rows_approx(total_rows);
-    }
-
     // Steal n partitions from the partition pool by the pipeline worker.
     // This also can steal the partitions from distributed node.
     pub fn try_get_partitions(&self, num: usize) -> Result<Partitions> {
