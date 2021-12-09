@@ -16,15 +16,16 @@ use async_raft::raft::Entry;
 use async_raft::raft::EntryNormal;
 use async_raft::raft::EntryPayload;
 use common_base::tokio;
-use common_base::GlobalSequence;
-use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::SledTree;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
 use common_meta_types::LogIndex;
 use common_meta_types::SeqV;
+use testing::new_sled_test_context;
 
+use crate::init_sled_ut;
+use crate::testing;
 use crate::testing::fake_key_spaces::Files;
 use crate::testing::fake_key_spaces::GenericKV;
 use crate::testing::fake_key_spaces::Logs;
@@ -33,24 +34,6 @@ use crate::testing::fake_key_spaces::StateMachineMeta;
 use crate::testing::fake_state_machine_meta::StateMachineMetaKey::Initialized;
 use crate::testing::fake_state_machine_meta::StateMachineMetaKey::LastApplied;
 use crate::testing::fake_state_machine_meta::StateMachineMetaValue;
-
-/// 1. Open a temp sled::Db for all tests.
-/// 2. Initialize a global tracing.
-/// 3. Create a span for a test case. One needs to enter it by `span.enter()` and keeps the guard held.
-#[macro_export]
-macro_rules! init_sled_ut {
-    () => {{
-        let t = tempfile::tempdir().expect("create temp dir to sled db");
-
-        common_meta_sled_store::init_temp_sled_db(t);
-        common_tracing::init_default_ut_tracing();
-
-        let name = common_tracing::func_name!();
-        let span =
-            common_tracing::tracing::debug_span!("ut", "{}", name.split("::").last().unwrap());
-        ((), span)
-    }};
-}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_sled_tree_open() -> anyhow::Result<()> {
@@ -1427,21 +1410,4 @@ async fn test_as_multi_types() -> anyhow::Result<()> {
     }
 
     Ok(())
-}
-
-pub struct SledTestContext {
-    pub tree_name: String,
-    pub db: sled::Db,
-}
-
-/// Create a new context for testing sled
-pub fn new_sled_test_context() -> SledTestContext {
-    SledTestContext {
-        tree_name: format!("test-{}-", next_port()),
-        db: get_sled_db(),
-    }
-}
-
-pub fn next_port() -> u32 {
-    29000u32 + (GlobalSequence::next() as u32)
 }

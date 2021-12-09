@@ -536,6 +536,31 @@ impl TransactionSledTree<'_> {
 
         Ok(removed)
     }
+
+    pub fn update_and_fetch<KV, F>(
+        &self,
+        key: &KV::K,
+        mut f: F,
+    ) -> Result<Option<KV::V>, UnabortableTransactionError>
+    where
+        KV: SledKeySpace,
+        F: FnMut(Option<KV::V>) -> Option<KV::V>,
+    {
+        let key_ivec = KV::serialize_key(key).unwrap();
+
+        let old_val_ivec = self.txn_tree.get(&key_ivec)?;
+        let old_val = old_val_ivec.map(|o| KV::deserialize_value(o).unwrap());
+
+        let new_val = f(old_val);
+        let _ = match new_val {
+            Some(ref v) => self
+                .txn_tree
+                .insert(key_ivec, KV::serialize_value(v).unwrap())?,
+            None => self.txn_tree.remove(key_ivec)?,
+        };
+
+        Ok(new_val)
+    }
 }
 
 /// It borrows the internal SledTree with access limited to a specified namespace `KV`.
@@ -564,6 +589,17 @@ impl<'a, KV: SledKeySpace> AsTxnKeySpace<'a, KV> {
 
     pub fn remove(&self, key: &KV::K) -> Result<Option<KV::V>, UnabortableTransactionError> {
         self.inner.remove::<KV>(key)
+    }
+
+    pub fn update_and_fetch<F>(
+        &self,
+        key: &KV::K,
+        f: F,
+    ) -> Result<Option<KV::V>, UnabortableTransactionError>
+    where
+        F: FnMut(Option<KV::V>) -> Option<KV::V>,
+    {
+        self.inner.update_and_fetch::<KV, _>(key, f)
     }
 }
 
