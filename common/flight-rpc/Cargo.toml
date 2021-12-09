@@ -30,7 +30,7 @@ tonic = { version = "0.6.2", features = ["transport", "codegen", "prost", "tls-r
 hyper = "0.14.15"
 lazy_static = "1.4.0"
 trust-dns-resolver = { version = "0.20.3", features = ["system-config"] }
-async-trait = "0.1.51"
+async-trait = "0.1.52"
 
 [dev-dependencies]
 pretty_assertions = "1.0.0"

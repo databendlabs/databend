@@ -34,7 +34,7 @@ pin-project = "1.0.8"
 bytes = "1.1.0"
 uuid = "0.8.2"
 tokio-stream = "0.1.8"
-async-trait = "0.1.51"
+async-trait = "0.1.52"
 naive-cityhash = "0.1.0"
 
 [dependencies.chrono]
