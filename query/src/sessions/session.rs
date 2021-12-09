@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_macros::MallocSizeOf;
 use common_mem_allocator::malloc_size;
+use common_meta_types::UserInfo;
 use futures::channel::*;
 
 use crate::catalogs::DatabaseCatalog;
@@ -149,13 +150,13 @@ impl Session {
         self.mutable_state.get_current_database()
     }
 
-    pub fn get_current_user(self: &Arc<Self>) -> Result<String> {
+    pub fn get_current_user(self: &Arc<Self>) -> Result<UserInfo> {
         self.mutable_state
             .get_current_user()
             .ok_or_else(|| ErrorCode::AuthenticateFailure("unauthenticated"))
     }
 
-    pub fn set_current_user(self: &Arc<Self>, user: String) {
+    pub fn set_current_user(self: &Arc<Self>, user: UserInfo) {
         self.mutable_state.set_current_user(user)
     }
 

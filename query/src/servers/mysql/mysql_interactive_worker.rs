@@ -218,12 +218,12 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
         let authed = user_manager
             .auth_user(
-                user_info,
+                user_info.clone(),
                 CertifiedInfo::create(user_name, encode_password, address),
             )
             .await?;
         if authed {
-            self.session.set_current_user(user_name.clone());
+            self.session.set_current_user(user_info);
         }
 
         Ok(authed)

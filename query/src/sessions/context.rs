@@ -34,6 +34,7 @@ use common_dal::S3;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_meta_types::UserInfo;
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
@@ -197,7 +198,7 @@ impl QueryContext {
         self.shared.get_current_database()
     }
 
-    pub fn get_current_user(&self) -> Result<String> {
+    pub fn get_current_user(&self) -> Result<UserInfo> {
         self.shared.get_current_user()
     }
 

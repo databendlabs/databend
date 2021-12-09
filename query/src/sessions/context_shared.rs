@@ -24,6 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::Mutex;
 use common_infallible::RwLock;
+use common_meta_types::UserInfo;
 use common_planners::PlanNode;
 use futures::future::AbortHandle;
 use uuid::Uuid;
@@ -112,7 +113,7 @@ impl QueryContextShared {
         self.session.get_current_database()
     }
 
-    pub fn get_current_user(&self) -> Result<String> {
+    pub fn get_current_user(&self) -> Result<UserInfo> {
         self.session.get_current_user()
     }
 

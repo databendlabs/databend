@@ -15,6 +15,8 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use common_meta_types::UserInfo;
+
 use crate::sessions::MutableStatus;
 use crate::sessions::Session;
 use crate::sessions::Settings;
@@ -24,7 +26,7 @@ pub struct ProcessInfo {
     pub typ: String,
     pub state: String,
     pub database: String,
-    pub user: String,
+    pub user: Option<UserInfo>,
     #[allow(unused)]
     pub settings: Arc<Settings>,
     pub client_address: Option<SocketAddr>,
@@ -54,7 +56,7 @@ impl Session {
             typ: self.typ.clone(),
             state: self.process_state(status),
             database: status.get_current_database(),
-            user: status.get_current_user().unwrap_or_else(|| "".into()),
+            user: status.get_current_user(),
             settings: status.get_settings(),
             client_address: status.get_client_host(),
             session_extra_info: self.process_extra_info(status),

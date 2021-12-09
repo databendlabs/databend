@@ -20,6 +20,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_macros::MallocSizeOf;
+use common_meta_types::UserInfo;
 use futures::channel::oneshot::Sender;
 
 use crate::sessions::context_shared::QueryContextShared;
@@ -30,7 +31,8 @@ pub struct MutableStatus {
     abort: AtomicBool,
     current_database: RwLock<String>,
     session_settings: RwLock<Settings>,
-    current_user: RwLock<Option<String>>,
+    #[ignore_malloc_size_of = "insignificant"]
+    current_user: RwLock<Option<UserInfo>>,
     #[ignore_malloc_size_of = "insignificant"]
     client_host: RwLock<Option<SocketAddr>>,
     #[ignore_malloc_size_of = "insignificant"]
@@ -75,13 +77,13 @@ impl MutableStatus {
     }
 
     // Set the current user after authentication
-    pub fn set_current_user(&self, user: String) {
+    pub fn set_current_user(&self, user: UserInfo) {
         let mut lock = self.current_user.write();
         *lock = Some(user);
     }
 
     // Get current user
-    pub fn get_current_user(&self) -> Option<String> {
+    pub fn get_current_user(&self) -> Option<UserInfo> {
         let lock = self.current_user.read();
         lock.clone()
     }
