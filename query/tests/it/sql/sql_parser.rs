@@ -17,6 +17,7 @@ use common_meta_types::AuthType;
 use common_meta_types::Compression;
 use common_meta_types::Credentials;
 use common_meta_types::FileFormat;
+use common_meta_types::Format;
 use common_meta_types::StageParams;
 use common_meta_types::UserPrivilege;
 use common_meta_types::UserPrivilegeType;
@@ -927,7 +928,7 @@ fn create_stage_test() -> Result<()> {
             if_not_exists: false,
             stage_name: "test_stage".to_string(),
             stage_params: StageParams::new("s3://load/files/", Credentials::S3 { access_key_id: "1a2b3c".to_string(), secret_access_key: "4x5y6z".to_string() }),
-            file_format: None,
+            file_format: FileFormat::default(),
             comments: "".to_string(),
         }),
     )?;
@@ -938,7 +939,7 @@ fn create_stage_test() -> Result<()> {
             if_not_exists: true,
             stage_name: "test_stage".to_string(),
             stage_params: StageParams::new("s3://load/files/", Credentials::S3 { access_key_id: "1a2b3c".to_string(), secret_access_key: "4x5y6z".to_string() }),
-            file_format: None,
+            file_format: FileFormat::default(),
             comments: "".to_string(),
         }),
     )?;
@@ -949,7 +950,7 @@ fn create_stage_test() -> Result<()> {
             if_not_exists: true,
             stage_name: "test_stage".to_string(),
             stage_params: StageParams::new("s3://load/files/", Credentials::S3 { access_key_id: "1a2b3c".to_string(), secret_access_key: "4x5y6z".to_string() }),
-            file_format: Some(FileFormat::Csv { compression: Compression::Gzip, record_delimiter: ",".to_string() }),
+            file_format:  FileFormat { compression: Compression::Gzip, record_delimiter: ",".to_string(),..Default::default()},
             comments: "".to_string(),
         }),
     )?;
@@ -960,7 +961,7 @@ fn create_stage_test() -> Result<()> {
             if_not_exists: true,
             stage_name: "test_stage".to_string(),
             stage_params: StageParams::new("s3://load/files/", Credentials::S3 { access_key_id: "1a2b3c".to_string(), secret_access_key: "4x5y6z".to_string() }),
-            file_format: Some(FileFormat::Csv { compression: Compression::Gzip, record_delimiter: ",".to_string() }),
+            file_format:  FileFormat { compression: Compression::Gzip, record_delimiter: ",".to_string(),..Default::default()},
             comments: "test".to_string(),
         }),
     )?;
@@ -971,18 +972,18 @@ fn create_stage_test() -> Result<()> {
             if_not_exists: false,
             stage_name: "test_stage".to_string(),
             stage_params: StageParams::new("s3://load/files/", Credentials::S3 { access_key_id: "1a2b3c".to_string(), secret_access_key: "4x5y6z".to_string() }),
-            file_format: Some(FileFormat::Parquet { compression: Compression::Auto}),
+            file_format:  FileFormat { format: Format::Parquet, compression: Compression::Auto ,..Default::default()},
             comments: "test".to_string(),
         }),
     )?;
 
     expect_parse_ok(
-        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=csv compression=AUTO record_delimiter=NONE) comments='test'",
+        "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=csv compression=AUTO) comments='test'",
         DfStatement::CreateStage(DfCreateStage {
             if_not_exists: false,
             stage_name: "test_stage".to_string(),
             stage_params: StageParams::new("s3://load/files/", Credentials::S3 { access_key_id: "1a2b3c".to_string(), secret_access_key: "4x5y6z".to_string() }),
-            file_format: Some(FileFormat::Csv { compression: Compression::Auto, record_delimiter: "".to_string() }),
+            file_format:  FileFormat { format: Format::Csv, compression: Compression::Auto,..Default::default()},
             comments: "test".to_string(),
         }),
     )?;
@@ -993,7 +994,7 @@ fn create_stage_test() -> Result<()> {
             if_not_exists: false,
             stage_name: "test_stage".to_string(),
             stage_params: StageParams::new("s3://load/files/", Credentials::S3 { access_key_id: "1a2b3c".to_string(), secret_access_key: "4x5y6z".to_string() }),
-            file_format: Some(FileFormat::Json ),
+            file_format:  FileFormat { format: Format::Json,..Default::default()},
             comments: "test".to_string(),
         }),
     )?;

@@ -188,6 +188,7 @@ build_exceptions! {
     SHA1CheckFailed(57),
     UnknownColumn(58),
     InvalidSourceFormat(59),
+    StrParseError(60),
 
     // uncategorized
     UnexpectedResponseType(600),

@@ -31,7 +31,7 @@ pub struct DfCreateStage {
     pub if_not_exists: bool,
     pub stage_name: String,
     pub stage_params: StageParams,
-    pub file_format: Option<FileFormat>,
+    pub file_format: FileFormat,
     pub comments: String,
 }
 

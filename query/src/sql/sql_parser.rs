@@ -15,6 +15,7 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::str::FromStr;
 use std::time::Instant;
@@ -50,7 +51,6 @@ use sqlparser::tokenizer::Whitespace;
 
 use super::statements::DfCopy;
 use super::statements::DfDescribeStage;
-use crate::common::HashMap;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCompactTable;
 use crate::sql::statements::DfCreateDatabase;
@@ -438,6 +438,25 @@ impl<'a> DfParser<'a> {
         }
     }
 
+    fn parse_value_or_ident(&mut self) -> Result<String, ParserError> {
+        match self.parser.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::TRUE => Ok("true".to_string()),
+                Keyword::FALSE => Ok("false".to_string()),
+                Keyword::NULL => Ok("null".to_string()),
+                _ => Ok(w.value),
+            },
+            // The call to n.parse() returns a bigdecimal when the
+            // bigdecimal feature is enabled, and is otherwise a no-op
+            // (i.e., it returns the input string).
+            Token::Number(n, l) => Ok(n),
+            Token::SingleQuotedString(s) => Ok(s.to_string()),
+            Token::NationalStringLiteral(s) => Ok(s.to_string()),
+            Token::HexStringLiteral(s) => Ok(s.to_string()),
+            unexpected => self.expected("a value", unexpected),
+        }
+    }
+
     fn parse_column_def(&mut self) -> Result<ColumnDef, ParserError> {
         let name = self.parser.parse_identifier()?;
         let data_type = self.parser.parse_data_type()?;
@@ -512,7 +531,7 @@ impl<'a> DfParser<'a> {
             if_not_exists,
             name: db_name,
             engine: db_engine,
-            options: vec![],
+            options: HashMap::new(),
         };
 
         Ok(DfStatement::CreateDatabase(create))
@@ -521,7 +540,7 @@ impl<'a> DfParser<'a> {
     fn parse_describe(&mut self) -> Result<DfStatement, ParserError> {
         if self.consume_token("stage") {
             let obj_name = self.parser.parse_object_name()?;
-            let desc = DfDescribeStage{name : obj_name};
+            let desc = DfDescribeStage { name: obj_name };
             Ok(DfStatement::DescribeStage(desc))
         } else {
             self.consume_token("table");
@@ -709,14 +728,13 @@ impl<'a> DfParser<'a> {
         if self.consume_token("FILE_FORMAT") {
             self.parser.expect_token(&Token::Eq)?;
             self.parser.expect_token(&Token::LParen)?;
-            let options = self.parse_options_to_map()?;
+            let options = self.parse_options()?;
             self.parser.expect_token(&Token::RParen)?;
 
-            file_format.inject_from_map(options);
-        } else {
-            None
-        };
-
+            file_format
+                .inject_from_map(options)
+                .map_err(|e| ParserError::ParserError(e.to_string()))?;
+        }
         Ok(file_format)
     }
 
@@ -1013,22 +1031,7 @@ impl<'a> DfParser<'a> {
         }))
     }
 
-    fn parse_options(&mut self) -> Result<Vec<SqlOption>, ParserError> {
-        let mut options = vec![];
-        loop {
-            let name = self.parser.parse_identifier();
-            if name.is_err() {
-                break;
-            }
-            let name = name.unwrap();
-            self.parser.expect_token(&Token::Eq)?;
-            let value = self.parse_value()?;
-            options.push(SqlOption { name, value });
-        }
-        Ok(options)
-    }
-
-    fn parse_options_to_map(&mut self) -> Result<HashMap<String, String>, ParserError> {
+    fn parse_options(&mut self) -> Result<HashMap<String, String>, ParserError> {
         let mut options = HashMap::new();
         loop {
             let name = self.parser.parse_identifier();
@@ -1037,9 +1040,9 @@ impl<'a> DfParser<'a> {
             }
             let name = name.unwrap();
             self.parser.expect_token(&Token::Eq)?;
-            let value = self.parse_value()?;
+            let value = self.parse_value_or_ident()?;
 
-            options.insert(name.to_string(), value.to_string());
+            options.insert(name.to_string(), value);
         }
         Ok(options)
     }

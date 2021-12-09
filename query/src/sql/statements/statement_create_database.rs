@@ -32,7 +32,7 @@ pub struct DfCreateDatabase {
     pub if_not_exists: bool,
     pub name: ObjectName,
     pub engine: String,
-    pub options: Vec<SqlOption>,
+    pub options: HashMap<String, String>,
 }
 
 #[async_trait::async_trait]
@@ -41,7 +41,7 @@ impl AnalyzableStatement for DfCreateDatabase {
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let db = self.database_name()?;
         let engine = self.database_engine()?;
-        let options = self.database_options();
+        let options = self.options.clone();
         let if_not_exists = self.if_not_exists;
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(
@@ -66,12 +66,5 @@ impl DfCreateDatabase {
 
     fn database_engine(&self) -> Result<String> {
         Ok(self.engine.clone())
-    }
-
-    fn database_options(&self) -> HashMap<String, String> {
-        self.options
-            .iter()
-            .map(|option| (option.name.value.to_lowercase(), option.value.to_string()))
-            .collect()
     }
 }

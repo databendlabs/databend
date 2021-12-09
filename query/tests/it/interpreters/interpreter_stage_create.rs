@@ -16,6 +16,7 @@ use common_base::tokio;
 use common_exception::Result;
 use common_meta_types::Compression;
 use common_meta_types::FileFormat;
+use common_meta_types::Format;
 use common_planners::*;
 use databend_query::interpreters::*;
 use databend_query::sql::*;
@@ -40,13 +41,11 @@ async fn test_create_stage_interpreter() -> Result<()> {
             .get_stage("test_stage")
             .await?;
 
-        assert_eq!(
-            stage.file_format,
-            FileFormat::Csv {
-                compression: Compression::Gzip,
-                record_delimiter: ",".to_string()
-            }
-        );
+        assert_eq!(stage.file_format, FileFormat {
+            format: Format::Csv,
+            compression: Compression::Gzip,
+            ..Default::default()
+        });
         assert_eq!(stage.comments, String::from("test"))
     } else {
         panic!()
@@ -63,13 +62,11 @@ async fn test_create_stage_interpreter() -> Result<()> {
             .get_stage("test_stage")
             .await?;
 
-        assert_eq!(
-            stage.file_format,
-            Some(FileFormat::Csv {
-                compression: Compression::Gzip,
-                record_delimiter: ",".to_string()
-            })
-        );
+        assert_eq!(stage.file_format, FileFormat {
+            format: Format::Csv,
+            compression: Compression::Gzip,
+            ..Default::default()
+        });
         assert_eq!(stage.comments, String::from("test"))
     } else {
         panic!()
@@ -87,13 +84,11 @@ async fn test_create_stage_interpreter() -> Result<()> {
             .get_stage("test_stage")
             .await?;
 
-        assert_eq!(
-            stage.file_format,
-            Some(FileFormat::Csv {
-                compression: Compression::Gzip,
-                record_delimiter: ",".to_string()
-            })
-        );
+        assert_eq!(stage.file_format, FileFormat {
+            format: Format::Csv,
+            compression: Compression::Gzip,
+            ..Default::default()
+        });
         assert_eq!(stage.comments, String::from("test"))
     } else {
         panic!()

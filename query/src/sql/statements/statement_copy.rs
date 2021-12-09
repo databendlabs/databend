@@ -33,7 +33,7 @@ pub struct DfCopy {
     pub columns: Vec<Ident>,
     pub location: String,
     pub format: String,
-    pub options: Vec<SqlOption>,
+    pub options: HashMap<String, String>,
 }
 
 #[async_trait::async_trait]
@@ -61,17 +61,6 @@ impl AnalyzableStatement for DfCopy {
             schema = DataSchemaRefExt::create(fields);
         }
 
-        let mut options = HashMap::new();
-        for p in self.options.iter() {
-            options.insert(
-                p.name.value.to_lowercase(),
-                p.value
-                    .to_string()
-                    .trim_matches(|s| s == '\'' || s == '"')
-                    .to_string(),
-            );
-        }
-
         let plan_node = CopyPlan {
             db_name,
             tbl_name,
@@ -79,7 +68,7 @@ impl AnalyzableStatement for DfCopy {
             schema,
             location: self.location.clone(),
             format: self.format.clone(),
-            options,
+            options: self.options.clone(),
         };
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::Copy(
