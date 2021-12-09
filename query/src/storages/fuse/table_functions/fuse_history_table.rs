@@ -92,7 +92,7 @@ impl FuseHistoryTable {
             meta: TableMeta {
                 schema,
                 engine,
-                options: Default::default(),
+                ..Default::default()
             },
         };
 
