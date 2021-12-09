@@ -4,12 +4,12 @@ USE db_09_0006;
 
 create table t(a uint64);
 
-insert into t select number from numbers(10);
--- expects 1 blocks, 10 rows
+insert into t values (1);
+-- expects 1 blocks, 1 rows
 select block_count, row_count from fuse_history('db_09_0006', 't') order by row_count desc limit 1;
 
-insert into t select number from numbers(10);
--- expects 2 blocks, 20 rows
+insert into t values (2);
+-- expects 2 blocks, 2 rows
 select block_count, row_count from fuse_history('db_09_0006', 't') order by row_count desc limit 1;
 
 -- unknown objects
