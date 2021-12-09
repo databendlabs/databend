@@ -12,18 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod plan_parser_test;
-#[cfg(test)]
-mod sql_parser_test;
-
 mod metrics;
-mod parser;
+pub mod parser;
 mod plan_parser;
 mod sql_common;
 mod sql_parser;
 mod sql_statement;
-mod statements;
+pub mod statements;
 
 pub use plan_parser::PlanParser;
 pub use sql_common::SQLCommon;

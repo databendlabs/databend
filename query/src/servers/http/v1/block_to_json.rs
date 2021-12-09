@@ -96,7 +96,7 @@ fn bad_type(data_type: &DataType) -> ErrorCode {
     ErrorCode::BadDataValueType(format!("Unsupported column type:{:?}", data_type))
 }
 
-pub(crate) fn block_to_json(block: &DataBlock) -> Result<Vec<Vec<JsonValue>>> {
+pub fn block_to_json(block: &DataBlock) -> Result<Vec<Vec<JsonValue>>> {
     let mut col_table = Vec::new();
     let columns_size = block.columns().len();
     for col_index in 0..columns_size {

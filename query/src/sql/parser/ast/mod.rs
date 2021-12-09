@@ -16,9 +16,6 @@ mod expression;
 mod query;
 mod statement;
 
-#[cfg(test)]
-mod ast_display_test;
-
 use std::fmt::Display;
 use std::fmt::Formatter;
 

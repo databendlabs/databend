@@ -12,21 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod pipe_test;
-#[cfg(test)]
-mod pipeline_builder_test;
-#[cfg(test)]
-mod pipeline_display_test;
-#[cfg(test)]
-mod pipeline_walker_test;
-#[cfg(test)]
-mod processor_empty_test;
-#[cfg(test)]
-mod processor_merge_test;
-#[cfg(test)]
-mod processor_mixed_test;
-
 mod pipe;
 mod pipeline;
 mod pipeline_builder;

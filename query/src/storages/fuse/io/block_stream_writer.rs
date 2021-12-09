@@ -105,7 +105,7 @@ impl BlockStreamWriter {
     //  NOTE:
     //    - the max size of merge-block will be 2 * block_size_threshold
     //    - for block that is larger than `block_size_threshold`, they will NOT be split
-    pub(crate) fn reshape_blocks(
+    pub fn reshape_blocks(
         mut blocks: Vec<DataBlock>,
         block_size_threshold: usize,
     ) -> Result<Vec<DataBlock>> {

@@ -25,7 +25,7 @@ pprof = { version = "0.6.1", features = ["flamegraph", "protobuf"] }
 tokio = { version = "1.14.0", features = ["macros", "rt", "rt-multi-thread", "sync", "fs", "signal"] }
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 serde = { version = "1.0.130", features = ["derive"] }
-poem = { version = "1.0.32", features = ["rustls"] }
+poem = { version = "1.0.38", features = ["rustls"] }
 
 
 [dev-dependencies]

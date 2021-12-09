@@ -16,6 +16,7 @@ use crate::scalars::function_factory::FunctionFactory;
 use crate::scalars::AsciiFunction;
 use crate::scalars::Base64DecodeFunction;
 use crate::scalars::Base64EncodeFunction;
+use crate::scalars::BinFunction;
 use crate::scalars::BitLengthFunction;
 use crate::scalars::CharLengthFunction;
 use crate::scalars::ConcatFunction;
@@ -88,5 +89,6 @@ impl StringFunction {
         factory.register("char_length", CharLengthFunction::desc());
         factory.register("character_length", CharLengthFunction::desc());
         factory.register("ord", OrdFunction::desc());
+        factory.register("bin", BinFunction::desc());
     }
 }

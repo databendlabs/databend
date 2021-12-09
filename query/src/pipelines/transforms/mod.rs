@@ -32,29 +32,6 @@ pub use transform_sort_partial::get_sort_descriptions;
 pub use transform_sort_partial::SortPartialTransform;
 pub use transform_source::SourceTransform;
 
-#[cfg(test)]
-mod transform_aggregator_final_test;
-#[cfg(test)]
-mod transform_aggregator_partial_test;
-#[cfg(test)]
-mod transform_expression_test;
-#[cfg(test)]
-mod transform_filter_test;
-#[cfg(test)]
-mod transform_group_by_final_test;
-#[cfg(test)]
-mod transform_group_by_partial_test;
-#[cfg(test)]
-mod transform_limit_by_test;
-#[cfg(test)]
-mod transform_limit_test;
-#[cfg(test)]
-mod transform_projection_test;
-#[cfg(test)]
-mod transform_sort_test;
-#[cfg(test)]
-mod transform_source_test;
-
 mod transform_aggregator_final;
 mod transform_aggregator_partial;
 mod transform_create_sets;

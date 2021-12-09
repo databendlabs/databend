@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(test)]
-mod session_status_test;
-
 #[macro_use]
 mod macros;
 
@@ -25,7 +22,6 @@ mod session;
 mod session_info;
 mod session_ref;
 mod session_status;
-mod session_test;
 #[allow(clippy::module_inception)]
 mod sessions;
 mod sessions_info;
