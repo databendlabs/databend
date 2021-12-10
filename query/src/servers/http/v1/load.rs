@@ -21,6 +21,7 @@ use common_planners::InsertInputSource;
 use common_planners::PlanNode;
 use common_streams::CsvSource;
 use common_streams::Source;
+use common_tracing::tracing;
 use futures::StreamExt;
 use poem::error::BadRequest;
 use poem::error::Result as PoemResult;
@@ -51,6 +52,13 @@ pub async fn streaming_load(
 ) -> PoemResult<Json<LoadResponse>> {
     let session_manager = sessions_extension.0;
     let session = session_manager.create_session("Streaming load")?;
+    // Auth.
+    let user_name = "root";
+    let user_manager = session.get_user_manager();
+    // TODO: list user's grant list and check client address
+    let user_info = user_manager.get_user(user_name, "%").await?;
+    session.set_current_user(user_info);
+
     let context = session.create_context().await?;
     let insert_sql = req
         .headers()
@@ -66,6 +74,7 @@ pub async fn streaming_load(
         .eq_ignore_ascii_case("1");
 
     let plan = PlanParser::parse(insert_sql, context.clone()).await?;
+    context.attach_query_str(insert_sql);
 
     // validate plan
     match &plan {
@@ -92,8 +101,11 @@ pub async fn streaming_load(
 
     let max_block_size = context.get_settings().get_max_block_size()? as usize;
     let interpreter = InterpreterFactory::get(context.clone(), plan.clone())?;
-
-    context.attach_query_str(insert_sql);
+    // Write Start to query log table.
+    let _ = interpreter
+        .start()
+        .await
+        .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
 
     let stream = stream! {
         while let Ok(Some(field)) = multipart.next_field().await {
@@ -114,6 +126,12 @@ pub async fn streaming_load(
     // this runs inside the runtime of poem, load is not cpu densive so it's ok
     let mut data_stream = interpreter.execute(Some(Box::pin(stream))).await?;
     while let Some(_block) = data_stream.next().await {}
+
+    // Write Finish to query log table.
+    let _ = interpreter
+        .finish()
+        .await
+        .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
 
     // TODO generate id
     // TODO duplicate by insert_label

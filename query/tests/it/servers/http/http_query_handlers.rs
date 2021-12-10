@@ -80,7 +80,7 @@ async fn test_bad_sql() -> Result<()> {
 async fn test_async() -> Result<()> {
     let sessions = SessionManagerBuilder::create().build()?;
     let route = Route::new().nest("/v1/query", query_route()).data(sessions);
-    let sql = "select sleep(0.1)";
+    let sql = "select sleep(2)";
     let json = serde_json::json!({"sql": sql.to_string()});
 
     let (status, result) = post_json_to_router(&route, &json, 0).await?;
