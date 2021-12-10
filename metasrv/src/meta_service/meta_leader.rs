@@ -60,15 +60,26 @@ impl<'a> MetaLeader<'a> {
                 Ok(AdminResponse::AppliedState(res))
             }
 
+            AdminRequestInner::ListDatabase(req) => {
+                let sm = self.meta_node.get_state_machine().await;
+                let res = sm.list_databases(req).await?;
+                Ok(AdminResponse::ListDatabase(res))
+            }
+
             AdminRequestInner::GetDatabase(req) => {
-                let x = self.meta_node.get_state_machine().await;
-                let res = x.get_database(req).await?;
+                let sm = self.meta_node.get_state_machine().await;
+                let res = sm.get_database(req).await?;
                 Ok(AdminResponse::DatabaseInfo(res))
             }
             AdminRequestInner::ListTable(req) => {
                 let sm = self.meta_node.get_state_machine().await;
                 let res = sm.list_tables(req).await?;
                 Ok(AdminResponse::ListTable(res))
+            }
+            AdminRequestInner::GetTable(req) => {
+                let sm = self.meta_node.get_state_machine().await;
+                let res = sm.get_table(req).await?;
+                Ok(AdminResponse::TableInfo(res))
             }
         }
     }

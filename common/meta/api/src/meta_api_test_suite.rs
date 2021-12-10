@@ -24,6 +24,7 @@ use common_meta_types::CreateTableReq;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
+use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
 use common_meta_types::TableIdent;
@@ -498,6 +499,42 @@ impl MetaApiTestSuite {
         Ok(())
     }
 
+    pub async fn list_database_leader_follower<MT: MetaApi>(
+        &self,
+        leader: &MT,
+        follower: &MT,
+    ) -> anyhow::Result<()> {
+        tracing::info!("--- create db1 and db3 on leader");
+        {
+            let dbs = vec!["db1", "db3"];
+            for db_name in dbs {
+                let req = CreateDatabaseReq {
+                    if_not_exists: false,
+                    db: db_name.to_string(),
+                    engine: "github".to_string(),
+                    options: Default::default(),
+                };
+                let res = leader.create_database(req).await;
+                tracing::info!("create database res: {:?}", res);
+                assert!(res.is_ok());
+            }
+        }
+
+        tracing::info!("--- list databases from follower");
+        {
+            let res = follower.list_databases(ListDatabaseReq {}).await;
+            tracing::debug!("get database list: {:?}", res);
+            let res = res?;
+            assert_eq!(2, res.len(), "database list len is 2");
+            assert_eq!(1, res[0].database_id, "db1 id is 1");
+            assert_eq!("db1".to_string(), res[0].db, "db1.name is db1");
+            assert_eq!(2, res[1].database_id, "db3 id is 2");
+            assert_eq!("db3".to_string(), res[1].db, "db3.name is db3");
+        }
+
+        Ok(())
+    }
+
     pub async fn list_table_leader_follower<MT: MetaApi>(
         &self,
         leader: &MT,
@@ -551,6 +588,71 @@ impl MetaApiTestSuite {
             assert_eq!("tb1".to_string(), res[0].name, "tb1.name is tb1");
             assert_eq!(2, res[1].ident.table_id, "tb2 id is 2");
             assert_eq!("tb2".to_string(), res[1].name, "tb2.name is tb2");
+        }
+
+        Ok(())
+    }
+
+    pub async fn table_create_get_drop_leader_follower<MT: MetaApi>(
+        &self,
+        leader: &MT,
+        follower: &MT,
+    ) -> anyhow::Result<()> {
+        tracing::info!("--- create table tb1 on leader");
+        let db_name = "db1";
+        {
+            let req = CreateDatabaseReq {
+                if_not_exists: false,
+                db: db_name.to_string(),
+                engine: "github".to_string(),
+                options: Default::default(),
+            };
+            let res = leader.create_database(req).await;
+            tracing::info!("create database res: {:?}", res);
+            assert!(res.is_ok());
+
+            let schema = Arc::new(DataSchema::new(vec![DataField::new(
+                "number",
+                DataType::UInt64,
+                false,
+            )]));
+
+            let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                db: db_name.to_string(),
+                table: "tb1".to_string(),
+                table_meta: TableMeta {
+                    schema: schema.clone(),
+                    engine: "JSON".to_string(),
+                    options: options.clone(),
+                },
+            };
+
+            let res = leader.create_table(req).await;
+            tracing::info!("create table res: {:?}", res);
+            assert!(res.is_ok());
+        }
+
+        tracing::info!("--- get tb1 on follower");
+        {
+            let res = follower.get_table(GetTableReq::new("db1", "tb1")).await;
+            tracing::debug!("get present table res: {:?}", res);
+            let res = res?;
+            assert_eq!(1, res.ident.table_id, "tb1 id is 1");
+            assert_eq!("tb1".to_string(), res.name, "tb1.name is tb1");
+        }
+
+        tracing::info!("--- get nonexistent-table on follower, expect correct error");
+        {
+            let res = follower
+                .get_table(GetTableReq::new("db1", "nonexistent"))
+                .await;
+            tracing::debug!("get present table res: {:?}", res);
+            let err = res.unwrap_err();
+            println!("{:?}", err);
+            assert_eq!(ErrorCode::UnknownTable("").code(), err.code());
         }
 
         Ok(())

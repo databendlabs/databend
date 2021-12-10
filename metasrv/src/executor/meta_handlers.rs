@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
-use common_meta_api::MetaApi;
 use common_meta_flight::FlightReq;
 use common_meta_flight::GetTableExtReq;
 use common_meta_types::Change;
@@ -247,8 +246,20 @@ impl RequestHandler<FlightReq<GetTableReq>> for ActionHandler {
         &self,
         act: FlightReq<GetTableReq>,
     ) -> common_exception::Result<Arc<TableInfo>> {
-        let sm = self.meta_node.get_state_machine().await;
-        sm.get_table(act.req).await
+        let res = self
+            .meta_node
+            .handle_admin_req(AdminRequest {
+                forward_to_leader: true,
+                req: AdminRequestInner::GetTable(act.req),
+            })
+            .await?;
+        let res: Arc<TableInfo> = res
+            .try_into()
+            .map_err_to_code(ErrorCode::UnknownException, || {
+                "handling FlightReq GetTableReq".to_string()
+            })?;
+
+        Ok(res)
     }
 }
 
@@ -279,8 +290,21 @@ impl RequestHandler<FlightReq<ListDatabaseReq>> for ActionHandler {
         &self,
         req: FlightReq<ListDatabaseReq>,
     ) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
-        let sm = self.meta_node.get_state_machine().await;
-        sm.list_databases(req.req).await
+        let res = self
+            .meta_node
+            .handle_admin_req(AdminRequest {
+                forward_to_leader: true,
+                req: AdminRequestInner::ListDatabase(req.req),
+            })
+            .await?;
+
+        let res: Vec<Arc<DatabaseInfo>> = res
+            .try_into()
+            .map_err_to_code(ErrorCode::UnknownException, || {
+                "handling FlightReq ListDatabaseReq".to_string()
+            })?;
+
+        Ok(res)
     }
 }
 

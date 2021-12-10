@@ -34,11 +34,34 @@ async fn test_meta_api_database_create_get_drop() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_api_list_table() -> anyhow::Result<()> {
+async fn test_meta_api_list_database() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let tcs = start_metasrv_cluster(&[0, 1]).await?;
+    let client0 = tcs[0].flight_client().await?;
+    let client1 = tcs[1].flight_client().await?;
+
+    MetaApiTestSuite {}
+        .list_database_leader_follower(&client0, &client1)
+        .await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_api_table_create_get_drop() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_meta_ut!();
+    let _ent = ut_span.enter();
+
+    let client0 = tcs[0].flight_client().await?;
+    let client1 = tcs[1].flight_client().await?;
+    MetaApiTestSuite {}
+        .table_create_get_drop_leader_follower(&client0, &client1)
+        .await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_meta_api_list_table() -> anyhow::Result<()> {
+    let (_log_guards, ut_span) = init_meta_ut!();
+    let _ent = ut_span.enter();
 
     let client0 = tcs[0].flight_client().await?;
     let client1 = tcs[1].flight_client().await?;
