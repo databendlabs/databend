@@ -18,6 +18,7 @@ use std::time::Instant;
 use common_clickhouse_srv::connection::Connection;
 use common_clickhouse_srv::CHContext;
 use common_clickhouse_srv::ClickHouseSession;
+use common_tracing::tracing;
 use metrics::histogram;
 
 use crate::servers::clickhouse::interactive_worker_base::InteractiveWorkerBase;
@@ -119,7 +120,7 @@ impl ClickHouseSession for InteractiveWorker {
                     res
                 }
                 Err(failure) => {
-                    log::error!(
+                    tracing::error!(
                         "ClickHouse handler authenticate failed, \
                         user: {}, \
                         client_address: {}, \

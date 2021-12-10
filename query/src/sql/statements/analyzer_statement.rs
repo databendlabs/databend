@@ -153,6 +153,7 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::DropDatabase(v) => v.analyze(ctx).await,
             DfStatement::CreateTable(v) => v.analyze(ctx).await,
             DfStatement::DescribeTable(v) => v.analyze(ctx).await,
+            DfStatement::DescribeStage(v) => v.analyze(ctx).await,
             DfStatement::DropTable(v) => v.analyze(ctx).await,
             DfStatement::TruncateTable(v) => v.analyze(ctx).await,
             DfStatement::CompactTable(v) => v.analyze(ctx).await,

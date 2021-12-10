@@ -17,6 +17,8 @@ use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
 
+use common_tracing::tracing;
+
 use crate::sessions::Session;
 
 /// SessionRef is the ptr of session.
@@ -56,7 +58,7 @@ impl Session {
     pub fn destroy_session_ref(self: &Arc<Self>) {
         if self.ref_count.fetch_sub(1, Ordering::Release) == 1 {
             std::sync::atomic::fence(Acquire);
-            log::debug!("Destroy session {}", self.id);
+            tracing::debug!("Destroy session {}", self.id);
             self.sessions.destroy_session(&self.id);
         }
     }

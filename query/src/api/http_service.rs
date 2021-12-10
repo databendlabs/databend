@@ -17,6 +17,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_tracing::tracing;
 use poem::get;
 use poem::listener::RustlsConfig;
 use poem::Endpoint;
@@ -75,7 +76,7 @@ impl HttpService {
     }
 
     async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        log::info!("Http API TLS enabled");
+        tracing::info!("Http API TLS enabled");
 
         let tls_config = Self::build_tls(self.sessions.get_conf())?;
         let addr = self
@@ -86,7 +87,7 @@ impl HttpService {
     }
 
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        log::warn!("Http API TLS not set");
+        tracing::warn!("Http API TLS not set");
 
         let addr = self
             .shutdown_handler

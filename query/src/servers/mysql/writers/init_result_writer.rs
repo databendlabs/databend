@@ -14,6 +14,7 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_tracing::tracing;
 use msql_srv::*;
 
 pub struct DFInitResultWriter<'a, W: std::io::Write> {
@@ -42,7 +43,7 @@ impl<'a, W: std::io::Write> DFInitResultWriter<'a, W> {
     }
 
     fn err(error: &ErrorCode, writer: InitWriter<'a, W>) -> Result<()> {
-        log::error!("OnInit Error: {:?}", error);
+        tracing::error!("OnInit Error: {:?}", error);
         writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", error).as_bytes())?;
         Ok(())
     }

@@ -20,6 +20,7 @@ use nom::character::complete::multispace1;
 use nom::IResult;
 
 use super::statements::DfCopy;
+use super::statements::DfDescribeStage;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCompactTable;
 use crate::sql::statements::DfCreateDatabase;
@@ -66,6 +67,7 @@ pub enum DfStatement {
     ShowCreateTable(DfShowCreateTable),
     CreateTable(DfCreateTable),
     DescribeTable(DfDescribeTable),
+    DescribeStage(DfDescribeStage),
     DropTable(DfDropTable),
     TruncateTable(DfTruncateTable),
     CompactTable(DfCompactTable),

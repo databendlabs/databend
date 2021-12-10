@@ -18,6 +18,7 @@ use common_base::tokio::sync::oneshot;
 use common_base::tokio::task::JoinHandle;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_tracing::tracing;
 use futures::FutureExt;
 use poem::listener::Acceptor;
 use poem::listener::AcceptorExt;
@@ -94,7 +95,7 @@ impl HttpShutdownHandler {
             }
             if let Some(join_handle) = self.join_handle.take() {
                 if let Err(error) = join_handle.await {
-                    log::error!(
+                    tracing::error!(
                         "Unexpected error during shutdown Http Server {}. cause {}",
                         self.service_name,
                         error

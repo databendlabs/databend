@@ -25,6 +25,7 @@ use common_datablocks::DataBlock;
 use common_exception::Result;
 use common_meta_types::NodeInfo;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 use futures::Stream;
 use futures::StreamExt;
 
@@ -67,7 +68,7 @@ impl Drop for ScheduledStream {
     fn drop(&mut self) {
         if !self.is_success.load(Ordering::Relaxed) {
             if let Err(cause) = self.cancel_scheduled_action() {
-                log::error!("Cannot cancel action, cause: {:?}", cause);
+                tracing::error!("Cannot cancel action, cause: {:?}", cause);
             }
         }
     }

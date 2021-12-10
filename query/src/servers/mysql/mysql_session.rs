@@ -20,6 +20,7 @@ use common_exception::exception::ABORT_SESSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_tracing::tracing;
 use msql_srv::MysqlIntermediary;
 
 use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
@@ -43,7 +44,7 @@ impl MySQLConnection {
         let interactive_worker = InteractiveWorker::create(session, client_addr);
         if let Err(error) = MysqlIntermediary::run_on_tcp(interactive_worker, blocking_stream) {
             if error.code() != ABORT_SESSION {
-                log::error!(
+                tracing::error!(
                     "Unexpected error occurred during query execution: {:?}",
                     error
                 );
@@ -56,7 +57,7 @@ impl MySQLConnection {
         let blocking_stream_ref = blocking_stream.try_clone()?;
         session.attach(host, move || {
             if let Err(error) = blocking_stream_ref.shutdown(Shutdown::Both) {
-                log::error!("Cannot shutdown MySQL session io {}", error);
+                tracing::error!("Cannot shutdown MySQL session io {}", error);
             }
         });
 

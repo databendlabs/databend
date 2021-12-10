@@ -21,7 +21,7 @@ use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
-use log::error;
+use common_tracing::tracing;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
@@ -57,7 +57,7 @@ impl MergeProcessor {
                 let mut stream = match processor.execute().await {
                     Err(e) => {
                         if let Err(error) = sender.send(Result::Err(e)).await {
-                            error!("Merge processor cannot push data: {}", error);
+                            tracing::error!("Merge processor cannot push data: {}", error);
                         }
                         return;
                     }
@@ -69,14 +69,14 @@ impl MergeProcessor {
                         Ok(item) => {
                             if let Err(error) = sender.send(Ok(item)).await {
                                 // Stop pulling data
-                                error!("Merge processor cannot push data: {}", error);
+                                tracing::error!("Merge processor cannot push data: {}", error);
                                 return;
                             }
                         }
                         Err(error) => {
                             // Stop pulling data
                             if let Err(error) = sender.send(Err(error)).await {
-                                error!("Merge processor cannot push data: {}", error);
+                                tracing::error!("Merge processor cannot push data: {}", error);
                             }
                             return;
                         }

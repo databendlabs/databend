@@ -23,6 +23,7 @@ use common_exception::exception::ABORT_QUERY;
 use common_exception::exception::ABORT_SESSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_tracing::tracing;
 use msql_srv::*;
 
 pub struct DFQueryResultWriter<'a, W: std::io::Write> {
@@ -190,7 +191,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
 
     fn err(error: &ErrorCode, writer: QueryResultWriter<'a, W>) -> Result<()> {
         if error.code() != ABORT_QUERY && error.code() != ABORT_SESSION {
-            log::error!("OnQuery Error: {:?}", error);
+            tracing::error!("OnQuery Error: {:?}", error);
             writer.error(ErrorKind::ER_UNKNOWN_ERROR, format!("{}", error).as_bytes())?;
         } else {
             writer.error(

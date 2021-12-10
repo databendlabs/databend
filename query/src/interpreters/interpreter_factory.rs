@@ -18,7 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::PlanNode;
 
-use crate::interpreters::interpreter_show_grants::ShowGrantsInterpreter;
+use super::DescribeStageInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CopyInterpreter;
 use crate::interpreters::CreatStageInterpreter;
@@ -39,6 +39,7 @@ use crate::interpreters::RevokePrivilegeInterpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::interpreters::SettingInterpreter;
 use crate::interpreters::ShowCreateTableInterpreter;
+use crate::interpreters::ShowGrantsInterpreter;
 use crate::interpreters::TruncateTableInterpreter;
 use crate::interpreters::UseDatabaseInterpreter;
 use crate::sessions::QueryContext;
@@ -70,6 +71,7 @@ impl InterpreterFactory {
             PlanNode::Copy(v) => CopyInterpreter::try_create(ctx_clone, v),
             PlanNode::CreateUserStage(v) => CreatStageInterpreter::try_create(ctx_clone, v),
             PlanNode::ShowGrants(v) => ShowGrantsInterpreter::try_create(ctx_clone, v),
+            PlanNode::DescribeStage(v) => DescribeStageInterpreter::try_create(ctx_clone, v),
             _ => Result::Err(ErrorCode::UnknownTypeOfQuery(format!(
                 "Can't get the interpreter by plan:{}",
                 plan.name()

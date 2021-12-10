@@ -16,6 +16,7 @@ use common_base::tokio;
 use common_exception::Result;
 use common_meta_types::Compression;
 use common_meta_types::FileFormat;
+use common_meta_types::Format;
 use common_planners::*;
 use databend_query::interpreters::*;
 use databend_query::sql::*;
@@ -28,7 +29,7 @@ async fn test_create_stage_interpreter() -> Result<()> {
 
     let ctx = crate::tests::create_query_context()?;
 
-    static TEST_QUERY: &str = "CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP record_delimiter=',') comments='test'";
+    static TEST_QUERY: &str = "CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP record_delimiter='\n') comments='test'";
     if let PlanNode::CreateUserStage(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
         let executor = CreatStageInterpreter::try_create(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatStageInterpreter");
@@ -40,13 +41,11 @@ async fn test_create_stage_interpreter() -> Result<()> {
             .get_stage("test_stage")
             .await?;
 
-        assert_eq!(
-            stage.file_format,
-            Some(FileFormat::Csv {
-                compression: Compression::Gzip,
-                record_delimiter: ",".to_string()
-            })
-        );
+        assert_eq!(stage.file_format, FileFormat {
+            format: Format::Csv,
+            compression: Compression::Gzip,
+            ..Default::default()
+        });
         assert_eq!(stage.comments, String::from("test"))
     } else {
         panic!()
@@ -63,19 +62,17 @@ async fn test_create_stage_interpreter() -> Result<()> {
             .get_stage("test_stage")
             .await?;
 
-        assert_eq!(
-            stage.file_format,
-            Some(FileFormat::Csv {
-                compression: Compression::Gzip,
-                record_delimiter: ",".to_string()
-            })
-        );
+        assert_eq!(stage.file_format, FileFormat {
+            format: Format::Csv,
+            compression: Compression::Gzip,
+            ..Default::default()
+        });
         assert_eq!(stage.comments, String::from("test"))
     } else {
         panic!()
     }
 
-    static TEST_QUERY1: &str = "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP record_delimiter=',') comments='test'";
+    static TEST_QUERY1: &str = "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP record_delimiter='\n') comments='test'";
     if let PlanNode::CreateUserStage(plan) = PlanParser::parse(TEST_QUERY1, ctx.clone()).await? {
         let executor = CreatStageInterpreter::try_create(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatStageInterpreter");
@@ -87,13 +84,11 @@ async fn test_create_stage_interpreter() -> Result<()> {
             .get_stage("test_stage")
             .await?;
 
-        assert_eq!(
-            stage.file_format,
-            Some(FileFormat::Csv {
-                compression: Compression::Gzip,
-                record_delimiter: ",".to_string()
-            })
-        );
+        assert_eq!(stage.file_format, FileFormat {
+            format: Format::Csv,
+            compression: Compression::Gzip,
+            ..Default::default()
+        });
         assert_eq!(stage.comments, String::from("test"))
     } else {
         panic!()

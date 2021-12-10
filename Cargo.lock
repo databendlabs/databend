@@ -526,6 +526,7 @@ dependencies = [
  "common-building",
  "common-datavalues",
  "common-meta-raft-store",
+ "common-tracing",
  "csv",
  "databend-meta",
  "databend-query",
@@ -541,7 +542,6 @@ dependencies = [
  "itertools",
  "lexical-util",
  "libc",
- "log",
  "nix",
  "num-format",
  "portpicker",
@@ -1103,9 +1103,9 @@ dependencies = [
 name = "common-cache"
 version = "0.1.0"
 dependencies = [
+ "common-tracing",
  "filetime",
  "heapsize",
- "log",
  "ritelinked",
  "tempfile",
  "walkdir",
@@ -1122,6 +1122,7 @@ dependencies = [
  "chrono-tz",
  "combine",
  "common-io",
+ "common-tracing",
  "env_logger 0.9.0",
  "futures",
  "futures-core",
@@ -1233,11 +1234,11 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-exception",
+ "common-tracing",
  "futures",
  "hyper",
  "jwt-simple",
  "lazy_static",
- "log",
  "pretty_assertions",
  "prost",
  "serde",
@@ -1291,6 +1292,7 @@ dependencies = [
  "bytes",
  "common-exception",
  "rand 0.8.4",
+ "serde",
 ]
 
 [[package]]
@@ -1390,7 +1392,6 @@ dependencies = [
  "hyper",
  "jwt-simple",
  "lazy_static",
- "log",
  "pretty_assertions",
  "prost",
  "rand 0.8.4",
@@ -2077,7 +2078,7 @@ dependencies = [
  "hyper",
  "indexmap",
  "lazy_static",
- "log",
+ "maplit",
  "metrics",
  "msql-srv",
  "mysql",
