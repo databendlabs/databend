@@ -26,3 +26,4 @@ mod others;
 mod strings;
 mod tuples;
 mod udfs;
+mod uuids;
