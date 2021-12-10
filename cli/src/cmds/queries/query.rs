@@ -29,6 +29,7 @@ use comfy_table::Table;
 use common_base::ProgressValues;
 use common_datavalues::DataSchemaRef;
 use http::HeaderMap;
+use http::StatusCode;
 use http::Uri;
 use lexical_util::num::AsPrimitive;
 use num_format::Locale;
@@ -324,15 +325,28 @@ pub async fn execute_load(
         .multipart(form)
         .send()
         .await
-        .expect("cannot post to http handler")
-        .json::<databend_query::servers::http::v1::LoadResponse>()
-        .await;
-    match resp {
-        Ok(v) => Ok(v.stats),
-        Err(e) => Err(CliError::Unknown(format!(
-            "Cannot retrieve query result: {:?}",
-            e
-        ))),
+        .expect("cannot post to http handler");
+    let err_msg = |reason: String| -> String {
+        format!(
+            "http streaming load fail, reason={}, response={:?}",
+            reason, resp
+        )
+    };
+
+    if resp.status() != StatusCode::OK {
+        Err(CliError::Unknown(err_msg(format!(
+            "status_code={}",
+            resp.status()
+        ))))
+    } else {
+        match resp
+            .json::<databend_query::servers::http::v1::LoadResponse>()
+            .await
+        {
+            Ok(v) if v.error.is_none() => Ok(v.stats),
+            Ok(v) => Err(CliError::Unknown(v.error.unwrap())),
+            Err(e) => Err(CliError::Unknown(format!("json decode error={}", e))),
+        }
     }
 }
 
