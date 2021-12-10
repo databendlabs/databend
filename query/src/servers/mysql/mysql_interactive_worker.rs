@@ -340,7 +340,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let _ = interpreter
             .finish()
             .await
-            .map_err(|e| log::error!("interpreter.finish.error: {:?}", e));
+            .map_err(|e| tracing::error!("interpreter.finish.error: {:?}", e));
         query_result.map(|data| (data, Self::extra_info(context, instant)))
     }
 

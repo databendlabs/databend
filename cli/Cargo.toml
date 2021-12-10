@@ -22,6 +22,8 @@ path = "src/bin/bendctl.rs"
 databend-query = {path = "../query"}
 common-base = {path = "../common/base" }
 common-datavalues = { path = "../common/datavalues" }
+common-tracing = {path = "../common/tracing" }
+
 itertools = "0.10.3"
 databend-meta = {path = "../metasrv" }
 common-meta-raft-store= {path = "../common/meta/raft-store"}
@@ -48,7 +50,6 @@ tar = "0.4.37"
 thiserror = "1.0.30"
 ureq = { version = "2.3.1", features = ["json"] }
 nix = "0.23.0"
-log = "0.4.14"
 serde_yaml = "0.8.21"
 structopt = "0.3.25"
 structopt-toml = "0.5.0"

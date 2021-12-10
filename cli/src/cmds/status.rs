@@ -27,10 +27,10 @@ use std::time;
 
 use async_trait::async_trait;
 use common_base::tokio::time::Duration;
+use common_tracing::tracing;
 use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
 use libc::pid_t;
-use log::info;
 use nix::unistd::Pid;
 use reqwest::Client;
 use serde::Deserialize;
@@ -228,7 +228,7 @@ impl LocalRuntime for LocalDashboardConfig {
             .stdout(unsafe { Stdio::from_raw_fd(out_file.into_raw_fd()) })
             .stderr(unsafe { Stdio::from_raw_fd(err_file.into_raw_fd()) });
         // logging debug
-        info!("executing command {:?}", command);
+        tracing::info!("executing command {:?}", command);
         Ok(command)
     }
 
@@ -349,7 +349,7 @@ impl LocalRuntime for LocalMetaConfig {
             .stdout(unsafe { Stdio::from_raw_fd(out_file.into_raw_fd()) })
             .stderr(unsafe { Stdio::from_raw_fd(err_file.into_raw_fd()) });
         // logging debug
-        info!("executing command {:?}", command);
+        tracing::info!("executing command {:?}", command);
         Ok(command)
     }
 
@@ -519,7 +519,7 @@ impl LocalRuntime for LocalQueryConfig {
             .stdout(unsafe { Stdio::from_raw_fd(out_file.into_raw_fd()) })
             .stderr(unsafe { Stdio::from_raw_fd(err_file.into_raw_fd()) });
         // logging debug
-        info!("executing command {:?}", command);
+        tracing::info!("executing command {:?}", command);
         Ok(command)
     }
     fn set_pid(&mut self, id: pid_t) {
@@ -555,7 +555,7 @@ impl LocalRuntime for LocalQueryConfig {
 impl Status {
     pub fn read(conf: Config) -> Result<Self> {
         let status_path = format!("{}/.status.json", conf.databend_dir);
-        log::info!("{}", status_path.as_str());
+        tracing::info!("{}", status_path.as_str());
         let local_config_dir = format!("{}/configs/local", conf.databend_dir);
         std::fs::create_dir_all(local_config_dir.as_str())
             .expect("cannot create dir to store local profile");

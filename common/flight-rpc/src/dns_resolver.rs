@@ -25,6 +25,7 @@ use common_base::tokio;
 use common_base::tokio::task::JoinHandle;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_tracing::tracing;
 use hyper::client::connect::dns::Name;
 use hyper::client::HttpConnector;
 use hyper::service::Service;
@@ -157,7 +158,7 @@ impl ConnectionFactory {
                 let builder = Channel::builder(uri.clone());
 
                 let mut endpoint = if let Some(conf) = rpc_client_config {
-                    log::info!("tls rpc enabled");
+                    tracing::info!("tls rpc enabled");
                     let client_tls_config = Self::client_tls_config(&conf).map_err(|e| {
                         ErrorCode::TLSConfigurationFailure(format!(
                             "loading client tls config failure: {} ",
