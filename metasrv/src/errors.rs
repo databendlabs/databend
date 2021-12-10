@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::ErrorCode;
+use common_exception::SerializedError;
 use common_meta_types::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
@@ -35,6 +36,9 @@ pub enum MetaError {
     #[error(transparent)]
     ConnectionError(#[from] ConnectionError),
 
+    #[error(transparent)]
+    ErrorCode(#[from] SerializedError),
+
     #[error("{0}")]
     UnknownError(String),
     // TODO(xp): RaftError needs impl Serialize etc.
@@ -42,9 +46,18 @@ pub enum MetaError {
     // RaftError(RaftError)
 }
 
+impl From<ErrorCode> for MetaError {
+    fn from(e: ErrorCode) -> Self {
+        MetaError::ErrorCode(SerializedError::from(e))
+    }
+}
+
 impl From<MetaError> for ErrorCode {
     fn from(e: MetaError) -> Self {
-        ErrorCode::MetaServiceError(e.to_string())
+        match e {
+            MetaError::ErrorCode(err_code) => err_code.into(),
+            _ => ErrorCode::MetaServiceError(e.to_string()),
+        }
     }
 }
 

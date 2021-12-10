@@ -544,11 +544,38 @@ where E: Display + Send + Sync + 'static
 
 // ===  ser/de to/from tonic::Status ===
 
-#[derive(serde::Serialize, serde::Deserialize)]
-struct SerializedError {
+#[derive(Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
+pub struct SerializedError {
     code: u16,
     message: String,
     backtrace: String,
+}
+
+impl Display for SerializedError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(f, "Code: {}, displayText = {}.", self.code, self.message,)
+    }
+}
+
+impl From<ErrorCode> for SerializedError {
+    fn from(e: ErrorCode) -> Self {
+        SerializedError {
+            code: e.code(),
+            message: e.message(),
+            backtrace: e.backtrace_str(),
+        }
+    }
+}
+
+impl From<SerializedError> for ErrorCode {
+    fn from(se: SerializedError) -> Self {
+        ErrorCode {
+            code: se.code,
+            display_text: se.message,
+            cause: None,
+            backtrace: Some(ErrorCodeBacktrace::Serialized(Arc::new(se.backtrace))),
+        }
+    }
 }
 
 impl From<&Status> for ErrorCode {

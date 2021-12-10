@@ -450,3 +450,54 @@ impl MetaApiTestSuite {
         Ok(res)
     }
 }
+
+// leader-follower tests
+// This is meant for testing distributed MetaApi impl, to ensure a read-after-write consistency.
+impl MetaApiTestSuite {
+    pub async fn database_create_get_drop_leader_follower<MT: MetaApi>(
+        &self,
+        leader: &MT,
+        follower: &MT,
+    ) -> anyhow::Result<()> {
+        tracing::info!("--- create db1 on leader");
+        {
+            let req = CreateDatabaseReq {
+                if_not_exists: false,
+                db: "db1".to_string(),
+                engine: "github".to_string(),
+                options: Default::default(),
+            };
+
+            let res = leader.create_database(req).await;
+            tracing::info!("create database res: {:?}", res);
+            let res = res.unwrap();
+            assert_eq!(1, res.database_id, "first database id is 1");
+        }
+
+        tracing::info!("--- get db1 on follower");
+        {
+            let res = follower.get_database(GetDatabaseReq::new("db1")).await;
+            tracing::debug!("get present database res: {:?}", res);
+            let res = res?;
+            assert_eq!(1, res.database_id, "db1 id is 1");
+            assert_eq!("db1".to_string(), res.db, "db1.db is db1");
+        }
+
+        tracing::info!("--- get nonexistent-db on follower, expect correct error");
+        {
+            let res = follower
+                .get_database(GetDatabaseReq::new("nonexistent"))
+                .await;
+            tracing::debug!("get present database res: {:?}", res);
+            let err = res.unwrap_err();
+            println!("{:?}", err);
+            assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
+            // TODO(xp): this does no pass. serialized error needs to be refined.
+            // assert_eq!("Code: 3, displayText = nonexistent.", err.message());
+        }
+
+        // TODO(xp): test drop is replicated to follower
+
+        Ok(())
+    }
+}
