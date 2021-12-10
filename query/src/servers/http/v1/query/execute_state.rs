@@ -108,7 +108,8 @@ impl Executor {
                 r.session.force_kill_query();
             }
             // Write Finish to query log table.
-            r.interpreter
+            let _ = r
+                .interpreter
                 .finish()
                 .await
                 .map_err(|e| log::warn!("interpreter.finish error: {:?}", e));
