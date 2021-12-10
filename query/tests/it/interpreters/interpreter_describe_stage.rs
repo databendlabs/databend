@@ -14,13 +14,9 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_meta_types::Compression;
-use common_meta_types::FileFormat;
-use common_meta_types::Format;
 use common_planners::*;
 use databend_query::interpreters::*;
 use databend_query::sql::*;
-use futures::stream::StreamExt;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
 
