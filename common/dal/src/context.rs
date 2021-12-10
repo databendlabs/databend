@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use common_cache::LruDiskCache;
+use common_exception::Result;
 use common_infallible::RwLock;
 
 #[derive(Clone, Debug, Default)]
@@ -22,16 +24,33 @@ pub struct DalMetrics {
     pub write_bytes: usize,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct DalContext {
     metrics: Arc<RwLock<DalMetrics>>,
+    table_cache_enabled: bool,
+    snapshots_cache: Option<Arc<RwLock<LruDiskCache>>>,
+    segments_cache: Option<Arc<RwLock<LruDiskCache>>>,
 }
 
 impl DalContext {
-    pub fn create() -> Self {
-        DalContext {
+    pub fn create(table_cache_enabled: bool, path: String, size_mb: u64) -> Result<Self> {
+        let (snapshots_cache, segments_cache) = if table_cache_enabled {
+            let bytes_size = size_mb * 1024 * 1024;
+            let snapshots_cache = LruDiskCache::new(path.clone(), bytes_size)?;
+            let segments_cache = LruDiskCache::new(path.clone(), bytes_size)?;
+            (
+                Some(Arc::new(RwLock::new(snapshots_cache))),
+                Some(Arc::new(RwLock::new(segments_cache))),
+            )
+        } else {
+            (None, None)
+        };
+        Ok(DalContext {
             metrics: Arc::new(Default::default()),
-        }
+            table_cache_enabled,
+            snapshots_cache,
+            segments_cache,
+        })
     }
 
     /// Increment read bytes.

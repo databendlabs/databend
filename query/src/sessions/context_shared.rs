@@ -71,8 +71,13 @@ impl QueryContextShared {
         conf: Config,
         session: Arc<Session>,
         cluster_cache: Arc<Cluster>,
-    ) -> Arc<QueryContextShared> {
-        Arc::new(QueryContextShared {
+    ) -> Result<Arc<QueryContextShared>> {
+        let dal_ctx = DalContext::create(
+            conf.query.table_cache_enabled,
+            conf.query.table_cache_root.clone(),
+            conf.query.table_cache_mb_size,
+        )?;
+        Ok(Arc::new(QueryContextShared {
             conf,
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             progress: Arc::new(Progress::create()),
@@ -86,8 +91,8 @@ impl QueryContextShared {
             http_query: Arc::new(RwLock::new(None)),
             running_plan: Arc::new(RwLock::new(None)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
-            dal_ctx: Arc::new(Default::default()),
-        })
+            dal_ctx: Arc::new(dal_ctx),
+        }))
     }
 
     pub fn kill(&self) {

@@ -260,7 +260,7 @@ pub struct QueryConfig {
         help = "Table cache size (mb)"
         )]
     #[serde(default)]
-    pub table_cache_mb_size: usize,
+    pub table_cache_mb_size: u64,
 }
 
 impl QueryConfig {
@@ -468,7 +468,7 @@ impl QueryConfig {
             mut_config,
             query,
             table_cache_mb_size,
-            usize,
+            u64,
             QUERY_TABLE_CACHE_MB_SIZE
         );
     }

@@ -47,7 +47,7 @@ pub fn create_query_context() -> Result<Arc<QueryContext>> {
         sessions.get_conf().clone(),
         Arc::new(dummy_session.as_ref().clone()),
         Cluster::empty(),
-    ));
+    )?);
 
     context.get_settings().set_max_threads(8)?;
     Ok(context)
@@ -61,7 +61,7 @@ pub fn create_query_context_with_config(config: Config) -> Result<Arc<QueryConte
         config,
         Arc::new(dummy_session.as_ref().clone()),
         Cluster::empty(),
-    ));
+    )?);
 
     context.get_settings().set_max_threads(8)?;
     Ok(context)

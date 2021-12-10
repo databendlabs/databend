@@ -62,6 +62,7 @@ fn get_all_files<P: AsRef<Path>>(path: P) -> Box<dyn Iterator<Item = (PathBuf, u
 pub type LruDiskCache = DiskCache<LruCache<OsString, u64, DefaultHashBuilder, FileSize>>;
 
 /// An basic disk cache of files on disk.
+#[derive(Debug)]
 pub struct DiskCache<C, S: BuildHasher + Clone = DefaultHashBuilder>
 where C: Cache<OsString, u64, S, FileSize>
 {

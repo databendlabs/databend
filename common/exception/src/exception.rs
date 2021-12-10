@@ -194,6 +194,9 @@ build_exceptions! {
 
     UnknownException(1000),
     TokioError(1001),
+
+    // cache
+    CacheInitFailed(2000),
 }
 
 // Store errors
@@ -442,6 +445,12 @@ impl From<prost::EncodeError> for ErrorCode {
 impl From<octocrab::Error> for ErrorCode {
     fn from(error: octocrab::Error) -> Self {
         ErrorCode::NetworkRequestError(format!("octocrab error, cause: {}", error))
+    }
+}
+
+impl From<common_cache::DiskCacheError> for ErrorCode {
+    fn from(error: common_cache::DiskCacheError) -> Self {
+        ErrorCode::CacheInitFailed(format!("cache init failed, cause: {}", error))
     }
 }
 
