@@ -500,4 +500,62 @@ impl MetaApiTestSuite {
 
         Ok(())
     }
+
+    pub async fn list_table_leader_follower<MT: MetaApi>(
+        &self,
+        leader: &MT,
+        follower: &MT,
+    ) -> anyhow::Result<()> {
+        tracing::info!("--- create db1 and tb1, tb2 on leader");
+        let db_name = "db1";
+        {
+            let req = CreateDatabaseReq {
+                if_not_exists: false,
+                db: db_name.to_string(),
+                engine: "github".to_string(),
+                options: Default::default(),
+            };
+            let res = leader.create_database(req).await;
+            tracing::info!("create database res: {:?}", res);
+            assert!(res.is_ok());
+
+            let tables = vec!["tb1", "tb2"];
+            let schema = Arc::new(DataSchema::new(vec![DataField::new(
+                "number",
+                DataType::UInt64,
+                false,
+            )]));
+
+            let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
+            for tb in tables {
+                let req = CreateTableReq {
+                    if_not_exists: false,
+                    db: db_name.to_string(),
+                    table: tb.to_string(),
+                    table_meta: TableMeta {
+                        schema: schema.clone(),
+                        engine: "JSON".to_string(),
+                        options: options.clone(),
+                    },
+                };
+                let res = leader.create_table(req).await;
+                tracing::info!("create table res: {:?}", res);
+                assert!(res.is_ok());
+            }
+        }
+
+        tracing::info!("--- list tables from follower");
+        {
+            let res = follower.list_tables(ListTableReq::new(db_name)).await;
+            tracing::debug!("get table list: {:?}", res);
+            let res = res?;
+            assert_eq!(2, res.len(), "table list len is 2");
+            assert_eq!(1, res[0].ident.table_id, "tb1 id is 1");
+            assert_eq!("tb1".to_string(), res[0].name, "tb1.name is tb1");
+            assert_eq!(2, res[1].ident.table_id, "tb2 id is 2");
+            assert_eq!("tb2".to_string(), res[0].name, "tb2.name is tb2");
+        }
+
+        Ok(())
+    }
 }

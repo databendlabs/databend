@@ -18,12 +18,9 @@ use async_raft::raft::AppendEntriesRequest;
 use async_raft::raft::InstallSnapshotRequest;
 use async_raft::raft::VoteRequest;
 use common_meta_raft_store::state_machine::AppliedState;
-<<<<<<< HEAD
 use common_meta_types::DatabaseInfo;
 use common_meta_types::GetDatabaseReq;
-=======
 use common_meta_types::ListTableReq;
->>>>>>> 071896884... follower forward ListTables request
 use common_meta_types::LogEntry;
 use common_meta_types::NodeId;
 use common_meta_types::TableInfo;
@@ -45,12 +42,8 @@ pub struct JoinRequest {
 pub enum AdminRequestInner {
     Join(JoinRequest),
     Write(LogEntry),
-<<<<<<< HEAD
-
     GetDatabase(GetDatabaseReq),
-=======
     ListTable(ListTableReq),
->>>>>>> 071896884... follower forward ListTables request
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -74,7 +67,6 @@ pub enum AdminResponse {
     AppliedState(AppliedState),
     DatabaseInfo(Arc<DatabaseInfo>),
     ListTable(Vec<Arc<TableInfo>>),
-
 }
 
 impl tonic::IntoRequest<RaftRequest> for AdminRequest {
