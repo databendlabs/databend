@@ -24,6 +24,7 @@ use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
+use crate::DescribeStagePlan;
 use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
@@ -113,6 +114,7 @@ pub trait PlanVisitor {
             PlanNode::CreateTable(plan) => self.visit_create_table(plan),
             PlanNode::DropTable(plan) => self.visit_drop_table(plan),
             PlanNode::DescribeTable(plan) => self.visit_describe_table(plan),
+            PlanNode::DescribeStage(plan) => self.visit_describe_stage(plan),
             PlanNode::TruncateTable(plan) => self.visit_truncate_table(plan),
             PlanNode::UseDatabase(plan) => self.visit_use_database(plan),
             PlanNode::SetVariable(plan) => self.visit_set_variable(plan),
@@ -273,6 +275,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_describe_table(&mut self, _: &DescribeTablePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_describe_stage(&mut self, _: &DescribeStagePlan) -> Result<()> {
         Ok(())
     }
 

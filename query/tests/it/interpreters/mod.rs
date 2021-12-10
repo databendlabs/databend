@@ -14,6 +14,7 @@
 
 mod interpreter_database_create;
 mod interpreter_database_drop;
+mod interpreter_describe_stage;
 mod interpreter_describe_table;
 mod interpreter_explain;
 mod interpreter_grant_privilege;

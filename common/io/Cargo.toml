@@ -15,6 +15,7 @@ test = false
 [dependencies]
 common-exception= {path = "../exception"}
 bytes = "1.1.0"
+serde = { version = "1.0.130", features = ["derive"] }
 
 [dev-dependencies]
 rand = "0.8.4"

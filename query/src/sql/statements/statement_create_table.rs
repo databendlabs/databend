@@ -27,7 +27,6 @@ use common_tracing::tracing;
 use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ColumnOption;
 use sqlparser::ast::ObjectName;
-use sqlparser::ast::SqlOption;
 
 use super::analyzer_expr::ExpressionAnalyzer;
 use crate::sessions::QueryContext;
@@ -42,7 +41,7 @@ pub struct DfCreateTable {
     pub name: ObjectName,
     pub columns: Vec<ColumnDef>,
     pub engine: String,
-    pub options: Vec<SqlOption>,
+    pub options: HashMap<String, String>,
 
     // The table name after "create .. like" statement.
     pub like: Option<ObjectName>,
@@ -80,30 +79,13 @@ impl DfCreateTable {
         }
     }
 
-    fn table_options(&self) -> HashMap<String, String> {
-        self.options
-            .iter()
-            .map(|option| {
-                (
-                    option.name.value.to_lowercase(),
-                    option
-                        .value
-                        .to_string()
-                        .trim_matches(|s| s == '\'' || s == '"')
-                        .to_string(),
-                )
-            })
-            .collect()
-    }
-
     async fn table_meta(&self, ctx: Arc<QueryContext>) -> Result<TableMeta> {
         let engine = self.engine.clone();
         let schema = self.table_schema(ctx).await?;
-        let options = self.table_options();
         Ok(TableMeta {
             schema,
             engine,
-            options,
+            options: self.options.clone(),
         })
     }
 
