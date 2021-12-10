@@ -17,6 +17,7 @@ use std::convert::TryInto;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
+use common_exception::ToErrorCode;
 use common_meta_api::MetaApi;
 use common_meta_flight::FlightReq;
 use common_meta_flight::GetTableExtReq;
@@ -50,6 +51,8 @@ use common_tracing::tracing;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
+use crate::meta_service::AdminRequest;
+use crate::meta_service::AdminRequestInner;
 
 // Db
 #[async_trait::async_trait]
@@ -101,8 +104,21 @@ impl RequestHandler<FlightReq<GetDatabaseReq>> for ActionHandler {
         &self,
         act: FlightReq<GetDatabaseReq>,
     ) -> common_exception::Result<Arc<DatabaseInfo>> {
-        let sm = self.meta_node.get_state_machine().await;
-        sm.get_database(act.req).await
+        let res = self
+            .meta_node
+            .handle_admin_req(AdminRequest {
+                forward_to_leader: true,
+                req: AdminRequestInner::GetDatabase(act.req),
+            })
+            .await?;
+
+        let res: Arc<DatabaseInfo> = res
+            .try_into()
+            .map_err_to_code(ErrorCode::UnknownException, || {
+                "handling FlightReq GetDatabaseReq".to_string()
+            })?;
+
+        Ok(res)
     }
 }
 
