@@ -35,6 +35,7 @@ use common_management::ClusterApi;
 use common_management::ClusterMgr;
 use common_meta_api::KVApi;
 use common_meta_types::NodeInfo;
+use common_tracing::tracing;
 use futures::future::select;
 use futures::future::Either;
 use futures::Future;
@@ -115,7 +116,7 @@ impl ClusterDiscovery {
             if before_node.flight_address.eq(&node_info.flight_address) {
                 let drop_invalid_node = self.api_provider.drop_node(before_node.id, None);
                 if let Err(cause) = drop_invalid_node.await {
-                    log::warn!("Drop invalid node failure: {:?}", cause);
+                    tracing::warn!("Drop invalid node failure: {:?}", cause);
                 }
             }
         }
@@ -127,7 +128,7 @@ impl ClusterDiscovery {
         let mut heartbeat = self.heartbeat.lock().await;
 
         if let Err(shutdown_failure) = heartbeat.shutdown().await {
-            log::warn!(
+            tracing::warn!(
                 "Cannot shutdown cluster heartbeat, cause {:?}",
                 shutdown_failure
             );
@@ -139,7 +140,7 @@ impl ClusterDiscovery {
         match futures::future::select(drop_node, signal_future).await {
             Either::Left((drop_node_result, _)) => {
                 if let Err(drop_node_failure) = drop_node_result {
-                    log::warn!(
+                    tracing::warn!(
                         "Cannot drop cluster node(while shutdown), cause {:?}",
                         drop_node_failure
                     );
@@ -280,7 +281,7 @@ impl ClusterHeartbeat {
                         shutdown_notified = new_shutdown_notified;
                         let heartbeat = cluster_api.heartbeat(local_id.clone(), None);
                         if let Err(failure) = heartbeat.await {
-                            log::error!("Cluster cluster api heartbeat failure: {:?}", failure);
+                            tracing::error!("Cluster cluster api heartbeat failure: {:?}", failure);
                         }
                     }
                 }

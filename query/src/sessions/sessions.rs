@@ -25,6 +25,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_metrics::label_counter;
+use common_tracing::tracing;
 use futures::future::Either;
 use futures::StreamExt;
 
@@ -171,7 +172,7 @@ impl SessionManager {
     ) -> impl Future<Output = ()> {
         let active_sessions = self.active_sessions.clone();
         async move {
-            log::info!(
+            tracing::info!(
                 "Waiting {} secs for connections to close. You can press Ctrl + C again to force shutdown.",
                 timeout_secs);
             let mut signal = Box::pin(signal.next());
@@ -189,7 +190,7 @@ impl SessionManager {
                 };
             }
 
-            log::info!("Will shutdown forcefully.");
+            tracing::info!("Will shutdown forcefully.");
             active_sessions
                 .read()
                 .values()
@@ -209,7 +210,7 @@ impl SessionManager {
         match active_sessions {
             0 => true,
             _ => {
-                log::info!("Waiting for {} connections to close.", active_sessions);
+                tracing::info!("Waiting for {} connections to close.", active_sessions);
                 false
             }
         }

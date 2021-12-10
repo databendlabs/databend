@@ -22,6 +22,7 @@ use common_base::DummySignalStream;
 use common_base::SignalStream;
 use common_base::SignalType;
 use common_exception::Result;
+use common_tracing::tracing;
 use futures::stream::Abortable;
 use futures::StreamExt;
 use tokio_stream::wrappers::TcpListenerStream;
@@ -71,13 +72,13 @@ impl ShutdownHandle {
     pub async fn wait_for_termination_request(&mut self) {
         match signal_stream() {
             Err(cause) => {
-                log::error!("Cannot set shutdown signal handler, {:?}", cause);
+                tracing::error!("Cannot set shutdown signal handler, {:?}", cause);
                 std::process::exit(1);
             }
             Ok(mut stream) => {
                 stream.next().await;
 
-                log::info!("Received termination signal.");
+                tracing::info!("Received termination signal.");
                 if let Ok(false) =
                     self.shutdown
                         .compare_exchange(false, true, Ordering::SeqCst, Ordering::Acquire)

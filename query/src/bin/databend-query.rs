@@ -20,6 +20,7 @@ use common_meta_embedded::MetaEmbedded;
 use common_metrics::init_default_metrics_recorder;
 use common_tracing::init_tracing_with_file;
 use common_tracing::set_panic_hook;
+use common_tracing::tracing;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
 use databend_query::configs::Config;
@@ -30,7 +31,6 @@ use databend_query::servers::MySQLHandler;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::sessions::SessionManager;
-use log::info;
 
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
@@ -40,7 +40,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     // If config file is not empty: -c xx.toml
     // Reload configs from the file.
     if !conf.config_file.is_empty() {
-        info!("Config reload from {:?}", conf.config_file);
+        tracing::info!("Config reload from {:?}", conf.config_file);
         conf = Config::load_from_toml(conf.config_file.as_str())?;
     }
 
@@ -66,8 +66,8 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     init_default_metrics_recorder();
 
     set_panic_hook();
-    info!("{:?}", conf);
-    info!(
+    tracing::info!("{:?}", conf);
+    tracing::info!(
         "DatabendQuery v-{}",
         *databend_query::configs::DATABEND_COMMIT_VERSION,
     );
@@ -83,7 +83,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let listening = handler.start(listening.parse()?).await?;
         shutdown_handle.add_service(handler);
 
-        info!(
+        tracing::info!(
             "MySQL handler listening on {}, Usage: mysql -h{} -P{}",
             listening,
             listening.ip(),
@@ -100,7 +100,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let listening = srv.start(listening.parse()?).await?;
         shutdown_handle.add_service(srv);
 
-        info!(
+        tracing::info!(
             "ClickHouse handler listening on {}, Usage: clickhouse-client --host {} --port {}",
             listening,
             listening.ip(),
@@ -117,9 +117,10 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         shutdown_handle.add_service(srv);
 
         let http_handler_usage = HttpHandler::usage(listening);
-        info!(
+        tracing::info!(
             "Http handler listening on {} {}",
-            listening, http_handler_usage
+            listening,
+            http_handler_usage
         );
     }
 
@@ -129,7 +130,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let mut srv = MetricService::create(session_manager.clone());
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
-        info!("Metric API server listening on {}", listening);
+        tracing::info!("Metric API server listening on {}", listening);
     }
 
     // HTTP API service.
@@ -138,7 +139,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let mut srv = HttpService::create(session_manager.clone());
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
-        info!("HTTP API server listening on {}", listening);
+        tracing::info!("HTTP API server listening on {}", listening);
     }
 
     // RPC API service.
@@ -147,7 +148,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let mut srv = RpcService::create(session_manager.clone());
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
-        info!("RPC API server listening on {}", listening);
+        tracing::info!("RPC API server listening on {}", listening);
     }
 
     // Cluster register.
@@ -155,14 +156,15 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let cluster_discovery = session_manager.get_cluster_discovery();
         let register_to_metastore = cluster_discovery.register_to_metastore(&conf);
         register_to_metastore.await?;
-        info!(
+        tracing::info!(
             "Databend query has been registered:{:?} to metasrv:[{:?}].",
-            conf.query.cluster_id, conf.meta.meta_address
+            conf.query.cluster_id,
+            conf.meta.meta_address
         );
     }
 
-    log::info!("Ready for connections.");
+    tracing::info!("Ready for connections.");
     shutdown_handle.wait_for_termination_request().await;
-    log::info!("Shutdown server.");
+    tracing::info!("Shutdown server.");
     Ok(())
 }

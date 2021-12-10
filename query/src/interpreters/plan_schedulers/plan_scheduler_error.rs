@@ -15,6 +15,8 @@
 
 use std::sync::Arc;
 
+use common_tracing::tracing;
+
 use crate::api::CancelAction;
 use crate::api::FlightAction;
 use crate::interpreters::plan_schedulers::Scheduled;
@@ -28,7 +30,7 @@ pub async fn handle_error(context: &Arc<QueryContext>, scheduled: Scheduled, tim
     for (_stream_name, scheduled_node) in scheduled {
         match cluster.create_node_conn(&scheduled_node.id, &config).await {
             Err(cause) => {
-                log::error!(
+                tracing::error!(
                     "Cannot cancel action for {}, cause: {}",
                     scheduled_node.id,
                     cause
@@ -40,7 +42,7 @@ pub async fn handle_error(context: &Arc<QueryContext>, scheduled: Scheduled, tim
                 });
                 let executing_action = flight_client.execute_action(cancel_action, timeout);
                 if let Err(cause) = executing_action.await {
-                    log::error!(
+                    tracing::error!(
                         "Cannot cancel action for {}, cause:{}",
                         scheduled_node.id,
                         cause

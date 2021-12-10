@@ -29,8 +29,6 @@ use futures::task::Context;
 use futures::task::Poll;
 use futures::Stream;
 use futures::StreamExt;
-use log::debug;
-use log::info;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -46,7 +44,7 @@ async fn main() -> std::result::Result<(), Box<dyn Error>> {
     // Note that this is the Tokio TcpListener, which is fully async.
     let listener = TcpListener::bind(host_port).await?;
 
-    info!("Server start at {}", host_port);
+    tracing::info!("Server start at {}", host_port);
 
     loop {
         // Asynchronously wait for an inbound TcpStream.

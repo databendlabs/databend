@@ -23,6 +23,7 @@ use common_base::Runtime;
 use common_base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_tracing::tracing;
 use futures::future::AbortHandle;
 use futures::future::AbortRegistration;
 use futures::future::Abortable;
@@ -71,7 +72,7 @@ impl MySQLHandler {
             let sessions = sessions.clone();
             async move {
                 match accept_socket {
-                    Err(error) => log::error!("Broken session connection: {}", error),
+                    Err(error) => tracing::error!("Broken session connection: {}", error),
                     Ok(socket) => MySQLHandler::accept_socket(sessions, executor, socket),
                 };
             }
@@ -82,9 +83,9 @@ impl MySQLHandler {
         match sessions.create_session("MySQL") {
             Err(error) => Self::reject_session(socket, executor, error),
             Ok(session) => {
-                log::info!("MySQL connection coming: {:?}", socket.peer_addr());
+                tracing::info!("MySQL connection coming: {:?}", socket.peer_addr());
                 if let Err(error) = MySQLConnection::run_on_stream(session, socket) {
-                    log::error!("Unexpected error occurred during query: {:?}", error);
+                    tracing::error!("Unexpected error occurred during query: {:?}", error);
                 };
             }
         }
@@ -100,7 +101,7 @@ impl MySQLHandler {
             if let Err(error) =
                 RejectConnection::reject_mysql_connection(stream, kind, message).await
             {
-                log::error!(
+                tracing::error!(
                     "Unexpected error occurred during reject connection: {:?}",
                     error
                 );
@@ -120,7 +121,7 @@ impl Server for MySQLHandler {
 
         if let Some(join_handle) = self.join_handle.take() {
             if let Err(error) = join_handle.await {
-                log::error!(
+                tracing::error!(
                     "Unexpected error during shutdown MySQLHandler. cause {}",
                     error
                 );

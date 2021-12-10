@@ -33,6 +33,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_tracing::tracing;
 use futures::channel::mpsc::Receiver;
 use futures::StreamExt;
 
@@ -79,7 +80,7 @@ impl<'a> QueryWriter<'a> {
     }
 
     async fn write_error(&mut self, error: ErrorCode) -> Result<()> {
-        log::error!("OnQuery Error: {:?}", error);
+        tracing::error!("OnQuery Error: {:?}", error);
         let clickhouse_err = to_clickhouse_err(error);
         match self.conn.write_error(&clickhouse_err).await {
             Ok(_) => Ok(()),

@@ -24,6 +24,7 @@ use common_meta_types::TableMeta;
 use common_planners::ReadDataSourcePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 
 use crate::sessions::QueryContext;
 use crate::storages::Table;
@@ -75,7 +76,7 @@ impl Table for CreditsTable {
             match cargo_license::get_dependencies_from_cargo_lock(metadata_command, false, false) {
                 Ok(v) => v,
                 Err(err) => {
-                    log::error!("{:?}", err);
+                    tracing::error!("{:?}", err);
                     vec![]
                 }
             };
