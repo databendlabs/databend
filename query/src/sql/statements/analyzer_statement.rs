@@ -162,6 +162,7 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::ShowSettings(v) => v.analyze(ctx).await,
             DfStatement::ShowProcessList(v) => v.analyze(ctx).await,
             DfStatement::ShowMetrics(v) => v.analyze(ctx).await,
+            DfStatement::ShowGrants(v) => v.analyze(ctx).await,
             DfStatement::KillStatement(v) => v.analyze(ctx).await,
             DfStatement::InsertQuery(v) => v.analyze(ctx).await,
             DfStatement::SetVariable(v) => v.analyze(ctx).await,

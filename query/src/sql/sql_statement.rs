@@ -39,6 +39,7 @@ use crate::sql::statements::DfRevokeStatement;
 use crate::sql::statements::DfSetVariable;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfShowDatabases;
+use crate::sql::statements::DfShowGrants;
 use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
 use crate::sql::statements::DfShowSettings;
@@ -99,6 +100,7 @@ pub enum DfStatement {
     // Grant
     GrantPrivilege(DfGrantStatement),
     RevokePrivilege(DfRevokeStatement),
+    ShowGrants(DfShowGrants),
 
     // Stage
     CreateStage(DfCreateStage),

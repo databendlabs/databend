@@ -56,6 +56,7 @@ use crate::RevokePrivilegePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateTablePlan;
+use crate::ShowGrantsPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -120,6 +121,7 @@ pub trait PlanRewriter {
             PlanNode::RevokePrivilege(plan) => self.revoke_privilege(plan),
             PlanNode::CreateUserStage(plan) => self.rewrite_create_stage(plan),
             PlanNode::Sink(plan) => self.rewrite_sink(plan),
+            PlanNode::ShowGrants(plan) => self.rewrite_show_grants(plan),
         }
     }
 
@@ -380,6 +382,10 @@ pub trait PlanRewriter {
 
     fn rewrite_create_stage(&mut self, plan: &CreateUserStagePlan) -> Result<PlanNode> {
         Ok(PlanNode::CreateUserStage(plan.clone()))
+    }
+
+    fn rewrite_show_grants(&mut self, plan: &ShowGrantsPlan) -> Result<PlanNode> {
+        Ok(PlanNode::ShowGrants(plan.clone()))
     }
 
     fn rewrite_sink(&mut self, plan: &SinkPlan) -> Result<PlanNode> {
