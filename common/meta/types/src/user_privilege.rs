@@ -41,6 +41,18 @@ const ALL_PRIVILEGES: BitFlags<UserPrivilegeType> = make_bitflags!(
         | Set}
 );
 
+impl std::fmt::Display for UserPrivilegeType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, match self {
+            UserPrivilegeType::Usage => "USAGE",
+            UserPrivilegeType::Create => "CREATE",
+            UserPrivilegeType::Select => "SELECT",
+            UserPrivilegeType::Insert => "INSERT",
+            UserPrivilegeType::Set => "SET",
+        })
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Default, Debug, Eq, PartialEq)]
 pub struct UserPrivilege {
     privileges: BitFlags<UserPrivilegeType>,
