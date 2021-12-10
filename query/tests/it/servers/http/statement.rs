@@ -32,32 +32,32 @@ async fn test_statement() -> Result<()> {
     {
         let (status, result) = test_sql("select * from system.tables limit 10", None).await?;
         assert_eq!(status, StatusCode::OK);
+        assert!(result.error.is_none(), "%{:?}", result.error);
         assert_eq!(result.data.len(), 10);
-        assert!(!result.error.is_some());
     }
     {
         let (status, result) = test_sql("select * from tables limit 10", Some("system")).await?;
+        assert!(result.error.is_none(), "%{:?}", result.error);
         assert_eq!(status, StatusCode::OK);
         assert_eq!(result.data.len(), 10);
-        assert!(!result.error.is_some());
     }
     {
         let (status, result) = test_sql("show tables", Some("system")).await?;
+        assert!(result.error.is_none(), "%{:?}", result.error);
         assert_eq!(status, StatusCode::OK);
         assert!(!result.data.is_empty());
-        assert!(!result.error.is_some());
     }
     {
         let (status, result) = test_sql("show tables", Some("")).await?;
         assert_eq!(status, StatusCode::OK);
+        assert!(result.error.is_none(), "%{:?}", result.error);
         assert!(result.data.is_empty());
-        assert!(!result.error.is_some());
     }
     {
         let (status, result) = test_sql("bad sql", None).await?;
         assert_eq!(status, StatusCode::OK);
-        assert!(result.data.is_empty());
         assert!(result.error.is_some());
+        assert!(result.data.is_empty());
     }
     Ok(())
 }

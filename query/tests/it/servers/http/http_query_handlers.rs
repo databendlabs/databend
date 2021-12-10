@@ -54,10 +54,10 @@ async fn test_simple_sql() -> Result<()> {
     let sql = "select * from system.tables limit 10";
     let (status, result) = post_sql(sql, 1).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.error.is_none(), "{:?}", result.error);
     assert_eq!(result.data.len(), 10);
     assert_eq!(result.state, ExecuteStateName::Succeeded);
     assert!(result.next_uri.is_none(), "{:?}", result);
-    assert!(result.error.is_none());
     assert!(result.stats.progress.is_some());
     assert!(result.schema.is_some());
     Ok(())
@@ -67,10 +67,10 @@ async fn test_simple_sql() -> Result<()> {
 async fn test_bad_sql() -> Result<()> {
     let (status, result) = post_sql("bad sql", 1).await?;
     assert_eq!(status, StatusCode::OK);
+    assert!(result.error.is_some());
     assert_eq!(result.data.len(), 0);
     assert!(result.next_uri.is_none());
     assert_eq!(result.state, ExecuteStateName::Failed);
-    assert!(result.error.is_some());
     assert!(result.stats.progress.is_none());
     assert!(result.schema.is_none());
     Ok(())
@@ -88,10 +88,10 @@ async fn test_async() -> Result<()> {
     let query_id = result.id;
     let next_uri = make_page_uri(&query_id, 0);
     assert_eq!(result.data.len(), 0);
+    assert!(result.error.is_none(), "{:?}", result.error);
     assert_eq!(result.next_uri, Some(next_uri));
     assert!(result.stats.progress.is_some());
     assert!(result.schema.is_some());
-    assert!(result.error.is_none());
     assert_eq!(result.state, ExecuteStateName::Running,);
 
     // get page, support retry
@@ -101,9 +101,9 @@ async fn test_async() -> Result<()> {
         let (status, result) = get_uri_checked(&route, &uri).await?;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(result.data.len(), 1);
+        assert!(result.error.is_none(), "{:?}", result.error);
         assert!(result.next_uri.is_none());
         assert!(result.schema.is_none());
-        assert!(result.error.is_none());
         assert!(result.stats.progress.is_some());
         assert_eq!(result.state, ExecuteStateName::Succeeded);
     }
@@ -112,10 +112,10 @@ async fn test_async() -> Result<()> {
     let uri = make_state_uri(&query_id);
     let (status, result) = get_uri_checked(&route, &uri).await?;
     assert_eq!(status, StatusCode::OK);
+    assert!(result.error.is_none(), "{:?}", result.error);
     assert_eq!(result.data.len(), 0);
     assert!(result.next_uri.is_none());
     assert!(result.schema.is_none());
-    assert!(result.error.is_none());
     assert!(result.stats.progress.is_some());
     assert_eq!(result.state, ExecuteStateName::Succeeded);
 
@@ -155,7 +155,7 @@ async fn test_multi_page() -> Result<()> {
     for p in 1..(num_parts + 1) {
         let (status, result) = get_uri_checked(&route, &next_uri).await?;
         assert_eq!(status, StatusCode::OK);
-        assert!(result.error.is_none());
+        assert!(result.error.is_none(), "{:?}", result.error);
         assert!(result.stats.progress.is_some());
         if p == num_parts {
             assert_eq!(result.data.len(), 0);
@@ -185,6 +185,7 @@ async fn test_insert() -> Result<()> {
         let json = serde_json::json!({"sql": sql.to_string()});
         let (status, result) = post_json_to_router(&route, &json, 3).await?;
         assert_eq!(status, StatusCode::OK);
+        assert!(result.error.is_none(), "{:?}", result.error);
         assert_eq!(result.data.len(), data_len);
         assert_eq!(result.state, ExecuteStateName::Succeeded);
     }
