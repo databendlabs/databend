@@ -16,19 +16,20 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use futures::StreamExt;
+use serde::Deserialize;
+use serde::Serialize;
+
+use common_base::ProgressValues;
 use common_base::tokio;
 use common_base::tokio::sync::mpsc;
 use common_base::tokio::sync::RwLock;
-use common_base::ProgressValues;
 use common_base::TrySpawn;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
-use futures::StreamExt;
-use serde::Deserialize;
-use serde::Serialize;
 use ExecuteState::*;
 
 use crate::interpreters::Interpreter;
@@ -158,9 +159,8 @@ impl ExecuteState {
             context.set_current_database(db.clone()).await?;
         };
         context.attach_query_str(sql);
-
-        // Auth.
-        let user_name = "root";
+        let default_user = "root".to_string();
+        let user_name = request.session.user.as_ref().unwrap_or(&default_user);
         let user_manager = session.get_user_manager();
         // TODO: list user's grant list and check client address
         let user_info = user_manager.get_user(user_name, "%").await?;
