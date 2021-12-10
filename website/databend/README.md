@@ -7,13 +7,13 @@ This website is built using [Docusaurus 2](https://docusaurus.io/), a modern sta
 Local preview
 
 ```shell
-npm start
+yarn start
 ```
 
 Production build
 
 ```shell
-npm run build
+yarn build
 ```
 
 ## Features

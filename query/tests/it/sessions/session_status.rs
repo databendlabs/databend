@@ -17,6 +17,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_types::AuthType;
+use common_meta_types::UserInfo;
 use databend_query::clusters::Cluster;
 use databend_query::sessions::MutableStatus;
 use databend_query::sessions::QueryContextShared;
@@ -59,10 +61,11 @@ fn test_session_status() -> Result<()> {
 
     // Current user.
     {
-        mutable_status.set_current_user("user1".to_string());
+        let user_info = UserInfo::new("user1".to_string(), "".to_string(), vec![], AuthType::None);
+        mutable_status.set_current_user(user_info);
 
-        let val = mutable_status.get_current_user();
-        assert_eq!(Some("user1".to_string()), val);
+        let val = mutable_status.get_current_user().unwrap();
+        assert_eq!("user1".to_string(), val.name);
     }
 
     // io shutdown tx.

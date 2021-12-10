@@ -14,6 +14,7 @@
 
 use std::collections::VecDeque;
 use std::future::Future;
+use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::Ordering::Acquire;
@@ -34,6 +35,7 @@ use common_dal::S3;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
+use common_meta_types::UserInfo;
 use common_planners::Part;
 use common_planners::Partitions;
 use common_planners::PlanNode;
@@ -41,6 +43,7 @@ use common_planners::ReadDataSourcePlan;
 use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
@@ -69,7 +72,7 @@ impl QueryContext {
     pub fn from_shared(shared: Arc<QueryContextShared>) -> Arc<QueryContext> {
         shared.increment_ref_count();
 
-        log::info!("Create DatabendQueryContext");
+        tracing::info!("Create DatabendQueryContext");
 
         Arc::new(QueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
@@ -119,14 +122,6 @@ impl QueryContext {
         self.shared.progress.as_ref().get_and_reset()
     }
 
-    // Some table can estimate the approx total rows, such as NumbersTable
-    pub fn add_total_rows_approx(&self, total_rows: usize) {
-        self.shared
-            .progress
-            .as_ref()
-            .add_total_rows_approx(total_rows);
-    }
-
     // Steal n partitions from the partition pool by the pipeline worker.
     // This also can steal the partitions from distributed node.
     pub fn try_get_partitions(&self, num: usize) -> Result<Partitions> {
@@ -161,7 +156,7 @@ impl QueryContext {
     }
 
     pub fn attach_http_query(&self, handle: HttpQueryHandle) {
-        self.shared.attach_http_query(handle);
+        self.shared.attach_http_query_handle(handle);
     }
 
     pub fn attach_query_str(&self, query: &str) {
@@ -205,7 +200,7 @@ impl QueryContext {
         self.shared.get_current_database()
     }
 
-    pub fn get_current_user(&self) -> Result<String> {
+    pub fn get_current_user(&self) -> Result<UserInfo> {
         self.shared.get_current_user()
     }
 
@@ -290,6 +285,16 @@ impl QueryContext {
     pub fn get_dal_metrics(&self) -> DalMetrics {
         self.shared.dal_ctx.get_metrics()
     }
+
+    /// Get the session running query.
+    pub fn get_query_str(&self) -> String {
+        self.shared.get_query_str()
+    }
+
+    // Get the client socket address.
+    pub fn get_client_address(&self) -> Option<SocketAddr> {
+        self.shared.session.mutable_state.get_client_host()
+    }
 }
 
 impl TrySpawn for QueryContext {
@@ -320,7 +325,7 @@ impl QueryContextShared {
     pub(in crate::sessions) fn destroy_context_ref(&self) {
         if self.ref_count.fetch_sub(1, Ordering::Release) == 1 {
             std::sync::atomic::fence(Acquire);
-            log::info!("Destroy DatabendQueryContext");
+            tracing::info!("Destroy DatabendQueryContext");
             self.session.destroy_context_shared();
         }
     }

@@ -18,6 +18,10 @@ use common_arrow::arrow::buffer::MutableBuffer;
 
 use crate::prelude::*;
 
+/// tranform from DFStringArray to DFStringArray
+/// # Safety
+/// The caller must uphold the following invariants:
+/// * ensure the total len of transformed DFStringArray values <= estimate_bytes
 pub fn transform<F>(from: &DFStringArray, estimate_bytes: usize, mut f: F) -> DFStringArray
 where F: FnMut(&[u8], &mut [u8]) -> Option<usize> {
     let mut values: MutableBuffer<u8> = MutableBuffer::with_capacity(estimate_bytes);
@@ -29,8 +33,10 @@ where F: FnMut(&[u8], &mut [u8]) -> Option<usize> {
 
     unsafe {
         for x in from.into_no_null_iter() {
-            let bytes =
-                std::slice::from_raw_parts_mut(values.as_mut_ptr(), values.capacity() - offset);
+            let bytes = std::slice::from_raw_parts_mut(
+                values.as_mut_ptr().add(offset),
+                values.capacity() - offset,
+            );
             if let Some(len) = f(x, bytes) {
                 offset += len;
                 offsets.push(i64::from_isize(offset as isize).unwrap());
@@ -43,16 +49,14 @@ where F: FnMut(&[u8], &mut [u8]) -> Option<usize> {
         values.set_len(offset);
         values.shrink_to_fit();
         let validity = combine_validities(from.array.validity(), Some(&validity.into()));
-        let array = BinaryArray::<i64>::from_data_unchecked(
-            BinaryArray::<i64>::default_data_type(),
-            offsets.into(),
-            values.into(),
-            validity,
-        );
-        DFStringArray::from_arrow_array(&array)
+        DFStringArray::from_data_unchecked(offsets.into(), values.into(), validity)
     }
 }
 
+/// tranform from DFStringArray to DFStringArray
+/// # Safety
+/// The caller must uphold the following invariants:
+/// * ensure the len of transformed DFStringArray values <= estimate_bytes
 pub fn transform_with_no_null<F>(
     from: &DFStringArray,
     estimate_bytes: usize,
@@ -69,8 +73,10 @@ where
 
     unsafe {
         for x in from.into_no_null_iter() {
-            let bytes =
-                std::slice::from_raw_parts_mut(values.as_mut_ptr(), values.capacity() - offset);
+            let bytes = std::slice::from_raw_parts_mut(
+                values.as_mut_ptr().add(offset),
+                values.capacity() - offset,
+            );
             let len = f(x, bytes);
 
             offset += len;
@@ -78,12 +84,54 @@ where
         }
         values.set_len(offset);
         values.shrink_to_fit();
-        let array = BinaryArray::<i64>::from_data_unchecked(
-            BinaryArray::<i64>::default_data_type(),
+        DFStringArray::from_data_unchecked(
             offsets.into(),
             values.into(),
             from.array.validity().cloned(),
-        );
-        DFStringArray::from_arrow_array(&array)
+        )
+    }
+}
+
+/// tranform from DFPrimitiveArray to DFStringArray
+/// # Safety
+/// The caller must uphold the following invariants:
+/// when turn original value1 => transformed value2
+/// * for value1, value2.len() <= f1(value1)
+/// we will need f1 to estimate how much space we need to reserve for a transformed value
+pub fn transform_from_primitive_with_no_null<F1, F2, T>(
+    from: &DFPrimitiveArray<T>,
+    f1: F1,
+    mut f2: F2,
+) -> DFStringArray
+where
+    T: DFPrimitiveType,
+    F1: Fn(&T) -> usize, // each value may turn to value with max size
+    F2: FnMut(&T, &mut [u8]) -> usize,
+{
+    let mut values: MutableBuffer<u8> = MutableBuffer::new();
+    let mut offsets: MutableBuffer<i64> = MutableBuffer::with_capacity(from.len() + 1);
+    offsets.push(0);
+
+    let mut offset: usize = 0;
+
+    unsafe {
+        for x in from.into_no_null_iter() {
+            let max_additional = f1(x);
+            values.reserve(max_additional);
+
+            let buffer =
+                std::slice::from_raw_parts_mut(values.as_mut_ptr().add(offset), max_additional);
+            let len = f2(x, buffer);
+            offset += len;
+            values.set_len(offset);
+
+            offsets.push(offset as i64);
+        }
+        values.shrink_to_fit();
+        DFStringArray::from_data_unchecked(
+            offsets.into(),
+            values.into(),
+            from.array.validity().cloned(),
+        )
     }
 }

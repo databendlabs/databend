@@ -47,6 +47,10 @@ jobs:
           bash ./scripts/setup/dev_setup.sh
           cargo install --version 0.1.16 cross
 
+      - uses: ./.github/actions/cache-cargo-registry
+        with:
+          cache_reset_key: ${{ secrets.CACHE_RESET_KEY }}
+
       - name: Build Perf Tool
         run: |
           if [ ${{ matrix.config.cross }} = true ]; then

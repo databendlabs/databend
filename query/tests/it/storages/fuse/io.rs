@@ -34,7 +34,7 @@ async fn test_fuse_table_block_appender() {
     let local_fs = Arc::new(local_fs);
     let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
 
-    // single segments
+    // single segment
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
     let block_stream = futures::stream::iter(vec![Ok(block)]);
 

@@ -22,6 +22,7 @@ use common_clickhouse_srv::ClickHouseServer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
+use common_tracing::tracing;
 
 use crate::servers::clickhouse::interactive_worker::InteractiveWorker;
 use crate::sessions::SessionRef;
@@ -52,7 +53,7 @@ impl ClickHouseConnection {
         let blocking_stream_ref = blocking_stream.try_clone()?;
         session.attach(host, move || {
             if let Err(error) = blocking_stream_ref.shutdown(Shutdown::Both) {
-                log::error!("Cannot shutdown ClickHouse session io {}", error);
+                tracing::error!("Cannot shutdown ClickHouse session io {}", error);
             }
         });
 

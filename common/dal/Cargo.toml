@@ -17,13 +17,13 @@ common-exception = {path = "../exception"}
 common-infallible = {path = "../infallible"}
 
 async-compat = "0.2.1"
-async-trait = "0.1.51"
+async-trait = "0.1.52"
 azure_core_mirror = "0.1.0"
 azure_storage_mirror = { version = "0.1.0", features = ["blob"] }
 bytes = "1.1.0"
 futures = "0.3.18"
 metrics = "0.17.0"
-reqwest = "0.11.6"
+reqwest = "0.11.7"
 rusoto_core = "0.47.0"
 rusoto_s3 = "0.47.0"
 rusoto_sts = "0.47.0"

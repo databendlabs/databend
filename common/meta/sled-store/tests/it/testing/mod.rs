@@ -14,3 +14,41 @@
 
 pub mod fake_key_spaces;
 pub mod fake_state_machine_meta;
+
+use common_base::GlobalSequence;
+use common_meta_sled_store::get_sled_db;
+
+/// 1. Open a temp sled::Db for all tests.
+/// 2. Initialize a global tracing.
+/// 3. Create a span for a test case. One needs to enter it by `span.enter()` and keeps the guard held.
+#[macro_export]
+macro_rules! init_sled_ut {
+    () => {{
+        let t = tempfile::tempdir().expect("create temp dir to sled db");
+
+        common_meta_sled_store::init_temp_sled_db(t);
+        common_tracing::init_default_ut_tracing();
+
+        let name = common_tracing::func_name!();
+        let span =
+            common_tracing::tracing::debug_span!("ut", "{}", name.split("::").last().unwrap());
+        ((), span)
+    }};
+}
+
+pub struct SledTestContext {
+    pub tree_name: String,
+    pub db: sled::Db,
+}
+
+/// Create a new context for testing sled
+pub fn new_sled_test_context() -> SledTestContext {
+    SledTestContext {
+        tree_name: format!("test-{}-", next_seq()),
+        db: get_sled_db(),
+    }
+}
+
+pub fn next_seq() -> u32 {
+    29000u32 + (GlobalSequence::next() as u32)
+}

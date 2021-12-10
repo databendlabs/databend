@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-extern crate log;
 #[cfg(feature = "heapsize")]
 #[cfg(not(target_os = "macos"))]
 extern crate heapsize_;

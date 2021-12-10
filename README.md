@@ -92,3 +92,9 @@ Databend is currently in **Alpha** and is not ready to be used in production, [R
 ## License
 
 Databend is licensed under [Apache 2.0](LICENSE).
+
+## Acknowledgement
+
+### Document Hosting
+
+[![](https://www.datocms-assets.com/31049/1618983297-powered-by-vercel.svg)](https://vercel.com/?utm_source=databend&utm_campaign=oss)

@@ -28,8 +28,10 @@ pub use sled_tree::AsTxnKeySpace;
 pub use sled_tree::SledTree;
 pub use sled_tree::SledValueToKey;
 pub use sled_tree::TransactionSledTree;
+pub use store::Store;
 
 mod db;
 mod sled_key_space;
 mod sled_serde;
 mod sled_tree;
+mod store;

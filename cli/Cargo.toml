@@ -22,41 +22,42 @@ path = "src/bin/bendctl.rs"
 databend-query = {path = "../query"}
 common-base = {path = "../common/base" }
 common-datavalues = { path = "../common/datavalues" }
+common-tracing = {path = "../common/tracing" }
+
 itertools = "0.10.3"
 databend-meta = {path = "../metasrv" }
 common-meta-raft-store= {path = "../common/meta/raft-store"}
 colored = "2.0.0"
 comfy-table = "5.0.0"
 dirs = "4.0.0"
-clap = "3.0.0-beta.5"
-clap_generate = "3.0.0-beta.5"
+clap = { version = "3.0.0-rc.0", features = ["env"] }
+clap_generate = "3.0.0-rc.0"
 dyn-clone = "1.0.4"
 flate2 = "1.0.22"
 handlebars = "4.1.6"
 indicatif = "0.16.2"
 run_script = "0.9.0"
-rustyline = "9.0.0"
+rustyline = "9.1.0"
 futures = "0.3.18"
 byte-unit = "4.0.13"
 num-format = "0.4.0"
 fs_extra = "1.2.0"
-serde = { version = "1.0.130", features = ["derive"] }
+serde = { version = "1.0.131", features = ["derive"] }
 serde_json = "1.0.72"
-sha2 = "0.9.8"
+sha2 = "0.10.0"
 sysinfo = "0.21.2"
 tar = "0.4.37"
 thiserror = "1.0.30"
 ureq = { version = "2.3.1", features = ["json"] }
 nix = "0.23.0"
-log = "0.4.14"
 serde_yaml = "0.8.21"
 structopt = "0.3.25"
 structopt-toml = "0.5.0"
 portpicker = "0.1.1"
-reqwest = { version = "0.11.6", features = ["json", "native-tls", "multipart", "blocking", "tokio-rustls", "stream"] }
-libc = "0.2.108"
+reqwest = { version = "0.11.7", features = ["json", "native-tls", "multipart", "blocking", "tokio-rustls", "stream"] }
+libc = "0.2.109"
 lexical-util = "0.8.1"
-async-trait = "0.1.51"
+async-trait = "0.1.52"
 webbrowser = "0.5.5"
 async-std = "1.10.0"
 tryhard = "0.4.0"

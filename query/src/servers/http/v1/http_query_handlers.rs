@@ -20,6 +20,7 @@ use std::time::Instant;
 use common_base::ProgressValues;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
+use common_tracing::tracing;
 use poem::error::Error as PoemError;
 use poem::error::NotFound;
 use poem::error::Result as PoemResult;
@@ -221,7 +222,7 @@ pub(crate) async fn query_handler(
     Query(params): Query<PageParams>,
     Json(req): Json<HttpQueryRequest>,
 ) -> PoemResult<Json<QueryResponse>> {
-    log::info!("receive http query: {:?} {:?}", req, params);
+    tracing::info!("receive http query: {:?} {:?}", req, params);
     let session_manager = sessions_extension.0;
     let http_query_manager = session_manager.get_http_query_manager();
     let query_id = http_query_manager.next_query_id();

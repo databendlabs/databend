@@ -12,12 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use async_raft::raft::AppendEntriesRequest;
 use async_raft::raft::InstallSnapshotRequest;
 use async_raft::raft::VoteRequest;
 use common_meta_raft_store::state_machine::AppliedState;
+use common_meta_types::DatabaseInfo;
+use common_meta_types::GetDatabaseReq;
+use common_meta_types::ListTableReq;
 use common_meta_types::LogEntry;
 use common_meta_types::NodeId;
+use common_meta_types::TableInfo;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
@@ -36,6 +42,8 @@ pub struct JoinRequest {
 pub enum AdminRequestInner {
     Join(JoinRequest),
     Write(LogEntry),
+    GetDatabase(GetDatabaseReq),
+    ListTable(ListTableReq),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -57,6 +65,8 @@ impl AdminRequest {
 pub enum AdminResponse {
     Join(()),
     AppliedState(AppliedState),
+    DatabaseInfo(Arc<DatabaseInfo>),
+    ListTable(Vec<Arc<TableInfo>>),
 }
 
 impl tonic::IntoRequest<RaftRequest> for AdminRequest {

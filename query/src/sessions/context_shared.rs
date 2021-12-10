@@ -24,6 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::Mutex;
 use common_infallible::RwLock;
+use common_meta_types::UserInfo;
 use common_planners::PlanNode;
 use futures::future::AbortHandle;
 use uuid::Uuid;
@@ -112,12 +113,12 @@ impl QueryContextShared {
         self.session.get_current_database()
     }
 
-    pub fn get_current_user(&self) -> Result<String> {
-        self.session.get_current_user()
-    }
-
     pub fn set_current_database(&self, new_database_name: String) {
         self.session.set_current_database(new_database_name);
+    }
+
+    pub fn get_current_user(&self) -> Result<UserInfo> {
+        self.session.get_current_user()
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {
@@ -174,13 +175,19 @@ impl QueryContextShared {
         }
     }
 
-    pub fn attach_http_query(&self, handle: HttpQueryHandle) {
+    pub fn attach_http_query_handle(&self, handle: HttpQueryHandle) {
         let mut http_query = self.http_query.write();
         *http_query = Some(handle);
     }
+
     pub fn attach_query_str(&self, query: &str) {
         let mut running_query = self.running_query.write();
         *running_query = Some(query.to_string());
+    }
+
+    pub fn get_query_str(&self) -> String {
+        let running_query = self.running_query.read();
+        running_query.as_ref().unwrap_or(&"".to_string()).clone()
     }
 
     pub fn attach_query_plan(&self, plan: &PlanNode) {

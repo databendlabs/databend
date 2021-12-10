@@ -33,6 +33,7 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_infallible::RwLock;
 use common_macros::databend_main;
+use common_tracing::tracing;
 use crossbeam_queue::ArrayQueue;
 use futures::future::try_join_all;
 use futures::StreamExt;
@@ -166,7 +167,7 @@ async fn run(bench: BenchmarkRef) -> Result<()> {
         executors.push(tokio::spawn(async move {
             if let Err(e) = execute(b).await {
                 b2.shutdown.store(true, Ordering::Relaxed);
-                log::error!("Got error in query {:?}", e);
+                tracing::error!("Got error in query {:?}", e);
             }
         }));
     }

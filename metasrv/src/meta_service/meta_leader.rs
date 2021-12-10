@@ -18,6 +18,7 @@ use async_raft::error::ResponseError;
 use async_raft::raft::ClientWriteRequest;
 use async_raft::ChangeConfigError;
 use async_raft::ClientWriteError;
+use common_meta_api::MetaApi;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
@@ -57,6 +58,17 @@ impl<'a> MetaLeader<'a> {
             AdminRequestInner::Write(entry) => {
                 let res = self.write(entry).await?;
                 Ok(AdminResponse::AppliedState(res))
+            }
+
+            AdminRequestInner::GetDatabase(req) => {
+                let x = self.meta_node.get_state_machine().await;
+                let res = x.get_database(req).await?;
+                Ok(AdminResponse::DatabaseInfo(res))
+            }
+            AdminRequestInner::ListTable(req) => {
+                let sm = self.meta_node.get_state_machine().await;
+                let res = sm.list_tables(req).await?;
+                Ok(AdminResponse::ListTable(res))
             }
         }
     }

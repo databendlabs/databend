@@ -22,6 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 use common_planners::PlanNode;
+use common_tracing::tracing;
 use metrics::histogram;
 use msql_srv::ErrorKind;
 use msql_srv::InitWriter;
@@ -91,7 +92,7 @@ impl<W: std::io::Write> MysqlShim<W> for InteractiveWorker<W> {
             match authenticate.await {
                 Ok(res) => res,
                 Err(failure) => {
-                    log::error!(
+                    tracing::error!(
                         "MySQL handler authenticate failed, \
                         user_name: {}, \
                         client_address: {}, \
@@ -218,12 +219,12 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
         let authed = user_manager
             .auth_user(
-                user_info,
+                user_info.clone(),
                 CertifiedInfo::create(user_name, encode_password, address),
             )
             .await?;
         if authed {
-            self.session.set_current_user(user_name.clone());
+            self.session.set_current_user(user_info);
         }
 
         Ok(authed)
@@ -281,7 +282,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     fn do_close(&mut self, _: u32) {}
 
     async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String)> {
-        log::debug!("{}", query);
+        tracing::debug!("{}", query);
 
         let context = self.session.create_context().await?;
         context.attach_query_str(query);
@@ -314,6 +315,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         }
     }
 
+    #[tracing::instrument(level = "debug", skip(plan, context))]
     async fn exec_query(
         plan: Result<PlanNode>,
         context: &Arc<QueryContext>,
@@ -321,6 +323,11 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
         let instant = Instant::now();
 
         let interpreter = InterpreterFactory::get(context.clone(), plan?)?;
+        // Write start query log.
+        let _ = interpreter
+            .start()
+            .await
+            .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
         let data_stream = interpreter.execute(None).await?;
         histogram!(
             super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
@@ -329,6 +336,11 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
         let collector = data_stream.collect::<Result<Vec<DataBlock>>>();
         let query_result = collector.await;
+        // Write finish query log.
+        let _ = interpreter
+            .finish()
+            .await
+            .map_err(|e| tracing::error!("interpreter.finish.error: {:?}", e));
         query_result.map(|data| (data, Self::extra_info(context, instant)))
     }
 

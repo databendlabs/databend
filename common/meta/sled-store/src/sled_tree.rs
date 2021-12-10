@@ -25,6 +25,7 @@ use sled::transaction::TransactionResult;
 use sled::transaction::TransactionalTree;
 use sled::transaction::UnabortableTransactionError;
 
+use crate::store::Store;
 use crate::SledKeySpace;
 
 /// Extract key from a value of sled tree that includes its key.
@@ -499,43 +500,6 @@ impl TransactionSledTree<'_> {
             phantom: PhantomData,
         }
     }
-
-    fn get<KV>(&self, key: &KV::K) -> Result<Option<KV::V>, UnabortableTransactionError>
-    where KV: SledKeySpace {
-        let k = KV::serialize_key(key).unwrap();
-        let got = self.txn_tree.get(k)?;
-
-        let v = got.map(|v| KV::deserialize_value(v).unwrap());
-
-        Ok(v)
-    }
-
-    fn insert<KV>(
-        &self,
-        key: &KV::K,
-        value: &KV::V,
-    ) -> Result<Option<KV::V>, UnabortableTransactionError>
-    where
-        KV: SledKeySpace,
-    {
-        let k = KV::serialize_key(key).unwrap();
-        let v = KV::serialize_value(value).unwrap();
-
-        let prev = self.txn_tree.insert(k, v)?;
-        let prev = prev.map(|x| KV::deserialize_value(x).unwrap());
-
-        Ok(prev)
-    }
-
-    fn remove<KV>(&self, key: &KV::K) -> Result<Option<KV::V>, UnabortableTransactionError>
-    where KV: SledKeySpace {
-        let k = KV::serialize_key(key).unwrap();
-        let removed = self.txn_tree.remove(k)?;
-
-        let removed = removed.map(|x| KV::deserialize_value(x).unwrap());
-
-        Ok(removed)
-    }
 }
 
 /// It borrows the internal SledTree with access limited to a specified namespace `KV`.
@@ -549,21 +513,53 @@ pub struct AsTxnKeySpace<'a, KV: SledKeySpace> {
     phantom: PhantomData<KV>,
 }
 
-impl<'a, KV: SledKeySpace> AsTxnKeySpace<'a, KV> {
-    pub fn insert(
-        &self,
-        key: &KV::K,
-        value: &KV::V,
-    ) -> Result<Option<KV::V>, UnabortableTransactionError> {
-        self.inner.insert::<KV>(key, value)
+impl<'a, KV: SledKeySpace> Store<KV> for AsTxnKeySpace<'a, KV> {
+    type Error = UnabortableTransactionError;
+
+    fn insert(&self, key: &KV::K, value: &KV::V) -> Result<Option<KV::V>, Self::Error> {
+        let k = KV::serialize_key(key).unwrap();
+        let v = KV::serialize_value(value).unwrap();
+
+        let prev = self.txn_tree.insert(k, v)?;
+        let prev = prev.map(|x| KV::deserialize_value(x).unwrap());
+
+        Ok(prev)
     }
 
-    pub fn get(&self, key: &KV::K) -> Result<Option<KV::V>, UnabortableTransactionError> {
-        self.inner.get::<KV>(key)
+    fn get(&self, key: &KV::K) -> Result<Option<KV::V>, Self::Error> {
+        let k = KV::serialize_key(key).unwrap();
+        let got = self.txn_tree.get(k)?;
+
+        let v = got.map(|v| KV::deserialize_value(v).unwrap());
+
+        Ok(v)
     }
 
-    pub fn remove(&self, key: &KV::K) -> Result<Option<KV::V>, UnabortableTransactionError> {
-        self.inner.remove::<KV>(key)
+    fn remove(&self, key: &KV::K) -> Result<Option<KV::V>, Self::Error> {
+        let k = KV::serialize_key(key).unwrap();
+        let removed = self.txn_tree.remove(k)?;
+
+        let removed = removed.map(|x| KV::deserialize_value(x).unwrap());
+
+        Ok(removed)
+    }
+
+    fn update_and_fetch<F>(&self, key: &KV::K, mut f: F) -> Result<Option<KV::V>, Self::Error>
+    where F: FnMut(Option<KV::V>) -> Option<KV::V> {
+        let key_ivec = KV::serialize_key(key).unwrap();
+
+        let old_val_ivec = self.txn_tree.get(&key_ivec)?;
+        let old_val = old_val_ivec.map(|o| KV::deserialize_value(o).unwrap());
+
+        let new_val = f(old_val);
+        let _ = match new_val {
+            Some(ref v) => self
+                .txn_tree
+                .insert(key_ivec, KV::serialize_value(v).unwrap())?,
+            None => self.txn_tree.remove(key_ivec)?,
+        };
+
+        Ok(new_val)
     }
 }
 

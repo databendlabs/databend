@@ -26,6 +26,7 @@ use common_exception::Result;
 use common_meta_types::TableMeta;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
+use common_streams::SendableDataBlockStream;
 use databend_query::catalogs::Catalog;
 use databend_query::configs::Config;
 use databend_query::sessions::QueryContext;
@@ -102,7 +103,7 @@ impl TestFixture {
         }
     }
 
-    pub fn gen_block_stream(num: u32, start: i32) -> Vec<Result<DataBlock>> {
+    pub fn gen_sample_blocks(num: u32, start: i32) -> Vec<Result<DataBlock>> {
         (0..num)
             .into_iter()
             .map(|_v| {
@@ -115,6 +116,11 @@ impl TestFixture {
                 ])]))
             })
             .collect()
+    }
+
+    pub fn gen_sample_blocks_stream(num: u32, start: i32) -> SendableDataBlockStream {
+        let blocks = Self::gen_sample_blocks(num, start);
+        Box::pin(futures::stream::iter(blocks))
     }
 
     pub async fn latest_default_table(&self) -> Result<Arc<dyn Table>> {

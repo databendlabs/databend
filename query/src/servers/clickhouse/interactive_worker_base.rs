@@ -30,6 +30,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planners::InsertPlan;
 use common_planners::PlanNode;
+use common_tracing::tracing;
 use futures::channel::mpsc;
 use futures::channel::mpsc::Receiver;
 use futures::SinkExt;
@@ -59,7 +60,7 @@ impl InteractiveWorkerBase {
         session: SessionRef,
     ) -> Result<Receiver<BlockItem>> {
         let query = &ch_ctx.state.query;
-        log::debug!("{}", query);
+        tracing::debug!("{}", query);
 
         let ctx = session.create_context().await?;
         ctx.attach_query_str(query);
@@ -71,6 +72,12 @@ impl InteractiveWorkerBase {
             _ => {
                 let start = Instant::now();
                 let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
+                // Write start query log.
+                let _ = interpreter
+                    .start()
+                    .await
+                    .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+
                 let name = interpreter.name().to_string();
                 let async_data_stream = interpreter.execute(None);
                 let mut data_stream = async_data_stream.await?;
@@ -102,6 +109,11 @@ impl InteractiveWorkerBase {
 
                     cancel_clone.store(true, Ordering::Relaxed);
                 })?;
+                // Write final query log.
+                let _ = interpreter
+                    .finish()
+                    .await
+                    .map_err(|e| tracing::error!("interpreter.finish.error: {:?}", e));
 
                 Ok(rx)
             }

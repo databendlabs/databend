@@ -57,7 +57,7 @@ sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "b4
 # Crates.io dependencies
 ahash = "0.7.6"
 async-compat = "0.2.1"
-async-trait = "0.1.51"
+async-trait = "0.1.52"
 async-stream = "0.3.2"
 poem = { version = "1.0.38", features = ["rustls", "multipart"] }
 bumpalo = "3.8.0"
@@ -77,7 +77,6 @@ headers = "0.3.5"
 hyper = "0.14.15"
 indexmap = "1.7.0"
 lazy_static = "1.4.0"
-log = "0.4.14"
 maplit = "1.0.2"
 metrics = "0.17.0"
 nom = "7.1.0"
@@ -88,18 +87,18 @@ paste = "1.0.6"
 prost = "0.9.0"
 quantiles = "0.7.1"
 rand = "0.8.4"
-reqwest = "0.11.6"
-serde = { version = "1.0.130", features = ["derive"] }
+reqwest = "0.11.7"
+serde = { version = "1.0.131", features = ["derive"] }
 serde_json = "1.0.72"
 sha1 = "0.6.0"
-sha2 = "0.9.8"
+sha2 = "0.10.0"
 structopt = "0.3.25"
 structopt-toml = "0.5.0"
 threadpool = "1.8.1"
 tokio-rustls = "0.23.1"
 tokio-stream = { version = "0.1.8", features = ["net"] }
 toml = "0.5.8"
-tonic = "0.6.1"
+tonic = "0.6.2"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
 parquet-format-async-temp= "0.2.0"
@@ -109,7 +108,7 @@ criterion = "0.3.5"
 flaky_test = "0.1.0"
 mysql = "21.0.2"
 pretty_assertions = "1.0.0"
-reqwest = { version = "0.11.6", features = ["json", "native-tls"] }
+reqwest = { version = "0.11.7", features = ["json", "native-tls"] }
 tempfile = "3.2.0"
 float-cmp = "0.9.0"
 

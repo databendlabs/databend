@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+mod history_table;
 mod io;
 mod operations;
 mod pruning;
