@@ -290,8 +290,21 @@ impl RequestHandler<FlightReq<ListTableReq>> for ActionHandler {
         &self,
         req: FlightReq<ListTableReq>,
     ) -> common_exception::Result<Vec<Arc<TableInfo>>> {
-        let sm = self.meta_node.get_state_machine().await;
-        sm.list_tables(req.req).await
+        let res = self
+            .meta_node
+            .handle_admin_req(AdminRequest {
+                forward_to_leader: true,
+                req: AdminRequestInner::ListTable(req.req),
+            })
+            .await?;
+
+        let res: Vec<Arc<TableInfo>> = res
+            .try_into()
+            .map_err_to_code(ErrorCode::UnknownException, || {
+                "handling FlightReq ListTableReq".to_string()
+            })?;
+
+        Ok(res)
     }
 }
 #[async_trait::async_trait]

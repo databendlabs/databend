@@ -553,7 +553,7 @@ impl MetaApiTestSuite {
             assert_eq!(1, res[0].ident.table_id, "tb1 id is 1");
             assert_eq!("tb1".to_string(), res[0].name, "tb1.name is tb1");
             assert_eq!(2, res[1].ident.table_id, "tb2 id is 2");
-            assert_eq!("tb2".to_string(), res[0].name, "tb2.name is tb2");
+            assert_eq!("tb2".to_string(), res[1].name, "tb2.name is tb2");
         }
 
         Ok(())
