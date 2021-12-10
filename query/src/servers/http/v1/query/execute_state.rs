@@ -157,6 +157,13 @@ impl ExecuteState {
         };
         context.attach_query_str(sql);
 
+        // Auth.
+        let user_name = "root";
+        let user_manager = session.get_user_manager();
+        // TODO: list user's grant list and check client address
+        let user_info = user_manager.get_user(user_name, "%").await?;
+        session.set_current_user(user_info);
+
         let plan = PlanParser::parse(sql, context.clone()).await?;
         let schema = plan.schema();
 
