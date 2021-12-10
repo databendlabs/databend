@@ -21,10 +21,10 @@ use std::time::UNIX_EPOCH;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_api::KVApi;
-use common_meta_types::AddResult;
 use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
 use common_meta_types::NodeInfo;
+use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
@@ -148,9 +148,9 @@ impl ClusterApi for ClusterMgr {
 
         let res = upsert_node.await?.into_add_result()?;
 
-        match res {
-            AddResult::Ok(v) => Ok(v.seq),
-            AddResult::Exists(v) => Err(ErrorCode::ClusterNodeAlreadyExists(format!(
+        match res.res {
+            OkOrExist::Ok(v) => Ok(v.seq),
+            OkOrExist::Exists(v) => Err(ErrorCode::ClusterNodeAlreadyExists(format!(
                 "Cluster ID already exists, seq [{}]",
                 v.seq
             ))),

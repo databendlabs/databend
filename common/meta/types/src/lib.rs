@@ -37,6 +37,7 @@ mod user_stage;
 
 pub use change::AddResult;
 pub use change::Change;
+pub use change::OkOrExist;
 pub use cluster::Node;
 pub use cluster::NodeInfo;
 pub use cluster::Slot;

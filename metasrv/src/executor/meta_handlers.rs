@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
 use common_meta_flight::FlightReq;
 use common_meta_flight::GetTableExtReq;
+use common_meta_types::AddResult;
 use common_meta_types::Change;
 use common_meta_types::Cmd::CreateDatabase;
 use common_meta_types::Cmd::CreateTable;
@@ -41,6 +42,7 @@ use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
 use common_meta_types::LogEntry;
+use common_meta_types::OkOrExist;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
@@ -187,18 +189,20 @@ impl RequestHandler<FlightReq<CreateTableReq>> for ActionHandler {
             .await
             .map_err(|e| ErrorCode::MetaNodeInternalError(e.to_string()))?;
 
-        let mut ch: Change<TableMeta, u64> = rst.try_into().expect("TableId");
-        let table_id = ch.ident.take().unwrap();
-        let (prev, _) = ch.unpack_data();
+        let add_res: AddResult<TableMeta, u64> = rst.try_into()?;
 
-        if prev.is_some() && !if_not_exists {
-            return Err(ErrorCode::TableAlreadyExists(format!(
-                "table exists: {}",
-                table_name
-            )));
+        if let OkOrExist::Exists(_) = add_res.res {
+            if !if_not_exists {
+                return Err(ErrorCode::TableAlreadyExists(format!(
+                    "table exists: {}",
+                    table_name
+                )));
+            }
         }
 
-        Ok(CreateTableReply { table_id })
+        Ok(CreateTableReply {
+            table_id: add_res.id.unwrap(),
+        })
     }
 }
 
