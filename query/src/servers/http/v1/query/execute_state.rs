@@ -28,7 +28,9 @@ use common_exception::Result;
 use futures::StreamExt;
 use serde::Deserialize;
 use serde::Serialize;
+use ExecuteState::*;
 
+use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
@@ -71,8 +73,6 @@ impl ExecuteState {
     }
 }
 
-use ExecuteState::*;
-
 pub(crate) type ExecutorRef = Arc<RwLock<Executor>>;
 
 pub(crate) struct ExecuteStopped {
@@ -107,6 +107,11 @@ impl Executor {
             if kill {
                 r.session.force_kill_query();
             }
+            // Write Finish to query log table.
+            r.interpreter
+                .finish()
+                .await
+                .map_err(|e| log::warn!("interpreter.finish error: {:?}", e));
             guard.state = Stopped(ExecuteStopped {
                 progress,
                 reason,
@@ -134,6 +139,7 @@ pub(crate) struct ExecuteRunning {
     session: SessionRef,
     // mainly used to get progress for now
     context: Arc<QueryContext>,
+    interpreter: Arc<dyn Interpreter>,
 }
 
 impl ExecuteState {
@@ -168,6 +174,7 @@ impl ExecuteState {
         let running_state = ExecuteRunning {
             session,
             context: context.clone(),
+            interpreter: interpreter.clone(),
         };
         let executor = Arc::new(RwLock::new(Executor {
             start_time: Instant::now(),
@@ -189,7 +196,7 @@ impl ExecuteState {
                             },
                             Err(err) => {
                                 Executor::stop(&executor, Err(err), false).await;
-                                break
+                                break;
                             }
                         };
                     } else {
@@ -200,8 +207,6 @@ impl ExecuteState {
                 log::debug!("drop block sender!");
             })?;
 
-        // Write Finish to query log table.
-        interpreter.finish().await?;
         Ok((executor_clone, schema))
     }
 }
