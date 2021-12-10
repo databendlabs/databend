@@ -19,6 +19,7 @@ mod transform;
 pub use builder::*;
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::compute::cast::binary_to_large_binary;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_exception::ErrorCode;
@@ -74,6 +75,28 @@ impl DFStringArray {
                 .unwrap()
                 .clone(),
         )
+    }
+
+    /// construct DFStringArray from unchecked data
+    /// # Safety
+    /// just like BinaryArray::from_data_unchecked, as follows
+    /// * `offsets` MUST be monotonically increasing
+    /// # Panics
+    /// This function panics iff:
+    /// * The last element of `offsets` is different from `values.len()`.
+    /// * The validity is not `None` and its length is different from `offsets.len() - 1`.
+    pub unsafe fn from_data_unchecked(
+        offsets: Buffer<i64>,
+        values: Buffer<u8>,
+        validity: Option<Bitmap>,
+    ) -> Self {
+        let array = BinaryArray::<i64>::from_data_unchecked(
+            BinaryArray::<i64>::default_data_type(),
+            offsets,
+            values,
+            validity,
+        );
+        Self { array }
     }
 
     pub fn inner(&self) -> &LargeBinaryArray {

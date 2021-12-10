@@ -49,13 +49,7 @@ where F: FnMut(&[u8], &mut [u8]) -> Option<usize> {
         values.set_len(offset);
         values.shrink_to_fit();
         let validity = combine_validities(from.array.validity(), Some(&validity.into()));
-        let array = BinaryArray::<i64>::from_data_unchecked(
-            BinaryArray::<i64>::default_data_type(),
-            offsets.into(),
-            values.into(),
-            validity,
-        );
-        DFStringArray::from_arrow_array(&array)
+        DFStringArray::from_data_unchecked(offsets.into(), values.into(), validity)
     }
 }
 
@@ -90,13 +84,11 @@ where
         }
         values.set_len(offset);
         values.shrink_to_fit();
-        let array = BinaryArray::<i64>::from_data_unchecked(
-            BinaryArray::<i64>::default_data_type(),
+        DFStringArray::from_data_unchecked(
             offsets.into(),
             values.into(),
             from.array.validity().cloned(),
-        );
-        DFStringArray::from_arrow_array(&array)
+        )
     }
 }
 
@@ -136,12 +128,10 @@ where
             offsets.push(offset as i64);
         }
         values.shrink_to_fit();
-        let array = BinaryArray::<i64>::from_data_unchecked(
-            BinaryArray::<i64>::default_data_type(),
+        DFStringArray::from_data_unchecked(
             offsets.into(),
             values.into(),
             from.array.validity().cloned(),
-        );
-        DFStringArray::from_arrow_array(&array)
+        )
     }
 }
