@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::ops;
 
 use enumflags2::bitflags;
@@ -43,7 +44,7 @@ const ALL_PRIVILEGES: BitFlags<UserPrivilegeType> = make_bitflags!(
 
 impl std::fmt::Display for UserPrivilegeType {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, match self {
+        write!(f, "{}", match self {
             UserPrivilegeType::Usage => "USAGE",
             UserPrivilegeType::Create => "CREATE",
             UserPrivilegeType::Select => "SELECT",
@@ -79,6 +80,20 @@ impl UserPrivilegeSet {
 
     pub fn set_all_privileges(&mut self) {
         self.privileges |= ALL_PRIVILEGES;
+    }
+}
+
+impl std::fmt::Display for UserPrivilegeSet {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(
+            f,
+            "{}",
+            self.privileges
+                .iter()
+                .map(|p| p.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     }
 }
 

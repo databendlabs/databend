@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+
 use enumflags2::BitFlags;
 
 use crate::UserPrivilegeSet;
@@ -22,6 +24,16 @@ pub enum GrantObject {
     Global,
     Database(String),
     Table(String, String),
+}
+
+impl fmt::Display for GrantObject {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            GrantObject::Global => write!(f, "*.*"),
+            GrantObject::Database(ref db) => write!(f, "{}.*", db),
+            GrantObject::Table(ref db, ref table) => write!(f, "{}.{}", db, table),
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -128,9 +140,14 @@ impl GrantEntry {
     }
 }
 
-impl std::fmt::Display for GrantEntry {
+impl fmt::Display for GrantEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "GRANT")
+        let privileges: UserPrivilegeSet = self.privileges.into();
+        write!(
+            f,
+            "GRANT {} ON {} TO {}@{}",
+            privileges, self.object, self.user, self.host_pattern
+        )
     }
 }
 
