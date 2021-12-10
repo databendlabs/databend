@@ -48,8 +48,15 @@ pub struct LogEvent {
     pub query_id: String,
     pub query_kind: String,
     pub query_text: String,
-    pub query_start_time: u64,
-    pub query_end_time: u64,
+    pub event_date: u32,
+    pub event_time: u64,
+
+    // Schema.
+    pub current_database: String,
+    pub databases: String,
+    pub tables: String,
+    pub columns: String,
+    pub projections: String,
 
     // Stats.
     pub written_rows: u64,
@@ -64,13 +71,6 @@ pub struct LogEvent {
     // Client.
     pub client_info: String,
     pub client_address: String,
-
-    // Schema.
-    pub current_database: String,
-    pub databases: String,
-    pub tables: String,
-    pub columns: String,
-    pub projections: String,
 
     // Exception.
     pub exception_code: i32,
@@ -112,8 +112,14 @@ impl InterpreterQueryLog {
             Series::new(vec![event.query_id.as_str()]),
             Series::new(vec![event.query_kind.as_str()]),
             Series::new(vec![event.query_text.as_str()]),
-            Series::new(vec![event.query_start_time as u32]),
-            Series::new(vec![event.query_end_time as u32]),
+            Series::new(vec![event.event_date as u32]),
+            Series::new(vec![event.event_time as u32]),
+            // Schema.
+            Series::new(vec![event.current_database.as_str()]),
+            Series::new(vec![event.databases.as_str()]),
+            Series::new(vec![event.tables.as_str()]),
+            Series::new(vec![event.columns.as_str()]),
+            Series::new(vec![event.projections.as_str()]),
             // Stats.
             Series::new(vec![event.written_rows as u64]),
             Series::new(vec![event.written_bytes as u64]),
@@ -126,12 +132,6 @@ impl InterpreterQueryLog {
             // Client.
             Series::new(vec![event.client_info.as_str()]),
             Series::new(vec![event.client_address.as_str()]),
-            // Schema.
-            Series::new(vec![event.current_database.as_str()]),
-            Series::new(vec![event.databases.as_str()]),
-            Series::new(vec![event.tables.as_str()]),
-            Series::new(vec![event.columns.as_str()]),
-            Series::new(vec![event.projections.as_str()]),
             // Exception.
             Series::new(vec![event.exception_code]),
             Series::new(vec![event.exception.as_str()]),
@@ -164,14 +164,17 @@ impl InterpreterQueryLog {
         let query_id = self.ctx.get_id();
         let query_kind = self.plan.name().to_string();
         let query_text = self.ctx.get_query_str();
+        // Schema.
+        let current_database = self.ctx.get_current_database();
 
         // Stats.
         let now = SystemTime::now();
-        let query_start_time = now
+        let event_time = now
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards")
             .as_secs();
-        let query_end_time = 0;
+        let event_date = (event_time / (24 * 3600)) as u32;
+
         let written_rows = 0u64;
         let written_bytes = 0u64;
         let read_rows = 0u64;
@@ -184,9 +187,6 @@ impl InterpreterQueryLog {
         // Client.
         let client_address = format!("{:?}", self.ctx.get_client_address());
 
-        // Schema.
-        let current_database = self.ctx.get_current_database();
-
         let log_event = LogEvent {
             log_type: LogType::Start,
             handler_type,
@@ -198,8 +198,13 @@ impl InterpreterQueryLog {
             query_id,
             query_kind,
             query_text,
-            query_start_time,
-            query_end_time,
+            event_date,
+            event_time,
+            current_database,
+            databases: "".to_string(),
+            tables: "".to_string(),
+            columns: "".to_string(),
+            projections: "".to_string(),
             written_rows,
             written_bytes,
             read_rows,
@@ -210,11 +215,7 @@ impl InterpreterQueryLog {
             memory_usage,
             client_info: "".to_string(),
             client_address,
-            current_database,
-            databases: "".to_string(),
-            tables: "".to_string(),
-            columns: "".to_string(),
-            projections: "".to_string(),
+
             exception_code: 0,
             exception: "".to_string(),
             stack_trace: "".to_string(),
@@ -241,12 +242,12 @@ impl InterpreterQueryLog {
         let query_text = self.ctx.get_query_str();
 
         // Stats.
-        let query_start_time = 0;
         let now = SystemTime::now();
-        let query_end_time = now
+        let event_time = now
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards")
             .as_secs();
+        let event_date = (event_time / (24 * 3600)) as u32;
         let written_rows = 0u64;
         let dal_metrics = self.ctx.get_dal_metrics();
         let written_bytes = dal_metrics.write_bytes as u64;
@@ -272,8 +273,12 @@ impl InterpreterQueryLog {
             query_id,
             query_kind,
             query_text,
-            query_start_time,
-            query_end_time,
+            event_date,
+            event_time,
+            databases: "".to_string(),
+            tables: "".to_string(),
+            columns: "".to_string(),
+            projections: "".to_string(),
             written_rows,
             written_bytes,
             read_rows,
@@ -285,10 +290,7 @@ impl InterpreterQueryLog {
             client_info: "".to_string(),
             client_address,
             current_database,
-            databases: "".to_string(),
-            tables: "".to_string(),
-            columns: "".to_string(),
-            projections: "".to_string(),
+
             exception_code: 0,
             exception: "".to_string(),
             stack_trace: "".to_string(),

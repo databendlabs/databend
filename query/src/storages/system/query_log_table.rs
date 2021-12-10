@@ -54,8 +54,14 @@ impl QueryLogTable {
             DataField::new("query_id", DataType::String, false),
             DataField::new("query_kind", DataType::String, false),
             DataField::new("query_text", DataType::String, false),
-            DataField::new("query_start_time", DataType::DateTime32(None), false),
-            DataField::new("query_end_time", DataType::DateTime32(None), false),
+            DataField::new("event_date", DataType::Date32, false),
+            DataField::new("event_time", DataType::DateTime32(None), false),
+            // Schema.
+            DataField::new("current_database", DataType::String, false),
+            DataField::new("databases", DataType::String, false),
+            DataField::new("tables", DataType::String, false),
+            DataField::new("columns", DataType::String, false),
+            DataField::new("projections", DataType::String, false),
             // Stats.
             DataField::new("written_rows", DataType::UInt64, false),
             DataField::new("written_bytes", DataType::UInt64, false),
@@ -68,12 +74,6 @@ impl QueryLogTable {
             // Client.
             DataField::new("client_info", DataType::String, false),
             DataField::new("client_address", DataType::String, false),
-            // Schema.
-            DataField::new("current_database", DataType::String, false),
-            DataField::new("databases", DataType::String, false),
-            DataField::new("tables", DataType::String, false),
-            DataField::new("columns", DataType::String, false),
-            DataField::new("projections", DataType::String, false),
             // Exception.
             DataField::new("exception_code", DataType::Int32, false),
             DataField::new("exception_text", DataType::String, false),
