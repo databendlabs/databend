@@ -36,7 +36,7 @@ use poem::Route;
 use pretty_assertions::assert_eq;
 
 use crate::init_meta_ut;
-use crate::tests::service::new_metasrv_test_context;
+use crate::tests::service::MetaSrvTestContext;
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;
@@ -47,8 +47,8 @@ async fn test_cluster_nodes() -> common_exception::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let tc0 = new_metasrv_test_context(0);
-    let mut tc1 = new_metasrv_test_context(1);
+    let tc0 = MetaSrvTestContext::new(0);
+    let mut tc1 = MetaSrvTestContext::new(1);
 
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr()];
@@ -82,8 +82,8 @@ async fn test_cluster_state() -> common_exception::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let tc0 = new_metasrv_test_context(0);
-    let mut tc1 = new_metasrv_test_context(1);
+    let tc0 = MetaSrvTestContext::new(0);
+    let mut tc1 = MetaSrvTestContext::new(1);
 
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr()];
@@ -124,8 +124,8 @@ async fn test_http_service_cluster_state() -> common_exception::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let tc0 = new_metasrv_test_context(0);
-    let mut tc1 = new_metasrv_test_context(1);
+    let tc0 = MetaSrvTestContext::new(0);
+    let mut tc1 = MetaSrvTestContext::new(1);
 
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr()];

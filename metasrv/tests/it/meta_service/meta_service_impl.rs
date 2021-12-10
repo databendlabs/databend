@@ -30,14 +30,14 @@ use pretty_assertions::assert_eq;
 
 use crate::init_meta_ut;
 use crate::tests::assert_metasrv_connection;
-use crate::tests::service::new_metasrv_test_context;
+use crate::tests::service::MetaSrvTestContext;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_metasrv_upsert_kv() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let tc = new_metasrv_test_context(0);
+    let tc = MetaSrvTestContext::new(0);
     let addr = tc.config.raft_config.raft_api_addr();
 
     let _mn = MetaNode::boot(&tc.config.raft_config).await?;
@@ -82,7 +82,7 @@ async fn test_metasrv_incr_seq() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let tc = new_metasrv_test_context(0);
+    let tc = MetaSrvTestContext::new(0);
     let addr = tc.config.raft_config.raft_api_addr();
 
     let _mn = MetaNode::boot(&tc.config.raft_config).await?;
@@ -122,8 +122,8 @@ async fn test_metasrv_cluster_write_on_non_leader() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let tc0 = new_metasrv_test_context(0);
-    let tc1 = new_metasrv_test_context(1);
+    let tc0 = MetaSrvTestContext::new(0);
+    let tc1 = MetaSrvTestContext::new(1);
 
     let addr0 = tc0.config.raft_config.raft_api_addr();
     let addr1 = tc1.config.raft_config.raft_api_addr();
