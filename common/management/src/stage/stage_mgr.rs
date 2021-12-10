@@ -18,10 +18,10 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_api::KVApi;
-use common_meta_types::AddResult;
 use common_meta_types::IntoSeqV;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
+use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
@@ -58,9 +58,9 @@ impl StageMgrApi for StageMgr {
 
         let res = upsert_info.await?.into_add_result()?;
 
-        match res {
-            AddResult::Ok(v) => Ok(v.seq),
-            AddResult::Exists(v) => Err(ErrorCode::StageAlreadyExists(format!(
+        match res.res {
+            OkOrExist::Ok(v) => Ok(v.seq),
+            OkOrExist::Exists(v) => Err(ErrorCode::StageAlreadyExists(format!(
                 "Stage already exists, seq [{}]",
                 v.seq
             ))),

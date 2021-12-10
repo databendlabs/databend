@@ -18,9 +18,14 @@ use serde::Serialize;
 
 use crate::SeqV;
 
-pub enum AddResult<T> {
+pub enum OkOrExist<T> {
     Ok(SeqV<T>),
     Exists(SeqV<T>),
+}
+
+pub struct AddResult<T, ID> {
+    pub id: Option<ID>,
+    pub res: OkOrExist<T>,
 }
 
 /// `Change` describes a state change, including the states before and after a change.
@@ -94,11 +99,15 @@ where
         self.prev != self.result
     }
 
-    pub fn into_add_result(self) -> Result<AddResult<T>, ErrorCode> {
+    pub fn into_add_result(mut self) -> Result<AddResult<T, ID>, ErrorCode> {
+        let id = self.ident.take();
         let (prev, result) = self.unpack();
         if let Some(p) = prev {
             return if result.is_some() {
-                Ok(AddResult::Exists(p))
+                Ok(AddResult {
+                    id,
+                    res: OkOrExist::Exists(p),
+                })
             } else {
                 Err(ErrorCode::UnknownException(format!(
                     "invalid result for add: prev: {:?} result: None",
@@ -108,7 +117,10 @@ where
         }
 
         if let Some(res) = result {
-            Ok(AddResult::Ok(res))
+            Ok(AddResult {
+                id,
+                res: OkOrExist::Ok(res),
+            })
         } else {
             Err(ErrorCode::UnknownException(
                 "invalid result for add: prev: None result: None".to_string(),
