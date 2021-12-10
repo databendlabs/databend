@@ -16,20 +16,19 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use futures::StreamExt;
-use serde::Deserialize;
-use serde::Serialize;
-
-use common_base::ProgressValues;
 use common_base::tokio;
 use common_base::tokio::sync::mpsc;
 use common_base::tokio::sync::RwLock;
+use common_base::ProgressValues;
 use common_base::TrySpawn;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_tracing::tracing;
+use futures::StreamExt;
+use serde::Deserialize;
+use serde::Serialize;
 use ExecuteState::*;
 
 use crate::interpreters::Interpreter;
