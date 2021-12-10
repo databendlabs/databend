@@ -31,6 +31,7 @@ mod interpreter_revoke_privilege;
 mod interpreter_select;
 mod interpreter_setting;
 mod interpreter_show_create_table;
+mod interpreter_show_grants;
 mod interpreter_stage_create;
 mod interpreter_table_create;
 mod interpreter_table_drop;
