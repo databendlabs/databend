@@ -18,6 +18,10 @@ use common_arrow::arrow::buffer::MutableBuffer;
 
 use crate::prelude::*;
 
+/// tranform from DFStringArray to DFStringArray
+/// # Safety
+/// The caller must uphold the following invariants:
+/// * ensure the total len of transformed DFStringArray values <= estimate_bytes
 pub fn transform<F>(from: &DFStringArray, estimate_bytes: usize, mut f: F) -> DFStringArray
 where F: FnMut(&[u8], &mut [u8]) -> Option<usize> {
     let mut values: MutableBuffer<u8> = MutableBuffer::with_capacity(estimate_bytes);
@@ -55,6 +59,10 @@ where F: FnMut(&[u8], &mut [u8]) -> Option<usize> {
     }
 }
 
+/// tranform from DFStringArray to DFStringArray
+/// # Safety
+/// The caller must uphold the following invariants:
+/// * ensure the len of transformed DFStringArray values <= estimate_bytes
 pub fn transform_with_no_null<F>(
     from: &DFStringArray,
     estimate_bytes: usize,
@@ -92,6 +100,12 @@ where
     }
 }
 
+/// tranform from DFPrimitiveArray to DFStringArray
+/// # Safety
+/// The caller must uphold the following invariants:
+/// when turn original value1 => transformed value2
+/// * for value1, value2.len() <= f1(value1)
+/// we will need f1 to estimate how much space we need to reserve for a transformed value
 pub fn transform_from_primitive_with_no_null<F1, F2, T>(
     from: &DFPrimitiveArray<T>,
     f1: F1,
