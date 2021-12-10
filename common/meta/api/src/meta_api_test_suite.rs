@@ -454,7 +454,7 @@ impl MetaApiTestSuite {
 // leader-follower tests
 // This is meant for testing distributed MetaApi impl, to ensure a read-after-write consistency.
 impl MetaApiTestSuite {
-    pub async fn database_create_get_drop_leader_follower<MT: MetaApi>(
+    pub async fn database_get_leader_follower<MT: MetaApi>(
         &self,
         leader: &MT,
         follower: &MT,
@@ -494,8 +494,6 @@ impl MetaApiTestSuite {
             assert_eq!("nonexistent", err.message());
             assert_eq!("Code: 3, displayText = nonexistent.", format!("{}", err));
         }
-
-        // TODO(xp): test drop is replicated to follower
 
         Ok(())
     }

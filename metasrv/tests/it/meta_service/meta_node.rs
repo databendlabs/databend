@@ -43,7 +43,6 @@ use pretty_assertions::assert_eq;
 
 use crate::init_meta_ut;
 use crate::tests::assert_metasrv_connection;
-use crate::tests::service::new_metasrv_test_context;
 use crate::tests::service::MetaSrvTestContext;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 5)]
@@ -54,7 +53,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let tc = new_metasrv_test_context(0);
+    let tc = MetaSrvTestContext::new(0);
     let addr = tc.config.raft_config.raft_api_addr();
 
     let mn = MetaNode::boot(&tc.config.raft_config).await?;
@@ -279,7 +278,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     // Create a snapshot every 10 logs
     let snap_logs = 10;
 
-    let mut tc = new_metasrv_test_context(0);
+    let mut tc = MetaSrvTestContext::new(0);
     tc.config.raft_config.snapshot_logs_since_last = snap_logs;
     tc.config.raft_config.install_snapshot_timeout = 10_1000; // milli seconds. In a CI multi-threads test delays async task badly.
     let addr = tc.config.raft_config.raft_api_addr();
@@ -408,7 +407,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     tracing::info!("--- bring up non-voter 2");
 
     let node_id = 2;
-    let tc2 = new_metasrv_test_context(node_id);
+    let tc2 = MetaSrvTestContext::new(node_id);
     let mn2 = MetaNode::open_create_boot(&tc2.config.raft_config, None, Some(()), None).await?;
 
     tracing::info!("--- join non-voter 2 to cluster by leader");
@@ -434,7 +433,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     tracing::info!("--- bring up non-voter 3");
 
     let node_id = 3;
-    let tc3 = new_metasrv_test_context(node_id);
+    let tc3 = MetaSrvTestContext::new(node_id);
     let mn3 = MetaNode::open_create_boot(&tc3.config.raft_config, None, Some(()), None).await?;
 
     tracing::info!("--- join node-3 by sending rpc `join` to a non-leader");
@@ -505,7 +504,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     tracing::info!("--- bring up non-voter 1");
 
     let node_id = 1;
-    let tc1 = new_metasrv_test_context(node_id);
+    let tc1 = MetaSrvTestContext::new(node_id);
     let mn1 = MetaNode::open_create_boot(&tc1.config.raft_config, None, Some(()), None).await?;
 
     tracing::info!("--- join non-voter 1 to cluster");
@@ -530,7 +529,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     tracing::info!("--- bring up non-voter 3");
 
     let node_id = 2;
-    let tc2 = new_metasrv_test_context(node_id);
+    let tc2 = MetaSrvTestContext::new(node_id);
     let mn2 = MetaNode::open_create_boot(&tc2.config.raft_config, None, Some(()), None).await?;
 
     tracing::info!("--- join node-2 by sending rpc `join` to a non-leader");
@@ -779,7 +778,7 @@ async fn start_meta_node_leader() -> anyhow::Result<(NodeId, MetaSrvTestContext)
     // asserts states are consistent
 
     let nid = 0;
-    let mut tc = new_metasrv_test_context(nid);
+    let mut tc = MetaSrvTestContext::new(nid);
     let addr = tc.config.raft_config.raft_api_addr();
 
     // boot up a single-node cluster
@@ -805,7 +804,7 @@ async fn start_meta_node_non_voter(
     leader: Arc<MetaNode>,
     id: NodeId,
 ) -> anyhow::Result<(NodeId, MetaSrvTestContext)> {
-    let mut tc = new_metasrv_test_context(id);
+    let mut tc = MetaSrvTestContext::new(id);
     let addr = tc.config.raft_config.raft_api_addr();
 
     let raft_config = tc.config.raft_config.clone();
