@@ -34,6 +34,7 @@ use crate::sessions::SessionManager;
 #[derive(Deserialize)]
 pub struct StatementHandlerParams {
     db: Option<String>,
+    user: Option<String>,
 }
 
 #[poem::handler]
@@ -47,6 +48,7 @@ pub async fn statement_handler(
     let query_id = http_query_manager.next_query_id();
     let session = HttpSessionConf {
         database: params.db.filter(|x| !x.is_empty()),
+        user: params.user,
     };
     let req = HttpQueryRequest { sql, session };
     let query = HttpQuery::try_create(query_id.clone(), req, session_manager).await;

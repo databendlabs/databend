@@ -48,6 +48,7 @@ pub struct HttpQueryRequest {
 #[derive(Deserialize, Debug, Default)]
 pub struct HttpSessionConf {
     pub database: Option<String>,
+    pub user: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
