@@ -25,6 +25,7 @@ use common_clickhouse_srv::types::Block;
 use common_clickhouse_srv::types::Progress;
 use common_clickhouse_srv::CHContext;
 use common_clickhouse_srv::ClickHouseServer;
+use common_tracing::tracing;
 use futures::task::Context;
 use futures::task::Poll;
 use futures::Stream;
@@ -74,7 +75,7 @@ struct Session {
 impl common_clickhouse_srv::ClickHouseSession for Session {
     async fn execute_query(&self, ctx: &mut CHContext, connection: &mut Connection) -> Result<()> {
         let query = ctx.state.query.clone();
-        debug!("Receive query {}", query);
+        tracing::debug!("Receive query {}", query);
 
         let start = Instant::now();
 
@@ -123,9 +124,10 @@ impl common_clickhouse_srv::ClickHouseSession for Session {
         }
 
         let duration = start.elapsed();
-        debug!(
+        tracing::debug!(
             "ClickHouseHandler executor cost:{:?}, statistics:{:?}",
-            duration, "xxx",
+            duration,
+            "xxx",
         );
         Ok(())
     }
