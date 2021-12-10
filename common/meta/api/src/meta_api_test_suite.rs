@@ -490,10 +490,9 @@ impl MetaApiTestSuite {
                 .await;
             tracing::debug!("get present database res: {:?}", res);
             let err = res.unwrap_err();
-            println!("{:?}", err);
             assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
-            // TODO(xp): this does no pass. serialized error needs to be refined.
-            // assert_eq!("Code: 3, displayText = nonexistent.", err.message());
+            assert_eq!("nonexistent", err.message());
+            assert_eq!("Code: 3, displayText = nonexistent.", format!("{}", err));
         }
 
         // TODO(xp): test drop is replicated to follower

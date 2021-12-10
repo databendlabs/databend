@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::ErrorCode;
+use common_exception::SerializedError;
 use tonic::Code;
 use tonic::Status;
 
@@ -86,6 +88,18 @@ fn test_derive_from_display() {
         "Code: 1000, displayText = 123, cause: 3.",
         format!("{}", rst1.as_ref().unwrap_err())
     );
+}
+
+#[test]
+fn test_from_and_to_serialized_error() {
+    let ec = ErrorCode::UnknownDatabase("foo");
+    let se: SerializedError = ec.clone().into();
+
+    let ec2: ErrorCode = se.into();
+    assert_eq!(ec.code(), ec2.code());
+    assert_eq!(ec.message(), ec2.message());
+    assert_eq!(format!("{}", ec), format!("{}", ec2));
+    assert_eq!(ec.backtrace_str(), ec2.backtrace_str());
 }
 
 #[test]
