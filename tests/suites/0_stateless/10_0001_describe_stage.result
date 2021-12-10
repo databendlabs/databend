@@ -1,0 +1,8 @@
+stage_params	url	String	s3://load/files/		1
+credentials	access_key_id	String	1a2b3c		1
+credentials	secret_access_key	String	4x5y6z		1
+file_format	format	String	Csv	Csv	0
+file_format	record_delimiter	String	,	\n	1
+file_format	field_delimiter	String	,	,	0
+file_format	csv_header	Boolean	false	false	0
+file_format	compression	String	Gzip	None	1
