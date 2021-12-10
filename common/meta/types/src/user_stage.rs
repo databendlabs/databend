@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::str::FromStr;
 
 use common_exception::ErrorCode;
@@ -24,20 +23,28 @@ pub struct StageParams {
     pub credentials: Credentials,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub enum Credentials {
-    S3 {
-        access_key_id: String,
-        secret_access_key: String,
-    },
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "lowercase")]
+pub struct Credentials {
+    #[serde(default)]
+    pub access_key_id: String,
+    #[serde(default)]
+    pub secret_access_key: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct FileFormat {
+    #[serde(default)]
     pub format: Format,
+    #[serde(default = "default_record_delimiter")]
     pub record_delimiter: String,
+    #[serde(default = "default_field_delimiter")]
     pub field_delimiter: String,
+    #[serde(default = "default_csv_header")]
     pub csv_header: bool,
+    #[serde(default)]
     pub compression: Compression,
 }
 
@@ -45,37 +52,28 @@ impl Default for FileFormat {
     fn default() -> Self {
         Self {
             format: Format::default(),
-            record_delimiter: "\n".to_string(),
-            field_delimiter: ",".to_string(),
-            csv_header: false,
+            record_delimiter: default_record_delimiter(),
+            field_delimiter: default_field_delimiter(),
+            csv_header: default_csv_header(),
             compression: Compression::default(),
         }
     }
 }
 
-impl FileFormat {
-    pub fn inject_from_map(&mut self, map: HashMap<String, String>) -> Result<()> {
-        for (k, v) in map.iter() {
-            match k.to_lowercase().as_str() {
-                "format" => self.format = Format::from_str(v)?,
-                "record_delimiter" => self.record_delimiter = v.to_string(),
-                "field_delimiter" => self.field_delimiter = v.to_string(),
-                "csv_header" => self.csv_header = v == "1" || v == "true",
-                "compression" => self.compression = Compression::from_str(v)?,
-                other => {
-                    return Err(ErrorCode::StrParseError(format!(
-                        "no match for key:{}",
-                        other
-                    )))
-                }
-            }
-        }
+fn default_record_delimiter() -> String {
+    "\n".to_string()
+}
 
-        Ok(())
-    }
+fn default_field_delimiter() -> String {
+    ",".to_string()
+}
+
+fn default_csv_header() -> bool {
+    false
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
 pub enum Format {
     Csv,
     Parquet,
@@ -107,6 +105,7 @@ impl FromStr for Format {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
 pub enum Compression {
     Auto,
     Gzip,

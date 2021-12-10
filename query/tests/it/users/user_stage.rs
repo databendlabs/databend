@@ -37,7 +37,7 @@ async fn test_user_stage() -> Result<()> {
         let stage_info = UserStageInfo::new(
             stage_name1,
             comments,
-            StageParams::new("test", Credentials::S3 {
+            StageParams::new("test", Credentials {
                 access_key_id: String::from("test"),
                 secret_access_key: String::from("test"),
             }),
@@ -51,7 +51,7 @@ async fn test_user_stage() -> Result<()> {
         let stage_info = UserStageInfo::new(
             stage_name2,
             comments,
-            StageParams::new("test", Credentials::S3 {
+            StageParams::new("test", Credentials {
                 access_key_id: String::from("test"),
                 secret_access_key: String::from("test"),
             }),

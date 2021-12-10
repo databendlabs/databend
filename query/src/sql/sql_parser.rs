@@ -20,6 +20,7 @@ use std::convert::TryFrom;
 use std::time::Instant;
 
 use common_exception::ErrorCode;
+use common_io::prelude::OptionsDeserializer;
 use common_meta_types::AuthType;
 use common_meta_types::Credentials;
 use common_meta_types::FileFormat;
@@ -28,6 +29,7 @@ use common_meta_types::UserPrivilege;
 use common_meta_types::UserPrivilegeType;
 use common_planners::ExplainType;
 use metrics::histogram;
+use serde::Deserialize;
 use sqlparser::ast::BinaryOperator;
 use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ColumnOptionDef;
@@ -408,6 +410,7 @@ impl<'a> DfParser<'a> {
 
     /// This is a copy from sqlparser
     /// Parse a literal value (numbers, strings, date/time, booleans)
+    #[allow(dead_code)]
     fn parse_value(&mut self) -> Result<Value, ParserError> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
@@ -446,10 +449,10 @@ impl<'a> DfParser<'a> {
             // The call to n.parse() returns a bigdecimal when the
             // bigdecimal feature is enabled, and is otherwise a no-op
             // (i.e., it returns the input string).
-            Token::Number(n, l) => Ok(n),
-            Token::SingleQuotedString(s) => Ok(s.to_string()),
-            Token::NationalStringLiteral(s) => Ok(s.to_string()),
-            Token::HexStringLiteral(s) => Ok(s.to_string()),
+            Token::Number(n, _) => Ok(n),
+            Token::SingleQuotedString(s) => Ok(s),
+            Token::NationalStringLiteral(s) => Ok(s),
+            Token::HexStringLiteral(s) => Ok(s),
             unexpected => self.expected("a value", unexpected),
         }
     }
@@ -721,50 +724,36 @@ impl<'a> DfParser<'a> {
     }
 
     fn parse_stage_file_format(&mut self) -> Result<FileFormat, ParserError> {
-        let mut file_format = FileFormat::default();
-        if self.consume_token("FILE_FORMAT") {
+        let options = if self.consume_token("FILE_FORMAT") {
+            self.parser.expect_token(&Token::Eq)?;
+            self.parser.expect_token(&Token::LParen)?;
+            let options = self.parse_options()?;
+
+            self.parser.expect_token(&Token::RParen)?;
+
+            options
+        } else {
+            HashMap::new()
+        };
+        let file_format = FileFormat::deserialize(OptionsDeserializer::new(&options))
+            .map_err(|e| ParserError::ParserError(format!("Invalid file format options: {}", e)))?;
+        Ok(file_format)
+    }
+
+    fn parse_stage_credentials(&mut self) -> Result<Credentials, ParserError> {
+        let options = if self.consume_token("CREDENTIALS") {
             self.parser.expect_token(&Token::Eq)?;
             self.parser.expect_token(&Token::LParen)?;
             let options = self.parse_options()?;
             self.parser.expect_token(&Token::RParen)?;
 
-            file_format
-                .inject_from_map(options)
-                .map_err(|e| ParserError::ParserError(e.to_string()))?;
-        }
-        Ok(file_format)
-    }
-
-    fn parse_stage_credentials(&mut self, url: String) -> Result<Credentials, ParserError> {
-        if !self.consume_token("CREDENTIALS") {
-            return parser_err!("Missing CREDENTIALS");
-        }
-        self.parser.expect_token(&Token::Eq)?;
-        self.parser.expect_token(&Token::LParen)?;
-
-        let credentials = if url.to_uppercase().starts_with("S3") {
-            //TODO: current credential field order is hard code
-            let access_key_id = if self.consume_token("ACCESS_KEY_ID") {
-                self.parser.expect_token(&Token::Eq)?;
-                self.parser.parse_literal_string()?
-            } else {
-                return parser_err!("Missing S3 ACCESS_KEY_ID");
-            };
-
-            let secret_access_key = if self.consume_token("SECRET_ACCESS_KEY") {
-                self.parser.expect_token(&Token::Eq)?;
-                self.parser.parse_literal_string()?
-            } else {
-                return parser_err!("Missing S3 SECRET_ACCESS_KEY");
-            };
-            Credentials::S3 {
-                access_key_id,
-                secret_access_key,
-            }
+            options
         } else {
-            return parser_err!("Not supported storage");
+            HashMap::new()
         };
-        self.parser.expect_token(&Token::RParen)?;
+
+        let credentials = Credentials::deserialize(OptionsDeserializer::new(&options))
+            .map_err(|e| ParserError::ParserError(format!("Invalid credentials options: {}", e)))?;
         Ok(credentials)
     }
 
@@ -780,7 +769,11 @@ impl<'a> DfParser<'a> {
             return parser_err!("Missing URL");
         };
 
-        let credentials = self.parse_stage_credentials(url.clone())?;
+        if !url.to_uppercase().starts_with("S3") {
+            return parser_err!("Not supported storage");
+        }
+
+        let credentials = self.parse_stage_credentials()?;
         let stage_params = StageParams::new(url.as_str(), credentials);
         let file_format = self.parse_stage_file_format()?;
 
@@ -1033,6 +1026,7 @@ impl<'a> DfParser<'a> {
         loop {
             let name = self.parser.parse_identifier();
             if name.is_err() {
+                self.parser.prev_token();
                 break;
             }
             let name = name.unwrap();

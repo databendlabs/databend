@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::{DataField, DataSchemaRef, DataSchemaRefExt, DataType};
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRef;
+use common_datavalues::DataSchemaRefExt;
+use common_datavalues::DataType;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DescribeStagePlan {

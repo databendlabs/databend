@@ -1298,6 +1298,7 @@ dependencies = [
  "bytes",
  "common-exception",
  "rand 0.8.4",
+ "serde",
 ]
 
 [[package]]
@@ -2076,6 +2077,7 @@ dependencies = [
  "indexmap",
  "lazy_static",
  "log",
+ "maplit",
  "metrics",
  "msql-srv",
  "mysql",
