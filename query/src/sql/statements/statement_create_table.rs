@@ -45,7 +45,7 @@ pub struct DfCreateTable {
 
     // The table name after "create .. like" statement.
     pub like: Option<ObjectName>,
-    pub select: Option<DfQueryStatement>,
+    pub query: Option<Box<DfQueryStatement>>,
 }
 
 #[async_trait::async_trait]

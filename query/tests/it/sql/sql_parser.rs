@@ -43,6 +43,8 @@ use databend_query::sql::statements::DfTruncateTable;
 use databend_query::sql::statements::DfUseDatabase;
 use databend_query::sql::*;
 use sqlparser::ast::*;
+use sqlparser::dialect::GenericDialect;
+use sqlparser::parser::ParserError;
 
 fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
     let (statements, _) = DfParser::parse_sql(sql)?;
@@ -65,6 +67,15 @@ fn expect_parse_err_contains(sql: &str, expected: String) -> Result<()> {
     let err = DfParser::parse_sql(sql).unwrap_err();
     assert!(err.message().contains(&expected));
     Ok(())
+}
+
+fn verified_query(sql: &str) -> Result<Box<DfQueryStatement>> {
+    let mut parser = DfParser::new_with_dialect(sql, &GenericDialect {})?;
+    let stmt = parser.parse_statement()?;
+    if let DfStatement::Query(query) = stmt {
+        return Ok(query);
+    }
+    Err(ParserError::ParserError("Expect query statement".to_string()).into())
 }
 
 fn make_column_def(name: impl Into<String>, data_type: DataType) -> ColumnDef {
@@ -150,7 +161,7 @@ fn create_table() -> Result<()> {
         engine: "CSV".to_string(),
         options: maplit::hashmap! {"location".into() => "/data/33.csv".into()},
         like: None,
-        select: None,
+        query: None,
     });
     expect_parse_ok(sql, expected)?;
 
@@ -171,7 +182,7 @@ fn create_table() -> Result<()> {
             "comment".into() => "foo".into(),
         },
         like: None,
-        select: None,
+        query: None,
     });
     expect_parse_ok(sql, expected)?;
 
@@ -185,7 +196,7 @@ fn create_table() -> Result<()> {
 
         options: maplit::hashmap! {"location".into() => "batcave".into()},
         like: Some(ObjectName(vec![Ident::new("db2"), Ident::new("test2")])),
-        select: None,
+        query: None,
     });
     expect_parse_ok(sql, expected)?;
 
@@ -1052,16 +1063,7 @@ fn create_table_select() -> Result<()> {
             engine: "FUSE".to_string(),
             options: maplit::hashmap! {},
             like: None,
-            select: Some(DfQueryStatement {
-                from: vec![],
-                projection: vec![],
-                selection: None,
-                group_by: vec![],
-                having: None,
-                order_by: vec![],
-                limit: None,
-                offset: None,
-            }),
+            query: Some(verified_query("SELECT a, b FROM bar")?),
         }),
     )?;
 

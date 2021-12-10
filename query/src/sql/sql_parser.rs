@@ -46,6 +46,7 @@ use sqlparser::parser::Parser;
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
+use sqlparser::tokenizer::Word;
 use sqlparser::tokenizer::Whitespace;
 
 use super::statements::DfCopy;
@@ -819,15 +820,15 @@ impl<'a> DfParser<'a> {
         let options = self.parse_options()?;
 
         let mut select = None;
-        if let Token::Word(w) = self.parser.peek_token() {
-            if w.keyword == Keyword::AS {
-                self.parser.expect_keyword(Keyword::AS)?
+        if let Token::Word(Word{keyword, ..}) =  self.parser.peek_token() {
+            let mut has_query = false;
+            if keyword == Keyword::AS {
+                self.parser.next_token();
+                has_query = true;
             }
-            if w.keyword == Keyword::SELECT {
+            if has_query || keyword == Keyword::SELECT {
                 let native = self.parser.parse_query()?;
-                select = Some(DfQueryStatement::try_from(native)?);
-            } else {
-                // todo: incorrect syntax
+                select = Some(Box::new(DfQueryStatement::try_from(native)?))
             }
         }
 
@@ -838,7 +839,7 @@ impl<'a> DfParser<'a> {
             engine,
             options,
             like: table_like,
-            select,
+            query: select,
         };
 
         Ok(DfStatement::CreateTable(create))
@@ -1038,6 +1039,13 @@ impl<'a> DfParser<'a> {
     fn parse_options(&mut self) -> Result<HashMap<String, String>, ParserError> {
         let mut options = HashMap::new();
         loop {
+            match self.parser.peek_token() {
+                Token::Word(w) if w.keyword != Keyword::NoKeyword => {
+                    // option key must not be sql keywords
+                    break;
+                }
+                _ => {}
+            }
             let name = self.parser.parse_identifier();
             if name.is_err() {
                 self.parser.prev_token();
