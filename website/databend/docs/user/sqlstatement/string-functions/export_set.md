@@ -19,11 +19,11 @@ EXPORT_SET(bits,on,off[,separator[,number_of_bits]])
 
 | Arguments   | Description |
 | ----------- | ----------- |
-| bits | The integer. |
-| on | The string. |
-| off | The string. |
-| separator | The string. |
-| number_of_bits | The integer. |
+| bits | The const integer. |
+| on | The expression string. |
+| off | The expression string. |
+| separator | The const string. |
+| number_of_bits | The const integer. |
 
 ## Return Type
 
