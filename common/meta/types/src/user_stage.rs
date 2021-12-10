@@ -17,7 +17,7 @@ use std::str::FromStr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
 pub struct StageParams {
     pub url: String,
     pub credentials: Credentials,
@@ -156,7 +156,7 @@ impl StageParams {
     }
 }
 /// Stage for data stage location.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
 pub struct UserStageInfo {
     #[serde(default)]
     pub stage_name: String,

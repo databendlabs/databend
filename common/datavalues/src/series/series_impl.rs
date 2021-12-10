@@ -258,6 +258,7 @@ impl_from!([i64], DFInt64Array, new_from_slice);
 impl_from!([f32], DFFloat32Array, new_from_slice);
 impl_from!([f64], DFFloat64Array, new_from_slice);
 impl_from!([Vec<u8>], DFStringArray, new_from_slice);
+impl_from!([String], DFStringArray, new_from_slice);
 
 impl_from!([Option<bool>], DFBooleanArray, new_from_opt_slice);
 impl_from!([Option<u8>], DFUInt8Array, new_from_opt_slice);

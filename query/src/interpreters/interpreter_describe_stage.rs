@@ -18,6 +18,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_datavalues::series::Series;
 use common_exception::Result;
+use common_meta_types::UserStageInfo;
 use common_planners::DescribeStagePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -48,29 +49,95 @@ impl Interpreter for DescribeStageInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let schema = self.plan.schema();
-        let stage = self.ctx
-        .get_sessions_manager()
-        .get_user_manager()
-        .get_stage(self.plan.name.as_str())
-        .await?;
+        let default_stage = UserStageInfo::default();
+        let stage = self
+            .ctx
+            .get_sessions_manager()
+            .get_user_manager()
+            .get_stage(self.plan.name.as_str())
+            .await?;
 
-        let mut names: Vec<&str> = vec![];
-        let mut values: Vec<&str> = vec![];
+        let mut parent_properties: Vec<&str> = vec![];
+        let mut properties: Vec<&str> = vec![];
+        let mut property_types: Vec<&str> = vec![];
+        let mut property_values: Vec<String> = vec![];
+        let mut property_defaults: Vec<String> = vec![];
 
-        names.push("name");
-        names.push("name");
-        names.push("name");
-        names.push("name");
+        let params = &stage.stage_params;
 
-        values.push(stage.stage_name.as_str());
+        // url
+        parent_properties.push("stage_params");
+        properties.push("url");
+        property_types.push("String");
+        property_values.push(params.url.clone());
+        property_defaults.push(default_stage.stage_params.url.clone());
+
+        // credentials
+        parent_properties.push("credentials");
+        properties.push("access_key_id");
+        property_types.push("String");
+        property_values.push(params.credentials.access_key_id.clone());
+        property_defaults.push(default_stage.stage_params.credentials.access_key_id.clone());
+
+        parent_properties.push("credentials");
+        properties.push("secret_access_key");
+        property_types.push("String");
+        property_values.push(params.credentials.secret_access_key.clone());
+        property_defaults.push(
+            default_stage
+                .stage_params
+                .credentials
+                .secret_access_key
+                .clone(),
+        );
+
+        // format
+        {
+            parent_properties.push("file_format");
+            properties.push("format");
+            property_types.push("String");
+            property_values.push(format!("{:?}", stage.file_format.format));
+            property_defaults.push(format!("{:?}", default_stage.file_format.format));
+
+            parent_properties.push("file_format");
+            properties.push("record_delimiter");
+            property_types.push("String");
+            property_values.push(stage.file_format.record_delimiter);
+            property_defaults.push(default_stage.file_format.record_delimiter);
+
+            parent_properties.push("file_format");
+            properties.push("field_delimiter");
+            property_types.push("String");
+            property_values.push(stage.file_format.field_delimiter.clone());
+            property_defaults.push(default_stage.file_format.field_delimiter.clone());
+
+            parent_properties.push("file_format");
+            properties.push("csv_header");
+            property_types.push("Boolean");
+            property_values.push(format!("{:?}", stage.file_format.csv_header));
+            property_defaults.push(format!("{:?}", default_stage.file_format.csv_header));
+
+            parent_properties.push("file_format");
+            properties.push("compression");
+            property_types.push("String");
+            property_values.push(format!("{:?}", stage.file_format.compression));
+            property_defaults.push(format!("{:?}", default_stage.file_format.compression));
+        }
+
+        let property_changed = property_values
+            .iter()
+            .zip(property_defaults.iter())
+            .map(|(v, d)| v != d)
+            .collect::<Vec<bool>>();
 
         let block = DataBlock::create_by_array(schema.clone(), vec![
-            Series::new(names),
-            Series::new(values),
+            Series::new(parent_properties),
+            Series::new(properties),
+            Series::new(property_types),
+            Series::new(property_values),
+            Series::new(property_defaults),
+            Series::new(property_changed),
         ]);
-
-        Ok(Box::pin(DataBlockStream::create(schema, None, vec![
-            block,
-        ])))
+        Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))
     }
 }
