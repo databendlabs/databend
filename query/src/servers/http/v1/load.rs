@@ -21,6 +21,7 @@ use common_planners::InsertInputSource;
 use common_planners::PlanNode;
 use common_streams::CsvSource;
 use common_streams::Source;
+use common_tracing::tracing;
 use futures::StreamExt;
 use poem::error::BadRequest;
 use poem::error::Result as PoemResult;
@@ -101,7 +102,10 @@ pub async fn streaming_load(
     let max_block_size = context.get_settings().get_max_block_size()? as usize;
     let interpreter = InterpreterFactory::get(context.clone(), plan.clone())?;
     // Write Start to query log table.
-    interpreter.start().await?;
+    let _ = interpreter
+        .start()
+        .await
+        .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
 
     let stream = stream! {
         while let Ok(Some(field)) = multipart.next_field().await {
@@ -127,7 +131,7 @@ pub async fn streaming_load(
     let _ = interpreter
         .finish()
         .await
-        .map_err(|e| log::error!("interpreter.finish error: {:?}", e));
+        .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
 
     // TODO generate id
     // TODO duplicate by insert_label

@@ -25,6 +25,7 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_tracing::tracing;
 use futures::StreamExt;
 use serde::Deserialize;
 use serde::Serialize;
@@ -112,7 +113,7 @@ impl Executor {
                 .interpreter
                 .finish()
                 .await
-                .map_err(|e| log::error!("interpreter.finish error: {:?}", e));
+                .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
             guard.state = Stopped(ExecuteStopped {
                 progress,
                 reason,
@@ -169,7 +170,10 @@ impl ExecuteState {
 
         let interpreter = InterpreterFactory::get(context.clone(), plan.clone())?;
         // Write Start to query log table.
-        interpreter.start().await?;
+        let _ = interpreter
+            .start()
+            .await
+            .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
 
         let data_stream = interpreter.execute(None).await?;
         let mut data_stream = context.try_create_abortable(data_stream)?;
@@ -212,7 +216,7 @@ impl ExecuteState {
                         break;
                     }
                 }
-                log::debug!("drop block sender!");
+                tracing::debug!("drop block sender!");
             })?;
 
         Ok((executor_clone, schema))
