@@ -58,7 +58,7 @@ async fn test_meta_api_table_create_get_drop() -> anyhow::Result<()> {
     let client0 = tcs[0].flight_client().await?;
     let client1 = tcs[1].flight_client().await?;
     MetaApiTestSuite {}
-        .table_create_get_drop_leader_follower(&client0, &client1)
+        .table_get_leader_follower(&client0, &client1)
         .await
 }
 

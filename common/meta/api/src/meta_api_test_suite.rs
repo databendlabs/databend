@@ -481,7 +481,7 @@ impl MetaApiTestSuite {
             tracing::debug!("get present database res: {:?}", res);
             let res = res?;
             assert_eq!(1, res.database_id, "db1 id is 1");
-            assert_eq!("db1".to_string(), res.db, "db1.db is db1");
+            assert_eq!("db1", res.db, "db1.db is db1");
         }
 
         tracing::info!("--- get nonexistent-db on follower, expect correct error");
@@ -527,9 +527,9 @@ impl MetaApiTestSuite {
             let res = res?;
             assert_eq!(2, res.len(), "database list len is 2");
             assert_eq!(1, res[0].database_id, "db1 id is 1");
-            assert_eq!("db1".to_string(), res[0].db, "db1.name is db1");
+            assert_eq!("db1", res[0].db, "db1.name is db1");
             assert_eq!(2, res[1].database_id, "db3 id is 2");
-            assert_eq!("db3".to_string(), res[1].db, "db3.name is db3");
+            assert_eq!("db3", res[1].db, "db3.name is db3");
         }
 
         Ok(())
@@ -585,15 +585,15 @@ impl MetaApiTestSuite {
             let res = res?;
             assert_eq!(2, res.len(), "table list len is 2");
             assert_eq!(1, res[0].ident.table_id, "tb1 id is 1");
-            assert_eq!("tb1".to_string(), res[0].name, "tb1.name is tb1");
+            assert_eq!("tb1", res[0].name, "tb1.name is tb1");
             assert_eq!(2, res[1].ident.table_id, "tb2 id is 2");
-            assert_eq!("tb2".to_string(), res[1].name, "tb2.name is tb2");
+            assert_eq!("tb2", res[1].name, "tb2.name is tb2");
         }
 
         Ok(())
     }
 
-    pub async fn table_create_get_drop_leader_follower<MT: MetaApi>(
+    pub async fn table_get_leader_follower<MT: MetaApi>(
         &self,
         leader: &MT,
         follower: &MT,
@@ -641,7 +641,7 @@ impl MetaApiTestSuite {
             tracing::debug!("get present table res: {:?}", res);
             let res = res?;
             assert_eq!(1, res.ident.table_id, "tb1 id is 1");
-            assert_eq!("tb1".to_string(), res.name, "tb1.name is tb1");
+            assert_eq!("tb1", res.name, "tb1.name is tb1");
         }
 
         tracing::info!("--- get nonexistent-table on follower, expect correct error");
