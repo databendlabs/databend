@@ -48,7 +48,7 @@ pub struct LogEvent {
     pub query_id: String,
     pub query_kind: String,
     pub query_text: String,
-    pub event_date: u32,
+    pub event_date: i32,
     pub event_time: u64,
 
     // Schema.
@@ -112,7 +112,7 @@ impl InterpreterQueryLog {
             Series::new(vec![event.query_id.as_str()]),
             Series::new(vec![event.query_kind.as_str()]),
             Series::new(vec![event.query_text.as_str()]),
-            Series::new(vec![event.event_date as u32]),
+            Series::new(vec![event.event_date as i32]),
             Series::new(vec![event.event_time as u32]),
             // Schema.
             Series::new(vec![event.current_database.as_str()]),
@@ -173,7 +173,7 @@ impl InterpreterQueryLog {
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards")
             .as_secs();
-        let event_date = (event_time / (24 * 3600)) as u32;
+        let event_date = (event_time / (24 * 3600)) as i32;
 
         let written_rows = 0u64;
         let written_bytes = 0u64;
@@ -247,7 +247,7 @@ impl InterpreterQueryLog {
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards")
             .as_secs();
-        let event_date = (event_time / (24 * 3600)) as u32;
+        let event_date = (event_time / (24 * 3600)) as i32;
         let written_rows = 0u64;
         let dal_metrics = self.ctx.get_dal_metrics();
         let written_bytes = dal_metrics.write_bytes as u64;
