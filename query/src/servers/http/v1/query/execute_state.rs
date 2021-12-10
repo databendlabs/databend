@@ -112,7 +112,7 @@ impl Executor {
                 .interpreter
                 .finish()
                 .await
-                .map_err(|e| log::warn!("interpreter.finish error: {:?}", e));
+                .map_err(|e| log::error!("interpreter.finish error: {:?}", e));
             guard.state = Stopped(ExecuteStopped {
                 progress,
                 reason,

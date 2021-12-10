@@ -51,6 +51,13 @@ pub async fn streaming_load(
 ) -> PoemResult<Json<LoadResponse>> {
     let session_manager = sessions_extension.0;
     let session = session_manager.create_session("Streaming load")?;
+    // Auth.
+    let user_name = "root";
+    let user_manager = session.get_user_manager();
+    // TODO: list user's grant list and check client address
+    let user_info = user_manager.get_user(user_name, "%").await?;
+    session.set_current_user(user_info);
+
     let context = session.create_context().await?;
     let insert_sql = req
         .headers()
@@ -117,7 +124,10 @@ pub async fn streaming_load(
     while let Some(_block) = data_stream.next().await {}
 
     // Write Finish to query log table.
-    interpreter.finish().await?;
+    let _ = interpreter
+        .finish()
+        .await
+        .map_err(|e| log::error!("interpreter.finish error: {:?}", e));
 
     // TODO generate id
     // TODO duplicate by insert_label

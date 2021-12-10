@@ -35,6 +35,8 @@ stateless_test_data/*
 _data/
 _tmp/*
 tls/certs/*
+.databend/
+checksums.txt
 
 # for tests in mac
 *.stderr-e
