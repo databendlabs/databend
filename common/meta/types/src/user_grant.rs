@@ -14,7 +14,7 @@
 
 use enumflags2::BitFlags;
 
-use crate::UserPrivilege;
+use crate::UserPrivilegeSet;
 use crate::UserPrivilegeType;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -128,6 +128,12 @@ impl GrantEntry {
     }
 }
 
+impl std::fmt::Display for GrantEntry {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "GRANT")
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct UserGrantSet {
     grants: Vec<GrantEntry>,
@@ -183,7 +189,7 @@ impl UserGrantSet {
         user: &str,
         host_pattern: &str,
         object: &GrantObject,
-        privileges: UserPrivilege,
+        privileges: UserPrivilegeSet,
     ) {
         let privileges: BitFlags<UserPrivilegeType> = privileges.into();
         let mut new_grants: Vec<GrantEntry> = vec![];
@@ -215,7 +221,7 @@ impl UserGrantSet {
         user: &str,
         host_pattern: &str,
         object: &GrantObject,
-        privileges: UserPrivilege,
+        privileges: UserPrivilegeSet,
     ) {
         let privileges: BitFlags<UserPrivilegeType> = privileges.into();
         let grants = self

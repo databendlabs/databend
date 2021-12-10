@@ -18,7 +18,7 @@ use common_meta_types::AuthType;
 use common_meta_types::GrantObject;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
-use common_meta_types::UserPrivilege;
+use common_meta_types::UserPrivilegeSet;
 use common_planners::*;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
@@ -56,7 +56,7 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
                 name,
                 hostname,
                 &GrantObject::Global,
-                UserPrivilege::all_privileges(),
+                UserPrivilegeSet::all_privileges(),
             );
             grants
         })

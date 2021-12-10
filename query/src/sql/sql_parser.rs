@@ -25,7 +25,7 @@ use common_meta_types::Compression;
 use common_meta_types::Credentials;
 use common_meta_types::FileFormat;
 use common_meta_types::StageParams;
-use common_meta_types::UserPrivilege;
+use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use common_planners::ExplainType;
 use metrics::histogram;
@@ -922,8 +922,8 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    fn parse_privileges(&mut self) -> Result<UserPrivilege, ParserError> {
-        let mut privileges = UserPrivilege::empty();
+    fn parse_privileges(&mut self) -> Result<UserPrivilegeSet, ParserError> {
+        let mut privileges = UserPrivilegeSet::empty();
         loop {
             match self.parser.next_token() {
                 Token::Word(w) => match w.keyword {

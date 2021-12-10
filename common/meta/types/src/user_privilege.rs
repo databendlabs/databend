@@ -54,13 +54,13 @@ impl std::fmt::Display for UserPrivilegeType {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Default, Debug, Eq, PartialEq)]
-pub struct UserPrivilege {
+pub struct UserPrivilegeSet {
     privileges: BitFlags<UserPrivilegeType>,
 }
 
-impl UserPrivilege {
+impl UserPrivilegeSet {
     pub fn empty() -> Self {
-        UserPrivilege {
+        UserPrivilegeSet {
             privileges: BitFlags::empty(),
         }
     }
@@ -82,7 +82,7 @@ impl UserPrivilege {
     }
 }
 
-impl ops::BitOr for UserPrivilege {
+impl ops::BitOr for UserPrivilegeSet {
     type Output = Self;
     #[inline(always)]
     fn bitor(self, other: Self) -> Self {
@@ -92,21 +92,21 @@ impl ops::BitOr for UserPrivilege {
     }
 }
 
-impl ops::BitOrAssign for UserPrivilege {
+impl ops::BitOrAssign for UserPrivilegeSet {
     #[inline(always)]
     fn bitor_assign(&mut self, other: Self) {
         self.privileges |= other.privileges
     }
 }
 
-impl From<UserPrivilege> for BitFlags<UserPrivilegeType> {
-    fn from(privilege: UserPrivilege) -> BitFlags<UserPrivilegeType> {
+impl From<UserPrivilegeSet> for BitFlags<UserPrivilegeType> {
+    fn from(privilege: UserPrivilegeSet) -> BitFlags<UserPrivilegeType> {
         privilege.privileges
     }
 }
 
-impl From<BitFlags<UserPrivilegeType>> for UserPrivilege {
-    fn from(privileges: BitFlags<UserPrivilegeType>) -> UserPrivilege {
-        UserPrivilege { privileges }
+impl From<BitFlags<UserPrivilegeType>> for UserPrivilegeSet {
+    fn from(privileges: BitFlags<UserPrivilegeType>) -> UserPrivilegeSet {
+        UserPrivilegeSet { privileges }
     }
 }

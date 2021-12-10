@@ -29,7 +29,7 @@ use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UserInfo;
-use common_meta_types::UserPrivilege;
+use common_meta_types::UserPrivilegeSet;
 
 use crate::user::user_api::UserMgrApi;
 
@@ -204,7 +204,7 @@ impl UserMgrApi for UserMgr {
         username: String,
         hostname: String,
         object: GrantObject,
-        privileges: UserPrivilege,
+        privileges: UserPrivilegeSet,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
         let user_val_seq = self.get_user(username.clone(), hostname.clone(), seq);
@@ -221,7 +221,7 @@ impl UserMgrApi for UserMgr {
         username: String,
         hostname: String,
         object: GrantObject,
-        privileges: UserPrivilege,
+        privileges: UserPrivilegeSet,
         seq: Option<u64>,
     ) -> Result<Option<u64>> {
         let user_val_seq = self.get_user(username.clone(), hostname.clone(), seq);

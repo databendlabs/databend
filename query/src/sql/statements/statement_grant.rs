@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilege;
+use common_meta_types::UserPrivilegeSet;
 use common_planners::GrantPrivilegePlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
@@ -29,7 +29,7 @@ use crate::sql::statements::AnalyzedResult;
 pub struct DfGrantStatement {
     pub name: String,
     pub hostname: String,
-    pub priv_types: UserPrivilege,
+    pub priv_types: UserPrivilegeSet,
     pub on: DfGrantObject,
 }
 

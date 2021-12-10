@@ -18,7 +18,7 @@ use common_meta_types::Compression;
 use common_meta_types::Credentials;
 use common_meta_types::FileFormat;
 use common_meta_types::StageParams;
-use common_meta_types::UserPrivilege;
+use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use databend_query::sql::statements::DfAlterUser;
 use databend_query::sql::statements::DfCopy;
@@ -800,7 +800,7 @@ fn grant_privilege_test() -> Result<()> {
             name: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
-            priv_types: UserPrivilege::all_privileges(),
+            priv_types: UserPrivilegeSet::all_privileges(),
         }),
     )?;
 
@@ -810,7 +810,7 @@ fn grant_privilege_test() -> Result<()> {
             name: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
-            priv_types: UserPrivilege::all_privileges(),
+            priv_types: UserPrivilegeSet::all_privileges(),
         }),
     )?;
 
@@ -821,7 +821,7 @@ fn grant_privilege_test() -> Result<()> {
             hostname: String::from("localhost"),
             on: DfGrantObject::Table(Some("db1".into()), "tb1".into()),
             priv_types: {
-                let mut privileges = UserPrivilege::empty();
+                let mut privileges = UserPrivilegeSet::empty();
                 privileges.set_privilege(UserPrivilegeType::Insert);
                 privileges
             },
@@ -835,7 +835,7 @@ fn grant_privilege_test() -> Result<()> {
             hostname: String::from("localhost"),
             on: DfGrantObject::Table(None, "tb1".into()),
             priv_types: {
-                let mut privileges = UserPrivilege::empty();
+                let mut privileges = UserPrivilegeSet::empty();
                 privileges.set_privilege(UserPrivilegeType::Insert);
                 privileges
             },
@@ -849,7 +849,7 @@ fn grant_privilege_test() -> Result<()> {
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(Some("db1".into())),
             priv_types: {
-                let mut privileges = UserPrivilege::empty();
+                let mut privileges = UserPrivilegeSet::empty();
                 privileges.set_privilege(UserPrivilegeType::Insert);
                 privileges
             },
@@ -863,7 +863,7 @@ fn grant_privilege_test() -> Result<()> {
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
             priv_types: {
-                let mut privileges = UserPrivilege::empty();
+                let mut privileges = UserPrivilegeSet::empty();
                 privileges.set_privilege(UserPrivilegeType::Select);
                 privileges.set_privilege(UserPrivilegeType::Create);
                 privileges
@@ -907,7 +907,7 @@ fn revoke_privilege_test() -> Result<()> {
             username: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
-            priv_types: UserPrivilege::all_privileges(),
+            priv_types: UserPrivilegeSet::all_privileges(),
         }),
     )?;
 

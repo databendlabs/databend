@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use common_exception::exception::Result;
-use common_meta_types::UserPrivilege;
+use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 
 #[test]
 fn test_user_privilege() -> Result<()> {
-    let mut privileges = UserPrivilege::empty();
+    let mut privileges = UserPrivilegeSet::empty();
     let r = privileges.has_privilege(UserPrivilegeType::Set);
     assert!(!r);
 

@@ -87,7 +87,7 @@ pub use user_grant::GrantEntry;
 pub use user_grant::GrantObject;
 pub use user_grant::UserGrantSet;
 pub use user_info::UserInfo;
-pub use user_privilege::UserPrivilege;
+pub use user_privilege::UserPrivilegeSet;
 pub use user_privilege::UserPrivilegeType;
 pub use user_quota::UserQuota;
 pub use user_stage::Compression;

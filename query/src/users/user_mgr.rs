@@ -17,7 +17,7 @@ use common_exception::Result;
 use common_meta_types::AuthType;
 use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
-use common_meta_types::UserPrivilege;
+use common_meta_types::UserPrivilegeSet;
 use sha2::Digest;
 
 use crate::users::CertifiedInfo;
@@ -98,7 +98,7 @@ impl UserApiProvider {
         username: &str,
         hostname: &str,
         object: GrantObject,
-        privileges: UserPrivilege,
+        privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client();
         client
@@ -118,7 +118,7 @@ impl UserApiProvider {
         username: &str,
         hostname: &str,
         object: GrantObject,
-        privileges: UserPrivilege,
+        privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client();
         client
