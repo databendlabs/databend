@@ -13,4 +13,4 @@
 // limitations under the License.
 
 mod meta_node;
-mod meta_service_impl;
+mod meta_srv;
