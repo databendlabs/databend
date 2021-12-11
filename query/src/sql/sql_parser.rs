@@ -70,6 +70,7 @@ use crate::sql::statements::DfRevokeStatement;
 use crate::sql::statements::DfSetVariable;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfShowDatabases;
+use crate::sql::statements::DfShowFunctions;
 use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
 use crate::sql::statements::DfShowSettings;
@@ -229,6 +230,23 @@ impl<'a> DfParser<'a> {
                             Ok(DfStatement::ShowMetrics(DfShowMetrics))
                         } else if self.consume_token("USERS") {
                             Ok(DfStatement::ShowUsers(DfShowUsers))
+                        } else if self.consume_token("FUNCTIONS") {
+                            let tok = self.parser.next_token();
+                            match &tok {
+                                Token::EOF | Token::SemiColon => {
+                                    Ok(DfStatement::ShowFunctions(DfShowFunctions::All))
+                                }
+                                Token::Word(w) => match w.keyword {
+                                    Keyword::LIKE => Ok(DfStatement::ShowFunctions(
+                                        DfShowFunctions::Like(self.parser.parse_identifier()?),
+                                    )),
+                                    Keyword::WHERE => Ok(DfStatement::ShowFunctions(
+                                        DfShowFunctions::Where(self.parser.parse_expr()?),
+                                    )),
+                                    _ => self.expected("like or where", tok),
+                                },
+                                _ => self.expected("like or where", tok),
+                            }
                         } else {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
