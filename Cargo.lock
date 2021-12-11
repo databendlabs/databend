@@ -1362,7 +1362,6 @@ dependencies = [
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",
- "common-planners",
  "common-tracing",
  "derive_more",
  "futures",
