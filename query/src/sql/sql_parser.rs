@@ -1045,8 +1045,7 @@ impl<'a> DfParser<'a> {
                 break;
             }
             let name = name.unwrap();
-            let eq = self.parser.expect_token(&Token::Eq);
-            if eq.is_err() {
+            if !self.parser.consume_token(&Token::Eq) {
                 // only paired values are considered as options
                 self.parser.prev_token();
                 break;
