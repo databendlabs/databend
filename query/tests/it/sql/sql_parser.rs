@@ -1067,5 +1067,17 @@ fn create_table_select() -> Result<()> {
         }),
     )?;
 
+    expect_parse_ok(
+        "CREATE TABLE foo (a INT) SELECT a, b FROM bar",
+        DfStatement::CreateTable(DfCreateTable {
+            if_not_exists: false,
+            name: ObjectName(vec![Ident::new("foo")]),
+            columns: vec![make_column_def("a", DataType::Int(None))],
+            engine: "FUSE".to_string(),
+            options: vec![],
+            query: Some(verified_query("SELECT a, b FROM bar")?),
+        }),
+    )?;
+
     Ok(())
 }
