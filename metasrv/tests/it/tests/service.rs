@@ -52,7 +52,7 @@ pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<(
     Ok(())
 }
 
-/// Bring upa cluster of metasrv, the first one is the leader.
+/// Bring up a cluster of metasrv, the first one is the leader.
 ///
 /// It returns a vec of test-context.
 pub async fn start_metasrv_cluster(node_ids: &[NodeId]) -> anyhow::Result<Vec<MetaSrvTestContext>> {

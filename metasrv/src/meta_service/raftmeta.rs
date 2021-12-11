@@ -383,8 +383,15 @@ impl MetaNode {
         }
 
         if !conf.join.is_empty() {
-            // Bring up a new node, join an cluster
+            // Bring up a new node, join it into a cluster
             let mn = MetaNode::open_create_boot(conf, Some(()), Some(()), None).await?;
+
+            if mn.is_opened() {
+                return Ok(mn);
+            }
+
+            // Try to join a cluster only when this node is just created.
+            // Joining a node with log has risk messing up the data in this node and in the target cluster.
 
             let addrs = &conf.join;
             for addr in addrs {
