@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
+
 use async_raft::AppDataResponse;
+use common_exception::ErrorCode;
+use common_meta_types::AddResult;
 use common_meta_types::Change;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::Node;
@@ -49,6 +53,24 @@ pub enum AppliedState {
 }
 
 impl AppDataResponse for AppliedState {}
+
+impl<T, ID> TryInto<AddResult<T, ID>> for AppliedState
+where
+    ID: Clone + PartialEq + Debug,
+    T: Clone + PartialEq + Debug,
+    Change<T, ID>: TryFrom<AppliedState>,
+    <Change<T, ID> as TryFrom<AppliedState>>::Error: Debug,
+{
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<AddResult<T, ID>, Self::Error> {
+        let typ = std::any::type_name::<T>();
+
+        let ch = TryInto::<Change<T, ID>>::try_into(self).expect(typ);
+        let add_res = ch.into_add_result()?;
+        Ok(add_res)
+    }
+}
 
 pub enum PrevOrResult<'a> {
     Prev(&'a AppliedState),
