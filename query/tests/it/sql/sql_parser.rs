@@ -1074,7 +1074,8 @@ fn create_table_select() -> Result<()> {
             name: ObjectName(vec![Ident::new("foo")]),
             columns: vec![make_column_def("a", DataType::Int(None))],
             engine: "FUSE".to_string(),
-            options: vec![],
+            options: maplit::hashmap! {},
+            like: None,
             query: Some(verified_query("SELECT a, b FROM bar")?),
         }),
     )?;

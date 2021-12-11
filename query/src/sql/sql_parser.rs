@@ -819,8 +819,8 @@ impl<'a> DfParser<'a> {
         // parse table options: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
         let options = self.parse_options()?;
 
-        let mut select = None;
-        if let Token::Word(Word{keyword, ..}) =  self.parser.peek_token() {
+        let mut query = None;
+        if let Token::Word(Word { keyword, .. }) = self.parser.peek_token() {
             let mut has_query = false;
             if keyword == Keyword::AS {
                 self.parser.next_token();
@@ -828,7 +828,7 @@ impl<'a> DfParser<'a> {
             }
             if has_query || keyword == Keyword::SELECT {
                 let native = self.parser.parse_query()?;
-                select = Some(Box::new(DfQueryStatement::try_from(native)?))
+                query = Some(Box::new(DfQueryStatement::try_from(native)?))
             }
         }
 
@@ -839,7 +839,7 @@ impl<'a> DfParser<'a> {
             engine,
             options,
             like: table_like,
-            query: select,
+            query,
         };
 
         Ok(DfStatement::CreateTable(create))
@@ -1039,20 +1039,18 @@ impl<'a> DfParser<'a> {
     fn parse_options(&mut self) -> Result<HashMap<String, String>, ParserError> {
         let mut options = HashMap::new();
         loop {
-            match self.parser.peek_token() {
-                Token::Word(w) if w.keyword != Keyword::NoKeyword => {
-                    // option key must not be sql keywords
-                    break;
-                }
-                _ => {}
-            }
             let name = self.parser.parse_identifier();
             if name.is_err() {
                 self.parser.prev_token();
                 break;
             }
             let name = name.unwrap();
-            self.parser.expect_token(&Token::Eq)?;
+            let eq = self.parser.expect_token(&Token::Eq);
+            if eq.is_err() {
+                // only paired values are considered as options
+                self.parser.prev_token();
+                break;
+            }
             let value = self.parse_value_or_ident()?;
 
             options.insert(name.to_string(), value);
