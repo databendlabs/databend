@@ -1,0 +1,31 @@
+=== const ===
+1
+2
+1
+3
+3
+3
+3
+4
+3
+3
+3
+2
+1
+=== series ===
+=== FIND_IN_SET(3, number) ===
+0
+0
+0
+1
+0
+=== FIND_IN_SET(number, 1,2,3,4,5) ===
+0
+1
+2
+3
+4
+=== null ===
+NULL
+NULL
+NULL
