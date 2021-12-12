@@ -15,8 +15,8 @@
 
 use std::convert::TryInto;
 use std::sync::Arc;
+
 use common_exception::ErrorCode;
-use common_exception::ToErrorCode;
 use common_meta_flight::GetTableExtReq;
 use common_meta_types::AddResult;
 use common_meta_types::Change;
@@ -96,10 +96,7 @@ impl RequestHandler<CreateDatabaseReq> for ActionHandler {
 
 #[async_trait::async_trait]
 impl RequestHandler<GetDatabaseReq> for ActionHandler {
-    async fn handle(
-        &self,
-        req: GetDatabaseReq,
-    ) -> common_exception::Result<Arc<DatabaseInfo>> {
+    async fn handle(&self, req: GetDatabaseReq) -> common_exception::Result<Arc<DatabaseInfo>> {
         let res = self.meta_node.consistent_read(req).await?;
         Ok(res)
     }
@@ -218,10 +215,7 @@ impl RequestHandler<DropTableReq> for ActionHandler {
 
 #[async_trait::async_trait]
 impl RequestHandler<GetTableReq> for ActionHandler {
-    async fn handle(
-        &self,
-        req: GetTableReq,
-    ) -> common_exception::Result<Arc<TableInfo>> {
+    async fn handle(&self, req: GetTableReq) -> common_exception::Result<Arc<TableInfo>> {
         let res = self.meta_node.consistent_read(req).await?;
         Ok(res)
     }
@@ -261,10 +255,7 @@ impl RequestHandler<ListDatabaseReq> for ActionHandler {
 
 #[async_trait::async_trait]
 impl RequestHandler<ListTableReq> for ActionHandler {
-    async fn handle(
-        &self,
-        req: ListTableReq,
-    ) -> common_exception::Result<Vec<Arc<TableInfo>>> {
+    async fn handle(&self, req: ListTableReq) -> common_exception::Result<Vec<Arc<TableInfo>>> {
         let res = self.meta_node.consistent_read(req).await?;
         Ok(res)
     }
