@@ -54,12 +54,11 @@ use crate::executor::ActionHandler;
 
 // Db
 #[async_trait::async_trait]
-impl RequestHandler<FlightReq<CreateDatabaseReq>> for ActionHandler {
+impl RequestHandler<CreateDatabaseReq> for ActionHandler {
     async fn handle(
         &self,
-        act: FlightReq<CreateDatabaseReq>,
+        req: CreateDatabaseReq,
     ) -> common_exception::Result<CreateDatabaseReply> {
-        let req = act.req;
         let db_name = &req.db;
         let engine = &req.engine;
         let if_not_exists = req.if_not_exists;

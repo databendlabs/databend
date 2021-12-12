@@ -47,7 +47,7 @@ impl MetaApi for MetaFlightClient {
         &self,
         req: CreateDatabaseReq,
     ) -> Result<CreateDatabaseReply, ErrorCode> {
-        self.do_action(FlightReq { req }).await
+        self.do_action(req).await
     }
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, ErrorCode> {

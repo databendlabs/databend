@@ -58,7 +58,7 @@ pub struct FlightReq<T> {
 // Action wrapper for do_action.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
 pub enum MetaFlightAction {
-    CreateDatabase(FlightReq<CreateDatabaseReq>),
+    CreateDatabase(CreateDatabaseReq),
     DropDatabase(FlightReq<DropDatabaseReq>),
     GetDatabase(FlightReq<GetDatabaseReq>),
     ListDatabases(FlightReq<ListDatabaseReq>),
@@ -151,7 +151,7 @@ impl RequestFor for UpsertKVAction {
 
 // == database actions ==
 
-impl RequestFor for FlightReq<CreateDatabaseReq> {
+impl RequestFor for CreateDatabaseReq {
     type Reply = CreateDatabaseReply;
 }
 
