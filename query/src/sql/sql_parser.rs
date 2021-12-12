@@ -380,16 +380,14 @@ impl<'a> DfParser<'a> {
     fn parse_show_functions(&mut self) -> Result<DfStatement, ParserError> {
         let tok = self.parser.next_token();
         match &tok {
-            Token::EOF | Token::SemiColon => {
-                Ok(DfStatement::ShowFunctions(DfShowFunctions::All))
-            }
+            Token::EOF | Token::SemiColon => Ok(DfStatement::ShowFunctions(DfShowFunctions::All)),
             Token::Word(w) => match w.keyword {
-                Keyword::LIKE => Ok(DfStatement::ShowFunctions(
-                    DfShowFunctions::Like(self.parser.parse_identifier()?),
-                )),
-                Keyword::WHERE => Ok(DfStatement::ShowFunctions(
-                    DfShowFunctions::Where(self.parser.parse_expr()?),
-                )),
+                Keyword::LIKE => Ok(DfStatement::ShowFunctions(DfShowFunctions::Like(
+                    self.parser.parse_identifier()?,
+                ))),
+                Keyword::WHERE => Ok(DfStatement::ShowFunctions(DfShowFunctions::Where(
+                    self.parser.parse_expr()?,
+                ))),
                 _ => self.expected("like or where", tok),
             },
             _ => self.expected("like or where", tok),
