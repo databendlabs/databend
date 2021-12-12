@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Test metasrv MetaApi by writing to leader and then reading from a follower.
 use common_base::tokio;
 use common_meta_api::MetaApiTestSuite;
 
