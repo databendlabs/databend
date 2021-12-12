@@ -51,7 +51,6 @@ use common_tracing::tracing;
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
 
-// Db
 #[async_trait::async_trait]
 impl RequestHandler<CreateDatabaseReq> for ActionHandler {
     async fn handle(
@@ -134,7 +133,6 @@ impl RequestHandler<DropDatabaseReq> for ActionHandler {
     }
 }
 
-// table
 #[async_trait::async_trait]
 impl RequestHandler<CreateTableReq> for ActionHandler {
     async fn handle(&self, req: CreateTableReq) -> common_exception::Result<CreateTableReply> {
@@ -260,6 +258,7 @@ impl RequestHandler<ListTableReq> for ActionHandler {
         Ok(res)
     }
 }
+
 #[async_trait::async_trait]
 impl RequestHandler<UpsertTableOptionReq> for ActionHandler {
     async fn handle(

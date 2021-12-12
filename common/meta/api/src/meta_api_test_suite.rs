@@ -180,6 +180,7 @@ impl MetaApiTestSuite {
 
         Ok(())
     }
+
     pub async fn table_create_get_drop<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -655,7 +656,6 @@ impl MetaApiTestSuite {
                 .await;
             tracing::debug!("get present table res: {:?}", res);
             let err = res.unwrap_err();
-            println!("{:?}", err);
             assert_eq!(ErrorCode::UnknownTable("").code(), err.code());
         }
 
