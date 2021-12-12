@@ -115,7 +115,7 @@ async fn test_metasrv_incr_seq() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_metasrv_cluster_write_on_non_leader() -> anyhow::Result<()> {
+async fn test_meta_node_cluster_write_on_non_leader() -> anyhow::Result<()> {
     // - Bring up a cluster of one leader and one non-voter
     // - Assert that writing on the non-voter returns ForwardToLeader error
 
@@ -125,19 +125,16 @@ async fn test_metasrv_cluster_write_on_non_leader() -> anyhow::Result<()> {
     let tc0 = MetaSrvTestContext::new(0);
     let tc1 = MetaSrvTestContext::new(1);
 
-    let addr0 = tc0.config.raft_config.raft_api_addr();
-    let addr1 = tc1.config.raft_config.raft_api_addr();
-
     let mn0 = MetaNode::boot(&tc0.config.raft_config).await?;
-    assert_metasrv_connection(&addr0).await?;
+    tc0.assert_meta_connection().await?;
 
     {
         tracing::info!("--- add node 1 as non-voter");
 
-        let config = tc1.config.raft_config.clone();
-        let mn1 = MetaNode::open_create_boot(&config, None, Some(()), None).await?;
+        let mn1 = MetaNode::open_create_boot(&tc1.config.raft_config, None, Some(()), None).await?;
+        tc1.assert_meta_connection().await?;
 
-        assert_metasrv_connection(&addr0).await?;
+        let addr1 = tc1.config.raft_config.raft_api_addr();
 
         let resp = mn0.add_node(1, addr1.clone()).await?;
         match resp {
@@ -154,7 +151,7 @@ async fn test_metasrv_cluster_write_on_non_leader() -> anyhow::Result<()> {
         mn1.raft.wait(None).log(3, "replicated log").await?;
     }
 
-    let mut client1 = MetaServiceClient::connect(format!("http://{}", addr1)).await?;
+    let mut client1 = tc1.raft_client().await?;
 
     let req = LogEntry {
         txid: None,

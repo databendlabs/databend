@@ -149,6 +149,37 @@ impl MetaSrvTestContext {
         let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
         Ok(client)
     }
+
+    pub async fn raft_client(
+        &self,
+    ) -> anyhow::Result<MetaServiceClient<tonic::transport::Channel>> {
+        let addr = self.config.raft_config.raft_api_addr();
+
+        // retry 3 times until server starts listening.
+        for _ in 0..4 {
+            let client = MetaServiceClient::connect(format!("http://{}", addr)).await;
+            match client {
+                Ok(x) => return Ok(x),
+                Err(err) => {
+                    tracing::info!("can not yet connect to {}, {}, sleep a while", addr, err);
+                    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                }
+            }
+        }
+
+        panic!("can not connect to raft server: {:?}", self.config);
+    }
+
+    pub async fn assert_meta_connection(&self) -> anyhow::Result<()> {
+        let mut client = self.raft_client().await?;
+
+        let req = tonic::Request::new(GetReq {
+            key: "ensure-connection".into(),
+        });
+        let rst = client.get(req).await?.into_inner();
+        assert_eq!("", rst.value, "connected");
+        Ok(())
+    }
 }
 
 pub async fn assert_metasrv_connection(addr: &str) -> anyhow::Result<()> {
