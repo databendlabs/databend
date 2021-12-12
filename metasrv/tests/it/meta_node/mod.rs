@@ -12,5 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod meta_node;
-mod meta_srv;
+mod meta_node_all;
