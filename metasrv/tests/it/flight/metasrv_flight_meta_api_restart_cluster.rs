@@ -35,7 +35,7 @@ async fn test_meta_api_restart_cluster_write_read() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    fn make_ket(tc: &MetaSrvTestContext, k: impl std::fmt::Display) -> String {
+    fn make_key(tc: &MetaSrvTestContext, k: impl std::fmt::Display) -> String {
         let x = &tc.config.raft_config;
         format!("t-restart-cluster-{}-{}-{}", x.config_id, x.id, k)
     }
