@@ -58,7 +58,7 @@ impl MetaService for MetaServiceImpl {
         // TODO(xp): call meta_node.write()
         let res = self
             .meta_node
-            .handle_admin_req(ForwardRequest {
+            .handle_forwardable_request(ForwardRequest {
                 forward_to_leader: 1,
                 body: ForwardRequestBody::Write(ent),
             })
@@ -104,7 +104,7 @@ impl MetaService for MetaServiceImpl {
         let admin_req: ForwardRequest = serde_json::from_str(&req.data)
             .map_err(|x| tonic::Status::invalid_argument(x.to_string()))?;
 
-        let res = self.meta_node.handle_admin_req(admin_req).await;
+        let res = self.meta_node.handle_forwardable_request(admin_req).await;
 
         let raft_mes: RaftReply = res.into();
 

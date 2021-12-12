@@ -655,7 +655,6 @@ impl MetaApiTestSuite {
                 .await;
             tracing::debug!("get present table res: {:?}", res);
             let err = res.unwrap_err();
-            println!("{:?}", err);
             assert_eq!(ErrorCode::UnknownTable("").code(), err.code());
         }
 

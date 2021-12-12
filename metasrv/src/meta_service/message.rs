@@ -69,7 +69,7 @@ impl ForwardRequest {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, derive_more::TryInto)]
 #[allow(clippy::large_enum_variant)]
-pub enum AdminResponse {
+pub enum ForwardResponse {
     Join(()),
     AppliedState(AppliedState),
     ListDatabase(Vec<Arc<DatabaseInfo>>),

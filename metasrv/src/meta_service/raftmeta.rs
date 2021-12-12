@@ -47,8 +47,8 @@ use common_tracing::tracing::Instrument;
 use crate::errors::ConnectionError;
 use crate::errors::ForwardToLeader;
 use crate::errors::MetaError;
-use crate::meta_service::message::AdminResponse;
 use crate::meta_service::message::ForwardRequest;
+use crate::meta_service::message::ForwardResponse;
 use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::JoinRequest;
@@ -508,11 +508,11 @@ impl MetaNode {
     pub async fn consistent_read<Request, Reply>(&self, req: Request) -> Result<Reply, MetaError>
     where
         Request: Into<ForwardRequestBody> + Debug,
-        AdminResponse: TryInto<Reply>,
-        <AdminResponse as TryInto<Reply>>::Error: std::fmt::Display,
+        ForwardResponse: TryInto<Reply>,
+        <ForwardResponse as TryInto<Reply>>::Error: std::fmt::Display,
     {
         let res = self
-            .handle_admin_req(ForwardRequest {
+            .handle_forwardable_request(ForwardRequest {
                 forward_to_leader: 1,
                 body: req.into(),
             })
@@ -526,7 +526,10 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn handle_admin_req(&self, req: ForwardRequest) -> Result<AdminResponse, MetaError> {
+    pub async fn handle_forwardable_request(
+        &self,
+        req: ForwardRequest,
+    ) -> Result<ForwardResponse, MetaError> {
         let forward = req.forward_to_leader;
 
         let l = self.as_leader().await;
@@ -555,7 +558,7 @@ impl MetaNode {
         // Avoid infinite forward
         r2.decr_forward();
 
-        let res: AdminResponse = self.forward(&leader_id, r2).await?;
+        let res: ForwardResponse = self.forward(&leader_id, r2).await?;
 
         Ok(res)
     }
@@ -639,7 +642,7 @@ impl MetaNode {
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn write(&self, req: LogEntry) -> common_exception::Result<AppliedState> {
         let res = self
-            .handle_admin_req(ForwardRequest {
+            .handle_forwardable_request(ForwardRequest {
                 forward_to_leader: 1,
                 body: ForwardRequestBody::Write(req.clone()),
             })
@@ -687,7 +690,7 @@ impl MetaNode {
         &self,
         node_id: &NodeId,
         req: ForwardRequest,
-    ) -> Result<AdminResponse, MetaError> {
+    ) -> Result<ForwardResponse, MetaError> {
         let addr = self
             .sto
             .get_node_addr(node_id)
@@ -704,7 +707,7 @@ impl MetaNode {
             .map_err(|e| MetaError::UnknownError(e.to_string()))?;
         let raft_mes = resp.into_inner();
 
-        let res: Result<AdminResponse, MetaError> = raft_mes.into();
+        let res: Result<ForwardResponse, MetaError> = raft_mes.into();
         res
     }
 }
