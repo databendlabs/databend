@@ -23,12 +23,13 @@ async fn test_meta_api_database_create_get_drop() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let tcs = start_metasrv_cluster(&[0, 1]).await?;
+    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
-    let client1 = tcs[1].flight_client().await?;
+    let follower1 = tcs[1].flight_client().await?;
+    let follower2 = tcs[2].flight_client().await?;
 
     MetaApiTestSuite {}
-        .database_get_diff_nodes(&client1, &client1)
+        .database_get_diff_nodes(&follower1, &follower2)
         .await
 }
 
@@ -37,12 +38,13 @@ async fn test_meta_api_list_database() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let tcs = start_metasrv_cluster(&[0, 1]).await?;
+    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
-    let client1 = tcs[1].flight_client().await?;
+    let follower1 = tcs[1].flight_client().await?;
+    let follower2 = tcs[2].flight_client().await?;
 
     MetaApiTestSuite {}
-        .list_database_diff_nodes(&client1, &client1)
+        .list_database_diff_nodes(&follower1, &follower2)
         .await
 }
 
@@ -51,12 +53,13 @@ async fn test_meta_api_table_create_get_drop() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let tcs = start_metasrv_cluster(&[0, 1]).await?;
+    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
-    let client1 = tcs[1].flight_client().await?;
+    let follower1 = tcs[1].flight_client().await?;
+    let follower2 = tcs[2].flight_client().await?;
 
     MetaApiTestSuite {}
-        .table_get_diff_nodes(&client1, &client1)
+        .table_get_diff_nodes(&follower1, &follower2)
         .await
 }
 
@@ -65,11 +68,12 @@ async fn test_meta_api_list_table() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let tcs = start_metasrv_cluster(&[0, 1]).await?;
+    let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
-    let client1 = tcs[1].flight_client().await?;
+    let follower1 = tcs[1].flight_client().await?;
+    let follower2 = tcs[2].flight_client().await?;
 
     MetaApiTestSuite {}
-        .list_table_diff_nodes(&client1, &client1)
+        .list_table_diff_nodes(&follower1, &follower2)
         .await
 }
