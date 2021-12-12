@@ -231,22 +231,7 @@ impl<'a> DfParser<'a> {
                         } else if self.consume_token("USERS") {
                             Ok(DfStatement::ShowUsers(DfShowUsers))
                         } else if self.consume_token("FUNCTIONS") {
-                            let tok = self.parser.next_token();
-                            match &tok {
-                                Token::EOF | Token::SemiColon => {
-                                    Ok(DfStatement::ShowFunctions(DfShowFunctions::All))
-                                }
-                                Token::Word(w) => match w.keyword {
-                                    Keyword::LIKE => Ok(DfStatement::ShowFunctions(
-                                        DfShowFunctions::Like(self.parser.parse_identifier()?),
-                                    )),
-                                    Keyword::WHERE => Ok(DfStatement::ShowFunctions(
-                                        DfShowFunctions::Where(self.parser.parse_expr()?),
-                                    )),
-                                    _ => self.expected("like or where", tok),
-                                },
-                                _ => self.expected("like or where", tok),
-                            }
+                            self.parse_show_functions()
                         } else {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
@@ -388,6 +373,26 @@ impl<'a> DfParser<'a> {
             }))
         } else {
             self.expected("where or like", self.parser.peek_token())
+        }
+    }
+
+    // parse show functions statement
+    fn parse_show_functions(&mut self) -> Result<DfStatement, ParserError> {
+        let tok = self.parser.next_token();
+        match &tok {
+            Token::EOF | Token::SemiColon => {
+                Ok(DfStatement::ShowFunctions(DfShowFunctions::All))
+            }
+            Token::Word(w) => match w.keyword {
+                Keyword::LIKE => Ok(DfStatement::ShowFunctions(
+                    DfShowFunctions::Like(self.parser.parse_identifier()?),
+                )),
+                Keyword::WHERE => Ok(DfStatement::ShowFunctions(
+                    DfShowFunctions::Where(self.parser.parse_expr()?),
+                )),
+                _ => self.expected("like or where", tok),
+            },
+            _ => self.expected("like or where", tok),
         }
     }
 
