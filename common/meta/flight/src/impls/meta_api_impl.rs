@@ -37,7 +37,6 @@ use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 
-use crate::FlightReq;
 use crate::GetTableExtReq;
 use crate::MetaFlightClient;
 
@@ -51,37 +50,37 @@ impl MetaApi for MetaFlightClient {
     }
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, ErrorCode> {
-        self.do_action(FlightReq { req }).await
+        self.do_action(req).await
     }
 
     async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, ErrorCode> {
-        self.do_action(FlightReq { req }).await
+        self.do_action(req).await
     }
 
     async fn list_databases(
         &self,
         req: ListDatabaseReq,
     ) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
-        self.do_action(FlightReq { req }).await
+        self.do_action(req).await
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, ErrorCode> {
-        self.do_action(FlightReq { req }).await
+        self.do_action(req).await
     }
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, ErrorCode> {
-        self.do_action(FlightReq { req }).await
+        self.do_action(req).await
     }
 
     async fn get_table(&self, req: GetTableReq) -> common_exception::Result<Arc<TableInfo>> {
-        self.do_action(FlightReq { req }).await
+        self.do_action(req).await
     }
 
     async fn list_tables(
         &self,
         req: ListTableReq,
     ) -> common_exception::Result<Vec<Arc<TableInfo>>> {
-        self.do_action(FlightReq { req }).await
+        self.do_action(req).await
     }
 
     async fn get_table_by_id(
@@ -96,7 +95,7 @@ impl MetaApi for MetaFlightClient {
         &self,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply, ErrorCode> {
-        self.do_action(FlightReq { req }).await
+        self.do_action(req).await
     }
 
     fn name(&self) -> String {
