@@ -44,7 +44,9 @@ use databend_query::sql::statements::DfUseDatabase;
 use databend_query::sql::*;
 use sqlparser::ast::*;
 use sqlparser::dialect::GenericDialect;
+use sqlparser::parser::Parser;
 use sqlparser::parser::ParserError;
+use sqlparser::tokenizer::Tokenizer;
 
 fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
     let (statements, _) = DfParser::parse_sql(sql)?;
@@ -88,6 +90,14 @@ fn make_column_def(name: impl Into<String>, data_type: DataType) -> ColumnDef {
         collation: None,
         options: vec![],
     }
+}
+
+fn parse_sql_to_expr(query_expr: &str) -> Expr {
+    let dialect = GenericDialect {};
+    let mut tokenizer = Tokenizer::new(&dialect, query_expr);
+    let tokens = tokenizer.tokenize().unwrap();
+    let mut parser = Parser::new(tokens, &dialect);
+    parser.parse_expr().unwrap()
 }
 
 #[test]
@@ -249,9 +259,6 @@ fn describe_table() -> Result<()> {
 fn show_queries() -> Result<()> {
     use databend_query::sql::statements::DfShowSettings;
     use databend_query::sql::statements::DfShowTables;
-    use sqlparser::dialect::GenericDialect;
-    use sqlparser::parser::Parser;
-    use sqlparser::tokenizer::Tokenizer;
 
     // positive case
     expect_parse_ok("SHOW TABLES", DfStatement::ShowTables(DfShowTables::All))?;
@@ -271,14 +278,6 @@ fn show_queries() -> Result<()> {
         "SHOW TABLES LIKE 'aaa' --comments should not in sql case2",
         DfStatement::ShowTables(DfShowTables::Like(Ident::with_quote('\'', "aaa"))),
     )?;
-
-    let parse_sql_to_expr = |query_expr: &str| -> Expr {
-        let dialect = GenericDialect {};
-        let mut tokenizer = Tokenizer::new(&dialect, query_expr);
-        let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens, &dialect);
-        parser.parse_expr().unwrap()
-    };
 
     expect_parse_ok(
         "SHOW TABLES WHERE t LIKE 'aaa'",
@@ -316,6 +315,55 @@ fn show_tables_test() -> Result<()> {
         "SHOW TABLES IN `ss`",
         DfStatement::ShowTables(DfShowTables::FromOrIn(name_two)),
     )?;
+    Ok(())
+}
+
+#[test]
+fn show_functions_tests() -> Result<()> {
+    use databend_query::sql::statements::DfShowFunctions;
+
+    // positive case
+    expect_parse_ok(
+        "SHOW FUNCTIONS",
+        DfStatement::ShowFunctions(DfShowFunctions::All),
+    )?;
+    expect_parse_ok(
+        "SHOW FUNCTIONS;",
+        DfStatement::ShowFunctions(DfShowFunctions::All),
+    )?;
+    expect_parse_ok(
+        "SHOW FUNCTIONS --comments should not in sql case1",
+        DfStatement::ShowFunctions(DfShowFunctions::All),
+    )?;
+
+    expect_parse_ok(
+        "SHOW FUNCTIONS LIKE 'aaa'",
+        DfStatement::ShowFunctions(DfShowFunctions::Like(Ident::with_quote('\'', "aaa"))),
+    )?;
+    expect_parse_ok(
+        "SHOW FUNCTIONS LIKE 'aaa';",
+        DfStatement::ShowFunctions(DfShowFunctions::Like(Ident::with_quote('\'', "aaa"))),
+    )?;
+    expect_parse_ok(
+        "SHOW FUNCTIONS LIKE 'aaa' --comments should not in sql case2",
+        DfStatement::ShowFunctions(DfShowFunctions::Like(Ident::with_quote('\'', "aaa"))),
+    )?;
+
+    expect_parse_ok(
+        "SHOW FUNCTIONS WHERE t LIKE 'aaa'",
+        DfStatement::ShowFunctions(DfShowFunctions::Where(parse_sql_to_expr("t LIKE 'aaa'"))),
+    )?;
+    expect_parse_ok(
+        "SHOW FUNCTIONS LIKE 'aaa' --comments should not in sql case2",
+        DfStatement::ShowFunctions(DfShowFunctions::Like(Ident::with_quote('\'', "aaa"))),
+    )?;
+    expect_parse_ok(
+        "SHOW FUNCTIONS WHERE t LIKE 'aaa' AND t LIKE 'a%'",
+        DfStatement::ShowFunctions(DfShowFunctions::Where(parse_sql_to_expr(
+            "t LIKE 'aaa' AND t LIKE 'a%'",
+        ))),
+    )?;
+
     Ok(())
 }
 
