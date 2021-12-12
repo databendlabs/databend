@@ -17,7 +17,6 @@ use std::convert::TryInto;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
-use common_exception::ToErrorCode;
 use common_meta_flight::FlightReq;
 use common_meta_flight::GetTableExtReq;
 use common_meta_types::AddResult;
@@ -52,8 +51,6 @@ use common_tracing::tracing;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
-use crate::meta_service::ForwardRequest;
-use crate::meta_service::ForwardRequestBody;
 
 // Db
 #[async_trait::async_trait]
@@ -103,22 +100,9 @@ impl RequestHandler<FlightReq<CreateDatabaseReq>> for ActionHandler {
 impl RequestHandler<FlightReq<GetDatabaseReq>> for ActionHandler {
     async fn handle(
         &self,
-        act: FlightReq<GetDatabaseReq>,
+        req: FlightReq<GetDatabaseReq>,
     ) -> common_exception::Result<Arc<DatabaseInfo>> {
-        let res = self
-            .meta_node
-            .handle_admin_req(ForwardRequest {
-                forward_to_leader: 1,
-                body: ForwardRequestBody::GetDatabase(act.req),
-            })
-            .await?;
-
-        let res: Arc<DatabaseInfo> = res
-            .try_into()
-            .map_err_to_code(ErrorCode::UnknownException, || {
-                "handling FlightReq GetDatabaseReq".to_string()
-            })?;
-
+        let res = self.meta_node.consistent_read(req.req).await?;
         Ok(res)
     }
 }
@@ -248,21 +232,9 @@ impl RequestHandler<FlightReq<DropTableReq>> for ActionHandler {
 impl RequestHandler<FlightReq<GetTableReq>> for ActionHandler {
     async fn handle(
         &self,
-        act: FlightReq<GetTableReq>,
+        req: FlightReq<GetTableReq>,
     ) -> common_exception::Result<Arc<TableInfo>> {
-        let res = self
-            .meta_node
-            .handle_admin_req(ForwardRequest {
-                forward_to_leader: 1,
-                body: ForwardRequestBody::GetTable(act.req),
-            })
-            .await?;
-        let res: Arc<TableInfo> = res
-            .try_into()
-            .map_err_to_code(ErrorCode::UnknownException, || {
-                "handling FlightReq GetTableReq".to_string()
-            })?;
-
+        let res = self.meta_node.consistent_read(req.req).await?;
         Ok(res)
     }
 }
@@ -294,20 +266,7 @@ impl RequestHandler<FlightReq<ListDatabaseReq>> for ActionHandler {
         &self,
         req: FlightReq<ListDatabaseReq>,
     ) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
-        let res = self
-            .meta_node
-            .handle_admin_req(ForwardRequest {
-                forward_to_leader: 1,
-                body: ForwardRequestBody::ListDatabase(req.req),
-            })
-            .await?;
-
-        let res: Vec<Arc<DatabaseInfo>> = res
-            .try_into()
-            .map_err_to_code(ErrorCode::UnknownException, || {
-                "handling FlightReq ListDatabaseReq".to_string()
-            })?;
-
+        let res = self.meta_node.consistent_read(req.req).await?;
         Ok(res)
     }
 }
@@ -318,20 +277,7 @@ impl RequestHandler<FlightReq<ListTableReq>> for ActionHandler {
         &self,
         req: FlightReq<ListTableReq>,
     ) -> common_exception::Result<Vec<Arc<TableInfo>>> {
-        let res = self
-            .meta_node
-            .handle_admin_req(ForwardRequest {
-                forward_to_leader: 1,
-                body: ForwardRequestBody::ListTable(req.req),
-            })
-            .await?;
-
-        let res: Vec<Arc<TableInfo>> = res
-            .try_into()
-            .map_err_to_code(ErrorCode::UnknownException, || {
-                "handling FlightReq ListTableReq".to_string()
-            })?;
-
+        let res = self.meta_node.consistent_read(req.req).await?;
         Ok(res)
     }
 }

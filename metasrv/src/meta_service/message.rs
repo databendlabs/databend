@@ -40,7 +40,9 @@ pub struct JoinRequest {
     pub address: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, derive_more::TryInto)]
+#[derive(
+    Serialize, Deserialize, Debug, Clone, PartialEq, derive_more::From, derive_more::TryInto,
+)]
 pub enum ForwardRequestBody {
     Join(JoinRequest),
     Write(LogEntry),
