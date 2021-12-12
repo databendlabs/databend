@@ -32,6 +32,7 @@ use super::analyzer_expr::ExpressionAnalyzer;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
+use crate::sql::statements::DfQueryStatement;
 use crate::sql::SQLCommon;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -45,6 +46,7 @@ pub struct DfCreateTable {
 
     // The table name after "create .. like" statement.
     pub like: Option<ObjectName>,
+    pub query: Option<Box<DfQueryStatement>>,
 }
 
 #[async_trait::async_trait]

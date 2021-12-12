@@ -47,6 +47,7 @@ use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::Whitespace;
+use sqlparser::tokenizer::Word;
 
 use super::statements::DfCopy;
 use super::statements::DfDescribeStage;
@@ -839,6 +840,19 @@ impl<'a> DfParser<'a> {
         // parse table options: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
         let options = self.parse_options()?;
 
+        let mut query = None;
+        if let Token::Word(Word { keyword, .. }) = self.parser.peek_token() {
+            let mut has_query = false;
+            if keyword == Keyword::AS {
+                self.parser.next_token();
+                has_query = true;
+            }
+            if has_query || keyword == Keyword::SELECT {
+                let native = self.parser.parse_query()?;
+                query = Some(Box::new(DfQueryStatement::try_from(native)?))
+            }
+        }
+
         let create = DfCreateTable {
             if_not_exists,
             name: table_name,
@@ -846,6 +860,7 @@ impl<'a> DfParser<'a> {
             engine,
             options,
             like: table_like,
+            query,
         };
 
         Ok(DfStatement::CreateTable(create))
@@ -1051,7 +1066,11 @@ impl<'a> DfParser<'a> {
                 break;
             }
             let name = name.unwrap();
-            self.parser.expect_token(&Token::Eq)?;
+            if !self.parser.consume_token(&Token::Eq) {
+                // only paired values are considered as options
+                self.parser.prev_token();
+                break;
+            }
             let value = self.parse_value_or_ident()?;
 
             options.insert(name.to_string(), value);
