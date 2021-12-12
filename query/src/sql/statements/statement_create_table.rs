@@ -30,8 +30,9 @@ use sqlparser::ast::ObjectName;
 
 use super::analyzer_expr::ExpressionAnalyzer;
 use crate::sessions::QueryContext;
-use crate::sql::statements::{AnalyzableStatement, DfQueryStatement};
+use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
+use crate::sql::statements::DfQueryStatement;
 use crate::sql::SQLCommon;
 
 #[derive(Debug, Clone, PartialEq)]

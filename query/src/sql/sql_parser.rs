@@ -46,8 +46,8 @@ use sqlparser::parser::Parser;
 use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
-use sqlparser::tokenizer::Word;
 use sqlparser::tokenizer::Whitespace;
+use sqlparser::tokenizer::Word;
 
 use super::statements::DfCopy;
 use super::statements::DfDescribeStage;
