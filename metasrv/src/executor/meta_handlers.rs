@@ -254,7 +254,6 @@ impl RequestHandler<ListDatabaseReq> for ActionHandler {
         &self,
         req: ListDatabaseReq,
     ) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
-
         let res = self.meta_node.consistent_read(req).await?;
         Ok(res)
     }
