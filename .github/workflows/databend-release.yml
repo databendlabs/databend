@@ -32,7 +32,7 @@ jobs:
       - name: Rust setup
         run: |
           bash ./scripts/setup/dev_setup.sh
-          cargo install --version 0.2.1 cross
+          cargo install cross
       - name: Build Binary
         run: |
           if [ ${{ matrix.config.os }} = "macos-11" ]; then
