@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Test metasrv MetaApi on a single node.
+
 use common_base::tokio;
 use common_meta_api::MetaApiTestSuite;
 use common_meta_flight::MetaFlightClient;

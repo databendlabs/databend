@@ -1058,7 +1058,7 @@ async fn test_meta_node_cluster_write_on_non_leader() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_metasrv_upsert_kv() -> anyhow::Result<()> {
+async fn test_meta_node_upsert_kv() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -1103,7 +1103,7 @@ async fn test_metasrv_upsert_kv() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_metasrv_incr_seq() -> anyhow::Result<()> {
+async fn test_meta_node_incr_seq() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
