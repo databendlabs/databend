@@ -35,7 +35,7 @@ async fn test_meta_api_restart_cluster_write_read() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    fn mk_key(tc: &MetaSrvTestContext, k: impl std::fmt::Display) -> String {
+    fn make_ket(tc: &MetaSrvTestContext, k: impl std::fmt::Display) -> String {
         let x = &tc.config.raft_config;
         format!("t-restart-cluster-{}-{}-{}", x.config_id, x.id, k)
     }
@@ -49,7 +49,7 @@ async fn test_meta_api_restart_cluster_write_read() -> anyhow::Result<()> {
         for tc in tcs.iter() {
             let client = tc.flight_client().await?;
 
-            let k = mk_key(tc, key_suffix);
+            let k = make_key(tc, key_suffix);
             let res = client
                 .upsert_kv(UpsertKVAction {
                     key: k.clone(),
