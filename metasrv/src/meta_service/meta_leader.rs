@@ -29,9 +29,9 @@ use common_tracing::tracing;
 use crate::errors::ForwardToLeader;
 use crate::errors::InvalidMembership;
 use crate::errors::MetaError;
-use crate::meta_service::message::AdminRequest;
 use crate::meta_service::message::AdminResponse;
-use crate::meta_service::AdminRequestInner;
+use crate::meta_service::message::ForwardRequest;
+use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::JoinRequest;
 use crate::meta_service::MetaNode;
 
@@ -49,34 +49,34 @@ impl<'a> MetaLeader<'a> {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn handle_admin_req(&self, req: AdminRequest) -> Result<AdminResponse, MetaError> {
-        match req.req {
-            AdminRequestInner::Join(join_req) => {
+    pub async fn handle_admin_req(&self, req: ForwardRequest) -> Result<AdminResponse, MetaError> {
+        match req.body {
+            ForwardRequestBody::Join(join_req) => {
                 self.join(join_req).await?;
                 Ok(AdminResponse::Join(()))
             }
-            AdminRequestInner::Write(entry) => {
+            ForwardRequestBody::Write(entry) => {
                 let res = self.write(entry).await?;
                 Ok(AdminResponse::AppliedState(res))
             }
 
-            AdminRequestInner::ListDatabase(req) => {
+            ForwardRequestBody::ListDatabase(req) => {
                 let sm = self.meta_node.get_state_machine().await;
                 let res = sm.list_databases(req).await?;
                 Ok(AdminResponse::ListDatabase(res))
             }
 
-            AdminRequestInner::GetDatabase(req) => {
+            ForwardRequestBody::GetDatabase(req) => {
                 let sm = self.meta_node.get_state_machine().await;
                 let res = sm.get_database(req).await?;
                 Ok(AdminResponse::DatabaseInfo(res))
             }
-            AdminRequestInner::ListTable(req) => {
+            ForwardRequestBody::ListTable(req) => {
                 let sm = self.meta_node.get_state_machine().await;
                 let res = sm.list_tables(req).await?;
                 Ok(AdminResponse::ListTable(res))
             }
-            AdminRequestInner::GetTable(req) => {
+            ForwardRequestBody::GetTable(req) => {
                 let sm = self.meta_node.get_state_machine().await;
                 let res = sm.get_table(req).await?;
                 Ok(AdminResponse::TableInfo(res))

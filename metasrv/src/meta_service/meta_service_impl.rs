@@ -22,8 +22,8 @@ use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::LogEntry;
 use common_tracing::tracing;
 
-use crate::meta_service::message::AdminRequest;
-use crate::meta_service::AdminRequestInner;
+use crate::meta_service::message::ForwardRequest;
+use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::MetaNode;
 use crate::proto::meta_service_server::MetaService;
 use crate::proto::GetReply;
@@ -53,14 +53,14 @@ impl MetaService for MetaServiceImpl {
         common_tracing::extract_remote_span_as_parent(&request);
 
         let mes = request.into_inner();
-        let req: LogEntry = mes.try_into()?;
+        let ent: LogEntry = mes.try_into()?;
 
         // TODO(xp): call meta_node.write()
         let res = self
             .meta_node
-            .handle_admin_req(AdminRequest {
-                forward_to_leader: true,
-                req: AdminRequestInner::Write(req),
+            .handle_admin_req(ForwardRequest {
+                forward_to_leader: 1,
+                body: ForwardRequestBody::Write(ent),
             })
             .await;
 
@@ -101,7 +101,7 @@ impl MetaService for MetaServiceImpl {
 
         let req = request.into_inner();
 
-        let admin_req: AdminRequest = serde_json::from_str(&req.data)
+        let admin_req: ForwardRequest = serde_json::from_str(&req.data)
             .map_err(|x| tonic::Status::invalid_argument(x.to_string()))?;
 
         let res = self.meta_node.handle_admin_req(admin_req).await;

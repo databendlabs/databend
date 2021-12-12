@@ -32,8 +32,8 @@ use databend_meta::configs;
 use databend_meta::errors::ForwardToLeader;
 use databend_meta::errors::MetaError;
 use databend_meta::meta_service::meta_leader::MetaLeader;
-use databend_meta::meta_service::AdminRequest;
-use databend_meta::meta_service::AdminRequestInner;
+use databend_meta::meta_service::ForwardRequest;
+use databend_meta::meta_service::ForwardRequestBody;
 use databend_meta::meta_service::JoinRequest;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::proto::meta_service_client::MetaServiceClient;
@@ -415,7 +415,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     let leader_id = all[0].get_leader().await;
     let leader = all[leader_id as usize].clone();
 
-    let admin_req = join_req(node_id, tc2.config.raft_config.raft_api_addr(), false);
+    let admin_req = join_req(node_id, tc2.config.raft_config.raft_api_addr(), 0);
     leader.handle_admin_req(admin_req).await?;
 
     all.push(mn2.clone());
@@ -441,7 +441,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
         let to_addr = tc1.config.raft_config.raft_api_addr();
 
         let mut client = MetaServiceClient::connect(format!("http://{}", to_addr)).await?;
-        let admin_req = join_req(node_id, tc3.config.raft_config.raft_api_addr(), true);
+        let admin_req = join_req(node_id, tc3.config.raft_config.raft_api_addr(), 1);
         client.forward(admin_req).await?;
     }
 
@@ -511,7 +511,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
 
     let leader_id = all[0].get_leader().await;
     let leader = all[leader_id as usize].clone();
-    let req = join_req(node_id, tc1.config.raft_config.raft_api_addr(), false);
+    let req = join_req(node_id, tc1.config.raft_config.raft_api_addr(), 1);
     leader.handle_admin_req(req).await?;
 
     all.push(mn1.clone());
@@ -534,12 +534,12 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
 
     tracing::info!("--- join node-2 by sending rpc `join` to a non-leader");
     {
-        let req = join_req(node_id, tc2.config.raft_config.raft_api_addr(), true);
+        let req = join_req(node_id, tc2.config.raft_config.raft_api_addr(), 1);
         leader.handle_admin_req(req).await?;
     }
     tracing::info!("--- join node-2 again");
     {
-        let req = join_req(node_id, tc2.config.raft_config.raft_api_addr(), true);
+        let req = join_req(node_id, tc2.config.raft_config.raft_api_addr(), 1);
         mn1.handle_admin_req(req).await?;
     }
 
@@ -836,10 +836,10 @@ async fn start_meta_node_non_voter(
     Ok((id, tc))
 }
 
-fn join_req(node_id: NodeId, address: String, forward: bool) -> AdminRequest {
-    AdminRequest {
+fn join_req(node_id: NodeId, address: String, forward: u64) -> ForwardRequest {
+    ForwardRequest {
         forward_to_leader: forward,
-        req: AdminRequestInner::Join(JoinRequest { node_id, address }),
+        body: ForwardRequestBody::Join(JoinRequest { node_id, address }),
     }
 }
 

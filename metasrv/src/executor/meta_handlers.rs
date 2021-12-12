@@ -52,8 +52,8 @@ use common_tracing::tracing;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
-use crate::meta_service::AdminRequest;
-use crate::meta_service::AdminRequestInner;
+use crate::meta_service::ForwardRequest;
+use crate::meta_service::ForwardRequestBody;
 
 // Db
 #[async_trait::async_trait]
@@ -107,9 +107,9 @@ impl RequestHandler<FlightReq<GetDatabaseReq>> for ActionHandler {
     ) -> common_exception::Result<Arc<DatabaseInfo>> {
         let res = self
             .meta_node
-            .handle_admin_req(AdminRequest {
-                forward_to_leader: true,
-                req: AdminRequestInner::GetDatabase(act.req),
+            .handle_admin_req(ForwardRequest {
+                forward_to_leader: 1,
+                body: ForwardRequestBody::GetDatabase(act.req),
             })
             .await?;
 
@@ -252,9 +252,9 @@ impl RequestHandler<FlightReq<GetTableReq>> for ActionHandler {
     ) -> common_exception::Result<Arc<TableInfo>> {
         let res = self
             .meta_node
-            .handle_admin_req(AdminRequest {
-                forward_to_leader: true,
-                req: AdminRequestInner::GetTable(act.req),
+            .handle_admin_req(ForwardRequest {
+                forward_to_leader: 1,
+                body: ForwardRequestBody::GetTable(act.req),
             })
             .await?;
         let res: Arc<TableInfo> = res
@@ -296,9 +296,9 @@ impl RequestHandler<FlightReq<ListDatabaseReq>> for ActionHandler {
     ) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
         let res = self
             .meta_node
-            .handle_admin_req(AdminRequest {
-                forward_to_leader: true,
-                req: AdminRequestInner::ListDatabase(req.req),
+            .handle_admin_req(ForwardRequest {
+                forward_to_leader: 1,
+                body: ForwardRequestBody::ListDatabase(req.req),
             })
             .await?;
 
@@ -320,9 +320,9 @@ impl RequestHandler<FlightReq<ListTableReq>> for ActionHandler {
     ) -> common_exception::Result<Vec<Arc<TableInfo>>> {
         let res = self
             .meta_node
-            .handle_admin_req(AdminRequest {
-                forward_to_leader: true,
-                req: AdminRequestInner::ListTable(req.req),
+            .handle_admin_req(ForwardRequest {
+                forward_to_leader: 1,
+                body: ForwardRequestBody::ListTable(req.req),
             })
             .await?;
 

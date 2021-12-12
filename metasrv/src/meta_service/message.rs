@@ -41,7 +41,7 @@ pub struct JoinRequest {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, derive_more::TryInto)]
-pub enum AdminRequestInner {
+pub enum ForwardRequestBody {
     Join(JoinRequest),
     Write(LogEntry),
     ListDatabase(ListDatabaseReq),
@@ -50,17 +50,18 @@ pub enum AdminRequestInner {
     GetTable(GetTableReq),
 }
 
+/// A request that is forwarded from one raft node to another
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct AdminRequest {
+pub struct ForwardRequest {
     /// Forward the request to leader if the node received this request is not leader.
-    pub forward_to_leader: bool,
+    pub forward_to_leader: u64,
 
-    pub req: AdminRequestInner,
+    pub body: ForwardRequestBody,
 }
 
-impl AdminRequest {
-    pub fn set_forward(&mut self, allow: bool) {
-        self.forward_to_leader = allow;
+impl ForwardRequest {
+    pub fn decr_forward(&mut self) {
+        self.forward_to_leader -= 1;
     }
 }
 
@@ -75,7 +76,7 @@ pub enum AdminResponse {
     TableInfo(Arc<TableInfo>),
 }
 
-impl tonic::IntoRequest<RaftRequest> for AdminRequest {
+impl tonic::IntoRequest<RaftRequest> for ForwardRequest {
     fn into_request(self) -> tonic::Request<RaftRequest> {
         let mes = RaftRequest {
             data: serde_json::to_string(&self).expect("fail to serialize"),
@@ -84,7 +85,7 @@ impl tonic::IntoRequest<RaftRequest> for AdminRequest {
     }
 }
 
-impl TryFrom<RaftRequest> for AdminRequest {
+impl TryFrom<RaftRequest> for ForwardRequest {
     type Error = tonic::Status;
 
     fn try_from(mes: RaftRequest) -> Result<Self, Self::Error> {
