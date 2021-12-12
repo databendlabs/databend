@@ -211,7 +211,7 @@ impl MetaNode {
             .await
             .map_err_to_code(ErrorCode::MetaServiceError, || "fail to serve")?;
 
-            Ok::<(), common_exception::ErrorCode>(())
+            Ok::<(), ErrorCode>(())
         });
 
         let mut jh = mn.join_handles.lock().await;
@@ -325,7 +325,7 @@ impl MetaNode {
                     loop {
                         let changed = tokio::select! {
                             _ = running_rx.changed() => {
-                               return Ok::<(), common_exception::ErrorCode>(());
+                               return Ok::<(), ErrorCode>(());
                             }
                             changed = metrics_rx.changed() => {
                                 changed
@@ -353,7 +353,7 @@ impl MetaNode {
                         }
                     }
 
-                    Ok::<(), common_exception::ErrorCode>(())
+                    Ok::<(), ErrorCode>(())
                 }
             }
             .instrument(span),
@@ -534,7 +534,7 @@ impl MetaNode {
 
         let l = self.as_leader().await;
         let res = match l {
-            Ok(l) => l.handle_admin_req(req.clone()).await,
+            Ok(l) => l.handle_forwardable_req(req.clone()).await,
             Err(e) => Err(MetaError::ForwardToLeader(e)),
         };
 
@@ -580,11 +580,7 @@ impl MetaNode {
     /// Add a new node into this cluster.
     /// The node info is committed with raft, thus it must be called on an initialized node.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn add_node(
-        &self,
-        node_id: NodeId,
-        addr: String,
-    ) -> common_exception::Result<AppliedState> {
+    pub async fn add_node(&self, node_id: NodeId, addr: String) -> Result<AppliedState, MetaError> {
         // TODO: use txid?
         let resp = self
             .write(LogEntry {
@@ -640,7 +636,7 @@ impl MetaNode {
 
     /// Submit a write request to the known leader. Returns the response after applying the request.
     #[tracing::instrument(level = "info", skip(self))]
-    pub async fn write(&self, req: LogEntry) -> common_exception::Result<AppliedState> {
+    pub async fn write(&self, req: LogEntry) -> Result<AppliedState, MetaError> {
         let res = self
             .handle_forwardable_request(ForwardRequest {
                 forward_to_leader: 1,

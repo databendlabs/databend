@@ -18,6 +18,7 @@ use async_raft::error::ResponseError;
 use async_raft::raft::ClientWriteRequest;
 use async_raft::ChangeConfigError;
 use async_raft::ClientWriteError;
+use common_meta_api::KVApi;
 use common_meta_api::MetaApi;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Cmd;
@@ -49,7 +50,7 @@ impl<'a> MetaLeader<'a> {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn handle_admin_req(
+    pub async fn handle_forwardable_req(
         &self,
         req: ForwardRequest,
     ) -> Result<ForwardResponse, MetaError> {
@@ -83,6 +84,21 @@ impl<'a> MetaLeader<'a> {
                 let sm = self.meta_node.get_state_machine().await;
                 let res = sm.get_table(req).await?;
                 Ok(ForwardResponse::TableInfo(res))
+            }
+            ForwardRequestBody::GetKV(req) => {
+                let sm = self.meta_node.get_state_machine().await;
+                let res = sm.get_kv(&req.key).await?;
+                Ok(ForwardResponse::GetKV(res))
+            }
+            ForwardRequestBody::MGetKV(req) => {
+                let sm = self.meta_node.get_state_machine().await;
+                let res = sm.mget_kv(&req.keys).await?;
+                Ok(ForwardResponse::MGetKV(res))
+            }
+            ForwardRequestBody::ListKV(req) => {
+                let sm = self.meta_node.get_state_machine().await;
+                let res = sm.prefix_list_kv(&req.prefix).await?;
+                Ok(ForwardResponse::ListKV(res))
             }
         }
     }

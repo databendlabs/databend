@@ -20,11 +20,17 @@ use async_raft::raft::VoteRequest;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::GetDatabaseReq;
+use common_meta_types::GetKVActionReply;
+use common_meta_types::GetKVReq;
 use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
+use common_meta_types::ListKVReq;
 use common_meta_types::ListTableReq;
 use common_meta_types::LogEntry;
+use common_meta_types::MGetKVActionReply;
+use common_meta_types::MGetKVReq;
 use common_meta_types::NodeId;
+use common_meta_types::PrefixListReply;
 use common_meta_types::TableInfo;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -46,10 +52,15 @@ pub struct JoinRequest {
 pub enum ForwardRequestBody {
     Join(JoinRequest),
     Write(LogEntry),
+
     ListDatabase(ListDatabaseReq),
     GetDatabase(GetDatabaseReq),
     ListTable(ListTableReq),
     GetTable(GetTableReq),
+
+    GetKV(GetKVReq),
+    MGetKV(MGetKVReq),
+    ListKV(ListKVReq),
 }
 
 /// A request that is forwarded from one raft node to another
@@ -76,6 +87,10 @@ pub enum ForwardResponse {
     DatabaseInfo(Arc<DatabaseInfo>),
     ListTable(Vec<Arc<TableInfo>>),
     TableInfo(Arc<TableInfo>),
+
+    GetKV(GetKVActionReply),
+    MGetKV(MGetKVActionReply),
+    ListKV(PrefixListReply),
 }
 
 impl tonic::IntoRequest<RaftRequest> for ForwardRequest {
