@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
+use std::fmt::Debug;
 use std::sync::Arc;
 
 use async_raft::config::Config;
@@ -501,6 +502,27 @@ impl MetaNode {
     pub async fn get_non_voters(&self) -> common_exception::Result<Vec<Node>> {
         // inconsistent get: from local state machine
         self.sto.get_non_voters().await
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn consistent_read<Request, Reply>(&self, req: Request) -> Result<Reply, MetaError>
+    where
+        Request: Into<ForwardRequestBody> + Debug,
+        AdminResponse: TryInto<Reply>,
+        <AdminResponse as TryInto<Reply>>::Error: std::fmt::Display,
+    {
+        let res = self
+            .handle_admin_req(ForwardRequest {
+                forward_to_leader: 1,
+                body: req.into(),
+            })
+            .await?;
+
+        let res: Reply = res.try_into().map_err(|e| {
+            ErrorCode::UnknownException(format!("consistent read recv invalid reply: {}", e))
+        })?;
+
+        Ok(res)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
