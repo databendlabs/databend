@@ -18,11 +18,12 @@
 use std::convert::TryInto;
 use std::sync::Arc;
 
+use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::LogEntry;
 use common_tracing::tracing;
 
-use crate::errors::MetaError;
 use crate::meta_service::message::AdminRequest;
+use crate::meta_service::AdminRequestInner;
 use crate::meta_service::MetaNode;
 use crate::proto::meta_service_server::MetaService;
 use crate::proto::GetReply;
@@ -54,21 +55,22 @@ impl MetaService for MetaServiceImpl {
         let mes = request.into_inner();
         let req: LogEntry = mes.try_into()?;
 
-        let leader = self.meta_node.as_leader().await;
+        // TODO(xp): call meta_node.write()
+        let res = self
+            .meta_node
+            .handle_admin_req(AdminRequest {
+                forward_to_leader: true,
+                req: AdminRequestInner::Write(req),
+            })
+            .await;
 
-        let leader = match leader {
-            Ok(x) => x,
-            Err(err) => {
-                let err: MetaError = err.into();
-                let raft_reply = Err::<(), _>(err).into();
-                return Ok(tonic::Response::new(raft_reply));
-            }
-        };
+        let res = res.map(|x| {
+            let a: AppliedState = x.try_into().unwrap();
+            a
+        });
 
-        let rst = leader.write(req).await;
-
-        let raft_reply = rst.into();
-        Ok(tonic::Response::new(raft_reply))
+        let raft_reply = RaftReply::from(res);
+        return Ok(tonic::Response::new(raft_reply));
     }
 
     #[tracing::instrument(level = "info", skip(self))]

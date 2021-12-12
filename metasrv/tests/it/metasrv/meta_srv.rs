@@ -20,8 +20,8 @@ use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
+use common_meta_types::SeqV;
 use common_tracing::tracing;
-use databend_meta::errors::ForwardToLeader;
 use databend_meta::errors::MetaError;
 use databend_meta::errors::RetryableError;
 use databend_meta::meta_service::MetaNode;
@@ -150,9 +150,11 @@ async fn test_metasrv_cluster_write_on_non_leader() -> anyhow::Result<()> {
         }
         mn1.raft.wait(None).state(State::NonVoter, "").await?;
         mn1.raft.wait(None).current_leader(0, "").await?;
+        // 3 log: init blank log, add-node-0 log, add-node-1 log
+        mn1.raft.wait(None).log(3, "replicated log").await?;
     }
 
-    let mut client = MetaServiceClient::connect(format!("http://{}", addr1)).await?;
+    let mut client1 = MetaServiceClient::connect(format!("http://{}", addr1)).await?;
 
     let req = LogEntry {
         txid: None,
@@ -163,21 +165,27 @@ async fn test_metasrv_cluster_write_on_non_leader() -> anyhow::Result<()> {
             value_meta: None,
         },
     };
-    let raft_mes = client.write(req).await?.into_inner();
+    let raft_reply = client1.write(req).await?.into_inner();
 
-    let rst: Result<AppliedState, MetaError> = raft_mes.into();
-    println!("{:?}", rst);
+    let res: Result<AppliedState, MetaError> = raft_reply.into();
 
-    assert!(rst.is_err());
-    let err = rst.unwrap_err();
-    match err {
-        MetaError::ForwardToLeader(ForwardToLeader { leader }) => {
-            assert_eq!(leader, Some(0));
-        }
-        _ => {
-            panic!("expect ForwardToLeader")
-        }
-    }
+    tracing::info!("--- write is forwarded to leader");
+    tracing::info!("res: {:?}", res);
+
+    let res = res?;
+
+    assert_eq!(
+        AppliedState::KV(Change {
+            ident: None,
+            prev: None,
+            result: Some(SeqV {
+                seq: 1,
+                meta: None,
+                data: b"1".to_vec(),
+            })
+        }),
+        res
+    );
 
     Ok(())
 }
