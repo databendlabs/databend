@@ -46,10 +46,10 @@ use common_tracing::tracing::Instrument;
 use crate::errors::ConnectionError;
 use crate::errors::ForwardToLeader;
 use crate::errors::MetaError;
-use crate::meta_service::message::AdminRequest;
 use crate::meta_service::message::AdminResponse;
+use crate::meta_service::message::ForwardRequest;
 use crate::meta_service::meta_leader::MetaLeader;
-use crate::meta_service::AdminRequestInner;
+use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::JoinRequest;
 use crate::meta_service::MetaServiceImpl;
 use crate::meta_service::Network;
@@ -399,9 +399,9 @@ impl MetaNode {
                     .await
                     .map_err(|e| ErrorCode::CannotConnectNode(e.to_string()))?;
 
-                let admin_req = AdminRequest {
-                    forward_to_leader: true,
-                    req: AdminRequestInner::Join(JoinRequest {
+                let admin_req = ForwardRequest {
+                    forward_to_leader: 1,
+                    body: ForwardRequestBody::Join(JoinRequest {
                         node_id: conf.id,
                         address: conf.raft_api_addr(),
                     }),
@@ -504,7 +504,7 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn handle_admin_req(&self, req: AdminRequest) -> Result<AdminResponse, MetaError> {
+    pub async fn handle_admin_req(&self, req: ForwardRequest) -> Result<AdminResponse, MetaError> {
         let forward = req.forward_to_leader;
 
         let l = self.as_leader().await;
@@ -523,7 +523,7 @@ impl MetaNode {
             _ => return Err(e),
         };
 
-        if !forward {
+        if forward == 0 {
             return Err(MetaError::ForwardToLeader(e));
         }
 
@@ -531,7 +531,7 @@ impl MetaNode {
 
         let mut r2 = req.clone();
         // Avoid infinite forward
-        r2.set_forward(false);
+        r2.decr_forward();
 
         let res: AdminResponse = self.forward(&leader_id, r2).await?;
 
@@ -617,9 +617,9 @@ impl MetaNode {
     #[tracing::instrument(level = "info", skip(self))]
     pub async fn write(&self, req: LogEntry) -> common_exception::Result<AppliedState> {
         let res = self
-            .handle_admin_req(AdminRequest {
-                forward_to_leader: true,
-                req: AdminRequestInner::Write(req.clone()),
+            .handle_admin_req(ForwardRequest {
+                forward_to_leader: 1,
+                body: ForwardRequestBody::Write(req.clone()),
             })
             .await?;
 
@@ -664,7 +664,7 @@ impl MetaNode {
     pub async fn forward(
         &self,
         node_id: &NodeId,
-        req: AdminRequest,
+        req: ForwardRequest,
     ) -> Result<AdminResponse, MetaError> {
         let addr = self
             .sto

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use message::AdminRequest;
-pub use message::AdminRequestInner;
+pub use message::ForwardRequest;
+pub use message::ForwardRequestBody;
 pub use message::JoinRequest;
 pub use meta_service_impl::MetaServiceImpl;
 pub use network::Network;
