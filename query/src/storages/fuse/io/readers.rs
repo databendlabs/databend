@@ -12,7 +12,9 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
+use std::sync::Arc;
 
+use common_dal::DalCache;
 use common_dal::DataAccessor;
 use common_exception::Result;
 use serde::de::DeserializeOwned;
@@ -20,8 +22,13 @@ use serde::de::DeserializeOwned;
 pub async fn read_obj<T: DeserializeOwned>(
     da: &dyn DataAccessor,
     loc: impl AsRef<str>,
+    cache: Arc<Option<DalCache>>,
 ) -> Result<T> {
-    let bytes = da.read(loc.as_ref()).await?;
+    let bytes = if let Some(cache) = &*cache {
+        cache.read(loc.as_ref(), da).await?
+    } else {
+        da.read(loc.as_ref()).await?
+    };
     let r = serde_json::from_slice::<T>(&bytes)?;
     Ok(r)
 }

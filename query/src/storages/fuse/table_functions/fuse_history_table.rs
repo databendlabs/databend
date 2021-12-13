@@ -122,10 +122,11 @@ impl FuseHistoryTable {
     async fn read_snapshots(
         da: &dyn DataAccessor,
         mut location: Option<String>,
+        ctx: Arc<QueryContext>,
     ) -> Result<Vec<TableSnapshot>> {
         let mut snapshots = vec![];
         while let Some(loc) = &location {
-            let snapshot: TableSnapshot = read_obj(da, loc).await?;
+            let snapshot: TableSnapshot = read_obj(da, loc, ctx.get_table_cache()).await?;
             let prev = snapshot.prev_snapshot_id;
             snapshots.push(snapshot);
             location = prev.map(|id| snapshot_location(id.to_simple().to_string().as_str()));
@@ -217,7 +218,7 @@ impl Table for FuseHistoryTable {
         match tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC) {
             Some(loc) => {
                 let da = ctx.get_data_accessor()?;
-                let snapshots = Self::read_snapshots(da.as_ref(), Some(loc.clone())).await?;
+                let snapshots = Self::read_snapshots(da.as_ref(), Some(loc.clone()), ctx).await?;
                 let block = self.snapshots_to_block(snapshots);
                 Ok::<_, ErrorCode>(vec![block])
             }

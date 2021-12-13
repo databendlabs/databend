@@ -33,6 +33,7 @@ _meta*/*
 stateless_test_data/*
 **/_logs*/*
 _data/
+_cache/
 _tmp/*
 tls/certs/*
 

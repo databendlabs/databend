@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use common_base::Progress;
 use common_base::Runtime;
+use common_dal::DalCache;
 use common_dal::DalContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -76,6 +77,7 @@ impl QueryContextShared {
             conf.query.table_cache_enabled,
             conf.query.table_cache_root.clone(),
             conf.query.table_cache_mb_size,
+            conf.query.table_cache_buffer_mb_size,
         )?;
         Ok(Arc::new(QueryContextShared {
             conf,
@@ -203,6 +205,10 @@ impl QueryContextShared {
     pub fn add_source_abort_handle(&self, handle: AbortHandle) {
         let mut sources_abort_handle = self.sources_abort_handle.write();
         sources_abort_handle.push(handle);
+    }
+
+    pub fn get_table_cache(&self) -> Arc<Option<DalCache>> {
+        self.dal_ctx.cache.clone()
     }
 }
 

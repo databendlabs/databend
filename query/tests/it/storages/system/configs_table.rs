@@ -38,7 +38,7 @@ async fn test_configs_table() -> Result<()> {
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 4);
-    assert_eq!(block.num_rows(), 35);
+    assert_eq!(block.num_rows(), 39);
 
     let expected = vec![
         "+-----------------------------------+------------------+-------+-------------+",
@@ -79,6 +79,10 @@ async fn test_configs_table() -> Result<()> {
         "| tenant_id                         |                  | query |             |",
         "| wait_timeout_mills                | 5000             | query |             |",
         "| max_query_log_size                | 10000            | query |             |",
+        "| table_cache_enabled               | false            | query |             |",
+        "| table_cache_root                  | _cache           | query |             |",
+        "| table_cache_mb_size               | 256              | query |             |",
+        "| table_cache_buffer_mb_size        | 100              | query |             |",
         "+-----------------------------------+------------------+-------+-------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

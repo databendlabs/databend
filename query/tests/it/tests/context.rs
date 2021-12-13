@@ -138,7 +138,7 @@ pub fn create_query_context_with_cluster(desc: ClusterDescriptor) -> Result<Arc<
         sessions.get_conf().clone(),
         Arc::new(dummy_session.as_ref().clone()),
         Cluster::create(nodes, local_id),
-    ));
+    )?);
 
     context.get_settings().set_max_threads(8)?;
     Ok(context)

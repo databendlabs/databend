@@ -36,7 +36,7 @@ struct TestFixture {
 
 impl TestFixture {
     fn new() -> Self {
-        let ctx = Arc::new(DalContext::create(false, "".to_string(), 0).unwrap());
+        let ctx = Arc::new(DalContext::create(false, "".to_string(), 0, 0).unwrap());
         let tmp_dir = TempDir::new().unwrap();
         let path = tmp_dir.path().to_str().unwrap();
         let raw_da = Local::new(path);

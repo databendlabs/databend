@@ -96,7 +96,7 @@ async fn test_block_pruner() -> Result<()> {
         .options()
         .get(TBL_OPT_KEY_SNAPSHOT_LOC)
         .unwrap();
-    let snapshot = io::read_obj(da.as_ref(), snapshot_loc.clone()).await?;
+    let snapshot = io::read_obj(da.as_ref(), snapshot_loc.clone(), ctx.get_table_cache()).await?;
 
     // no pruning
     let push_downs = None;
@@ -105,6 +105,7 @@ async fn test_block_pruner() -> Result<()> {
         table.get_table_info().schema(),
         &push_downs,
         da.clone(),
+        ctx.clone(),
     )
     .await?;
     let rows: u64 = blocks.iter().map(|b| b.row_count).sum();
@@ -121,6 +122,7 @@ async fn test_block_pruner() -> Result<()> {
         table.get_table_info().schema(),
         &Some(extra),
         da.clone(),
+        ctx.clone(),
     )
     .await?;
     assert_eq!(0, blocks.len());
@@ -130,8 +132,14 @@ async fn test_block_pruner() -> Result<()> {
     let pred = col("a").gt(lit(3)).and(col("b").gt(lit(3)));
     extra.filters = vec![pred];
 
-    let blocks =
-        apply_block_pruning(&snapshot, table.get_table_info().schema(), &Some(extra), da).await?;
+    let blocks = apply_block_pruning(
+        &snapshot,
+        table.get_table_info().schema(),
+        &Some(extra),
+        da,
+        ctx.clone(),
+    )
+    .await?;
     assert_eq!(num - 1, blocks.len() as u64);
 
     Ok(())

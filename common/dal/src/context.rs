@@ -18,6 +18,8 @@ use common_cache::LruDiskCache;
 use common_exception::Result;
 use common_infallible::RwLock;
 
+use crate::cache::DalCache;
+
 #[derive(Clone, Debug, Default)]
 pub struct DalMetrics {
     pub read_bytes: usize,
@@ -27,29 +29,28 @@ pub struct DalMetrics {
 #[derive(Clone, Debug)]
 pub struct DalContext {
     metrics: Arc<RwLock<DalMetrics>>,
-    table_cache_enabled: bool,
-    snapshots_cache: Option<Arc<RwLock<LruDiskCache>>>,
-    segments_cache: Option<Arc<RwLock<LruDiskCache>>>,
+    pub cache: Arc<Option<DalCache>>,
 }
 
 impl DalContext {
-    pub fn create(table_cache_enabled: bool, path: String, size_mb: u64) -> Result<Self> {
-        let (snapshots_cache, segments_cache) = if table_cache_enabled {
-            let bytes_size = size_mb * 1024 * 1024;
-            let snapshots_cache = LruDiskCache::new(path.clone(), bytes_size)?;
-            let segments_cache = LruDiskCache::new(path.clone(), bytes_size)?;
-            (
-                Some(Arc::new(RwLock::new(snapshots_cache))),
-                Some(Arc::new(RwLock::new(segments_cache))),
-            )
+    pub fn create(
+        table_cache_enabled: bool,
+        path: String,
+        cache_size_mb: u64,
+        cache_buffer_mb_size: u64,
+    ) -> Result<Self> {
+        let cache = if table_cache_enabled {
+            let bytes_size = cache_size_mb * 1024 * 1024;
+            let cache = Arc::new(common_base::tokio::sync::RwLock::new(LruDiskCache::new(
+                path, bytes_size,
+            )?));
+            Arc::new(Some(DalCache::create(cache, cache_buffer_mb_size)))
         } else {
-            (None, None)
+            Arc::new(None)
         };
         Ok(DalContext {
             metrics: Arc::new(Default::default()),
-            table_cache_enabled,
-            snapshots_cache,
-            segments_cache,
+            cache,
         })
     }
 
