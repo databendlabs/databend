@@ -123,5 +123,5 @@ async fn test_meta_api_restart_cluster_write_read() -> anyhow::Result<()> {
 }
 
 fn timeout() -> Option<Duration> {
-    Some(Duration::from_millis(5000))
+    Some(Duration::from_millis(10_000))
 }
