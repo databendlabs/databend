@@ -145,7 +145,7 @@ impl fmt::Display for GrantEntry {
         let privileges: UserPrivilegeSet = self.privileges.into();
         write!(
             f,
-            "GRANT {} ON {} TO {}@{}",
+            "GRANT {} ON {} TO '{}'@'{}'",
             privileges, self.object, self.user, self.host_pattern
         )
     }

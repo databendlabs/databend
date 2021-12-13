@@ -92,7 +92,7 @@ impl std::fmt::Display for UserPrivilegeSet {
                 .iter()
                 .map(|p| p.to_string())
                 .collect::<Vec<_>>()
-                .join(", ")
+                .join(",")
         )
     }
 }

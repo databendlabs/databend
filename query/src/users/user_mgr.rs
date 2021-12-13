@@ -37,7 +37,7 @@ impl UserApiProvider {
                         username,
                         hostname,
                         &GrantObject::Global,
-                        UserPrivilege::all_privileges(),
+                        UserPrivilegeSet::all_privileges(),
                     );
                 }
                 Ok(user_info)
