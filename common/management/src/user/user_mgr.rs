@@ -19,12 +19,12 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_meta_api::KVApi;
-use common_meta_types::AddResult;
 use common_meta_types::AuthType;
 use common_meta_types::GrantObject;
 use common_meta_types::IntoSeqV;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
+use common_meta_types::OkOrExist;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKVAction;
@@ -100,9 +100,9 @@ impl UserMgrApi for UserMgr {
             None,
         ));
         let res = upsert_kv.await?.into_add_result()?;
-        match res {
-            AddResult::Ok(v) => Ok(v.seq),
-            AddResult::Exists(v) => Err(ErrorCode::UserAlreadyExists(format!(
+        match res.res {
+            OkOrExist::Ok(v) => Ok(v.seq),
+            OkOrExist::Exists(v) => Err(ErrorCode::UserAlreadyExists(format!(
                 "User already exists, seq [{}]",
                 v.seq
             ))),

@@ -38,6 +38,7 @@ mod user_stage;
 
 pub use change::AddResult;
 pub use change::Change;
+pub use change::OkOrExist;
 pub use cluster::Node;
 pub use cluster::NodeInfo;
 pub use cluster::Slot;
@@ -52,7 +53,10 @@ pub use database::GetDatabaseReq;
 pub use database::ListDatabaseReq;
 pub use errors::ConflictSeq;
 pub use kv_message::GetKVActionReply;
+pub use kv_message::GetKVReq;
+pub use kv_message::ListKVReq;
 pub use kv_message::MGetKVActionReply;
+pub use kv_message::MGetKVReq;
 pub use kv_message::PrefixListReply;
 pub use kv_message::UpsertKVAction;
 pub use kv_message::UpsertKVActionReply;

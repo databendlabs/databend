@@ -48,6 +48,7 @@ pub struct HttpQueryRequest {
 #[derive(Deserialize, Debug, Default)]
 pub struct HttpSessionConf {
     pub database: Option<String>,
+    pub user: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
@@ -157,9 +158,8 @@ impl ExecuteState {
             context.set_current_database(db.clone()).await?;
         };
         context.attach_query_str(sql);
-
-        // Auth.
-        let user_name = "root";
+        let default_user = "root".to_string();
+        let user_name = request.session.user.as_ref().unwrap_or(&default_user);
         let user_manager = session.get_user_manager();
         // TODO: list user's grant list and check client address
         let user_info = user_manager.get_user(user_name, "%").await?;

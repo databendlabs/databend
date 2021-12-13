@@ -32,7 +32,7 @@ use databend_meta::Opened;
 use maplit::btreeset;
 
 use crate::init_meta_ut;
-use crate::tests::service::new_metasrv_test_context;
+use crate::tests::service::MetaSrvTestContext;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_metasrv_restart() -> anyhow::Result<()> {
@@ -48,7 +48,7 @@ async fn test_metasrv_restart() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let id = 3;
-    let tc = new_metasrv_test_context(id);
+    let tc = MetaSrvTestContext::new(id);
 
     tracing::info!("--- new metasrv");
     {
@@ -93,7 +93,7 @@ async fn test_metasrv_get_membership_from_log() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let id = 3;
-    let tc = new_metasrv_test_context(id);
+    let tc = MetaSrvTestContext::new(id);
 
     tracing::info!("--- new metasrv");
     let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
@@ -193,7 +193,7 @@ async fn test_metasrv_do_log_compaction_empty() -> anyhow::Result<()> {
     let _ent = ut_span.enter();
 
     let id = 3;
-    let tc = new_metasrv_test_context(id);
+    let tc = MetaSrvTestContext::new(id);
 
     let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 
@@ -241,7 +241,7 @@ async fn test_metasrv_do_log_compaction_1_snap_ptr_1_log() -> anyhow::Result<()>
     let _ent = ut_span.enter();
 
     let id = 3;
-    let tc = new_metasrv_test_context(id);
+    let tc = MetaSrvTestContext::new(id);
 
     let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 
@@ -315,7 +315,7 @@ async fn test_metasrv_do_log_compaction_all_logs_with_memberchange() -> anyhow::
     let _ent = ut_span.enter();
 
     let id = 3;
-    let tc = new_metasrv_test_context(id);
+    let tc = MetaSrvTestContext::new(id);
 
     let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 
@@ -368,7 +368,7 @@ async fn test_metasrv_do_log_compaction_current_snapshot() -> anyhow::Result<()>
     let _ent = ut_span.enter();
 
     let id = 3;
-    let tc = new_metasrv_test_context(id);
+    let tc = MetaSrvTestContext::new(id);
 
     let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 
@@ -424,7 +424,7 @@ async fn test_metasrv_install_snapshot() -> anyhow::Result<()> {
     let id = 3;
     let snap;
     {
-        let tc = new_metasrv_test_context(id);
+        let tc = MetaSrvTestContext::new(id);
 
         let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 
@@ -441,7 +441,7 @@ async fn test_metasrv_install_snapshot() -> anyhow::Result<()> {
 
     tracing::info!("--- reopen a new metasrv to install snapshot");
     {
-        let tc = new_metasrv_test_context(id);
+        let tc = MetaSrvTestContext::new(id);
 
         let ms = MetaRaftStore::open_create(&tc.config.raft_config, None, Some(())).await?;
 

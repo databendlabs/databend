@@ -24,6 +24,7 @@ pub mod errors;
 pub mod executor;
 pub mod meta_service;
 pub mod metrics;
+pub mod network;
 pub mod store;
 
 pub trait Opened {

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
+use std::fmt::Debug;
 use std::sync::Arc;
 
 use async_raft::config::Config;
@@ -46,13 +47,13 @@ use common_tracing::tracing::Instrument;
 use crate::errors::ConnectionError;
 use crate::errors::ForwardToLeader;
 use crate::errors::MetaError;
-use crate::meta_service::message::AdminRequest;
-use crate::meta_service::message::AdminResponse;
+use crate::meta_service::message::ForwardRequest;
+use crate::meta_service::message::ForwardResponse;
 use crate::meta_service::meta_leader::MetaLeader;
-use crate::meta_service::AdminRequestInner;
+use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::JoinRequest;
 use crate::meta_service::MetaServiceImpl;
-use crate::meta_service::Network;
+use crate::network::Network;
 use crate::proto::meta_service_client::MetaServiceClient;
 use crate::proto::meta_service_server::MetaServiceServer;
 use crate::store::MetaRaftStore;
@@ -210,7 +211,7 @@ impl MetaNode {
             .await
             .map_err_to_code(ErrorCode::MetaServiceError, || "fail to serve")?;
 
-            Ok::<(), common_exception::ErrorCode>(())
+            Ok::<(), ErrorCode>(())
         });
 
         let mut jh = mn.join_handles.lock().await;
@@ -324,7 +325,7 @@ impl MetaNode {
                     loop {
                         let changed = tokio::select! {
                             _ = running_rx.changed() => {
-                               return Ok::<(), common_exception::ErrorCode>(());
+                               return Ok::<(), ErrorCode>(());
                             }
                             changed = metrics_rx.changed() => {
                                 changed
@@ -352,7 +353,7 @@ impl MetaNode {
                         }
                     }
 
-                    Ok::<(), common_exception::ErrorCode>(())
+                    Ok::<(), ErrorCode>(())
                 }
             }
             .instrument(span),
@@ -383,8 +384,15 @@ impl MetaNode {
         }
 
         if !conf.join.is_empty() {
-            // Bring up a new node, join an cluster
+            // Bring up a new node, join it into a cluster
             let mn = MetaNode::open_create_boot(conf, Some(()), Some(()), None).await?;
+
+            if mn.is_opened() {
+                return Ok(mn);
+            }
+
+            // Try to join a cluster only when this node is just created.
+            // Joining a node with log has risk messing up the data in this node and in the target cluster.
 
             let addrs = &conf.join;
             for addr in addrs {
@@ -392,9 +400,9 @@ impl MetaNode {
                     .await
                     .map_err(|e| ErrorCode::CannotConnectNode(e.to_string()))?;
 
-                let admin_req = AdminRequest {
-                    forward_to_leader: true,
-                    req: AdminRequestInner::Join(JoinRequest {
+                let admin_req = ForwardRequest {
+                    forward_to_leader: 1,
+                    body: ForwardRequestBody::Join(JoinRequest {
                         node_id: conf.id,
                         address: conf.raft_api_addr(),
                     }),
@@ -497,12 +505,36 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn handle_admin_req(&self, req: AdminRequest) -> Result<AdminResponse, MetaError> {
+    pub async fn consistent_read<Request, Reply>(&self, req: Request) -> Result<Reply, MetaError>
+    where
+        Request: Into<ForwardRequestBody> + Debug,
+        ForwardResponse: TryInto<Reply>,
+        <ForwardResponse as TryInto<Reply>>::Error: std::fmt::Display,
+    {
+        let res = self
+            .handle_forwardable_request(ForwardRequest {
+                forward_to_leader: 1,
+                body: req.into(),
+            })
+            .await?;
+
+        let res: Reply = res.try_into().map_err(|e| {
+            ErrorCode::UnknownException(format!("consistent read recv invalid reply: {}", e))
+        })?;
+
+        Ok(res)
+    }
+
+    #[tracing::instrument(level = "debug", skip(self))]
+    pub async fn handle_forwardable_request(
+        &self,
+        req: ForwardRequest,
+    ) -> Result<ForwardResponse, MetaError> {
         let forward = req.forward_to_leader;
 
         let l = self.as_leader().await;
         let res = match l {
-            Ok(l) => l.handle_admin_req(req.clone()).await,
+            Ok(l) => l.handle_forwardable_req(req.clone()).await,
             Err(e) => Err(MetaError::ForwardToLeader(e)),
         };
 
@@ -516,7 +548,7 @@ impl MetaNode {
             _ => return Err(e),
         };
 
-        if !forward {
+        if forward == 0 {
             return Err(MetaError::ForwardToLeader(e));
         }
 
@@ -524,9 +556,9 @@ impl MetaNode {
 
         let mut r2 = req.clone();
         // Avoid infinite forward
-        r2.set_forward(false);
+        r2.decr_forward();
 
-        let res: AdminResponse = self.forward(&leader_id, r2).await?;
+        let res: ForwardResponse = self.forward(&leader_id, r2).await?;
 
         Ok(res)
     }
@@ -548,11 +580,7 @@ impl MetaNode {
     /// Add a new node into this cluster.
     /// The node info is committed with raft, thus it must be called on an initialized node.
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn add_node(
-        &self,
-        node_id: NodeId,
-        addr: String,
-    ) -> common_exception::Result<AppliedState> {
+    pub async fn add_node(&self, node_id: NodeId, addr: String) -> Result<AppliedState, MetaError> {
         // TODO: use txid?
         let resp = self
             .write(LogEntry {
@@ -608,11 +636,11 @@ impl MetaNode {
 
     /// Submit a write request to the known leader. Returns the response after applying the request.
     #[tracing::instrument(level = "info", skip(self))]
-    pub async fn write(&self, req: LogEntry) -> common_exception::Result<AppliedState> {
+    pub async fn write(&self, req: LogEntry) -> Result<AppliedState, MetaError> {
         let res = self
-            .handle_admin_req(AdminRequest {
-                forward_to_leader: true,
-                req: AdminRequestInner::Write(req.clone()),
+            .handle_forwardable_request(ForwardRequest {
+                forward_to_leader: 1,
+                body: ForwardRequestBody::Write(req.clone()),
             })
             .await?;
 
@@ -657,8 +685,8 @@ impl MetaNode {
     pub async fn forward(
         &self,
         node_id: &NodeId,
-        req: AdminRequest,
-    ) -> Result<AdminResponse, MetaError> {
+        req: ForwardRequest,
+    ) -> Result<ForwardResponse, MetaError> {
         let addr = self
             .sto
             .get_node_addr(node_id)
@@ -675,7 +703,7 @@ impl MetaNode {
             .map_err(|e| MetaError::UnknownError(e.to_string()))?;
         let raft_mes = resp.into_inner();
 
-        let res: Result<AdminResponse, MetaError> = raft_mes.into();
+        let res: Result<ForwardResponse, MetaError> = raft_mes.into();
         res
     }
 }

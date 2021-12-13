@@ -48,6 +48,7 @@ use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::Whitespace;
+use sqlparser::tokenizer::Word;
 
 use super::statements::DfCopy;
 use super::statements::DfDescribeStage;
@@ -71,6 +72,7 @@ use crate::sql::statements::DfRevokeStatement;
 use crate::sql::statements::DfSetVariable;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfShowDatabases;
+use crate::sql::statements::DfShowFunctions;
 use crate::sql::statements::DfShowGrants;
 use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
@@ -200,25 +202,7 @@ impl<'a> DfParser<'a> {
                     Keyword::SHOW => {
                         self.parser.next_token();
                         if self.consume_token("TABLES") {
-                            let tok = self.parser.next_token();
-                            match &tok {
-                                Token::EOF | Token::SemiColon => {
-                                    Ok(DfStatement::ShowTables(DfShowTables::All))
-                                }
-                                Token::Word(w) => match w.keyword {
-                                    Keyword::LIKE => Ok(DfStatement::ShowTables(
-                                        DfShowTables::Like(self.parser.parse_identifier()?),
-                                    )),
-                                    Keyword::WHERE => Ok(DfStatement::ShowTables(
-                                        DfShowTables::Where(self.parser.parse_expr()?),
-                                    )),
-                                    Keyword::FROM | Keyword::IN => Ok(DfStatement::ShowTables(
-                                        DfShowTables::FromOrIn(self.parser.parse_object_name()?),
-                                    )),
-                                    _ => self.expected("like or where", tok),
-                                },
-                                _ => self.expected("like or where", tok),
-                            }
+                            self.parse_show_tables()
                         } else if self.consume_token("DATABASES") {
                             self.parse_show_databases()
                         } else if self.consume_token("SETTINGS") {
@@ -233,6 +217,8 @@ impl<'a> DfParser<'a> {
                             Ok(DfStatement::ShowUsers(DfShowUsers))
                         } else if self.consume_token("GRANTS") {
                             self.parse_show_grants()
+                        } else if self.consume_token("FUNCTIONS") {
+                            self.parse_show_functions()
                         } else {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
@@ -345,6 +331,27 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::Explain(DfExplain { typ, statement }))
     }
 
+    // parse show tables.
+    fn parse_show_tables(&mut self) -> Result<DfStatement, ParserError> {
+        let tok = self.parser.next_token();
+        match &tok {
+            Token::EOF | Token::SemiColon => Ok(DfStatement::ShowTables(DfShowTables::All)),
+            Token::Word(w) => match w.keyword {
+                Keyword::LIKE => Ok(DfStatement::ShowTables(DfShowTables::Like(
+                    self.parser.parse_identifier()?,
+                ))),
+                Keyword::WHERE => Ok(DfStatement::ShowTables(DfShowTables::Where(
+                    self.parser.parse_expr()?,
+                ))),
+                Keyword::FROM | Keyword::IN => Ok(DfStatement::ShowTables(DfShowTables::FromOrIn(
+                    self.parser.parse_object_name()?,
+                ))),
+                _ => self.expected("like or where", tok),
+            },
+            _ => self.expected("like or where", tok),
+        }
+    }
+
     // parse show databases where database = xxx or where database
     fn parse_show_databases(&mut self) -> Result<DfStatement, ParserError> {
         if self.parser.parse_keyword(Keyword::WHERE) {
@@ -374,6 +381,24 @@ impl<'a> DfParser<'a> {
             }))
         } else {
             self.expected("where or like", self.parser.peek_token())
+        }
+    }
+
+    // parse show functions statement
+    fn parse_show_functions(&mut self) -> Result<DfStatement, ParserError> {
+        let tok = self.parser.next_token();
+        match &tok {
+            Token::EOF | Token::SemiColon => Ok(DfStatement::ShowFunctions(DfShowFunctions::All)),
+            Token::Word(w) => match w.keyword {
+                Keyword::LIKE => Ok(DfStatement::ShowFunctions(DfShowFunctions::Like(
+                    self.parser.parse_identifier()?,
+                ))),
+                Keyword::WHERE => Ok(DfStatement::ShowFunctions(DfShowFunctions::Where(
+                    self.parser.parse_expr()?,
+                ))),
+                _ => self.expected("like or where", tok),
+            },
+            _ => self.expected("like or where", tok),
         }
     }
 
@@ -822,6 +847,19 @@ impl<'a> DfParser<'a> {
         // parse table options: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
         let options = self.parse_options()?;
 
+        let mut query = None;
+        if let Token::Word(Word { keyword, .. }) = self.parser.peek_token() {
+            let mut has_query = false;
+            if keyword == Keyword::AS {
+                self.parser.next_token();
+                has_query = true;
+            }
+            if has_query || keyword == Keyword::SELECT {
+                let native = self.parser.parse_query()?;
+                query = Some(Box::new(DfQueryStatement::try_from(native)?))
+            }
+        }
+
         let create = DfCreateTable {
             if_not_exists,
             name: table_name,
@@ -829,6 +867,7 @@ impl<'a> DfParser<'a> {
             engine,
             options,
             like: table_like,
+            query,
         };
 
         Ok(DfStatement::CreateTable(create))
@@ -1049,7 +1088,11 @@ impl<'a> DfParser<'a> {
                 break;
             }
             let name = name.unwrap();
-            self.parser.expect_token(&Token::Eq)?;
+            if !self.parser.consume_token(&Token::Eq) {
+                // only paired values are considered as options
+                self.parser.prev_token();
+                break;
+            }
             let value = self.parse_value_or_ident()?;
 
             options.insert(name.to_string(), value);

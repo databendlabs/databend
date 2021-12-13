@@ -53,10 +53,6 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         MetaEmbedded::init_global_meta_store(conf.meta.meta_embedded_dir.clone()).await?;
     }
 
-    env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or(conf.log.log_level.to_lowercase().as_str()),
-    )
-    .init();
     let _guards = init_tracing_with_file(
         "databend-query",
         conf.log.log_dir.as_str(),

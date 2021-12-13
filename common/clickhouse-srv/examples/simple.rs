@@ -39,7 +39,6 @@ extern crate common_clickhouse_srv;
 #[tokio::main]
 async fn main() -> std::result::Result<(), Box<dyn Error>> {
     env::set_var("RUST_LOG", "clickhouse_srv=debug");
-    env_logger::init();
     let host_port = "127.0.0.1:9000";
 
     // Note that this is the Tokio TcpListener, which is fully async.

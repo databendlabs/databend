@@ -35,6 +35,7 @@ use databend_query::sql::statements::DfDropTable;
 use databend_query::sql::statements::DfDropUser;
 use databend_query::sql::statements::DfGrantObject;
 use databend_query::sql::statements::DfGrantStatement;
+use databend_query::sql::statements::DfQueryStatement;
 use databend_query::sql::statements::DfRevokeStatement;
 use databend_query::sql::statements::DfShowDatabases;
 use databend_query::sql::statements::DfShowTables;
@@ -42,6 +43,10 @@ use databend_query::sql::statements::DfTruncateTable;
 use databend_query::sql::statements::DfUseDatabase;
 use databend_query::sql::*;
 use sqlparser::ast::*;
+use sqlparser::dialect::GenericDialect;
+use sqlparser::parser::Parser;
+use sqlparser::parser::ParserError;
+use sqlparser::tokenizer::Tokenizer;
 
 fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
     let (statements, _) = DfParser::parse_sql(sql)?;
@@ -66,6 +71,15 @@ fn expect_parse_err_contains(sql: &str, expected: String) -> Result<()> {
     Ok(())
 }
 
+fn verified_query(sql: &str) -> Result<Box<DfQueryStatement>> {
+    let mut parser = DfParser::new_with_dialect(sql, &GenericDialect {})?;
+    let stmt = parser.parse_statement()?;
+    if let DfStatement::Query(query) = stmt {
+        return Ok(query);
+    }
+    Err(ParserError::ParserError("Expect query statement".to_string()).into())
+}
+
 fn make_column_def(name: impl Into<String>, data_type: DataType) -> ColumnDef {
     ColumnDef {
         name: Ident {
@@ -76,6 +90,14 @@ fn make_column_def(name: impl Into<String>, data_type: DataType) -> ColumnDef {
         collation: None,
         options: vec![],
     }
+}
+
+fn parse_sql_to_expr(query_expr: &str) -> Expr {
+    let dialect = GenericDialect {};
+    let mut tokenizer = Tokenizer::new(&dialect, query_expr);
+    let tokens = tokenizer.tokenize().unwrap();
+    let mut parser = Parser::new(tokens, &dialect);
+    parser.parse_expr().unwrap()
 }
 
 #[test]
@@ -149,6 +171,7 @@ fn create_table() -> Result<()> {
         engine: "CSV".to_string(),
         options: maplit::hashmap! {"location".into() => "/data/33.csv".into()},
         like: None,
+        query: None,
     });
     expect_parse_ok(sql, expected)?;
 
@@ -169,6 +192,7 @@ fn create_table() -> Result<()> {
             "comment".into() => "foo".into(),
         },
         like: None,
+        query: None,
     });
     expect_parse_ok(sql, expected)?;
 
@@ -182,6 +206,41 @@ fn create_table() -> Result<()> {
 
         options: maplit::hashmap! {"location".into() => "batcave".into()},
         like: Some(ObjectName(vec![Ident::new("db2"), Ident::new("test2")])),
+        query: None,
+    });
+    expect_parse_ok(sql, expected)?;
+
+    // create table as select statement
+    let sql = "CREATE TABLE db1.test1(c1 int, c2 varchar(255)) ENGINE = Parquet location = 'batcave' AS SELECT * FROM t2";
+    let expected = DfStatement::CreateTable(DfCreateTable {
+        if_not_exists: false,
+        name: ObjectName(vec![Ident::new("db1"), Ident::new("test1")]),
+        columns: vec![
+            make_column_def("c1", DataType::Int(None)),
+            make_column_def("c2", DataType::Varchar(Some(255))),
+        ],
+        engine: "Parquet".to_string(),
+
+        options: maplit::hashmap! {"location".into() => "batcave".into()},
+        like: None,
+        query: Some(Box::new(DfQueryStatement {
+            from: vec![TableWithJoins {
+                relation: TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("t2")]),
+                    alias: None,
+                    args: vec![],
+                    with_hints: vec![],
+                },
+                joins: vec![],
+            }],
+            projection: vec![SelectItem::Wildcard],
+            selection: None,
+            group_by: vec![],
+            having: None,
+            order_by: vec![],
+            limit: None,
+            offset: None,
+        })),
     });
     expect_parse_ok(sql, expected)?;
 
@@ -234,9 +293,6 @@ fn describe_table() -> Result<()> {
 fn show_queries() -> Result<()> {
     use databend_query::sql::statements::DfShowSettings;
     use databend_query::sql::statements::DfShowTables;
-    use sqlparser::dialect::GenericDialect;
-    use sqlparser::parser::Parser;
-    use sqlparser::tokenizer::Tokenizer;
 
     // positive case
     expect_parse_ok("SHOW TABLES", DfStatement::ShowTables(DfShowTables::All))?;
@@ -256,14 +312,6 @@ fn show_queries() -> Result<()> {
         "SHOW TABLES LIKE 'aaa' --comments should not in sql case2",
         DfStatement::ShowTables(DfShowTables::Like(Ident::with_quote('\'', "aaa"))),
     )?;
-
-    let parse_sql_to_expr = |query_expr: &str| -> Expr {
-        let dialect = GenericDialect {};
-        let mut tokenizer = Tokenizer::new(&dialect, query_expr);
-        let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens, &dialect);
-        parser.parse_expr().unwrap()
-    };
 
     expect_parse_ok(
         "SHOW TABLES WHERE t LIKE 'aaa'",
@@ -301,6 +349,55 @@ fn show_tables_test() -> Result<()> {
         "SHOW TABLES IN `ss`",
         DfStatement::ShowTables(DfShowTables::FromOrIn(name_two)),
     )?;
+    Ok(())
+}
+
+#[test]
+fn show_functions_tests() -> Result<()> {
+    use databend_query::sql::statements::DfShowFunctions;
+
+    // positive case
+    expect_parse_ok(
+        "SHOW FUNCTIONS",
+        DfStatement::ShowFunctions(DfShowFunctions::All),
+    )?;
+    expect_parse_ok(
+        "SHOW FUNCTIONS;",
+        DfStatement::ShowFunctions(DfShowFunctions::All),
+    )?;
+    expect_parse_ok(
+        "SHOW FUNCTIONS --comments should not in sql case1",
+        DfStatement::ShowFunctions(DfShowFunctions::All),
+    )?;
+
+    expect_parse_ok(
+        "SHOW FUNCTIONS LIKE 'aaa'",
+        DfStatement::ShowFunctions(DfShowFunctions::Like(Ident::with_quote('\'', "aaa"))),
+    )?;
+    expect_parse_ok(
+        "SHOW FUNCTIONS LIKE 'aaa';",
+        DfStatement::ShowFunctions(DfShowFunctions::Like(Ident::with_quote('\'', "aaa"))),
+    )?;
+    expect_parse_ok(
+        "SHOW FUNCTIONS LIKE 'aaa' --comments should not in sql case2",
+        DfStatement::ShowFunctions(DfShowFunctions::Like(Ident::with_quote('\'', "aaa"))),
+    )?;
+
+    expect_parse_ok(
+        "SHOW FUNCTIONS WHERE t LIKE 'aaa'",
+        DfStatement::ShowFunctions(DfShowFunctions::Where(parse_sql_to_expr("t LIKE 'aaa'"))),
+    )?;
+    expect_parse_ok(
+        "SHOW FUNCTIONS LIKE 'aaa' --comments should not in sql case2",
+        DfStatement::ShowFunctions(DfShowFunctions::Like(Ident::with_quote('\'', "aaa"))),
+    )?;
+    expect_parse_ok(
+        "SHOW FUNCTIONS WHERE t LIKE 'aaa' AND t LIKE 'a%'",
+        DfStatement::ShowFunctions(DfShowFunctions::Where(parse_sql_to_expr(
+            "t LIKE 'aaa' AND t LIKE 'a%'",
+        ))),
+    )?;
+
     Ok(())
 }
 
@@ -383,11 +480,11 @@ fn copy_test() -> Result<()> {
             columns: vec![],
             location: "@my_ext_stage/tutorials/sample.csv".to_string(),
             format: "csv".to_string(),
-        options: maplit::hashmap! {
-            "csv_header".into() => "1".into(),
-            "field_delimitor".into() => ",".into(),
-     }
-    }
+            options: maplit::hashmap! {
+                "csv_header".into() => "1".into(),
+                "field_delimitor".into() => ",".into(),
+         }
+        }
         ),
 
 
@@ -1032,6 +1129,37 @@ fn create_stage_test() -> Result<()> {
     expect_parse_err_contains(
         "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(format=csv1 compression=AUTO record_delimiter=NONE) comments='test'",
         String::from("unknown variant `csv1`"),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn create_table_select() -> Result<()> {
+    expect_parse_ok(
+        "CREATE TABLE foo AS SELECT a, b FROM bar",
+        DfStatement::CreateTable(DfCreateTable {
+            if_not_exists: false,
+            name: ObjectName(vec![Ident::new("foo")]),
+            columns: vec![],
+            engine: "FUSE".to_string(),
+            options: maplit::hashmap! {},
+            like: None,
+            query: Some(verified_query("SELECT a, b FROM bar")?),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE TABLE foo (a INT) SELECT a, b FROM bar",
+        DfStatement::CreateTable(DfCreateTable {
+            if_not_exists: false,
+            name: ObjectName(vec![Ident::new("foo")]),
+            columns: vec![make_column_def("a", DataType::Int(None))],
+            engine: "FUSE".to_string(),
+            options: maplit::hashmap! {},
+            like: None,
+            query: Some(verified_query("SELECT a, b FROM bar")?),
+        }),
     )?;
 
     Ok(())

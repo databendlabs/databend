@@ -45,7 +45,7 @@ jobs:
       - name: Rust setup
         run: |
           bash ./scripts/setup/dev_setup.sh
-          cargo install --version 0.1.16 cross
+          cargo install --version 0.2.1 cross
 
       - uses: ./.github/actions/cache-cargo-registry
         with:

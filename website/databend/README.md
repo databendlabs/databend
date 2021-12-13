@@ -4,6 +4,18 @@ This website is built using [Docusaurus 2](https://docusaurus.io/), a modern sta
 
 ## Get Started
 
+Specify node version
+
+```shell
+nvm use
+```
+
+Install dependencies
+
+```shell
+yarn install
+```
+
 Local preview
 
 ```shell
