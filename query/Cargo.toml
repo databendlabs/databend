@@ -73,7 +73,7 @@ ctrlc = { version = "3.2.1", features = ["termination"] }
 dyn-clone = "1.0.4"
 futures = "0.3.18"
 headers = "0.3.5"
-hyper = "0.14.15"
+hyper = "0.14.16"
 indexmap = "1.7.0"
 lazy_static = "1.4.0"
 maplit = "1.0.2"
