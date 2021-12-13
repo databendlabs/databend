@@ -45,7 +45,7 @@ Mode switched to admin mode
 ## 4. Create the ontime table
 
 ```
-bendctl --databend_dir ~/.databend --group local query ./tests/suites/0_stateful/ddl/create_table.sql
+bendctl --databend_dir ~/.databend --group local query ./tests/suites/0_stateful/ontime/ddl/create_table.sql
 ```
 
 ## 5. Load raw data into ontime table

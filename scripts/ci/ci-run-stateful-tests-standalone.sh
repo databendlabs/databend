@@ -29,7 +29,7 @@ else
 	exit 1
 fi
 
-./target/release/bendctl --databend_dir ./.databend --group local query ./tests/suites/0_stateful/ddl/create_table.sql
+./target/release/bendctl --databend_dir ./.databend --group local query ./tests/suites/0_stateful/01_ontime/ddl/create_table.sql
 if [ $? -eq 0 ]; then
 	echo "dataset table DDL passed"
 else
@@ -45,7 +45,7 @@ fi
 echo "Starting stateful databend-test"
 # Create table
 # shellcheck disable=SC2044
-for i in $(find ./tests/suites/0_stateful/sql -name "*.sql" -type f); do
+for i in $(find ./tests/suites/0_stateful/01_ontime/sql -name "*.sql" -type f); do
 	./target/release/bendctl --databend_dir ./.databend --group local query $i 2>$i.error >$i.out
 	# shellcheck disable=SC2046
 	if [ $(cat $i.error | wc -l) -ne 0 ]; then
