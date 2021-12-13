@@ -11,5 +11,5 @@ doctest = false
 test = false
 
 [dependencies]
-vergen = "5.2.0"
+vergen = "6.0.0"
 run_script = "0.9.0"
