@@ -210,6 +210,40 @@ fn create_table() -> Result<()> {
     });
     expect_parse_ok(sql, expected)?;
 
+    // create table as select statement
+    let sql = "CREATE TABLE db1.test1(c1 int, c2 varchar(255)) ENGINE = Parquet location = 'batcave' AS SELECT * FROM t2";
+    let expected = DfStatement::CreateTable(DfCreateTable {
+        if_not_exists: false,
+        name: ObjectName(vec![Ident::new("db1"), Ident::new("test1")]),
+        columns: vec![
+            make_column_def("c1", DataType::Int(None)),
+            make_column_def("c2", DataType::Varchar(Some(255))),
+        ],
+        engine: "Parquet".to_string(),
+
+        options: maplit::hashmap! {"location".into() => "batcave".into()},
+        like: None,
+        query: Some(Box::new(DfQueryStatement {
+            from: vec![TableWithJoins {
+                relation: TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("t2")]),
+                    alias: None,
+                    args: vec![],
+                    with_hints: vec![],
+                },
+                joins: vec![],
+            }],
+            projection: vec![SelectItem::Wildcard],
+            selection: None,
+            group_by: vec![],
+            having: None,
+            order_by: vec![],
+            limit: None,
+            offset: None,
+        })),
+    });
+    expect_parse_ok(sql, expected)?;
+
     Ok(())
 }
 
