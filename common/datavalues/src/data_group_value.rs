@@ -18,13 +18,17 @@ use std::convert::TryFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use ordered_float::OrderedFloat;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::DataValue;
 
 /// Enumeration of types that can be used in a GROUP BY expression
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 pub enum DataGroupValue {
+    #[serde(with = "OrderedFloatDef")]
     Float32(OrderedFloat<f32>),
+    #[serde(with = "OrderedFloatDef")]
     Float64(OrderedFloat<f64>),
     UInt8(u8),
     UInt16(u16),
@@ -36,6 +40,21 @@ pub enum DataGroupValue {
     Int64(i64),
     String(Vec<u8>),
     Boolean(bool),
+}
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "OrderedFloat")]
+struct OrderedFloatDef<T>(pub T);
+
+impl From<OrderedFloatDef<f32>> for OrderedFloat<f32> {
+    fn from(def: OrderedFloatDef<f32>) -> Self {
+        OrderedFloat::from(def.0)
+    }
+}
+
+impl From<OrderedFloatDef<f64>> for OrderedFloat<f64> {
+    fn from(def: OrderedFloatDef<f64>) -> Self {
+        OrderedFloat::from(def.0)
+    }
 }
 
 impl TryFrom<&DataValue> for DataGroupValue {

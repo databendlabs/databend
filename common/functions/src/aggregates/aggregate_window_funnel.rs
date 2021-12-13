@@ -25,6 +25,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 use num::traits::AsPrimitive;
+use serde::de::DeserializeOwned;
+use serde::Deserialize;
+use serde::Serialize;
 
 use super::AggregateFunctionRef;
 use super::StateAddr;
@@ -35,7 +38,9 @@ use crate::aggregates::AggregateFunction;
 use crate::with_match_date_date_time_types;
 use crate::with_match_unsigned_numeric_types;
 
+#[derive(Serialize, Deserialize)]
 struct AggregateWindowFunnelState<T> {
+    #[serde(bound(deserialize = "T: DeserializeOwned"))]
     pub events_list: Vec<(T, u8)>,
     pub sorted: bool,
 }
@@ -44,8 +49,8 @@ impl<T> AggregateWindowFunnelState<T>
 where T: Ord
         + Sub<Output = T>
         + AsPrimitive<u64>
-        + BinarySer
-        + BinaryDe
+        + Serialize
+        + DeserializeOwned
         + Clone
         + Send
         + Sync
@@ -136,27 +141,13 @@ where T: Ord
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        self.sorted.serialize_to_buf(writer)?;
-        writer.write_uvarint(self.events_list.len() as u64)?;
-
-        for (timestamp, event) in self.events_list.iter() {
-            timestamp.serialize_to_buf(writer)?;
-            event.serialize_to_buf(writer)?;
-        }
+        let writer = BufMut::writer(writer);
+        bincode::serialize_into(writer, self)?;
         Ok(())
     }
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.sorted = bool::deserialize(reader)?;
-        let size: u64 = reader.read_uvarint()?;
-        self.events_list = Vec::with_capacity(size as usize);
-
-        for _i in 0..size {
-            let timestamp = T::deserialize(reader)?;
-            let event = u8::deserialize(reader)?;
-
-            self.events_list.push((timestamp, event));
-        }
+        *self = bincode::deserialize_from(reader)?;
         Ok(())
     }
 }
@@ -176,8 +167,6 @@ where
     T: Ord
         + Sub<Output = T>
         + AsPrimitive<u64>
-        + BinarySer
-        + BinaryDe
         + Clone
         + Send
         + Sync
@@ -252,7 +241,8 @@ where
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
         let state = place.get::<AggregateWindowFunnelState<T>>();
-        state.serialize(writer)
+        // state.serialize(writer)
+        AggregateWindowFunnelState::<T>::serialize(state, writer)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
@@ -286,8 +276,6 @@ where
     T: Ord
         + Sub<Output = T>
         + AsPrimitive<u64>
-        + BinarySer
-        + BinaryDe
         + Clone
         + Send
         + Sync

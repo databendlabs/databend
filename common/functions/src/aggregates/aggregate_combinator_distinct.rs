@@ -22,6 +22,8 @@ use std::sync::Arc;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_io::prelude::*;
+use serde::Deserialize;
+use serde::Serialize;
 
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionCreator;
@@ -31,7 +33,7 @@ use crate::aggregates::aggregator_common::assert_variadic_arguments;
 use crate::aggregates::AggregateCountFunction;
 use crate::aggregates::AggregateFunction;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 struct DataGroupValues(Vec<DataGroupValue>);
 
 pub struct AggregateDistinctState {
@@ -40,35 +42,37 @@ pub struct AggregateDistinctState {
 
 impl AggregateDistinctState {
     pub fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        writer.write_uvarint(self.set.len() as u64)?;
+        // writer.write_uvarint(self.set.len() as u64)?;
 
-        for entry in self.set.iter() {
-            writer.write_uvarint(entry.0.len() as u64)?;
-            for group_value in entry.0.iter() {
-                let datavalue = DataValue::from(group_value);
-                datavalue.serialize_to_buf(writer)?;
-            }
-        }
+        // for entry in self.set.iter() {
+        //     writer.write_uvarint(entry.0.len() as u64)?;
+        //     for group_value in entry.0.iter() {
+        //         let datavalue = DataValue::from(group_value);
+        //         datavalue.serialize_to_buf(writer)?;
+        //     }
+        // }
+        let writer = BufMut::writer(writer);
+        bincode::serialize_into(writer, &self.set)?;    
         Ok(())
     }
 
     pub fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.set.clear();
+        // self.set.clear();
 
-        let size = reader.read_uvarint()?;
-        self.set.reserve(size as usize);
+        // let size = reader.read_uvarint()?;
+        // self.set.reserve(size as usize);
 
-        for _i in 0..size {
-            let vsize = reader.read_uvarint()?;
-            let mut values = Vec::with_capacity(vsize as usize);
-            for _j in 0..vsize {
-                let value = DataValue::deserialize(reader)?;
-                let value = DataGroupValue::try_from(&value)?;
-                values.push(value);
-            }
-            self.set.insert(DataGroupValues(values));
-        }
-
+        // for _i in 0..size {
+        //     let vsize = reader.read_uvarint()?;
+        //     let mut values = Vec::with_capacity(vsize as usize);
+        //     for _j in 0..vsize {
+        //         let value = DataValue::deserialize(reader)?;
+        //         let value = DataGroupValue::try_from(&value)?;
+        //         values.push(value);
+        //     }
+        //     self.set.insert(DataGroupValues(values));
+        // }
+        self.set = bincode::deserialize_from(reader)?;    
         Ok(())
     }
 }
