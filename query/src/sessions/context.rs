@@ -72,7 +72,7 @@ impl QueryContext {
     pub fn from_shared(shared: Arc<QueryContextShared>) -> Arc<QueryContext> {
         shared.increment_ref_count();
 
-        tracing::info!("Create DatabendQueryContext");
+        tracing::debug!("Create DatabendQueryContext");
 
         Arc::new(QueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
@@ -325,7 +325,7 @@ impl QueryContextShared {
     pub(in crate::sessions) fn destroy_context_ref(&self) {
         if self.ref_count.fetch_sub(1, Ordering::Release) == 1 {
             std::sync::atomic::fence(Acquire);
-            tracing::info!("Destroy DatabendQueryContext");
+            tracing::debug!("Destroy DatabendQueryContext");
             self.session.destroy_context_shared();
         }
     }
