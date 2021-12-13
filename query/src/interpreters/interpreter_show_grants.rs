@@ -28,12 +28,12 @@ use crate::sessions::QueryContext;
 
 pub struct ShowGrantsInterpreter {
     ctx: Arc<QueryContext>,
-    _plan: ShowGrantsPlan,
+    plan: ShowGrantsPlan,
 }
 
 impl ShowGrantsInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, _plan: ShowGrantsPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(ShowGrantsInterpreter { ctx, _plan }))
+    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowGrantsPlan) -> Result<InterpreterPtr> {
+        Ok(Arc::new(ShowGrantsInterpreter { ctx, plan }))
     }
 }
 
@@ -50,9 +50,19 @@ impl Interpreter for ShowGrantsInterpreter {
         let schema =
             DataSchemaRefExt::create(vec![DataField::new("Grants", DataType::String, false)]);
 
-        let grant_list = self
-            .ctx
-            .get_current_user()?
+        // TODO: add permission check on reading user grants
+        let user_info = match self.plan.user_identity {
+            None => self.ctx.get_current_user()?,
+            Some(ref user_identity) => {
+                self.ctx
+                    .get_sessions_manager()
+                    .get_user_manager()
+                    .get_user(&user_identity.username, &user_identity.hostname)
+                    .await?
+            }
+        };
+
+        let grant_list = user_info
             .grants
             .entries()
             .iter()
