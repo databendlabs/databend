@@ -68,7 +68,7 @@ tonic = { version = "0.6.2", features = ["tls"] }
 
 sha2 = "0.10.0"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
-poem = { version = "1.0.38", features = ["rustls"] }
+poem = { version = "1.1.1", features = ["rustls"] }
 
 [dev-dependencies]
 common-meta-api = {path = "../common/meta/api" }
