@@ -30,8 +30,8 @@ impl fmt::Display for GrantObject {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
             GrantObject::Global => write!(f, "*.*"),
-            GrantObject::Database(ref db) => write!(f, "{}.*", db),
-            GrantObject::Table(ref db, ref table) => write!(f, "{}.{}", db, table),
+            GrantObject::Database(ref db) => write!(f, "'{}'.*", db),
+            GrantObject::Table(ref db, ref table) => write!(f, "'{}'.'{}'", db, table),
         }
     }
 }
