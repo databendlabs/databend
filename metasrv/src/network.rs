@@ -99,12 +99,12 @@ impl RaftNetwork<LogEntry> for Network {
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id))]
     async fn vote(&self, target: NodeId, rpc: VoteRequest) -> anyhow::Result<VoteResponse> {
-        tracing::debug!("vote req to: id={} {:?}", target, rpc);
+        tracing::debug!("vote: req to: target={} {:?}", target, rpc);
 
         let mut client = self.make_client(&target).await?;
         let req = common_tracing::inject_span_to_tonic_request(rpc);
         let resp = client.vote(req).await;
-        tracing::info!("vote: resp from id={} {:?}", target, resp);
+        tracing::info!("vote: resp from target={} {:?}", target, resp);
 
         let resp = resp?;
         let mes = resp.into_inner();

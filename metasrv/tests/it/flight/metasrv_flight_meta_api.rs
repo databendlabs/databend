@@ -12,18 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Test metasrv MetaApi on a single node.
+
 use common_base::tokio;
 use common_meta_api::MetaApiTestSuite;
 use common_meta_flight::MetaFlightClient;
 
 use crate::init_meta_ut;
+use crate::tests::start_metasrv;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_api_database_create_get_drop() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let (_tc, addr) = crate::tests::start_metasrv().await?;
+    let (_tc, addr) = start_metasrv().await?;
 
     let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -35,7 +38,7 @@ async fn test_meta_api_database_list() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let (_tc, addr) = crate::tests::start_metasrv().await?;
+    let (_tc, addr) = start_metasrv().await?;
 
     let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -47,7 +50,7 @@ async fn test_meta_api_table_create_get_drop() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let (_tc, addr) = crate::tests::start_metasrv().await?;
+    let (_tc, addr) = start_metasrv().await?;
 
     let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 
@@ -59,7 +62,7 @@ async fn test_meta_api_table_list() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let (_tc, addr) = crate::tests::start_metasrv().await?;
+    let (_tc, addr) = start_metasrv().await?;
 
     let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
 

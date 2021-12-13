@@ -17,7 +17,7 @@
 <img src="https://github.com/datafuselabs/databend/actions/workflows/unit-tests.yml/badge.svg" alt="CI Status" />
 </a>
 
-<img src="https://img.shields.io/badge/Platform-Linux,%20ARM,%20OS%20X,%20Windows-green.svg?style=flat" alt="patform" />
+<img src="https://img.shields.io/badge/Platform-Linux%2C%20macOS%2C%20ARM-green.svg?style=flat" alt="patform" />
 
 <a href="https://opensource.org/licenses/Apache-2.0">
 <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="license" />

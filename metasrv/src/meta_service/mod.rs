@@ -16,12 +16,10 @@ pub use message::ForwardRequest;
 pub use message::ForwardRequestBody;
 pub use message::JoinRequest;
 pub use meta_service_impl::MetaServiceImpl;
-pub use network::Network;
 pub use raftmeta::MetaNode;
 
 mod message;
 pub mod meta_leader;
 mod meta_node_kv_api_impl;
 pub mod meta_service_impl;
-pub mod network;
 pub mod raftmeta;

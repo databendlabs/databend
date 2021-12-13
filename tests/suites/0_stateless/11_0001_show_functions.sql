@@ -1,0 +1,2 @@
+SHOW FUNCTIONS LIKE 'today%';
+SHOW FUNCTIONS WHERE name LIKE 'today%';

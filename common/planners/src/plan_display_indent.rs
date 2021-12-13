@@ -254,7 +254,8 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
         // need engine to impl Display
         write!(f, " engine: {},", plan.engine())?;
         write!(f, " if_not_exists:{:},", plan.if_not_exists)?;
-        write!(f, " option: {:?}", plan.options())
+        write!(f, " option: {:?},", plan.options())?;
+        write!(f, " as_select: {:?}", plan.as_select())
     }
 
     fn format_drop_table(f: &mut Formatter, plan: &DropTablePlan) -> fmt::Result {

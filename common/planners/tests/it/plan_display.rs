@@ -40,10 +40,11 @@ fn test_plan_display_indent() -> Result<()> {
             engine: "JSON".to_string(),
             options,
         },
+        as_select: None,
     });
 
     assert_eq!(
-        "Create table foo.bar DataField { name: \"a\", data_type: Int64, nullable: false }, engine: JSON, if_not_exists:true, option: {\"opt_foo\": \"opt_bar\"}",
+        "Create table foo.bar DataField { name: \"a\", data_type: Int64, nullable: false }, engine: JSON, if_not_exists:true, option: {\"opt_foo\": \"opt_bar\"}, as_select: None",
         format!("{:?}", plan_create)
     );
 

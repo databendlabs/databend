@@ -24,6 +24,7 @@ use crate::scalars::ConcatWsFunction;
 use crate::scalars::EltFunction;
 use crate::scalars::ExportSetFunction;
 use crate::scalars::FieldFunction;
+use crate::scalars::FindInSetFunction;
 use crate::scalars::HexFunction;
 use crate::scalars::InsertFunction;
 use crate::scalars::InstrFunction;
@@ -94,5 +95,6 @@ impl StringFunction {
         factory.register("bin", BinFunction::desc());
         factory.register("export_set", ExportSetFunction::desc());
         factory.register("soundex", SoundexFunction::desc());
+        factory.register("find_in_set", FindInSetFunction::desc());
     }
 }

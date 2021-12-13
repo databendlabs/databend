@@ -418,7 +418,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
     let leader = all[leader_id as usize].clone();
 
     let admin_req = join_req(node_id, tc2.config.raft_config.raft_api_addr(), 0);
-    leader.handle_admin_req(admin_req).await?;
+    leader.handle_forwardable_request(admin_req).await?;
 
     all.push(mn2.clone());
 
@@ -514,7 +514,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     let leader_id = all[0].get_leader().await;
     let leader = all[leader_id as usize].clone();
     let req = join_req(node_id, tc1.config.raft_config.raft_api_addr(), 1);
-    leader.handle_admin_req(req).await?;
+    leader.handle_forwardable_request(req).await?;
 
     all.push(mn1.clone());
 
@@ -537,12 +537,12 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     tracing::info!("--- join node-2 by sending rpc `join` to a non-leader");
     {
         let req = join_req(node_id, tc2.config.raft_config.raft_api_addr(), 1);
-        leader.handle_admin_req(req).await?;
+        leader.handle_forwardable_request(req).await?;
     }
     tracing::info!("--- join node-2 again");
     {
         let req = join_req(node_id, tc2.config.raft_config.raft_api_addr(), 1);
-        mn1.handle_admin_req(req).await?;
+        mn1.handle_forwardable_request(req).await?;
     }
 
     all.push(mn2.clone());
@@ -1058,7 +1058,7 @@ async fn test_meta_node_cluster_write_on_non_leader() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_metasrv_upsert_kv() -> anyhow::Result<()> {
+async fn test_meta_node_upsert_kv() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
@@ -1103,7 +1103,7 @@ async fn test_metasrv_upsert_kv() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_metasrv_incr_seq() -> anyhow::Result<()> {
+async fn test_meta_node_incr_seq() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
