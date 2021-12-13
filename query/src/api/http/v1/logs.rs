@@ -14,11 +14,12 @@
 
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 use poem::http::StatusCode;
 use poem::web::Data;
+use poem::Body;
 use poem::IntoResponse;
 use tokio_stream::StreamExt;
 
@@ -38,15 +39,27 @@ pub async fn logs_handler(
     Ok(data)
 }
 
-async fn select_table(sessions: &Arc<SessionManager>) -> Result<String> {
+async fn select_table(sessions: &Arc<SessionManager>) -> Result<Body> {
     let session = sessions.create_session("WatchLogs")?;
     let query_context = session.create_context().await?;
+    let mut tracing_table_stream = execute_query(query_context).await?;
 
-    let tracing_table_stream = execute_query(query_context).await?;
-    let tracing_logs = tracing_table_stream
-        .collect::<Result<Vec<DataBlock>>>()
-        .await?;
-    Ok(format!("{:?}", tracing_logs))
+    let stream = async_stream::try_stream! {
+        match tracing_table_stream.next().await {
+            Some(res) => {
+                let block = res?;
+                yield format!("{:?}", block);
+            },
+            None => return,
+        }
+
+        while let Some(res) = tracing_table_stream.next().await {
+            let block = res?;
+            yield format!(", {:?}", block);
+        }
+    };
+
+    Ok(Body::from_bytes_stream::<_, _, ErrorCode>(stream))
 }
 
 async fn execute_query(ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
