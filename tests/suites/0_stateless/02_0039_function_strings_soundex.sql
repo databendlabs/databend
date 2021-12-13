@@ -1,3 +1,4 @@
+SELECT SOUNDEX(NULL);
 SELECT SOUNDEX("Hello");
 SELECT SOUNDEX("hello");
 SELECT SOUNDEX("Quadratically");
