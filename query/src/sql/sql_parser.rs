@@ -25,6 +25,7 @@ use common_meta_types::AuthType;
 use common_meta_types::Credentials;
 use common_meta_types::FileFormat;
 use common_meta_types::StageParams;
+use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use common_planners::ExplainType;
@@ -231,9 +232,7 @@ impl<'a> DfParser<'a> {
                         } else if self.consume_token("USERS") {
                             Ok(DfStatement::ShowUsers(DfShowUsers))
                         } else if self.consume_token("GRANTS") {
-                            Ok(DfStatement::ShowGrants(DfShowGrants {
-                                user_identity: None,
-                            }))
+                            self.parse_show_grants()
                         } else {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
@@ -869,6 +868,21 @@ impl<'a> DfParser<'a> {
             },
             unexpected => self.expected("show create statement", unexpected),
         }
+    }
+
+    fn parse_show_grants(&mut self) -> Result<DfStatement, ParserError> {
+        // SHOW GRANTS
+        if !self.consume_token("FOR") {
+            return Ok(DfStatement::ShowGrants(DfShowGrants {
+                user_identity: None,
+            }));
+        }
+
+        // SHOW GRANTS FOR 'u1'@'%'
+        let (username, hostname) = self.parse_user_identity()?;
+        Ok(DfStatement::ShowGrants(DfShowGrants {
+            user_identity: Some(UserIdentity { username, hostname }),
+        }))
     }
 
     fn parse_truncate(&mut self) -> Result<DfStatement, ParserError> {
