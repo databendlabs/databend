@@ -133,8 +133,8 @@ impl Function for SoundexFunction {
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         match columns[0].data_type() {
             DataType::String => {
-                return match columns[0].column().cast_with_type(&DataType::String) {
-                    Ok(DataColumn::Constant(DataValue::String(Some(ref data)), _)) => {
+                return match columns[0].column() {
+                    DataColumn::Constant(DataValue::String(Some(ref data)), _) => {
                         let r = Self::soundex(data);
                         Ok(DataColumn::Constant(DataValue::String(Some(r)), input_rows))
                     }
