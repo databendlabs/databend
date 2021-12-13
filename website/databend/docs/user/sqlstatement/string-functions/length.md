@@ -26,7 +26,7 @@ A number data type value.
 ```txt
 SELECT LENGTH('Word');
 +----------------+
-| LENGTH('word') |
+| LENGTH('Word') |
 +----------------+
 |              4 |
 +----------------+
