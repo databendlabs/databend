@@ -53,7 +53,11 @@ impl SoundexFunction {
                 last = score;
                 result.push(ch.to_ascii_uppercase());
             } else {
-                if !ch.is_ascii_alphabetic() || Self::is_drop(ch) || score.is_none() || score == last {
+                if !ch.is_ascii_alphabetic()
+                    || Self::is_drop(ch)
+                    || score.is_none()
+                    || score == last
+                {
                     continue;
                 }
 
@@ -87,13 +91,16 @@ impl SoundexFunction {
 
     #[inline(always)]
     fn is_drop(c: char) -> bool {
-        matches!(c, 'a' | 'e' | 'i' | 'o' | 'u' | 'y' | 'h' | 'w')
+        matches!(
+            c.to_ascii_lowercase(),
+            'a' | 'e' | 'i' | 'o' | 'u' | 'y' | 'h' | 'w'
+        )
     }
 
     // https://github.com/mysql/mysql-server/blob/3290a66c89eb1625a7058e0ef732432b6952b435/sql/item_strfunc.cc#L1919
     #[inline(always)]
     fn is_uni_alphabetic(c: char) -> bool {
-        (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c as i32 >= 0xC0
+        ('a'..='z').contains(&c) || ('A'..='Z').contains(&c) || c as i32 >= 0xC0
     }
 }
 
@@ -129,16 +136,9 @@ impl Function for SoundexFunction {
                 return match columns[0].column().cast_with_type(&DataType::String) {
                     Ok(DataColumn::Constant(DataValue::String(Some(ref data)), _)) => {
                         let r = Self::soundex(data);
-                        Ok(
-                            DataColumn::Constant(
-                                DataValue::String(Some(r)),
-                                input_rows,
-                            )
-                        )
+                        Ok(DataColumn::Constant(DataValue::String(Some(r)), input_rows))
                     }
-                    _ => {
-                        Ok(DataColumn::Constant(DataValue::Null, input_rows))
-                    }
+                    _ => Ok(DataColumn::Constant(DataValue::Null, input_rows)),
                 };
             }
             DataType::Null => Ok(DataColumn::Constant(DataValue::Null, input_rows)),

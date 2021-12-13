@@ -15,7 +15,6 @@
 mod locate;
 mod substring;
 mod trim;
-mod soundex;
 
 mod utils;
 pub use utils::*;

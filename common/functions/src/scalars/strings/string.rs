@@ -42,13 +42,13 @@ use crate::scalars::ReplaceFunction;
 use crate::scalars::ReverseFunction;
 use crate::scalars::RightFunction;
 use crate::scalars::RightPadFunction;
+use crate::scalars::SoundexFunction;
 use crate::scalars::SpaceFunction;
 use crate::scalars::StrcmpFunction;
 use crate::scalars::SubstringFunction;
 use crate::scalars::SubstringIndexFunction;
 use crate::scalars::TrimFunction;
 use crate::scalars::UnhexFunction;
-use crate::scalars::SoundexFunction;
 
 #[derive(Clone)]
 pub struct StringFunction;
