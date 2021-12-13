@@ -30,8 +30,12 @@ use crate::tests::service::start_metasrv_cluster;
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::start_metasrv_with_context;
 
+/// - Start a cluster of 3.
+/// - Test upsert kv and read on different nodes.
+/// - Stop and restart the cluster.
+/// - Test upsert kv and read on different nodes.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_meta_api_restart_cluster_write_read() -> anyhow::Result<()> {
+async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 

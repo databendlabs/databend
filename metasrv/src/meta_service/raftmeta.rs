@@ -53,7 +53,7 @@ use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::JoinRequest;
 use crate::meta_service::MetaServiceImpl;
-use crate::meta_service::Network;
+use crate::network::Network;
 use crate::proto::meta_service_client::MetaServiceClient;
 use crate::proto::meta_service_server::MetaServiceServer;
 use crate::store::MetaRaftStore;

@@ -15,8 +15,8 @@
 pub mod metasrv_flight_api;
 pub mod metasrv_flight_kv_api;
 pub mod metasrv_flight_kv_api_cross_node;
+pub mod metasrv_flight_kv_api_restart_cluster;
 pub mod metasrv_flight_meta_api;
 pub mod metasrv_flight_meta_api_follower_follower;
 pub mod metasrv_flight_meta_api_leader_follower;
-pub mod metasrv_flight_meta_api_restart_cluster;
 pub mod metasrv_flight_tls;
