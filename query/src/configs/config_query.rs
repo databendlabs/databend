@@ -36,7 +36,6 @@ pub const QUERY_MAX_QUERY_LOG_SIZE: &str = "QUERY_MAX_QUERY_LOG_SIZE";
 pub const QUERY_TABLE_CACHE_ENABLED: &str = "QUERY_TABLE_CACHE_ENABLED";
 pub const QUERY_TABLE_CACHE_ROOT: &str = "QUERY_TABLE_CACHE_ROOT";
 pub const QUERY_TABLE_CACHE_MB_SIZE: &str = "QUERY_TABLE_CACHE_MB_SIZE";
-pub const QUERY_TABLE_CACHE_BUFFER_MB_SIZE: &str = "QUERY_TABLE_CACHE_BUFFER_MB_SIZE";
 const QUERY_API_TLS_SERVER_CERT: &str = "QUERY_API_TLS_SERVER_CERT";
 const QUERY_API_TLS_SERVER_KEY: &str = "QUERY_API_TLS_SERVER_KEY";
 const QUERY_API_TLS_SERVER_ROOT_CA_CERT: &str = "QUERY_API_TLS_SERVER_ROOT_CA_CERT";
@@ -262,15 +261,6 @@ pub struct QueryConfig {
         )]
     #[serde(default)]
     pub table_cache_mb_size: u64,
-
-    #[structopt(
-        long,
-        env = QUERY_TABLE_CACHE_BUFFER_MB_SIZE,
-        default_value = "100",
-        help = "Table cache buffer size (mb)"
-        )]
-    #[serde(default)]
-    pub table_cache_buffer_mb_size: u64,
 }
 
 impl QueryConfig {
@@ -305,7 +295,6 @@ impl QueryConfig {
             table_cache_enabled: false,
             table_cache_root: "_cache".to_string(),
             table_cache_mb_size: 256,
-            table_cache_buffer_mb_size: 100,
         }
     }
 
@@ -481,13 +470,6 @@ impl QueryConfig {
             table_cache_mb_size,
             u64,
             QUERY_TABLE_CACHE_MB_SIZE
-        );
-        env_helper!(
-            mut_config,
-            query,
-            table_cache_buffer_mb_size,
-            u64,
-            QUERY_TABLE_CACHE_BUFFER_MB_SIZE
         );
     }
 }

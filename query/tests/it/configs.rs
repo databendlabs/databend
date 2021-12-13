@@ -65,7 +65,6 @@ max_query_log_size = 10000
 table_cache_enabled = false
 table_cache_root = \"_cache\"
 table_cache_mb_size = 256
-table_cache_buffer_mb_size = 100
 
 [log]
 log_level = \"INFO\"
@@ -123,7 +122,6 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("QUERY_TABLE_CACHE_ENABLED", "true");
     std::env::set_var("QUERY_TABLE_CACHE_ROOT", "_cache_env");
     std::env::set_var("QUERY_TABLE_CACHE_MB_SIZE", "512");
-    std::env::set_var("QUERY_TABLE_CACHE_BUFFER_MB_SIZE", "150");
     std::env::set_var("STORAGE_TYPE", "s3");
     std::env::set_var("DISK_STORAGE_DATA_PATH", "/tmp/test");
     std::env::set_var("S3_STORAGE_REGION", "us.region");
@@ -173,7 +171,6 @@ fn test_env_config() -> Result<()> {
     assert!(configured.query.table_cache_enabled);
     assert_eq!("_cache_env", configured.query.table_cache_root);
     assert_eq!(512, configured.query.table_cache_mb_size);
-    assert_eq!(150, configured.query.table_cache_buffer_mb_size);
 
     // clean up
     std::env::remove_var("LOG_LEVEL");
@@ -191,7 +188,6 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("QUERY_TABLE_CACHE_ENABLED");
     std::env::remove_var("QUERY_TABLE_CACHE_ROOT");
     std::env::remove_var("QUERY_TABLE_CACHE_MB_SIZE");
-    std::env::remove_var("QUERY_TABLE_CACHE_BUFFER_MB_SIZE");
     std::env::remove_var("STORAGE_TYPE");
     std::env::remove_var("DISK_STORAGE_DATA_PATH");
     std::env::remove_var("S3_STORAGE_REGION");

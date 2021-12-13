@@ -77,7 +77,8 @@ impl QueryContextShared {
             conf.query.table_cache_enabled,
             conf.query.table_cache_root.clone(),
             conf.query.table_cache_mb_size,
-            conf.query.table_cache_buffer_mb_size,
+            conf.query.tenant_id.clone(),
+            conf.query.cluster_id.clone(),
         )?;
         Ok(Arc::new(QueryContextShared {
             conf,

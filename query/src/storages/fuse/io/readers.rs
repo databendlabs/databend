@@ -19,16 +19,26 @@ use common_dal::DataAccessor;
 use common_exception::Result;
 use serde::de::DeserializeOwned;
 
+use crate::storages::fuse::constants::FUSE_TBL_SEGMENT_PREFIX;
+use crate::storages::fuse::constants::FUSE_TBL_SNAPSHOT_PREFIX;
+
 pub async fn read_obj<T: DeserializeOwned>(
     da: &dyn DataAccessor,
     loc: impl AsRef<str>,
     cache: Arc<Option<DalCache>>,
 ) -> Result<T> {
-    let bytes = if let Some(cache) = &*cache {
-        cache.read(loc.as_ref(), da).await?
-    } else {
-        da.read(loc.as_ref()).await?
-    };
+    // only metadata(segments and snapshots will use cache now)
+    let loc = loc.as_ref();
+    let bytes =
+        if loc.starts_with(FUSE_TBL_SNAPSHOT_PREFIX) || loc.starts_with(FUSE_TBL_SEGMENT_PREFIX) {
+            if let Some(cache) = &*cache {
+                cache.read(loc, da).await?
+            } else {
+                da.read(loc).await?
+            }
+        } else {
+            da.read(loc).await?
+        };
     let r = serde_json::from_slice::<T>(&bytes)?;
     Ok(r)
 }

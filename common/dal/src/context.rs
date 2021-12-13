@@ -37,14 +37,15 @@ impl DalContext {
         table_cache_enabled: bool,
         path: String,
         cache_size_mb: u64,
-        cache_buffer_mb_size: u64,
+        tenant_id: String,
+        cluster_id: String,
     ) -> Result<Self> {
         let cache = if table_cache_enabled {
             let bytes_size = cache_size_mb * 1024 * 1024;
             let cache = Arc::new(common_base::tokio::sync::RwLock::new(LruDiskCache::new(
                 path, bytes_size,
             )?));
-            Arc::new(Some(DalCache::create(cache, cache_buffer_mb_size)))
+            Arc::new(Some(DalCache::create(cache, tenant_id, cluster_id)))
         } else {
             Arc::new(None)
         };

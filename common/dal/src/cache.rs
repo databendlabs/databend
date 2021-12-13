@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
 use std::ffi::OsStr;
 use std::io::Read;
 use std::sync::Arc;
@@ -20,40 +19,73 @@ use std::sync::Arc;
 use common_base::tokio::sync::RwLock;
 use common_cache::LruDiskCache;
 use common_exception::Result;
+use common_metrics::label_counter;
+use common_metrics::label_counter_with_val;
 
 use crate::DataAccessor;
+
+const CACHE_READ_BYTES_FROM_REMOTE: &str = "cache_read_bytes_from_remote";
+const CACHE_READ_BYTES_FROM_LOCAL: &str = "cache_read_bytes_from_local";
+const CACHE_ACCESS_COUNT: &str = "cache_access_count";
+const CACHE_ACCESS_HIT_COUNT: &str = "cache_access_hit_count";
 
 // TODO maybe distinct segments cache and snapshots cache
 #[derive(Clone, Debug)]
 pub struct DalCache {
     pub cache: Arc<RwLock<LruDiskCache>>,
-    input_tasks: Arc<RwLock<VecDeque<CacheTask>>>,
-    buffer_bytes_capacity: u64,
+    tenant_id: String,
+    cluster_id: String,
 }
 
-#[derive(Clone, Debug)]
-struct CacheTask {}
-
 impl DalCache {
-    pub fn create(cache: Arc<RwLock<LruDiskCache>>, cache_buffer_mb_size: u64) -> Self {
+    pub fn create(cache: Arc<RwLock<LruDiskCache>>, tenant_id: String, cluster_id: String) -> Self {
         Self {
             cache,
-            input_tasks: Arc::new(RwLock::new(VecDeque::new())),
-            buffer_bytes_capacity: cache_buffer_mb_size * 1024 * 1024,
+            tenant_id,
+            cluster_id,
         }
     }
 
     pub async fn read<K: AsRef<OsStr>>(&self, loc: K, da: &dyn DataAccessor) -> Result<Vec<u8>> {
         let loc = loc.as_ref().to_owned();
         let mut cache = self.cache.write().await;
+
+        label_counter(
+            CACHE_ACCESS_COUNT,
+            self.tenant_id.as_str(),
+            self.cluster_id.as_str(),
+        );
+
         if cache.contains_key(loc.clone()) {
             let mut path = cache.get(loc)?;
             let data = read_all(&mut path)?;
+
+            label_counter(
+                CACHE_ACCESS_HIT_COUNT,
+                self.tenant_id.as_str(),
+                self.cluster_id.as_str(),
+            );
+
+            label_counter_with_val(
+                CACHE_READ_BYTES_FROM_LOCAL,
+                data.len() as u64,
+                self.tenant_id.as_str(),
+                self.cluster_id.as_str(),
+            );
+
             Ok(data)
         } else {
             let bytes = da.read(loc.to_str().unwrap()).await?;
-            // this will put a task in a queue
+
             cache.insert_bytes(loc, bytes.as_slice())?;
+
+            label_counter_with_val(
+                CACHE_READ_BYTES_FROM_REMOTE,
+                bytes.len() as u64,
+                self.tenant_id.as_str(),
+                self.cluster_id.as_str(),
+            );
+
             Ok(bytes)
         }
     }
