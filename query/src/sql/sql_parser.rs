@@ -231,7 +231,9 @@ impl<'a> DfParser<'a> {
                         } else if self.consume_token("USERS") {
                             Ok(DfStatement::ShowUsers(DfShowUsers))
                         } else if self.consume_token("GRANTS") {
-                            Ok(DfStatement::ShowGrants(DfShowGrants))
+                            Ok(DfStatement::ShowGrants(DfShowGrants {
+                                user_identity: None,
+                            }))
                         } else {
                             self.expected("tables or settings", self.parser.peek_token())
                         }

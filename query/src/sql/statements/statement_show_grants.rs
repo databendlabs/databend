@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_types::UserIdentity;
 use common_planners::PlanNode;
 use common_planners::ShowGrantsPlan;
 use common_tracing::tracing;
@@ -24,14 +25,18 @@ use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DfShowGrants;
+pub struct DfShowGrants {
+    pub user_identity: Option<UserIdentity>,
+}
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfShowGrants {
     #[tracing::instrument(level = "info", skip(self, _ctx), fields(_ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::ShowGrants(
-            ShowGrantsPlan {},
+            ShowGrantsPlan {
+                user_identity: self.user_identity.clone(),
+            },
         ))))
     }
 }
