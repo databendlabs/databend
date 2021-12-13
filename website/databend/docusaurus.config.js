@@ -7,7 +7,7 @@ const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 /** @type {import('@docusaurus/types').Config} */
 const config = {
     title: 'Databend',
-    tagline: 'Built to make the Data Cloud easy.',
+    tagline: 'The Open Source Serverless Data Warehouse for Everyone.',
     url: 'https://databend.rs',
     baseUrl: '/',
     onBrokenLinks: 'throw',
@@ -33,12 +33,15 @@ const config = {
                         'https://github.com/datafuselabs/databend/edit/main/website/databend/blog',
                 },
                 theme: {
-                    customCss: require.resolve('./src/css/custom.css'),
+                    customCss: require.resolve('./src/css/custom.scss'),
                 },
             }),
         ],
     ],
     plugins: [
+        'docusaurus-plugin-sass',
+        './src/plugins/pxToVw',
+        './src/plugins/globalSassVarInject',
         [
             '@docusaurus/plugin-content-docs',
             /** @type {import('@docusaurus/plugin-content-docs').Options} */

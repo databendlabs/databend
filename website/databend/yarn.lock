@@ -2268,6 +2268,11 @@ async@^2.6.2:
   dependencies:
     lodash "^4.17.14"
 
+async@^3.2.0:
+  version "3.2.2"
+  resolved "https://registry.yarnpkg.com/async/-/async-3.2.2.tgz#2eb7671034bb2194d45d30e31e24ec7e7f9670cd"
+  integrity sha512-H0E+qZaDEfx/FY4t7iLRv1W2fFI6+pyCeTw1uN20AQPiwqwM6ojPxHxdLv4z8hi2DtnW9BOckSspLucW7pIE5g==
+
 at-least-node@^1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/at-least-node/-/at-least-node-1.0.0.tgz#602cd4b46e844ad4effc92a8011a3c46e0238dc2"
@@ -2614,7 +2619,7 @@ cheerio@^0.22.0:
     lodash.reject "^4.4.0"
     lodash.some "^4.4.0"
 
-chokidar@^3.4.2, chokidar@^3.5.2:
+"chokidar@>=3.0.0 <4.0.0", chokidar@^3.4.2, chokidar@^3.5.2:
   version "3.5.2"
   resolved "https://registry.yarnpkg.com/chokidar/-/chokidar-3.5.2.tgz#dba3976fcadb016f66fd365021d91600d01c1e75"
   integrity sha512-ekGhOnNVPgT77r4K/U3GDhu+FQ2S8TnK/s2KbIGXi0SZWuwkZ2QNyfWdZW+TVfn84DpEP7rLeCt2UI6bJ8GwbQ==
@@ -3263,6 +3268,13 @@ dns-txt@^2.0.2:
   integrity sha1-uR2Ab10nGI5Ks+fRB9iBocxGQrY=
   dependencies:
     buffer-indexof "^1.0.0"
+
+docusaurus-plugin-sass@^0.2.1:
+  version "0.2.1"
+  resolved "https://registry.yarnpkg.com/docusaurus-plugin-sass/-/docusaurus-plugin-sass-0.2.1.tgz#673c6b6ac00b581e8fb0baab22f2b3766735aafc"
+  integrity sha512-cRugbRWnKLjFPQTo1k2cyn/AANYkXAPHv+DaLs7bkOfOofEgTSrMdpNidt3oZ0ltQcjUUbvmSRRjH9R1ifdRMA==
+  dependencies:
+    sass-loader "^10.1.1"
 
 dom-converter@^0.2.0:
   version "0.2.0"
@@ -4348,6 +4360,11 @@ immer@^9.0.6:
   resolved "https://registry.yarnpkg.com/immer/-/immer-9.0.7.tgz#b6156bd7db55db7abc73fd2fdadf4e579a701075"
   integrity sha512-KGllzpbamZDvOIxnmJ0jI840g7Oikx58lBPWV0hUh7dtAyZpFqqrBZdKka5GlTwMTZ1Tjc/bKKW4VSFAt6BqMA==
 
+immutable@^4.0.0:
+  version "4.0.0"
+  resolved "https://registry.yarnpkg.com/immutable/-/immutable-4.0.0.tgz#b86f78de6adef3608395efb269a91462797e2c23"
+  integrity sha512-zIE9hX70qew5qTUjSS7wi1iwj/l7+m54KWU247nhM3v806UdGj1yDndXj+IOYxxtW9zyLI+xqFNZjTuDaLUqFw==
+
 import-fresh@^3.1.0, import-fresh@^3.2.1, import-fresh@^3.2.2, import-fresh@^3.3.0:
   version "3.3.0"
   resolved "https://registry.yarnpkg.com/import-fresh/-/import-fresh-3.3.0.tgz#37162c25fcb9ebaa2e6e53d5b4d88ce17d9e0c2b"
@@ -4842,7 +4859,7 @@ kleur@^3.0.3:
   resolved "https://registry.yarnpkg.com/kleur/-/kleur-3.0.3.tgz#a79c9ecc86ee1ce3fa6206d1216c501f147fc07e"
   integrity sha512-eTIzlVOSUR+JxdDFepEYcBMtZ9Qqdef+rnzWdRZuMbOywu5tO2w2N7rqjoANZ5k9vywhL6Br1VRjUIgTQx4E8w==
 
-klona@^2.0.5:
+klona@^2.0.4, klona@^2.0.5:
   version "2.0.5"
   resolved "https://registry.yarnpkg.com/klona/-/klona-2.0.5.tgz#d166574d90076395d9963aa7a928fabb8d76afbc"
   integrity sha512-pJiBpiXMbt7dkzXe8Ghj/u4FfXOOa98fPW+bihOJ4SjnoijweJrNThJfd3ifXpXhREjpoF2mZVH1GfS9LV3kHQ==
@@ -5351,7 +5368,7 @@ nth-check@^2.0.0:
   dependencies:
     boolbase "^1.0.0"
 
-object-assign@^4.1.0, object-assign@^4.1.1:
+object-assign@>=4.0.1, object-assign@^4.1.0, object-assign@^4.1.1:
   version "4.1.1"
   resolved "https://registry.yarnpkg.com/object-assign/-/object-assign-4.1.1.tgz#2109adc7965887cfc05cbbd442cac8bfbb360863"
   integrity sha1-IQmtx5ZYh8/AXLvUQsrIv7s2CGM=
@@ -5909,6 +5926,14 @@ postcss-ordered-values@^5.0.2:
     cssnano-utils "^2.0.1"
     postcss-value-parser "^4.1.0"
 
+postcss-px-to-viewport@^1.1.1:
+  version "1.1.1"
+  resolved "https://registry.yarnpkg.com/postcss-px-to-viewport/-/postcss-px-to-viewport-1.1.1.tgz#a25ca410b553c9892cc8b525cc710da47bf1aa55"
+  integrity sha512-2x9oGnBms+e0cYtBJOZdlwrFg/mLR4P1g2IFu7jYKvnqnH/HLhoKyareW2Q/x4sg0BgklHlP1qeWo2oCyPm8FQ==
+  dependencies:
+    object-assign ">=4.0.1"
+    postcss ">=5.0.2"
+
 postcss-reduce-idents@^5.0.1:
   version "5.0.1"
   resolved "https://registry.yarnpkg.com/postcss-reduce-idents/-/postcss-reduce-idents-5.0.1.tgz#99b49ce8ee6f9c179447671cc9693e198e877bb7"
@@ -5980,6 +6005,15 @@ postcss-zindex@^5.0.1:
   dependencies:
     picocolors "^0.2.1"
     source-map "^0.6.1"
+
+postcss@>=5.0.2:
+  version "8.4.5"
+  resolved "https://registry.yarnpkg.com/postcss/-/postcss-8.4.5.tgz#bae665764dfd4c6fcc24dc0fdf7e7aa00cc77f95"
+  integrity sha512-jBDboWM8qpaqwkMwItqTQTiFikhs/67OYVvblFFTM7MrZjt6yMKd6r2kgXizEbTTljacm4NldIlZnhbjr84QYg==
+  dependencies:
+    nanoid "^3.1.30"
+    picocolors "^1.0.0"
+    source-map-js "^1.0.1"
 
 postcss@^8.2.15, postcss@^8.3.11, postcss@^8.3.5, postcss@^8.3.7:
   version "8.4.4"
@@ -6642,6 +6676,36 @@ safe-buffer@>=5.1.0, safe-buffer@^5.0.1, safe-buffer@^5.1.0, safe-buffer@~5.2.0:
   resolved "https://registry.yarnpkg.com/safer-buffer/-/safer-buffer-2.1.2.tgz#44fa161b0187b9549dd84bb91802f9bd8385cd6a"
   integrity sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==
 
+sass-loader@^10.1.1:
+  version "10.2.0"
+  resolved "https://registry.yarnpkg.com/sass-loader/-/sass-loader-10.2.0.tgz#3d64c1590f911013b3fa48a0b22a83d5e1494716"
+  integrity sha512-kUceLzC1gIHz0zNJPpqRsJyisWatGYNFRmv2CKZK2/ngMJgLqxTbXwe/hJ85luyvZkgqU3VlJ33UVF2T/0g6mw==
+  dependencies:
+    klona "^2.0.4"
+    loader-utils "^2.0.0"
+    neo-async "^2.6.2"
+    schema-utils "^3.0.0"
+    semver "^7.3.2"
+
+sass-resources-loader@^2.2.4:
+  version "2.2.4"
+  resolved "https://registry.yarnpkg.com/sass-resources-loader/-/sass-resources-loader-2.2.4.tgz#1a86fba499e74a88cb7ce95f0c98449f348d360e"
+  integrity sha512-hIQhBygYky+rLf+4cuoGYONZ623CEH4Swo1fs1WRJkukbqdvN1VIu2KCL59du6vX92bNELzNkGPLx+NorN73xA==
+  dependencies:
+    async "^3.2.0"
+    chalk "^4.1.0"
+    glob "^7.1.6"
+    loader-utils "^2.0.0"
+
+sass@^1.45.0:
+  version "1.45.0"
+  resolved "https://registry.yarnpkg.com/sass/-/sass-1.45.0.tgz#192ede1908324bb293a3e403d1841dbcaafdd323"
+  integrity sha512-ONy5bjppoohtNkFJRqdz1gscXamMzN3wQy1YH9qO2FiNpgjLhpz/IPRGg0PpCjyz/pWfCOaNEaiEGCcjOFAjqw==
+  dependencies:
+    chokidar ">=3.0.0 <4.0.0"
+    immutable "^4.0.0"
+    source-map-js ">=0.6.2 <2.0.0"
+
 sax@^1.2.4, sax@~1.2.4:
   version "1.2.4"
   resolved "https://registry.yarnpkg.com/sax/-/sax-1.2.4.tgz#2816234e2378bddc4e5354fab5caa895df7100d9"
@@ -6914,7 +6978,7 @@ source-list-map@^2.0.0:
   resolved "https://registry.yarnpkg.com/source-list-map/-/source-list-map-2.0.1.tgz#3993bd873bfc48479cca9ea3a547835c7c154b34"
   integrity sha512-qnQ7gVMxGNxsiL4lEuJwe/To8UnK7fAnmbGEEH8RpLouuKbeEm0lhbQVFIrNSuB+G7tVrAlVsZgETT5nljf+Iw==
 
-source-map-js@^1.0.1:
+"source-map-js@>=0.6.2 <2.0.0", source-map-js@^1.0.1:
   version "1.0.1"
   resolved "https://registry.yarnpkg.com/source-map-js/-/source-map-js-1.0.1.tgz#a1741c131e3c77d048252adfa24e23b908670caf"
   integrity sha512-4+TN2b3tqOCd/kaGRJ/sTYA0tR0mdXx26ipdolxcwtJVqEnqNYvlCAt1q3ypy4QMlYus+Zh34RNtYLoq2oQ4IA==
