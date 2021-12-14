@@ -17,4 +17,4 @@ curl -H "insert_sql:insert into ontime format CSV" -H "csv_header:1" -F  "upload
 
 
 echo "select count(1) ,avg(Year), sum(DayOfWeek)  from ontime;" | $MYSQL_CLIENT_CONNECT
-echo "drop table ontime;" | $MYSQL_CLIENT_CONNECT
+##echo "drop table ontime;" | $MYSQL_CLIENT_CONNECT
