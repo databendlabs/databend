@@ -31,7 +31,7 @@ colored = "2.0.0"
 comfy-table = "5.0.0"
 dirs = "4.0.0"
 clap = { version = "3.0.0-rc.0", features = ["env"] }
-clap_generate = "3.0.0-rc.0"
+clap_generate = "3.0.0-rc.4"
 dyn-clone = "1.0.4"
 flate2 = "1.0.22"
 handlebars = "4.1.6"
