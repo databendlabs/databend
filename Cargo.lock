@@ -1268,6 +1268,7 @@ dependencies = [
  "lazy_static",
  "md5",
  "num",
+ "num-format",
  "ordered-float 2.8.0",
  "pretty_assertions",
  "rand 0.8.4",
