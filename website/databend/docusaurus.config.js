@@ -85,7 +85,6 @@ const config = {
                         to: '/user/index', label: 'User Guide', position: 'left', items: [
                             {label: 'Get Started', to: '/user/index'},
                             {label: 'API', to: '/user/api/index'},
-                            {label: 'CLI', to: '/user/cli/index'},
                             {label: 'SQL Statement', to: '/user/sqlstatement/index'},
                             {label: 'System', to: '/user/system/index'}
                         ]
@@ -100,6 +99,7 @@ const config = {
                             {label: 'Policies', to: '/dev/policies/index'}
                         ]
                     },
+                    {to: '/cli/index', label: 'CLI', position: 'left'},
                     {to: '/blog', label: 'Blog', position: 'left'},
                     {
                         href: 'https://github.com/datafuselabs/databend',
