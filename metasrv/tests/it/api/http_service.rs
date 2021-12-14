@@ -30,7 +30,7 @@ use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
 
 // TODO(zhihanz) add tls fail case
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_http_service_tls_server() -> Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();

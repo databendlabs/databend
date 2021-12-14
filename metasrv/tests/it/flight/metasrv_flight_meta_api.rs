@@ -21,7 +21,7 @@ use common_meta_flight::MetaFlightClient;
 use crate::init_meta_ut;
 use crate::tests::start_metasrv;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_api_database_create_get_drop() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
@@ -33,7 +33,7 @@ async fn test_meta_api_database_create_get_drop() -> anyhow::Result<()> {
     MetaApiTestSuite {}.database_create_get_drop(&client).await
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_api_database_list() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
@@ -45,7 +45,7 @@ async fn test_meta_api_database_list() -> anyhow::Result<()> {
     MetaApiTestSuite {}.database_list(&client).await
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_api_table_create_get_drop() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
@@ -57,7 +57,7 @@ async fn test_meta_api_table_create_get_drop() -> anyhow::Result<()> {
     MetaApiTestSuite {}.table_create_get_drop(&client).await
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_api_table_list() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
@@ -73,7 +73,7 @@ async fn test_meta_api_table_list() -> anyhow::Result<()> {
 // ------------------------------------------------------------
 
 /*
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_api_flight_get_database_meta_ddl_table() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
@@ -151,7 +151,7 @@ async fn test_meta_api_flight_get_database_meta_ddl_table() -> anyhow::Result<()
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_api_flight_get_database_meta_empty_db() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
@@ -165,7 +165,7 @@ async fn test_meta_api_flight_get_database_meta_empty_db() -> anyhow::Result<()>
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_api_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();

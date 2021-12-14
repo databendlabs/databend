@@ -117,7 +117,7 @@ async fn test_cluster_state() -> common_exception::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_http_service_cluster_state() -> common_exception::Result<()> {
     let addr_str = "127.0.0.1:30003";
 

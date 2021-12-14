@@ -395,6 +395,7 @@ impl MetaNode {
             // Joining a node with log has risk messing up the data in this node and in the target cluster.
 
             let addrs = &conf.join;
+            #[allow(clippy::never_loop)]
             for addr in addrs {
                 let mut client = MetaServiceClient::connect(format!("http://{}", addr))
                     .await
@@ -410,7 +411,7 @@ impl MetaNode {
 
                 let _res = client.forward(admin_req.clone()).await?;
                 // TODO: retry
-                // break;
+                break;
             }
 
             return Ok(mn);

@@ -18,7 +18,7 @@ use common_meta_api::KVApiTestSuite;
 use crate::init_meta_ut;
 use crate::tests::service::start_metasrv_cluster;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_kv_api_write_read_cross_nodes() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();

@@ -22,6 +22,7 @@ simd = ["common-arrow/simd"]
 [dependencies]
 # Workspace dependencies
 common-arrow = {path = "../common/arrow"}
+common-containers = {path = "../common/containers"}
 common-datavalues = {path = "../common/datavalues"}
 common-exception = { path = "../common/exception" }
 common-flight-rpc = { path = "../common/flight-rpc" }
