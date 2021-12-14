@@ -1015,10 +1015,10 @@ async fn test_meta_node_cluster_write_on_non_leader() -> anyhow::Result<()> {
                 panic!("expect node")
             }
         }
-        mn1.raft.wait(None).state(State::NonVoter, "").await?;
-        mn1.raft.wait(None).current_leader(0, "").await?;
+        mn1.raft.wait(timeout()).state(State::NonVoter, "").await?;
+        mn1.raft.wait(timeout()).current_leader(0, "").await?;
         // 3 log: init blank log, add-node-0 log, add-node-1 log
-        mn1.raft.wait(None).log(3, "replicated log").await?;
+        mn1.raft.wait(timeout()).log(3, "replicated log").await?;
     }
 
     let mut client1 = tc1.raft_client().await?;
