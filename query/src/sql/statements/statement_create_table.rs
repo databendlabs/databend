@@ -69,8 +69,6 @@ impl AnalyzableStatement for DfCreateTable {
 
                 // If the current table schema is empty, for example 'CREATE TABLE t1 AS SELECT * FROM t2',
                 // we use the schema from 'AS SELECT' query.
-                // TODO: there is a bug that nullable information is missed in select_plan.schema().
-                // See the TODO item in plan_expression.rs, function nullable.
                 if table_meta.schema.fields().is_empty() {
                     table_meta.schema = select_plan.schema();
                 }
