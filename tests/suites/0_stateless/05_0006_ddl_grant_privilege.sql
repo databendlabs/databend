@@ -14,10 +14,11 @@ GRANT SELECT ON db01.tb1 TO 'test-grant'@'localhost';
 GRANT SELECT ON `db01`.'tb1' TO 'test-grant'@'localhost';
 GRANT SELECT ON db01.tbnotexists TO 'test-grant'@'localhost'; -- {ErrorCode 25}
 GRANT SELECT ON dbnotexists.* TO 'test-grant'@'localhost'; -- {ErrorCode 3}
-
 SHOW GRANTS FOR 'test-grant'@'localhost';
 
 REVOKE SELECT ON db01.* FROM 'test-grant'@'localhost';
+SHOW GRANTS FOR 'test-grant'@'localhost';
 REVOKE ALL PRIVILEGES ON * FROM 'test-grant'@'localhost';
+SHOW GRANTS FOR 'test-grant'@'localhost';
 
 DROP DATABASE `db01`;
