@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_arrow::arrow::types::NativeType;
-use common_io::prelude::*;
 use num::NumCast;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -85,8 +84,6 @@ pub trait DFPrimitiveType:
     + PartialOrd
     + Into<DataValue>
     + Default
-    + BinarySer
-    + BinaryDe
     + Serialize
     + DeserializeOwned
     + DFTryFrom<DataValue>

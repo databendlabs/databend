@@ -164,13 +164,7 @@ pub struct AggregateWindowFunnelFunction<T> {
 impl<T> AggregateFunction for AggregateWindowFunnelFunction<T>
 where
     T: DFPrimitiveType,
-    T: Ord
-        + Sub<Output = T>
-        + AsPrimitive<u64>
-        + Clone
-        + Send
-        + Sync
-        + 'static,
+    T: Ord + Sub<Output = T> + AsPrimitive<u64> + Clone + Send + Sync + 'static,
 {
     fn name(&self) -> &str {
         "AggregateWindowFunnelFunction"
@@ -241,7 +235,6 @@ where
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
         let state = place.get::<AggregateWindowFunnelState<T>>();
-        // state.serialize(writer)
         AggregateWindowFunnelState::<T>::serialize(state, writer)
     }
 
@@ -273,13 +266,7 @@ impl<T> fmt::Display for AggregateWindowFunnelFunction<T> {
 impl<T> AggregateWindowFunnelFunction<T>
 where
     T: DFPrimitiveType,
-    T: Ord
-        + Sub<Output = T>
-        + AsPrimitive<u64>
-        + Clone
-        + Send
-        + Sync
-        + 'static,
+    T: Ord + Sub<Output = T> + AsPrimitive<u64> + Clone + Send + Sync + 'static,
 {
     pub fn try_create(
         display_name: &str,

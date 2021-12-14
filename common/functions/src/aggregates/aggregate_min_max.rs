@@ -126,13 +126,11 @@ where
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        // self.value.serialize_to_buf(writer)
         let writer = BufMut::writer(writer);
         bincode::serialize_into(writer, &self.value)?;
         Ok(())
     }
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        // self.value = Option::<T>::deserialize(reader)?;
         self.value = bincode::deserialize_from(reader)?;
         Ok(())
     }

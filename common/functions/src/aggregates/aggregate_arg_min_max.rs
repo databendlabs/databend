@@ -250,16 +250,12 @@ impl AggregateArgMinMaxState for StringState {
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        // self.value.serialize_to_buf(writer)?;
-        // self.data.serialize_to_buf(writer)
         let writer = BufMut::writer(writer);
         bincode::serialize_into(writer, self)?;
         Ok(())
     }
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        // self.value = Option::<Vec<u8>>::deserialize(reader)?;
-        // self.data = DataValue::deserialize(reader)?;
         *self = bincode::deserialize_from(reader)?;
         Ok(())
     }

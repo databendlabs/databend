@@ -42,37 +42,13 @@ pub struct AggregateDistinctState {
 
 impl AggregateDistinctState {
     pub fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        // writer.write_uvarint(self.set.len() as u64)?;
-
-        // for entry in self.set.iter() {
-        //     writer.write_uvarint(entry.0.len() as u64)?;
-        //     for group_value in entry.0.iter() {
-        //         let datavalue = DataValue::from(group_value);
-        //         datavalue.serialize_to_buf(writer)?;
-        //     }
-        // }
         let writer = BufMut::writer(writer);
-        bincode::serialize_into(writer, &self.set)?;    
+        bincode::serialize_into(writer, &self.set)?;
         Ok(())
     }
 
     pub fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        // self.set.clear();
-
-        // let size = reader.read_uvarint()?;
-        // self.set.reserve(size as usize);
-
-        // for _i in 0..size {
-        //     let vsize = reader.read_uvarint()?;
-        //     let mut values = Vec::with_capacity(vsize as usize);
-        //     for _j in 0..vsize {
-        //         let value = DataValue::deserialize(reader)?;
-        //         let value = DataGroupValue::try_from(&value)?;
-        //         values.push(value);
-        //     }
-        //     self.set.insert(DataGroupValues(values));
-        // }
-        self.set = bincode::deserialize_from(reader)?;    
+        self.set = bincode::deserialize_from(reader)?;
         Ok(())
     }
 }

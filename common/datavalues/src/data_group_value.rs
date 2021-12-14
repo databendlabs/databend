@@ -41,21 +41,6 @@ pub enum DataGroupValue {
     String(Vec<u8>),
     Boolean(bool),
 }
-#[derive(Serialize, Deserialize)]
-#[serde(remote = "OrderedFloat")]
-struct OrderedFloatDef<T>(pub T);
-
-impl From<OrderedFloatDef<f32>> for OrderedFloat<f32> {
-    fn from(def: OrderedFloatDef<f32>) -> Self {
-        OrderedFloat::from(def.0)
-    }
-}
-
-impl From<OrderedFloatDef<f64>> for OrderedFloat<f64> {
-    fn from(def: OrderedFloatDef<f64>) -> Self {
-        OrderedFloat::from(def.0)
-    }
-}
 
 impl TryFrom<&DataValue> for DataGroupValue {
     type Error = ErrorCode;
@@ -119,5 +104,21 @@ impl From<&DataGroupValue> for DataValue {
             DataGroupValue::UInt64(v) => DataValue::UInt64(Some(*v)),
             DataGroupValue::String(v) => DataValue::String(Some(v.to_vec())),
         }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "OrderedFloat")]
+struct OrderedFloatDef<T>(pub T);
+
+impl From<OrderedFloatDef<f32>> for OrderedFloat<f32> {
+    fn from(def: OrderedFloatDef<f32>) -> Self {
+        OrderedFloat::from(def.0)
+    }
+}
+
+impl From<OrderedFloatDef<f64>> for OrderedFloat<f64> {
+    fn from(def: OrderedFloatDef<f64>) -> Self {
+        OrderedFloat::from(def.0)
     }
 }
