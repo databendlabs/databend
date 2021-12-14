@@ -16,18 +16,14 @@ use std::sync::Arc;
 
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
-use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilegeSet;
+use common_meta_types::UserIdentity;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct GrantPrivilegePlan {
-    pub name: String,
-    pub hostname: String,
-    pub priv_types: UserPrivilegeSet,
-    pub on: GrantObject,
+pub struct ShowGrantsPlan {
+    pub user_identity: Option<UserIdentity>,
 }
 
-impl GrantPrivilegePlan {
+impl ShowGrantsPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

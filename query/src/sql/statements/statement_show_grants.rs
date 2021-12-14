@@ -15,35 +15,28 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::UserPrivilegeSet;
+use common_meta_types::UserIdentity;
 use common_planners::PlanNode;
-use common_planners::RevokePrivilegePlan;
+use common_planners::ShowGrantsPlan;
 use common_tracing::tracing;
 
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
-use crate::sql::statements::DfGrantObject;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DfRevokeStatement {
-    pub username: String,
-    pub hostname: String,
-    pub priv_types: UserPrivilegeSet,
-    pub on: DfGrantObject,
+pub struct DfShowGrants {
+    pub user_identity: Option<UserIdentity>,
 }
 
 #[async_trait::async_trait]
-impl AnalyzableStatement for DfRevokeStatement {
-    #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
-    async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        Ok(AnalyzedResult::SimpleQuery(Box::new(
-            PlanNode::RevokePrivilege(RevokePrivilegePlan {
-                username: self.username.clone(),
-                hostname: self.hostname.clone(),
-                on: self.on.convert_to_grant_object(ctx),
-                priv_types: self.priv_types,
-            }),
-        )))
+impl AnalyzableStatement for DfShowGrants {
+    #[tracing::instrument(level = "info", skip(self, _ctx), fields(_ctx.id = _ctx.get_id().as_str()))]
+    async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::ShowGrants(
+            ShowGrantsPlan {
+                user_identity: self.user_identity.clone(),
+            },
+        ))))
     }
 }

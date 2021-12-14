@@ -25,7 +25,8 @@ use common_meta_types::AuthType;
 use common_meta_types::Credentials;
 use common_meta_types::FileFormat;
 use common_meta_types::StageParams;
-use common_meta_types::UserPrivilege;
+use common_meta_types::UserIdentity;
+use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use common_planners::ExplainType;
 use metrics::histogram;
@@ -72,6 +73,7 @@ use crate::sql::statements::DfSetVariable;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfShowDatabases;
 use crate::sql::statements::DfShowFunctions;
+use crate::sql::statements::DfShowGrants;
 use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
 use crate::sql::statements::DfShowSettings;
@@ -213,6 +215,8 @@ impl<'a> DfParser<'a> {
                             Ok(DfStatement::ShowMetrics(DfShowMetrics))
                         } else if self.consume_token("USERS") {
                             Ok(DfStatement::ShowUsers(DfShowUsers))
+                        } else if self.consume_token("GRANTS") {
+                            self.parse_show_grants()
                         } else if self.consume_token("FUNCTIONS") {
                             self.parse_show_functions()
                         } else {
@@ -905,6 +909,21 @@ impl<'a> DfParser<'a> {
         }
     }
 
+    fn parse_show_grants(&mut self) -> Result<DfStatement, ParserError> {
+        // SHOW GRANTS
+        if !self.consume_token("FOR") {
+            return Ok(DfStatement::ShowGrants(DfShowGrants {
+                user_identity: None,
+            }));
+        }
+
+        // SHOW GRANTS FOR 'u1'@'%'
+        let (username, hostname) = self.parse_user_identity()?;
+        Ok(DfStatement::ShowGrants(DfShowGrants {
+            user_identity: Some(UserIdentity { username, hostname }),
+        }))
+    }
+
     fn parse_truncate(&mut self) -> Result<DfStatement, ParserError> {
         self.parser.next_token();
         match self.parser.next_token() {
@@ -920,8 +939,8 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    fn parse_privileges(&mut self) -> Result<UserPrivilege, ParserError> {
-        let mut privileges = UserPrivilege::empty();
+    fn parse_privileges(&mut self) -> Result<UserPrivilegeSet, ParserError> {
+        let mut privileges = UserPrivilegeSet::empty();
         loop {
             match self.parser.next_token() {
                 Token::Word(w) => match w.keyword {

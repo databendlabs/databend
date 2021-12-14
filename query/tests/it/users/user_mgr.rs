@@ -17,7 +17,7 @@ use common_exception::Result;
 use common_meta_types::AuthType;
 use common_meta_types::GrantObject;
 use common_meta_types::UserGrantSet;
-use common_meta_types::UserPrivilege;
+use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use databend_query::configs::Config;
 use databend_query::users::User;
@@ -94,7 +94,7 @@ async fn test_user_manager() -> Result<()> {
         let old_user = user_mgr.get_user(user, hostname).await?;
         assert_eq!(old_user.grants, UserGrantSet::empty());
 
-        let mut add_priv = UserPrivilege::empty();
+        let mut add_priv = UserPrivilegeSet::empty();
         add_priv.set_privilege(UserPrivilegeType::Set);
         user_mgr
             .grant_user_privileges(user, hostname, GrantObject::Global, add_priv)
@@ -120,7 +120,7 @@ async fn test_user_manager() -> Result<()> {
                 user,
                 hostname,
                 GrantObject::Global,
-                UserPrivilege::all_privileges(),
+                UserPrivilegeSet::all_privileges(),
             )
             .await?;
         let user_info = user_mgr.get_user(user, hostname).await?;
@@ -131,7 +131,7 @@ async fn test_user_manager() -> Result<()> {
                 user,
                 hostname,
                 GrantObject::Global,
-                UserPrivilege::all_privileges(),
+                UserPrivilegeSet::all_privileges(),
             )
             .await?;
         let user_info = user_mgr.get_user(user, hostname).await?;

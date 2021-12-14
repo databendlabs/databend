@@ -12,23 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-use common_meta_types::GrantObject;
-use common_meta_types::UserPrivilegeSet;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct GrantPrivilegePlan {
-    pub name: String,
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct UserIdentity {
+    pub username: String,
     pub hostname: String,
-    pub priv_types: UserPrivilegeSet,
-    pub on: GrantObject,
-}
-
-impl GrantPrivilegePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }
