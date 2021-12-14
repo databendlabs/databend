@@ -5,13 +5,15 @@
  */
 
 /* You can override the default Infima variables here. */
+@import "./fonts.scss";
 html,
 body {
   @include pm;
   height: 100%;
+  font-family: 'Roboto', sans-serif;
 }
 :root {
-  --ifm-color-primary: #25c2a0;
+  --ifm-color-primary: #76aff7;
   --ifm-color-primary-dark: rgb(33, 175, 144);
   --ifm-color-primary-darker: rgb(31, 165, 136);
   --ifm-color-primary-darkest: rgb(26, 136, 112);
@@ -22,6 +24,9 @@ body {
   --ifm-navbar-link-hover-color: #76aff7;
   --ifm-navbar-background-color: #303846;
   --ifm-navbar-link-color: #fff;
+  --ifm-font-family-base: 'Roboto', sans-serif;
+  --ifm-footer-link-hover-color: #76aff7;
+  --ifm-menu-color-active: #76aff7;
 }
 .navbar{
   border-bottom: 1px solid rgba(112,155,231,.2);
@@ -45,4 +50,7 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
 .hero__subtitle{
   margin-bottom: 2rem;
   margin-top: 2rem;
+}
+.navbar__logo{
+  transform: scale(1.4);
 }
