@@ -160,4 +160,10 @@ impl DataAccessor for AzureBlobAccessor {
         }
         self.put_blob(path, data).await
     }
+
+    async fn remove(&self, _path: &str) -> Result<()> {
+        Err(ErrorCode::UnImplement(
+            "remove not implemented for azure blob storage yet",
+        ))
+    }
 }

@@ -125,7 +125,12 @@ impl FuseHistoryTable {
     ) -> Result<Vec<TableSnapshot>> {
         let mut snapshots = vec![];
         while let Some(loc) = &location {
-            let snapshot: TableSnapshot = read_obj(da, loc).await?;
+            let r: Result<TableSnapshot> = read_obj(da, loc).await;
+            let snapshot = match r {
+                Ok(s) => s,
+                Err(e) if e.code() == ErrorCode::DALPathNotFoundCode() => break,
+                Err(e) => return Err(e),
+            };
             let prev = snapshot.prev_snapshot_id;
             snapshots.push(snapshot);
             location = prev.map(|id| snapshot_location(id.to_simple().to_string().as_str()));

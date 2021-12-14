@@ -65,7 +65,13 @@ impl Local {
 impl DataAccessor for Local {
     fn get_input_stream(&self, path: &str, _stream_len: Option<u64>) -> Result<InputStream> {
         let path = self.prefix_with_root(path)?;
-        let std_file = std::fs::File::open(path)?;
+        let std_file = std::fs::File::open(path).map_err(|e| {
+            if e.kind() == ErrorKind::NotFound {
+                ErrorCode::DALPathNotFound(e.to_string())
+            } else {
+                e.into()
+            }
+        })?;
         let tokio_file = tokio::fs::File::from_std(std_file);
         Ok(Box::new(tokio_file.compat()))
     }
@@ -75,7 +81,7 @@ impl DataAccessor for Local {
         let path = self.prefix_with_root(path)?;
         let parent = path
             .parent()
-            .ok_or_else(|| ErrorCode::UnknownException(""))?; // TODO customized error code
+            .ok_or_else(|| ErrorCode::DALTransportError(""))?; // TODO customized error code
         tokio::fs::create_dir_all(parent).await?;
         let mut new_file = tokio::fs::File::create(path).await?;
         new_file.write_all(&content).await?;
@@ -106,6 +112,12 @@ impl DataAccessor for Local {
             new_file.write_all(&v).await?
         }
         new_file.flush().await?;
+        Ok(())
+    }
+
+    async fn remove(&self, location: &str) -> Result<()> {
+        let path = self.prefix_with_root(location)?;
+        std::fs::remove_file(path)?; // use std fs
         Ok(())
     }
 }

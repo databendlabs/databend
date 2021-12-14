@@ -59,12 +59,10 @@ pub struct FuseTruncateHistory {
 impl FuseTruncateHistory {
     pub(crate) async fn remove_location(
         &self,
-        _da: Arc<dyn DataAccessor>,
+        da: Arc<dyn DataAccessor>,
         loc: impl AsRef<str>,
     ) -> Result<()> {
-        let str = loc.as_ref();
-        eprintln!(">>>> DELETE LOC {}", str);
-        Ok(())
+        da.remove(loc.as_ref()).await
     }
 }
 
@@ -139,7 +137,12 @@ impl FuseTruncateHistory {
     ) -> Result<Vec<TableSnapshot>> {
         let mut snapshots = vec![];
         while let Some(loc) = &location {
-            let snapshot: TableSnapshot = read_obj(da, loc).await?;
+            let r: Result<TableSnapshot> = read_obj(da, loc).await;
+            let snapshot = match r {
+                Ok(s) => s,
+                Err(e) if e.code() == ErrorCode::DALPathNotFoundCode() => break,
+                Err(e) => return Err(e),
+            };
             let prev = snapshot.prev_snapshot_id;
             snapshots.push(snapshot);
             location = prev.map(|id| snapshot_location(id.to_simple().to_string().as_str()));

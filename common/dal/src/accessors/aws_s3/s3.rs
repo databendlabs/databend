@@ -24,6 +24,7 @@ use rusoto_core::ByteStream;
 use rusoto_core::Client;
 use rusoto_core::HttpClient;
 use rusoto_core::Region;
+use rusoto_s3::DeleteObjectRequest;
 use rusoto_s3::PutObjectRequest;
 use rusoto_s3::S3Client;
 use rusoto_s3::S3 as RusotoS3;
@@ -129,7 +130,7 @@ impl S3 {
     ) -> common_exception::Result<()> {
         let req = PutObjectRequest {
             key: path.to_string(),
-            bucket: self.bucket.to_string(),
+            bucket: self.bucket.clone(),
             body: Some(input_stream),
             ..Default::default()
         };
@@ -173,5 +174,19 @@ impl DataAccessor for S3 {
     ) -> common_exception::Result<()> {
         self.put_byte_stream(path, ByteStream::new_with_size(input_stream, stream_len))
             .await
+    }
+
+    async fn remove(&self, path: &str) -> Result<()> {
+        let req = DeleteObjectRequest {
+            bucket: self.bucket.clone(),
+            key: path.to_owned(),
+            ..Default::default()
+        };
+        self.client
+            .delete_object(req)
+            .await
+            .map_err(|e| ErrorCode::DALTransportError(e.to_string()))?;
+
+        Ok(())
     }
 }
