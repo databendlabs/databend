@@ -77,7 +77,6 @@ def run_single_test(args, ext, client_options, case_file, stdout_file,
     os.system("LC_ALL=C sed -i -e 's/{test_db}/default/g' {file}".format(
         test_db=args.database, file=stdout_file))
 
-
     if proc.returncode == 0:
 
         filter_fn = result_file.rsplit(".result")[0] + ".result_filter"
@@ -93,7 +92,7 @@ def run_single_test(args, ext, client_options, case_file, stdout_file,
                 line = line.strip()
                 for i in range(0, len(filters), 2):
                     flt = filters[i].strip()
-                    repl = filters[i+1].strip()
+                    repl = filters[i + 1].strip()
 
                     line = re.sub(flt, repl, line)
 
@@ -104,11 +103,9 @@ def run_single_test(args, ext, client_options, case_file, stdout_file,
             with open(stdout_file, 'wb') as f:
                 f.write(stdout)
 
-
     stdout = open(stdout_file,
                   'rb').read() if os.path.exists(stdout_file) else b''
     stdout = str(stdout, errors='replace', encoding='utf-8')
-
 
     stderr = open(stderr_file,
                   'rb').read() if os.path.exists(stderr_file) else b''
