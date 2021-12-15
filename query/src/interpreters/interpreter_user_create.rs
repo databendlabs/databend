@@ -56,7 +56,7 @@ impl Interpreter for CreatUserInterpreter {
             name: plan.name,
             hostname: plan.hostname,
             password: plan.password,
-            auth_type: plan.auth_type,
+            password_type: plan.password_type,
             grants: UserGrantSet::empty(),
             quota: UserQuota::no_limit(),
         };
