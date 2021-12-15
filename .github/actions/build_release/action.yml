@@ -26,17 +26,6 @@ runs:
         use-cross: ${{ matrix.config.cross }}
         args: --release --target ${{ matrix.config.target }}
 
-    - name: Build perf-tools
-      uses: actions-rs/cargo@v1
-      # Only build perf tools on ubuntu
-      if: matrix.config.os == 'ubuntu-latest'
-      with:
-        command: build
-        use-cross: ${{ matrix.config.cross }}
-        args: --release --target ${{ matrix.config.target }} --bin databend-benchmark
-      env:
-        RUSTFLAGS: "-C link-arg=-Wl,--compress-debug-sections=zlib-gabi"
-
     - name: Upload artifact
       uses: actions/upload-artifact@v2
       with:
