@@ -6,7 +6,7 @@ use common_exception::Result;
 use common_infallible::Mutex;
 use crate::pipelines::new::executor::RunningProcessor;
 
-struct SharedStatus {
+pub struct SharedStatus {
     // TODO: Very bad
     data: Mutex<Option<Result<DataBlock>>>,
 }

@@ -14,3 +14,4 @@
 
 mod processors;
 mod transforms;
+mod new;

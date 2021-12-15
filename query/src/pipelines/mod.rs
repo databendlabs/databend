@@ -15,7 +15,5 @@
 pub mod processors;
 pub mod transforms;
 
-mod new;
-
-
-
+// TODO: pub mod for tests
+pub mod new;

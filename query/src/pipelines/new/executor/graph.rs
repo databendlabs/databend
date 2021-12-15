@@ -47,7 +47,7 @@ impl RunningGraphState {
                 return Err(ErrorCode::IllegalPipelineState(""));
             }
 
-            let (input_port, output_port) = create_port(nodes[input].clone(), nodes[output].clone());
+            let (input_port, output_port) = create_port(&nodes, input, output);
             processors[input].connect_input(input_port)?;
             processors[output].connect_output(output_port)?;
         }
