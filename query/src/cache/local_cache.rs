@@ -12,22 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::io::Read;
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use common_base::tokio::sync::RwLock;
 use common_cache::BytesMeter;
 use common_cache::Cache;
 use common_cache::DefaultHashBuilder;
 use common_cache::LruCache;
 use common_cache::LruDiskCache;
+use common_dal::DataAccessor;
 use common_exception::Result;
 use common_metrics::label_counter;
 use common_metrics::label_counter_with_val;
 
-use crate::DataAccessor;
+use crate::cache::QueryCache;
 
 const CACHE_READ_BYTES_FROM_REMOTE: &str = "cache_read_bytes_from_remote";
 const CACHE_READ_BYTES_FROM_LOCAL: &str = "cache_read_bytes_from_local";
@@ -63,7 +64,7 @@ impl Drop for CacheDeferMetrics<'_> {
     }
 }
 
-pub struct DalCacheConfig {
+pub struct LocalCacheConfig {
     pub memory_cache_size_mb: u64,
     pub disk_cache_size_mb: u64,
     pub disk_cache_root: String,
@@ -75,20 +76,20 @@ type MemCache = Arc<RwLock<LruCache<OsString, Vec<u8>, DefaultHashBuilder, Bytes
 
 // TODO maybe distinct segments cache and snapshots cache
 #[derive(Clone, Debug)]
-pub struct DalCache {
+pub struct LocalCache {
     pub disk_cache: Arc<RwLock<LruDiskCache>>,
     pub mem_cache: MemCache,
     tenant_id: String,
     cluster_id: String,
 }
 
-impl DalCache {
-    pub fn create(conf: DalCacheConfig) -> Result<Self> {
+impl LocalCache {
+    pub fn create(conf: LocalCacheConfig) -> Result<Box<dyn QueryCache>> {
         let disk_cache = Arc::new(RwLock::new(LruDiskCache::new(
             conf.disk_cache_root,
             conf.disk_cache_size_mb * 1024 * 1024,
         )?));
-        Ok(Self {
+        Ok(Box::new(LocalCache {
             mem_cache: Arc::new(RwLock::new(LruCache::with_meter(
                 conf.memory_cache_size_mb * 1024 * 1024,
                 BytesMeter,
@@ -96,15 +97,14 @@ impl DalCache {
             disk_cache,
             tenant_id: conf.tenant_id,
             cluster_id: conf.cluster_id,
-        })
+        }))
     }
+}
 
-    pub async fn read<K: AsRef<OsStr>>(
-        &self,
-        location: K,
-        da: &dyn DataAccessor,
-    ) -> Result<Vec<u8>> {
-        let location = location.as_ref().to_owned();
+#[async_trait]
+impl QueryCache for LocalCache {
+    async fn get(&self, location: &str, da: &dyn DataAccessor) -> Result<Vec<u8>> {
+        let location: OsString = location.to_owned().into();
         let mut metrics = CacheDeferMetrics {
             tenant_id: self.tenant_id.as_str(),
             cluster_id: self.cluster_id.as_str(),

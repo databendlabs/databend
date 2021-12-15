@@ -14,25 +14,25 @@
 //
 use std::sync::Arc;
 
-use common_dal::DalCache;
 use common_dal::DataAccessor;
 use common_exception::Result;
 use serde::de::DeserializeOwned;
 
+use crate::cache::QueryCache;
 use crate::storages::fuse::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::storages::fuse::constants::FUSE_TBL_SNAPSHOT_PREFIX;
 
 pub async fn read_obj<T: DeserializeOwned>(
     da: &dyn DataAccessor,
     loc: impl AsRef<str>,
-    cache: Arc<Option<DalCache>>,
+    cache: Arc<Option<Box<dyn QueryCache>>>,
 ) -> Result<T> {
     // only metadata(segments and snapshots will use cache now)
     let loc = loc.as_ref();
     let bytes =
         if loc.starts_with(FUSE_TBL_SNAPSHOT_PREFIX) || loc.starts_with(FUSE_TBL_SEGMENT_PREFIX) {
             if let Some(cache) = &*cache {
-                cache.read(loc, da).await?
+                cache.get(loc, da).await?
             } else {
                 da.read(loc).await?
             }

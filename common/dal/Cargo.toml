@@ -15,7 +15,6 @@ common-base = {path = "../base"}
 common-datablocks = {path = "../datablocks"}
 common-exception = {path = "../exception"}
 common-infallible = {path = "../infallible"}
-common-cache = {path = "../cache"}
 common-metrics = {path = "../metrics"}
 
 async-compat = "0.2.1"

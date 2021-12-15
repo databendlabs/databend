@@ -21,8 +21,6 @@ use std::time::Duration;
 
 use common_base::tokio;
 use common_base::SignalStream;
-use common_dal::DalCache;
-use common_dal::DalCacheConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -30,6 +28,9 @@ use common_metrics::label_counter;
 use futures::future::Either;
 use futures::StreamExt;
 
+use crate::cache::LocalCache;
+use crate::cache::LocalCacheConfig;
+use crate::cache::QueryCache;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
 use crate::configs::Config;
@@ -47,20 +48,20 @@ pub struct SessionManager {
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
-    pub(in crate::sessions) table_cache: Arc<Option<DalCache>>,
+    pub(in crate::sessions) table_cache: Arc<Option<Box<dyn QueryCache>>>,
 }
 
 impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
         let table_cache = if conf.query.table_cache_enabled {
-            let cache_conf = DalCacheConfig {
+            let cache_conf = LocalCacheConfig {
                 memory_cache_size_mb: conf.query.table_memory_cache_mb_size,
                 disk_cache_size_mb: conf.query.table_disk_cache_mb_size,
                 disk_cache_root: conf.query.table_disk_cache_root.clone(),
                 tenant_id: conf.query.tenant_id.clone(),
                 cluster_id: conf.query.cluster_id.clone(),
             };
-            let table_cache = DalCache::create(cache_conf)?;
+            let table_cache = LocalCache::create(cache_conf)?;
             Arc::new(Some(table_cache))
         } else {
             Arc::new(None)
@@ -110,7 +111,7 @@ impl SessionManager {
         self.catalog.clone()
     }
 
-    pub fn get_table_cache(self: &Arc<Self>) -> Arc<Option<DalCache>> {
+    pub fn get_table_cache(self: &Arc<Self>) -> Arc<Option<Box<dyn QueryCache>>> {
         self.table_cache.clone()
     }
 

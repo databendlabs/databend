@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod accessors;
-mod cache;
 mod context;
 mod data_accessor;
 mod in_memory_data;
@@ -25,8 +24,6 @@ pub use accessors::aws_s3::S3;
 pub use accessors::azure_blob::AzureBlobAccessor;
 pub use accessors::azure_blob::AzureBlobInputStream;
 pub use accessors::local::Local;
-pub use cache::DalCache;
-pub use cache::DalCacheConfig;
 pub use context::DalContext;
 pub use context::DalMetrics;
 pub use data_accessor::AsyncSeekableReader;

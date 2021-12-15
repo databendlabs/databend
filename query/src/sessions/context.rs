@@ -26,7 +26,6 @@ use common_base::ProgressValues;
 use common_base::Runtime;
 use common_base::TrySpawn;
 use common_dal::AzureBlobAccessor;
-use common_dal::DalCache;
 use common_dal::DalMetrics;
 use common_dal::DataAccessor;
 use common_dal::DataAccessorInterceptor;
@@ -45,6 +44,7 @@ use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 
+use crate::cache::QueryCache;
 use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::Cluster;
@@ -297,7 +297,7 @@ impl QueryContext {
     }
 
     // Get table cache
-    pub fn get_table_cache(&self) -> Arc<Option<DalCache>> {
+    pub fn get_table_cache(&self) -> Arc<Option<Box<dyn QueryCache>>> {
         self.shared.get_table_cache()
     }
 }

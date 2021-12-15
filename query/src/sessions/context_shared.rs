@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use common_base::Progress;
 use common_base::Runtime;
-use common_dal::DalCache;
 use common_dal::DalContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -30,6 +29,7 @@ use common_planners::PlanNode;
 use futures::future::AbortHandle;
 use uuid::Uuid;
 
+use crate::cache::QueryCache;
 use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::Cluster;
@@ -201,7 +201,7 @@ impl QueryContextShared {
         sources_abort_handle.push(handle);
     }
 
-    pub fn get_table_cache(&self) -> Arc<Option<DalCache>> {
+    pub fn get_table_cache(&self) -> Arc<Option<Box<dyn QueryCache>>> {
         self.session.sessions.get_table_cache()
     }
 }
