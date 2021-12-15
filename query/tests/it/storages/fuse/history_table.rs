@@ -32,6 +32,7 @@ use databend_query::storages::FuseHistoryTable;
 use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::table_functions::TableArgs;
 use futures::TryStreamExt;
+use walkdir::WalkDir;
 
 use super::table_test_fixture::TestFixture;
 
@@ -192,6 +193,45 @@ async fn test_fuse_history_table_read() -> Result<()> {
         );
     }
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_fuse_history_truncate_in_drop_stmt() -> Result<()> {
+    let fixture = TestFixture::new().await;
+    let db = fixture.default_db_name();
+    let tbl = fixture.default_table_name();
+    let ctx = fixture.ctx();
+
+    // test db & table
+    let create_table_plan = fixture.default_crate_table_plan();
+    let catalog = ctx.get_catalog();
+    catalog.create_table(create_table_plan.into()).await?;
+
+    append_sample_data(10, &fixture).await?;
+    let data_path = ctx.get_config().storage.disk.data_path;
+    let root = data_path.as_str();
+
+    let mut got_some_files = false;
+    for entry in WalkDir::new(root) {
+        let entry = entry.unwrap();
+        if entry.file_type().is_file() {
+            got_some_files = true;
+            break;
+        }
+    }
+    assert!(got_some_files, "there should be some file there");
+
+    let qry = format!("drop table '{}'.'{}'", db, tbl);
+    execute_command(qry.as_str(), ctx.clone()).await?;
+
+    // there should be no files left on test root
+    for entry in WalkDir::new(root) {
+        let entry = entry.unwrap();
+        if entry.file_type().is_file() {
+            assert!(false, "there should be not file left")
+        }
+    }
     Ok(())
 }
 
