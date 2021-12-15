@@ -148,6 +148,6 @@ where
             interval *= 2;
         }
 
-        panic!("unreachable")
+        unreachable!("the loop should always return!");
     }
 }
