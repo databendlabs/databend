@@ -39,6 +39,7 @@ use crate::storages::fuse::io;
 use crate::storages::fuse::io::snapshot_history;
 use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::meta::SegmentInfo;
+use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::table::check_table_compatibility;
 use crate::storages::fuse::table_functions::table_arg_util::parse_table_args;
 use crate::storages::fuse::table_functions::table_arg_util::string_literal;
@@ -56,32 +57,19 @@ pub struct FuseTruncateHistory {
 }
 
 impl FuseTruncateHistory {
-    async fn remove_location(
-        &self,
-        data_accessor: Arc<dyn DataAccessor>,
-        location: impl AsRef<str>,
-    ) -> Result<()> {
-        data_accessor.remove(location.as_ref()).await
-    }
-}
-
-impl FuseTruncateHistory {
-    pub fn create(
+    pub fn new(
         database_name: &str,
         table_func_name: &str,
         table_id: u64,
-        table_args: TableArgs,
-    ) -> Result<Arc<dyn TableFunction>> {
+        arg_database_name: String,
+        arg_table_name: String,
+    ) -> Arc<FuseTruncateHistory> {
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("snapshot_removed", DataType::UInt64, false),
             DataField::new("segment_removed", DataType::UInt64, false),
             DataField::new("block_removed", DataType::UInt64, false),
         ]);
-
-        let (arg_database_name, arg_table_name) = parse_table_args(&table_args)?;
-
         let engine = FUSE_FUNC_TRUNCATE.to_owned();
-
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
             desc: format!("'{}'.'{}'", database_name, table_func_name),
@@ -92,12 +80,105 @@ impl FuseTruncateHistory {
                 options: Default::default(),
             },
         };
-
-        Ok(Arc::new(FuseTruncateHistory {
+        Arc::new(FuseTruncateHistory {
             table_info,
             arg_database_name,
             arg_table_name,
-        }))
+        })
+    }
+
+    pub fn create(
+        database_name: &str,
+        table_func_name: &str,
+        table_id: u64,
+        table_args: TableArgs,
+    ) -> Result<Arc<dyn TableFunction>> {
+        let (arg_database_name, arg_table_name) = parse_table_args(&table_args)?;
+        Ok(Self::new(
+            database_name,
+            table_func_name,
+            table_id,
+            arg_database_name,
+            arg_table_name,
+        ))
+    }
+
+    pub async fn truncate_history(
+        &self,
+        ctx: Arc<QueryContext>,
+        truncate_all: bool,
+    ) -> Result<Option<(u64, u64, u64)>> {
+        let tbl = ctx
+            .get_catalog()
+            .get_table(
+                self.arg_database_name.as_str(),
+                self.arg_table_name.as_str(),
+            )
+            .await?;
+
+        check_table_compatibility(tbl.as_ref())?;
+
+        let da = ctx.get_data_accessor()?;
+        let tbl_info = tbl.get_table_info();
+        let snapshot_loc = tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC);
+        let mut snapshots = snapshot_history(da.as_ref(), snapshot_loc).await?;
+
+        let min_history_len = if truncate_all { 0 } else { 1 };
+
+        // short cut
+        if snapshots.len() <= min_history_len {
+            return Ok(None);
+        }
+
+        let current_segments: HashSet<&String>;
+        let current_snapshot: TableSnapshot;
+        if truncate_all {
+            // if truncate_all requested, gc root contains nothing;
+            current_segments = HashSet::new();
+        } else {
+            current_snapshot = snapshots.remove(0);
+            current_segments = HashSet::from_iter(&current_snapshot.segments);
+        }
+
+        let prevs = snapshots.iter().fold(HashSet::new(), |mut acc, s| {
+            acc.extend(&s.segments);
+            acc
+        });
+
+        // segments which no longer need to be kept
+        let seg_delta = prevs.difference(&current_segments).collect::<Vec<_>>();
+
+        // blocks to be removed
+        let prev_blocks: HashSet<String> = self.blocks_of(da.clone(), seg_delta.iter()).await?;
+        let current_blocks: HashSet<String> =
+            self.blocks_of(da.clone(), current_segments.iter()).await?;
+        let block_delta = prev_blocks.difference(&current_blocks);
+
+        // NOTE: the following steps are NOT transactional yet
+
+        // 1. remove blocks
+        let mut block_removed = 0u64;
+        for x in block_delta {
+            self.remove_location(da.clone(), x).await?;
+            block_removed += 1;
+        }
+
+        // 2. remove the segments
+        let mut segment_removed = 0u64;
+        for x in seg_delta {
+            self.remove_location(da.clone(), x).await?;
+            segment_removed += 1;
+        }
+
+        // 3. remove the blocks
+        for x in snapshots.iter().rev() {
+            let loc = snapshot_location(&x.snapshot_id);
+            self.remove_location(da.clone(), loc).await?
+        }
+
+        let snapshot_removed = snapshots.len() as u64;
+
+        Ok(Some((snapshot_removed, segment_removed, block_removed)))
     }
 
     fn empty_result(&self) -> Result<SendableDataBlockStream> {
@@ -126,6 +207,14 @@ impl FuseTruncateHistory {
         }
         Ok(result)
     }
+
+    async fn remove_location(
+        &self,
+        data_accessor: Arc<dyn DataAccessor>,
+        location: impl AsRef<str>,
+    ) -> Result<()> {
+        data_accessor.remove(location.as_ref()).await
+    }
 }
 
 #[async_trait::async_trait]
@@ -150,74 +239,19 @@ impl Table for FuseTruncateHistory {
         ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let tbl = ctx
-            .get_catalog()
-            .get_table(
-                self.arg_database_name.as_str(),
-                self.arg_table_name.as_str(),
-            )
-            .await?;
+        if let Some((snapshot_removed, segment_removed, block_removed)) =
+            self.truncate_history(ctx, false).await?
+        {
+            let block = DataBlock::create_by_array(self.table_info.schema(), vec![
+                Series::new(vec![snapshot_removed]),
+                Series::new(vec![segment_removed]),
+                Series::new(vec![block_removed]),
+            ]);
 
-        check_table_compatibility(tbl.as_ref())?;
-
-        let da = ctx.get_data_accessor()?;
-        let tbl_info = tbl.get_table_info();
-        let snapshot_loc = tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC);
-        let mut snapshots = snapshot_history(da.as_ref(), snapshot_loc).await?;
-
-        // short cut
-        if snapshots.len() <= 1 {
-            return self.empty_result();
+            self.build_result(vec![block])
+        } else {
+            self.empty_result()
         }
-
-        let current_snapshot = snapshots.remove(0);
-        let current_segments: HashSet<&String> = HashSet::from_iter(&current_snapshot.segments);
-        let prevs = snapshots.iter().fold(HashSet::new(), |mut acc, s| {
-            acc.extend(&s.segments);
-            acc
-        });
-
-        // segments which no longer need to be kept
-        let seg_delta = prevs.difference(&current_segments).collect::<Vec<_>>();
-
-        // blocks to be removed
-        let prev_blocks: HashSet<String> = self.blocks_of(da.clone(), seg_delta.iter()).await?;
-        let current_blocks: HashSet<String> = self
-            .blocks_of(da.clone(), current_snapshot.segments.iter())
-            .await?;
-        let block_delta = prev_blocks.difference(&current_blocks);
-
-        // NOTE: the following steps are NOT transactional yet
-
-        // 1. remove blocks
-        let mut block_removed = 0u64;
-        for x in block_delta {
-            self.remove_location(da.clone(), x).await?;
-            block_removed += 1;
-        }
-
-        // 2. remove the segments
-        let mut segment_removed = 0u64;
-        for x in seg_delta {
-            self.remove_location(da.clone(), x).await?;
-            segment_removed += 1;
-        }
-
-        // 3. remove the blocks
-        for x in snapshots.iter().rev() {
-            let loc = snapshot_location(&x.snapshot_id);
-            self.remove_location(da.clone(), loc).await?
-        }
-
-        let snapshot_removed = snapshots.len() as u64;
-
-        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
-            Series::new(vec![snapshot_removed]),
-            Series::new(vec![segment_removed]),
-            Series::new(vec![block_removed]),
-        ]);
-
-        self.build_result(vec![block])
     }
 }
 
