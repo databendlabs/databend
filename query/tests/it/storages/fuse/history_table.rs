@@ -230,7 +230,7 @@ async fn test_fuse_history_truncate_in_drop_stmt() -> Result<()> {
     for entry in WalkDir::new(root) {
         let entry = entry.unwrap();
         if entry.file_type().is_file() {
-            assert!(false, "there should be not file left")
+            panic!("there should be not file left")
         }
     }
     Ok(())

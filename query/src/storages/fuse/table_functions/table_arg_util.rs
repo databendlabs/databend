@@ -58,8 +58,8 @@ pub fn parse_truncate_history_table_args(table_args: &TableArgs) -> Result<(Stri
             let tbl = string_value(&args[1])?;
             let all_flag = args
                 .get(2)
-                .map(|v| string_value(v))
-                .unwrap_or(Ok("all".to_owned()))?;
+                .map(string_value)
+                .unwrap_or_else(|| Ok("all".to_owned()))?;
             let all = all_flag.to_lowercase().as_str() == "all";
             return Ok((db, tbl, all));
         }
