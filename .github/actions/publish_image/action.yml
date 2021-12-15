@@ -39,6 +39,10 @@ runs:
       shell: bash
       run: echo ${{ steps.docker_build.outputs.digest }}
 
+    # setup QEMU so that we can build the image for linux/arm64
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v1
+
     - name: Build and publish perf_tools images
       id: docker_build_perf
       uses: docker/build-push-action@v2
