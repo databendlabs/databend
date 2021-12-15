@@ -107,38 +107,27 @@ impl Function for FormatFunction {
             ) => {
                 // Currently we ignore the locale value and use en_US as default.
                 let ret = Self::format_en_us(number, precision);
-                Ok(DataColumn::Constant(
-                    DataValue::String(ret),
-                    input_rows,
-                ))
+                Ok(DataColumn::Constant(DataValue::String(ret), input_rows))
             }
-            (
-                DataColumn::Array(number),
-                DataColumn::Constant(DataValue::Int64(precision), _),
-            ) => {
+            (DataColumn::Array(number), DataColumn::Constant(DataValue::Int64(precision), _)) => {
                 let mut string_builder = StringArrayBuilder::with_capacity(input_rows);
                 for number in number.f64()? {
                     string_builder.append_option(Self::format_en_us(number.copied(), precision));
                 }
                 Ok(string_builder.finish().into())
             }
-            (
-                DataColumn::Constant(DataValue::Float64(number), _),
-                DataColumn::Array(precision),
-            ) => {
+            (DataColumn::Constant(DataValue::Float64(number), _), DataColumn::Array(precision)) => {
                 let mut string_builder = StringArrayBuilder::with_capacity(input_rows);
                 for precision in precision.i64()? {
                     string_builder.append_option(Self::format_en_us(number, precision.copied()));
                 }
                 Ok(string_builder.finish().into())
             }
-            (
-                DataColumn::Array(number),
-                DataColumn::Array(precision), 
-            ) => {
+            (DataColumn::Array(number), DataColumn::Array(precision)) => {
                 let mut string_builder = StringArrayBuilder::with_capacity(input_rows);
                 for (number, precision) in number.f64()?.into_iter().zip(precision.i64()?) {
-                    string_builder.append_option(Self::format_en_us(number.copied(), precision.copied()));
+                    string_builder
+                        .append_option(Self::format_en_us(number.copied(), precision.copied()));
                 }
                 Ok(string_builder.finish().into())
             }
