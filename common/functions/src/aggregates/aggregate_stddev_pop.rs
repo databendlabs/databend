@@ -22,6 +22,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 use num::cast::AsPrimitive;
+use serde::Deserialize;
+use serde::Serialize;
 
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
@@ -30,6 +32,7 @@ use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 use crate::with_match_primitive_type;
 
+#[derive(Serialize, Deserialize)]
 struct AggregateStddevPopState {
     pub sum: f64,
     pub count: u64,
@@ -158,16 +161,14 @@ where T: DFPrimitiveType + AsPrimitive<f64>
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
         let state = place.get::<AggregateStddevPopState>();
-        state.sum.serialize_to_buf(writer)?;
-        state.count.serialize_to_buf(writer)?;
-        state.variance.serialize_to_buf(writer)
+        let writer = BufMut::writer(writer);
+        bincode::serialize_into(writer, state)?;
+        Ok(())
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateStddevPopState>();
-        state.sum = f64::deserialize(reader)?;
-        state.count = u64::deserialize(reader)?;
-        state.variance = f64::deserialize(reader)?;
+        *state = bincode::deserialize_from(reader)?;
         Ok(())
     }
 
