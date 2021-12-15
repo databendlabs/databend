@@ -21,6 +21,8 @@ use std::time::Duration;
 
 use common_base::tokio;
 use common_base::SignalStream;
+use common_dal::DalCache;
+use common_dal::DalCacheConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -45,10 +47,25 @@ pub struct SessionManager {
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
+    pub(in crate::sessions) table_cache: Arc<Option<DalCache>>,
 }
 
 impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
+        let table_cache = if conf.query.table_cache_enabled {
+            let cache_conf = DalCacheConfig {
+                memory_cache_size_mb: conf.query.table_memory_cache_mb_size,
+                disk_cache_size_mb: conf.query.table_disk_cache_mb_size,
+                disk_cache_root: conf.query.table_disk_cache_root.clone(),
+                tenant_id: conf.query.tenant_id.clone(),
+                cluster_id: conf.query.cluster_id.clone(),
+            };
+            let table_cache = DalCache::create(cache_conf)?;
+            Arc::new(Some(table_cache))
+        } else {
+            Arc::new(None)
+        };
+
         let catalog = Arc::new(DatabaseCatalog::try_create_with_config(conf.clone()).await?);
 
         // Cluster discovery.
@@ -68,6 +85,7 @@ impl SessionManager {
             http_query_manager,
             max_sessions: max_active_sessions,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
+            table_cache,
         }))
     }
 
@@ -90,6 +108,10 @@ impl SessionManager {
 
     pub fn get_catalog(self: &Arc<Self>) -> Arc<DatabaseCatalog> {
         self.catalog.clone()
+    }
+
+    pub fn get_table_cache(self: &Arc<Self>) -> Arc<Option<DalCache>> {
+        self.table_cache.clone()
     }
 
     pub fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {

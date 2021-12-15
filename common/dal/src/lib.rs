@@ -26,6 +26,7 @@ pub use accessors::azure_blob::AzureBlobAccessor;
 pub use accessors::azure_blob::AzureBlobInputStream;
 pub use accessors::local::Local;
 pub use cache::DalCache;
+pub use cache::DalCacheConfig;
 pub use context::DalContext;
 pub use context::DalMetrics;
 pub use data_accessor::AsyncSeekableReader;

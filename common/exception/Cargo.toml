@@ -12,7 +12,6 @@ test = false
 
 [dependencies] # In alphabetical order
 common-arrow = { path = "../arrow" }
-common-cache = { path = "../cache" }
 
 anyhow = "1.0.51"
 backtrace = "0.3.63"

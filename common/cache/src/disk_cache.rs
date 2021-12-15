@@ -357,4 +357,21 @@ pub mod result {
     pub type Result<T> = std::result::Result<T, Error>;
 }
 
+use common_exception::ErrorCode;
 use result::*;
+
+impl From<Error> for ErrorCode {
+    fn from(error: Error) -> Self {
+        match error {
+            Error::FileNotInCache => {
+                ErrorCode::DiskCacheFileNotInCache("disk cache error: file not in cache")
+            }
+            Error::FileTooLarge => {
+                ErrorCode::DiskCacheFileTooLarge("disk cache error: file too large")
+            }
+            Error::Io(err) => {
+                ErrorCode::DiskCacheIOError(format!("disk cache io error, cause: {}", err))
+            }
+        }
+    }
+}

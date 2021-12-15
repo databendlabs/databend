@@ -34,8 +34,9 @@ pub const QUERY_METRICS_API_ADDRESS: &str = "QUERY_METRIC_API_ADDRESS";
 pub const QUERY_WAIT_TIMEOUT_MILLS: &str = "QUERY_WAIT_TIMEOUT_MILLS";
 pub const QUERY_MAX_QUERY_LOG_SIZE: &str = "QUERY_MAX_QUERY_LOG_SIZE";
 pub const QUERY_TABLE_CACHE_ENABLED: &str = "QUERY_TABLE_CACHE_ENABLED";
-pub const QUERY_TABLE_CACHE_ROOT: &str = "QUERY_TABLE_CACHE_ROOT";
-pub const QUERY_TABLE_CACHE_MB_SIZE: &str = "QUERY_TABLE_CACHE_MB_SIZE";
+pub const QUERY_TABLE_MEMORY_CACHE_MB_SIZE: &str = "QUERY_TABLE_MEMORY_CACHE_MB_SIZE";
+pub const QUERY_TABLE_DISK_CACHE_ROOT: &str = "QUERY_TABLE_DISK_CACHE_ROOT";
+pub const QUERY_TABLE_DISK_CACHE_MB_SIZE: &str = "QUERY_TABLE_DISK_CACHE_MB_SIZE";
 const QUERY_API_TLS_SERVER_CERT: &str = "QUERY_API_TLS_SERVER_CERT";
 const QUERY_API_TLS_SERVER_KEY: &str = "QUERY_API_TLS_SERVER_KEY";
 const QUERY_API_TLS_SERVER_ROOT_CA_CERT: &str = "QUERY_API_TLS_SERVER_ROOT_CA_CERT";
@@ -246,21 +247,30 @@ pub struct QueryConfig {
 
     #[structopt(
         long,
-        env = QUERY_TABLE_CACHE_ROOT,
-        default_value = "_cache",
-        help = "Table cache folder root"
-    )]
+        env = QUERY_TABLE_MEMORY_CACHE_MB_SIZE,
+        default_value = "256",
+        help = "Table memory cache size (mb)"
+        )]
     #[serde(default)]
-    pub table_cache_root: String,
+    pub table_memory_cache_mb_size: u64,
 
     #[structopt(
         long,
-        env = QUERY_TABLE_CACHE_MB_SIZE,
-        default_value = "256",
-        help = "Table cache size (mb)"
+        env = QUERY_TABLE_DISK_CACHE_ROOT,
+        default_value = "_cache",
+        help = "Table disk cache folder root"
+    )]
+    #[serde(default)]
+    pub table_disk_cache_root: String,
+
+    #[structopt(
+        long,
+        env = QUERY_TABLE_DISK_CACHE_MB_SIZE,
+        default_value = "1024",
+        help = "Table disk cache size (mb)"
         )]
     #[serde(default)]
-    pub table_cache_mb_size: u64,
+    pub table_disk_cache_mb_size: u64,
 }
 
 impl QueryConfig {
@@ -293,8 +303,9 @@ impl QueryConfig {
             wait_timeout_mills: 5000,
             max_query_log_size: 10000,
             table_cache_enabled: false,
-            table_cache_root: "_cache".to_string(),
-            table_cache_mb_size: 256,
+            table_memory_cache_mb_size: 256,
+            table_disk_cache_root: "_cache".to_string(),
+            table_disk_cache_mb_size: 1024,
         }
     }
 
@@ -432,23 +443,9 @@ impl QueryConfig {
         env_helper!(
             mut_config,
             query,
-            table_cache_enabled,
-            bool,
-            QUERY_TABLE_CACHE_ENABLED
-        );
-        env_helper!(
-            mut_config,
-            query,
             table_engine_parquet_enabled,
             bool,
             QUERY_TABLE_ENGINE_PARQUET_ENABLED
-        );
-        env_helper!(
-            mut_config,
-            query,
-            table_cache_root,
-            String,
-            QUERY_TABLE_CACHE_ROOT
         );
         env_helper!(
             mut_config,
@@ -467,9 +464,30 @@ impl QueryConfig {
         env_helper!(
             mut_config,
             query,
-            table_cache_mb_size,
+            table_cache_enabled,
+            bool,
+            QUERY_TABLE_CACHE_ENABLED
+        );
+        env_helper!(
+            mut_config,
+            query,
+            table_memory_cache_mb_size,
             u64,
-            QUERY_TABLE_CACHE_MB_SIZE
+            QUERY_TABLE_MEMORY_CACHE_MB_SIZE
+        );
+        env_helper!(
+            mut_config,
+            query,
+            table_disk_cache_root,
+            String,
+            QUERY_TABLE_DISK_CACHE_ROOT
+        );
+        env_helper!(
+            mut_config,
+            query,
+            table_disk_cache_mb_size,
+            u64,
+            QUERY_TABLE_DISK_CACHE_MB_SIZE
         );
     }
 }

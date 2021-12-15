@@ -28,6 +28,7 @@ pub use disk_cache::result::Error as DiskCacheError;
 pub use disk_cache::result::Result as DiskCacheResult;
 pub use disk_cache::DiskCache;
 pub use disk_cache::LruDiskCache;
+pub use meter::bytes_meter::BytesMeter;
 pub use meter::count_meter::Count;
 pub use meter::count_meter::CountableMeter;
 pub use meter::file_meter::FileSize;
@@ -35,3 +36,4 @@ pub use meter::file_meter::FileSize;
 #[cfg(not(target_os = "macos"))]
 pub use meter::heap_meter::HeapSize;
 pub use meter::Meter;
+pub use ritelinked::DefaultHashBuilder;

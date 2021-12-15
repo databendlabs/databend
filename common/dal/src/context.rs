@@ -14,11 +14,7 @@
 
 use std::sync::Arc;
 
-use common_cache::LruDiskCache;
-use common_exception::Result;
 use common_infallible::RwLock;
-
-use crate::cache::DalCache;
 
 #[derive(Clone, Debug, Default)]
 pub struct DalMetrics {
@@ -26,33 +22,16 @@ pub struct DalMetrics {
     pub write_bytes: usize,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct DalContext {
     metrics: Arc<RwLock<DalMetrics>>,
-    pub cache: Arc<Option<DalCache>>,
 }
 
 impl DalContext {
-    pub fn create(
-        table_cache_enabled: bool,
-        path: String,
-        cache_size_mb: u64,
-        tenant_id: String,
-        cluster_id: String,
-    ) -> Result<Self> {
-        let cache = if table_cache_enabled {
-            let bytes_size = cache_size_mb * 1024 * 1024;
-            let cache = Arc::new(common_base::tokio::sync::RwLock::new(LruDiskCache::new(
-                path, bytes_size,
-            )?));
-            Arc::new(Some(DalCache::create(cache, tenant_id, cluster_id)))
-        } else {
-            Arc::new(None)
-        };
-        Ok(DalContext {
+    pub fn create() -> Self {
+        DalContext {
             metrics: Arc::new(Default::default()),
-            cache,
-        })
+        }
     }
 
     /// Increment read bytes.
