@@ -208,6 +208,7 @@ async fn test_fuse_history_truncate_in_drop_stmt() -> Result<()> {
     let catalog = ctx.get_catalog();
     catalog.create_table(create_table_plan.into()).await?;
 
+    // ingests some test data
     append_sample_data(10, &fixture).await?;
     let data_path = ctx.get_config().storage.disk.data_path;
     let root = data_path.as_str();
@@ -220,11 +221,11 @@ async fn test_fuse_history_truncate_in_drop_stmt() -> Result<()> {
             break;
         }
     }
-    assert!(got_some_files, "there should be some file there");
+    assert!(got_some_files, "there should be some files");
 
+    // let's Drop
     let qry = format!("drop table '{}'.'{}'", db, tbl);
     execute_command(qry.as_str(), ctx.clone()).await?;
-
     // there should be no files left on test root
     for entry in WalkDir::new(root) {
         let entry = entry.unwrap();
