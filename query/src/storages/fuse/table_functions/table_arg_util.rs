@@ -60,13 +60,13 @@ pub fn parse_truncate_history_table_args(table_args: &TableArgs) -> Result<(Stri
                 .get(2)
                 .map(|v| string_value(v))
                 .unwrap_or(Ok("all".to_owned()))?;
-            let all = all_flag.to_lowercase().as_str() == "fall";
+            let all = all_flag.to_lowercase().as_str() == "all";
             return Ok((db, tbl, all));
         }
     };
 
     Err(ErrorCode::BadArguments(format!(
-        "expecting (database_name, table_name [, all]),  as 2 or 2 or 3 string literals, but got {:?}",
+        "expecting (database_name, table_name [, all]),  as 2 or 3 string literals, but got {:?}",
         table_args
     )))
 }
