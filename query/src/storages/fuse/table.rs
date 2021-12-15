@@ -14,10 +14,12 @@
 //
 
 use std::any::Any;
+use std::any::TypeId;
 use std::convert::TryFrom;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableInfo;
 use common_planners::Extras;
@@ -132,5 +134,17 @@ impl FuseTable {
         } else {
             Ok(None)
         }
+    }
+}
+
+pub fn check_table_compatibility(table: &dyn Table) -> Result<()> {
+    let tid = table.as_any().type_id();
+    if tid != TypeId::of::<FuseTable>() {
+        Err(ErrorCode::BadArguments(format!(
+            "expecting fuse table, but got table of engine type: {}",
+            table.get_table_info().meta.engine
+        )))
+    } else {
+        Ok(())
     }
 }

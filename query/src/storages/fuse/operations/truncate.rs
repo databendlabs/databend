@@ -40,8 +40,7 @@ impl FuseTable {
             new_snapshot.prev_snapshot_id = Some(prev_id);
             new_snapshot.summary = Default::default();
             new_snapshot.snapshot_id = Uuid::new_v4();
-            let new_snapshot_loc =
-                io::snapshot_location(new_snapshot.snapshot_id.to_simple().to_string().as_str()); // TODO refine this
+            let new_snapshot_loc = io::snapshot_location(&new_snapshot.snapshot_id);
             let da = ctx.get_data_accessor()?;
             let bytes = serde_json::to_vec(&new_snapshot)?;
             da.put(&new_snapshot_loc, bytes).await?;
@@ -55,6 +54,8 @@ impl FuseTable {
                     new_snapshot_loc,
                 ))
                 .await?;
+
+            // TODO try truncate historical data
             return Ok(());
         }
 

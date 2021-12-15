@@ -14,16 +14,16 @@
 //
 
 use std::any::Any;
-use std::any::TypeId;
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_dal::DataAccessor;
+use common_datablocks::DataBlock;
+use common_datavalues::prelude::Series;
+use common_datavalues::prelude::SeriesFrom;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
-use common_datavalues::DataValue;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableIdent;
 use common_meta_types::TableInfo;
@@ -36,19 +36,18 @@ use common_streams::SendableDataBlockStream;
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io;
-use crate::storages::fuse::io::read_obj;
+use crate::storages::fuse::io::snapshot_history;
 use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::meta::SegmentInfo;
-use crate::storages::fuse::meta::TableSnapshot;
-use crate::storages::fuse::FuseTable;
+use crate::storages::fuse::table::check_table_compatibility;
+use crate::storages::fuse::table_functions::table_arg_util::parse_table_args;
+use crate::storages::fuse::table_functions::table_arg_util::string_literal;
 use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::Table;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
 
 pub const FUSE_FUNC_TRUNCATE: &str = "fuse_truncate_history";
-
-// TODO duplicated codes
 
 pub struct FuseTruncateHistory {
     table_info: TableInfo,
@@ -57,12 +56,12 @@ pub struct FuseTruncateHistory {
 }
 
 impl FuseTruncateHistory {
-    pub(crate) async fn remove_location(
+    async fn remove_location(
         &self,
-        da: Arc<dyn DataAccessor>,
-        loc: impl AsRef<str>,
+        data_accessor: Arc<dyn DataAccessor>,
+        location: impl AsRef<str>,
     ) -> Result<()> {
-        da.remove(loc.as_ref()).await
+        data_accessor.remove(location.as_ref()).await
     }
 }
 
@@ -74,26 +73,12 @@ impl FuseTruncateHistory {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("snapshot_id", DataType::String, false),
-            DataField::new("prev_snapshot_id", DataType::String, true),
-            DataField::new("segment_count", DataType::UInt64, false),
-            DataField::new("block_count", DataType::UInt64, false),
-            DataField::new("row_count", DataType::UInt64, false),
-            DataField::new("uncompressed_bytes", DataType::UInt64, false),
-            DataField::new("compressed_bytes", DataType::UInt64, false),
+            DataField::new("snapshot_removed", DataType::UInt64, false),
+            DataField::new("segment_removed", DataType::UInt64, false),
+            DataField::new("block_removed", DataType::UInt64, false),
         ]);
 
-        let (arg_database_name, arg_table_name) = match table_args {
-            Some(args) if args.len() == 2 => {
-                let db = Self::string_value(&args[0])?;
-                let tbl = Self::string_value(&args[1])?;
-                Ok((db, tbl))
-            }
-            _ => Err(ErrorCode::BadArguments(format!(
-                "expecting database and table name (as two string literals), but got {:?}",
-                table_args
-            ))),
-        }?;
+        let (arg_database_name, arg_table_name) = parse_table_args(&table_args)?;
 
         let engine = FUSE_FUNC_TRUNCATE.to_owned();
 
@@ -115,76 +100,31 @@ impl FuseTruncateHistory {
         }))
     }
 
-    fn string_value(expr: &Expression) -> Result<String> {
-        if let Expression::Literal { value, .. } = expr {
-            String::from_utf8(value.as_string()?)
-                .map_err(|e| ErrorCode::BadArguments(format!("invalid string. {}", e)))
-        } else {
-            Err(ErrorCode::BadArguments(format!(
-                "expecting string literal, but got {:?}",
-                expr
-            )))
-        }
-    }
-
-    fn string_literal(val: &str) -> Expression {
-        Expression::create_literal(DataValue::String(Some(val.as_bytes().to_vec())))
-    }
-
-    async fn read_snapshots(
-        da: &dyn DataAccessor,
-        mut location: Option<String>,
-    ) -> Result<Vec<TableSnapshot>> {
-        let mut snapshots = vec![];
-        while let Some(loc) = &location {
-            let r: Result<TableSnapshot> = read_obj(da, loc).await;
-            let snapshot = match r {
-                Ok(s) => s,
-                Err(e) if e.code() == ErrorCode::DALPathNotFoundCode() => break,
-                Err(e) => return Err(e),
-            };
-            let prev = snapshot.prev_snapshot_id;
-            snapshots.push(snapshot);
-            location = prev.map(|id| snapshot_location(id.to_simple().to_string().as_str()));
-        }
-        Ok(snapshots)
-    }
-
-    fn check_table_compatibility(tbl: &dyn Table) -> Result<()> {
-        // since StorageFactory is free to choose the engine name,
-        // we use type_id to verify the compatibility here
-        let tid = tbl.as_any().type_id();
-        if tid != TypeId::of::<FuseTable>() {
-            Err(ErrorCode::BadArguments(format!(
-                "expecting fuse table, but got table of engine type: {}",
-                tbl.get_table_info().meta.engine
-            )))
-        } else {
-            Ok(())
-        }
-    }
-
     fn empty_result(&self) -> Result<SendableDataBlockStream> {
+        self.build_result(vec![])
+    }
+
+    fn build_result(&self, blocks: Vec<DataBlock>) -> Result<SendableDataBlockStream> {
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),
             None,
-            vec![],
+            blocks,
         )))
     }
 
     async fn blocks_of(
         &self,
-        da: Arc<dyn DataAccessor>,
-        locs: impl Iterator<Item = impl AsRef<str>>,
+        data_accessor: Arc<dyn DataAccessor>,
+        locations: impl Iterator<Item = impl AsRef<str>>,
     ) -> Result<HashSet<String>> {
-        let mut r = HashSet::new();
-        for x in locs {
-            let res: SegmentInfo = io::read_obj(da.as_ref(), x).await?;
-            for x in res.blocks {
-                r.insert(x.location.location);
+        let mut result = HashSet::new();
+        for x in locations {
+            let res: SegmentInfo = io::read_obj(data_accessor.as_ref(), x).await?;
+            for block_meta in res.blocks {
+                result.insert(block_meta.location.location);
             }
         }
-        Ok(r)
+        Ok(result)
     }
 }
 
@@ -200,8 +140,8 @@ impl Table for FuseTruncateHistory {
 
     fn table_args(&self) -> Option<Vec<Expression>> {
         Some(vec![
-            Self::string_literal(self.arg_database_name.as_str()),
-            Self::string_literal(self.arg_table_name.as_str()),
+            string_literal(self.arg_database_name.as_str()),
+            string_literal(self.arg_table_name.as_str()),
         ])
     }
 
@@ -218,17 +158,12 @@ impl Table for FuseTruncateHistory {
             )
             .await?;
 
-        Self::check_table_compatibility(tbl.as_ref())?;
+        check_table_compatibility(tbl.as_ref())?;
 
+        let da = ctx.get_data_accessor()?;
         let tbl_info = tbl.get_table_info();
-        let mut snapshots = match tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC) {
-            Some(loc) => {
-                let da = ctx.get_data_accessor()?;
-                let snapshots = Self::read_snapshots(da.as_ref(), Some(loc.clone())).await?;
-                Ok::<_, ErrorCode>(snapshots)
-            }
-            None => Ok(vec![]),
-        }?;
+        let snapshot_loc = tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC);
+        let mut snapshots = snapshot_history(da.as_ref(), snapshot_loc).await?;
 
         // short cut
         if snapshots.len() <= 1 {
@@ -245,33 +180,44 @@ impl Table for FuseTruncateHistory {
         // segments which no longer need to be kept
         let seg_delta = prevs.difference(&current_segments).collect::<Vec<_>>();
 
-        let da = ctx.get_data_accessor()?;
         // blocks to be removed
         let prev_blocks: HashSet<String> = self.blocks_of(da.clone(), seg_delta.iter()).await?;
         let current_blocks: HashSet<String> = self
             .blocks_of(da.clone(), current_snapshot.segments.iter())
             .await?;
-
-        // blocks that can be
         let block_delta = prev_blocks.difference(&current_blocks);
 
+        // NOTE: the following steps are NOT transactional yet
+
         // 1. remove blocks
+        let mut block_removed = 0u64;
         for x in block_delta {
-            self.remove_location(da.clone(), x).await?
+            self.remove_location(da.clone(), x).await?;
+            block_removed += 1;
         }
 
         // 2. remove the segments
+        let mut segment_removed = 0u64;
         for x in seg_delta {
-            self.remove_location(da.clone(), x).await?
+            self.remove_location(da.clone(), x).await?;
+            segment_removed += 1;
         }
 
         // 3. remove the blocks
         for x in snapshots.iter().rev() {
-            let loc = snapshot_location(x.snapshot_id.to_simple().to_string());
+            let loc = snapshot_location(&x.snapshot_id);
             self.remove_location(da.clone(), loc).await?
         }
 
-        self.empty_result()
+        let snapshot_removed = snapshots.len() as u64;
+
+        let block = DataBlock::create_by_array(self.table_info.schema(), vec![
+            Series::new(vec![snapshot_removed]),
+            Series::new(vec![segment_removed]),
+            Series::new(vec![block_removed]),
+        ]);
+
+        self.build_result(vec![block])
     }
 }
 
