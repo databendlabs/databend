@@ -22,7 +22,7 @@ common-tracing= {path = "../tracing"}
 async-trait = "0.1.52"
 lazy_static = "1.4.0"
 serde = { version = "1.0.131", features = ["derive"] }
-serde_json = "1.0.72"
+serde_json = "1.0.73"
 tempfile = "3.2.0"
 
 
@@ -30,5 +30,5 @@ tempfile = "3.2.0"
 common-base = { path = "../base" }
 common-meta-embedded = {path = "../meta/embedded" }
 
-mockall = "0.10.2"
+mockall = "0.11.0"
 tempfile = "3.2.0"
