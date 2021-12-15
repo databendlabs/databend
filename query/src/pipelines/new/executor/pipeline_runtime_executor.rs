@@ -4,7 +4,7 @@ use common_base::{Runtime, TrySpawn};
 use common_exception::Result;
 use common_exception::ErrorCode;
 
-use crate::pipelines::executor::pipeline_executor::PipelineExecutor;
+use crate::pipelines::new::executor::pipeline_executor::PipelineExecutor;
 
 pub struct PipelineRuntimeExecutor {
     base: PipelineExecutor,

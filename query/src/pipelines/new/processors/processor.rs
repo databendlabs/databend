@@ -1,9 +1,8 @@
 use common_exception::Result;
-use crate::pipelines::new_processors::port::InputPorts;
-use crate::pipelines::new_processors::port::OutputPorts;
 use common_base::Runtime;
+use crate::pipelines::new::processors::port::{InputPort, OutputPort};
 
-enum PrepareState {
+pub enum PrepareState {
     NeedData,
     NeedConsume,
     Sync,
@@ -14,7 +13,7 @@ enum PrepareState {
 // The design is inspired by ClickHouse processors
 #[async_trait::async_trait]
 pub trait Processor {
-    const NAME: str;
+    // const NAME: str;
 
     fn prepare(&self) -> PrepareState;
 
@@ -24,7 +23,9 @@ pub trait Processor {
     // Asynchronous work.
     async fn async_process(&mut self) -> Result<()>;
 
-    fn attach_inputs(&mut self, inputs: InputPorts) -> Result<()>;
+    fn connect_input(&mut self, input: InputPort) -> Result<()>;
 
-    fn attach_outputs(&mut self, outputs: OutputPorts) -> Result<()>;
+    fn connect_output(&mut self, output: OutputPort) -> Result<()>;
 }
+
+pub type Processors = Vec<Box<dyn Processor>>;

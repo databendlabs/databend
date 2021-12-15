@@ -1,6 +1,6 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
-use crate::pipelines::executor::pipeline_executor::PipelineExecutor;
+use crate::pipelines::new::executor::pipeline_executor::PipelineExecutor;
 
 pub struct PipelineThreadsExecutor {
     base: PipelineExecutor,

@@ -44,7 +44,7 @@ impl<T> RwLock<T> {
 
     // lock the rwlock in read mode and can be upgrade to write mode
     pub fn upgradable_read(&self) -> RwLockUpgradableReadGuard<'_, T> {
-        RwLockUpgradableReadGuard(self.0.upgradable_read())
+        RwLockUpgradableReadGuard::create(self.0.upgradable_read())
     }
 
     /// return the owned type consuming the lock
