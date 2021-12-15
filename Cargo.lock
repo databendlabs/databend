@@ -1154,6 +1154,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-containers"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "common-base",
+ "common-tracing",
+]
+
+[[package]]
 name = "common-dal"
 version = "0.1.0"
 dependencies = [
@@ -1991,6 +2001,7 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-building",
+ "common-containers",
  "common-datavalues",
  "common-exception",
  "common-flight-rpc",

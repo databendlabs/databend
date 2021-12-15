@@ -94,6 +94,8 @@ impl SledTree {
         sync: bool,
         f: impl Fn(TransactionSledTree<'_>) -> Result<T, UnabortableTransactionError>,
     ) -> Result<T, ErrorCode> {
+        let sync = sync && self.sync;
+
         // use map_err_to_code
         let result: TransactionResult<T, UnabortableTransactionError> =
             (&self.tree).transaction(move |tree| {

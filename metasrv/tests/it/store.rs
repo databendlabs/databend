@@ -34,7 +34,7 @@ use maplit::btreeset;
 use crate::init_meta_ut;
 use crate::tests::service::MetaSrvTestContext;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_metasrv_restart() -> anyhow::Result<()> {
     // - Create a metasrv
     // - Update metasrv
@@ -83,7 +83,7 @@ async fn test_metasrv_restart() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_metasrv_get_membership_from_log() -> anyhow::Result<()> {
     // - Create a metasrv
     // - Append logs
@@ -184,7 +184,7 @@ async fn test_metasrv_get_membership_from_log() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_metasrv_do_log_compaction_empty() -> anyhow::Result<()> {
     // - Create a metasrv
     // - Create a snapshot check snapshot state
@@ -231,7 +231,7 @@ async fn test_metasrv_do_log_compaction_empty() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_metasrv_do_log_compaction_1_snap_ptr_1_log() -> anyhow::Result<()> {
     // - Create a metasrv
     // - Apply logs
@@ -305,7 +305,7 @@ async fn test_metasrv_do_log_compaction_1_snap_ptr_1_log() -> anyhow::Result<()>
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_metasrv_do_log_compaction_all_logs_with_memberchange() -> anyhow::Result<()> {
     // - Create a metasrv
     // - Apply logs
@@ -358,7 +358,7 @@ async fn test_metasrv_do_log_compaction_all_logs_with_memberchange() -> anyhow::
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_metasrv_do_log_compaction_current_snapshot() -> anyhow::Result<()> {
     // - Create a metasrv
     // - Apply logs
@@ -409,7 +409,7 @@ async fn test_metasrv_do_log_compaction_current_snapshot() -> anyhow::Result<()>
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_metasrv_install_snapshot() -> anyhow::Result<()> {
     // - Create a metasrv
     // - Feed logs

@@ -185,7 +185,10 @@ impl FlightServer {
 #[async_trait::async_trait]
 impl Stoppable for FlightServer {
     async fn start(&mut self) -> Result<(), ErrorCode> {
-        self.do_start().await
+        tracing::info!("FlightServer::start");
+        let res = self.do_start().await;
+        tracing::info!("Done FlightServer::start");
+        res
     }
 
     async fn stop(
