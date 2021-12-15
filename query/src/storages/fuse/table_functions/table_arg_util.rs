@@ -36,7 +36,7 @@ pub fn string_literal(val: &str) -> Expression {
     Expression::create_literal(DataValue::String(Some(val.as_bytes().to_vec())))
 }
 
-pub fn parse_table_args(table_args: &TableArgs) -> Result<(String, String)> {
+pub fn parse_table_history_args(table_args: &TableArgs) -> Result<(String, String)> {
     match table_args {
         Some(args) if args.len() == 2 => {
             let db = string_value(&args[0])?;
@@ -48,4 +48,25 @@ pub fn parse_table_args(table_args: &TableArgs) -> Result<(String, String)> {
             table_args
         ))),
     }
+}
+
+pub fn parse_truncate_history_table_args(table_args: &TableArgs) -> Result<(String, String, bool)> {
+    if let Some(args) = table_args {
+        let len = args.len();
+        if len == 2 || len == 3 {
+            let db = string_value(&args[0])?;
+            let tbl = string_value(&args[1])?;
+            let all_flag = args
+                .get(2)
+                .map(|v| string_value(v))
+                .unwrap_or(Ok("all".to_owned()))?;
+            let all = all_flag.to_lowercase().as_str() == "fall";
+            return Ok((db, tbl, all));
+        }
+    };
+
+    Err(ErrorCode::BadArguments(format!(
+        "expecting (database_name, table_name [, all]),  as 2 or 2 or 3 string literals, but got {:?}",
+        table_args
+    )))
 }

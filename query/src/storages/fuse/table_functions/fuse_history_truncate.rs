@@ -41,7 +41,7 @@ use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::table::check_table_compatibility;
-use crate::storages::fuse::table_functions::table_arg_util::parse_table_args;
+use crate::storages::fuse::table_functions::table_arg_util::parse_truncate_history_table_args;
 use crate::storages::fuse::table_functions::table_arg_util::string_literal;
 use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::Table;
@@ -54,6 +54,7 @@ pub struct FuseTruncateHistory {
     table_info: TableInfo,
     arg_database_name: String,
     arg_table_name: String,
+    truncate_all: bool,
 }
 
 impl FuseTruncateHistory {
@@ -63,6 +64,7 @@ impl FuseTruncateHistory {
         table_id: u64,
         arg_database_name: String,
         arg_table_name: String,
+        truncate_all: bool,
     ) -> Arc<FuseTruncateHistory> {
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("snapshot_removed", DataType::UInt64, false),
@@ -84,6 +86,7 @@ impl FuseTruncateHistory {
             table_info,
             arg_database_name,
             arg_table_name,
+            truncate_all,
         })
     }
 
@@ -93,20 +96,21 @@ impl FuseTruncateHistory {
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        let (arg_database_name, arg_table_name) = parse_table_args(&table_args)?;
+        let (arg_database_name, arg_table_name, all) =
+            parse_truncate_history_table_args(&table_args)?;
         Ok(Self::new(
             database_name,
             table_func_name,
             table_id,
             arg_database_name,
             arg_table_name,
+            all,
         ))
     }
 
     pub async fn truncate_history(
         &self,
         ctx: Arc<QueryContext>,
-        truncate_all: bool,
     ) -> Result<Option<(u64, u64, u64)>> {
         let tbl = ctx
             .get_catalog()
@@ -123,7 +127,7 @@ impl FuseTruncateHistory {
         let snapshot_loc = tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC);
         let mut snapshots = snapshot_history(da.as_ref(), snapshot_loc).await?;
 
-        let min_history_len = if truncate_all { 0 } else { 1 };
+        let min_history_len = if self.truncate_all { 0 } else { 1 };
 
         // short cut
         if snapshots.len() <= min_history_len {
@@ -132,7 +136,7 @@ impl FuseTruncateHistory {
 
         let current_segments: HashSet<&String>;
         let current_snapshot: TableSnapshot;
-        if truncate_all {
+        if self.truncate_all {
             // if truncate_all requested, gc root contains nothing;
             current_segments = HashSet::new();
         } else {
@@ -154,7 +158,7 @@ impl FuseTruncateHistory {
             self.blocks_of(da.clone(), current_segments.iter()).await?;
         let block_delta = prev_blocks.difference(&current_blocks);
 
-        // NOTE: the following steps are NOT transactional yet
+        // NOTE: the following actions are NOT transactional yet
 
         // 1. remove blocks
         let mut block_removed = 0u64;
@@ -170,7 +174,7 @@ impl FuseTruncateHistory {
             segment_removed += 1;
         }
 
-        // 3. remove the blocks
+        // 3. remove the snapshots
         for x in snapshots.iter().rev() {
             let loc = snapshot_location(&x.snapshot_id);
             self.remove_location(da.clone(), loc).await?
@@ -240,7 +244,7 @@ impl Table for FuseTruncateHistory {
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
         if let Some((snapshot_removed, segment_removed, block_removed)) =
-            self.truncate_history(ctx, false).await?
+            self.truncate_history(ctx).await?
         {
             let block = DataBlock::create_by_array(self.table_info.schema(), vec![
                 Series::new(vec![snapshot_removed]),

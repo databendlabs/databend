@@ -36,7 +36,7 @@ use crate::sessions::QueryContext;
 use crate::storages::fuse::io::snapshot_history;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::table::check_table_compatibility;
-use crate::storages::fuse::table_functions::table_arg_util::parse_table_args;
+use crate::storages::fuse::table_functions::table_arg_util::parse_table_history_args;
 use crate::storages::fuse::table_functions::table_arg_util::string_literal;
 use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::Table;
@@ -68,7 +68,7 @@ impl FuseHistoryTable {
             DataField::new("bytes_compressed", DataType::UInt64, false),
         ]);
 
-        let (arg_database_name, arg_table_name) = parse_table_args(&table_args)?;
+        let (arg_database_name, arg_table_name) = parse_table_history_args(&table_args)?;
 
         let engine = FUSE_FUNC_HIST.to_owned();
 
