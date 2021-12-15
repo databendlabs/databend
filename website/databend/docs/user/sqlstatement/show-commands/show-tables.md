@@ -34,7 +34,7 @@ mysql> SHOW TABLES;
 
 Showing the tables with table name `"numbers_local"`:
 ```
-mysql> SHOW TABLES LIKE 'numbers%';
+mysql> SHOW TABLES LIKE 'numbers_local';
 +---------------+
 | name          |
 +---------------+

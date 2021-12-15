@@ -15,26 +15,27 @@
 // Borrow from apache/arrow/rust/datafusion/src/sql/sql_parser
 // See notice.md
 
+use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::str::FromStr;
 use std::time::Instant;
 
 use common_exception::ErrorCode;
+use common_io::prelude::OptionsDeserializer;
 use common_meta_types::AuthType;
-use common_meta_types::Compression;
 use common_meta_types::Credentials;
 use common_meta_types::FileFormat;
 use common_meta_types::StageParams;
-use common_meta_types::UserPrivilege;
+use common_meta_types::UserIdentity;
+use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use common_planners::ExplainType;
 use metrics::histogram;
+use serde::Deserialize;
 use sqlparser::ast::BinaryOperator;
 use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ColumnOptionDef;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Ident;
-use sqlparser::ast::SqlOption;
 use sqlparser::ast::Statement;
 use sqlparser::ast::TableConstraint;
 use sqlparser::ast::Value;
@@ -47,8 +48,10 @@ use sqlparser::parser::ParserError;
 use sqlparser::tokenizer::Token;
 use sqlparser::tokenizer::Tokenizer;
 use sqlparser::tokenizer::Whitespace;
+use sqlparser::tokenizer::Word;
 
 use super::statements::DfCopy;
+use super::statements::DfDescribeStage;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCompactTable;
 use crate::sql::statements::DfCreateDatabase;
@@ -69,6 +72,8 @@ use crate::sql::statements::DfRevokeStatement;
 use crate::sql::statements::DfSetVariable;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfShowDatabases;
+use crate::sql::statements::DfShowFunctions;
+use crate::sql::statements::DfShowGrants;
 use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
 use crate::sql::statements::DfShowSettings;
@@ -197,25 +202,7 @@ impl<'a> DfParser<'a> {
                     Keyword::SHOW => {
                         self.parser.next_token();
                         if self.consume_token("TABLES") {
-                            let tok = self.parser.next_token();
-                            match &tok {
-                                Token::EOF | Token::SemiColon => {
-                                    Ok(DfStatement::ShowTables(DfShowTables::All))
-                                }
-                                Token::Word(w) => match w.keyword {
-                                    Keyword::LIKE => Ok(DfStatement::ShowTables(
-                                        DfShowTables::Like(self.parser.parse_identifier()?),
-                                    )),
-                                    Keyword::WHERE => Ok(DfStatement::ShowTables(
-                                        DfShowTables::Where(self.parser.parse_expr()?),
-                                    )),
-                                    Keyword::FROM | Keyword::IN => Ok(DfStatement::ShowTables(
-                                        DfShowTables::FromOrIn(self.parser.parse_object_name()?),
-                                    )),
-                                    _ => self.expected("like or where", tok),
-                                },
-                                _ => self.expected("like or where", tok),
-                            }
+                            self.parse_show_tables()
                         } else if self.consume_token("DATABASES") {
                             self.parse_show_databases()
                         } else if self.consume_token("SETTINGS") {
@@ -228,6 +215,10 @@ impl<'a> DfParser<'a> {
                             Ok(DfStatement::ShowMetrics(DfShowMetrics))
                         } else if self.consume_token("USERS") {
                             Ok(DfStatement::ShowUsers(DfShowUsers))
+                        } else if self.consume_token("GRANTS") {
+                            self.parse_show_grants()
+                        } else if self.consume_token("FUNCTIONS") {
+                            self.parse_show_functions()
                         } else {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
@@ -340,6 +331,27 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::Explain(DfExplain { typ, statement }))
     }
 
+    // parse show tables.
+    fn parse_show_tables(&mut self) -> Result<DfStatement, ParserError> {
+        let tok = self.parser.next_token();
+        match &tok {
+            Token::EOF | Token::SemiColon => Ok(DfStatement::ShowTables(DfShowTables::All)),
+            Token::Word(w) => match w.keyword {
+                Keyword::LIKE => Ok(DfStatement::ShowTables(DfShowTables::Like(
+                    self.parser.parse_identifier()?,
+                ))),
+                Keyword::WHERE => Ok(DfStatement::ShowTables(DfShowTables::Where(
+                    self.parser.parse_expr()?,
+                ))),
+                Keyword::FROM | Keyword::IN => Ok(DfStatement::ShowTables(DfShowTables::FromOrIn(
+                    self.parser.parse_object_name()?,
+                ))),
+                _ => self.expected("like or where", tok),
+            },
+            _ => self.expected("like or where", tok),
+        }
+    }
+
     // parse show databases where database = xxx or where database
     fn parse_show_databases(&mut self) -> Result<DfStatement, ParserError> {
         if self.parser.parse_keyword(Keyword::WHERE) {
@@ -369,6 +381,24 @@ impl<'a> DfParser<'a> {
             }))
         } else {
             self.expected("where or like", self.parser.peek_token())
+        }
+    }
+
+    // parse show functions statement
+    fn parse_show_functions(&mut self) -> Result<DfStatement, ParserError> {
+        let tok = self.parser.next_token();
+        match &tok {
+            Token::EOF | Token::SemiColon => Ok(DfStatement::ShowFunctions(DfShowFunctions::All)),
+            Token::Word(w) => match w.keyword {
+                Keyword::LIKE => Ok(DfStatement::ShowFunctions(DfShowFunctions::Like(
+                    self.parser.parse_identifier()?,
+                ))),
+                Keyword::WHERE => Ok(DfStatement::ShowFunctions(DfShowFunctions::Where(
+                    self.parser.parse_expr()?,
+                ))),
+                _ => self.expected("like or where", tok),
+            },
+            _ => self.expected("like or where", tok),
         }
     }
 
@@ -409,6 +439,7 @@ impl<'a> DfParser<'a> {
 
     /// This is a copy from sqlparser
     /// Parse a literal value (numbers, strings, date/time, booleans)
+    #[allow(dead_code)]
     fn parse_value(&mut self) -> Result<Value, ParserError> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
@@ -432,6 +463,25 @@ impl<'a> DfParser<'a> {
             Token::SingleQuotedString(ref s) => Ok(Value::SingleQuotedString(s.to_string())),
             Token::NationalStringLiteral(ref s) => Ok(Value::NationalStringLiteral(s.to_string())),
             Token::HexStringLiteral(ref s) => Ok(Value::HexStringLiteral(s.to_string())),
+            unexpected => self.expected("a value", unexpected),
+        }
+    }
+
+    fn parse_value_or_ident(&mut self) -> Result<String, ParserError> {
+        match self.parser.next_token() {
+            Token::Word(w) => match w.keyword {
+                Keyword::TRUE => Ok("true".to_string()),
+                Keyword::FALSE => Ok("false".to_string()),
+                Keyword::NULL => Ok("null".to_string()),
+                _ => Ok(w.value),
+            },
+            // The call to n.parse() returns a bigdecimal when the
+            // bigdecimal feature is enabled, and is otherwise a no-op
+            // (i.e., it returns the input string).
+            Token::Number(n, _) => Ok(n),
+            Token::SingleQuotedString(s) => Ok(s),
+            Token::NationalStringLiteral(s) => Ok(s),
+            Token::HexStringLiteral(s) => Ok(s),
             unexpected => self.expected("a value", unexpected),
         }
     }
@@ -510,16 +560,23 @@ impl<'a> DfParser<'a> {
             if_not_exists,
             name: db_name,
             engine: db_engine,
-            options: vec![],
+            options: HashMap::new(),
         };
 
         Ok(DfStatement::CreateDatabase(create))
     }
 
     fn parse_describe(&mut self) -> Result<DfStatement, ParserError> {
-        let table_name = self.parser.parse_object_name()?;
-        let desc = DfDescribeTable { name: table_name };
-        Ok(DfStatement::DescribeTable(desc))
+        if self.consume_token("stage") {
+            let obj_name = self.parser.parse_object_name()?;
+            let desc = DfDescribeStage { name: obj_name };
+            Ok(DfStatement::DescribeStage(desc))
+        } else {
+            self.consume_token("table");
+            let table_name = self.parser.parse_object_name()?;
+            let desc = DfDescribeTable { name: table_name };
+            Ok(DfStatement::DescribeTable(desc))
+        }
     }
 
     /// Drop database/table.
@@ -695,110 +752,37 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    fn parse_stage_file_format(&mut self) -> Result<Option<FileFormat>, ParserError> {
-        let file_format = if self.consume_token("FILE_FORMAT") {
+    fn parse_stage_file_format(&mut self) -> Result<FileFormat, ParserError> {
+        let options = if self.consume_token("FILE_FORMAT") {
             self.parser.expect_token(&Token::Eq)?;
             self.parser.expect_token(&Token::LParen)?;
-
-            let format = if self.consume_token("FORMAT") {
-                self.parser.expect_token(&Token::Eq)?;
-                self.parser.next_token().to_string()
-            } else {
-                return parser_err!("Missing FORMAT");
-            };
-
-            let file_format = match format.to_uppercase().as_str() {
-                "CSV" | "PARQUET" => {
-                    let compression = if self.consume_token("COMPRESSION") {
-                        self.parser.expect_token(&Token::Eq)?;
-                        //TODO:check compression value correctness
-                        let value = self.parser.next_token().to_string();
-                        Compression::from_str(value.as_str())
-                            .map_err(|e| ParserError::ParserError(e.to_string()))?
-                    } else {
-                        Compression::None
-                    };
-                    if "CSV" == format.to_uppercase().as_str() {
-                        if self.consume_token("RECORD_DELIMITER") {
-                            self.parser.expect_token(&Token::Eq)?;
-
-                            let record_delimiter = match self.parser.next_token() {
-                                Token::Word(w) => match w.value.to_uppercase().as_str() {
-                                    "NONE" => String::from(""),
-                                    _ => {
-                                        return self
-                                            .expected("record delimiter NONE", Token::Word(w))
-                                    }
-                                },
-                                Token::SingleQuotedString(s) => s,
-                                unexpected => {
-                                    return self
-                                        .expected("not supported record delimiter", unexpected)
-                                }
-                            };
-
-                            Some(FileFormat::Csv {
-                                compression,
-                                record_delimiter,
-                            })
-                        } else {
-                            Some(FileFormat::Csv {
-                                compression,
-                                record_delimiter: String::from(""),
-                            })
-                        }
-                    } else {
-                        Some(FileFormat::Parquet { compression })
-                    }
-                }
-                "JSON" => Some(FileFormat::Json),
-                unexpected => {
-                    return parser_err!(format!(
-                        "Expected format type {}, found: {}",
-                        "CSV|PARQUET|JSON", unexpected
-                    ))
-                }
-            };
+            let options = self.parse_options()?;
 
             self.parser.expect_token(&Token::RParen)?;
-            file_format
-        } else {
-            None
-        };
 
+            options
+        } else {
+            HashMap::new()
+        };
+        let file_format = FileFormat::deserialize(OptionsDeserializer::new(&options))
+            .map_err(|e| ParserError::ParserError(format!("Invalid file format options: {}", e)))?;
         Ok(file_format)
     }
 
-    fn parse_stage_credentials(&mut self, url: String) -> Result<Credentials, ParserError> {
-        if !self.consume_token("CREDENTIALS") {
-            return parser_err!("Missing CREDENTIALS");
-        }
-        self.parser.expect_token(&Token::Eq)?;
-        self.parser.expect_token(&Token::LParen)?;
+    fn parse_stage_credentials(&mut self) -> Result<Credentials, ParserError> {
+        let options = if self.consume_token("CREDENTIALS") {
+            self.parser.expect_token(&Token::Eq)?;
+            self.parser.expect_token(&Token::LParen)?;
+            let options = self.parse_options()?;
+            self.parser.expect_token(&Token::RParen)?;
 
-        let credentials = if url.to_uppercase().starts_with("S3") {
-            //TODO: current credential field order is hard code
-            let access_key_id = if self.consume_token("ACCESS_KEY_ID") {
-                self.parser.expect_token(&Token::Eq)?;
-                self.parser.parse_literal_string()?
-            } else {
-                return parser_err!("Missing S3 ACCESS_KEY_ID");
-            };
-
-            let secret_access_key = if self.consume_token("SECRET_ACCESS_KEY") {
-                self.parser.expect_token(&Token::Eq)?;
-                self.parser.parse_literal_string()?
-            } else {
-                return parser_err!("Missing S3 SECRET_ACCESS_KEY");
-            };
-            Credentials::S3 {
-                access_key_id,
-                secret_access_key,
-            }
+            options
         } else {
-            return parser_err!("Not supported storage");
+            HashMap::new()
         };
-        self.parser.expect_token(&Token::RParen)?;
+
+        let credentials = Credentials::deserialize(OptionsDeserializer::new(&options))
+            .map_err(|e| ParserError::ParserError(format!("Invalid credentials options: {}", e)))?;
         Ok(credentials)
     }
 
@@ -814,7 +798,11 @@ impl<'a> DfParser<'a> {
             return parser_err!("Missing URL");
         };
 
-        let credentials = self.parse_stage_credentials(url.clone())?;
+        if !url.to_uppercase().starts_with("S3") {
+            return parser_err!("Not supported storage");
+        }
+
+        let credentials = self.parse_stage_credentials()?;
         let stage_params = StageParams::new(url.as_str(), credentials);
         let file_format = self.parse_stage_file_format()?;
 
@@ -859,6 +847,19 @@ impl<'a> DfParser<'a> {
         // parse table options: https://dev.mysql.com/doc/refman/8.0/en/create-table.html
         let options = self.parse_options()?;
 
+        let mut query = None;
+        if let Token::Word(Word { keyword, .. }) = self.parser.peek_token() {
+            let mut has_query = false;
+            if keyword == Keyword::AS {
+                self.parser.next_token();
+                has_query = true;
+            }
+            if has_query || keyword == Keyword::SELECT {
+                let native = self.parser.parse_query()?;
+                query = Some(Box::new(DfQueryStatement::try_from(native)?))
+            }
+        }
+
         let create = DfCreateTable {
             if_not_exists,
             name: table_name,
@@ -866,6 +867,7 @@ impl<'a> DfParser<'a> {
             engine,
             options,
             like: table_like,
+            query,
         };
 
         Ok(DfStatement::CreateTable(create))
@@ -907,6 +909,21 @@ impl<'a> DfParser<'a> {
         }
     }
 
+    fn parse_show_grants(&mut self) -> Result<DfStatement, ParserError> {
+        // SHOW GRANTS
+        if !self.consume_token("FOR") {
+            return Ok(DfStatement::ShowGrants(DfShowGrants {
+                user_identity: None,
+            }));
+        }
+
+        // SHOW GRANTS FOR 'u1'@'%'
+        let (username, hostname) = self.parse_user_identity()?;
+        Ok(DfStatement::ShowGrants(DfShowGrants {
+            user_identity: Some(UserIdentity { username, hostname }),
+        }))
+    }
+
     fn parse_truncate(&mut self) -> Result<DfStatement, ParserError> {
         self.parser.next_token();
         match self.parser.next_token() {
@@ -922,8 +939,8 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    fn parse_privileges(&mut self) -> Result<UserPrivilege, ParserError> {
-        let mut privileges = UserPrivilege::empty();
+    fn parse_privileges(&mut self) -> Result<UserPrivilegeSet, ParserError> {
+        let mut privileges = UserPrivilegeSet::empty();
         loop {
             match self.parser.next_token() {
                 Token::Word(w) => match w.keyword {
@@ -1062,17 +1079,23 @@ impl<'a> DfParser<'a> {
         }))
     }
 
-    fn parse_options(&mut self) -> Result<Vec<SqlOption>, ParserError> {
-        let mut options = vec![];
+    fn parse_options(&mut self) -> Result<HashMap<String, String>, ParserError> {
+        let mut options = HashMap::new();
         loop {
             let name = self.parser.parse_identifier();
             if name.is_err() {
+                self.parser.prev_token();
                 break;
             }
             let name = name.unwrap();
-            self.parser.expect_token(&Token::Eq)?;
-            let value = self.parse_value()?;
-            options.push(SqlOption { name, value });
+            if !self.parser.consume_token(&Token::Eq) {
+                // only paired values are considered as options
+                self.parser.prev_token();
+                break;
+            }
+            let value = self.parse_value_or_ident()?;
+
+            options.insert(name.to_string(), value);
         }
         Ok(options)
     }

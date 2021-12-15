@@ -25,12 +25,11 @@ use common_clickhouse_srv::types::Block;
 use common_clickhouse_srv::types::Progress;
 use common_clickhouse_srv::CHContext;
 use common_clickhouse_srv::ClickHouseServer;
+use common_tracing::tracing;
 use futures::task::Context;
 use futures::task::Poll;
 use futures::Stream;
 use futures::StreamExt;
-use log::debug;
-use log::info;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -40,13 +39,12 @@ extern crate common_clickhouse_srv;
 #[tokio::main]
 async fn main() -> std::result::Result<(), Box<dyn Error>> {
     env::set_var("RUST_LOG", "clickhouse_srv=debug");
-    env_logger::init();
     let host_port = "127.0.0.1:9000";
 
     // Note that this is the Tokio TcpListener, which is fully async.
     let listener = TcpListener::bind(host_port).await?;
 
-    info!("Server start at {}", host_port);
+    tracing::info!("Server start at {}", host_port);
 
     loop {
         // Asynchronously wait for an inbound TcpStream.
@@ -76,7 +74,7 @@ struct Session {
 impl common_clickhouse_srv::ClickHouseSession for Session {
     async fn execute_query(&self, ctx: &mut CHContext, connection: &mut Connection) -> Result<()> {
         let query = ctx.state.query.clone();
-        debug!("Receive query {}", query);
+        tracing::debug!("Receive query {}", query);
 
         let start = Instant::now();
 
@@ -125,9 +123,10 @@ impl common_clickhouse_srv::ClickHouseSession for Session {
         }
 
         let duration = start.elapsed();
-        debug!(
+        tracing::debug!(
             "ClickHouseHandler executor cost:{:?}, statistics:{:?}",
-            duration, "xxx",
+            duration,
+            "xxx",
         );
         Ok(())
     }

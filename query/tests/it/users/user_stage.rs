@@ -15,6 +15,7 @@
 use common_base::tokio;
 use common_exception::Result;
 use common_meta_types::Credentials;
+use common_meta_types::FileFormat;
 use common_meta_types::StageParams;
 use common_meta_types::UserStageInfo;
 use databend_query::configs::Config;
@@ -36,11 +37,11 @@ async fn test_user_stage() -> Result<()> {
         let stage_info = UserStageInfo::new(
             stage_name1,
             comments,
-            StageParams::new("test", Credentials::S3 {
+            StageParams::new("test", Credentials {
                 access_key_id: String::from("test"),
                 secret_access_key: String::from("test"),
             }),
-            None,
+            FileFormat::default(),
         );
         user_mgr.add_stage(stage_info).await?;
     }
@@ -50,11 +51,11 @@ async fn test_user_stage() -> Result<()> {
         let stage_info = UserStageInfo::new(
             stage_name2,
             comments,
-            StageParams::new("test", Credentials::S3 {
+            StageParams::new("test", Credentials {
                 access_key_id: String::from("test"),
                 secret_access_key: String::from("test"),
             }),
-            None,
+            FileFormat::default(),
         );
         user_mgr.add_stage(stage_info).await?;
     }

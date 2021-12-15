@@ -26,6 +26,7 @@ use common_tracing::tracing;
 use crate::KVApi;
 
 pub struct KVApiTestSuite {}
+
 impl KVApiTestSuite {
     pub async fn kv_write_read<KV: KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         {
@@ -500,6 +501,87 @@ impl KVApiTestSuite {
             .await?;
         assert_eq!(res, vec![Some(SeqV::new(1, b"v1".to_vec())), None]);
 
+        Ok(())
+    }
+}
+
+/// Test that write and read should be forwarded to leader
+impl KVApiTestSuite {
+    pub async fn kv_write_read_cross_nodes<KV: KVApi>(
+        &self,
+        kv1: &KV,
+        kv2: &KV,
+    ) -> anyhow::Result<()> {
+        let mut values = vec![];
+        {
+            kv1.upsert_kv(UpsertKVAction::new(
+                "t",
+                MatchSeq::Any,
+                Operation::Update("t".as_bytes().to_vec()),
+                None,
+            ))
+            .await?;
+
+            for i in 0..9 {
+                let key = format!("__users/{}", i);
+                let val = format!("val_{}", i);
+                values.push(val.clone());
+                tracing::info!("--- Start upsert-kv: {}", key);
+                kv1.upsert_kv(UpsertKVAction::new(
+                    &key,
+                    MatchSeq::Any,
+                    Operation::Update(val.as_bytes().to_vec()),
+                    None,
+                ))
+                .await?;
+                tracing::info!("--- Done upsert-kv: {}", key);
+            }
+
+            kv1.upsert_kv(UpsertKVAction::new(
+                "v",
+                MatchSeq::Any,
+                Operation::Update(b"v".to_vec()),
+                None,
+            ))
+            .await?;
+        }
+
+        tracing::info!("--- test get on other node");
+        {
+            let res = kv2.get_kv("t").await?;
+            let res = res.unwrap();
+            assert_eq!(b"t".to_vec(), res.data);
+        }
+
+        tracing::info!("--- test mget on other node");
+        {
+            let res = kv2.mget_kv(&["u".to_string(), "v".to_string()]).await?;
+            assert_eq!(
+                vec![
+                    None,
+                    Some(SeqV {
+                        seq: 11,
+                        meta: None,
+                        data: b"v".to_vec()
+                    })
+                ],
+                res
+            );
+        }
+
+        tracing::info!("--- test list on other node");
+        {
+            let res = kv2.prefix_list_kv("__users/").await?;
+            assert_eq!(
+                res.iter()
+                    .map(|(_key, val)| val.data.clone())
+                    .collect::<Vec<_>>(),
+                values
+                    .iter()
+                    .map(|v| v.as_bytes().to_vec())
+                    .collect::<Vec<_>>()
+            );
+        }
         Ok(())
     }
 }

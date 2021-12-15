@@ -36,6 +36,8 @@ _data/
 _cache/
 _tmp/*
 tls/certs/*
+.databend/
+checksums.txt
 
 # for tests in mac
 *.stderr-e

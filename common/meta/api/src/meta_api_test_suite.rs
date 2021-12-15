@@ -24,6 +24,7 @@ use common_meta_types::CreateTableReq;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
+use common_meta_types::GetTableReq;
 use common_meta_types::ListDatabaseReq;
 use common_meta_types::ListTableReq;
 use common_meta_types::TableIdent;
@@ -179,6 +180,7 @@ impl MetaApiTestSuite {
 
         Ok(())
     }
+
     pub async fn table_create_get_drop<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -448,5 +450,215 @@ impl MetaApiTestSuite {
         let res = mt.create_database(req).await?;
         tracing::info!("create database res: {:?}", res);
         Ok(res)
+    }
+}
+
+// Test write and read meta on different nodes
+// This is meant for testing distributed MetaApi impl, to ensure a read-after-write consistency.
+impl MetaApiTestSuite {
+    /// Create db one node, get db on another
+    pub async fn database_get_diff_nodes<MT: MetaApi>(
+        &self,
+        node_a: &MT,
+        node_b: &MT,
+    ) -> anyhow::Result<()> {
+        tracing::info!("--- create db1 on node_a");
+        {
+            let req = CreateDatabaseReq {
+                if_not_exists: false,
+                db: "db1".to_string(),
+                engine: "github".to_string(),
+                options: Default::default(),
+            };
+
+            let res = node_a.create_database(req).await;
+            tracing::info!("create database res: {:?}", res);
+            let res = res.unwrap();
+            assert_eq!(1, res.database_id, "first database id is 1");
+        }
+
+        tracing::info!("--- get db1 on node_b");
+        {
+            let res = node_b.get_database(GetDatabaseReq::new("db1")).await;
+            tracing::debug!("get present database res: {:?}", res);
+            let res = res?;
+            assert_eq!(1, res.database_id, "db1 id is 1");
+            assert_eq!("db1", res.db, "db1.db is db1");
+        }
+
+        tracing::info!("--- get nonexistent-db on node_b, expect correct error");
+        {
+            let res = node_b
+                .get_database(GetDatabaseReq::new("nonexistent"))
+                .await;
+            tracing::debug!("get present database res: {:?}", res);
+            let err = res.unwrap_err();
+            assert_eq!(ErrorCode::UnknownDatabase("").code(), err.code());
+            assert_eq!("nonexistent", err.message());
+            assert_eq!("Code: 3, displayText = nonexistent.", format!("{}", err));
+        }
+
+        Ok(())
+    }
+
+    /// Create dbs on node_a, list dbs on node_b
+    pub async fn list_database_diff_nodes<MT: MetaApi>(
+        &self,
+        node_a: &MT,
+        node_b: &MT,
+    ) -> anyhow::Result<()> {
+        tracing::info!("--- create db1 and db3 on node_a");
+        {
+            let dbs = vec!["db1", "db3"];
+            for db_name in dbs {
+                let req = CreateDatabaseReq {
+                    if_not_exists: false,
+                    db: db_name.to_string(),
+                    engine: "github".to_string(),
+                    options: Default::default(),
+                };
+                let res = node_a.create_database(req).await;
+                tracing::info!("create database res: {:?}", res);
+                assert!(res.is_ok());
+            }
+        }
+
+        tracing::info!("--- list databases from node_b");
+        {
+            let res = node_b.list_databases(ListDatabaseReq {}).await;
+            tracing::debug!("get database list: {:?}", res);
+            let res = res?;
+            assert_eq!(2, res.len(), "database list len is 2");
+            assert_eq!(1, res[0].database_id, "db1 id is 1");
+            assert_eq!("db1", res[0].db, "db1.name is db1");
+            assert_eq!(2, res[1].database_id, "db3 id is 2");
+            assert_eq!("db3", res[1].db, "db3.name is db3");
+        }
+
+        Ok(())
+    }
+
+    /// Create table on node_a, list table on node_b
+    pub async fn list_table_diff_nodes<MT: MetaApi>(
+        &self,
+        node_a: &MT,
+        node_b: &MT,
+    ) -> anyhow::Result<()> {
+        tracing::info!("--- create db1 and tb1, tb2 on node_a");
+        let db_name = "db1";
+        {
+            let req = CreateDatabaseReq {
+                if_not_exists: false,
+                db: db_name.to_string(),
+                engine: "github".to_string(),
+                options: Default::default(),
+            };
+            let res = node_a.create_database(req).await;
+            tracing::info!("create database res: {:?}", res);
+            assert!(res.is_ok());
+
+            let tables = vec!["tb1", "tb2"];
+            let schema = Arc::new(DataSchema::new(vec![DataField::new(
+                "number",
+                DataType::UInt64,
+                false,
+            )]));
+
+            let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
+            for tb in tables {
+                let req = CreateTableReq {
+                    if_not_exists: false,
+                    db: db_name.to_string(),
+                    table: tb.to_string(),
+                    table_meta: TableMeta {
+                        schema: schema.clone(),
+                        engine: "JSON".to_string(),
+                        options: options.clone(),
+                    },
+                };
+                let res = node_a.create_table(req).await;
+                tracing::info!("create table res: {:?}", res);
+                assert!(res.is_ok());
+            }
+        }
+
+        tracing::info!("--- list tables from node_b");
+        {
+            let res = node_b.list_tables(ListTableReq::new(db_name)).await;
+            tracing::debug!("get table list: {:?}", res);
+            let res = res?;
+            assert_eq!(2, res.len(), "table list len is 2");
+            assert_eq!(1, res[0].ident.table_id, "tb1 id is 1");
+            assert_eq!("tb1", res[0].name, "tb1.name is tb1");
+            assert_eq!(2, res[1].ident.table_id, "tb2 id is 2");
+            assert_eq!("tb2", res[1].name, "tb2.name is tb2");
+        }
+
+        Ok(())
+    }
+
+    /// Create table on node_a, get table on node_b
+    pub async fn table_get_diff_nodes<MT: MetaApi>(
+        &self,
+        node_a: &MT,
+        node_b: &MT,
+    ) -> anyhow::Result<()> {
+        tracing::info!("--- create table tb1 on node_a");
+        let db_name = "db1";
+        {
+            let req = CreateDatabaseReq {
+                if_not_exists: false,
+                db: db_name.to_string(),
+                engine: "github".to_string(),
+                options: Default::default(),
+            };
+            let res = node_a.create_database(req).await;
+            tracing::info!("create database res: {:?}", res);
+            assert!(res.is_ok());
+
+            let schema = Arc::new(DataSchema::new(vec![DataField::new(
+                "number",
+                DataType::UInt64,
+                false,
+            )]));
+
+            let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
+
+            let req = CreateTableReq {
+                if_not_exists: false,
+                db: db_name.to_string(),
+                table: "tb1".to_string(),
+                table_meta: TableMeta {
+                    schema: schema.clone(),
+                    engine: "JSON".to_string(),
+                    options: options.clone(),
+                },
+            };
+
+            let res = node_a.create_table(req).await;
+            tracing::info!("create table res: {:?}", res);
+            assert!(res.is_ok());
+        }
+
+        tracing::info!("--- get tb1 on node_b");
+        {
+            let res = node_b.get_table(GetTableReq::new("db1", "tb1")).await;
+            tracing::debug!("get present table res: {:?}", res);
+            let res = res?;
+            assert_eq!(1, res.ident.table_id, "tb1 id is 1");
+            assert_eq!("tb1", res.name, "tb1.name is tb1");
+        }
+
+        tracing::info!("--- get nonexistent-table on node_b, expect correct error");
+        {
+            let res = node_b
+                .get_table(GetTableReq::new("db1", "nonexistent"))
+                .await;
+            tracing::debug!("get present table res: {:?}", res);
+            let err = res.unwrap_err();
+            assert_eq!(ErrorCode::UnknownTable("").code(), err.code());
+        }
+
+        Ok(())
     }
 }

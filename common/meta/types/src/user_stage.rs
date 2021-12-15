@@ -17,33 +17,95 @@ use std::str::FromStr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
 pub struct StageParams {
     pub url: String,
     pub credentials: Credentials,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub enum Credentials {
-    S3 {
-        access_key_id: String,
-        secret_access_key: String,
-    },
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "lowercase")]
+pub struct Credentials {
+    #[serde(default)]
+    pub access_key_id: String,
+    #[serde(default)]
+    pub secret_access_key: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub enum FileFormat {
-    Csv {
-        compression: Compression,
-        record_delimiter: String,
-    },
-    Parquet {
-        compression: Compression,
-    },
+#[serde(deny_unknown_fields)]
+pub struct FileFormat {
+    #[serde(default)]
+    pub format: Format,
+    #[serde(default = "default_record_delimiter")]
+    pub record_delimiter: String,
+    #[serde(default = "default_field_delimiter")]
+    pub field_delimiter: String,
+    #[serde(default = "default_csv_header")]
+    pub csv_header: bool,
+    #[serde(default)]
+    pub compression: Compression,
+}
+
+impl Default for FileFormat {
+    fn default() -> Self {
+        Self {
+            format: Format::default(),
+            record_delimiter: default_record_delimiter(),
+            field_delimiter: default_field_delimiter(),
+            csv_header: default_csv_header(),
+            compression: Compression::default(),
+        }
+    }
+}
+
+fn default_record_delimiter() -> String {
+    "\n".to_string()
+}
+
+fn default_field_delimiter() -> String {
+    ",".to_string()
+}
+
+fn default_csv_header() -> bool {
+    false
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum Format {
+    Csv,
+    Parquet,
     Json,
 }
 
+impl Default for Format {
+    fn default() -> Self {
+        Self::Csv
+    }
+}
+
+impl FromStr for Format {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> Result<Format> {
+        let s = s.to_lowercase();
+        match s.as_str() {
+            "csv" => Ok(Format::Csv),
+            "parquet" => Ok(Format::Parquet),
+            "json" => Ok(Format::Json),
+
+            other => Err(ErrorCode::StrParseError(format!(
+                "no match for format: {}",
+                other
+            ))),
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
 pub enum Compression {
     Auto,
     Gzip,
@@ -57,21 +119,30 @@ pub enum Compression {
     None,
 }
 
-impl FromStr for Compression {
-    type Err = &'static str;
+impl Default for Compression {
+    fn default() -> Self {
+        Self::None
+    }
+}
 
-    fn from_str(s: &str) -> std::result::Result<Compression, &'static str> {
-        let s = s.to_uppercase();
+impl FromStr for Compression {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> Result<Compression> {
+        let s = s.to_lowercase();
         match s.as_str() {
-            "AUTO" => Ok(Compression::Auto),
-            "GZIP" => Ok(Compression::Gzip),
-            "BZ2" => Ok(Compression::Bz2),
-            "BROTLI" => Ok(Compression::Brotli),
-            "ZSTD" => Ok(Compression::Zstd),
-            "DEFLATE" => Ok(Compression::Deflate),
-            "RAW_DEFLATE" => Ok(Compression::RawDeflate),
-            "NONE" => Ok(Compression::None),
-            _ => Err("no match for compression"),
+            "auto" => Ok(Compression::Auto),
+            "gzip" => Ok(Compression::Gzip),
+            "bz2" => Ok(Compression::Bz2),
+            "brotli" => Ok(Compression::Brotli),
+            "zstd" => Ok(Compression::Zstd),
+            "deflate" => Ok(Compression::Deflate),
+            "raw_deflate" => Ok(Compression::RawDeflate),
+            "none" => Ok(Compression::None),
+            other => Err(ErrorCode::StrParseError(format!(
+                "no match for compression: {}",
+                other
+            ))),
         }
     }
 }
@@ -85,15 +156,13 @@ impl StageParams {
     }
 }
 /// Stage for data stage location.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
 pub struct UserStageInfo {
     #[serde(default)]
     pub stage_name: String,
 
     pub stage_params: StageParams,
-    #[serde(default)]
-    pub file_format: Option<FileFormat>,
-    #[serde(default)]
+    pub file_format: FileFormat,
     pub comments: String,
 }
 
@@ -102,7 +171,7 @@ impl UserStageInfo {
         stage_name: &str,
         comments: &str,
         stage_params: StageParams,
-        file_format: Option<FileFormat>,
+        file_format: FileFormat,
     ) -> Self {
         UserStageInfo {
             stage_name: stage_name.to_string(),

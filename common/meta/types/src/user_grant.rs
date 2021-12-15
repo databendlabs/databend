@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+
 use enumflags2::BitFlags;
 
-use crate::UserPrivilege;
+use crate::UserPrivilegeSet;
 use crate::UserPrivilegeType;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -22,6 +24,16 @@ pub enum GrantObject {
     Global,
     Database(String),
     Table(String, String),
+}
+
+impl fmt::Display for GrantObject {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            GrantObject::Global => write!(f, "*.*"),
+            GrantObject::Database(ref db) => write!(f, "'{}'.*", db),
+            GrantObject::Table(ref db, ref table) => write!(f, "'{}'.'{}'", db, table),
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -128,6 +140,17 @@ impl GrantEntry {
     }
 }
 
+impl fmt::Display for GrantEntry {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        let privileges: UserPrivilegeSet = self.privileges.into();
+        write!(
+            f,
+            "GRANT {} ON {} TO '{}'@'{}'",
+            privileges, self.object, self.user, self.host_pattern
+        )
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct UserGrantSet {
     grants: Vec<GrantEntry>,
@@ -183,7 +206,7 @@ impl UserGrantSet {
         user: &str,
         host_pattern: &str,
         object: &GrantObject,
-        privileges: UserPrivilege,
+        privileges: UserPrivilegeSet,
     ) {
         let privileges: BitFlags<UserPrivilegeType> = privileges.into();
         let mut new_grants: Vec<GrantEntry> = vec![];
@@ -215,7 +238,7 @@ impl UserGrantSet {
         user: &str,
         host_pattern: &str,
         object: &GrantObject,
-        privileges: UserPrivilege,
+        privileges: UserPrivilegeSet,
     ) {
         let privileges: BitFlags<UserPrivilegeType> = privileges.into();
         let grants = self

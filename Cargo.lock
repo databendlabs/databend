@@ -526,6 +526,7 @@ dependencies = [
  "common-building",
  "common-datavalues",
  "common-meta-raft-store",
+ "common-tracing",
  "csv",
  "databend-meta",
  "databend-query",
@@ -541,7 +542,6 @@ dependencies = [
  "itertools",
  "lexical-util",
  "libc",
- "log",
  "nix",
  "num-format",
  "portpicker",
@@ -579,6 +579,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bincode"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "bindgen"
 version = "0.58.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -588,7 +597,7 @@ dependencies = [
  "cexpr",
  "clang-sys",
  "clap 2.34.0",
- "env_logger 0.8.4",
+ "env_logger",
  "lazy_static",
  "lazycell",
  "log",
@@ -1104,9 +1113,9 @@ name = "common-cache"
 version = "0.1.0"
 dependencies = [
  "common-exception",
+ "common-tracing",
  "filetime",
  "heapsize",
- "log",
  "ritelinked",
  "tempfile",
  "walkdir",
@@ -1123,7 +1132,7 @@ dependencies = [
  "chrono-tz",
  "combine",
  "common-io",
- "env_logger 0.9.0",
+ "common-tracing",
  "futures",
  "futures-core",
  "futures-sink",
@@ -1143,6 +1152,16 @@ dependencies = [
  "tokio-util",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "common-containers"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "common-base",
+ "common-tracing",
 ]
 
 [[package]]
@@ -1214,6 +1233,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "backtrace",
+ "bincode",
  "common-arrow",
  "octocrab",
  "paste",
@@ -1234,11 +1254,11 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-exception",
+ "common-tracing",
  "futures",
  "hyper",
  "jwt-simple",
  "lazy_static",
- "log",
  "pretty_assertions",
  "prost",
  "serde",
@@ -1253,6 +1273,7 @@ name = "common-functions"
 version = "0.1.0"
 dependencies = [
  "base64 0.13.0",
+ "bincode",
  "bumpalo",
  "bytes",
  "common-arrow",
@@ -1292,6 +1313,7 @@ dependencies = [
  "bytes",
  "common-exception",
  "rand 0.8.4",
+ "serde",
 ]
 
 [[package]]
@@ -1362,7 +1384,6 @@ dependencies = [
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",
- "common-planners",
  "common-tracing",
  "derive_more",
  "futures",
@@ -1391,7 +1412,6 @@ dependencies = [
  "hyper",
  "jwt-simple",
  "lazy_static",
- "log",
  "pretty_assertions",
  "prost",
  "rand 0.8.4",
@@ -1860,7 +1880,7 @@ checksum = "22813a6dc45b335f9bade10bf7271dc477e81113e89eb251a0bc2a8a81c536e1"
 dependencies = [
  "bstr",
  "csv-core",
- "itoa",
+ "itoa 0.4.8",
  "ryu",
  "serde",
 ]
@@ -1874,7 +1894,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "csv-core",
  "futures",
- "itoa",
+ "itoa 0.4.8",
  "ryu",
  "serde",
 ]
@@ -1982,6 +2002,7 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-building",
+ "common-containers",
  "common-datavalues",
  "common-exception",
  "common-flight-rpc",
@@ -2071,7 +2092,6 @@ dependencies = [
  "crossbeam-queue 0.3.2",
  "ctrlc",
  "dyn-clone",
- "env_logger 0.9.0",
  "flaky_test",
  "float-cmp 0.9.0",
  "futures",
@@ -2079,7 +2099,7 @@ dependencies = [
  "hyper",
  "indexmap",
  "lazy_static",
- "log",
+ "maplit",
  "metrics",
  "msql-srv",
  "mysql",
@@ -2411,19 +2431,6 @@ name = "env_logger"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a19187fea3ac7e84da7dacf48de0c45d63c6a76f9490dae389aead16c243fce3"
-dependencies = [
- "atty",
- "humantime",
- "log",
- "regex",
- "termcolor",
-]
-
-[[package]]
-name = "env_logger"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b2cf0344971ee6c64c31be0d530793fba457d322dfec2810c453d0ef228f9c3"
 dependencies = [
  "atty",
  "humantime",
@@ -2989,9 +2996,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.3.7"
+version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fd819562fcebdac5afc5c113c3ec36f902840b70fd4fc458799c8ce4607ae55"
+checksum = "8f072413d126e57991455e0a922b31e4c8ba7c2ffbebf6b78b4f8521397d65cd"
 dependencies = [
  "bytes",
  "fnv",
@@ -3163,7 +3170,7 @@ checksum = "1323096b05d41827dadeaee54c9981958c0f94e670bc94ed80037d1a7b8b186b"
 dependencies = [
  "bytes",
  "fnv",
- "itoa",
+ "itoa 0.4.8",
 ]
 
 [[package]]
@@ -3225,9 +3232,9 @@ checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "hyper"
-version = "0.14.15"
+version = "0.14.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "436ec0091e4f20e655156a30a0df3770fe2900aa301e548e08446ec794b6953c"
+checksum = "b7ec3e62bdc98a2f0393a5048e4c30ef659440ea6e0e572965103e72bd836f55"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -3238,7 +3245,7 @@ dependencies = [
  "http-body",
  "httparse",
  "httpdate",
- "itoa",
+ "itoa 0.4.8",
  "pin-project-lite",
  "socket2 0.4.2",
  "tokio",
@@ -3374,7 +3381,7 @@ dependencies = [
  "ahash",
  "atty",
  "indexmap",
- "itoa",
+ "itoa 0.4.8",
  "lazy_static",
  "log",
  "num-format",
@@ -3479,6 +3486,12 @@ name = "itoa"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b71991ff56294aa922b450139ee08b3bfc70982c6b2c7562771375cf73542dd4"
+
+[[package]]
+name = "itoa"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1aab8fc367588b89dcee83ab0fd66b72b50b72fa1904d7095045ace2b0c81c35"
 
 [[package]]
 name = "jobserver"
@@ -4369,7 +4382,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bafe4179722c2894288ee77a9f044f02811c86af699344c498b0840c698a2465"
 dependencies = [
  "arrayvec 0.4.12",
- "itoa",
+ "itoa 0.4.8",
 ]
 
 [[package]]
@@ -4951,9 +4964,9 @@ dependencies = [
 
 [[package]]
 name = "poem"
-version = "1.0.38"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d5268e20f10bab1b12f2b1bd9aa8263b4418210d4ca1cc49d930f07572c9f49"
+checksum = "a69bd7b9378e4273fc36cdc29b25f4efb5b56c4f96feef92a46cba105a6c1e70"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4964,7 +4977,6 @@ dependencies = [
  "mime",
  "mime_guess",
  "multer",
- "nom 7.1.0",
  "parking_lot",
  "percent-encoding",
  "pin-project-lite",
@@ -4983,9 +4995,9 @@ dependencies = [
 
 [[package]]
 name = "poem-derive"
-version = "1.0.20"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3795975cfc1663ca3932a2fc341b77ace2d81c0f2e1e4ea22348b6767d9d9b75"
+checksum = "3db87c6ece598edaf7830aaddd094dcf1785dd9207348a874e16d8a7d123e99e"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -5981,12 +5993,12 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.72"
+version = "1.0.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0ffa0837f2dfa6fb90868c2b5468cad482e175f7dad97e7421951e663f2b527"
+checksum = "bcbd0344bc6533bc7ec56df11d42fb70f1b912351c0825ccb7211b59d8af7cf5"
 dependencies = [
  "indexmap",
- "itoa",
+ "itoa 1.0.1",
  "ryu",
  "serde",
 ]
@@ -6017,7 +6029,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edfa57a7f8d9c1d260a549e7224100f6c43d43f9103e06dd8b4095a9b2b43ce9"
 dependencies = [
  "form_urlencoded",
- "itoa",
+ "itoa 0.4.8",
  "ryu",
  "serde",
 ]
@@ -6785,7 +6797,7 @@ version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "41effe7cfa8af36f439fac33861b66b049edc6f9a32331e2312660529c1c24ad"
 dependencies = [
- "itoa",
+ "itoa 0.4.8",
  "libc",
 ]
 
@@ -7390,9 +7402,9 @@ checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
 name = "vergen"
-version = "5.2.0"
+version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4a21b1fc04977357c3a6187a56ebd91ab60b98328956c1dda501f4e04c7afcb"
+checksum = "fd0c9f8387e118573859ae0e6c6fbdfa41bd1f4fbea451b0b8c5a81a3b8bc9e0"
 dependencies = [
  "anyhow",
  "cfg-if 1.0.0",

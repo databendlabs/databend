@@ -24,6 +24,7 @@ use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
+use crate::DescribeStagePlan;
 use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
@@ -47,6 +48,7 @@ use crate::RevokePrivilegePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateTablePlan;
+use crate::ShowGrantsPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -113,6 +115,7 @@ pub trait PlanVisitor {
             PlanNode::CreateTable(plan) => self.visit_create_table(plan),
             PlanNode::DropTable(plan) => self.visit_drop_table(plan),
             PlanNode::DescribeTable(plan) => self.visit_describe_table(plan),
+            PlanNode::DescribeStage(plan) => self.visit_describe_stage(plan),
             PlanNode::TruncateTable(plan) => self.visit_truncate_table(plan),
             PlanNode::UseDatabase(plan) => self.visit_use_database(plan),
             PlanNode::SetVariable(plan) => self.visit_set_variable(plan),
@@ -133,6 +136,7 @@ pub trait PlanVisitor {
             PlanNode::RevokePrivilege(plan) => self.visit_revoke_privilege(plan),
             PlanNode::Sink(plan) => self.visit_append(plan),
             PlanNode::CreateUserStage(plan) => self.visit_create_stage(plan),
+            PlanNode::ShowGrants(plan) => self.visit_show_grants(plan),
         }
     }
 
@@ -276,6 +280,10 @@ pub trait PlanVisitor {
         Ok(())
     }
 
+    fn visit_describe_stage(&mut self, _: &DescribeStagePlan) -> Result<()> {
+        Ok(())
+    }
+
     fn visit_drop_table(&mut self, _: &DropTablePlan) -> Result<()> {
         Ok(())
     }
@@ -312,6 +320,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_create_stage(&mut self, _: &CreateUserStagePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_show_grants(&mut self, _: &ShowGrantsPlan) -> Result<()> {
         Ok(())
     }
 }

@@ -26,6 +26,7 @@ use crate::CopyPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
 use crate::CreateUserPlan;
+use crate::DescribeStagePlan;
 use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
@@ -47,6 +48,7 @@ use crate::RevokePrivilegePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateTablePlan;
+use crate::ShowGrantsPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -77,6 +79,7 @@ pub enum PlanNode {
     DropDatabase(DropDatabasePlan),
     CreateTable(CreateTablePlan),
     DescribeTable(DescribeTablePlan),
+    DescribeStage(DescribeStagePlan),
     DropTable(DropTablePlan),
     TruncateTable(TruncateTablePlan),
     UseDatabase(UseDatabasePlan),
@@ -92,6 +95,7 @@ pub enum PlanNode {
     GrantPrivilege(GrantPrivilegePlan),
     RevokePrivilege(RevokePrivilegePlan),
     CreateUserStage(CreateUserStagePlan),
+    ShowGrants(ShowGrantsPlan),
 }
 
 impl PlanNode {
@@ -118,6 +122,7 @@ impl PlanNode {
             PlanNode::CreateTable(v) => v.schema(),
             PlanNode::DropTable(v) => v.schema(),
             PlanNode::DescribeTable(v) => v.schema(),
+            PlanNode::DescribeStage(v) => v.schema(),
             PlanNode::TruncateTable(v) => v.schema(),
             PlanNode::SetVariable(v) => v.schema(),
             PlanNode::Sort(v) => v.schema(),
@@ -134,6 +139,7 @@ impl PlanNode {
             PlanNode::Sink(v) => v.schema(),
             PlanNode::Copy(v) => v.schema(),
             PlanNode::CreateUserStage(v) => v.schema(),
+            PlanNode::ShowGrants(v) => v.schema(),
         }
     }
 
@@ -158,6 +164,7 @@ impl PlanNode {
             PlanNode::DropDatabase(_) => "DropDatabasePlan",
             PlanNode::CreateTable(_) => "CreateTablePlan",
             PlanNode::DescribeTable(_) => "DescribeTablePlan",
+            PlanNode::DescribeStage(_) => "DescribeStagePlan",
             PlanNode::DropTable(_) => "DropTablePlan",
             PlanNode::TruncateTable(_) => "TruncateTablePlan",
             PlanNode::SetVariable(_) => "SetVariablePlan",
@@ -175,6 +182,7 @@ impl PlanNode {
             PlanNode::Sink(_) => "SinkPlan",
             PlanNode::Copy(_) => "CopyPlan",
             PlanNode::CreateUserStage(_) => "CreateUserStagePlan",
+            PlanNode::ShowGrants(_) => "ShowGrantsPlan",
         }
     }
 

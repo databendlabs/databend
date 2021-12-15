@@ -25,10 +25,13 @@ use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_tracing::tracing;
 use futures::StreamExt;
 use serde::Deserialize;
 use serde::Serialize;
+use ExecuteState::*;
 
+use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
@@ -45,6 +48,7 @@ pub struct HttpQueryRequest {
 #[derive(Deserialize, Debug, Default)]
 pub struct HttpSessionConf {
     pub database: Option<String>,
+    pub user: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq)]
@@ -70,8 +74,6 @@ impl ExecuteState {
         }
     }
 }
-
-use ExecuteState::*;
 
 pub(crate) type ExecutorRef = Arc<RwLock<Executor>>;
 
@@ -107,6 +109,12 @@ impl Executor {
             if kill {
                 r.session.force_kill_query();
             }
+            // Write Finish to query log table.
+            let _ = r
+                .interpreter
+                .finish()
+                .await
+                .map_err(|e| tracing::error!("interpreter.finish error: {:?}", e));
             guard.state = Stopped(ExecuteStopped {
                 progress,
                 reason,
@@ -134,6 +142,7 @@ pub(crate) struct ExecuteRunning {
     session: SessionRef,
     // mainly used to get progress for now
     context: Arc<QueryContext>,
+    interpreter: Arc<dyn Interpreter>,
 }
 
 impl ExecuteState {
@@ -149,11 +158,23 @@ impl ExecuteState {
             context.set_current_database(db.clone()).await?;
         };
         context.attach_query_str(sql);
+        let default_user = "root".to_string();
+        let user_name = request.session.user.as_ref().unwrap_or(&default_user);
+        let user_manager = session.get_user_manager();
+        // TODO: list user's grant list and check client address
+        let user_info = user_manager.get_user(user_name, "%").await?;
+        session.set_current_user(user_info);
 
         let plan = PlanParser::parse(sql, context.clone()).await?;
         let schema = plan.schema();
 
         let interpreter = InterpreterFactory::get(context.clone(), plan.clone())?;
+        // Write Start to query log table.
+        let _ = interpreter
+            .start()
+            .await
+            .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+
         let data_stream = interpreter.execute(None).await?;
         let mut data_stream = context.try_create_abortable(data_stream)?;
 
@@ -165,6 +186,7 @@ impl ExecuteState {
         let running_state = ExecuteRunning {
             session,
             context: context.clone(),
+            interpreter: interpreter.clone(),
         };
         let executor = Arc::new(RwLock::new(Executor {
             start_time: Instant::now(),
@@ -186,7 +208,7 @@ impl ExecuteState {
                             },
                             Err(err) => {
                                 Executor::stop(&executor, Err(err), false).await;
-                                break
+                                break;
                             }
                         };
                     } else {
@@ -194,8 +216,9 @@ impl ExecuteState {
                         break;
                     }
                 }
-                log::debug!("drop block sender!");
+                tracing::debug!("drop block sender!");
             })?;
+
         Ok((executor_clone, schema))
     }
 }

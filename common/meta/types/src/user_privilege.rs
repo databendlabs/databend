@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::ops;
 
 use enumflags2::bitflags;
@@ -41,14 +42,26 @@ const ALL_PRIVILEGES: BitFlags<UserPrivilegeType> = make_bitflags!(
         | Set}
 );
 
+impl std::fmt::Display for UserPrivilegeType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", match self {
+            UserPrivilegeType::Usage => "USAGE",
+            UserPrivilegeType::Create => "CREATE",
+            UserPrivilegeType::Select => "SELECT",
+            UserPrivilegeType::Insert => "INSERT",
+            UserPrivilegeType::Set => "SET",
+        })
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Default, Debug, Eq, PartialEq)]
-pub struct UserPrivilege {
+pub struct UserPrivilegeSet {
     privileges: BitFlags<UserPrivilegeType>,
 }
 
-impl UserPrivilege {
+impl UserPrivilegeSet {
     pub fn empty() -> Self {
-        UserPrivilege {
+        UserPrivilegeSet {
             privileges: BitFlags::empty(),
         }
     }
@@ -70,7 +83,21 @@ impl UserPrivilege {
     }
 }
 
-impl ops::BitOr for UserPrivilege {
+impl std::fmt::Display for UserPrivilegeSet {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(
+            f,
+            "{}",
+            self.privileges
+                .iter()
+                .map(|p| p.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        )
+    }
+}
+
+impl ops::BitOr for UserPrivilegeSet {
     type Output = Self;
     #[inline(always)]
     fn bitor(self, other: Self) -> Self {
@@ -80,21 +107,21 @@ impl ops::BitOr for UserPrivilege {
     }
 }
 
-impl ops::BitOrAssign for UserPrivilege {
+impl ops::BitOrAssign for UserPrivilegeSet {
     #[inline(always)]
     fn bitor_assign(&mut self, other: Self) {
         self.privileges |= other.privileges
     }
 }
 
-impl From<UserPrivilege> for BitFlags<UserPrivilegeType> {
-    fn from(privilege: UserPrivilege) -> BitFlags<UserPrivilegeType> {
+impl From<UserPrivilegeSet> for BitFlags<UserPrivilegeType> {
+    fn from(privilege: UserPrivilegeSet) -> BitFlags<UserPrivilegeType> {
         privilege.privileges
     }
 }
 
-impl From<BitFlags<UserPrivilegeType>> for UserPrivilege {
-    fn from(privileges: BitFlags<UserPrivilegeType>) -> UserPrivilege {
-        UserPrivilege { privileges }
+impl From<BitFlags<UserPrivilegeType>> for UserPrivilegeSet {
+    fn from(privileges: BitFlags<UserPrivilegeType>) -> UserPrivilegeSet {
+        UserPrivilegeSet { privileges }
     }
 }

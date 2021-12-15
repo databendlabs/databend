@@ -153,6 +153,7 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::DropDatabase(v) => v.analyze(ctx).await,
             DfStatement::CreateTable(v) => v.analyze(ctx).await,
             DfStatement::DescribeTable(v) => v.analyze(ctx).await,
+            DfStatement::DescribeStage(v) => v.analyze(ctx).await,
             DfStatement::DropTable(v) => v.analyze(ctx).await,
             DfStatement::TruncateTable(v) => v.analyze(ctx).await,
             DfStatement::CompactTable(v) => v.analyze(ctx).await,
@@ -162,6 +163,7 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::ShowSettings(v) => v.analyze(ctx).await,
             DfStatement::ShowProcessList(v) => v.analyze(ctx).await,
             DfStatement::ShowMetrics(v) => v.analyze(ctx).await,
+            DfStatement::ShowGrants(v) => v.analyze(ctx).await,
             DfStatement::KillStatement(v) => v.analyze(ctx).await,
             DfStatement::InsertQuery(v) => v.analyze(ctx).await,
             DfStatement::SetVariable(v) => v.analyze(ctx).await,
@@ -173,6 +175,7 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::DropUser(v) => v.analyze(ctx).await,
             DfStatement::Copy(v) => v.analyze(ctx).await,
             DfStatement::CreateStage(v) => v.analyze(ctx).await,
+            DfStatement::ShowFunctions(v) => v.analyze(ctx).await,
         }
     }
 }

@@ -17,7 +17,7 @@ use common_exception::Result;
 use common_meta_types::AuthType;
 use common_meta_types::GrantObject;
 use common_meta_types::UserInfo;
-use common_meta_types::UserPrivilege;
+use common_meta_types::UserPrivilegeSet;
 use sha2::Digest;
 
 use crate::users::CertifiedInfo;
@@ -26,16 +26,25 @@ use crate::users::UserApiProvider;
 
 impl UserApiProvider {
     // Get one user from by tenant.
-    pub async fn get_user(&self, user: &str, hostname: &str) -> Result<UserInfo> {
-        match user {
+    pub async fn get_user(&self, username: &str, hostname: &str) -> Result<UserInfo> {
+        match username {
             // TODO(BohuTANG): Mock, need removed.
             "default" | "" | "root" => {
-                let user = User::new(user, "%", "", AuthType::None);
-                Ok(user.into())
+                let mut user_info: UserInfo =
+                    User::new(username, hostname, "", AuthType::None).into();
+                if hostname == "127.0.0.1" || &hostname.to_lowercase() == "localhost" {
+                    user_info.grants.grant_privileges(
+                        username,
+                        hostname,
+                        &GrantObject::Global,
+                        UserPrivilegeSet::all_privileges(),
+                    );
+                }
+                Ok(user_info)
             }
             _ => {
                 let client = self.get_user_api_client();
-                let get_user = client.get_user(user.to_string(), hostname.to_string(), None);
+                let get_user = client.get_user(username.to_string(), hostname.to_string(), None);
                 Ok(get_user.await?.data)
             }
         }
@@ -98,7 +107,7 @@ impl UserApiProvider {
         username: &str,
         hostname: &str,
         object: GrantObject,
-        privileges: UserPrivilege,
+        privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client();
         client
@@ -118,7 +127,7 @@ impl UserApiProvider {
         username: &str,
         hostname: &str,
         object: GrantObject,
-        privileges: UserPrivilege,
+        privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client();
         client

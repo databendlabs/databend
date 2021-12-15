@@ -26,6 +26,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_infallible::RwLock;
+use common_tracing::tracing;
 use tokio_stream::StreamExt;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
@@ -149,7 +150,7 @@ impl DatabendQueryFlightDispatcher {
                 Ok(mut abortable_stream) => {
                     while let Some(item) = abortable_stream.next().await {
                         if let Err(error) = tx.send(item).await {
-                            log::error!(
+                            tracing::error!(
                                 "Cannot push data when run_action_without_scatters. {}",
                                 error
                             );

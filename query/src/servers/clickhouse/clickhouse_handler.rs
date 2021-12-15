@@ -22,6 +22,7 @@ use common_base::Runtime;
 use common_base::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_tracing::tracing;
 use futures::future::AbortHandle;
 use futures::future::AbortRegistration;
 use futures::stream::Abortable;
@@ -69,7 +70,7 @@ impl ClickHouseHandler {
             let sessions = sessions.clone();
             async move {
                 match accept_socket {
-                    Err(error) => log::error!("Broken session connection: {}", error),
+                    Err(error) => tracing::error!("Broken session connection: {}", error),
                     Ok(socket) => ClickHouseHandler::accept_socket(sessions, executor, socket),
                 };
             }
@@ -79,7 +80,7 @@ impl ClickHouseHandler {
     fn reject_connection(stream: TcpStream, executor: Arc<Runtime>, error: ErrorCode) {
         executor.spawn(async move {
             if let Err(error) = RejectCHConnection::reject(stream, error).await {
-                log::error!(
+                tracing::error!(
                     "Unexpected error occurred during reject connection: {:?}",
                     error
                 );
@@ -91,9 +92,9 @@ impl ClickHouseHandler {
         match sessions.create_session("ClickHouseSession") {
             Err(error) => Self::reject_connection(socket, executor, error),
             Ok(session) => {
-                log::info!("ClickHouse connection coming: {:?}", socket.peer_addr());
+                tracing::info!("ClickHouse connection coming: {:?}", socket.peer_addr());
                 if let Err(error) = ClickHouseConnection::run_on_stream(session, socket) {
-                    log::error!("Unexpected error occurred during query: {:?}", error);
+                    tracing::error!("Unexpected error occurred during query: {:?}", error);
                 }
             }
         }
@@ -110,7 +111,7 @@ impl Server for ClickHouseHandler {
 
         if let Some(join_handle) = self.join_handle.take() {
             if let Err(error) = join_handle.await {
-                log::error!(
+                tracing::error!(
                     "Unexpected error during shutdown ClickHouseHandler. cause {}",
                     error
                 );

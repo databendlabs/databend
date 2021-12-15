@@ -20,6 +20,7 @@ use nom::character::complete::multispace1;
 use nom::IResult;
 
 use super::statements::DfCopy;
+use super::statements::DfDescribeStage;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCompactTable;
 use crate::sql::statements::DfCreateDatabase;
@@ -39,6 +40,8 @@ use crate::sql::statements::DfRevokeStatement;
 use crate::sql::statements::DfSetVariable;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfShowDatabases;
+use crate::sql::statements::DfShowFunctions;
+use crate::sql::statements::DfShowGrants;
 use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
 use crate::sql::statements::DfShowSettings;
@@ -65,6 +68,7 @@ pub enum DfStatement {
     ShowCreateTable(DfShowCreateTable),
     CreateTable(DfCreateTable),
     DescribeTable(DfDescribeTable),
+    DescribeStage(DfDescribeStage),
     DropTable(DfDropTable),
     TruncateTable(DfTruncateTable),
     CompactTable(DfCompactTable),
@@ -77,6 +81,9 @@ pub enum DfStatement {
 
     // Metrics
     ShowMetrics(DfShowMetrics),
+
+    // Functions
+    ShowFunctions(DfShowFunctions),
 
     // Kill
     KillStatement(DfKillStatement),
@@ -99,6 +106,7 @@ pub enum DfStatement {
     // Grant
     GrantPrivilege(DfGrantStatement),
     RevokePrivilege(DfRevokeStatement),
+    ShowGrants(DfShowGrants),
 
     // Stage
     CreateStage(DfCreateStage),

@@ -28,10 +28,10 @@ use pretty_assertions::assert_eq;
 use tokio::time::Duration;
 
 use crate::init_meta_ut;
-use crate::tests::service::new_metasrv_test_context;
+use crate::tests::service::MetaSrvTestContext;
 use crate::tests::start_metasrv_with_context;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_restart() -> anyhow::Result<()> {
     // Fix: Issue 1134  https://github.com/datafuselabs/databend/issues/1134
     // - Start a metasrv server.
@@ -127,7 +127,7 @@ async fn test_restart() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_join() -> anyhow::Result<()> {
     // - Start 2 metasrv.
     // - Join node-1 to node-0
@@ -136,8 +136,8 @@ async fn test_join() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let mut tc0 = new_metasrv_test_context(0);
-    let mut tc1 = new_metasrv_test_context(1);
+    let mut tc0 = MetaSrvTestContext::new(0);
+    let mut tc1 = MetaSrvTestContext::new(1);
 
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr()];
@@ -146,7 +146,7 @@ async fn test_join() -> anyhow::Result<()> {
     start_metasrv_with_context(&mut tc1).await?;
 
     let addr0 = tc0.config.flight_api_address.clone();
-    let addr1 = tc0.config.flight_api_address.clone();
+    let addr1 = tc1.config.flight_api_address.clone();
 
     let client0 = MetaFlightClient::try_create(addr0.as_str(), "root", "xxx").await?;
     let client1 = MetaFlightClient::try_create(addr1.as_str(), "root", "xxx").await?;

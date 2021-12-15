@@ -24,7 +24,6 @@ use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::*;
 use common_macros::MallocSizeOf;
 
 use crate::arrays::ListBooleanArrayBuilder;
@@ -537,25 +536,5 @@ impl fmt::Debug for DataValue {
             DataValue::List(_, _) => write!(f, "[{}]", self),
             DataValue::Struct(v) => write!(f, "{:?}", v),
         }
-    }
-}
-
-impl BinarySer for DataValue {
-    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> Result<()> {
-        let bs = serde_json::to_string(self)?;
-        writer.write_string(bs)
-    }
-
-    fn serialize_to_buf<W: BufMut>(&self, writer: &mut W) -> Result<()> {
-        let bs = serde_json::to_string(self)?;
-        writer.write_string(bs)
-    }
-}
-
-impl BinaryDe for DataValue {
-    fn deserialize<R: std::io::Read>(reader: &mut R) -> Result<Self> {
-        let str = reader.read_string()?;
-        let value: DataValue = serde_json::from_str(&str)?;
-        Ok(value)
     }
 }

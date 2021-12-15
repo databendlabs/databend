@@ -20,19 +20,19 @@ use common_meta_flight::MetaFlightClient;
 use pretty_assertions::assert_eq;
 
 use crate::init_meta_ut;
-use crate::tests::service::new_metasrv_test_context;
+use crate::tests::service::MetaSrvTestContext;
 use crate::tests::start_metasrv_with_context;
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_tls_server() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let mut tc = new_metasrv_test_context(0);
+    let mut tc = MetaSrvTestContext::new(0);
 
     tc.config.flight_tls_server_key = TEST_SERVER_KEY.to_owned();
     tc.config.flight_tls_server_cert = TEST_SERVER_CERT.to_owned();
@@ -58,12 +58,12 @@ async fn test_tls_server() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_tls_server_config_failure() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let mut tc = new_metasrv_test_context(0);
+    let mut tc = MetaSrvTestContext::new(0);
 
     tc.config.flight_tls_server_key = "../tests/data/certs/not_exist.key".to_owned();
     tc.config.flight_tls_server_cert = "../tests/data/certs/not_exist.pem".to_owned();
@@ -73,7 +73,7 @@ async fn test_tls_server_config_failure() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_tls_client_config_failure() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();

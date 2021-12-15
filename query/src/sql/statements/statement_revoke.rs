@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::UserPrivilege;
+use common_meta_types::UserPrivilegeSet;
 use common_planners::PlanNode;
 use common_planners::RevokePrivilegePlan;
 use common_tracing::tracing;
@@ -29,7 +29,7 @@ use crate::sql::statements::DfGrantObject;
 pub struct DfRevokeStatement {
     pub username: String,
     pub hostname: String,
-    pub priv_types: UserPrivilege,
+    pub priv_types: UserPrivilegeSet,
     pub on: DfGrantObject,
 }
 

@@ -14,12 +14,11 @@
 
 pub mod prelude;
 
-mod binary_de;
 mod binary_read;
-mod binary_ser;
 mod binary_write;
 mod buf_read;
 mod marshal;
+mod options_deserializer;
 mod stat_buffer;
 mod unmarshal;
 mod utils;

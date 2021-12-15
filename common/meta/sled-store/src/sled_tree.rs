@@ -94,6 +94,8 @@ impl SledTree {
         sync: bool,
         f: impl Fn(TransactionSledTree<'_>) -> Result<T, UnabortableTransactionError>,
     ) -> Result<T, ErrorCode> {
+        let sync = sync && self.sync;
+
         // use map_err_to_code
         let result: TransactionResult<T, UnabortableTransactionError> =
             (&self.tree).transaction(move |tree| {
@@ -500,43 +502,6 @@ impl TransactionSledTree<'_> {
             phantom: PhantomData,
         }
     }
-
-    fn get<KV>(&self, key: &KV::K) -> Result<Option<KV::V>, UnabortableTransactionError>
-    where KV: SledKeySpace {
-        let k = KV::serialize_key(key).unwrap();
-        let got = self.txn_tree.get(k)?;
-
-        let v = got.map(|v| KV::deserialize_value(v).unwrap());
-
-        Ok(v)
-    }
-
-    fn insert<KV>(
-        &self,
-        key: &KV::K,
-        value: &KV::V,
-    ) -> Result<Option<KV::V>, UnabortableTransactionError>
-    where
-        KV: SledKeySpace,
-    {
-        let k = KV::serialize_key(key).unwrap();
-        let v = KV::serialize_value(value).unwrap();
-
-        let prev = self.txn_tree.insert(k, v)?;
-        let prev = prev.map(|x| KV::deserialize_value(x).unwrap());
-
-        Ok(prev)
-    }
-
-    fn remove<KV>(&self, key: &KV::K) -> Result<Option<KV::V>, UnabortableTransactionError>
-    where KV: SledKeySpace {
-        let k = KV::serialize_key(key).unwrap();
-        let removed = self.txn_tree.remove(k)?;
-
-        let removed = removed.map(|x| KV::deserialize_value(x).unwrap());
-
-        Ok(removed)
-    }
 }
 
 /// It borrows the internal SledTree with access limited to a specified namespace `KV`.
@@ -554,15 +519,31 @@ impl<'a, KV: SledKeySpace> Store<KV> for AsTxnKeySpace<'a, KV> {
     type Error = UnabortableTransactionError;
 
     fn insert(&self, key: &KV::K, value: &KV::V) -> Result<Option<KV::V>, Self::Error> {
-        self.inner.insert::<KV>(key, value)
+        let k = KV::serialize_key(key).unwrap();
+        let v = KV::serialize_value(value).unwrap();
+
+        let prev = self.txn_tree.insert(k, v)?;
+        let prev = prev.map(|x| KV::deserialize_value(x).unwrap());
+
+        Ok(prev)
     }
 
     fn get(&self, key: &KV::K) -> Result<Option<KV::V>, Self::Error> {
-        self.inner.get::<KV>(key)
+        let k = KV::serialize_key(key).unwrap();
+        let got = self.txn_tree.get(k)?;
+
+        let v = got.map(|v| KV::deserialize_value(v).unwrap());
+
+        Ok(v)
     }
 
     fn remove(&self, key: &KV::K) -> Result<Option<KV::V>, Self::Error> {
-        self.inner.remove::<KV>(key)
+        let k = KV::serialize_key(key).unwrap();
+        let removed = self.txn_tree.remove(k)?;
+
+        let removed = removed.map(|x| KV::deserialize_value(x).unwrap());
+
+        Ok(removed)
     }
 
     fn update_and_fetch<F>(&self, key: &KV::K, mut f: F) -> Result<Option<KV::V>, Self::Error>

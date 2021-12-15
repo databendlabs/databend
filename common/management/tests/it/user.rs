@@ -728,7 +728,7 @@ mod set_user_privileges {
     use common_meta_types::AuthType;
     use common_meta_types::GrantObject;
     use common_meta_types::UserInfo;
-    use common_meta_types::UserPrivilege;
+    use common_meta_types::UserPrivilegeSet;
     use common_meta_types::UserPrivilegeType;
 
     use super::*;
@@ -761,7 +761,7 @@ mod set_user_privileges {
                 .return_once(move |_k| Ok(Some(SeqV::new(0, prev_value))));
         }
         // - update_kv should be called
-        let mut privileges = UserPrivilege::empty();
+        let mut privileges = UserPrivilegeSet::empty();
         privileges.set_privilege(UserPrivilegeType::Select);
         user_info.grants.grant_privileges(
             test_user_name,

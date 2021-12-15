@@ -31,6 +31,7 @@ use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
+use crate::DescribeStagePlan;
 use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
@@ -56,6 +57,7 @@ use crate::RevokePrivilegePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateTablePlan;
+use crate::ShowGrantsPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -105,6 +107,7 @@ pub trait PlanRewriter {
             PlanNode::Having(plan) => self.rewrite_having(plan),
             PlanNode::Expression(plan) => self.rewrite_expression(plan),
             PlanNode::DescribeTable(plan) => self.rewrite_describe_table(plan),
+            PlanNode::DescribeStage(plan) => self.rewrite_describe_stage(plan),
             PlanNode::DropTable(plan) => self.rewrite_drop_table(plan),
             PlanNode::DropDatabase(plan) => self.rewrite_drop_database(plan),
             PlanNode::Insert(plan) => self.rewrite_insert_into(plan),
@@ -120,6 +123,7 @@ pub trait PlanRewriter {
             PlanNode::RevokePrivilege(plan) => self.revoke_privilege(plan),
             PlanNode::CreateUserStage(plan) => self.rewrite_create_stage(plan),
             PlanNode::Sink(plan) => self.rewrite_sink(plan),
+            PlanNode::ShowGrants(plan) => self.rewrite_show_grants(plan),
         }
     }
 
@@ -330,6 +334,10 @@ pub trait PlanRewriter {
         Ok(PlanNode::DescribeTable(plan.clone()))
     }
 
+    fn rewrite_describe_stage(&mut self, plan: &DescribeStagePlan) -> Result<PlanNode> {
+        Ok(PlanNode::DescribeStage(plan.clone()))
+    }
+
     fn rewrite_drop_table(&mut self, plan: &DropTablePlan) -> Result<PlanNode> {
         Ok(PlanNode::DropTable(plan.clone()))
     }
@@ -380,6 +388,10 @@ pub trait PlanRewriter {
 
     fn rewrite_create_stage(&mut self, plan: &CreateUserStagePlan) -> Result<PlanNode> {
         Ok(PlanNode::CreateUserStage(plan.clone()))
+    }
+
+    fn rewrite_show_grants(&mut self, plan: &ShowGrantsPlan) -> Result<PlanNode> {
+        Ok(PlanNode::ShowGrants(plan.clone()))
     }
 
     fn rewrite_sink(&mut self, plan: &SinkPlan) -> Result<PlanNode> {

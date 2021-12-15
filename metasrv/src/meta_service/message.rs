@@ -12,12 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use async_raft::raft::AppendEntriesRequest;
 use async_raft::raft::InstallSnapshotRequest;
 use async_raft::raft::VoteRequest;
 use common_meta_raft_store::state_machine::AppliedState;
+use common_meta_types::DatabaseInfo;
+use common_meta_types::GetDatabaseReq;
+use common_meta_types::GetKVActionReply;
+use common_meta_types::GetKVReq;
+use common_meta_types::GetTableReq;
+use common_meta_types::ListDatabaseReq;
+use common_meta_types::ListKVReq;
+use common_meta_types::ListTableReq;
 use common_meta_types::LogEntry;
+use common_meta_types::MGetKVActionReply;
+use common_meta_types::MGetKVReq;
 use common_meta_types::NodeId;
+use common_meta_types::PrefixListReply;
+use common_meta_types::TableInfo;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
@@ -32,34 +46,54 @@ pub struct JoinRequest {
     pub address: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, derive_more::TryInto)]
-pub enum AdminRequestInner {
+#[derive(
+    Serialize, Deserialize, Debug, Clone, PartialEq, derive_more::From, derive_more::TryInto,
+)]
+pub enum ForwardRequestBody {
     Join(JoinRequest),
     Write(LogEntry),
+
+    ListDatabase(ListDatabaseReq),
+    GetDatabase(GetDatabaseReq),
+    ListTable(ListTableReq),
+    GetTable(GetTableReq),
+
+    GetKV(GetKVReq),
+    MGetKV(MGetKVReq),
+    ListKV(ListKVReq),
 }
 
+/// A request that is forwarded from one raft node to another
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct AdminRequest {
+pub struct ForwardRequest {
     /// Forward the request to leader if the node received this request is not leader.
-    pub forward_to_leader: bool,
+    pub forward_to_leader: u64,
 
-    pub req: AdminRequestInner,
+    pub body: ForwardRequestBody,
 }
 
-impl AdminRequest {
-    pub fn set_forward(&mut self, allow: bool) {
-        self.forward_to_leader = allow;
+impl ForwardRequest {
+    pub fn decr_forward(&mut self) {
+        self.forward_to_leader -= 1;
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, derive_more::TryInto)]
 #[allow(clippy::large_enum_variant)]
-pub enum AdminResponse {
+pub enum ForwardResponse {
     Join(()),
     AppliedState(AppliedState),
+    ListDatabase(Vec<Arc<DatabaseInfo>>),
+    DatabaseInfo(Arc<DatabaseInfo>),
+    ListTable(Vec<Arc<TableInfo>>),
+    TableInfo(Arc<TableInfo>),
+
+    GetKV(GetKVActionReply),
+    MGetKV(MGetKVActionReply),
+    ListKV(PrefixListReply),
 }
 
-impl tonic::IntoRequest<RaftRequest> for AdminRequest {
+impl tonic::IntoRequest<RaftRequest> for ForwardRequest {
     fn into_request(self) -> tonic::Request<RaftRequest> {
         let mes = RaftRequest {
             data: serde_json::to_string(&self).expect("fail to serialize"),
@@ -68,7 +102,7 @@ impl tonic::IntoRequest<RaftRequest> for AdminRequest {
     }
 }
 
-impl TryFrom<RaftRequest> for AdminRequest {
+impl TryFrom<RaftRequest> for ForwardRequest {
     type Error = tonic::Status;
 
     fn try_from(mes: RaftRequest) -> Result<Self, Self::Error> {

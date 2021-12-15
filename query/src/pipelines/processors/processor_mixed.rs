@@ -25,7 +25,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_streams::SendableDataBlockStream;
-use log::error;
+use common_tracing::tracing;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
@@ -66,7 +66,7 @@ impl MixedWorker {
                 let i = index.fetch_add(1, Ordering::Relaxed) % outputs_len;
                 // TODO: USE try_reserve when the channel is blocking
                 if let Err(error) = senders[i].send(item).await {
-                    error!("Mixed processor cannot push data: {}", error);
+                    tracing::error!("Mixed processor cannot push data: {}", error);
                 }
             }
         })?;
