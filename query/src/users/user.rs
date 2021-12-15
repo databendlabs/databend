@@ -13,7 +13,7 @@
 // limitations under the License.
 //
 
-use common_meta_types::AuthType;
+use common_meta_types::PasswordType;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_meta_types::UserQuota;
@@ -23,7 +23,7 @@ pub struct User {
     name: String,
     hostname: String,
     password: String,
-    auth_type: AuthType,
+    password_type: PasswordType,
 }
 
 impl User {
@@ -31,13 +31,13 @@ impl User {
         name: impl Into<String>,
         hostname: impl Into<String>,
         password: impl Into<String>,
-        auth_type: AuthType,
+        password_type: PasswordType,
     ) -> Self {
         User {
             name: name.into(),
             hostname: hostname.into(),
             password: password.into(),
-            auth_type,
+            password_type,
         }
     }
 }
@@ -51,7 +51,7 @@ impl From<&User> for UserInfo {
             name: user.name.clone(),
             hostname: user.hostname.clone(),
             password: Vec::from(user.password.clone()),
-            auth_type: user.auth_type.clone(),
+            password_type: user.password_type.clone(),
             grants,
             quota,
         }

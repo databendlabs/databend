@@ -15,11 +15,11 @@
 use std::collections::HashMap;
 
 use common_exception::Result;
-use common_meta_types::AuthType;
 use common_meta_types::Compression;
 use common_meta_types::Credentials;
 use common_meta_types::FileFormat;
 use common_meta_types::Format;
+use common_meta_types::PasswordType;
 use common_meta_types::StageParams;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
@@ -613,7 +613,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::Sha256,
+            password_type: PasswordType::Sha256,
             password: String::from("password"),
         }),
     )?;
@@ -624,7 +624,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::PlainText,
+            password_type: PasswordType::PlainText,
             password: String::from("password"),
         }),
     )?;
@@ -635,7 +635,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::Sha256,
+            password_type: PasswordType::Sha256,
             password: String::from("password"),
         }),
     )?;
@@ -646,7 +646,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::DoubleSha1,
+            password_type: PasswordType::DoubleSha1,
             password: String::from("password"),
         }),
     )?;
@@ -657,7 +657,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::None,
+            password_type: PasswordType::None,
             password: String::from(""),
         }),
     )?;
@@ -668,7 +668,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: true,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::Sha256,
+            password_type: PasswordType::Sha256,
             password: String::from("password"),
         }),
     )?;
@@ -679,7 +679,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test@localhost"),
             hostname: String::from("%"),
-            auth_type: AuthType::Sha256,
+            password_type: PasswordType::Sha256,
             password: String::from("password"),
         }),
     )?;
@@ -690,7 +690,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::None,
+            password_type: PasswordType::None,
             password: String::from(""),
         }),
     )?;
@@ -701,7 +701,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::None,
+            password_type: PasswordType::None,
             password: String::from(""),
         }),
     )?;
@@ -736,7 +736,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_auth_type: AuthType::Sha256,
+            new_password_type: PasswordType::Sha256,
             new_password: String::from("password"),
         }),
     )?;
@@ -747,7 +747,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: true,
             name: String::from(""),
             hostname: String::from(""),
-            new_auth_type: AuthType::Sha256,
+            new_password_type: PasswordType::Sha256,
             new_password: String::from("password"),
         }),
     )?;
@@ -758,7 +758,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_auth_type: AuthType::PlainText,
+            new_password_type: PasswordType::PlainText,
             new_password: String::from("password"),
         }),
     )?;
@@ -769,7 +769,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_auth_type: AuthType::Sha256,
+            new_password_type: PasswordType::Sha256,
             new_password: String::from("password"),
         }),
     )?;
@@ -780,7 +780,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_auth_type: AuthType::DoubleSha1,
+            new_password_type: PasswordType::DoubleSha1,
             new_password: String::from("password"),
         }),
     )?;
@@ -791,7 +791,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_auth_type: AuthType::None,
+            new_password_type: PasswordType::None,
             new_password: String::from(""),
         }),
     )?;
@@ -802,7 +802,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test@localhost"),
             hostname: String::from("%"),
-            new_auth_type: AuthType::Sha256,
+            new_password_type: PasswordType::Sha256,
             new_password: String::from("password"),
         }),
     )?;
@@ -813,7 +813,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_auth_type: AuthType::None,
+            new_password_type: PasswordType::None,
             new_password: String::from(""),
         }),
     )?;
@@ -824,7 +824,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_auth_type: AuthType::None,
+            new_password_type: PasswordType::None,
             new_password: String::from(""),
         }),
     )?;

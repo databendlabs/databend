@@ -13,15 +13,15 @@
 // limitations under the License.
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub enum AuthType {
+pub enum PasswordType {
     None = 0,
     PlainText = 1,
     DoubleSha1 = 2,
     Sha256 = 3,
 }
 
-impl Default for AuthType {
+impl Default for PasswordType {
     fn default() -> Self {
-        AuthType::None
+        PasswordType::None
     }
 }

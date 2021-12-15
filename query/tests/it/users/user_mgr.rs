@@ -14,8 +14,8 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_meta_types::AuthType;
 use common_meta_types::GrantObject;
+use common_meta_types::PasswordType;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
@@ -37,13 +37,13 @@ async fn test_user_manager() -> Result<()> {
 
     // add user hostname.
     {
-        let user_info = User::new(user, hostname, pwd, AuthType::PlainText);
+        let user_info = User::new(user, hostname, pwd, PasswordType::PlainText);
         user_mgr.add_user(user_info.into()).await?;
     }
 
     // add user hostname2.
     {
-        let user_info = User::new(user, hostname2, pwd, AuthType::PlainText);
+        let user_info = User::new(user, hostname2, pwd, PasswordType::PlainText);
         user_mgr.add_user(user_info.into()).await?;
     }
 
@@ -89,7 +89,7 @@ async fn test_user_manager() -> Result<()> {
 
     // grant privileges
     {
-        let user_info = User::new(user, hostname, pwd, AuthType::PlainText);
+        let user_info = User::new(user, hostname, pwd, PasswordType::PlainText);
         user_mgr.add_user(user_info.into()).await?;
         let old_user = user_mgr.get_user(user, hostname).await?;
         assert_eq!(old_user.grants, UserGrantSet::empty());
@@ -113,7 +113,7 @@ async fn test_user_manager() -> Result<()> {
 
     // revoke privileges
     {
-        let user_info = User::new(user, hostname, pwd, AuthType::PlainText);
+        let user_info = User::new(user, hostname, pwd, PasswordType::PlainText);
         user_mgr.add_user(user_info.into()).await?;
         user_mgr
             .grant_user_privileges(
@@ -144,7 +144,7 @@ async fn test_user_manager() -> Result<()> {
         let user = "test";
         let hostname = "localhost";
         let pwd = "test";
-        let user_info = User::new(user, hostname, pwd, AuthType::PlainText);
+        let user_info = User::new(user, hostname, pwd, PasswordType::PlainText);
         user_mgr.add_user(user_info.into()).await?;
 
         let old_user = user_mgr.get_user(user, hostname).await?;
@@ -155,20 +155,20 @@ async fn test_user_manager() -> Result<()> {
             .update_user(
                 user,
                 hostname,
-                Some(AuthType::Sha256),
+                Some(PasswordType::Sha256),
                 Some(Vec::from(new_pwd)),
             )
             .await?;
         let new_user = user_mgr.get_user(user, hostname).await?;
         assert_eq!(new_user.password, Vec::from(new_pwd));
-        assert_eq!(new_user.auth_type, AuthType::Sha256);
+        assert_eq!(new_user.password_type, PasswordType::Sha256);
 
         let new_new_pwd = "test2";
         user_mgr
             .update_user(
                 user,
                 hostname,
-                Some(AuthType::Sha256),
+                Some(PasswordType::Sha256),
                 Some(Vec::from(new_new_pwd)),
             )
             .await?;
@@ -179,7 +179,7 @@ async fn test_user_manager() -> Result<()> {
             .update_user(
                 "user",
                 hostname,
-                Some(AuthType::Sha256),
+                Some(PasswordType::Sha256),
                 Some(Vec::from(new_new_pwd)),
             )
             .await;
