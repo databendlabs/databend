@@ -24,6 +24,8 @@ use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 
+const FORMAT_MAX_DECIMALS: i64 = 30;
+
 #[derive(Clone)]
 pub struct FormatFunction {
     _display_name: String,
@@ -41,24 +43,22 @@ impl FormatFunction {
             .features(FunctionFeatures::default().deterministic())
     }
 
-    fn format_en_us(number: Vec<u8>, precision: Vec<u8>) -> Vec<u8> {
-        let number = String::from_utf8(number).unwrap_or_default();
-        let number = number.parse::<f64>().unwrap_or(0.0);
-        let precision = String::from_utf8(precision).unwrap_or_default();
-        let precision = precision.parse::<i64>().unwrap_or(0);
-        let precision = if precision < 0 {
+    fn format_en_us(number: f64, precision: i64) -> Vec<u8> {
+        let precision = if precision > FORMAT_MAX_DECIMALS {
+            FORMAT_MAX_DECIMALS
+        } else if precision < 0 {
             0
-        } else if precision > 30 {
-            30
         } else {
             precision
         };
         let trunc = number as i64;
         let fract = (number - trunc as f64).abs();
         let fract_str = format!("{0:.1$}", fract, precision as usize);
-        let fract_str = fract_str.strip_prefix('0').unwrap();
+        let fract_str = fract_str.strip_prefix('0');
         let mut trunc_str = trunc.to_formatted_string(&Locale::en);
-        trunc_str.add_assign(fract_str);
+        if let Some(s) = fract_str {
+            trunc_str.add_assign(s)
+        }
         Vec::from(trunc_str)
     }
 }
@@ -89,13 +89,17 @@ impl Function for FormatFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
+        if columns[0].column().data_type().is_null() || columns[1].column().data_type().is_null() {
+            return Ok(DataColumn::Constant(DataValue::Null, input_rows));
+        }
+
         match (
-            columns[0].column().cast_with_type(&DataType::String)?,
-            columns[1].column().cast_with_type(&DataType::String)?,
+            columns[0].column().cast_with_type(&DataType::Float64)?,
+            columns[1].column().cast_with_type(&DataType::Int64)?,
         ) {
             (
-                DataColumn::Constant(DataValue::String(Some(number)), _),
-                DataColumn::Constant(DataValue::String(Some(precision)), _),
+                DataColumn::Constant(DataValue::Float64(Some(number)), _),
+                DataColumn::Constant(DataValue::Int64(Some(precision)), _),
             ) => {
                 // Currently we ignore the locale value and use en_US as default.
                 let ret = Self::format_en_us(number, precision);
