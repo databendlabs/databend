@@ -1,6 +1,6 @@
 use common_exception::Result;
-use crate::pipelines::new_processors::port::{InputPorts, OutputPorts};
-use futures::executor::block_on;
+use crate::pipelines::new_processors::port::InputPorts;
+use crate::pipelines::new_processors::port::OutputPorts;
 use common_base::Runtime;
 
 enum PrepareState {

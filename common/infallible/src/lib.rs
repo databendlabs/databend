@@ -15,10 +15,12 @@
 mod exit_guard;
 mod mutex;
 mod rwlock;
+mod rwlock_upgrade_read;
 
 pub use exit_guard::ExitGuard;
 pub use mutex::Mutex;
 pub use rwlock::RwLock;
+pub use rwlock_upgrade_read::RwLockUpgradableReadGuard;
 
 #[macro_export]
 macro_rules! exit_scope {

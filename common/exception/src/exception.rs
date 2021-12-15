@@ -190,6 +190,7 @@ build_exceptions! {
     InvalidSourceFormat(59),
     StrParseError(60),
     PipelineAreadlyStarted(61),
+    PipelineNotStarted(62),
 
     // uncategorized
     UnexpectedResponseType(600),
