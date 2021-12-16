@@ -14,6 +14,7 @@
 //
 
 use std::any::Any;
+use std::any::TypeId;
 use std::convert::TryFrom;
 use std::sync::Arc;
 
@@ -133,4 +134,9 @@ impl FuseTable {
             Ok(None)
         }
     }
+}
+
+pub fn is_fuse_table(table: &dyn Table) -> bool {
+    let tid = table.as_any().type_id();
+    tid == TypeId::of::<FuseTable>()
 }

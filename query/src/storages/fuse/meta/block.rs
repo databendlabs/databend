@@ -16,7 +16,6 @@
 use std::collections::HashMap;
 
 use crate::storages::fuse::meta::ColumnId;
-use crate::storages::fuse::meta::Location;
 use crate::storages::index::ColumnStatistics;
 
 /// Meta information of a block (currently, the parquet file)
@@ -31,7 +30,7 @@ pub struct BlockMeta {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct BlockLocation {
-    pub location: Location,
+    pub path: String,
     // for parquet, this filed can be used to fetch the meta data without seeking around
     pub meta_size: u64,
 }

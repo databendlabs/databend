@@ -115,7 +115,7 @@ impl PartiallyAccumulated {
         stats.file_size += file_size;
         let block_meta = BlockMeta {
             location: BlockLocation {
-                location,
+                path: location,
                 meta_size: 0,
             },
             row_count: self.block_row_count,

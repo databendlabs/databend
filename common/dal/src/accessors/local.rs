@@ -49,7 +49,6 @@ impl Local {
         if path.starts_with(&self.root) {
             Ok(path)
         } else {
-            // TODO customize error code
             Err(ErrorCode::from(Error::new(
                 ErrorKind::Other,
                 format!(
@@ -65,7 +64,13 @@ impl Local {
 impl DataAccessor for Local {
     fn get_input_stream(&self, path: &str, _stream_len: Option<u64>) -> Result<InputStream> {
         let path = self.prefix_with_root(path)?;
-        let std_file = std::fs::File::open(path)?;
+        let std_file = std::fs::File::open(path).map_err(|e| {
+            if e.kind() == ErrorKind::NotFound {
+                ErrorCode::DalPathNotFound(e.to_string())
+            } else {
+                e.into()
+            }
+        })?;
         let tokio_file = tokio::fs::File::from_std(std_file);
         Ok(Box::new(tokio_file.compat()))
     }
@@ -73,10 +78,7 @@ impl DataAccessor for Local {
     // not "atomic", for test purpose only
     async fn put(&self, path: &str, content: Vec<u8>) -> common_exception::Result<()> {
         let path = self.prefix_with_root(path)?;
-        let parent = path
-            .parent()
-            .ok_or_else(|| ErrorCode::UnknownException(""))?; // TODO customized error code
-        tokio::fs::create_dir_all(parent).await?;
+        mk_parent_dir(&path).await?;
         let mut new_file = tokio::fs::File::create(path).await?;
         new_file.write_all(&content).await?;
         new_file.flush().await?;
@@ -96,10 +98,7 @@ impl DataAccessor for Local {
         _stream_len: usize,
     ) -> common_exception::Result<()> {
         let path = self.prefix_with_root(path)?;
-        let parent = path
-            .parent()
-            .ok_or_else(|| ErrorCode::UnknownException(""))?; // TODO customized error code
-        tokio::fs::create_dir_all(parent).await?;
+        mk_parent_dir(&path).await?;
         let mut new_file = tokio::fs::File::create(path).await?;
         let mut s = Box::pin(input_stream);
         while let Some(Ok(v)) = s.next().await {
@@ -108,6 +107,20 @@ impl DataAccessor for Local {
         new_file.flush().await?;
         Ok(())
     }
+
+    async fn remove(&self, location: &str) -> Result<()> {
+        let path = self.prefix_with_root(location)?;
+        std::fs::remove_file(path)?; // use std fs
+        Ok(())
+    }
+}
+
+async fn mk_parent_dir(path: &Path) -> Result<()> {
+    let parent = path.parent().ok_or_else(|| {
+        ErrorCode::DalTransportError(format!("accessing malformed path, {:?}", path.to_str()))
+    })?;
+    tokio::fs::create_dir_all(parent).await?;
+    Ok(())
 }
 
 // from cargo::util::path
