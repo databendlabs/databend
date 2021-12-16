@@ -222,6 +222,13 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
                     comma = true;
                 }
 
+                if p.filters.len() > 0 {
+                    if comma {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, ", filters: {:?}", p.filters)?;
+                }
+
                 if p.limit.is_some() {
                     if comma {
                         write!(f, ", ")?;
