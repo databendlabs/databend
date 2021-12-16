@@ -57,11 +57,7 @@ pub struct Config {
     #[clap(long, env = METASRV_LOG_DIR, default_value = "./_logs")]
     pub log_dir: String,
 
-    #[clap(
-        long,
-        env = METASRV_METRIC_API_ADDRESS,
-        default_value = "127.0.0.1:28001"
-    )]
+    #[clap(long, env = METASRV_METRIC_API_ADDRESS, default_value = "127.0.0.1:28001")]
     pub metric_api_address: String,
 
     #[clap(long, env = ADMIN_API_ADDRESS, default_value = "127.0.0.1:28002")]
@@ -73,19 +69,11 @@ pub struct Config {
     #[clap(long, env = ADMIN_TLS_SERVER_KEY, default_value = "")]
     pub admin_tls_server_key: String,
 
-    #[clap(
-        long,
-        env = METASRV_FLIGHT_API_ADDRESS,
-        default_value = "127.0.0.1:9191"
-    )]
+    #[clap(long, env = METASRV_FLIGHT_API_ADDRESS, default_value = "127.0.0.1:9191")]
     pub flight_api_address: String,
 
-    #[clap(
-        long,
-        env = FLIGHT_TLS_SERVER_CERT,
-        default_value = "",
-        help = "Certificate for server to identify itself"
-    )]
+    /// Certificate for server to identify itself
+    #[clap(long, env = FLIGHT_TLS_SERVER_CERT, default_value = "")]
     pub flight_tls_server_cert: String,
 
     #[clap(long, env = FLIGHT_TLS_SERVER_KEY, default_value = "")]
@@ -93,6 +81,19 @@ pub struct Config {
 
     #[clap(flatten)]
     pub raft_config: RaftConfig,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            log_level: "INFO".to_string(),
+            log_dir: "./_logs".to_string(),
+            metric_api_address: "127.0.0.1:28001".to_string(),
+            admin_api_address: "127.0.0.1:28002".to_string(),
+            flight_api_address: "127.0.0.1:9191".to_string(),
+            ..Default::default()
+        }
+    }
 }
 
 impl Config {
