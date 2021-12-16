@@ -59,9 +59,9 @@ pub trait DataAccessor: Send + Sync {
         input_stream.read_to_end(&mut buffer).await.map_err(|e| {
             let msg = e.to_string();
             if e.kind() == ErrorKind::NotFound {
-                ErrorCode::DALPathNotFound(msg)
+                ErrorCode::DalPathNotFound(msg)
             } else {
-                ErrorCode::DALTransportError(msg)
+                ErrorCode::DalTransportError(msg)
             }
         })?;
         Ok(buffer)

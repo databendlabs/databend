@@ -41,7 +41,7 @@ pub async fn snapshot_history(
 
         let snapshot = match r {
             Ok(s) => s,
-            Err(e) if e.code() == ErrorCode::DALPathNotFoundCode() => {
+            Err(e) if e.code() == ErrorCode::dal_path_not_found_code() => {
                 // snapshot has been truncated
                 break;
             }

@@ -66,7 +66,7 @@ impl DataAccessor for Local {
         let path = self.prefix_with_root(path)?;
         let std_file = std::fs::File::open(path).map_err(|e| {
             if e.kind() == ErrorKind::NotFound {
-                ErrorCode::DALPathNotFound(e.to_string())
+                ErrorCode::DalPathNotFound(e.to_string())
             } else {
                 e.into()
             }
@@ -117,7 +117,7 @@ impl DataAccessor for Local {
 
 async fn mk_parent_dir(path: &Path) -> Result<()> {
     let parent = path.parent().ok_or_else(|| {
-        ErrorCode::DALTransportError(format!("accessing malformed path, {:?}", path.to_str()))
+        ErrorCode::DalTransportError(format!("accessing malformed path, {:?}", path.to_str()))
     })?;
     tokio::fs::create_dir_all(parent).await?;
     Ok(())
