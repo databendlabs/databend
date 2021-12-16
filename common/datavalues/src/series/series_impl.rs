@@ -18,6 +18,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use common_arrow::arrow::array::ArrayRef;
+use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -51,6 +52,7 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn is_empty(&self) -> bool;
     fn is_null(&self, row: usize) -> bool;
     fn null_count(&self) -> usize;
+    fn validity(&self) -> Option<&Bitmap>;
 
     fn get_array_memory_size(&self) -> usize;
     fn get_array_ref(&self) -> ArrayRef;

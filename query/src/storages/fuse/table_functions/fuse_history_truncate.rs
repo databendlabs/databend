@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use common_dal::DataAccessor;
 use common_datablocks::DataBlock;
+use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
 use common_datavalues::DataField;
@@ -80,6 +81,7 @@ impl FuseTruncateHistory {
                 schema,
                 engine,
                 options: Default::default(),
+                created_on: Utc::now(),
             },
         };
         Arc::new(FuseTruncateHistory {

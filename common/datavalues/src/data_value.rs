@@ -62,6 +62,10 @@ pub type DataValueRef = Arc<DataValue>;
 
 impl DataValue {
     pub fn is_null(&self) -> bool {
+        if let DataValue::Struct(v) = self {
+            return v.iter().all(|v| v.is_null());
+        }
+
         matches!(
             self,
             DataValue::Boolean(None)
