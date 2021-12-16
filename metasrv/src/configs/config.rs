@@ -90,8 +90,12 @@ impl Default for Config {
             log_dir: "./_logs".to_string(),
             metric_api_address: "127.0.0.1:28001".to_string(),
             admin_api_address: "127.0.0.1:28002".to_string(),
+            admin_tls_server_cert: "".to_string(),
+            admin_tls_server_key: "".to_string(),
             flight_api_address: "127.0.0.1:9191".to_string(),
-            ..Default::default()
+            flight_tls_server_cert: "".to_string(),
+            flight_tls_server_key: "".to_string(),
+            raft_config: Default::default(),
         }
     }
 }

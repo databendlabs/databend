@@ -30,6 +30,7 @@ pub const KVSRV_SINGLE: &str = "KVSRV_SINGLE";
 pub const KVSRV_ID: &str = "KVSRV_ID";
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Parser)]
+#[serde(default)]
 pub struct RaftConfig {
     /// Identify a config.
     /// This is only meant to make debugging easier with more than one Config involved.
@@ -92,6 +93,26 @@ pub struct RaftConfig {
     /// For test only: specifies the tree name prefix
     #[clap(long, default_value = "")]
     pub sled_tree_prefix: String,
+}
+
+impl Default for RaftConfig {
+    fn default() -> Self {
+        Self {
+            config_id: "".to_string(),
+            raft_api_host: "127.0.0.1".to_string(),
+            raft_api_port: 28004,
+            raft_dir: "./_meta".to_string(),
+            no_sync: false,
+            snapshot_logs_since_last: 1024,
+            heartbeat_interval: 1000,
+            install_snapshot_timeout: 4000,
+            boot: false,
+            single: false,
+            join: vec![],
+            id: 0,
+            sled_tree_prefix: "".to_string(),
+        }
+    }
 }
 
 impl RaftConfig {
