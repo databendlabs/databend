@@ -66,7 +66,8 @@ async fn test_cluster_nodes() -> common_exception::Result<()> {
                 .method(Method::GET)
                 .finish(),
         )
-        .await;
+        .await
+        .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
     let body = response.into_body().into_vec().await.unwrap();
@@ -101,7 +102,8 @@ async fn test_cluster_state() -> common_exception::Result<()> {
                 .method(Method::GET)
                 .finish(),
         )
-        .await;
+        .await
+        .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
 
