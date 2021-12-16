@@ -175,6 +175,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
     let truncate_plan = TruncateTablePlan {
         db: fixture.default_db_name(),
         table: fixture.default_table_name(),
+        purge: false,
     };
 
     // 1. truncate empty table

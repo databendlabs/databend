@@ -29,6 +29,7 @@ use crate::sql::statements::AnalyzedResult;
 pub struct DfDropTable {
     pub if_exists: bool,
     pub name: ObjectName,
+    pub purge: bool,
 }
 
 #[async_trait::async_trait]
@@ -43,6 +44,7 @@ impl AnalyzableStatement for DfDropTable {
                 if_exists,
                 db,
                 table,
+                purge: self.purge,
             },
         ))))
     }

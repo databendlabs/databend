@@ -53,8 +53,10 @@ impl Interpreter for DropTableInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        // potential errs of truncate_history are ignored
-        let _ = self.truncate_history().await;
+        if self.plan.purge {
+            self.truncate_history().await?
+        }
+
         let catalog = self.ctx.get_catalog();
         catalog.drop_table(self.plan.clone().into()).await?;
         Ok(Box::pin(DataBlockStream::create(

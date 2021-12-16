@@ -609,10 +609,12 @@ impl<'a> DfParser<'a> {
     fn parse_drop_table(&mut self) -> Result<DfStatement, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let table_name = self.parser.parse_object_name()?;
+        let purge = self.parse_purge()?;
 
         let drop = DfDropTable {
             if_exists,
             name: table_name,
+            purge,
         };
 
         Ok(DfStatement::DropTable(drop))
@@ -930,12 +932,24 @@ impl<'a> DfParser<'a> {
             Token::Word(w) => match w.keyword {
                 Keyword::TABLE => {
                     let table_name = self.parser.parse_object_name()?;
-                    let trunc = DfTruncateTable { name: table_name };
+                    let purge = self.parse_purge()?;
+                    let trunc = DfTruncateTable {
+                        name: table_name,
+                        purge,
+                    };
                     Ok(DfStatement::TruncateTable(trunc))
                 }
                 _ => self.expected("truncate statement", Token::Word(w)),
             },
             unexpected => self.expected("truncate statement", unexpected),
+        }
+    }
+
+    fn parse_purge(&mut self) -> Result<bool, ParserError> {
+        match self.parser.next_token() {
+            Token::Word(word) if word.value.to_lowercase() == "purge" => Ok(true),
+            Token::EOF => Ok(false),
+            t @ _ => self.expected("expected purge", t),
         }
     }
 

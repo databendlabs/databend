@@ -222,7 +222,7 @@ async fn test_fuse_history_truncate_in_truncate_stmt() -> Result<()> {
 
     // let's truncate
     {
-        let qry = format!("truncate table '{}'.'{}'", db, tbl);
+        let qry = format!("truncate table '{}'.'{}' purge", db, tbl);
         execute_command(qry.as_str(), ctx.clone()).await?;
 
         let expected = vec![
@@ -271,7 +271,7 @@ async fn test_fuse_history_truncate_in_drop_stmt() -> Result<()> {
     let root = data_path.as_str();
     // let's Drop
     {
-        let qry = format!("drop table '{}'.'{}'", db, tbl);
+        let qry = format!("drop table '{}'.'{}' purge", db, tbl);
         execute_command(qry.as_str(), ctx.clone()).await?;
         // there should be no files left inside test root (dirs are kept, though)
         for entry in WalkDir::new(root) {

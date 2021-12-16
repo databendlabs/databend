@@ -28,6 +28,7 @@ use crate::sql::statements::AnalyzedResult;
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfTruncateTable {
     pub name: ObjectName,
+    pub purge: bool,
 }
 
 #[async_trait::async_trait]
@@ -36,7 +37,11 @@ impl AnalyzableStatement for DfTruncateTable {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let (db, table) = self.resolve_table(ctx)?;
         Ok(AnalyzedResult::SimpleQuery(Box::new(
-            PlanNode::TruncateTable(TruncateTablePlan { db, table }),
+            PlanNode::TruncateTable(TruncateTablePlan {
+                db,
+                table,
+                purge: self.purge,
+            }),
         )))
     }
 }
