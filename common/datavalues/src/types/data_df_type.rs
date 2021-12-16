@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::types::NativeType;
+use common_arrow::arrow::compute::arithmetics::basic::NativeArithmetics;
 use num::NumCast;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -79,7 +79,7 @@ impl DFDataType for Struct {
 
 pub trait DFPrimitiveType:
     DFDataType
-    + NativeType
+    + NativeArithmetics
     + NumCast
     + PartialOrd
     + Into<DataValue>
