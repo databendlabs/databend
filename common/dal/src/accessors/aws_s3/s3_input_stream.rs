@@ -31,7 +31,10 @@ use futures::Stream;
 use futures::StreamExt;
 use metrics::counter;
 use metrics::histogram;
+use rusoto_core::RusotoError;
+use rusoto_s3::GetObjectError;
 use rusoto_s3::GetObjectRequest;
+use rusoto_s3::HeadObjectError;
 use rusoto_s3::HeadObjectRequest;
 use rusoto_s3::S3Client;
 use rusoto_s3::StreamingBody;
@@ -96,7 +99,12 @@ impl futures::AsyncRead for S3InputStream {
                         let start = Instant::now();
                         let reply = client.get_object(req).await.map_err(|e| {
                             counter!(super::metrics::METRIC_S3_GETOBJECT_ERRORS, 1);
-                            Error::new(ErrorKind::Other, e)
+                            match e {
+                                RusotoError::Service(GetObjectError::NoSuchKey(msg)) => {
+                                    Error::new(ErrorKind::NotFound, msg)
+                                }
+                                _ => Error::new(ErrorKind::Other, e),
+                            }
                         })?;
                         histogram!(
                             super::metrics::METRIC_S3_GETOBJECT_USEDTIME,
@@ -185,15 +193,18 @@ impl S3InputStream {
                             bucket: self.bucket.clone(),
                             ..Default::default()
                         };
-                        //head_req.key = self.key.clone();
-                        //head_req.bucket = self.bucket.clone();
                         let cli = self.client.clone();
                         counter!(super::metrics::METRIC_S3_HEADOBJECT_NUMBERS, 1);
                         let res = async move {
                             let start = Instant::now();
                             let result = cli.head_object(head_req).await.map_err(|e| {
                                 counter!(super::metrics::METRIC_S3_HEADOBJECT_ERRORS, 1);
-                                Error::new(ErrorKind::Other, e)
+                                match e {
+                                    RusotoError::Service(HeadObjectError::NoSuchKey(msg)) => {
+                                        Error::new(ErrorKind::NotFound, msg)
+                                    }
+                                    _ => Error::new(ErrorKind::Other, e),
+                                }
                             })?;
                             histogram!(
                                 super::metrics::METRIC_S3_HEADOBJECT_USEDTIME,

@@ -29,6 +29,6 @@ pub fn gen_segment_info_location() -> String {
     format!("{}/{}", FUSE_TBL_SEGMENT_PREFIX, segment_uuid)
 }
 
-pub fn snapshot_location(name: impl AsRef<str>) -> String {
-    format!("{}/{}", FUSE_TBL_SNAPSHOT_PREFIX, name.as_ref())
+pub fn snapshot_location(id: &Uuid) -> String {
+    format!("{}/{}", FUSE_TBL_SNAPSHOT_PREFIX, id.to_simple())
 }

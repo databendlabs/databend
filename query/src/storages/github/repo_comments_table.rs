@@ -62,6 +62,7 @@ impl RepoCommentsTable {
                 schema: RepoCommentsTable::schema(),
                 engine: GITHUB_REPO_COMMENTS_TABLE_ENGINE.into(),
                 options,
+                ..Default::default()
             },
         };
         ctx.meta.create_table(req).await?;

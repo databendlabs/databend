@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_arrow::arrow::array::*;
+use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -86,6 +87,11 @@ impl DFStructArray {
     #[inline]
     pub fn is_null(&self, i: usize) -> bool {
         self.array.is_null(i)
+    }
+
+    #[inline]
+    pub fn validity(&self) -> Option<&Bitmap> {
+        self.array.validity()
     }
 
     /// Take a view of top n elements

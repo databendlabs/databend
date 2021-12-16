@@ -15,12 +15,16 @@
 use std::sync::Arc;
 
 use common_dal::DataAccessor;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::de::DeserializeOwned;
 
 use crate::cache::QueryCache;
+use crate::sessions::QueryContext;
 use crate::storages::fuse::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::storages::fuse::constants::FUSE_TBL_SNAPSHOT_PREFIX;
+use crate::storages::fuse::io::locations::snapshot_location;
+use crate::storages::fuse::meta::TableSnapshot;
 
 pub async fn read_obj<T: DeserializeOwned>(
     da: &dyn DataAccessor,
@@ -41,4 +45,29 @@ pub async fn read_obj<T: DeserializeOwned>(
         };
     let r = serde_json::from_slice::<T>(&bytes)?;
     Ok(r)
+}
+
+pub async fn snapshot_history(
+    data_accessor: &dyn DataAccessor,
+    latest_snapshot_location: Option<&String>,
+    ctx: Arc<QueryContext>,
+) -> Result<Vec<TableSnapshot>> {
+    let mut snapshots = vec![];
+    let mut current_snapshot_location = latest_snapshot_location.cloned();
+    while let Some(loc) = current_snapshot_location {
+        let r: Result<TableSnapshot> = read_obj(data_accessor, loc, ctx.get_table_cache()).await;
+
+        let snapshot = match r {
+            Ok(s) => s,
+            Err(e) if e.code() == ErrorCode::dal_path_not_found_code() => {
+                // snapshot has been truncated
+                break;
+            }
+            Err(e) => return Err(e),
+        };
+        let prev = snapshot.prev_snapshot_id;
+        snapshots.push(snapshot);
+        current_snapshot_location = prev.map(|id| snapshot_location(&id));
+    }
+    Ok(snapshots)
 }

@@ -22,3 +22,4 @@ pub use block_stream_writer::SegmentInfoStream;
 pub use locations::gen_segment_info_location;
 pub use locations::snapshot_location;
 pub use readers::read_obj;
+pub use readers::snapshot_history;

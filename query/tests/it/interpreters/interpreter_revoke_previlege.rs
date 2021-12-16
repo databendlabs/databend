@@ -14,7 +14,7 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_meta_types::AuthType;
+use common_meta_types::PasswordType;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_planners::*;
@@ -35,7 +35,7 @@ async fn test_revoke_privilege_interpreter() -> Result<()> {
         name.to_string(),
         hostname.to_string(),
         Vec::from(password),
-        AuthType::PlainText,
+        PasswordType::PlainText,
     );
     assert_eq!(user_info.grants, UserGrantSet::empty());
     let user_mgr = ctx.get_sessions_manager().get_user_manager();

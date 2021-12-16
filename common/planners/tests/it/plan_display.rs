@@ -39,6 +39,7 @@ fn test_plan_display_indent() -> Result<()> {
             schema,
             engine: "JSON".to_string(),
             options,
+            ..Default::default()
         },
         as_select: None,
     });

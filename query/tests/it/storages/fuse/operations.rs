@@ -49,7 +49,7 @@ fn test_to_partitions() -> Result<()> {
             .sum(),
         col_stats: cols_stats.clone(),
         location: BlockLocation {
-            location: "".to_string(),
+            path: "".to_string(),
             meta_size: 0,
         },
     };

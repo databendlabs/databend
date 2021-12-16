@@ -21,9 +21,9 @@ use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_io::prelude::OptionsDeserializer;
-use common_meta_types::AuthType;
 use common_meta_types::Credentials;
 use common_meta_types::FileFormat;
+use common_meta_types::PasswordType;
 use common_meta_types::StageParams;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
@@ -657,13 +657,13 @@ impl<'a> DfParser<'a> {
             String::from("%")
         };
 
-        let (auth_type, password) = self.get_auth_option()?;
+        let (password_type, password) = self.get_auth_option()?;
 
         let create = DfCreateUser {
             if_not_exists,
             name,
             hostname,
-            auth_type,
+            password_type,
             password,
         };
 
@@ -689,13 +689,13 @@ impl<'a> DfParser<'a> {
             String::from("")
         };
 
-        let (auth_type, password) = self.get_auth_option()?;
+        let (password_type, password) = self.get_auth_option()?;
 
         let alter = DfAlterUser {
             if_current_user,
             name,
             hostname,
-            new_auth_type: auth_type,
+            new_password_type: password_type,
             new_password: password,
         };
 
@@ -718,34 +718,34 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::DropUser(drop))
     }
 
-    fn get_auth_option(&mut self) -> Result<(AuthType, String), ParserError> {
+    fn get_auth_option(&mut self) -> Result<(PasswordType, String), ParserError> {
         let exist_not_identified = self.parser.parse_keyword(Keyword::NOT);
         let exist_identified = self.consume_token("IDENTIFIED");
         let exist_with = self.consume_token("WITH");
 
         if exist_not_identified || !exist_identified {
-            Ok((AuthType::None, String::from("")))
+            Ok((PasswordType::None, String::from("")))
         } else {
-            let auth_type = if exist_with {
+            let password_type = if exist_with {
                 match self.parser.parse_literal_string()?.as_str() {
-                    "no_password" => AuthType::None,
-                    "plaintext_password" => AuthType::PlainText,
-                    "sha256_password" => AuthType::Sha256,
-                    "double_sha1_password" => AuthType::DoubleSha1,
+                    "no_password" => PasswordType::None,
+                    "plaintext_password" => PasswordType::PlainText,
+                    "sha256_password" => PasswordType::Sha256,
+                    "double_sha1_password" => PasswordType::DoubleSha1,
                     unexpected => return parser_err!(format!("Expected auth type {}, found: {}", "'no_password'|'plaintext_password'|'sha256_password'|'double_sha1_password'", unexpected))
                 }
             } else {
-                AuthType::Sha256
+                PasswordType::Sha256
             };
 
-            if AuthType::None == auth_type {
-                Ok((AuthType::None, String::from("")))
+            if PasswordType::None == password_type {
+                Ok((PasswordType::None, String::from("")))
             } else if self.parser.parse_keyword(Keyword::BY) {
                 let password = self.parser.parse_literal_string()?;
                 if password.is_empty() {
                     return parser_err!("Missing password");
                 }
-                Ok((auth_type, password))
+                Ok((password_type, password))
             } else {
                 return parser_err!("Expected keyword BY");
             }

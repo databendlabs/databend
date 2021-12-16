@@ -52,6 +52,7 @@ async fn test_csv_table() -> Result<()> {
             )]),
             engine: "Csv".to_string(),
             options,
+            ..Default::default()
         },
     })?;
 
@@ -110,6 +111,7 @@ async fn test_csv_table_parse_error() -> Result<()> {
             ]),
             engine: "Csv".to_string(),
             options,
+            ..Default::default()
         },
     })?;
 

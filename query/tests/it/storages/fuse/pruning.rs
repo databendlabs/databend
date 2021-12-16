@@ -56,6 +56,7 @@ async fn test_block_pruner() -> Result<()> {
             engine: "FUSE".to_string(),
             // make sure blocks will not be merged
             options: [(TBL_OPT_KEY_CHUNK_BLOCK_NUM.to_owned(), "1".to_owned())].into(),
+            ..Default::default()
         },
     };
 
