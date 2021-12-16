@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_datavalues::chrono::Utc;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
@@ -211,6 +212,8 @@ impl MetaApiTestSuite {
 
             let options = maplit::hashmap! {"opt‐1".into() => "val-1".into()};
 
+            let created_on = Utc::now();
+
             let mut req = CreateTableReq {
                 if_not_exists: false,
                 db: db_name.to_string(),
@@ -219,6 +222,7 @@ impl MetaApiTestSuite {
                     schema: schema.clone(),
                     engine: "JSON".to_string(),
                     options: options.clone(),
+                    created_on,
                 },
             };
 
@@ -236,6 +240,7 @@ impl MetaApiTestSuite {
                         schema: schema.clone(),
                         engine: "JSON".to_owned(),
                         options: options.clone(),
+                        created_on,
                     },
                 };
                 assert_eq!(want, got.as_ref().clone(), "get created table");
@@ -256,6 +261,7 @@ impl MetaApiTestSuite {
                         schema: schema.clone(),
                         engine: "JSON".to_owned(),
                         options: options.clone(),
+                        created_on,
                     },
                 };
                 assert_eq!(want, got.as_ref().clone(), "get created table");
@@ -285,6 +291,7 @@ impl MetaApiTestSuite {
                         schema: schema.clone(),
                         engine: "JSON".to_owned(),
                         options: options.clone(),
+                        created_on,
                     },
                 };
                 assert_eq!(want, got.as_ref().clone(), "get old table");
@@ -408,6 +415,7 @@ impl MetaApiTestSuite {
                     schema: schema.clone(),
                     engine: "JSON".to_string(),
                     options: options.clone(),
+                    ..Default::default()
                 },
             };
 
@@ -574,6 +582,7 @@ impl MetaApiTestSuite {
                         schema: schema.clone(),
                         engine: "JSON".to_string(),
                         options: options.clone(),
+                        ..Default::default()
                     },
                 };
                 let res = node_a.create_table(req).await;
@@ -632,6 +641,7 @@ impl MetaApiTestSuite {
                     schema: schema.clone(),
                     engine: "JSON".to_string(),
                     options: options.clone(),
+                    ..Default::default()
                 },
             };
 

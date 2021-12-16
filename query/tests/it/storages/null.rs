@@ -40,6 +40,7 @@ async fn test_null_table() -> Result<()> {
             schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::UInt64, false)]),
             engine: "Null".to_string(),
             options: TableOptions::default(),
+            ..Default::default()
         },
     })?;
 
