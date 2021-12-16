@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use clap::Parser;
 use common_meta_raft_store::config::RaftConfig;
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use serde::Serialize;
-use structopt::StructOpt;
-use structopt_toml::StructOptToml;
 
 lazy_static! {
     pub static ref DATABEND_COMMIT_VERSION: String = {
@@ -49,49 +48,50 @@ pub const METASRV_FLIGHT_API_ADDRESS: &str = "METASRV_FLIGHT_API_ADDRESS";
 pub const FLIGHT_TLS_SERVER_CERT: &str = "FLIGHT_TLS_SERVER_CERT";
 pub const FLIGHT_TLS_SERVER_KEY: &str = "FLIGHT_TLS_SERVER_KEY";
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
+#[clap(about, version, author)]
 pub struct Config {
-    #[structopt(long, env = METASRV_LOG_LEVEL, default_value = "INFO")]
+    #[clap(long, env = METASRV_LOG_LEVEL, default_value = "INFO")]
     pub log_level: String,
 
-    #[structopt(long, env = METASRV_LOG_DIR, default_value = "./_logs")]
+    #[clap(long, env = METASRV_LOG_DIR, default_value = "./_logs")]
     pub log_dir: String,
 
-    #[structopt(
-    long,
-    env = METASRV_METRIC_API_ADDRESS,
-    default_value = "127.0.0.1:28001"
+    #[clap(
+        long,
+        env = METASRV_METRIC_API_ADDRESS,
+        default_value = "127.0.0.1:28001"
     )]
     pub metric_api_address: String,
 
-    #[structopt(long, env = ADMIN_API_ADDRESS, default_value = "127.0.0.1:28002")]
+    #[clap(long, env = ADMIN_API_ADDRESS, default_value = "127.0.0.1:28002")]
     pub admin_api_address: String,
 
-    #[structopt(long, env = ADMIN_TLS_SERVER_CERT, default_value = "")]
+    #[clap(long, env = ADMIN_TLS_SERVER_CERT, default_value = "")]
     pub admin_tls_server_cert: String,
 
-    #[structopt(long, env = ADMIN_TLS_SERVER_KEY, default_value = "")]
+    #[clap(long, env = ADMIN_TLS_SERVER_KEY, default_value = "")]
     pub admin_tls_server_key: String,
 
-    #[structopt(
-    long,
-    env = METASRV_FLIGHT_API_ADDRESS,
-    default_value = "127.0.0.1:9191"
+    #[clap(
+        long,
+        env = METASRV_FLIGHT_API_ADDRESS,
+        default_value = "127.0.0.1:9191"
     )]
     pub flight_api_address: String,
 
-    #[structopt(
-    long,
-    env = FLIGHT_TLS_SERVER_CERT,
-    default_value = "",
-    help = "Certificate for server to identify itself"
+    #[clap(
+        long,
+        env = FLIGHT_TLS_SERVER_CERT,
+        default_value = "",
+        help = "Certificate for server to identify itself"
     )]
     pub flight_tls_server_cert: String,
 
-    #[structopt(long, env = FLIGHT_TLS_SERVER_KEY, default_value = "")]
+    #[clap(long, env = FLIGHT_TLS_SERVER_KEY, default_value = "")]
     pub flight_tls_server_key: String,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub raft_config: RaftConfig,
 }
 
@@ -102,7 +102,7 @@ impl Config {
     ///
     /// Thus we need another method to generate an empty default instance.
     pub fn empty() -> Self {
-        <Self as StructOpt>::from_iter(&Vec::<&'static str>::new())
+        <Self as Parser>::parse_from(&Vec::<&'static str>::new())
     }
 
     pub fn tls_rpc_server_enabled(&self) -> bool {

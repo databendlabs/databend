@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use clap::Parser;
 use common_base::RuntimeTracker;
 use common_base::StopHandle;
 use common_base::Stoppable;
@@ -27,11 +28,10 @@ use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::metrics::MetricService;
-use structopt::StructOpt;
 
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
-    let conf = Config::from_args();
+    let conf = Config::parse();
 
     let _guards = init_global_tracing(
         "databend-meta",

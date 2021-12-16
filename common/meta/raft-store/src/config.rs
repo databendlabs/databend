@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use clap::Parser;
 use common_exception::ErrorCode;
 use common_meta_types::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
-use structopt::StructOpt;
-use structopt_toml::StructOptToml;
+
 pub const KVSRV_API_HOST: &str = "KVSRV_API_HOST";
 pub const KVSRV_API_PORT: &str = "KVSRV_API_PORT";
 pub const KVSRV_RAFT_DIR: &str = "KVSRV_RAFT_DIR";
@@ -29,109 +29,68 @@ pub const KVSRV_BOOT: &str = "KVSRV_BOOT";
 pub const KVSRV_SINGLE: &str = "KVSRV_SINGLE";
 pub const KVSRV_ID: &str = "KVSRV_ID";
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Parser)]
 pub struct RaftConfig {
-    /// Identify a config. This is only meant to make debugging easier with more than one Config involved.
-    #[structopt(long, default_value = "")]
+    /// Identify a config.
+    /// This is only meant to make debugging easier with more than one Config involved.
+    #[clap(long, default_value = "")]
     pub config_id: String,
 
-    #[structopt(
-        long,
-        env = KVSRV_API_HOST,
-        default_value = "127.0.0.1",
-        help = "The listening host for metadata communication"
-    )]
+    /// The listening host for metadata communication.
+    #[clap(long, env = KVSRV_API_HOST, default_value = "127.0.0.1")]
     pub raft_api_host: String,
 
-    #[structopt(
-        long,
-        env = KVSRV_API_PORT,
-        default_value = "28004",
-        help = "The listening port for metadata communication"
-    )]
+    /// The listening port for metadata communication.
+    #[clap(long, env = KVSRV_API_PORT, default_value = "28004")]
     pub raft_api_port: u32,
 
-    #[structopt(
-        long,
-        env = KVSRV_RAFT_DIR,
-        default_value = "./_meta",
-        help = "The dir to store persisted meta state, including raft logs, state machine etc."
-    )]
+    /// The dir to store persisted meta state, including raft logs, state machine etc.
+    #[clap(long, env = KVSRV_RAFT_DIR, default_value = "./_meta")]
     pub raft_dir: String,
 
-    #[structopt(
-    long,
-    env = KVSRV_NO_SYNC,
-    help = concat!("Whether to fsync meta to disk for every meta write(raft log, state machine etc).",
-    " No-sync brings risks of data loss during a crash.",
-    " You should only use this in a testing environment, unless YOU KNOW WHAT YOU ARE DOING."
-    ),
-    )]
+    /// Whether to fsync meta to disk for every meta write(raft log, state machine etc).
+    /// No-sync brings risks of data loss during a crash.
+    /// You should only use this in a testing environment, unless YOU KNOW WHAT YOU ARE DOING.
+    #[clap(long, env = KVSRV_NO_SYNC)]
     pub no_sync: bool,
 
-    // raft config
-    #[structopt(
-        long,
-        env = KVSRV_SNAPSHOT_LOGS_SINCE_LAST,
-        default_value = "1024",
-        help = "The number of logs since the last snapshot to trigger next snapshot."
-    )]
+    /// The number of logs since the last snapshot to trigger next snapshot.
+    #[clap(long, env = KVSRV_SNAPSHOT_LOGS_SINCE_LAST, default_value = "1024")]
     pub snapshot_logs_since_last: u64,
 
-    #[structopt(
-    long,
-    env = KVSRV_HEARTBEAT_INTERVAL,
-    default_value = "1000",
-    help = concat!("The interval in milli seconds at which a leader send heartbeat message to followers.",
-    " Different value of this setting on leader and followers may cause unexpected behavior.")
-    )]
+    /// The interval in milli seconds at which a leader send heartbeat message to followers.
+    /// Different value of this setting on leader and followers may cause unexpected behavior.
+    #[clap(long, env = KVSRV_HEARTBEAT_INTERVAL, default_value = "1000")]
     pub heartbeat_interval: u64,
 
-    #[structopt(
-    long,
-    env = KVSRV_INSTALL_SNAPSHOT_TIMEOUT,
-    default_value = "4000",
-    help = concat!("The max time in milli seconds that a leader wait for install-snapshot ack from a follower or non-voter.")
-    )]
+    /// The max time in milli seconds that a leader wait for install-snapshot ack from a follower or non-voter.
+    #[clap(long, env = KVSRV_INSTALL_SNAPSHOT_TIMEOUT, default_value = "4000")]
     pub install_snapshot_timeout: u64,
 
-    #[structopt(
-        long,
-        env = KVSRV_BOOT,
-        help = "Whether to boot up a new cluster. If already booted, it is ignored"
-    )]
+    /// Whether to boot up a new cluster. If already booted, it is ignored
+    #[clap(long, env = KVSRV_BOOT)]
     pub boot: bool,
 
-    #[structopt(
-    long,
-    env = KVSRV_SINGLE,
-    help = concat!("Single node metasrv. It creates a single node cluster if meta data is not initialized.",
-    " Otherwise it opens the previous one.",
-    " This is mainly for testing purpose.")
-    )]
+    /// Single node metasrv. It creates a single node cluster if meta data is not initialized.
+    /// Otherwise it opens the previous one.
+    /// This is mainly for testing purpose.
+    #[clap(long, env = KVSRV_SINGLE)]
     pub single: bool,
 
     /// Bring up a metasrv node and join a cluster.
     ///
     /// The value is one or more addresses of a node in the cluster, to which this node sends a `join` request.
-    #[structopt(long, env = "METASRV_JOIN")]
+    #[clap(long, env = "METASRV_JOIN")]
     pub join: Vec<String>,
 
-    #[structopt(
-    long,
-    env = KVSRV_ID,
-    default_value = "0",
-    help = concat!("The node id. Only used when this server is not initialized,",
-    " e.g. --boot or --single for the first time.",
-    " Otherwise this argument is ignored.")
-    )]
+    /// The node id. Only used when this server is not initialized,
+    ///  e.g. --boot or --single for the first time.
+    ///  Otherwise this argument is ignored.
+    #[clap(long, env = KVSRV_ID, default_value = "0")]
     pub id: NodeId,
 
-    #[structopt(
-        long,
-        default_value = "",
-        help = "For test only: specifies the tree name prefix"
-    )]
+    /// For test only: specifies the tree name prefix
+    #[clap(long, default_value = "")]
     pub sled_tree_prefix: String,
 }
 
@@ -142,7 +101,7 @@ impl RaftConfig {
     ///
     /// Thus we need another method to generate an empty default instance.
     pub fn empty() -> Self {
-        <Self as StructOpt>::from_iter(&Vec::<&'static str>::new())
+        <Self as Parser>::parse_from(&Vec::<&'static str>::new())
     }
 
     pub fn raft_api_addr(&self) -> String {
