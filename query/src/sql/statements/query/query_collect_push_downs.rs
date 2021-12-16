@@ -44,7 +44,7 @@ impl QueryASTIRVisitor<QueryCollectPushDowns> for QueryCollectPushDowns {
 
     fn visit_filter(predicate: &mut Expression, data: &mut QueryCollectPushDowns) -> Result<()> {
         data.require_filters = vec![predicate.clone()];
-        Ok(())
+        Self::visit_recursive_expr(predicate, data)
     }
 }
 
