@@ -24,6 +24,4 @@ mod table_functions;
 pub use constants::*;
 pub use table::FuseTable;
 pub use table_functions::FuseHistoryTable;
-pub use table_functions::FuseTruncateHistory;
 pub use table_functions::FUSE_FUNC_HIST;
-pub use table_functions::FUSE_FUNC_TRUNCATE;

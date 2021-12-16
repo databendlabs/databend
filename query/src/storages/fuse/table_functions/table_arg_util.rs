@@ -49,25 +49,3 @@ pub fn parse_func_history_args(table_args: &TableArgs) -> Result<(String, String
         ))),
     }
 }
-
-pub fn parse_func_truncate_history_args(table_args: &TableArgs) -> Result<(String, String, bool)> {
-    if let Some(args) = table_args {
-        let len = args.len();
-        if len == 2 || len == 3 {
-            let db = string_value(&args[0])?;
-            let tbl = string_value(&args[1])?;
-            // default is NOT all
-            let all_flag = args
-                .get(2)
-                .map(string_value)
-                .unwrap_or_else(|| Ok("".to_owned()))?;
-            let all = all_flag.to_lowercase().as_str() == "all";
-            return Ok((db, tbl, all));
-        }
-    };
-
-    Err(ErrorCode::BadArguments(format!(
-        "expecting (database_name, table_name [, all]),  as 2 or 3 string literals, but got {:?}",
-        table_args
-    )))
-}

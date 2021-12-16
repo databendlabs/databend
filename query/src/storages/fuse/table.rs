@@ -116,6 +116,10 @@ impl Table for FuseTable {
     ) -> Result<()> {
         self.do_truncate(ctx, truncate_plan).await
     }
+
+    async fn optimize(&self, ctx: Arc<QueryContext>, keep_last_snapshot: bool) -> Result<()> {
+        self.do_truncate_history(ctx, keep_last_snapshot).await
+    }
 }
 
 impl FuseTable {
