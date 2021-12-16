@@ -837,7 +837,7 @@ impl StateMachine {
             },
         };
 
-        seq_kv_value.seq = self.txn_incr_seq(KS::NAME, &*sub_tree)?;
+        seq_kv_value.seq = self.txn_incr_seq(KS::NAME, sub_tree)?;
 
         sub_tree.insert(key, &seq_kv_value)?;
 
