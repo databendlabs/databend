@@ -232,9 +232,11 @@ impl Table for FuseTruncateHistory {
     }
 
     fn table_args(&self) -> Option<Vec<Expression>> {
+        let flag_truncate_all = if self.truncate_all { "all" } else { "" };
         Some(vec![
             string_literal(self.arg_database_name.as_str()),
             string_literal(self.arg_table_name.as_str()),
+            string_literal(flag_truncate_all),
         ])
     }
 
