@@ -56,10 +56,11 @@ pub fn parse_truncate_history_table_args(table_args: &TableArgs) -> Result<(Stri
         if len == 2 || len == 3 {
             let db = string_value(&args[0])?;
             let tbl = string_value(&args[1])?;
+            // default is NOT all
             let all_flag = args
                 .get(2)
                 .map(string_value)
-                .unwrap_or_else(|| Ok("all".to_owned()))?;
+                .unwrap_or_else(|| Ok("".to_owned()))?;
             let all = all_flag.to_lowercase().as_str() == "all";
             return Ok((db, tbl, all));
         }
