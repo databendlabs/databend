@@ -172,41 +172,20 @@ pub struct QueryConfig {
     #[clap(long, env = QUERY_MAX_QUERY_LOG_SIZE, default_value = "10000")]
     pub max_query_log_size: usize,
 
-    #[structopt(
-        long,
-        env = QUERY_TABLE_CACHE_ENABLED,
-        parse(try_from_str),
-        default_value = "false",
-        help = "Table Cached enabled"
-    )]
-    #[serde(default)]
+    /// Table Cached enabled
+    #[clap(long, env = QUERY_TABLE_CACHE_ENABLED)]
     pub table_cache_enabled: bool,
 
-    #[structopt(
-        long,
-        env = QUERY_TABLE_MEMORY_CACHE_MB_SIZE,
-        default_value = "256",
-        help = "Table memory cache size (mb)"
-        )]
-    #[serde(default)]
+    /// Table memory cache size (mb)
+    #[clap(long, env = QUERY_TABLE_MEMORY_CACHE_MB_SIZE, default_value = "256")]
     pub table_memory_cache_mb_size: u64,
 
-    #[structopt(
-        long,
-        env = QUERY_TABLE_DISK_CACHE_ROOT,
-        default_value = "_cache",
-        help = "Table disk cache folder root"
-    )]
-    #[serde(default)]
+    /// Table disk cache folder root
+    #[clap(long, env = QUERY_TABLE_DISK_CACHE_ROOT, default_value = "_cache")]
     pub table_disk_cache_root: String,
 
-    #[structopt(
-        long,
-        env = QUERY_TABLE_DISK_CACHE_MB_SIZE,
-        default_value = "1024",
-        help = "Table disk cache size (mb)"
-        )]
-    #[serde(default)]
+    /// Table disk cache size (mb)
+    #[clap(long, env = QUERY_TABLE_DISK_CACHE_MB_SIZE, default_value = "1024")]
     pub table_disk_cache_mb_size: u64,
 }
 
