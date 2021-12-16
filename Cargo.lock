@@ -1112,6 +1112,7 @@ dependencies = [
 name = "common-cache"
 version = "0.1.0"
 dependencies = [
+ "common-exception",
  "common-tracing",
  "filetime",
  "heapsize",
@@ -2066,6 +2067,7 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-building",
+ "common-cache",
  "common-clickhouse-srv",
  "common-dal",
  "common-datablocks",

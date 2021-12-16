@@ -38,7 +38,7 @@ impl FuseTable {
         let da = ctx.get_data_accessor()?;
         let tbl_info = self.get_table_info();
         let snapshot_loc = tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC);
-        let mut snapshots = snapshot_history(da.as_ref(), snapshot_loc).await?;
+        let mut snapshots = snapshot_history(da.as_ref(), snapshot_loc, ctx.clone()).await?;
 
         let min_history_len = if !keep_last_snapshot { 0 } else { 1 };
 
@@ -66,9 +66,12 @@ impl FuseTable {
         let seg_delta = prevs.difference(&current_segments).collect::<Vec<_>>();
 
         // blocks to be removed
-        let prev_blocks: HashSet<String> = self.blocks_of(da.clone(), seg_delta.iter()).await?;
-        let current_blocks: HashSet<String> =
-            self.blocks_of(da.clone(), current_segments.iter()).await?;
+        let prev_blocks: HashSet<String> = self
+            .blocks_of(da.clone(), seg_delta.iter(), ctx.clone())
+            .await?;
+        let current_blocks: HashSet<String> = self
+            .blocks_of(da.clone(), current_segments.iter(), ctx.clone())
+            .await?;
         let block_delta = prev_blocks.difference(&current_blocks);
 
         // NOTE: the following actions are NOT transactional yet
@@ -96,10 +99,12 @@ impl FuseTable {
         &self,
         data_accessor: Arc<dyn DataAccessor>,
         locations: impl Iterator<Item = impl AsRef<str>>,
+        ctx: Arc<QueryContext>,
     ) -> Result<HashSet<String>> {
         let mut result = HashSet::new();
         for x in locations {
-            let res: SegmentInfo = io::read_obj(data_accessor.as_ref(), x).await?;
+            let res: SegmentInfo =
+                io::read_obj(data_accessor.as_ref(), x, ctx.get_table_cache()).await?;
             for block_meta in res.blocks {
                 result.insert(block_meta.location.path);
             }

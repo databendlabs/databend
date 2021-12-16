@@ -195,6 +195,11 @@ build_exceptions! {
 
     UnknownException(1000),
     TokioError(1001),
+
+    // cache
+    DiskCacheIOError(2000),
+    DiskCacheFileTooLarge(2001),
+    DiskCacheFileNotInCache(2002),
 }
 
 // Store errors

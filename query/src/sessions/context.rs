@@ -45,6 +45,7 @@ use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
+use crate::cache::QueryCache;
 use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::Cluster;
@@ -294,6 +295,11 @@ impl QueryContext {
     // Get the client socket address.
     pub fn get_client_address(&self) -> Option<SocketAddr> {
         self.shared.session.mutable_state.get_client_host()
+    }
+
+    // Get table cache
+    pub fn get_table_cache(&self) -> Arc<Option<Box<dyn QueryCache>>> {
+        self.shared.get_table_cache()
     }
 }
 

@@ -165,7 +165,7 @@ impl Table for FuseHistoryTable {
         let tbl_info = tbl.get_table_info();
         let location = tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC);
         let da = ctx.get_data_accessor()?;
-        let snapshots = snapshot_history(da.as_ref(), location).await?;
+        let snapshots = snapshot_history(da.as_ref(), location, ctx).await?;
         let blocks = vec![self.snapshots_to_block(snapshots)];
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),

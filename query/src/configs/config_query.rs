@@ -33,6 +33,10 @@ pub const QUERY_HTTP_API_ADDRESS: &str = "QUERY_HTTP_API_ADDRESS";
 pub const QUERY_METRICS_API_ADDRESS: &str = "QUERY_METRIC_API_ADDRESS";
 pub const QUERY_WAIT_TIMEOUT_MILLS: &str = "QUERY_WAIT_TIMEOUT_MILLS";
 pub const QUERY_MAX_QUERY_LOG_SIZE: &str = "QUERY_MAX_QUERY_LOG_SIZE";
+pub const QUERY_TABLE_CACHE_ENABLED: &str = "QUERY_TABLE_CACHE_ENABLED";
+pub const QUERY_TABLE_MEMORY_CACHE_MB_SIZE: &str = "QUERY_TABLE_MEMORY_CACHE_MB_SIZE";
+pub const QUERY_TABLE_DISK_CACHE_ROOT: &str = "QUERY_TABLE_DISK_CACHE_ROOT";
+pub const QUERY_TABLE_DISK_CACHE_MB_SIZE: &str = "QUERY_TABLE_DISK_CACHE_MB_SIZE";
 
 const QUERY_HTTP_HANDLER_TLS_SERVER_CERT: &str = "QUERY_HTTP_HANDLER_TLS_SERVER_CERT";
 const QUERY_HTTP_HANDLER_TLS_SERVER_KEY: &str = "QUERY_HTTP_HANDLER_TLS_SERVER_KEY";
@@ -248,6 +252,43 @@ pub struct QueryConfig {
     )]
     #[serde(default)]
     pub max_query_log_size: usize,
+
+    #[structopt(
+        long,
+        env = QUERY_TABLE_CACHE_ENABLED,
+        parse(try_from_str),
+        default_value = "false",
+        help = "Table Cached enabled"
+    )]
+    #[serde(default)]
+    pub table_cache_enabled: bool,
+
+    #[structopt(
+        long,
+        env = QUERY_TABLE_MEMORY_CACHE_MB_SIZE,
+        default_value = "256",
+        help = "Table memory cache size (mb)"
+        )]
+    #[serde(default)]
+    pub table_memory_cache_mb_size: u64,
+
+    #[structopt(
+        long,
+        env = QUERY_TABLE_DISK_CACHE_ROOT,
+        default_value = "_cache",
+        help = "Table disk cache folder root"
+    )]
+    #[serde(default)]
+    pub table_disk_cache_root: String,
+
+    #[structopt(
+        long,
+        env = QUERY_TABLE_DISK_CACHE_MB_SIZE,
+        default_value = "1024",
+        help = "Table disk cache size (mb)"
+        )]
+    #[serde(default)]
+    pub table_disk_cache_mb_size: u64,
 }
 
 impl QueryConfig {
@@ -282,6 +323,10 @@ impl QueryConfig {
             table_engine_github_enabled: true,
             wait_timeout_mills: 5000,
             max_query_log_size: 10000,
+            table_cache_enabled: false,
+            table_memory_cache_mb_size: 256,
+            table_disk_cache_root: "_cache".to_string(),
+            table_disk_cache_mb_size: 1024,
         }
     }
 
@@ -461,6 +506,34 @@ impl QueryConfig {
             table_engine_github_enabled,
             bool,
             QUERY_TABLE_ENGINE_GITHUB_ENABLED
+        );
+        env_helper!(
+            mut_config,
+            query,
+            table_cache_enabled,
+            bool,
+            QUERY_TABLE_CACHE_ENABLED
+        );
+        env_helper!(
+            mut_config,
+            query,
+            table_memory_cache_mb_size,
+            u64,
+            QUERY_TABLE_MEMORY_CACHE_MB_SIZE
+        );
+        env_helper!(
+            mut_config,
+            query,
+            table_disk_cache_root,
+            String,
+            QUERY_TABLE_DISK_CACHE_ROOT
+        );
+        env_helper!(
+            mut_config,
+            query,
+            table_disk_cache_mb_size,
+            u64,
+            QUERY_TABLE_DISK_CACHE_MB_SIZE
         );
     }
 }

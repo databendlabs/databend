@@ -29,6 +29,7 @@ use common_planners::PlanNode;
 use futures::future::AbortHandle;
 use uuid::Uuid;
 
+use crate::cache::QueryCache;
 use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::Cluster;
@@ -71,8 +72,8 @@ impl QueryContextShared {
         conf: Config,
         session: Arc<Session>,
         cluster_cache: Arc<Cluster>,
-    ) -> Arc<QueryContextShared> {
-        Arc::new(QueryContextShared {
+    ) -> Result<Arc<QueryContextShared>> {
+        Ok(Arc::new(QueryContextShared {
             conf,
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             progress: Arc::new(Progress::create()),
@@ -87,7 +88,7 @@ impl QueryContextShared {
             running_plan: Arc::new(RwLock::new(None)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
             dal_ctx: Arc::new(Default::default()),
-        })
+        }))
     }
 
     pub fn kill(&self) {
@@ -198,6 +199,10 @@ impl QueryContextShared {
     pub fn add_source_abort_handle(&self, handle: AbortHandle) {
         let mut sources_abort_handle = self.sources_abort_handle.write();
         sources_abort_handle.push(handle);
+    }
+
+    pub fn get_table_cache(&self) -> Arc<Option<Box<dyn QueryCache>>> {
+        self.session.sessions.get_table_cache()
     }
 }
 

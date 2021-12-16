@@ -12,25 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(hash_raw_entry)]
-#![feature(core_intrinsics)]
-#![feature(arbitrary_self_types)]
+use std::borrow::Borrow;
 
-pub mod api;
-pub mod cache;
-pub mod catalogs;
-pub mod clusters;
-pub mod common;
-pub mod configs;
-pub mod databases;
-pub mod functions;
-pub mod interpreters;
-pub mod metrics;
-pub mod optimizers;
-pub mod pipelines;
-pub mod servers;
-pub mod sessions;
-pub mod sql;
-pub mod storages;
-pub mod table_functions;
-pub mod users;
+use super::Meter;
+pub struct BytesMeter;
+
+impl<K> Meter<K, Vec<u8>> for BytesMeter {
+    type Measure = usize;
+    fn measure<Q: ?Sized>(&self, _: &Q, v: &Vec<u8>) -> usize
+    where K: Borrow<Q> {
+        v.len()
+    }
+}

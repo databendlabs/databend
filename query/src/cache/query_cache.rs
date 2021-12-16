@@ -12,25 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(hash_raw_entry)]
-#![feature(core_intrinsics)]
-#![feature(arbitrary_self_types)]
+// use common_exception::Result;
 
-pub mod api;
-pub mod cache;
-pub mod catalogs;
-pub mod clusters;
-pub mod common;
-pub mod configs;
-pub mod databases;
-pub mod functions;
-pub mod interpreters;
-pub mod metrics;
-pub mod optimizers;
-pub mod pipelines;
-pub mod servers;
-pub mod sessions;
-pub mod sql;
-pub mod storages;
-pub mod table_functions;
-pub mod users;
+use async_trait::async_trait;
+use common_dal::DataAccessor;
+use common_exception::Result;
+
+#[async_trait]
+pub trait QueryCache: Send + Sync {
+    async fn get(&self, location: &str, da: &dyn DataAccessor) -> Result<Vec<u8>>;
+}

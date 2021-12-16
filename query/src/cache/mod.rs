@@ -12,25 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(hash_raw_entry)]
-#![feature(core_intrinsics)]
-#![feature(arbitrary_self_types)]
+mod local_cache;
+mod query_cache;
 
-pub mod api;
-pub mod cache;
-pub mod catalogs;
-pub mod clusters;
-pub mod common;
-pub mod configs;
-pub mod databases;
-pub mod functions;
-pub mod interpreters;
-pub mod metrics;
-pub mod optimizers;
-pub mod pipelines;
-pub mod servers;
-pub mod sessions;
-pub mod sql;
-pub mod storages;
-pub mod table_functions;
-pub mod users;
+pub use local_cache::LocalCache;
+pub use local_cache::LocalCacheConfig;
+pub use query_cache::QueryCache;
