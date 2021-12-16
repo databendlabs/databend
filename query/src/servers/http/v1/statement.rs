@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use poem::error::NotFound;
+use hyper::StatusCode;
 use poem::error::Result as PoemResult;
 use poem::post;
 use poem::web::Data;
@@ -58,7 +58,7 @@ pub async fn statement_handler(
             let resp = query
                 .get_response_page(0, &Wait::Sync, true)
                 .await
-                .map_err(|err| NotFound(err.message()))?;
+                .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
             Ok(Json(QueryResponse::from_internal(query_id, resp)))
         }
         Err(e) => Ok(Json(QueryResponse::fail_to_start_sql(query_id, &e))),

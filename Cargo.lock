@@ -4957,9 +4957,9 @@ dependencies = [
 
 [[package]]
 name = "poem"
-version = "1.1.1"
+version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a69bd7b9378e4273fc36cdc29b25f4efb5b56c4f96feef92a46cba105a6c1e70"
+checksum = "1c715e2ce32ff816421654f18bcdc43535065db13e8f57aec6441cdc2c30504c"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4979,6 +4979,7 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "smallvec",
+ "thiserror",
  "tokio",
  "tokio-rustls 0.22.0",
  "tokio-stream",
@@ -4988,9 +4989,9 @@ dependencies = [
 
 [[package]]
 name = "poem-derive"
-version = "1.1.1"
+version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3db87c6ece598edaf7830aaddd094dcf1785dd9207348a874e16d8a7d123e99e"
+checksum = "429008e1153c1cce034d5f26c2949b04e5f0709cab53bacb15c071c9cfe3dd98"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",

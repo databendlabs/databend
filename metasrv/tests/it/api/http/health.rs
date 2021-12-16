@@ -36,7 +36,8 @@ async fn test_health() -> common_exception::Result<()> {
                 .method(Method::GET)
                 .finish(),
         )
-        .await;
+        .await
+        .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
 
