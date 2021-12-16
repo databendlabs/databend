@@ -22,7 +22,6 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_tracing::tracing;
 use poem::error::Error as PoemError;
-use poem::error::NotFound;
 use poem::error::Result as PoemResult;
 use poem::get;
 use poem::http::StatusCode;
@@ -209,7 +208,7 @@ async fn query_page_handler(
             let resp = query
                 .get_response_page(page_no, &wait_type, false)
                 .await
-                .map_err(|err| NotFound(err.message()))?;
+                .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
             Ok(Json(QueryResponse::from_internal(query_id, resp)))
         }
         None => Err(query_id_not_found(query_id)),
@@ -240,7 +239,7 @@ pub(crate) async fn query_handler(
             let resp = query
                 .get_response_page(0, &wait_type, true)
                 .await
-                .map_err(|err| NotFound(err.message()))?;
+                .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
             Ok(Json(QueryResponse::from_internal(
                 query.id.to_string(),
                 resp,
@@ -260,5 +259,8 @@ pub fn query_route() -> Route {
 }
 
 fn query_id_not_found(query_id: String) -> PoemError {
-    NotFound(format!("query id not found {}", query_id))
+    PoemError::from_string(
+        format!("query id not found {}", query_id),
+        StatusCode::NOT_FOUND,
+    )
 }

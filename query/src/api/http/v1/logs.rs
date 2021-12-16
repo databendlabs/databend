@@ -33,8 +33,10 @@ pub async fn logs_handler(
     sessions_extension: Data<&Arc<SessionManager>>,
 ) -> poem::Result<impl IntoResponse> {
     let data = select_table(sessions_extension.0).await.map_err(|err| {
-        poem::Error::new(StatusCode::INTERNAL_SERVER_ERROR)
-            .with_reason(format!("Failed to fetch log. Error: {}", err))
+        poem::Error::from_string(
+            format!("Failed to fetch log. Error: {}", err),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )
     })?;
     Ok(data)
 }

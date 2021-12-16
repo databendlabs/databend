@@ -82,7 +82,8 @@ async fn test_sql(
                 .method(Method::POST)
                 .body(sql),
         )
-        .await;
+        .await
+        .unwrap();
 
     let status = response.status();
     let body = response.into_body().into_vec().await.unwrap();

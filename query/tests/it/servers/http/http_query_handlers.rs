@@ -220,7 +220,9 @@ async fn get_uri(route: &RouteWithData, uri: &str) -> Response {
                 .finish(),
         )
         .await
+        .unwrap_or_else(|err| err.as_response())
 }
+
 async fn get_uri_checked(route: &RouteWithData, uri: &str) -> Result<(StatusCode, QueryResponse)> {
     let response = get_uri(route, uri).await;
     check_response(response).await
@@ -262,7 +264,8 @@ async fn post_json_to_router(
                 .header(header::CONTENT_TYPE, content_type)
                 .body(body),
         )
-        .await;
+        .await
+        .unwrap();
 
     check_response(response).await
 }
