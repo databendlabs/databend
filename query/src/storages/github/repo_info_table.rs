@@ -66,6 +66,7 @@ impl RepoInfoTable {
                 schema: RepoInfoTable::schema(),
                 engine: GITHUB_REPO_INFO_TABLE_ENGINE.into(),
                 options,
+                ..Default::default()
             },
         };
         ctx.meta.create_table(req).await?;

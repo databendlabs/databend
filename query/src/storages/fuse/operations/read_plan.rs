@@ -57,7 +57,7 @@ impl FuseTable {
             (Statistics::default(), Partitions::default()),
             |(mut stats, mut parts), block_meta| {
                 parts.push(Part {
-                    name: block_meta.location.location.clone(),
+                    name: block_meta.location.path.clone(),
                     version: 0,
                 });
 

@@ -30,30 +30,30 @@ async fn test_tables_table() -> Result<()> {
     let stream = table.read(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
-    assert_eq!(block.num_columns(), 3);
+    assert_eq!(block.num_columns(), 4);
 
     let expected = vec![
-        "+----------+--------------+--------------------+",
-        "| database | name         | engine             |",
-        "+----------+--------------+--------------------+",
-        "| system   | clusters     | SystemClusters     |",
-        "| system   | columns      | SystemColumns      |",
-        "| system   | configs      | SystemConfigs      |",
-        "| system   | contributors | SystemContributors |",
-        "| system   | credits      | SystemCredits      |",
-        "| system   | databases    | SystemDatabases    |",
-        "| system   | functions    | SystemFunctions    |",
-        "| system   | metrics      | SystemMetrics      |",
-        "| system   | one          | SystemOne          |",
-        "| system   | processes    | SystemProcesses    |",
-        "| system   | query_log    | SystemQueryLog     |",
-        "| system   | settings     | SystemSettings     |",
-        "| system   | tables       | SystemTables       |",
-        "| system   | tracing      | SystemTracing      |",
-        "| system   | users        | SystemUsers        |",
-        "+----------+--------------+--------------------+",
+        r"\+----------\+--------------\+--------------------\+-------------------------------\+",
+        r"\| database \| name         \| engine             \| created_on                    \|",
+        r"\+----------\+--------------\+--------------------\+-------------------------------\+",
+        r"\| system   \| clusters     \| SystemClusters     \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
+        r"\| system   \| columns      \| SystemColumns      \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
+        r"\| system   \| configs      \| SystemConfigs      \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
+        r"\| system   \| contributors \| SystemContributors \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
+        r"\| system   \| credits      \| SystemCredits      \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
+        r"\| system   \| databases    \| SystemDatabases    \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
+        r"\| system   \| functions    \| SystemFunctions    \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
+        r"\| system   \| metrics      \| SystemMetrics      \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
+        r"\| system   \| one          \| SystemOne          \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
+        r"\| system   \| processes    \| SystemProcesses    \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
+        r"\| system   \| query_log    \| SystemQueryLog     \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
+        r"\| system   \| settings     \| SystemSettings     \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
+        r"\| system   \| tables       \| SystemTables       \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
+        r"\| system   \| tracing      \| SystemTracing      \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
+        r"\| system   \| users        \| SystemUsers        \| \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [\+-]\d{4} \|",
+        r"\+----------\+--------------\+--------------------\+-------------------------------\+",
     ];
-    common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+    common_datablocks::assert_blocks_sorted_eq_with_regex(expected, result.as_slice());
 
     Ok(())
 }

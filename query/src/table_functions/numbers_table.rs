@@ -17,6 +17,9 @@ use std::any::Any;
 use std::mem::size_of;
 use std::sync::Arc;
 
+use common_datavalues::chrono::NaiveDateTime;
+use common_datavalues::chrono::TimeZone;
+use common_datavalues::chrono::Utc;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
@@ -89,6 +92,9 @@ impl NumbersTable {
                 )]),
                 engine: engine.to_string(),
                 options: Default::default(),
+                // Assuming that created_on is unnecessary for function table,
+                // we could make created_on fixed to pass test_shuffle_action_try_into.
+                created_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp(0, 0)),
             },
         };
 

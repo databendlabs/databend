@@ -70,6 +70,7 @@ impl RepoIssuesTable {
                 schema: RepoIssuesTable::schema(),
                 engine: GITHUB_REPO_ISSUES_TABLE_ENGINE.into(),
                 options,
+                ..Default::default()
             },
         };
         ctx.meta.create_table(req).await?;

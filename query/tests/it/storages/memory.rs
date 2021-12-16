@@ -40,6 +40,7 @@ async fn test_memorytable() -> Result<()> {
             schema: schema.clone(),
             engine: "Memory".to_string(),
             options: TableOptions::default(),
+            ..Default::default()
         },
     })?;
 

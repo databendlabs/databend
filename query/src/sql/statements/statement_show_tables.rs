@@ -48,21 +48,21 @@ impl AnalyzableStatement for DfShowTables {
 impl DfShowTables {
     fn show_all_tables(&self, ctx: Arc<QueryContext>) -> String {
         format!(
-            "SELECT name FROM system.tables where database = '{}' ORDER BY database, name",
+            "SELECT created_on, name FROM system.tables where database = '{}' ORDER BY database, name",
             ctx.get_current_database()
         )
     }
 
     fn show_tables_with_like(&self, i: &Ident, ctx: Arc<QueryContext>) -> String {
         format!(
-            "SELECT name FROM system.tables where database = '{}' AND name LIKE {} ORDER BY database, name",
+            "SELECT created_on, name FROM system.tables where database = '{}' AND name LIKE {} ORDER BY database, name",
             ctx.get_current_database(), i,
         )
     }
 
     fn show_tables_with_predicate(&self, e: &Expr, ctx: Arc<QueryContext>) -> String {
         format!(
-            "SELECT name FROM system.tables where database = '{}' AND ({}) ORDER BY database, name",
+            "SELECT created_on, name FROM system.tables where database = '{}' AND ({}) ORDER BY database, name",
             ctx.get_current_database(),
             e,
         )
