@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 //  Copyright 2021 Datafuse Labs.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,6 +12,8 @@ use std::collections::HashSet;
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
+
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_dal::DataAccessor;
