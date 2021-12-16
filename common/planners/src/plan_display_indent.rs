@@ -222,11 +222,12 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
                     comma = true;
                 }
 
-                if p.filters.len() > 0 {
+                if !p.filters.is_empty() {
                     if comma {
                         write!(f, ", ")?;
                     }
-                    write!(f, ", filters: {:?}", p.filters)?;
+                    write!(f, "filters: {:?}", p.filters)?;
+                    comma = true;
                 }
 
                 if p.limit.is_some() {
