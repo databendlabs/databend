@@ -2407,9 +2407,9 @@ dependencies = [
 
 [[package]]
 name = "enumflags2"
-version = "0.7.1"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8672257d642ffdd235f6e9c723c2326ac1253c8f3c022e7cfd2e57da55b1131"
+checksum = "0ff9afdda4e54e2e711c7c729318e0948f427058dfdf3d27084b2d1cd6e2d8fe"
 dependencies = [
  "enumflags2_derive",
  "serde",
@@ -2417,9 +2417,9 @@ dependencies = [
 
 [[package]]
 name = "enumflags2_derive"
-version = "0.7.0"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33526f770a27828ce7c2792fdb7cb240220237e0ff12933ed6c23957fc5dd7cf"
+checksum = "6c17e972efecc5eaf9eeac61e004039e47926685409735ea4d0d7ba353e19acd"
 dependencies = [
  "proc-macro2",
  "quote",
