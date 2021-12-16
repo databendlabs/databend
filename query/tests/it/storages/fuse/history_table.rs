@@ -27,7 +27,6 @@ use databend_query::catalogs::Catalog;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::sql::PlanParser;
-use databend_query::storages::fuse::FuseTruncateHistory;
 use databend_query::storages::FuseHistoryTable;
 use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::table_functions::TableArgs;
@@ -197,129 +196,90 @@ async fn test_fuse_history_table_read() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_fuse_history_truncate_in_drop_stmt() -> Result<()> {
+async fn test_fuse_history_truncate_in_truncate_stmt() -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     let ctx = fixture.ctx();
-
-    // test db & table
-    let create_table_plan = fixture.default_crate_table_plan();
-    let catalog = ctx.get_catalog();
-    catalog.create_table(create_table_plan.into()).await?;
+    fixture.create_default_table().await?;
 
     // ingests some test data
     append_sample_data(10, &fixture).await?;
     let data_path = ctx.get_config().storage.disk.data_path;
     let root = data_path.as_str();
 
-    let mut got_some_files = false;
-    for entry in WalkDir::new(root) {
-        let entry = entry.unwrap();
-        if entry.file_type().is_file() {
-            got_some_files = true;
-            break;
+    {
+        let mut got_some_files = false;
+        for entry in WalkDir::new(root) {
+            let entry = entry.unwrap();
+            if entry.file_type().is_file() {
+                got_some_files = true;
+                break;
+            }
         }
+        assert!(got_some_files, "there should be some files");
     }
-    assert!(got_some_files, "there should be some files");
 
-    // let's Drop
-    let qry = format!("drop table '{}'.'{}'", db, tbl);
-    execute_command(qry.as_str(), ctx.clone()).await?;
-    // there should be no files left inside test root (dirs are kept, though)
-    for entry in WalkDir::new(root) {
-        let entry = entry.unwrap();
-        if entry.file_type().is_file() {
-            panic!("there should be not file left")
+    // let's truncate
+    {
+        let qry = format!("truncate table '{}'.'{}'", db, tbl);
+        execute_command(qry.as_str(), ctx.clone()).await?;
+
+        let expected = vec![
+            "+-------+",
+            "| count |",
+            "+-------+",
+            "| 1     |",
+            "+-------+",
+        ];
+        let qry = format!(
+            "select count(*) as count from fuse_history('{}', '{}')",
+            db, tbl
+        );
+
+        expects_ok(
+            "after_truncate_there_should_be_one_item_left_in_history",
+            execute_query(qry.as_str(), ctx.clone()).await,
+            expected,
+        )
+        .await?;
+
+        let mut got_some_files = false;
+        for entry in WalkDir::new(root) {
+            let entry = entry.unwrap();
+            if entry.file_type().is_file() {
+                got_some_files = true;
+                break;
+            }
         }
+        assert!(got_some_files, "there should be some files");
     }
     Ok(())
 }
 
 #[tokio::test]
-async fn test_fuse_history_truncate() -> Result<()> {
+async fn test_fuse_history_truncate_in_drop_stmt() -> Result<()> {
     let fixture = TestFixture::new().await;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     let ctx = fixture.ctx();
+    fixture.create_default_table().await?;
 
-    // test db & table
-    let create_table_plan = fixture.default_crate_table_plan();
-    let catalog = ctx.get_catalog();
-    catalog.create_table(create_table_plan.into()).await?;
-
-    // func args
-    let arg_db = Expression::create_literal(DataValue::String(Some(db.as_bytes().to_vec())));
-    let arg_tbl = Expression::create_literal(DataValue::String(Some(tbl.as_bytes().to_vec())));
-
+    // ingests some test data
+    append_sample_data(10, &fixture).await?;
+    let data_path = ctx.get_config().storage.disk.data_path;
+    let root = data_path.as_str();
+    // let's Drop
     {
-        let expected = vec![
-            "++", //
-            "++", //
-        ];
-
-        expects_ok(
-            "truncate_table_with_no_snapshot_should_not_panic",
-            test_truncate_with_args_and_ctx(
-                Some(vec![arg_db.clone(), arg_tbl.clone()]),
-                ctx.clone(),
-            )
-            .await,
-            expected,
-        )
-        .await?;
-    }
-
-    {
-        append_sample_data(5, &fixture).await?;
-
-        let expected = vec![
-            "++", //
-            "++", //
-        ];
-
-        expects_ok(
-            "truncate_table_with_only_one_snapshot_should_not_panic",
-            test_truncate_with_args_and_ctx(
-                Some(vec![arg_db.clone(), arg_tbl.clone()]),
-                ctx.clone(),
-            )
-            .await,
-            expected,
-        )
-        .await?;
-    }
-
-    {
-        // insert overwrite, 3 times:
-        // 3 row and 1 block per insertion, there will be extra three snapshot added
-        for _x in 0..3 {
-            append_sample_data_overwrite(1, true, &fixture).await?;
-        }
-
-        // do the truncation (syntax sugar coming soon)
-        let qry = format!("select * from fuse_truncate_history('{}', '{}')", db, tbl);
+        let qry = format!("drop table '{}'.'{}'", db, tbl);
         execute_command(qry.as_str(), ctx.clone()).await?;
-
-        // check the table history after truncation
-        // only the last insertion should be kept (3 row, 1 block)
-        let expected = vec![
-            "+-----------+-------------+",
-            "| row_count | block_count |",
-            "+-----------+-------------+",
-            "| 3         | 1           |",
-            "+-----------+-------------+",
-        ];
-        let qry = format!(
-            "select row_count, block_count from fuse_history('{}', '{}') order by row_count",
-            db, tbl
-        );
-        expects_ok(
-            "check_row_and_block_count_after_append",
-            execute_query(qry.as_str(), ctx.clone()).await,
-            expected,
-        )
-        .await?;
+        // there should be no files left inside test root (dirs are kept, though)
+        for entry in WalkDir::new(root) {
+            let entry = entry.unwrap();
+            if entry.file_type().is_file() {
+                panic!("there should be not file left")
+            }
+        }
     }
     Ok(())
 }
@@ -346,20 +306,6 @@ async fn test_drive_with_args_and_ctx(
     ctx: std::sync::Arc<QueryContext>,
 ) -> Result<SendableDataBlockStream> {
     let func = FuseHistoryTable::create("system", "fuse_history", 1, tbl_args)?;
-    let source_plan = func
-        .clone()
-        .as_table()
-        .read_plan(ctx.clone(), Some(Extras::default()))
-        .await?;
-    ctx.try_set_partitions(source_plan.parts.clone())?;
-    func.read(ctx, &source_plan).await
-}
-
-async fn test_truncate_with_args_and_ctx(
-    tbl_args: TableArgs,
-    ctx: std::sync::Arc<QueryContext>,
-) -> Result<SendableDataBlockStream> {
-    let func = FuseTruncateHistory::create("system", "fuse_truncate_history", 1, tbl_args)?;
     let source_plan = func
         .clone()
         .as_table()
