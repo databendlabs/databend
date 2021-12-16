@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fs::File;
+use std::io::Read;
 use std::sync::Arc;
 
 use common_base::tokio;
@@ -22,6 +24,7 @@ use databend_query::servers::http::v1::make_state_uri;
 use databend_query::servers::http::v1::query_route;
 use databend_query::servers::http::v1::ExecuteStateName;
 use databend_query::servers::http::v1::QueryResponse;
+use databend_query::servers::HttpHandler;
 use databend_query::sessions::SessionManager;
 use hyper::header;
 use poem::http::Method;
@@ -34,6 +37,15 @@ use poem::Response;
 use poem::Route;
 use pretty_assertions::assert_eq;
 
+use crate::tests::tls_constants::TEST_CA_CERT;
+use crate::tests::tls_constants::TEST_CN_NAME;
+use crate::tests::tls_constants::TEST_SERVER_CERT;
+use crate::tests::tls_constants::TEST_SERVER_KEY;
+use crate::tests::tls_constants::TEST_TLS_CA_CERT;
+use crate::tests::tls_constants::TEST_TLS_CLIENT_IDENTITY;
+use crate::tests::tls_constants::TEST_TLS_CLIENT_PASSWORD;
+use crate::tests::tls_constants::TEST_TLS_SERVER_CERT;
+use crate::tests::tls_constants::TEST_TLS_SERVER_KEY;
 use crate::tests::SessionManagerBuilder;
 
 // TODO(youngsofun): add test for
@@ -265,4 +277,138 @@ async fn post_json_to_router(
         .await;
 
     check_response(response).await
+}
+
+// need to support local_addr, but axum_server do not have local_addr callback
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_http_handler_tls_server() -> Result<()> {
+    let address_str = "127.0.0.1:39000";
+    let mut srv = HttpHandler::create(
+        SessionManagerBuilder::create()
+            .http_handler_tls_server_key(TEST_SERVER_KEY)
+            .http_handler_tls_server_cert(TEST_SERVER_CERT)
+            .build()?,
+    );
+
+    let listening = srv.start(address_str.parse()?).await?;
+
+    // test cert is issued for "localhost"
+    let url = format!("https://{}:{}/v1/query", TEST_CN_NAME, listening.port());
+    let sql = "select * from system.tables limit 10";
+    let json = serde_json::json!({"sql": sql.to_string()});
+    // load cert
+    let mut buf = Vec::new();
+    File::open(TEST_CA_CERT)?.read_to_end(&mut buf)?;
+    let cert = reqwest::Certificate::from_pem(&buf).unwrap();
+
+    // kick off
+    let client = reqwest::Client::builder()
+        .add_root_certificate(cert)
+        .build()
+        .unwrap();
+    let resp = client.post(&url).json(&json).send().await;
+    assert!(resp.is_ok(), "{:?}", resp.err());
+    let resp = resp.unwrap();
+    assert!(resp.status().is_success());
+    let res = resp.json::<QueryResponse>().await;
+    assert!(res.is_ok());
+    let res = res.unwrap();
+    assert!(res.data.len() > 0, "{:?}", res);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_http_handler_tls_server_failed_case_1() -> Result<()> {
+    let address_str = "127.0.0.1:39001";
+    let mut srv = HttpHandler::create(
+        SessionManagerBuilder::create()
+            .http_handler_tls_server_key(TEST_SERVER_KEY)
+            .http_handler_tls_server_cert(TEST_SERVER_CERT)
+            .build()?,
+    );
+
+    let listening = srv.start(address_str.parse()?).await?;
+
+    // test cert is issued for "localhost"
+    let url = format!("https://{}:{}/v1/query", TEST_CN_NAME, listening.port());
+    let sql = "select * from system.tables limit 10";
+    let json = serde_json::json!({"sql": sql.to_string()});
+
+    // kick off
+    let client = reqwest::Client::builder().build().unwrap();
+    let resp = client.post(&url).json(&json).send().await;
+    assert!(resp.is_err(), "{:?}", resp.err());
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
+    let addr_str = "127.0.0.1:39011";
+    let mut srv = HttpHandler::create(
+        SessionManagerBuilder::create()
+            .http_handler_tls_server_key(TEST_TLS_SERVER_KEY)
+            .http_handler_tls_server_cert(TEST_TLS_SERVER_CERT)
+            .http_handler_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
+            .build()?,
+    );
+    let listening = srv.start(addr_str.parse()?).await?;
+
+    // test cert is issued for "localhost"
+    let url = format!("https://{}:{}/v1/query", TEST_CN_NAME, listening.port());
+    let sql = "select * from system.tables limit 10";
+    let json = serde_json::json!({"sql": sql.to_string()});
+
+    // get identity
+    let mut buf = Vec::new();
+    File::open(TEST_TLS_CLIENT_IDENTITY)?.read_to_end(&mut buf)?;
+    let pkcs12 = reqwest::Identity::from_pkcs12_der(&buf, TEST_TLS_CLIENT_PASSWORD).unwrap();
+    let mut buf = Vec::new();
+    File::open(TEST_TLS_CA_CERT)?.read_to_end(&mut buf)?;
+    let cert = reqwest::Certificate::from_pem(&buf).unwrap();
+    // kick off
+    let client = reqwest::Client::builder()
+        .identity(pkcs12)
+        .add_root_certificate(cert)
+        .build()
+        .expect("preconfigured rustls tls");
+    let resp = client.post(&url).json(&json).send().await;
+    assert!(resp.is_ok(), "{:?}", resp.err());
+    let resp = resp.unwrap();
+    assert!(resp.status().is_success());
+    let res = resp.json::<QueryResponse>().await;
+    assert!(res.is_ok());
+    let res = res.unwrap();
+    assert!(res.data.len() > 0, "{:?}", res);
+    Ok(())
+}
+
+// cannot connect with server unless it have CA signed identity
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
+    let addr_str = "127.0.0.1:39012";
+    let mut srv = HttpHandler::create(
+        SessionManagerBuilder::create()
+            .http_handler_tls_server_key(TEST_TLS_SERVER_KEY)
+            .http_handler_tls_server_cert(TEST_TLS_SERVER_CERT)
+            .http_handler_tls_server_root_ca_cert(TEST_TLS_CA_CERT)
+            .build()?,
+    );
+    let listening = srv.start(addr_str.parse()?).await?;
+
+    // test cert is issued for "localhost"
+    let url = format!("https://{}:{}/v1/query", TEST_CN_NAME, listening.port());
+    let sql = "select * from system.tables limit 10";
+    let json = serde_json::json!({"sql": sql.to_string()});
+
+    let mut buf = Vec::new();
+    File::open(TEST_TLS_CA_CERT)?.read_to_end(&mut buf)?;
+    let cert = reqwest::Certificate::from_pem(&buf).unwrap();
+    // kick off
+    let client = reqwest::Client::builder()
+        .add_root_certificate(cert)
+        .build()
+        .expect("preconfigured rustls tls");
+    let resp = client.post(&url).json(&json).send().await;
+    assert!(resp.is_err(), "{:?}", resp.err());
+    Ok(())
 }

@@ -33,6 +33,12 @@ pub const QUERY_HTTP_API_ADDRESS: &str = "QUERY_HTTP_API_ADDRESS";
 pub const QUERY_METRICS_API_ADDRESS: &str = "QUERY_METRIC_API_ADDRESS";
 pub const QUERY_WAIT_TIMEOUT_MILLS: &str = "QUERY_WAIT_TIMEOUT_MILLS";
 pub const QUERY_MAX_QUERY_LOG_SIZE: &str = "QUERY_MAX_QUERY_LOG_SIZE";
+
+const QUERY_HTTP_HANDLER_TLS_SERVER_CERT: &str = "QUERY_HTTP_HANDLER_TLS_SERVER_CERT";
+const QUERY_HTTP_HANDLER_TLS_SERVER_KEY: &str = "QUERY_HTTP_HANDLER_TLS_SERVER_KEY";
+const QUERY_HTTP_HANDLER_TLS_SERVER_ROOT_CA_CERT: &str =
+    "QUERY_HTTP_HANDLER_TLS_SERVER_ROOT_CA_CERT";
+
 const QUERY_API_TLS_SERVER_CERT: &str = "QUERY_API_TLS_SERVER_CERT";
 const QUERY_API_TLS_SERVER_KEY: &str = "QUERY_API_TLS_SERVER_KEY";
 const QUERY_API_TLS_SERVER_ROOT_CA_CERT: &str = "QUERY_API_TLS_SERVER_ROOT_CA_CERT";
@@ -140,6 +146,18 @@ pub struct QueryConfig {
     )]
     #[serde(default)]
     pub metric_api_address: String,
+
+    #[structopt(long, env = QUERY_HTTP_HANDLER_TLS_SERVER_CERT, default_value = "")]
+    #[serde(default)]
+    pub http_handler_tls_server_cert: String,
+
+    #[structopt(long, env = QUERY_HTTP_HANDLER_TLS_SERVER_KEY, default_value = "")]
+    #[serde(default)]
+    pub http_handler_tls_server_key: String,
+
+    #[structopt(long, env = QUERY_HTTP_HANDLER_TLS_SERVER_ROOT_CA_CERT, default_value = "")]
+    #[serde(default)]
+    pub http_handler_tls_server_root_ca_cert: String,
 
     #[structopt(long, env = QUERY_API_TLS_SERVER_CERT, default_value = "")]
     #[serde(default)]
@@ -251,6 +269,9 @@ impl QueryConfig {
             api_tls_server_cert: "".to_string(),
             api_tls_server_key: "".to_string(),
             api_tls_server_root_ca_cert: "".to_string(),
+            http_handler_tls_server_cert: "".to_string(),
+            http_handler_tls_server_key: "".to_string(),
+            http_handler_tls_server_root_ca_cert: "".to_string(),
             rpc_tls_server_cert: "".to_string(),
             rpc_tls_server_key: "".to_string(),
             rpc_tls_query_server_root_ca_cert: "".to_string(),
@@ -340,6 +361,31 @@ impl QueryConfig {
             api_tls_server_key,
             String,
             QUERY_API_TLS_SERVER_KEY
+        );
+
+        // for http handler service
+        env_helper!(
+            mut_config,
+            query,
+            http_handler_tls_server_cert,
+            String,
+            QUERY_HTTP_HANDLER_TLS_SERVER_CERT
+        );
+
+        env_helper!(
+            mut_config,
+            query,
+            http_handler_tls_server_key,
+            String,
+            QUERY_HTTP_HANDLER_TLS_SERVER_KEY
+        );
+
+        env_helper!(
+            mut_config,
+            query,
+            http_handler_tls_server_root_ca_cert,
+            String,
+            QUERY_HTTP_HANDLER_TLS_SERVER_ROOT_CA_CERT
         );
 
         // for query rpc server
