@@ -19,6 +19,8 @@ use std::fmt::Formatter;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use common_datavalues::chrono::DateTime;
+use common_datavalues::chrono::Utc;
 use common_datavalues::DataSchema;
 use maplit::hashmap;
 
@@ -98,6 +100,7 @@ pub struct TableMeta {
     pub schema: Arc<DataSchema>,
     pub engine: String,
     pub options: HashMap<String, String>,
+    pub created_on: DateTime<Utc>,
 }
 
 impl TableInfo {
@@ -147,6 +150,7 @@ impl Default for TableMeta {
             schema: Arc::new(DataSchema::empty()),
             engine: "".to_string(),
             options: HashMap::new(),
+            created_on: Utc::now(),
         }
     }
 }
@@ -155,8 +159,8 @@ impl Display for TableMeta {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Engine: {}, Schema: {}, Options: {:?}",
-            self.engine, self.schema, self.options
+            "Engine: {}, Schema: {}, Options: {:?} CreatedOn: {:?}",
+            self.engine, self.schema, self.options, self.created_on
         )
     }
 }

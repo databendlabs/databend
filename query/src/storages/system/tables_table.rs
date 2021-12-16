@@ -39,6 +39,7 @@ impl TablesTable {
             DataField::new("database", DataType::String, false),
             DataField::new("name", DataType::String, false),
             DataField::new("engine", DataType::String, false),
+            DataField::new("created_on", DataType::String, false),
         ]);
 
         let table_info = TableInfo {
@@ -92,11 +93,23 @@ impl Table for TablesTable {
             .iter()
             .map(|(_, v)| v.engine().as_bytes())
             .collect();
+        let created_ons: Vec<String> = database_tables
+            .iter()
+            .map(|(_, v)| {
+                v.get_table_info()
+                    .meta
+                    .created_on
+                    .format("%Y-%m-%d %H:%M:%S.%3f %z")
+                    .to_string()
+            })
+            .collect();
+        let created_ons: Vec<&[u8]> = created_ons.iter().map(|s| s.as_bytes()).collect();
 
         let block = DataBlock::create_by_array(self.table_info.schema(), vec![
             Series::new(databases),
             Series::new(names),
             Series::new(engines),
+            Series::new(created_ons),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(
