@@ -24,7 +24,6 @@ use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::io;
 use crate::storages::fuse::FuseTable;
-use crate::storages::fuse::FuseTruncateHistory;
 use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 
 impl FuseTable {
@@ -46,30 +45,17 @@ impl FuseTable {
             let bytes = serde_json::to_vec(&new_snapshot)?;
             da.put(&new_snapshot_loc, bytes).await?;
 
-            let catalog = ctx.get_catalog();
-            // TODO backoff retry
-            catalog
+            let keep_last_snapshot = false;
+            let _ = self
+                .do_truncate_history(ctx.clone(), keep_last_snapshot)
+                .await;
+            ctx.get_catalog()
                 .upsert_table_option(UpsertTableOptionReq::new(
                     &self.table_info.ident,
                     TBL_OPT_KEY_SNAPSHOT_LOC,
                     new_snapshot_loc,
                 ))
                 .await?;
-
-            let tbl_info = &self.table_info;
-            let database_name = _truncate_plan.db;
-            let truncate_all = false;
-            let func_hist_trunc = FuseTruncateHistory::new(
-                "",
-                "",
-                0,
-                database_name,
-                tbl_info.name.clone(),
-                truncate_all,
-            );
-            func_hist_trunc.truncate_history(ctx.clone()).await?;
-
-            return Ok(());
         }
 
         Ok(())

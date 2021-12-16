@@ -18,6 +18,7 @@ mod operation_log;
 mod read;
 mod read_plan;
 mod truncate;
+mod truncate_histor;
 
 pub use operation_log::AppendOperationLogEntry;
 pub use operation_log::TableOperationLog;

@@ -14,10 +14,7 @@
 //
 
 mod fuse_history_table;
-mod fuse_history_truncate;
 mod table_arg_util;
 
 pub use fuse_history_table::FuseHistoryTable;
 pub use fuse_history_table::FUSE_FUNC_HIST;
-pub use fuse_history_truncate::FuseTruncateHistory;
-pub use fuse_history_truncate::FUSE_FUNC_TRUNCATE;

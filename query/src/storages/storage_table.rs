@@ -118,8 +118,16 @@ pub trait Table: Sync + Send {
         _truncate_plan: TruncateTablePlan,
     ) -> Result<()> {
         Err(ErrorCode::UnImplement(format!(
-            "truncate for local table {} is not implemented",
+            "truncate for table {} is not implemented",
             self.name()
         )))
+    }
+
+    async fn truncate_history(
+        &self,
+        _ctx: Arc<QueryContext>,
+        _keep_last_snapshot: bool,
+    ) -> Result<()> {
+        Ok(())
     }
 }
