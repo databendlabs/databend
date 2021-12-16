@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::compute::aggregate;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -71,6 +72,10 @@ macro_rules! impl_dyn_array {
 
             fn null_count(&self) -> usize {
                 self.0.null_count()
+            }
+
+            fn validity(&self) -> Option<&Bitmap> {
+                self.0.validity()
             }
 
             fn get_array_memory_size(&self) -> usize {

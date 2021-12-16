@@ -284,9 +284,10 @@ build_exceptions! {
 
 
     // DAL error
-    DALTransportError(7000),
-    UnknownStorageSchemeName(7001),
-    SecretKeyNotSet(7002),
+    UnknownStorageSchemeName(7000),
+    SecretKeyNotSet(7001),
+    DalTransportError(7002),
+    DalPathNotFound(7003),
 
     // datasource error
     DuplicatedTableEngineProvider(8000),

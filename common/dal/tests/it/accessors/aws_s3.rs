@@ -78,7 +78,7 @@ impl TestFixture {
             .put_object(put_req)
             .await
             .map(|_| ())
-            .map_err(|e| ErrorCode::DALTransportError(e.to_string()))
+            .map_err(|e| ErrorCode::DalTransportError(e.to_string()))
     }
 }
 

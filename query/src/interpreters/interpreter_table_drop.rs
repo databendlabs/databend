@@ -21,8 +21,10 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Catalog;
 use crate::interpreters::Interpreter;
+use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
+use crate::sql::PlanParser;
 
 pub struct DropTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -32,6 +34,17 @@ pub struct DropTableInterpreter {
 impl DropTableInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: DropTablePlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(DropTableInterpreter { ctx, plan }))
+    }
+    async fn truncate_history(&self) -> Result<SendableDataBlockStream> {
+        // during execution of DROP TABLE, truncate all the historical data
+        let qry = format!(
+            "select * from fuse_truncate_history('{}', '{}', 'all')",
+            self.plan.db, self.plan.table
+        );
+        let plan = PlanParser::parse(qry.as_str(), self.ctx.clone()).await?;
+        InterpreterFactory::get(self.ctx.clone(), plan)?
+            .execute(None)
+            .await
     }
 }
 
@@ -45,9 +58,9 @@ impl Interpreter for DropTableInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
+        let _ = self.truncate_history().await;
         let catalog = self.ctx.get_catalog();
         catalog.drop_table(self.plan.clone().into()).await?;
-
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
             None,

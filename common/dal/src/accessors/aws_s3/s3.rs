@@ -24,6 +24,7 @@ use rusoto_core::ByteStream;
 use rusoto_core::Client;
 use rusoto_core::HttpClient;
 use rusoto_core::Region;
+use rusoto_s3::DeleteObjectRequest;
 use rusoto_s3::PutObjectRequest;
 use rusoto_s3::S3Client;
 use rusoto_s3::S3 as RusotoS3;
@@ -49,7 +50,7 @@ impl S3 {
         let region = Self::parse_region(region_name, endpoint_url)?;
 
         let dispatcher = HttpClient::new().map_err(|e| {
-            ErrorCode::DALTransportError(format!("failed to create http client of s3, {}", e))
+            ErrorCode::DalTransportError(format!("failed to create http client of s3, {}", e))
         })?;
 
         let client = match Self::credential_provider(access_key_id, secret_accesses_key) {
@@ -58,14 +59,14 @@ impl S3 {
                 // check on k8s admission webhook injection
                 if enable_pod_iam_policy {
                     if std::env::var("AWS_WEB_IDENTITY_TOKEN_FILE").is_err() {
-                        return Err(ErrorCode::DALTransportError(
+                        return Err(ErrorCode::DalTransportError(
                             "AWS_WEB_IDENTITY_TOKEN_FILE env variable is not set".to_string(),
                         ));
                     }
                     let provider = rusoto_sts::WebIdentityProvider::from_k8s_env();
                     let provider = rusoto_credential::AutoRefreshingProvider::new(provider)
                         .map_err(|e| {
-                            ErrorCode::DALTransportError(format!(
+                            ErrorCode::DalTransportError(format!(
                                 "failed to create Web Identity credential provider of s3, {}",
                                 e
                             ))
@@ -75,7 +76,7 @@ impl S3 {
                     // Otherwise, return the default.
                     Client::new_with(
                         DefaultCredentialsProvider::new().map_err(|e| {
-                            ErrorCode::DALTransportError(format!(
+                            ErrorCode::DalTransportError(format!(
                                 "failed to create default credentials provider, {}",
                                 e
                             ))
@@ -96,7 +97,7 @@ impl S3 {
     fn parse_region(name: &str, endpoint: &str) -> Result<Region> {
         if endpoint.is_empty() {
             Region::from_str(name).map_err(|e| {
-                ErrorCode::DALTransportError(format!(
+                ErrorCode::DalTransportError(format!(
                     "invalid region {}, error details {}",
                     name, e
                 ))
@@ -129,14 +130,14 @@ impl S3 {
     ) -> common_exception::Result<()> {
         let req = PutObjectRequest {
             key: path.to_string(),
-            bucket: self.bucket.to_string(),
+            bucket: self.bucket.clone(),
             body: Some(input_stream),
             ..Default::default()
         };
         self.client
             .put_object(req)
             .await
-            .map_err(|e| ErrorCode::DALTransportError(e.to_string()))?;
+            .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
         Ok(())
     }
 }
@@ -173,5 +174,19 @@ impl DataAccessor for S3 {
     ) -> common_exception::Result<()> {
         self.put_byte_stream(path, ByteStream::new_with_size(input_stream, stream_len))
             .await
+    }
+
+    async fn remove(&self, path: &str) -> Result<()> {
+        let req = DeleteObjectRequest {
+            bucket: self.bucket.clone(),
+            key: path.to_owned(),
+            ..Default::default()
+        };
+        self.client
+            .delete_object(req)
+            .await
+            .map_err(|e| ErrorCode::DalTransportError(e.to_string()))?;
+
+        Ok(())
     }
 }

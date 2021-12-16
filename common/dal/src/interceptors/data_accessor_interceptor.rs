@@ -71,4 +71,8 @@ impl DataAccessor for DataAccessorInterceptor {
             .await
             .map(|_| self.ctx.inc_write_bytes(stream_len as usize))
     }
+
+    async fn remove(&self, path: &str) -> common_exception::Result<()> {
+        self.inner.remove(path).await
+    }
 }

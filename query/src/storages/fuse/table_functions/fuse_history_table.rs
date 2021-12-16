@@ -14,17 +14,14 @@
 //
 
 use std::any::Any;
-use std::any::TypeId;
 use std::sync::Arc;
 
-use common_dal::DataAccessor;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
-use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::TableIdent;
@@ -37,10 +34,11 @@ use common_streams::SendableDataBlockStream;
 
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
-use crate::storages::fuse::io::read_obj;
-use crate::storages::fuse::io::snapshot_location;
+use crate::storages::fuse::io::snapshot_history;
 use crate::storages::fuse::meta::TableSnapshot;
-use crate::storages::fuse::FuseTable;
+use crate::storages::fuse::table::is_fuse_table;
+use crate::storages::fuse::table_functions::table_arg_util::parse_func_history_args;
+use crate::storages::fuse::table_functions::table_arg_util::string_literal;
 use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::Table;
 use crate::table_functions::TableArgs;
@@ -67,21 +65,11 @@ impl FuseHistoryTable {
             DataField::new("segment_count", DataType::UInt64, false),
             DataField::new("block_count", DataType::UInt64, false),
             DataField::new("row_count", DataType::UInt64, false),
-            DataField::new("uncompressed_bytes", DataType::UInt64, false),
-            DataField::new("compressed_bytes", DataType::UInt64, false),
+            DataField::new("bytes_uncompressed", DataType::UInt64, false),
+            DataField::new("bytes_compressed", DataType::UInt64, false),
         ]);
 
-        let (arg_database_name, arg_table_name) = match table_args {
-            Some(args) if args.len() == 2 => {
-                let db = Self::string_value(&args[0])?;
-                let tbl = Self::string_value(&args[1])?;
-                Ok((db, tbl))
-            }
-            _ => Err(ErrorCode::BadArguments(format!(
-                "expecting database and table name (as two string literals), but got {:?}",
-                table_args
-            ))),
-        }?;
+        let (arg_database_name, arg_table_name) = parse_func_history_args(&table_args)?;
 
         let engine = FUSE_FUNC_HIST.to_owned();
 
@@ -101,36 +89,6 @@ impl FuseHistoryTable {
             arg_database_name,
             arg_table_name,
         }))
-    }
-
-    fn string_value(expr: &Expression) -> Result<String> {
-        if let Expression::Literal { value, .. } = expr {
-            String::from_utf8(value.as_string()?)
-                .map_err(|e| ErrorCode::BadArguments(format!("invalid string. {}", e)))
-        } else {
-            Err(ErrorCode::BadArguments(format!(
-                "expecting string literal, but got {:?}",
-                expr
-            )))
-        }
-    }
-
-    fn string_literal(val: &str) -> Expression {
-        Expression::create_literal(DataValue::String(Some(val.as_bytes().to_vec())))
-    }
-
-    async fn read_snapshots(
-        da: &dyn DataAccessor,
-        mut location: Option<String>,
-    ) -> Result<Vec<TableSnapshot>> {
-        let mut snapshots = vec![];
-        while let Some(loc) = &location {
-            let snapshot: TableSnapshot = read_obj(da, loc).await?;
-            let prev = snapshot.prev_snapshot_id;
-            snapshots.push(snapshot);
-            location = prev.map(|id| snapshot_location(id.to_simple().to_string().as_str()));
-        }
-        Ok(snapshots)
     }
 
     fn snapshots_to_block(&self, snapshots: Vec<TableSnapshot>) -> DataBlock {
@@ -165,20 +123,6 @@ impl FuseHistoryTable {
             Series::new(compressed),
         ])
     }
-
-    fn check_table_compatibility(tbl: &dyn Table) -> Result<()> {
-        // since StorageFactory is free to choose the engine name,
-        // we use type_id to verify the compatibility here
-        let tid = tbl.as_any().type_id();
-        if tid != TypeId::of::<FuseTable>() {
-            Err(ErrorCode::BadArguments(format!(
-                "expecting fuse table, but got table of engine type: {}",
-                tbl.get_table_info().meta.engine
-            )))
-        } else {
-            Ok(())
-        }
-    }
 }
 
 #[async_trait::async_trait]
@@ -193,8 +137,8 @@ impl Table for FuseHistoryTable {
 
     fn table_args(&self) -> Option<Vec<Expression>> {
         Some(vec![
-            Self::string_literal(self.arg_database_name.as_str()),
-            Self::string_literal(self.arg_table_name.as_str()),
+            string_literal(self.arg_database_name.as_str()),
+            string_literal(self.arg_table_name.as_str()),
         ])
     }
 
@@ -211,25 +155,23 @@ impl Table for FuseHistoryTable {
             )
             .await?;
 
-        Self::check_table_compatibility(tbl.as_ref())?;
+        if !is_fuse_table(tbl.as_ref()) {
+            return Err(ErrorCode::BadArguments(format!(
+                "expecting fuse table, but got table of engine type: {}",
+                tbl.get_table_info().meta.engine
+            )));
+        }
 
         let tbl_info = tbl.get_table_info();
-        match tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC) {
-            Some(loc) => {
-                let da = ctx.get_data_accessor()?;
-                let snapshots = Self::read_snapshots(da.as_ref(), Some(loc.clone())).await?;
-                let block = self.snapshots_to_block(snapshots);
-                Ok::<_, ErrorCode>(vec![block])
-            }
-            None => Ok(vec![]),
-        }
-        .map(|blocks| {
-            Box::pin(DataBlockStream::create(
-                self.table_info.schema(),
-                None,
-                blocks,
-            )) as SendableDataBlockStream
-        })
+        let location = tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC);
+        let da = ctx.get_data_accessor()?;
+        let snapshots = snapshot_history(da.as_ref(), location).await?;
+        let blocks = vec![self.snapshots_to_block(snapshots)];
+        Ok(Box::pin(DataBlockStream::create(
+            self.table_info.schema(),
+            None,
+            blocks,
+        )))
     }
 }
 
