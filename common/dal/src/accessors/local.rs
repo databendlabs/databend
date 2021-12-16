@@ -115,7 +115,7 @@ impl DataAccessor for Local {
     }
 }
 
-async fn mk_parent_dir(path: &PathBuf) -> Result<()> {
+async fn mk_parent_dir(path: &Path) -> Result<()> {
     let parent = path.parent().ok_or_else(|| {
         ErrorCode::DALTransportError(format!("accessing malformed path, {:?}", path.to_str()))
     })?;
