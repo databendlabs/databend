@@ -36,6 +36,7 @@ impl DropTableInterpreter {
         Ok(Arc::new(DropTableInterpreter { ctx, plan }))
     }
     async fn truncate_history(&self) -> Result<SendableDataBlockStream> {
+        // during execution of DROP TABLE, truncate all the historical data
         let qry = format!(
             "select * from fuse_truncate_history('{}', '{}', 'all')",
             self.plan.db, self.plan.table
@@ -57,7 +58,7 @@ impl Interpreter for DropTableInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let _ = self.truncate_history().await?;
+        let _ = self.truncate_history().await;
         let catalog = self.ctx.get_catalog();
         catalog.drop_table(self.plan.clone().into()).await?;
         Ok(Box::pin(DataBlockStream::create(

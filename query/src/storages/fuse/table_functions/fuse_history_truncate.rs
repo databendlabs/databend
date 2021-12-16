@@ -120,7 +120,9 @@ impl FuseTruncateHistory {
             )
             .await?;
 
-        check_table_compatibility(tbl.as_ref())?;
+        if let Err(_) = check_table_compatibility(tbl.as_ref()) {
+            return Ok(None);
+        }
 
         let da = ctx.get_data_accessor()?;
         let tbl_info = tbl.get_table_info();
