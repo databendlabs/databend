@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::net::SocketAddr;
+use std::path::Path;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -20,9 +21,12 @@ use poem::get;
 use poem::put;
 use poem::Endpoint;
 use poem::EndpointExt;
+use poem::listener::RustlsConfig;
 use poem::Route;
+use common_tracing::tracing;
 
 use crate::common::service::HttpShutdownHandler;
+use crate::configs::Config;
 use crate::servers::http::v1::query_route;
 use crate::servers::http::v1::statement_router;
 use crate::servers::http::v1::streaming_load;
@@ -65,6 +69,27 @@ curl --request POST '{:?}/v1/query/' --header 'Content-Type: application/json' -
             .boxed()
     }
 
+    fn build_tls(config: &Config) -> Result<RustlsConfig> {
+        let mut cfg = RustlsConfig::new()
+            .cert(std::fs::read(&config.query.http_handler_tls_server_cert.as_str())?)
+            .key(std::fs::read(&config.query.http_handler_tls_server_key.as_str())?);
+        if Path::new(&config.query.http_handler_tls_server_root_ca_cert).exists() {
+            cfg = cfg.client_auth_required(std::fs::read(
+                &config.query.http_handler_tls_server_root_ca_cert.as_str(),
+            )?);
+        }
+        Ok(cfg)
+    }
+
+    async fn start_with_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
+        tracing::info!("Http Handler TLS enabled");
+
+        let tls_config = Self::build_tls(self.session_manager.get_conf())?;
+        self.shutdown_handler
+            .start_service(listening, Some(tls_config), self.build_router(listening))
+            .await
+    }
+
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
         self.shutdown_handler
             .start_service(listening, None, self.build_router(listening))
@@ -79,6 +104,10 @@ impl Server for HttpHandler {
     }
 
     async fn start(&mut self, listening: SocketAddr) -> common_exception::Result<SocketAddr> {
-        self.start_without_tls(listening).await
+        let config = &self.session_manager.get_conf().query;
+        match config.http_handler_tls_server_key.is_empty() || config.http_handler_tls_server_cert.is_empty() {
+            true => self.start_without_tls(listening).await,
+            false => self.start_with_tls(listening).await,
+        }
     }
 }
