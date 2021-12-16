@@ -945,12 +945,16 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    fn parse_purge(&mut self) -> Result<bool, ParserError> {
+    fn parse_non_keyword(&mut self, value: &str) -> Result<bool, ParserError> {
         match self.parser.next_token() {
-            Token::Word(word) if word.value.to_lowercase() == "purge" => Ok(true),
+            Token::Word(word) if word.value.to_lowercase() == value => Ok(true),
             Token::EOF => Ok(false),
             t @ _ => self.expected("expected purge", t),
         }
+    }
+
+    fn parse_purge(&mut self) -> Result<bool, ParserError> {
+        self.parse_non_keyword("purge")
     }
 
     fn parse_privileges(&mut self) -> Result<UserPrivilegeSet, ParserError> {
