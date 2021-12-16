@@ -82,9 +82,7 @@ where
     }
 
     fn return_type(&self) -> Result<DataType> {
-        let value: DataValue = Some(SumT::default()).into();
-
-        Ok(value.data_type())
+        Ok(SumT::data_type())
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
