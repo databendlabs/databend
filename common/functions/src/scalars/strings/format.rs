@@ -16,6 +16,7 @@ use std::fmt;
 use std::ops::AddAssign;
 
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use num_format::Locale;
 use num_format::ToFormattedString;
@@ -81,10 +82,15 @@ impl Function for FormatFunction {
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if args[0].is_null() || args[1].is_null() {
-            Ok(DataType::Null)
-        } else {
+        if (args[0].is_numeric() || args[0] == DataType::String || args[0] == DataType::Null)
+            && (args[1].is_numeric() || args[1] == DataType::String || args[1] == DataType::Null)
+        {
             Ok(DataType::String)
+        } else {
+            Err(ErrorCode::IllegalDataType(format!(
+                "Expected string/numeric, but got {}",
+                args[0]
+            )))
         }
     }
 
@@ -93,10 +99,6 @@ impl Function for FormatFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        if columns[0].column().data_type().is_null() || columns[1].column().data_type().is_null() {
-            return Ok(DataColumn::Constant(DataValue::Null, input_rows));
-        }
-
         match (
             columns[0].column().cast_with_type(&DataType::Float64)?,
             columns[1].column().cast_with_type(&DataType::Int64)?,
@@ -131,7 +133,7 @@ impl Function for FormatFunction {
                 }
                 Ok(string_builder.finish().into())
             }
-            _ => Ok(DataColumn::Constant(DataValue::Null, input_rows)),
+            _ => Ok(DataColumn::Constant(DataValue::String(None), input_rows)),
         }
     }
 }

@@ -13,7 +13,4 @@ SELECT FORMAT(12332.123456, 4, 'zh_CN');
 SELECT FORMAT(12332.123456, 4, '');
 SELECT FORMAT(12332.123456, 4, NULL);
 SELECT FORMAT(100 + 100, 2);
-SELECT FORMAT(number + 10000, 2) from NUMBERS(1);
-SELECT FORMAT(number + 10000, 2) from NUMBERS(3);
-SELECT FORMAT(12332.123456, number) from NUMBERS(2);
-SELECT FORMAT(number, number) from NUMBERS(2);
+SELECT FORMAT(number, number), number from  numbers(3) order by number;
