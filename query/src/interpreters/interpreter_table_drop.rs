@@ -39,8 +39,7 @@ impl DropTableInterpreter {
         let tbl_name = self.plan.table.as_str();
         let tbl = self.ctx.get_table(db_name, tbl_name).await?;
         let keep_last_snapshot = false;
-        tbl.truncate_history(self.ctx.clone(), keep_last_snapshot)
-            .await
+        tbl.optimize(self.ctx.clone(), keep_last_snapshot).await
     }
 }
 

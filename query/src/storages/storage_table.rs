@@ -123,11 +123,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    async fn truncate_history(
-        &self,
-        _ctx: Arc<QueryContext>,
-        _keep_last_snapshot: bool,
-    ) -> Result<()> {
+    async fn optimize(&self, _ctx: Arc<QueryContext>, _keep_last_snapshot: bool) -> Result<()> {
         Ok(())
     }
 }
