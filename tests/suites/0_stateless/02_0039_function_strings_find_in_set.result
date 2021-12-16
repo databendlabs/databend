@@ -1,0 +1,44 @@
+=== const ===
+=== FIND_IN_SET(a, a); ===
+1
+=== FIND_IN_SET(a, ,a); ===
+2
+=== FIND_IN_SET(a, a,); ===
+1
+=== FIND_IN_SET(a, ,,a,); ===
+3
+=== FIND_IN_SET(a, 1,2,a,4,5); ===
+3
+=== FIND_IN_SET(a, 1,2,a,4,5); ===
+3
+=== FIND_IN_SET(a, 1,2,a,); ===
+3
+=== FIND_IN_SET(a, ,1,2,a); ===
+4
+=== FIND_IN_SET(ab, 1,2,ab,3,4,5); ===
+3
+=== FIND_IN_SET(ab, 1,2,ab,); ===
+3
+=== FIND_IN_SET(ab, 1,2,ab); ===
+3
+=== FIND_IN_SET(ab, ,ab); ===
+2
+=== FIND_IN_SET(ab, ab); ===
+1
+=== series ===
+=== FIND_IN_SET(3, number) ===
+0
+0
+0
+1
+0
+=== FIND_IN_SET(number, 1,2,3,4,5) ===
+0
+1
+2
+3
+4
+=== null ===
+NULL
+NULL
+NULL

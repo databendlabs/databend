@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_raft::async_trait::async_trait;
 use async_raft::raft::AppendEntriesRequest;
@@ -22,30 +23,61 @@ use async_raft::raft::InstallSnapshotResponse;
 use async_raft::raft::VoteRequest;
 use async_raft::raft::VoteResponse;
 use async_raft::RaftNetwork;
+use common_containers::ItemManager;
+use common_containers::Pool;
 use common_meta_types::LogEntry;
 use common_meta_types::NodeId;
 use common_tracing::tracing;
+use tonic::client::GrpcService;
 use tonic::transport::channel::Channel;
 
 use crate::proto::meta_service_client::MetaServiceClient;
 use crate::store::MetaRaftStore;
 
+struct ChannelManager {}
+
+#[async_trait]
+impl ItemManager for ChannelManager {
+    type Key = String;
+    type Item = Channel;
+    type Error = tonic::transport::Error;
+
+    async fn build(&self, addr: &Self::Key) -> Result<Channel, tonic::transport::Error> {
+        tonic::transport::Endpoint::new(addr.clone())?
+            .connect()
+            .await
+    }
+
+    async fn check(&self, mut ch: Channel) -> Result<Channel, tonic::transport::Error> {
+        futures::future::poll_fn(|cx| (&mut ch).poll_ready(cx)).await?;
+        Ok(ch)
+    }
+}
+
 pub struct Network {
     sto: Arc<MetaRaftStore>,
+
+    conn_pool: Pool<ChannelManager>,
 }
 
 impl Network {
     pub fn new(sto: Arc<MetaRaftStore>) -> Network {
-        Network { sto }
+        let mgr = ChannelManager {};
+        Network {
+            sto,
+            conn_pool: Pool::new(mgr, Duration::from_millis(50)),
+        }
     }
 
     #[tracing::instrument(level = "info", skip(self), fields(id=self.sto.id))]
     pub async fn make_client(&self, target: &NodeId) -> anyhow::Result<MetaServiceClient<Channel>> {
         let addr = self.sto.get_node_addr(target).await?;
+        let addr = format!("http://{}", addr);
 
-        tracing::info!("connect: target={}: {}", target, addr);
+        tracing::debug!("connect: target={}: {}", target, addr);
 
-        let client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
+        let channel = self.conn_pool.get(&addr).await?;
+        let client = MetaServiceClient::new(channel);
 
         tracing::info!("connected: target={}: {}", target, addr);
 
@@ -99,12 +131,12 @@ impl RaftNetwork<LogEntry> for Network {
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.sto.id))]
     async fn vote(&self, target: NodeId, rpc: VoteRequest) -> anyhow::Result<VoteResponse> {
-        tracing::debug!("vote req to: id={} {:?}", target, rpc);
+        tracing::debug!("vote: req to: target={} {:?}", target, rpc);
 
         let mut client = self.make_client(&target).await?;
         let req = common_tracing::inject_span_to_tonic_request(rpc);
         let resp = client.vote(req).await;
-        tracing::info!("vote: resp from id={} {:?}", target, resp);
+        tracing::info!("vote: resp from target={} {:?}", target, resp);
 
         let resp = resp?;
         let mes = resp.into_inner();

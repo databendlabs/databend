@@ -44,10 +44,6 @@ pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<(
     let mut srv = FlightServer::create(tc.config.clone(), mn);
     srv.start().await?;
 
-    // TODO(xp): some times the MetaNode takes more than 200 ms to startup, with disk-backed store.
-    //           Find out why and using some kind of waiting routine to ensure service is on.
-    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-
     tc.flight_srv = Some(Box::new(srv));
     Ok(())
 }

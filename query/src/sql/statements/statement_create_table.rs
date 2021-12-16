@@ -33,6 +33,8 @@ use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
+use crate::sql::DfStatement;
+use crate::sql::PlanParser;
 use crate::sql::SQLCommon;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -46,6 +48,8 @@ pub struct DfCreateTable {
 
     // The table name after "create .. like" statement.
     pub like: Option<ObjectName>,
+
+    // The query of "create table .. as select" statement.
     pub query: Option<Box<DfQueryStatement>>,
 }
 
@@ -53,9 +57,26 @@ pub struct DfCreateTable {
 impl AnalyzableStatement for DfCreateTable {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let table_meta = self.table_meta(ctx.clone()).await?;
+        let mut table_meta = self.table_meta(ctx.clone()).await?;
         let if_not_exists = self.if_not_exists;
-        let (db, table) = Self::resolve_table(ctx, &self.name)?;
+        let (db, table) = Self::resolve_table(ctx.clone(), &self.name)?;
+
+        let as_select_plan_node = match &self.query {
+            // CTAS
+            Some(query_statement) => {
+                let statements = vec![DfStatement::Query(query_statement.clone())];
+                let select_plan = PlanParser::build_plan(statements, ctx).await?;
+
+                // If the current table schema is empty, for example 'CREATE TABLE t1 AS SELECT * FROM t2',
+                // we use the schema from 'AS SELECT' query.
+                if table_meta.schema.fields().is_empty() {
+                    table_meta.schema = select_plan.schema();
+                }
+                Some(Box::new(select_plan))
+            }
+            // Query doesn't contain 'As Select' statement
+            None => None,
+        };
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::CreateTable(CreateTablePlan {
@@ -63,6 +84,7 @@ impl AnalyzableStatement for DfCreateTable {
                 db,
                 table,
                 table_meta,
+                as_select: as_select_plan_node,
             }),
         )))
     }

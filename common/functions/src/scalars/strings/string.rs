@@ -24,12 +24,14 @@ use crate::scalars::ConcatWsFunction;
 use crate::scalars::EltFunction;
 use crate::scalars::ExportSetFunction;
 use crate::scalars::FieldFunction;
+use crate::scalars::FindInSetFunction;
 use crate::scalars::HexFunction;
 use crate::scalars::InsertFunction;
 use crate::scalars::InstrFunction;
 use crate::scalars::LTrimFunction;
 use crate::scalars::LeftFunction;
 use crate::scalars::LeftPadFunction;
+use crate::scalars::LengthFunction;
 use crate::scalars::LocateFunction;
 use crate::scalars::OctFunction;
 use crate::scalars::OctetLengthFunction;
@@ -92,5 +94,7 @@ impl StringFunction {
         factory.register("ord", OrdFunction::desc());
         factory.register("bin", BinFunction::desc());
         factory.register("export_set", ExportSetFunction::desc());
+        factory.register("find_in_set", FindInSetFunction::desc());
+        factory.register("length", LengthFunction::desc());
     }
 }

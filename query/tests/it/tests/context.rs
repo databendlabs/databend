@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_embedded::MetaEmbedded;
-use common_meta_types::AuthType;
 use common_meta_types::NodeInfo;
+use common_meta_types::PasswordType;
 use common_meta_types::UserInfo;
 use databend_query::catalogs::CatalogContext;
 use databend_query::clusters::Cluster;
@@ -39,7 +39,7 @@ pub fn create_query_context() -> Result<Arc<QueryContext>> {
         "test_user".to_string(),
         "%".to_string(),
         Vec::from("pass"),
-        AuthType::Sha256,
+        PasswordType::Sha256,
     );
     dummy_session.set_current_user(user_info);
 

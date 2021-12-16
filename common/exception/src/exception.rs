@@ -399,6 +399,12 @@ impl From<common_arrow::arrow::error::ArrowError> for ErrorCode {
     }
 }
 
+impl From<Box<bincode::ErrorKind>> for ErrorCode {
+    fn from(error: Box<bincode::ErrorKind>) -> Self {
+        ErrorCode::from_std_error(error)
+    }
+}
+
 impl From<serde_json::Error> for ErrorCode {
     fn from(error: serde_json::Error) -> Self {
         ErrorCode::from_std_error(error)

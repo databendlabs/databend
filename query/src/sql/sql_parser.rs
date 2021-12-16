@@ -21,11 +21,12 @@ use std::time::Instant;
 
 use common_exception::ErrorCode;
 use common_io::prelude::OptionsDeserializer;
-use common_meta_types::AuthType;
 use common_meta_types::Credentials;
 use common_meta_types::FileFormat;
+use common_meta_types::PasswordType;
 use common_meta_types::StageParams;
-use common_meta_types::UserPrivilege;
+use common_meta_types::UserIdentity;
+use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use common_planners::ExplainType;
 use metrics::histogram;
@@ -72,6 +73,7 @@ use crate::sql::statements::DfSetVariable;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfShowDatabases;
 use crate::sql::statements::DfShowFunctions;
+use crate::sql::statements::DfShowGrants;
 use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
 use crate::sql::statements::DfShowSettings;
@@ -200,25 +202,7 @@ impl<'a> DfParser<'a> {
                     Keyword::SHOW => {
                         self.parser.next_token();
                         if self.consume_token("TABLES") {
-                            let tok = self.parser.next_token();
-                            match &tok {
-                                Token::EOF | Token::SemiColon => {
-                                    Ok(DfStatement::ShowTables(DfShowTables::All))
-                                }
-                                Token::Word(w) => match w.keyword {
-                                    Keyword::LIKE => Ok(DfStatement::ShowTables(
-                                        DfShowTables::Like(self.parser.parse_identifier()?),
-                                    )),
-                                    Keyword::WHERE => Ok(DfStatement::ShowTables(
-                                        DfShowTables::Where(self.parser.parse_expr()?),
-                                    )),
-                                    Keyword::FROM | Keyword::IN => Ok(DfStatement::ShowTables(
-                                        DfShowTables::FromOrIn(self.parser.parse_object_name()?),
-                                    )),
-                                    _ => self.expected("like or where", tok),
-                                },
-                                _ => self.expected("like or where", tok),
-                            }
+                            self.parse_show_tables()
                         } else if self.consume_token("DATABASES") {
                             self.parse_show_databases()
                         } else if self.consume_token("SETTINGS") {
@@ -231,6 +215,8 @@ impl<'a> DfParser<'a> {
                             Ok(DfStatement::ShowMetrics(DfShowMetrics))
                         } else if self.consume_token("USERS") {
                             Ok(DfStatement::ShowUsers(DfShowUsers))
+                        } else if self.consume_token("GRANTS") {
+                            self.parse_show_grants()
                         } else if self.consume_token("FUNCTIONS") {
                             self.parse_show_functions()
                         } else {
@@ -343,6 +329,27 @@ impl<'a> DfParser<'a> {
 
         let statement = Box::new(self.parse_query()?);
         Ok(DfStatement::Explain(DfExplain { typ, statement }))
+    }
+
+    // parse show tables.
+    fn parse_show_tables(&mut self) -> Result<DfStatement, ParserError> {
+        let tok = self.parser.next_token();
+        match &tok {
+            Token::EOF | Token::SemiColon => Ok(DfStatement::ShowTables(DfShowTables::All)),
+            Token::Word(w) => match w.keyword {
+                Keyword::LIKE => Ok(DfStatement::ShowTables(DfShowTables::Like(
+                    self.parser.parse_identifier()?,
+                ))),
+                Keyword::WHERE => Ok(DfStatement::ShowTables(DfShowTables::Where(
+                    self.parser.parse_expr()?,
+                ))),
+                Keyword::FROM | Keyword::IN => Ok(DfStatement::ShowTables(DfShowTables::FromOrIn(
+                    self.parser.parse_object_name()?,
+                ))),
+                _ => self.expected("like or where", tok),
+            },
+            _ => self.expected("like or where", tok),
+        }
     }
 
     // parse show databases where database = xxx or where database
@@ -650,13 +657,13 @@ impl<'a> DfParser<'a> {
             String::from("%")
         };
 
-        let (auth_type, password) = self.get_auth_option()?;
+        let (password_type, password) = self.get_auth_option()?;
 
         let create = DfCreateUser {
             if_not_exists,
             name,
             hostname,
-            auth_type,
+            password_type,
             password,
         };
 
@@ -682,13 +689,13 @@ impl<'a> DfParser<'a> {
             String::from("")
         };
 
-        let (auth_type, password) = self.get_auth_option()?;
+        let (password_type, password) = self.get_auth_option()?;
 
         let alter = DfAlterUser {
             if_current_user,
             name,
             hostname,
-            new_auth_type: auth_type,
+            new_password_type: password_type,
             new_password: password,
         };
 
@@ -711,34 +718,34 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::DropUser(drop))
     }
 
-    fn get_auth_option(&mut self) -> Result<(AuthType, String), ParserError> {
+    fn get_auth_option(&mut self) -> Result<(PasswordType, String), ParserError> {
         let exist_not_identified = self.parser.parse_keyword(Keyword::NOT);
         let exist_identified = self.consume_token("IDENTIFIED");
         let exist_with = self.consume_token("WITH");
 
         if exist_not_identified || !exist_identified {
-            Ok((AuthType::None, String::from("")))
+            Ok((PasswordType::None, String::from("")))
         } else {
-            let auth_type = if exist_with {
+            let password_type = if exist_with {
                 match self.parser.parse_literal_string()?.as_str() {
-                    "no_password" => AuthType::None,
-                    "plaintext_password" => AuthType::PlainText,
-                    "sha256_password" => AuthType::Sha256,
-                    "double_sha1_password" => AuthType::DoubleSha1,
+                    "no_password" => PasswordType::None,
+                    "plaintext_password" => PasswordType::PlainText,
+                    "sha256_password" => PasswordType::Sha256,
+                    "double_sha1_password" => PasswordType::DoubleSha1,
                     unexpected => return parser_err!(format!("Expected auth type {}, found: {}", "'no_password'|'plaintext_password'|'sha256_password'|'double_sha1_password'", unexpected))
                 }
             } else {
-                AuthType::Sha256
+                PasswordType::Sha256
             };
 
-            if AuthType::None == auth_type {
-                Ok((AuthType::None, String::from("")))
+            if PasswordType::None == password_type {
+                Ok((PasswordType::None, String::from("")))
             } else if self.parser.parse_keyword(Keyword::BY) {
                 let password = self.parser.parse_literal_string()?;
                 if password.is_empty() {
                     return parser_err!("Missing password");
                 }
-                Ok((auth_type, password))
+                Ok((password_type, password))
             } else {
                 return parser_err!("Expected keyword BY");
             }
@@ -902,6 +909,21 @@ impl<'a> DfParser<'a> {
         }
     }
 
+    fn parse_show_grants(&mut self) -> Result<DfStatement, ParserError> {
+        // SHOW GRANTS
+        if !self.consume_token("FOR") {
+            return Ok(DfStatement::ShowGrants(DfShowGrants {
+                user_identity: None,
+            }));
+        }
+
+        // SHOW GRANTS FOR 'u1'@'%'
+        let (username, hostname) = self.parse_user_identity()?;
+        Ok(DfStatement::ShowGrants(DfShowGrants {
+            user_identity: Some(UserIdentity { username, hostname }),
+        }))
+    }
+
     fn parse_truncate(&mut self) -> Result<DfStatement, ParserError> {
         self.parser.next_token();
         match self.parser.next_token() {
@@ -917,8 +939,8 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    fn parse_privileges(&mut self) -> Result<UserPrivilege, ParserError> {
-        let mut privileges = UserPrivilege::empty();
+    fn parse_privileges(&mut self) -> Result<UserPrivilegeSet, ParserError> {
+        let mut privileges = UserPrivilegeSet::empty();
         loop {
             match self.parser.next_token() {
                 Token::Word(w) => match w.keyword {

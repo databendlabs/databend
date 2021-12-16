@@ -1,0 +1,33 @@
+name: 'Build Release'
+description: 'Build with release profile'
+inputs:
+  github_token:
+    description: "Github Token"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - uses: arduino/setup-protoc@v1
+      with:
+        version: '3.x'
+        repo-token: ${{ inputs.github_token }}
+
+    - uses: actions-rs/toolchain@v1
+      with:
+        target: ${{ matrix.config.target }}
+        components: rustfmt, clippy
+
+    - uses: Swatinem/rust-cache@v1
+
+    - name: Build Databend
+      uses: actions-rs/cargo@v1
+      with:
+        command: build
+        use-cross: ${{ matrix.config.cross }}
+        args: --release --target ${{ matrix.config.target }}
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: release-${{ github.sha }}-${{ matrix.config.os }}-${{ matrix.config.target }}
+        path: ./target/${{ matrix.config.target }}/release/databend-*
