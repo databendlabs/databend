@@ -78,7 +78,10 @@ impl SessionManagerBuilder {
         SessionManagerBuilder::inner_create(new_config)
     }
 
-    pub fn http_handler_tls_server_root_ca_cert(self, value: impl Into<String>) -> SessionManagerBuilder {
+    pub fn http_handler_tls_server_root_ca_cert(
+        self,
+        value: impl Into<String>,
+    ) -> SessionManagerBuilder {
         let mut new_config = self.config;
         new_config.query.http_handler_tls_server_root_ca_cert = value.into();
         SessionManagerBuilder::inner_create(new_config)

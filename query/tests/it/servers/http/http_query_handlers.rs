@@ -24,6 +24,7 @@ use databend_query::servers::http::v1::make_state_uri;
 use databend_query::servers::http::v1::query_route;
 use databend_query::servers::http::v1::ExecuteStateName;
 use databend_query::servers::http::v1::QueryResponse;
+use databend_query::servers::HttpHandler;
 use databend_query::sessions::SessionManager;
 use hyper::header;
 use poem::http::Method;
@@ -35,10 +36,17 @@ use poem::Request;
 use poem::Response;
 use poem::Route;
 use pretty_assertions::assert_eq;
-use databend_query::servers::HttpHandler;
 
+use crate::tests::tls_constants::TEST_CA_CERT;
+use crate::tests::tls_constants::TEST_CN_NAME;
+use crate::tests::tls_constants::TEST_SERVER_CERT;
+use crate::tests::tls_constants::TEST_SERVER_KEY;
+use crate::tests::tls_constants::TEST_TLS_CA_CERT;
+use crate::tests::tls_constants::TEST_TLS_CLIENT_IDENTITY;
+use crate::tests::tls_constants::TEST_TLS_CLIENT_PASSWORD;
+use crate::tests::tls_constants::TEST_TLS_SERVER_CERT;
+use crate::tests::tls_constants::TEST_TLS_SERVER_KEY;
 use crate::tests::SessionManagerBuilder;
-use crate::tests::tls_constants::{TEST_CA_CERT, TEST_CN_NAME, TEST_SERVER_CERT, TEST_SERVER_KEY, TEST_TLS_CA_CERT, TEST_TLS_CLIENT_IDENTITY, TEST_TLS_CLIENT_PASSWORD, TEST_TLS_SERVER_CERT, TEST_TLS_SERVER_KEY};
 
 // TODO(youngsofun): add test for
 // 1. query fail after started
@@ -327,9 +335,7 @@ async fn test_http_handler_tls_server_failed_case_1() -> Result<()> {
     let json = serde_json::json!({"sql": sql.to_string()});
 
     // kick off
-    let client = reqwest::Client::builder()
-        .build()
-        .unwrap();
+    let client = reqwest::Client::builder().build().unwrap();
     let resp = client.post(&url).json(&json).send().await;
     assert!(resp.is_err(), "{:?}", resp.err());
     Ok(())
