@@ -171,6 +171,7 @@ impl DataColumn {
         }
     }
 
+    // Note: Don't call this inside a loop, it's slow.
     #[inline]
     pub fn try_get(&self, index: usize) -> Result<DataValue> {
         match self {

@@ -110,6 +110,7 @@ impl DfCreateTable {
             schema,
             engine,
             options: self.options.clone(),
+            ..Default::default()
         })
     }
 

@@ -25,6 +25,7 @@ use crate::scalars::EltFunction;
 use crate::scalars::ExportSetFunction;
 use crate::scalars::FieldFunction;
 use crate::scalars::FindInSetFunction;
+use crate::scalars::FormatFunction;
 use crate::scalars::HexFunction;
 use crate::scalars::InsertFunction;
 use crate::scalars::InstrFunction;
@@ -96,5 +97,6 @@ impl StringFunction {
         factory.register("export_set", ExportSetFunction::desc());
         factory.register("find_in_set", FindInSetFunction::desc());
         factory.register("length", LengthFunction::desc());
+        factory.register("format", FormatFunction::desc());
     }
 }
