@@ -949,7 +949,7 @@ impl<'a> DfParser<'a> {
         match self.parser.next_token() {
             Token::Word(word) if word.value.to_lowercase() == value => Ok(true),
             Token::EOF => Ok(false),
-            t @ _ => self.expected("expected purge", t),
+            t => self.expected("expected purge", t),
         }
     }
 
