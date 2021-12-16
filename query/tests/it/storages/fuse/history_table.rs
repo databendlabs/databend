@@ -226,7 +226,7 @@ async fn test_fuse_history_truncate_in_drop_stmt() -> Result<()> {
     // let's Drop
     let qry = format!("drop table '{}'.'{}'", db, tbl);
     execute_command(qry.as_str(), ctx.clone()).await?;
-    // there should be no files left on test root
+    // there should be no files left inside test root (dirs are kept, though)
     for entry in WalkDir::new(root) {
         let entry = entry.unwrap();
         if entry.file_type().is_file() {

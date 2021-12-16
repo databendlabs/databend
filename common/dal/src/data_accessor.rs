@@ -57,10 +57,11 @@ pub trait DataAccessor: Send + Sync {
         let mut input_stream = self.get_input_stream(location, None)?;
         let mut buffer = vec![];
         input_stream.read_to_end(&mut buffer).await.map_err(|e| {
+            let msg = e.to_string();
             if e.kind() == ErrorKind::NotFound {
-                ErrorCode::DALPathNotFound(e.to_string())
+                ErrorCode::DALPathNotFound(msg)
             } else {
-                ErrorCode::DALTransportError(e.to_string())
+                ErrorCode::DALTransportError(msg)
             }
         })?;
         Ok(buffer)

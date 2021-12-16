@@ -40,8 +40,8 @@ use crate::storages::fuse::io::snapshot_history;
 use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
-use crate::storages::fuse::table::check_table_compatibility;
-use crate::storages::fuse::table_functions::table_arg_util::parse_truncate_history_table_args;
+use crate::storages::fuse::table::is_fuse_table;
+use crate::storages::fuse::table_functions::table_arg_util::parse_func_truncate_history_args;
 use crate::storages::fuse::table_functions::table_arg_util::string_literal;
 use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::Table;
@@ -97,7 +97,7 @@ impl FuseTruncateHistory {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let (arg_database_name, arg_table_name, all) =
-            parse_truncate_history_table_args(&table_args)?;
+            parse_func_truncate_history_args(&table_args)?;
         Ok(Self::new(
             database_name,
             table_func_name,
@@ -120,7 +120,7 @@ impl FuseTruncateHistory {
             )
             .await?;
 
-        if let Err(_) = check_table_compatibility(tbl.as_ref()) {
+        if !is_fuse_table(tbl.as_ref()) {
             return Ok(None);
         }
 
@@ -208,7 +208,7 @@ impl FuseTruncateHistory {
         for x in locations {
             let res: SegmentInfo = io::read_obj(data_accessor.as_ref(), x).await?;
             for block_meta in res.blocks {
-                result.insert(block_meta.location.location);
+                result.insert(block_meta.location.path);
             }
         }
         Ok(result)

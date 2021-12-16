@@ -58,8 +58,15 @@ impl FuseTable {
 
             let tbl_info = &self.table_info;
             let database_name = _truncate_plan.db;
-            let func_hist_trunc =
-                FuseTruncateHistory::new("", "", 0, database_name, tbl_info.name.clone(), false);
+            let truncate_all = false;
+            let func_hist_trunc = FuseTruncateHistory::new(
+                "",
+                "",
+                0,
+                database_name,
+                tbl_info.name.clone(),
+                truncate_all,
+            );
             func_hist_trunc.truncate_history(ctx.clone()).await?;
 
             return Ok(());
