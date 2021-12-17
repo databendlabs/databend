@@ -12,8 +12,8 @@ doctest = false
 test = false
 
 [dependencies]
-common-exception = {path = "../../exception"}
-common-tracing = {path = "../../tracing"}
+common-exception = { path = "../../exception" }
+common-tracing = { path = "../../tracing" }
 
 anyhow = "1.0.51"
 async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.14.1" }
@@ -21,12 +21,10 @@ byteorder = "1.4.3"
 lazy_static = "1.4.0"
 serde = { version = "1.0.132", features = ["derive"] }
 serde_json = "1.0.73"
-sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1",default-features = false }
+sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
 tempfile = "3.2.0"
 
 
 [dev-dependencies]
-common-base = {path = "../../base" }
-common-meta-types = {path = "../types"}
-pretty_assertions = "1.0.0"
-
+common-base = { path = "../../base" }
+common-meta-types = { path = "../types" }

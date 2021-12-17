@@ -26,8 +26,3 @@ tokio = { version = "1.15.0", features = ["macros", "rt", "rt-multi-thread", "sy
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 serde = { version = "1.0.132", features = ["derive"] }
 poem = { version = "1.2.2", features = ["rustls"] }
-
-
-[dev-dependencies]
-pretty_assertions = "1.0.0"
-

@@ -12,10 +12,10 @@ test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-arrow = {path = "../arrow"}
-common-base = {path = "../base" }
-common-exception= {path = "../exception"}
-common-tracing = {path = "../tracing" }
+common-arrow = { path = "../arrow" }
+common-base = { path = "../base" }
+common-exception = { path = "../exception" }
+common-tracing = { path = "../tracing" }
 
 # Github dependencies
 
@@ -31,9 +31,6 @@ hyper = "0.14.16"
 lazy_static = "1.4.0"
 trust-dns-resolver = { version = "0.20.3", features = ["system-config"] }
 async-trait = "0.1.52"
-
-[dev-dependencies]
-pretty_assertions = "1.0.0"
 
 [build-dependencies]
 
