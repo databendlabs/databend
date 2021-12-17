@@ -110,7 +110,7 @@ macro_rules! build_exceptions {
                         code: $code,
                         display_text: display_text.into(),
                         cause: None,
-                        backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
+                        backtrace: None,
                     }
                 }
                 paste::item! {
@@ -381,7 +381,7 @@ impl From<anyhow::Error> for ErrorCode {
             code: 1002,
             display_text: format!("{}, source: {:?}", error, error.source()),
             cause: Some(Box::new(OtherErrors::AnyHow { error })),
-            backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
+            backtrace: None,
         }
     }
 }
@@ -491,7 +491,7 @@ impl ErrorCode {
             code: 1002,
             display_text: format!("{}", error),
             cause: None,
-            backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::new()))),
+            backtrace: None,
         }
     }
 
