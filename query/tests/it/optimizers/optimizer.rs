@@ -56,7 +56,7 @@ fn test_literal_false_filter() -> Result<()> {
     let expect = "\
         Projection: number:UInt64\
         \n  Filter: false\
-        \n    ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0]]";
+        \n    ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0], filters: [((1 + 2) = 2)]]";
 
     assert_eq!(actual, expect);
     Ok(())
@@ -77,7 +77,7 @@ fn test_skip_read_data_source() -> Result<()> {
                 expect:"\
                 Projection: number:UInt64\
                 \n  Filter: false\
-                \n    ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0]]",
+                \n    ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0], filters: [((1 + 2) = 2)]]",
             },
             Test {
                 name: "Limit with zero should skip the scan",
@@ -86,7 +86,7 @@ fn test_skip_read_data_source() -> Result<()> {
                 Limit: 0\
                 \n  Projection: number:UInt64\
                 \n    Filter: true\
-                \n      ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0]]",
+                \n      ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0], filters: [true]]",
             },
             Test {
                 name: "Having with 'having 1+1=3' should skip the scan",

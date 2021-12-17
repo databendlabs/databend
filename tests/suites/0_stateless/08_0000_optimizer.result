@@ -8,4 +8,4 @@ Projection: max((number + 1)) as c1:UInt64, ((number % 3) + 1) as c2:UInt16
 projection push down: push (name and value) to read datasource
 Projection: a:Int32
   Filter: (b > 10)
-    ReadDataSource: scan partitions: [0], scan schema: [a:Int32, b:Int32], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0, 1]]
+    ReadDataSource: scan partitions: [0], scan schema: [a:Int32, b:Int32], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0, 1], filters: [(b > 10)]]
