@@ -64,7 +64,7 @@ fn test_lower_function() -> Result<()> {
             display: "lcase",
             nullable: true,
             arg_names: vec!["a"],
-            columns: vec![Series::new(Vec::<Option<Vec<u8>>>::from(vec![None])).into()],
+            columns: vec![Series::new(vec![Option::<Vec<u8>>::None]).into()],
             func: LowerFunction::try_create("lcase")?,
             expect: DataColumn::Constant(DataValue::String(None), 1),
             error: "",
