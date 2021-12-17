@@ -48,10 +48,7 @@ pub async fn debug_pprof_handler(
             Profiling::create(duration, i32::from(PProfRequest::default_frequency()))
         }
     };
-    let body = profile
-        .dump_flamegraph()
-        .await
-        .map_err(InternalServerError)?;
+    let body = profile.dump_proto().await.map_err(InternalServerError)?;
 
     tracing::info!("finished pprof request");
     Ok(body)
