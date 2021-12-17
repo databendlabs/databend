@@ -68,7 +68,7 @@ cargo-license = "0.4.2"
 cargo_metadata = "0.14.1"
 chrono = "0.4.19"
 chrono-tz = "0.6.1"
-clap = { version = "3.0.0-rc.5", features = ["derive", "env"] }
+clap = { version = "3.0.0-rc.7", features = ["derive", "env"] }
 crossbeam = "0.8.1"
 crossbeam-queue = "0.3.2"
 ctrlc = { version = "3.2.1", features = ["termination"] }
@@ -79,7 +79,7 @@ hyper = "0.14.16"
 indexmap = "1.7.0"
 lazy_static = "1.4.0"
 maplit = "1.0.2"
-metrics = "0.17.0"
+metrics = "0.17.1"
 nom = "7.1.0"
 num = "0.4.0"
 num_cpus = "1.13.0"

@@ -30,8 +30,8 @@ common-meta-raft-store = { path = "../common/meta/raft-store" }
 colored = "2.0.0"
 comfy-table = "5.0.0"
 dirs = "4.0.0"
-clap = { version = "3.0.0-rc.5", features = ["env"] }
-clap_generate = "3.0.0-rc.5"
+clap = { version = "3.0.0-rc.7", features = ["env"] }
+clap_generate = "3.0.0-rc.7"
 dyn-clone = "1.0.4"
 flate2 = "1.0.22"
 handlebars = "4.1.6"
