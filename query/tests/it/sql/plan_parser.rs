@@ -180,7 +180,7 @@ fn test_plan_parser() -> Result<()> {
             \n            AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]\
             \n              Expression: (number % 3):UInt8, (number + 1):UInt64 (Before GroupBy)\
             \n                Filter: (number > 1)\
-            \n                  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+            \n                  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [(number > 1)]]",
             error: "",
         },
         Test {
@@ -195,7 +195,7 @@ fn test_plan_parser() -> Result<()> {
             expect: "\
             Projection: number:UInt64\
             \n  Filter: NULL\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [NULL]]",
             error: "",
         },
         Test {
@@ -204,7 +204,7 @@ fn test_plan_parser() -> Result<()> {
             expect: "\
             Projection: number:UInt64\
             \n  Filter: (NULL AND true)\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [(NULL AND true)]]",
             error: "",
         },
         Test {
