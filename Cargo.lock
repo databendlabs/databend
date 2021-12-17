@@ -1269,6 +1269,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.13.0",
  "bincode",
+ "bstr",
  "bumpalo",
  "bytes",
  "common-arrow",

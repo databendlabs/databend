@@ -34,6 +34,7 @@ use crate::scalars::LeftFunction;
 use crate::scalars::LeftPadFunction;
 use crate::scalars::LengthFunction;
 use crate::scalars::LocateFunction;
+use crate::scalars::LowerFunction;
 use crate::scalars::OctFunction;
 use crate::scalars::OctetLengthFunction;
 use crate::scalars::OrdFunction;
@@ -98,5 +99,7 @@ impl StringFunction {
         factory.register("find_in_set", FindInSetFunction::desc());
         factory.register("length", LengthFunction::desc());
         factory.register("format", FormatFunction::desc());
+        factory.register("lower", LowerFunction::desc());
+        factory.register("lcase", LowerFunction::desc());
     }
 }

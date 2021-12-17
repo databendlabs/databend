@@ -12,11 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod locate;
-mod lower;
-mod substring;
-mod trim;
+use bstr::ByteSlice;
 
-mod utils;
+use super::string2string::String2StringFunction;
+use super::string2string::StringOperator;
 
-pub use utils::*;
+#[derive(Clone, Default)]
+pub struct Lower;
+
+impl StringOperator for Lower {
+    #[inline]
+    fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
+        buffer.copy_from_slice(&s.to_lowercase());
+
+        s.len()
+    }
+}
+
+pub type LowerFunction = String2StringFunction<Lower>;

@@ -38,6 +38,7 @@ hex = "0.4.3"
 base64 = "0.13.0"
 itertools = "0.10.3"
 num-format = "0.4"
+bstr = "0.2.17"
 
 [dev-dependencies]
 bumpalo = "3.8.0"
