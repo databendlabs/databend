@@ -12,80 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
-
-use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
-use common_datavalues::DataSchema;
-use common_datavalues::DataType;
-use common_exception::ErrorCode;
-use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
-use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::strings::String2StringFunction;
+use crate::scalars::strings::StringOperator;
 
-#[derive(Clone)]
-pub struct Md5HashFunction {
-    display_name: String,
-}
+#[derive(Clone, Default)]
+pub struct Md5 {}
 
-impl Md5HashFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(Md5HashFunction {
-            display_name: display_name.to_string(),
-        }))
+impl StringOperator for Md5 {
+    #[inline]
+    fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
+        // TODO md5 lib doesn't allow encode into buffer...
+        buffer.copy_from_slice(format!("{:x}", md5::compute(s)).as_ref());
+        32
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+    fn estimate_bytes(&self, array: &DFStringArray) -> usize {
+        array.len() * 32
     }
 }
 
-impl Function for Md5HashFunction {
-    fn name(&self) -> &str {
-        &*self.display_name
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
-    }
-
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if args[0] == DataType::String || args[0] == DataType::Null {
-            Ok(DataType::String)
-        } else {
-            Err(ErrorCode::IllegalDataType(format!(
-                "Expected string type, but got {}",
-                args[0]
-            )))
-        }
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
-    }
-
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        let opt_iter = columns[0]
-            .column()
-            .to_minimal_array()?
-            .cast_with_type(&DataType::String)?;
-
-        let opt_iter = opt_iter
-            .string()?
-            .into_iter()
-            .map(|vo| vo.map(|v| format!("{:x}", md5::compute(v))));
-
-        let result = DFStringArray::new_from_opt_iter(opt_iter);
-        let column: DataColumn = result.into();
-        Ok(column.resize_constant(columns[0].column().len()))
-    }
-}
-
-impl fmt::Display for Md5HashFunction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.display_name)
-    }
-}
+pub type Md5HashFunction = String2StringFunction<Md5>;
