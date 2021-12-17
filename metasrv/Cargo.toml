@@ -74,8 +74,6 @@ poem = { version = "1.2.2", features = ["rustls"] }
 common-meta-api = { path = "../common/meta/api" }
 
 pretty_assertions = "1.0.0"
-test-env-log = "0.2.8"
-flaky_test = "0.1.0"
 reqwest = { version = "0.11.7", features = ["json"] }
 
 [build-dependencies]

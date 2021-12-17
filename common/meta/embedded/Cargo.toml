@@ -13,15 +13,15 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-common-arrow = {path = "../../arrow" }
-common-base = {path = "../../base" }
-common-datavalues = {path = "../../datavalues" }
-common-exception = {path = "../../exception" }
-common-meta-api = {path = "../api" }
-common-meta-raft-store = {path = "../raft-store" }
-common-meta-sled-store = {path = "../sled-store" }
-common-meta-types = {path = "../types" }
-common-tracing = {path = "../../tracing" }
+common-arrow = { path = "../../arrow" }
+common-base = { path = "../../base" }
+common-datavalues = { path = "../../datavalues" }
+common-exception = { path = "../../exception" }
+common-meta-api = { path = "../api" }
+common-meta-raft-store = { path = "../raft-store" }
+common-meta-sled-store = { path = "../sled-store" }
+common-meta-types = { path = "../types" }
+common-tracing = { path = "../../tracing" }
 
 
 # Crates.io dependencies
@@ -35,5 +35,3 @@ tempfile = "3.2.0"
 
 [dev-dependencies]
 anyhow = "1.0.51"
-pretty_assertions = "1.0.0"
-

@@ -11,11 +11,10 @@ doctest = false
 test = false
 
 [dependencies]
-common-base = {path = "../base"}
-common-datablocks = {path = "../datablocks"}
-common-exception = {path = "../exception"}
-common-infallible = {path = "../infallible"}
-common-metrics = {path = "../metrics"}
+common-base = { path = "../base" }
+common-datablocks = { path = "../datablocks" }
+common-exception = { path = "../exception" }
+common-infallible = { path = "../infallible" }
 
 async-compat = "0.2.1"
 async-trait = "0.1.52"
@@ -31,7 +30,6 @@ rusoto_sts = "0.47.0"
 rusoto_credential = "0.47.0"
 
 [dev-dependencies]
-common-metrics= {path = "../metrics"}
-pretty_assertions = "1.0.0"
+common-metrics = { path = "../metrics" }
 rand = "0.8.4"
 tempfile = "3.2.0"

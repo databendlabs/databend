@@ -546,7 +546,6 @@ dependencies = [
  "num-format",
  "portpicker",
  "predicates",
- "pretty_assertions",
  "reqwest",
  "run_script",
  "rustyline",
@@ -1088,7 +1087,6 @@ dependencies = [
  "futures",
  "poem",
  "pprof",
- "pretty_assertions",
  "serde",
  "tokio",
  "uuid",
@@ -1174,7 +1172,6 @@ dependencies = [
  "common-metrics",
  "futures",
  "metrics",
- "pretty_assertions",
  "rand 0.8.4",
  "reqwest",
  "rusoto_core",
@@ -1254,7 +1251,6 @@ dependencies = [
  "hyper",
  "jwt-simple",
  "lazy_static",
- "pretty_assertions",
  "prost",
  "serde",
  "serde_json",
@@ -1385,7 +1381,6 @@ dependencies = [
  "futures",
  "lazy_static",
  "maplit",
- "pretty_assertions",
  "tempfile",
 ]
 
@@ -1406,9 +1401,7 @@ dependencies = [
  "derive_more",
  "futures",
  "hyper",
- "jwt-simple",
  "lazy_static",
- "pretty_assertions",
  "prost",
  "rand 0.8.4",
  "serde",
@@ -1457,7 +1450,6 @@ dependencies = [
  "common-meta-types",
  "common-tracing",
  "lazy_static",
- "pretty_assertions",
  "serde",
  "serde_json",
  "sled",
@@ -1474,7 +1466,6 @@ dependencies = [
  "derive_more",
  "enumflags2",
  "maplit",
- "pretty_assertions",
  "serde",
  "serde_json",
 ]
@@ -1526,7 +1517,6 @@ dependencies = [
  "csv-async",
  "futures",
  "pin-project-lite",
- "pretty_assertions",
  "tempfile",
  "tokio-stream",
 ]
@@ -2012,7 +2002,6 @@ dependencies = [
  "common-metrics",
  "common-tracing",
  "derive_more",
- "flaky_test",
  "futures",
  "indexmap",
  "lazy_static",
@@ -2031,7 +2020,6 @@ dependencies = [
  "sha2 0.10.0",
  "sled",
  "tempfile",
- "test-env-log",
  "thiserror",
  "threadpool",
  "tokio-stream",
@@ -2087,8 +2075,6 @@ dependencies = [
  "crossbeam-queue 0.3.2",
  "ctrlc",
  "dyn-clone",
- "flaky_test",
- "float-cmp",
  "futures",
  "headers",
  "hyper",
@@ -2547,17 +2533,6 @@ name = "fixedbitset"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "398ea4fabe40b9b0d885340a2a991a44c8a645624075ad966d21f88688e2b69e"
-
-[[package]]
-name = "flaky_test"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "479cde5eb168cf5a056dd98f311cbfab7494c216394e4fb9eba0336827a8db93"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
 
 [[package]]
 name = "flatbuffers"
@@ -6567,17 +6542,6 @@ name = "termtree"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13a4ec180a2de59b57434704ccfad967f789b12737738798fa08798cd5824c16"
-
-[[package]]
-name = "test-env-log"
-version = "0.2.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "877189d680101869f65ef94168105d6c188b3a143c13a2d42cf8a09c4c704f8a"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
 
 [[package]]
 name = "textwrap"

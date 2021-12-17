@@ -64,7 +64,6 @@ csv = "1.1.6"
 http = "0.2.5"
 
 [dev-dependencies]
-pretty_assertions = "1.0.0"
 tempfile = "3.2.0"
 assert_cmd = "2.0.2"
 predicates = "2.1.0"
