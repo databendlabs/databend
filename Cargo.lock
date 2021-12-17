@@ -2306,9 +2306,9 @@ dependencies = [
 
 [[package]]
 name = "ed25519-compact"
-version = "0.1.11"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1f45ef578ef75efffba301628066d951042f6e988f21f8b548928468ba5877b"
+checksum = "3ef48e534dc9c84a7194ee4831546acb5517bf52b23d29f31d6a143f49c2685d"
 dependencies = [
  "ct-codecs",
  "getrandom 0.2.3",
@@ -3502,9 +3502,9 @@ dependencies = [
 
 [[package]]
 name = "jwt-simple"
-version = "0.10.7"
+version = "0.10.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "226e04c4fe02806153a9b54b0d19c03dbf10180d86f787a7128c7258f15b433d"
+checksum = "62b56547b8cb883de90ff60e684b18ac4c79244574fa73617217e5d3c6cdfb9c"
 dependencies = [
  "anyhow",
  "coarsetime",
@@ -5884,9 +5884,9 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "serde"
-version = "1.0.131"
+version = "1.0.132"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4ad69dfbd3e45369132cc64e6748c2d65cdfb001a2b1c232d128b4ad60561c1"
+checksum = "8b9875c23cf305cd1fd7eb77234cbb705f21ea6a72c637a5c6db5fe4b8e7f008"
 dependencies = [
  "serde_derive",
 ]
@@ -5915,9 +5915,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.131"
+version = "1.0.132"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b710a83c4e0dff6a3d511946b95274ad9ca9e5d3ae497b63fda866ac955358d2"
+checksum = "ecc0db5cb2556c0e558887d9bbdcf6ac4471e83ff66cf696e5419024d1606276"
 dependencies = [
  "proc-macro2",
  "quote",
