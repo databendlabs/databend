@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use bstr::ByteSlice;
+use bytes::BufMut;
 
 use super::string2string::String2StringFunction;
 use super::string2string::StringOperator;
@@ -22,9 +23,19 @@ pub struct Lower;
 
 impl StringOperator for Lower {
     #[inline]
-    fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
-        buffer.copy_from_slice(&s.to_lowercase());
-
+    fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], mut buffer: &mut [u8]) -> usize {
+        for (start, end, ch) in s.char_indices() {
+            if ch == '\u{FFFD}' {
+                // If char is not valid, just copy it.
+                buffer.put_slice(&s.as_bytes()[start..end]);
+            } else if ch.is_ascii() {
+                buffer.put_u8(ch.to_ascii_lowercase() as u8);
+            } else {
+                for x in ch.to_lowercase() {
+                    buffer.put_slice(x.encode_utf8(&mut [0; 4]).as_bytes());
+                }
+            }
+        }
         s.len()
     }
 }
