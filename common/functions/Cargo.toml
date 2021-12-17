@@ -12,10 +12,10 @@ test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-arrow = {path = "../arrow"}
-common-datavalues = {path = "../datavalues"}
-common-exception = {path = "../exception"}
-common-io = {path = "../io"}
+common-arrow = { path = "../arrow" }
+common-datavalues = { path = "../datavalues" }
+common-exception = { path = "../exception" }
+common-io = { path = "../io" }
 
 # Github dependencies
 
@@ -33,6 +33,7 @@ crc32fast = "1.3.0"
 sha1 = "0.6.0"
 sha2 = "0.10.0"
 md5 = "0.7.0"
+blake3 = "1.2.0"
 rand = "0.8.4"
 hex = "0.4.3"
 base64 = "0.13.0"
@@ -42,6 +43,6 @@ bstr = "0.2.17"
 
 [dev-dependencies]
 bumpalo = "3.8.0"
-common-datablocks = {path = "../datablocks"}
+common-datablocks = { path = "../datablocks" }
 pretty_assertions = "1.0.0"
 float-cmp = "0.9.0"
