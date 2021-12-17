@@ -17,7 +17,6 @@
 use std::env;
 use std::path::Path;
 fn main() {
-    common_building::setup();
     build_proto();
 }
 
@@ -25,8 +24,8 @@ fn build_proto() {
     let manifest_dir =
         env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR env variable unset");
 
-    // Changing OUT_DIR fails docker build because src/proto is read-only.
-    // env::set_var("OUT_DIR", "src/proto");
+    // Changing OUT_DIR fails docker build because src/protobuf is read-only.
+    // env::set_var("OUT_DIR", "src/protobuf");
 
     let proto_dir = Path::new(&manifest_dir).join("proto");
     let protos = [&Path::new(&proto_dir).join(Path::new("meta.proto"))];

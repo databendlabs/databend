@@ -17,3 +17,10 @@ pub mod log;
 pub mod sled_key_spaces;
 pub mod state;
 pub mod state_machine;
+// ProtoBuf generated files.
+#[allow(clippy::all)]
+pub mod protobuf {
+    tonic::include_proto!("meta");
+}
+
+pub use log::message;

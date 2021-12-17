@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod message;
 mod raft_log;
 
 pub use raft_log::RaftLog;

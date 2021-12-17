@@ -1460,10 +1460,14 @@ dependencies = [
  "derive_more",
  "maplit",
  "pretty_assertions",
+ "prost",
  "rand 0.8.4",
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror",
+ "tonic",
+ "tonic-build",
 ]
 
 [[package]]
