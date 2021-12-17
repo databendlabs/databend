@@ -76,7 +76,7 @@ impl Function for Blake3HashFunction {
         let opt_iter = opt_iter
             .string()?
             .into_iter()
-            .map(|vo| vo.map(|v| format!("{:?}", blake3::hash(v).to_string())));
+            .map(|vo| vo.map(|v| blake3::hash(v).to_string()));
 
         let result = DFStringArray::new_from_opt_iter(opt_iter);
         let column: DataColumn = result.into();
