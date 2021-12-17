@@ -18,14 +18,11 @@ use super::string2string::String2StringFunction;
 use super::string2string::StringOperator;
 
 #[derive(Clone, Default)]
-pub struct Encode {
-    buf: Vec<u8>,
-}
+pub struct Encode {}
 
 impl StringOperator for Encode {
     #[inline]
     fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
-        self.buf.resize(s.len() * 4 / 3 + 4, 0);
         base64::encode_config_slice(s, base64::STANDARD, buffer)
     }
 
