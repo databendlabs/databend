@@ -554,8 +554,6 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "sha2 0.10.0",
- "structopt",
- "structopt-toml",
  "sysinfo 0.21.2",
  "tar",
  "tempfile",
@@ -754,12 +752,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bytecount"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72feb31ffc86498dacdbd0fcebb56138e7177a8cc5cea4516031d15ae85a742e"
-
-[[package]]
 name = "bytemuck"
 version = "1.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -801,7 +793,7 @@ dependencies = [
  "ansi_term",
  "anyhow",
  "atty",
- "cargo_metadata 0.14.1",
+ "cargo_metadata",
  "csv",
  "getopts",
  "semver 1.0.4",
@@ -819,19 +811,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cbdb825da8a5df079a43676dbe042702f1707b1109f713a01420fbb4cc71fa27"
 dependencies = [
  "serde",
-]
-
-[[package]]
-name = "cargo_metadata"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7714a157da7991e23d90686b9524b9e12e0407a108647f52e9328f4b3d51ac7f"
-dependencies = [
- "cargo-platform",
- "semver 0.11.0",
- "semver-parser 0.10.2",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -968,11 +947,26 @@ checksum = "9d358d5dcd274692e60df775bd452f66341a49ab90cc6cc1084c4350a3f914d9"
 dependencies = [
  "atty",
  "bitflags",
+ "clap_derive",
  "indexmap",
+ "lazy_static",
  "os_str_bytes",
  "strsim 0.10.0",
  "termcolor",
  "textwrap 0.14.2",
+]
+
+[[package]]
+name = "clap_derive"
+version = "3.0.0-rc.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a0823802ec32930a7b22133dc3a8b7cf297297e8af413e59d2fbbf864c7bd63"
+dependencies = [
+ "heck",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -1433,6 +1427,7 @@ dependencies = [
  "async-raft",
  "async-trait",
  "bytes",
+ "clap 3.0.0-rc.5",
  "common-arrow",
  "common-base",
  "common-exception",
@@ -1447,8 +1442,6 @@ dependencies = [
  "rand 0.8.4",
  "serde",
  "serde_json",
- "structopt",
- "structopt-toml",
  "tempfile",
 ]
 
@@ -2001,6 +1994,7 @@ dependencies = [
  "async-trait",
  "backtrace",
  "byteorder",
+ "clap 3.0.0-rc.5",
  "common-arrow",
  "common-base",
  "common-building",
@@ -2036,8 +2030,6 @@ dependencies = [
  "serde_json",
  "sha2 0.10.0",
  "sled",
- "structopt",
- "structopt-toml",
  "tempfile",
  "test-env-log",
  "thiserror",
@@ -2060,9 +2052,10 @@ dependencies = [
  "byteorder",
  "bytes",
  "cargo-license",
- "cargo_metadata 0.14.1",
+ "cargo_metadata",
  "chrono",
  "chrono-tz",
+ "clap 3.0.0-rc.5",
  "clickhouse-rs",
  "common-arrow",
  "common-base",
@@ -2122,8 +2115,6 @@ dependencies = [
  "sha1",
  "sha2 0.10.0",
  "sqlparser",
- "structopt",
- "structopt-toml",
  "tempfile",
  "threadpool",
  "tokio-rustls 0.23.1",
@@ -2439,15 +2430,6 @@ dependencies = [
  "log",
  "regex",
  "termcolor",
-]
-
-[[package]]
-name = "error-chain"
-version = "0.12.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d2f06b9cac1506ece98fe3231e3cc9c4410ec3d5b1f24ae1c8946f0742cdefc"
-dependencies = [
- "version_check",
 ]
 
 [[package]]
@@ -5212,17 +5194,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pulldown-cmark"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffade02495f22453cd593159ea2f59827aae7f53fa8323f756799b670881dcf8"
-dependencies = [
- "bitflags",
- "memchr",
- "unicase",
-]
-
-[[package]]
 name = "qstring"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5893,17 +5864,7 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d7eb9ef2c18661902cc47e535f9bc51b78acd254da71d375c2f6720d9a40403"
 dependencies = [
- "semver-parser 0.7.0",
-]
-
-[[package]]
-name = "semver"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f301af10236f6df4160f7c3f04eec6dbc70ace82d23326abad5edee88801c6b6"
-dependencies = [
- "semver-parser 0.10.2",
- "serde",
+ "semver-parser",
 ]
 
 [[package]]
@@ -5920,15 +5881,6 @@ name = "semver-parser"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
-
-[[package]]
-name = "semver-parser"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00b0bef5b7f9e0df16536d3961cfb6e84331c065b4066afb39768d0e319411f7"
-dependencies = [
- "pest",
-]
 
 [[package]]
 name = "serde"
@@ -6168,21 +6120,6 @@ checksum = "16d69225bde7a69b235da73377861095455d298f2b970996eec25ddbb42b3d1e"
 dependencies = [
  "bitmaps",
  "typenum",
-]
-
-[[package]]
-name = "skeptic"
-version = "0.13.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "188b810342d98f23f0bb875045299f34187b559370b041eb11520c905370a888"
-dependencies = [
- "bytecount",
- "cargo_metadata 0.12.3",
- "error-chain",
- "glob",
- "pulldown-cmark",
- "tempfile",
- "walkdir",
 ]
 
 [[package]]
@@ -6449,33 +6386,6 @@ checksum = "dcb5ae327f9cc13b68763b5749770cb9e048a99bd9dfdfa58d0cf05d5f64afe0"
 dependencies = [
  "heck",
  "proc-macro-error",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "structopt-toml"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c27d68c57e6cc3fb03041c49534e50a6ccef677c511effc1c5bf12a4bc865a62"
-dependencies = [
- "anyhow",
- "clap 2.34.0",
- "serde",
- "serde_derive",
- "skeptic",
- "structopt",
- "structopt-toml-derive",
- "toml",
-]
-
-[[package]]
-name = "structopt-toml-derive"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "316302a563af68baf93e5e77b8355a8bfe168c67c4424623365ca5bf521d013e"
-dependencies = [
  "proc-macro2",
  "quote",
  "syn",
