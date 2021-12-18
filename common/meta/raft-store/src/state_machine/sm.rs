@@ -348,10 +348,7 @@ impl StateMachine {
                 }
             }
 
-            Cmd::CreateDatabase {
-                ref name,
-                ref engine,
-            } => {
+            Cmd::CreateDatabase { ref name, ref meta } => {
                 let db_id = self.txn_incr_seq(SEQ_DATABASE_ID, txn_tree).map_err(|e| {
                     let e: ConflictableTransactionError<Infallible> = e.into();
                     ErrorCode::from(e)
@@ -403,9 +400,7 @@ impl StateMachine {
                         &dbs,
                         &db_id,
                         &MatchSeq::Exact(0),
-                        Operation::Update(DatabaseMeta {
-                            engine: engine.clone(),
-                        }),
+                        Operation::Update(meta.clone()),
                         None,
                     )
                     .map_err(|e| {

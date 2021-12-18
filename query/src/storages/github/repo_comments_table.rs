@@ -12,56 +12,44 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::CreateTableReq;
-use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
-use common_planners::ReadDataSourcePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 use octocrab::models;
 
-use crate::sessions::QueryContext;
 use crate::storages::github::github_client::create_github_client;
-use crate::storages::github::github_client::get_own_repo_from_table_info;
-use crate::storages::github::GITHUB_REPO_COMMENTS_TABLE_ENGINE;
-use crate::storages::github::OWNER;
-use crate::storages::github::REPO;
+use crate::storages::github::GithubDataGetter;
+use crate::storages::github::GithubTableType;
+use crate::storages::github::RepoTableOptions;
 use crate::storages::StorageContext;
-use crate::storages::Table;
 
 const COMMENT_ID: &str = "comment_id";
 const USER: &str = "user";
 const BODY: &str = "body";
 
 pub struct RepoCommentsTable {
-    table_info: TableInfo,
+    options: RepoTableOptions,
 }
 
 impl RepoCommentsTable {
-    pub fn try_create(_ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
-        Ok(Box::new(RepoCommentsTable { table_info }))
+    pub fn create(options: RepoTableOptions) -> Box<dyn GithubDataGetter> {
+        Box::new(RepoCommentsTable { options })
     }
 
-    pub async fn create(ctx: StorageContext, owner: String, repo: String) -> Result<()> {
-        let mut options = HashMap::new();
-        options.insert(OWNER.to_string(), owner.clone());
-        options.insert(REPO.to_string(), repo.clone());
-
+    pub async fn create_table(ctx: StorageContext, options: RepoTableOptions) -> Result<()> {
+        let mut options = options;
+        options.table_type = GithubTableType::Comments.to_string();
         let req = CreateTableReq {
             if_not_exists: false,
-            db: owner,
-            table: repo + "_comments",
+            db: options.owner.clone(),
+            table: format!("{}_{}", options.repo.clone(), "comments"),
             table_meta: TableMeta {
                 schema: RepoCommentsTable::schema(),
-                engine: GITHUB_REPO_COMMENTS_TABLE_ENGINE.into(),
-                options,
+                engine: "GITHUB".into(),
+                engine_options: options.into(),
                 ..Default::default()
             },
         };
@@ -78,16 +66,23 @@ impl RepoCommentsTable {
 
         Arc::new(DataSchema::new(fields))
     }
+}
 
+#[async_trait::async_trait]
+impl GithubDataGetter for RepoCommentsTable {
     async fn get_data_from_github(&self) -> Result<Vec<Series>> {
         // init array
         let mut id_array: Vec<u64> = Vec::new();
         let mut user_array: Vec<Vec<u8>> = Vec::new();
         let mut body_array: Vec<Vec<u8>> = Vec::new();
 
-        // get owner repo info from table meta
-        let (owner, repo) = get_own_repo_from_table_info(&self.table_info)?;
-        let instance = create_github_client()?;
+        let RepoTableOptions {
+            ref repo,
+            ref owner,
+            ref token,
+            ..
+        } = self.options;
+        let instance = create_github_client(token)?;
 
         #[allow(unused_mut)]
         let mut page = instance
@@ -116,31 +111,5 @@ impl RepoCommentsTable {
             Series::new(user_array),
             Series::new(body_array),
         ])
-    }
-}
-
-#[async_trait::async_trait]
-impl Table for RepoCommentsTable {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn get_table_info(&self) -> &TableInfo {
-        &self.table_info
-    }
-
-    async fn read(
-        &self,
-        _ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        let arrays = self.get_data_from_github().await?;
-        let block = DataBlock::create_by_array(self.table_info.schema(), arrays);
-
-        Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema(),
-            None,
-            vec![block],
-        )))
     }
 }

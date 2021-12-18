@@ -110,6 +110,7 @@ fn create_database() -> Result<()> {
             if_not_exists: false,
             name: ObjectName(vec![Ident::new("db1")]),
             engine: "".to_string(),
+            engine_options: HashMap::new(),
             options: HashMap::new(),
         });
         expect_parse_ok(sql, expected)?;
@@ -121,6 +122,7 @@ fn create_database() -> Result<()> {
             if_not_exists: false,
             name: ObjectName(vec![Ident::new("db1")]),
             engine: "github".to_string(),
+            engine_options: HashMap::new(),
             options: HashMap::new(),
         });
         expect_parse_ok(sql, expected)?;
@@ -132,6 +134,7 @@ fn create_database() -> Result<()> {
             if_not_exists: true,
             name: ObjectName(vec![Ident::new("db1")]),
             engine: "".to_string(),
+            engine_options: HashMap::new(),
             options: HashMap::new(),
         });
         expect_parse_ok(sql, expected)?;

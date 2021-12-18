@@ -13,32 +13,42 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_meta_types::DatabaseMeta;
 use common_tracing::tracing;
 use octocrab::params;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
+use crate::storages::github::create_github_client;
 use crate::storages::github::RepoCommentsTable;
 use crate::storages::github::RepoInfoTable;
 use crate::storages::github::RepoIssuesTable;
-use crate::storages::github::RepoPrsTable;
+use crate::storages::github::RepoPRsTable;
+use crate::storages::github::RepoTableOptions;
 use crate::storages::StorageContext;
 
 #[derive(Clone)]
 pub struct GithubDatabase {
     ctx: DatabaseContext,
     db_name: String,
+    token: String,
 }
 
 impl GithubDatabase {
     pub fn try_create(
         ctx: DatabaseContext,
         db_name: &str,
-        _db_engine: &str,
+        db_meta: DatabaseMeta,
     ) -> Result<Box<dyn Database>> {
+        let token = db_meta
+            .engine_options
+            .get("token")
+            .unwrap_or(&"".to_string())
+            .clone();
         Ok(Box::new(Self {
             ctx,
             db_name: db_name.to_string(),
+            token,
         }))
     }
 }
@@ -51,7 +61,8 @@ impl Database for GithubDatabase {
 
     async fn init_database(&self) -> Result<()> {
         // 1. get all repos in this organization
-        let repos = octocrab::instance()
+        let instance = create_github_client(&self.token)?;
+        let repos = instance
             .orgs(self.name())
             .list_repos()
             .repo_type(params::repos::Type::Sources)
@@ -68,35 +79,22 @@ impl Database for GithubDatabase {
         // 2. create all tables in need
         let mut iter = repos.items.iter();
         for repo in &mut iter {
+            let options = RepoTableOptions {
+                owner: self.name().to_string(),
+                repo: repo.name.clone(),
+                token: self.token.clone(),
+                table_type: "".to_string(),
+            };
+
             tracing::error!("creating {} related repo", &repo.name);
             // Create default db
-            RepoInfoTable::create(
-                storage_ctx.clone(),
-                self.name().to_string(),
-                repo.name.clone(),
-            )
-            .await?;
+            RepoInfoTable::create_table(storage_ctx.clone(), options.clone()).await?;
 
-            RepoIssuesTable::create(
-                storage_ctx.clone(),
-                self.name().to_string(),
-                repo.name.clone(),
-            )
-            .await?;
+            RepoIssuesTable::create_table(storage_ctx.clone(), options.clone()).await?;
 
-            RepoPrsTable::create(
-                storage_ctx.clone(),
-                self.name().to_string(),
-                repo.name.clone(),
-            )
-            .await?;
+            RepoPRsTable::create_table(storage_ctx.clone(), options.clone()).await?;
 
-            RepoCommentsTable::create(
-                storage_ctx.clone(),
-                self.name().to_string(),
-                repo.name.clone(),
-            )
-            .await?;
+            RepoCommentsTable::create_table(storage_ctx.clone(), options.clone()).await?;
         }
 
         Ok(())

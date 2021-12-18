@@ -58,14 +58,14 @@ impl RequestHandler<CreateDatabaseReq> for ActionHandler {
         req: CreateDatabaseReq,
     ) -> common_exception::Result<CreateDatabaseReply> {
         let db_name = &req.db;
-        let engine = &req.engine;
+        let db_meta = &req.meta;
         let if_not_exists = req.if_not_exists;
 
         let cr = LogEntry {
             txid: None,
             cmd: CreateDatabase {
                 name: db_name.clone(),
-                engine: engine.clone(),
+                meta: db_meta.clone(),
             },
         };
 
