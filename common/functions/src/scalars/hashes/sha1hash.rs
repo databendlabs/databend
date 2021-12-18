@@ -24,6 +24,7 @@ impl StringOperator for Sha1 {
     #[inline]
     fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
         // TODO sha1 lib doesn't allow encode into buffer...
+        let buffer = &mut buffer[0..40];
         buffer.copy_from_slice(sha1::Sha1::from(s).digest().to_string().as_ref());
         40
     }
