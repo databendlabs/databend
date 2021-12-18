@@ -1,6 +1,6 @@
 use common_base::Runtime;
 use common_exception::{ErrorCode, Result};
-use crate::pipelines::new::executor::graph::RunningGraph;
+use crate::pipelines::new::executor::exector_graph::RunningGraph;
 
 pub struct PipelineExecutor {
     graph: RunningGraph,
@@ -12,7 +12,7 @@ impl PipelineExecutor {
         unimplemented!()
     }
 
-    pub fn initialize_executor(&mut self, workers: usize) -> Result<()> {
+    pub fn initialize_executor(&self, workers: usize) -> Result<()> {
         self.graph.initialize_executor()?;
         unimplemented!()
     }

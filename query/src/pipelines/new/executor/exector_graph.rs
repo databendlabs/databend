@@ -1,8 +1,9 @@
 // running graph
 
+use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::sync::Arc;
-use common_infallible::{Mutex, RwLock};
+use common_infallible::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use common_exception::{ErrorCode, Result};
 use crate::pipelines::new::processors::{create_port, PortReactor, Processor, Processors};
 
@@ -15,23 +16,23 @@ pub enum RunningState {
 
 pub struct RunningProcessor {
     state: Mutex<RunningState>,
-    inputs: Vec<usize>,
-    outputs: Vec<usize>,
+    inputs: UnsafeCell<Vec<usize>>,
+    outputs: UnsafeCell<Vec<usize>>,
 }
 
 impl RunningProcessor {
     pub fn create(processor: &Box<dyn Processor>) -> Arc<RunningProcessor> {
         Arc::new(RunningProcessor {
             state: Mutex::new(RunningState::Idle),
-            inputs: vec![],
-            outputs: vec![],
+            inputs: UnsafeCell::new(vec![]),
+            outputs: UnsafeCell::new(vec![]),
         })
     }
 }
 
 struct RunningGraphState {
     nodes: Vec<Arc<RunningProcessor>>,
-    raw_processors: Processors,
+    raw_processors: UnsafeCell<Processors>,
 }
 
 impl RunningGraphState {
@@ -52,7 +53,7 @@ impl RunningGraphState {
             processors[output].connect_output(output_port)?;
         }
 
-        Ok(RunningGraphState { nodes, raw_processors: processors })
+        Ok(RunningGraphState { nodes, raw_processors: UnsafeCell::new(processors) })
     }
 
     pub fn initialize_executor(state: &RwLock<RunningGraphState>) -> Result<()> {
@@ -80,7 +81,6 @@ impl RunningGraph {
     }
 }
 
-// Syntactic sugar for RunningGraph
 impl RunningGraph {
     pub fn schedule_next(&self) -> Result<()> {
         RunningGraphState::schedule_next(&self.0)
@@ -91,14 +91,20 @@ impl RunningGraph {
     }
 }
 
+// Thread safe: because locked before call prepare
+// We always push and pull ports in processor prepare method.
 impl PortReactor<usize> for RunningProcessor {
+    #[inline(always)]
     fn on_push(&self, push_to: usize) {
-        //
-        unimplemented!("")
+        unsafe {
+            (*self.outputs.get()).push(push_to);
+        }
     }
 
+    #[inline(always)]
     fn on_pull(&self, pull_from: usize) {
-        //
-        unimplemented!("")
+        unsafe {
+            (*self.inputs.get()).push(pull_from);
+        }
     }
 }
