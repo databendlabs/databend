@@ -12,80 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
-
-use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
-use common_datavalues::DataSchema;
-use common_datavalues::DataType;
-use common_exception::ErrorCode;
-use common_exception::Result;
 
-use crate::scalars::function_factory::FunctionDescription;
-use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::strings::String2StringFunction;
+use crate::scalars::strings::StringOperator;
 
-#[derive(Clone)]
-pub struct Blake3HashFunction {
-    display_name: String,
-}
+#[derive(Clone, Default)]
+pub struct Blake3Hash {}
 
-impl Blake3HashFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(Blake3HashFunction {
-            display_name: display_name.to_string(),
-        }))
+impl StringOperator for Blake3Hash {
+    #[inline]
+    fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
+        let buffer = &mut buffer[0..64];
+        // TODO blake3 lib doesn't allow encode into buffer...
+        hex::encode_to_slice(blake3::hash(s).as_bytes(), buffer).unwrap();
+        64
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+    fn estimate_bytes(&self, array: &DFStringArray) -> usize {
+        array.len() * 64
     }
 }
 
-impl Function for Blake3HashFunction {
-    fn name(&self) -> &str {
-        &*self.display_name
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
-    }
-
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if args[0] == DataType::String || args[0] == DataType::Null {
-            Ok(DataType::String)
-        } else {
-            Err(ErrorCode::IllegalDataType(format!(
-                "Expected string type, but got {}",
-                args[0]
-            )))
-        }
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
-    }
-
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        let opt_iter = columns[0]
-            .column()
-            .to_minimal_array()?
-            .cast_with_type(&DataType::String)?;
-
-        let opt_iter = opt_iter
-            .string()?
-            .into_iter()
-            .map(|vo| vo.map(|v| blake3::hash(v).to_string()));
-
-        let result = DFStringArray::new_from_opt_iter(opt_iter);
-        let column: DataColumn = result.into();
-        Ok(column.resize_constant(columns[0].column().len()))
-    }
-}
-
-impl fmt::Display for Blake3HashFunction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.display_name)
-    }
-}
+pub type Blake3HashFunction = String2StringFunction<Blake3Hash>;

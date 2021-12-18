@@ -83,6 +83,8 @@ pub use strcmp::StrcmpFunction;
 pub use string::StringFunction;
 pub use string2number::NumberResultFunction;
 pub use string2number::String2NumberFunction;
+pub use string2string::String2StringFunction;
+pub use string2string::StringOperator;
 pub use substring::SubstringFunction;
 pub use substring_index::SubstringIndexFunction;
 pub use trim::LTrimFunction;
