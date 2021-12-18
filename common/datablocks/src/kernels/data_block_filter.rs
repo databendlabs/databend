@@ -14,10 +14,10 @@
 
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute::filter::build_filter;
-use common_datavalues::DataValue;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::IntoSeries;
 use common_datavalues::DataType;
+use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
