@@ -27,6 +27,7 @@ header:
     - "**/*.sql"
     - "rust-toolchain"
     - "rustfmt.toml"
+    - "**/*.proto"
     - ".cargo"
     - ".yamllint.yml"
     - ".mergify.yml"
