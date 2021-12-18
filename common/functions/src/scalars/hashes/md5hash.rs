@@ -23,9 +23,9 @@ pub struct Md5 {}
 impl StringOperator for Md5 {
     #[inline]
     fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
-        // TODO md5 lib doesn't allow encode into buffer...
         let buffer = &mut buffer[0..32];
-        buffer.copy_from_slice(format!("{:x}", md5::compute(s)).as_ref());
+        // TODO md5 lib doesn't allow encode into buffer...
+        hex::encode_to_slice(md5::compute(s).as_ref(), buffer).unwrap();
         32
     }
 

@@ -23,9 +23,9 @@ pub struct Blake3Hash {}
 impl StringOperator for Blake3Hash {
     #[inline]
     fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
-        // TODO blake3 lib doesn't allow encode into buffer...
         let buffer = &mut buffer[0..64];
-        buffer.copy_from_slice(blake3::hash(s).to_string().as_ref());
+        // TODO blake3 lib doesn't allow encode into buffer...
+        hex::encode_to_slice(blake3::hash(s).as_bytes(), buffer).unwrap();
         64
     }
 
