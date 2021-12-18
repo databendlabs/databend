@@ -66,8 +66,7 @@ impl<const HAVING: bool> FilterTransform<HAVING> {
 
     fn filter(executor: Arc<ExpressionExecutor>, data: DataBlock) -> Result<DataBlock> {
         let filter_block = executor.execute(&data)?;
-        let filter_array = filter_block.column(0).to_array()?;
-        DataBlock::filter_block(&data, filter_array)
+        DataBlock::filter_block(&data, filter_block.column(0))
     }
 
     fn filter_map(executor: ExpressionExecutorRef, data: DataBlock) -> Option<Result<DataBlock>> {

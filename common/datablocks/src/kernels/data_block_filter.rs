@@ -14,9 +14,9 @@
 
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::compute::filter::build_filter;
+use common_datavalues::DataValue;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::IntoSeries;
-use common_datavalues::series::Series;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -24,20 +24,31 @@ use common_exception::Result;
 use crate::DataBlock;
 
 impl DataBlock {
-    pub fn filter_block(block: &DataBlock, predicate: Series) -> Result<DataBlock> {
+    pub fn filter_block(block: &DataBlock, predicate: &DataColumn) -> Result<DataBlock> {
         if block.num_columns() == 0 || block.num_rows() == 0 {
             return Ok(block.clone());
         }
 
-        let predicate_series = predicate.cast_with_type(&DataType::Boolean)?;
-        if predicate_series.len() != block.num_rows() {
+        let predicate = predicate.cast_with_type(&DataType::Boolean)?;
+        if predicate.len() != block.num_rows() {
             return Err(ErrorCode::BadPredicateRows(format!(
                 "DataBlock rows({}) must be equals predicate rows({})",
                 block.num_rows(),
-                predicate_series.len()
+                predicate.len()
             )));
         }
 
+        // faster path for constant filter
+        if let DataColumn::Constant(DataValue::Boolean(v), _) = predicate {
+            let ok = v.unwrap_or(false);
+            if ok {
+                return Ok(block.clone());
+            } else {
+                return Ok(DataBlock::empty_with_schema(block.schema().clone()));
+            }
+        }
+
+        let predicate_series = predicate.to_array()?;
         let predicate_array = predicate_series.bool()?.inner();
 
         let before_filter_rows = predicate_array.values().len();
