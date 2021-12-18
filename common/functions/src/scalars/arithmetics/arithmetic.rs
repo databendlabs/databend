@@ -16,7 +16,6 @@ use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
-use common_datavalues::DataSchema;
 use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
@@ -77,10 +76,6 @@ impl Function for ArithmeticFunction {
             return datetime_arithmetic_coercion(&self.op, &args[0], &args[1]);
         }
         numerical_arithmetic_coercion(&self.op, &args[0], &args[1])
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
