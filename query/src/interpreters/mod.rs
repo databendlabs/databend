@@ -73,7 +73,7 @@ pub use interpreter_table_drop::DropTableInterpreter;
 pub use interpreter_truncate_table::TruncateTableInterpreter;
 pub use interpreter_use_database::UseDatabaseInterpreter;
 pub use interpreter_user_alter::AlterUserInterpreter;
-pub use interpreter_user_create::CreatUserInterpreter;
+pub use interpreter_user_create::CreateUserInterpreter;
 pub use interpreter_user_drop::DropUserInterpreter;
 pub use plan_schedulers::PlanScheduler;
 pub use stream_addon::AddOnStream;
