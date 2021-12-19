@@ -164,7 +164,7 @@ pub async fn streaming_load(
     Ok(Json(LoadResponse {
         id,
         state: "SUCCESS".to_string(),
-        stats: context.get_progress_value(),
+        stats: context.get_scan_progress_value(),
         error: None,
     }))
 }

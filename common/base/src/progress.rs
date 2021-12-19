@@ -18,10 +18,7 @@ use std::sync::atomic::Ordering;
 use serde::Deserialize;
 use serde::Serialize;
 
-/// Progress callback is called with progress about the stream read progress.
-pub type ProgressCallback = Box<dyn FnMut(&ProgressValues) + Send + Sync + 'static>;
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct ProgressValues {
     pub read_rows: usize,
     pub read_bytes: usize,
@@ -70,7 +67,4 @@ impl Progress {
             read_bytes,
         }
     }
-
-    // Placeholder for default callback init.
-    pub fn default_callback(_: &Progress) {}
 }

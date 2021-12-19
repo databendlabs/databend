@@ -97,7 +97,7 @@ impl InteractiveWorkerBase {
                 tokio::spawn(async move {
                     while !cancel.load(Ordering::Relaxed) {
                         let _ = interval_stream.next().await;
-                        let values = progress_ctx.get_and_reset_progress_value();
+                        let values = progress_ctx.get_and_reset_scan_progress_value();
                         tx.send(BlockItem::ProgressTicker(values)).await.ok();
                     }
                 });

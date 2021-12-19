@@ -91,7 +91,7 @@ pub(crate) struct Executor {
 impl Executor {
     pub(crate) fn get_progress(&self) -> Option<ProgressValues> {
         match &self.state {
-            Running(r) => Some(r.context.get_progress_value()),
+            Running(r) => Some(r.context.get_scan_progress_value()),
             Stopped(f) => f.progress.clone(),
         }
     }
@@ -105,7 +105,7 @@ impl Executor {
         let mut guard = this.write().await;
         if let Running(r) = &guard.state {
             // release session
-            let progress = Some(r.context.get_progress_value());
+            let progress = Some(r.context.get_scan_progress_value());
             if kill {
                 r.session.force_kill_query();
             }
