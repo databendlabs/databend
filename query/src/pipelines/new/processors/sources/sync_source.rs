@@ -40,11 +40,11 @@ impl<T: 'static + SyncSource> SyncSourceProcessorWrap<T> {
     }
 
     #[inline(always)]
-    fn push_data_to_output(&mut self, index: &mut usize) {
-        let generated_data = self.generated_data.unwrap();
-        self.generated_data = None;
-        self.outputs[index].push_data(Ok(generated_data));
-        self.best_push_pos += 1;
+    fn push_data_to_output(&mut self, index: usize) {
+        if let Some(generated_data) = self.generated_data.take() {
+            self.outputs[index].push_data(Ok(generated_data));
+            self.best_push_pos += 1;
+        }
     }
 
     #[inline(always)]
@@ -54,7 +54,7 @@ impl<T: 'static + SyncSource> SyncSourceProcessorWrap<T> {
 
         loop {
             if self.outputs[index].can_push() {
-                self.push_data_to_output(&mut index);
+                self.push_data_to_output(index);
                 return false;
             }
 
@@ -136,9 +136,10 @@ impl<T: 'static + SyncSource> SingleOutputSyncSourceProcessorWrap<T> {
 
     #[inline(always)]
     fn push_data(&mut self) -> PrepareState {
-        let generated_data = self.generated_data.unwrap();
-        self.generated_data = None;
-        self.output.push_data(Ok(generated_data));
+        if let Some(generated_data) = self.generated_data.take() {
+            self.output.push_data(Ok(generated_data));
+        }
+
         PrepareState::NeedConsume
     }
 

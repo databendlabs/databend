@@ -115,6 +115,9 @@ impl<Data: Copy, T: PortReactor<Data> + Sized> ReactiveOutputPort<Data, T> {
     }
 }
 
+unsafe impl<Data: Copy, T: PortReactor<Data> + Sized> Send for ReactiveInputPort<Data, T> {}
+unsafe impl<Data: Copy, T: PortReactor<Data> + Sized> Send for ReactiveOutputPort<Data, T> {}
+
 pub type InputPort = ReactiveInputPort<usize, RunningProcessor>;
 pub type OutputPort = ReactiveOutputPort<usize, RunningProcessor>;
 

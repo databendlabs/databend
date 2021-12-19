@@ -2,7 +2,9 @@ mod sync_source;
 mod async_source;
 
 pub use sync_source::SyncSource;
+pub use async_source::AsyncSource;
 pub use sync_source::SyncSourceProcessorWrap;
+pub use async_source::ASyncSourceProcessorWrap;
 
 mod source_example {
     use common_exception::Result;

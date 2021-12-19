@@ -2,8 +2,6 @@ pub mod port;
 pub mod processor;
 
 mod sources;
-
-mod example;
 mod transforms;
 
 pub use port::create_port;
