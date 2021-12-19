@@ -22,6 +22,9 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
+use serde::de::DeserializeOwned;
+use serde::Deserialize;
+use serde::Serialize;
 
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
@@ -46,10 +49,13 @@ pub trait AggregateMinMaxState: Send + Sync + 'static {
     fn merge_result(&mut self) -> Result<DataValue>;
 }
 
+#[derive(Serialize, Deserialize)]
 struct NumericState<T: DFPrimitiveType> {
+    #[serde(bound(deserialize = "T: DeserializeOwned"))]
     pub value: Option<T>,
 }
 
+#[derive(Serialize, Deserialize)]
 struct StringState {
     pub value: Option<Vec<u8>>,
 }
@@ -120,10 +126,12 @@ where
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        self.value.serialize_to_buf(writer)
+        let writer = BufMut::writer(writer);
+        bincode::serialize_into(writer, &self.value)?;
+        Ok(())
     }
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.value = Option::<T>::deserialize(reader)?;
+        self.value = bincode::deserialize_from(reader)?;
         Ok(())
     }
 
@@ -188,10 +196,12 @@ impl AggregateMinMaxState for StringState {
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        self.value.serialize_to_buf(writer)
+        let writer = BufMut::writer(writer);
+        bincode::serialize_into(writer, &self.value)?;
+        Ok(())
     }
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.value = Option::<Vec<u8>>::deserialize(reader)?;
+        self.value = bincode::deserialize_from(reader)?;
         Ok(())
     }
 

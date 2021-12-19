@@ -34,7 +34,7 @@ use crate::tests::start_metasrv_with_context;
 /// - Test upsert kv and read on different nodes.
 /// - Stop and restart the cluster.
 /// - Test upsert kv and read on different nodes.
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
@@ -126,6 +126,10 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
     Ok(())
 }
 
+// Election timeout is 8~12 sec.
+// A raft node waits for a interval of election timeout before starting election
+// TODO: the raft should set the wait time by election_timeout.
+//       For now, just use a large timeout.
 fn timeout() -> Option<Duration> {
-    Some(Duration::from_millis(10_000))
+    Some(Duration::from_millis(30_000))
 }

@@ -195,6 +195,11 @@ build_exceptions! {
 
     UnknownException(1000),
     TokioError(1001),
+
+    // cache
+    DiskCacheIOError(2000),
+    DiskCacheFileTooLarge(2001),
+    DiskCacheFileNotInCache(2002),
 }
 
 // Store errors
@@ -284,9 +289,10 @@ build_exceptions! {
 
 
     // DAL error
-    DALTransportError(7000),
-    UnknownStorageSchemeName(7001),
-    SecretKeyNotSet(7002),
+    UnknownStorageSchemeName(7000),
+    SecretKeyNotSet(7001),
+    DalTransportError(7002),
+    DalPathNotFound(7003),
 
     // datasource error
     DuplicatedTableEngineProvider(8000),
@@ -394,6 +400,12 @@ impl From<std::num::ParseFloatError> for ErrorCode {
 
 impl From<common_arrow::arrow::error::ArrowError> for ErrorCode {
     fn from(error: common_arrow::arrow::error::ArrowError) -> Self {
+        ErrorCode::from_std_error(error)
+    }
+}
+
+impl From<Box<bincode::ErrorKind>> for ErrorCode {
+    fn from(error: Box<bincode::ErrorKind>) -> Self {
         ErrorCode::from_std_error(error)
     }
 }

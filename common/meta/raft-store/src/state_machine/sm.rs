@@ -247,11 +247,13 @@ impl StateMachine {
     /// If a duplicated log entry is detected by checking data.txid, no update
     /// will be made and the previous resp is returned. In this way a client is able to re-send a
     /// command safely in case of network failure etc.
-    #[tracing::instrument(level = "trace", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     pub async fn apply(&self, entry: &Entry<LogEntry>) -> common_exception::Result<AppliedState> {
         // TODO(xp): all update need to be done in a tx.
 
         let log_id = &entry.log_id;
+
+        tracing::debug!("sled tx start: {:?}", entry);
 
         let result = self.sm_tree.txn(true, move |txn_tree| {
             let txn_sm_meta = txn_tree.key_space::<StateMachineMeta>();
@@ -291,6 +293,8 @@ impl StateMachine {
 
             Ok(None)
         })?;
+
+        tracing::debug!("sled tx done: {:?}", entry);
 
         let result = match result {
             Some(r) => r,
@@ -833,7 +837,7 @@ impl StateMachine {
             },
         };
 
-        seq_kv_value.seq = self.txn_incr_seq(KS::NAME, &*sub_tree)?;
+        seq_kv_value.seq = self.txn_incr_seq(KS::NAME, sub_tree)?;
 
         sub_tree.insert(key, &seq_kv_value)?;
 

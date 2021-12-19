@@ -24,6 +24,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 use num::traits::AsPrimitive;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 use super::AggregateFunctionRef;
 use super::StateAddr;
@@ -39,7 +41,7 @@ struct AggregateSumState<T> {
 impl<T> AggregateSumState<T>
 where
     T: std::ops::Add<Output = T> + Copy + Clone,
-    Option<T>: BinarySer + BinaryDe,
+    Option<T>: Serialize + DeserializeOwned,
 {
     #[inline(always)]
     fn add(&mut self, other: T) {
@@ -50,11 +52,13 @@ where
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        self.value.serialize_to_buf(writer)
+        let writer = BufMut::writer(writer);
+        bincode::serialize_into(writer, &self.value)?;
+        Ok(())
     }
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.value = Option::<T>::deserialize(reader)?;
+        self.value = bincode::deserialize_from(reader)?;
         Ok(())
     }
 }
@@ -78,9 +82,7 @@ where
     }
 
     fn return_type(&self) -> Result<DataType> {
-        let value: DataValue = Some(SumT::default()).into();
-
-        Ok(value.data_type())
+        Ok(SumT::data_type())
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {

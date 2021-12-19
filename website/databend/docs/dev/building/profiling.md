@@ -2,12 +2,6 @@
 title: How to profile Databend
 ---
 
-## flame graph
-
-Open `http://localhost:8080/debug/pprof/profile?seconds=5` in browser, Databend debug api will response the svg of the flame graph to the client.
-
-![](images/profiling-flamegraph.png)
-
 ## go pprof tool
 
 `go tool pprof http://localhost:8080/debug/pprof/profile?seconds=20`

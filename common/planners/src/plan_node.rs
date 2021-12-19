@@ -48,6 +48,7 @@ use crate::RevokePrivilegePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
 use crate::ShowCreateTablePlan;
+use crate::ShowGrantsPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -94,6 +95,7 @@ pub enum PlanNode {
     GrantPrivilege(GrantPrivilegePlan),
     RevokePrivilege(RevokePrivilegePlan),
     CreateUserStage(CreateUserStagePlan),
+    ShowGrants(ShowGrantsPlan),
 }
 
 impl PlanNode {
@@ -137,6 +139,7 @@ impl PlanNode {
             PlanNode::Sink(v) => v.schema(),
             PlanNode::Copy(v) => v.schema(),
             PlanNode::CreateUserStage(v) => v.schema(),
+            PlanNode::ShowGrants(v) => v.schema(),
         }
     }
 
@@ -179,6 +182,7 @@ impl PlanNode {
             PlanNode::Sink(_) => "SinkPlan",
             PlanNode::Copy(_) => "CopyPlan",
             PlanNode::CreateUserStage(_) => "CreateUserStagePlan",
+            PlanNode::ShowGrants(_) => "ShowGrantsPlan",
         }
     }
 

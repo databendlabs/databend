@@ -229,9 +229,48 @@ impl Expression {
         })
     }
 
-    // TODO
-    pub fn nullable(&self, _input_schema: &DataSchemaRef) -> Result<bool> {
-        Ok(false)
+    #[inline(always)]
+    pub fn subquery_nullable(subquery_plan: &PlanNode) -> Result<bool> {
+        let subquery_schema = subquery_plan.schema();
+        let nullable = subquery_schema
+            .fields()
+            .iter()
+            .any(|field| field.is_nullable());
+        Ok(nullable)
+    }
+
+    #[inline(always)]
+    pub fn function_nullable(op: &str, input_schema: &DataSchemaRef) -> Result<bool> {
+        let f = FunctionFactory::instance().get(op)?;
+        f.nullable(input_schema)
+    }
+
+    pub fn nullable(&self, input_schema: &DataSchemaRef) -> Result<bool> {
+        match self {
+            Expression::Alias(_, expr) => expr.nullable(input_schema),
+            Expression::Column(s) => Ok(input_schema.field_with_name(s)?.is_nullable()),
+            Expression::QualifiedColumn(_) => Err(ErrorCode::LogicalError(
+                "QualifiedColumn should be resolve in analyze.",
+            )),
+            Expression::Literal { .. } => {
+                // For literal value, which represents a constant value, we say it is nullable.
+                Ok(true)
+            }
+            Expression::Subquery { query_plan, .. } => Self::subquery_nullable(query_plan),
+            Expression::ScalarSubquery { query_plan, .. } => Self::subquery_nullable(query_plan),
+            Expression::BinaryExpression { op, .. } => Self::function_nullable(op, input_schema),
+            Expression::UnaryExpression { op, .. } => Self::function_nullable(op, input_schema),
+            Expression::ScalarFunction { op, .. } => Self::function_nullable(op, input_schema),
+            Expression::AggregateFunction { .. } => {
+                let f = self.to_aggregate_function(input_schema)?;
+                f.nullable(input_schema)
+            }
+            Expression::Wildcard => Result::Err(ErrorCode::IllegalDataType(
+                "Wildcard expressions are not valid to get return nullable",
+            )),
+            Expression::Cast { expr, .. } => expr.nullable(input_schema),
+            Expression::Sort { expr, .. } => expr.nullable(input_schema),
+        }
     }
 
     pub fn to_subquery_type(subquery_plan: &PlanNode) -> DataType {

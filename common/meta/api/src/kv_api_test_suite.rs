@@ -526,6 +526,7 @@ impl KVApiTestSuite {
                 let key = format!("__users/{}", i);
                 let val = format!("val_{}", i);
                 values.push(val.clone());
+                tracing::info!("--- Start upsert-kv: {}", key);
                 kv1.upsert_kv(UpsertKVAction::new(
                     &key,
                     MatchSeq::Any,
@@ -533,6 +534,7 @@ impl KVApiTestSuite {
                     None,
                 ))
                 .await?;
+                tracing::info!("--- Done upsert-kv: {}", key);
             }
 
             kv1.upsert_kv(UpsertKVAction::new(

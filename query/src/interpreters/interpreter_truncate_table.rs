@@ -44,13 +44,10 @@ impl Interpreter for TruncateTableInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let database = self.plan.db.as_str();
-        let table = self.plan.table.as_str();
-        let truncate_table = self.ctx.get_table(database, table).await?;
-
-        truncate_table
-            .truncate(self.ctx.clone(), self.plan.clone())
-            .await?;
+        let db_name = self.plan.db.as_str();
+        let tbl_name = self.plan.table.as_str();
+        let tbl = self.ctx.get_table(db_name, tbl_name).await?;
+        tbl.truncate(self.ctx.clone(), self.plan.clone()).await?;
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
             None,

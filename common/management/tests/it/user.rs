@@ -57,8 +57,8 @@ fn format_user_key(username: &str, hostname: &str) -> String {
 }
 
 mod add {
-    use common_meta_types::AuthType;
     use common_meta_types::Operation;
+    use common_meta_types::PasswordType;
     use common_meta_types::UserInfo;
 
     use super::*;
@@ -68,12 +68,12 @@ mod add {
         let test_user_name = "test_user";
         let test_password = "test_password";
         let test_hostname = "localhost";
-        let auth_type = AuthType::Sha256;
+        let password_type = PasswordType::Sha256;
         let user_info = UserInfo::new(
             test_user_name.to_string(),
             test_hostname.to_string(),
             Vec::from(test_password),
-            auth_type.clone(),
+            password_type.clone(),
         );
         let v = serde_json::to_vec(&user_info)?;
         let value = Operation::Update(serde_json::to_vec(&user_info)?);
@@ -130,7 +130,7 @@ mod add {
                 test_user_name.to_string(),
                 test_hostname.to_string(),
                 Vec::from(test_password),
-                auth_type.clone(),
+                password_type.clone(),
             );
 
             let res = user_mgr.add_user(user_info).await;
@@ -161,7 +161,7 @@ mod add {
                 test_user_name.to_string(),
                 test_hostname.to_string(),
                 Vec::from(test_password),
-                auth_type,
+                password_type,
             );
 
             let res = user_mgr.add_user(user_info).await;
@@ -176,7 +176,7 @@ mod add {
 }
 
 mod get {
-    use common_meta_types::AuthType;
+    use common_meta_types::PasswordType;
     use common_meta_types::UserInfo;
 
     use super::*;
@@ -194,7 +194,7 @@ mod get {
             test_user_name.to_string(),
             test_hostname.to_string(),
             Vec::from("pass"),
-            AuthType::Sha256,
+            PasswordType::Sha256,
         );
         let value = serde_json::to_vec(&user_info)?;
 
@@ -229,7 +229,7 @@ mod get {
             test_user_name.to_string(),
             test_hostname.to_string(),
             Vec::from("pass"),
-            AuthType::Sha256,
+            PasswordType::Sha256,
         );
         let value = serde_json::to_vec(&user_info)?;
 
@@ -328,7 +328,7 @@ mod get {
 }
 
 mod get_users {
-    use common_meta_types::AuthType;
+    use common_meta_types::PasswordType;
     use common_meta_types::UserInfo;
 
     use super::*;
@@ -350,7 +350,7 @@ mod get_users {
 
             let key = format!("tenant1/{}", format_user_key(&name, &hostname));
             keys.push(key);
-            let user_info = UserInfo::new(name, hostname, Vec::from("pass"), AuthType::Sha256);
+            let user_info = UserInfo::new(name, hostname, Vec::from("pass"), PasswordType::Sha256);
             res.push((
                 "fake_key".to_string(),
                 SeqV::new(i, serde_json::to_vec(&user_info)?),
@@ -471,7 +471,7 @@ mod drop {
 }
 
 mod update {
-    use common_meta_types::AuthType;
+    use common_meta_types::PasswordType;
     use common_meta_types::UserInfo;
 
     use super::*;
@@ -487,13 +487,13 @@ mod update {
         let test_seq = None;
 
         let old_pass = "old_key";
-        let old_auth_type = AuthType::DoubleSha1;
+        let old_password_type = PasswordType::DoubleSha1;
 
         let user_info = UserInfo::new(
             test_user_name.to_string(),
             test_hostname.to_string(),
             Vec::from(old_pass),
-            old_auth_type,
+            old_password_type,
         );
         let prev_value = serde_json::to_vec(&user_info)?;
 
@@ -514,7 +514,7 @@ mod update {
             test_user_name.to_string(),
             test_hostname.to_string(),
             Vec::from(new_pass),
-            AuthType::DoubleSha1,
+            PasswordType::DoubleSha1,
         );
         let new_value_with_old_salt = serde_json::to_vec(&new_user_info)?;
 
@@ -554,13 +554,13 @@ mod update {
         let test_seq = None;
 
         let old_pass = "old_key";
-        let old_auth_type = AuthType::DoubleSha1;
+        let old_password_type = PasswordType::DoubleSha1;
 
         let user_info = UserInfo::new(
             test_user_name.to_string(),
             test_hostname.to_string(),
             Vec::from(old_pass),
-            old_auth_type,
+            old_password_type,
         );
         let prev_value = serde_json::to_vec(&user_info)?;
 
@@ -576,13 +576,13 @@ mod update {
         // - update_kv should be called
 
         let new_pass = "new_pass";
-        let new_auth_type = AuthType::Sha256;
+        let new_password_type = PasswordType::Sha256;
 
         let new_user_info = UserInfo::new(
             test_user_name.to_string(),
             test_hostname.to_string(),
             Vec::from(new_pass),
-            new_auth_type.clone(),
+            new_password_type.clone(),
         );
         let new_value = serde_json::to_vec(&new_user_info)?;
 
@@ -603,7 +603,7 @@ mod update {
             test_user_name.to_string(),
             test_hostname.to_string(),
             Some(new_user_info.password),
-            Some(new_auth_type),
+            Some(new_password_type),
             test_seq,
         );
         assert!(res.await.is_ok());
@@ -678,13 +678,13 @@ mod update {
         let test_seq = None;
 
         let old_pass = "old_key";
-        let old_auth_type = AuthType::DoubleSha1;
+        let old_password_type = PasswordType::DoubleSha1;
 
         let user_info = UserInfo::new(
             test_user_name.to_string(),
             test_hostname.to_string(),
             Vec::from(old_pass),
-            old_auth_type,
+            old_password_type,
         );
         let prev_value = serde_json::to_vec(&user_info)?;
 
@@ -713,7 +713,7 @@ mod update {
             test_user_name.to_string(),
             test_hostname.to_string(),
             Some(Vec::from("new_pass".as_bytes())),
-            Some(AuthType::Sha256),
+            Some(PasswordType::Sha256),
             test_seq,
         );
         assert_eq!(
@@ -725,10 +725,10 @@ mod update {
 }
 
 mod set_user_privileges {
-    use common_meta_types::AuthType;
     use common_meta_types::GrantObject;
+    use common_meta_types::PasswordType;
     use common_meta_types::UserInfo;
-    use common_meta_types::UserPrivilege;
+    use common_meta_types::UserPrivilegeSet;
     use common_meta_types::UserPrivilegeType;
 
     use super::*;
@@ -747,7 +747,7 @@ mod set_user_privileges {
             test_user_name.to_string(),
             test_hostname.to_string(),
             Vec::from("pass"),
-            AuthType::DoubleSha1,
+            PasswordType::DoubleSha1,
         );
         let prev_value = serde_json::to_vec(&user_info)?;
 
@@ -761,7 +761,7 @@ mod set_user_privileges {
                 .return_once(move |_k| Ok(Some(SeqV::new(0, prev_value))));
         }
         // - update_kv should be called
-        let mut privileges = UserPrivilege::empty();
+        let mut privileges = UserPrivilegeSet::empty();
         privileges.set_privilege(UserPrivilegeType::Select);
         user_info.grants.grant_privileges(
             test_user_name,

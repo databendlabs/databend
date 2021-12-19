@@ -24,6 +24,9 @@ use common_exception::Result;
 use common_io::prelude::*;
 use num::cast::AsPrimitive;
 use num::NumCast;
+use serde::de::DeserializeOwned;
+use serde::Deserialize;
+use serde::Serialize;
 
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
@@ -34,7 +37,9 @@ use crate::with_match_primitive_type;
 
 // count = 0 means it's all nullable
 // so we do not need option like sum
+#[derive(Serialize, Deserialize)]
 struct AggregateAvgState<T: DFPrimitiveType> {
+    #[serde(bound(deserialize = "T: DeserializeOwned"))]
     pub value: T,
     pub count: u64,
 }
@@ -124,14 +129,14 @@ where
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
         let state = place.get::<AggregateAvgState<SumT>>();
-        state.value.serialize_to_buf(writer)?;
-        state.count.serialize_to_buf(writer)
+        let writer = BufMut::writer(writer);
+        bincode::serialize_into(writer, state)?;
+        Ok(())
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateAvgState<SumT>>();
-        state.value = SumT::deserialize(reader)?;
-        state.count = u64::deserialize(reader)?;
+        *state = bincode::deserialize_from(reader)?;
         Ok(())
     }
 
@@ -195,7 +200,7 @@ pub fn try_create_aggregate_avg_function(
 
     {
         Err(ErrorCode::BadDataValueType(format!(
-            "AggregateSumFunction does not support type '{:?}'",
+            "AggregateAvgFunction does not support type '{:?}'",
             data_type
         )))
     })

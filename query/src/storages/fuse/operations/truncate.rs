@@ -40,22 +40,22 @@ impl FuseTable {
             new_snapshot.prev_snapshot_id = Some(prev_id);
             new_snapshot.summary = Default::default();
             new_snapshot.snapshot_id = Uuid::new_v4();
-            let new_snapshot_loc =
-                io::snapshot_location(new_snapshot.snapshot_id.to_simple().to_string().as_str()); // TODO refine this
+            let new_snapshot_loc = io::snapshot_location(&new_snapshot.snapshot_id);
             let da = ctx.get_data_accessor()?;
             let bytes = serde_json::to_vec(&new_snapshot)?;
             da.put(&new_snapshot_loc, bytes).await?;
 
-            let catalog = ctx.get_catalog();
-            // TODO backoff retry
-            catalog
+            let keep_last_snapshot = false;
+            let _ = self
+                .do_truncate_history(ctx.clone(), keep_last_snapshot)
+                .await;
+            ctx.get_catalog()
                 .upsert_table_option(UpsertTableOptionReq::new(
                     &self.table_info.ident,
                     TBL_OPT_KEY_SNAPSHOT_LOC,
                     new_snapshot_loc,
                 ))
                 .await?;
-            return Ok(());
         }
 
         Ok(())

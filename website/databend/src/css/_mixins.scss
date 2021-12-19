@@ -1,0 +1,256 @@
+@use "sass:math";
+
+$color-text-primary:#000;
+$color-text-gray:#838383;
+$color-text-link:#2249c0;
+
+$link-color: #1890ff; // link color
+$link-hover-color: #2976d4; // link color
+$section-color: #141e24;
+
+$success-color: #52c41a; // success color
+$warning-color: #faad14; // warning color
+$error-color: #f5222d; // error color
+$colorWhite:#fff;
+$colorBlack:#000;
+
+$heading-color: rgba(#000, 0.85); // title color
+$text-color: rgba(#000, 0.65); // mian text color
+$text-color-secondary: rgba(#000, 0.45); // sub text color
+$disabled-color: rgba(#000,0.25); // disabled color
+$border-radius-base: 4px; // border-radius
+$border-color-base: #d9d9d9;
+$box-shadow-base: 0 2px 8px rgba(#000, 0.15);
+
+$container-width:1200px;
+$header-height:70px;
+$phone-width:750px;
+$databend-background-color:#06163C;
+$databen-gray-color: #F6F7F8;
+$databend-white: #fff;  // Databend white
+$databend-black: #222;
+$databend-description: #687497;
+$font-size-base: 14px; // main font-size 
+$databend-blue: #76AFF7;
+// function
+@function mpx($px:0){
+  @return math.div($px*1920,375)+px;
+}
+$phoneW:997px;
+@mixin media($phone:$phoneW){
+  @media screen and (max-width: $phone) {
+    @content;
+  }
+}
+@mixin min-media($width:3000px){
+  @media screen and (min-width: $width) {
+    @content;
+  }
+}
+@mixin pm{
+  [data-pc]{display:block;}
+  [data-phone]{display:none;}
+  @include media{
+    [data-pc]{display:none;}
+    [data-phone]{display:block;}
+  }
+  @content;
+}
+
+@mixin box($direction:row,$align:flex-start,$justify:flex-start){
+    display:flex;
+    flex-direction:$direction;
+    align-items:$align;
+    justify-content:$justify;
+}
+@mixin gl-home-main {
+  flex: 1;
+}
+@mixin box-c{
+  @include box($direction:row,$align:center,$justify:center);
+}
+@mixin align-c{
+  @include box($direction:row,$align:center,$justify:flex-start);
+}
+@mixin align-s{
+  @include box($direction:row,$align:flex-start,$justify:flex-start);
+}
+@mixin justify-c{
+  @include box($direction:row,$align:flex-start,$justify:center);
+}
+@mixin box-column{
+  @include box($direction:column,$align:flex-start,$justify:flex-start);
+}
+@mixin box-column-e{
+  @include box($direction:column,$align:flex-end,$justify:flex-start);
+}
+@mixin box-column-c{
+  @include box($direction:column,$align:center,$justify:center);
+}
+@mixin align-column-c{
+  @include box($direction:column,$align:center,$justify:flex-start);
+}
+@mixin justify-column-c{
+  @include box($direction:column,$align:flex-start,$justify:center);
+}
+@mixin box-flex {flex: 1;}
+@mixin box-shadow($shadow:5px,$color:$borColor-3){
+    box-shadow:0 0 $shadow 0 $color;
+}
+@mixin ellipsis($line:1){
+  @if $line==1 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  @else {
+    display: -webkit-box;
+    -webkit-line-clamp: $line;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+@mixin cardHover{
+  &,*{transition:all .4s ease;}
+  &:hover{transition:all .4s ease !important;box-shadow:0 0 20px rgba(0, 0, 0, 0.1); transform: translateY(-10px) !important;}
+  @content;
+  @include media{
+    &:hover{
+      transform: translateY(0) !important;
+    }
+  }
+}
+
+@mixin ellipse-n($line-num: 3) {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: $line-num;
+  overflow: hidden;
+}
+
+// iphonex padding
+@mixin iphonex-padding-bottom($paddingBottom: 0px) {
+  padding-bottom: $paddingBottom;
+  padding-bottom: calc(#{$paddingBottom} + constant(safe-area-inset-bottom));
+  padding-bottom: calc(#{$paddingBottom} + env(safe-area-inset-bottom));
+}
+
+// iphonex bottom
+@mixin iphonex-fixed-bottom($bottom:0px) {
+  bottom: $bottom;
+  bottom: calc(#{$bottom} + constant(safe-area-inset-bottom));
+  bottom: calc(#{$bottom} + env(safe-area-inset-bottom));
+}
+
+// iphonex fixed
+@mixin iphonex-fixed-bottom-zero($backgroundColor: #ffffff) {
+  @include iphonex-fixed-bottom();
+  &::after {
+    content: ' ';
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: $backgroundColor;
+    height: constant(safe-area-inset-bottom);
+    height: env(safe-area-inset-bottom);
+  }
+}
+%scroll{
+  &::-webkit-scrollbar {width: 7px !important;border-radius: 7px;display: block !important;}
+
+  /* px-to-viewport-ignore */
+
+  /* Handle style */
+  &::-webkit-scrollbar-thumb {border-radius: 7px;background-color: #333;}
+
+  /* px-to-viewport-ignore */
+
+  /* hover*/
+  &::-webkit-scrollbar-thumb:vertical:hover {background-color: darken(#333,5%);}
+
+  /* press */
+  &::-webkit-scrollbar-thumb:vertical:active {background-color: darken(#333,10%);}
+}
+
+%clearfix{zoom:1;
+  &::before,&::after{content:"";display:table;}
+  &::after {clear:both;}
+}
+
+.global-card-hover{
+  @include cardHover;
+}
+.global-container-width{
+  width: $container-width;
+  margin: 0 auto;
+  @include media{
+    width: 100%;
+  }
+}
+
+.bubble-animation {
+  $randomOffsets: 4px 6px 8px;opacity: 0.8;flex: 0 0 260px;
+  &:hover {
+      opacity: 1.0;
+  }
+  @each $val in 1, 2, 3 {
+      $random: nth($randomOffsets, $val);
+      @keyframes random-anim-#{$val} {
+          0% {
+              transform: 0;
+          }
+          20% {
+              transform: translateY(-$random);
+          }
+          40% {
+              transform: 0;
+          }
+          80% {
+              transform: translateY($random);
+          }
+          100% {
+              transform: translateY(0);
+          }
+      }
+  }
+  &.way1 { animation: random-anim-1 5s linear 0.3s infinite; }
+  &.way2 { animation: random-anim-2 5s linear 1.5s infinite; }
+  &.way3 { animation: random-anim-3 5s linear 2.2s infinite; }
+  &.way4 { animation: random-anim-3 5s linear 2.7s infinite; }
+}
+.fontSize12{
+  font-size: 12px;
+}
+.fontSize14{
+  font-size: 14px;
+}
+.fontSize16{
+  font-size: 16px;
+}
+.fontSize18{
+  font-size: 18px;
+}
+.fontSize20{
+  font-size: 20px;
+}
+.fontSize22{
+  font-size: 22px;
+}
+.fontSize24{
+  font-size: 24px;
+}
+.fontSize26{
+  font-size: 26px;
+}
+.fontSize28{
+  font-size: 28px;
+}
+.fontSize30{
+  font-size: 30px;
+}
+.icon-text-center{
+  display: flex;
+  align-items: center;
+}

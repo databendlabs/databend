@@ -63,6 +63,7 @@ fn get_all_files<P: AsRef<Path>>(path: P) -> Box<dyn Iterator<Item = (PathBuf, u
 pub type LruDiskCache = DiskCache<LruCache<OsString, u64, DefaultHashBuilder, FileSize>>;
 
 /// An basic disk cache of files on disk.
+#[derive(Debug)]
 pub struct DiskCache<C, S: BuildHasher + Clone = DefaultHashBuilder>
 where C: Cache<OsString, u64, S, FileSize>
 {
@@ -358,4 +359,21 @@ pub mod result {
     pub type Result<T> = std::result::Result<T, Error>;
 }
 
+use common_exception::ErrorCode;
 use result::*;
+
+impl From<Error> for ErrorCode {
+    fn from(error: Error) -> Self {
+        match error {
+            Error::FileNotInCache => {
+                ErrorCode::DiskCacheFileNotInCache("disk cache error: file not in cache")
+            }
+            Error::FileTooLarge => {
+                ErrorCode::DiskCacheFileTooLarge("disk cache error: file too large")
+            }
+            Error::Io(err) => {
+                ErrorCode::DiskCacheIOError(format!("disk cache io error, cause: {}", err))
+            }
+        }
+    }
+}

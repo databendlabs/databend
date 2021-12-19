@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 
 ## create ontime table
-cat $CURDIR/ddl/create_table.sql | $MYSQL_CLIENT_CONNECT
+cat $CURDIR/ontime/create_table.sql | sed 's/ontime/ontime_streaming_load/g' | $MYSQL_CLIENT_CONNECT
 
 
 if [ ! -f /tmp/ontime.csv ]; then
@@ -13,8 +13,8 @@ if [ ! -f /tmp/ontime.csv ]; then
 fi
 
 
-curl -H "insert_sql:insert into ontime format CSV" -H "csv_header:1" -F  "upload=@/tmp/ontime.csv"  -XPUT http://localhost:8001/v1/streaming_load > /dev/null 2>&1
+curl -H "insert_sql:insert into ontime_streaming_load format CSV" -H "csv_header:1" -F  "upload=@/tmp/ontime.csv"  -XPUT http://localhost:8001/v1/streaming_load > /dev/null 2>&1
 
 
-echo "select count(1) ,avg(Year), sum(DayOfWeek)  from ontime;" | $MYSQL_CLIENT_CONNECT
-echo "drop table ontime;" | $MYSQL_CLIENT_CONNECT
+echo "select count(1) ,avg(Year), sum(DayOfWeek)  from ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
+echo "drop table ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT

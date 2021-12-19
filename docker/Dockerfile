@@ -1,13 +1,7 @@
-FROM rust:1.48.0-buster AS builder
-
-COPY ./ /app
-WORKDIR /app
-RUN make setup
-RUN make build
-
 FROM debian:buster
-COPY --from=builder /app/target/release/databend-query /databend-query
-COPY --from=builder /app/target/release/databend-meta /databend-meta
-COPY --from=builder /app/docker/databend-query-docker.toml /databend-query.toml
-COPY --from=builder /app/docker/bootstrap.sh /bootstrap.sh
+
+COPY ./target/release/databend-query /databend-query
+COPY ./target/release/databend-meta /databend-meta
+COPY ./docker/databend-query-docker.toml /databend-query.toml
+COPY ./docker/bootstrap.sh /bootstrap.sh
 ENTRYPOINT ["/bootstrap.sh"]

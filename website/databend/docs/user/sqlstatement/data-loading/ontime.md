@@ -39,13 +39,13 @@ Mode switched to admin mode
 [ok] ✅ To process mysql queries, run: mysql -h127.0.0.1 -P3307 -uroot
 [ok] ✅ To process clickhouse queries, run: clickhouse client --host 127.0.0.1 --port 9000 --user root
 [ok] ✅ To process HTTP REST queries, run: curl --location --request POST '127.0.0.1:24974/v1/statement/' --header 'Content-Type: text/plain' --data-raw 'your SQL'
-[local] [admin]> 
+[local] [admin]>
 ```
 
 ## 4. Create the ontime table
 
 ```
-bendctl --databend_dir ~/.databend --group local query ./tests/suites/0_stateful/ddl/create_table.sql
+bendctl --databend_dir ~/.databend --group local query ./tests/suites/0_stateful/ontime/create_table.sql
 ```
 
 ## 5. Load raw data into ontime table

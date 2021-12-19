@@ -345,7 +345,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     }
 
     fn extra_info(context: &Arc<QueryContext>, instant: Instant) -> String {
-        let progress = context.get_progress_value();
+        let progress = context.get_scan_progress_value();
         let seconds = instant.elapsed().as_nanos() as f64 / 1e9f64;
         format!(
             "Read {} rows, {} in {:.3} sec., {} rows/sec., {}/sec.",

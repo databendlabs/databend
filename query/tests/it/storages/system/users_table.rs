@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_base::tokio;
 use common_exception::Result;
-use common_meta_types::AuthType;
+use common_meta_types::PasswordType;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_meta_types::UserQuota;
@@ -36,7 +36,7 @@ async fn test_users_table() -> Result<()> {
             name: "test".to_string(),
             hostname: "localhost".to_string(),
             password: Vec::from(""),
-            auth_type: AuthType::None,
+            password_type: PasswordType::None,
             grants: UserGrantSet::empty(),
             quota: UserQuota::no_limit(),
         })
@@ -47,7 +47,7 @@ async fn test_users_table() -> Result<()> {
             name: "test1".to_string(),
             hostname: "%".to_string(),
             password: Vec::from("123456789"),
-            auth_type: AuthType::PlainText,
+            password_type: PasswordType::PlainText,
             grants: UserGrantSet::empty(),
             quota: UserQuota::no_limit(),
         })
@@ -62,12 +62,12 @@ async fn test_users_table() -> Result<()> {
     assert_eq!(block.num_columns(), 4);
 
     let expected = vec![
-        "+-------+-----------+-----------+-----------+",
-        "| name  | hostname  | password  | auth_type |",
-        "+-------+-----------+-----------+-----------+",
-        "| test  | localhost |           | 0         |",
-        "| test1 | %         | 123456789 | 1         |",
-        "+-------+-----------+-----------+-----------+",
+        "+-------+-----------+-----------+---------------+",
+        "| name  | hostname  | password  | password_type |",
+        "+-------+-----------+-----------+---------------+",
+        "| test  | localhost |           | 0             |",
+        "| test1 | %         | 123456789 | 1             |",
+        "+-------+-----------+-----------+---------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     Ok(())

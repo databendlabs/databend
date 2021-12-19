@@ -54,7 +54,7 @@ impl Interpreter for AlterUserInterpreter {
             .update_user(
                 plan.name.as_str(),
                 plan.hostname.as_str(),
-                Some(plan.new_auth_type),
+                Some(plan.new_password_type),
                 Some(plan.new_password),
             )
             .await?;

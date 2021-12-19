@@ -78,7 +78,7 @@ impl AzureBlobAccessor {
         let response_opt = blob.put_block_blob(body).execute().await;
         match response_opt {
             Err(e) => {
-                return Err(ErrorCode::DALTransportError(format!(
+                return Err(ErrorCode::DalTransportError(format!(
                     "Failed on azure blob put operation, {}",
                     e
                 )))
@@ -109,7 +109,7 @@ impl AzureBlobAccessor {
         let retrieved_blob_opt = blob.get().execute().await;
         match retrieved_blob_opt {
             Err(e) => {
-                return Err(ErrorCode::DALTransportError(format!(
+                return Err(ErrorCode::DalTransportError(format!(
                     "Failed on azure blob get operation,, {}",
                     e
                 )));
@@ -154,10 +154,16 @@ impl DataAccessor for AzureBlobAccessor {
         let mut s = Box::pin(input_stream);
         while let Some(bytes_res) = s.next().await {
             match bytes_res {
-                Err(e) => return Err(ErrorCode::DALTransportError(e.to_string())),
+                Err(e) => return Err(ErrorCode::DalTransportError(e.to_string())),
                 Ok(bytes) => data.append(&mut bytes.to_vec()),
             }
         }
         self.put_blob(path, data).await
+    }
+
+    async fn remove(&self, _path: &str) -> Result<()> {
+        Err(ErrorCode::UnImplement(
+            "remove not implemented for azure blob storage yet",
+        ))
     }
 }

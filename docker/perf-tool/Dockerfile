@@ -1,7 +1,7 @@
 FROM python:3
 COPY ./tests/perfs/perfs.py /perfs.py
 COPY ./tests/perfs/compare.py /compare.py
-COPY ./distro/databend-benchmark /databend-benchmark
+COPY ./target/release/databend-benchmark /databend-benchmark
 
 COPY ./tests/perfs/perfs.yaml /perfs.yaml
 RUN rm /usr/bin/lsb_release || true

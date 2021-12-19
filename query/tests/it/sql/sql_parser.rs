@@ -15,13 +15,14 @@
 use std::collections::HashMap;
 
 use common_exception::Result;
-use common_meta_types::AuthType;
 use common_meta_types::Compression;
 use common_meta_types::Credentials;
 use common_meta_types::FileFormat;
 use common_meta_types::Format;
+use common_meta_types::PasswordType;
 use common_meta_types::StageParams;
-use common_meta_types::UserPrivilege;
+use common_meta_types::UserIdentity;
+use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use databend_query::sql::statements::DfAlterUser;
 use databend_query::sql::statements::DfCopy;
@@ -38,6 +39,7 @@ use databend_query::sql::statements::DfGrantStatement;
 use databend_query::sql::statements::DfQueryStatement;
 use databend_query::sql::statements::DfRevokeStatement;
 use databend_query::sql::statements::DfShowDatabases;
+use databend_query::sql::statements::DfShowGrants;
 use databend_query::sql::statements::DfShowTables;
 use databend_query::sql::statements::DfTruncateTable;
 use databend_query::sql::statements::DfUseDatabase;
@@ -353,6 +355,28 @@ fn show_tables_test() -> Result<()> {
 }
 
 #[test]
+fn show_grants_test() -> Result<()> {
+    expect_parse_ok(
+        "SHOW GRANTS",
+        DfStatement::ShowGrants(DfShowGrants {
+            user_identity: None,
+        }),
+    )?;
+
+    expect_parse_ok(
+        "SHOW GRANTS FOR 'u1'@'%'",
+        DfStatement::ShowGrants(DfShowGrants {
+            user_identity: Some(UserIdentity {
+                username: "u1".into(),
+                hostname: "%".into(),
+            }),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
 fn show_functions_tests() -> Result<()> {
     use databend_query::sql::statements::DfShowFunctions;
 
@@ -589,7 +613,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::Sha256,
+            password_type: PasswordType::Sha256,
             password: String::from("password"),
         }),
     )?;
@@ -600,7 +624,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::PlainText,
+            password_type: PasswordType::PlainText,
             password: String::from("password"),
         }),
     )?;
@@ -611,7 +635,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::Sha256,
+            password_type: PasswordType::Sha256,
             password: String::from("password"),
         }),
     )?;
@@ -622,7 +646,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::DoubleSha1,
+            password_type: PasswordType::DoubleSha1,
             password: String::from("password"),
         }),
     )?;
@@ -633,7 +657,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::None,
+            password_type: PasswordType::None,
             password: String::from(""),
         }),
     )?;
@@ -644,7 +668,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: true,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::Sha256,
+            password_type: PasswordType::Sha256,
             password: String::from("password"),
         }),
     )?;
@@ -655,7 +679,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test@localhost"),
             hostname: String::from("%"),
-            auth_type: AuthType::Sha256,
+            password_type: PasswordType::Sha256,
             password: String::from("password"),
         }),
     )?;
@@ -666,7 +690,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::None,
+            password_type: PasswordType::None,
             password: String::from(""),
         }),
     )?;
@@ -677,7 +701,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::None,
+            password_type: PasswordType::None,
             password: String::from(""),
         }),
     )?;
@@ -712,7 +736,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_auth_type: AuthType::Sha256,
+            new_password_type: PasswordType::Sha256,
             new_password: String::from("password"),
         }),
     )?;
@@ -723,7 +747,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: true,
             name: String::from(""),
             hostname: String::from(""),
-            new_auth_type: AuthType::Sha256,
+            new_password_type: PasswordType::Sha256,
             new_password: String::from("password"),
         }),
     )?;
@@ -734,7 +758,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_auth_type: AuthType::PlainText,
+            new_password_type: PasswordType::PlainText,
             new_password: String::from("password"),
         }),
     )?;
@@ -745,7 +769,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_auth_type: AuthType::Sha256,
+            new_password_type: PasswordType::Sha256,
             new_password: String::from("password"),
         }),
     )?;
@@ -756,7 +780,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_auth_type: AuthType::DoubleSha1,
+            new_password_type: PasswordType::DoubleSha1,
             new_password: String::from("password"),
         }),
     )?;
@@ -767,7 +791,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_auth_type: AuthType::None,
+            new_password_type: PasswordType::None,
             new_password: String::from(""),
         }),
     )?;
@@ -778,7 +802,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test@localhost"),
             hostname: String::from("%"),
-            new_auth_type: AuthType::Sha256,
+            new_password_type: PasswordType::Sha256,
             new_password: String::from("password"),
         }),
     )?;
@@ -789,7 +813,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_auth_type: AuthType::None,
+            new_password_type: PasswordType::None,
             new_password: String::from(""),
         }),
     )?;
@@ -800,7 +824,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_auth_type: AuthType::None,
+            new_password_type: PasswordType::None,
             new_password: String::from(""),
         }),
     )?;
@@ -893,7 +917,7 @@ fn grant_privilege_test() -> Result<()> {
             name: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
-            priv_types: UserPrivilege::all_privileges(),
+            priv_types: UserPrivilegeSet::all_privileges(),
         }),
     )?;
 
@@ -903,7 +927,7 @@ fn grant_privilege_test() -> Result<()> {
             name: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
-            priv_types: UserPrivilege::all_privileges(),
+            priv_types: UserPrivilegeSet::all_privileges(),
         }),
     )?;
 
@@ -914,7 +938,7 @@ fn grant_privilege_test() -> Result<()> {
             hostname: String::from("localhost"),
             on: DfGrantObject::Table(Some("db1".into()), "tb1".into()),
             priv_types: {
-                let mut privileges = UserPrivilege::empty();
+                let mut privileges = UserPrivilegeSet::empty();
                 privileges.set_privilege(UserPrivilegeType::Insert);
                 privileges
             },
@@ -928,7 +952,7 @@ fn grant_privilege_test() -> Result<()> {
             hostname: String::from("localhost"),
             on: DfGrantObject::Table(None, "tb1".into()),
             priv_types: {
-                let mut privileges = UserPrivilege::empty();
+                let mut privileges = UserPrivilegeSet::empty();
                 privileges.set_privilege(UserPrivilegeType::Insert);
                 privileges
             },
@@ -942,7 +966,7 @@ fn grant_privilege_test() -> Result<()> {
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(Some("db1".into())),
             priv_types: {
-                let mut privileges = UserPrivilege::empty();
+                let mut privileges = UserPrivilegeSet::empty();
                 privileges.set_privilege(UserPrivilegeType::Insert);
                 privileges
             },
@@ -956,7 +980,7 @@ fn grant_privilege_test() -> Result<()> {
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
             priv_types: {
-                let mut privileges = UserPrivilege::empty();
+                let mut privileges = UserPrivilegeSet::empty();
                 privileges.set_privilege(UserPrivilegeType::Select);
                 privileges.set_privilege(UserPrivilegeType::Create);
                 privileges
@@ -1000,7 +1024,7 @@ fn revoke_privilege_test() -> Result<()> {
             username: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
-            priv_types: UserPrivilege::all_privileges(),
+            priv_types: UserPrivilegeSet::all_privileges(),
         }),
     )?;
 

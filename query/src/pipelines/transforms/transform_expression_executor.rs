@@ -123,8 +123,7 @@ impl ExpressionExecutor {
                         arg_columns.push(column);
                     }
 
-                    let func = f.to_function()?;
-                    let column = func.eval(&arg_columns, rows)?;
+                    let column = f.func.eval(&arg_columns, rows)?;
 
                     let column = DataColumnWithField::new(
                         column,

@@ -99,9 +99,16 @@ impl TestFixture {
                 engine: "FUSE".to_string(),
                 // make sure blocks will not be merged
                 options: [(TBL_OPT_KEY_CHUNK_BLOCK_NUM.to_owned(), "1".to_owned())].into(),
+                ..Default::default()
             },
             as_select: None,
         }
+    }
+
+    pub async fn create_default_table(&self) -> Result<()> {
+        let create_table_plan = self.default_crate_table_plan();
+        let catalog = self.ctx.get_catalog();
+        catalog.create_table(create_table_plan.into()).await
     }
 
     pub fn gen_sample_blocks(num: u32, start: i32) -> Vec<Result<DataBlock>> {

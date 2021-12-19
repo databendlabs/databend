@@ -31,6 +31,7 @@ use databend_query::storages::FuseHistoryTable;
 use databend_query::storages::ToReadDataSourcePlan;
 use databend_query::table_functions::TableArgs;
 use futures::TryStreamExt;
+use walkdir::WalkDir;
 
 use super::table_test_fixture::TestFixture;
 
@@ -97,8 +98,10 @@ async fn test_fuse_history_table_read() -> Result<()> {
 
     {
         let expected = vec![
-            "++", //
-            "++", //
+            "+-------------+------------------+---------------+-------------+-----------+--------------------+------------------+",
+            "| snapshot_id | prev_snapshot_id | segment_count | block_count | row_count | bytes_uncompressed | bytes_compressed |",
+            "+-------------+------------------+---------------+-------------+-----------+--------------------+------------------+",
+            "+-------------+------------------+---------------+-------------+-----------+--------------------+------------------+", 
         ];
 
         expects_ok(
@@ -192,6 +195,95 @@ async fn test_fuse_history_table_read() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn test_fuse_history_truncate_in_truncate_stmt() -> Result<()> {
+    let fixture = TestFixture::new().await;
+    let db = fixture.default_db_name();
+    let tbl = fixture.default_table_name();
+    let ctx = fixture.ctx();
+    fixture.create_default_table().await?;
+
+    // ingests some test data
+    append_sample_data(10, &fixture).await?;
+    let data_path = ctx.get_config().storage.disk.data_path;
+    let root = data_path.as_str();
+
+    {
+        let mut got_some_files = false;
+        for entry in WalkDir::new(root) {
+            let entry = entry.unwrap();
+            if entry.file_type().is_file() {
+                got_some_files = true;
+                break;
+            }
+        }
+        assert!(got_some_files, "there should be some files");
+    }
+
+    // let's truncate
+    {
+        let qry = format!("truncate table '{}'.'{}'", db, tbl);
+        execute_command(qry.as_str(), ctx.clone()).await?;
+
+        let expected = vec![
+            "+-------+",
+            "| count |",
+            "+-------+",
+            "| 1     |",
+            "+-------+",
+        ];
+        let qry = format!(
+            "select count(*) as count from fuse_history('{}', '{}')",
+            db, tbl
+        );
+
+        expects_ok(
+            "after_truncate_there_should_be_one_item_left_in_history",
+            execute_query(qry.as_str(), ctx.clone()).await,
+            expected,
+        )
+        .await?;
+
+        let mut got_some_files = false;
+        for entry in WalkDir::new(root) {
+            let entry = entry.unwrap();
+            if entry.file_type().is_file() {
+                got_some_files = true;
+                break;
+            }
+        }
+        assert!(got_some_files, "there should be some files");
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_fuse_history_truncate_in_drop_stmt() -> Result<()> {
+    let fixture = TestFixture::new().await;
+    let db = fixture.default_db_name();
+    let tbl = fixture.default_table_name();
+    let ctx = fixture.ctx();
+    fixture.create_default_table().await?;
+
+    // ingests some test data
+    append_sample_data(10, &fixture).await?;
+    let data_path = ctx.get_config().storage.disk.data_path;
+    let root = data_path.as_str();
+    // let's Drop
+    {
+        let qry = format!("drop table '{}'.'{}'", db, tbl);
+        execute_command(qry.as_str(), ctx.clone()).await?;
+        // there should be no files left inside test root (dirs are kept, though)
+        for entry in WalkDir::new(root) {
+            let entry = entry.unwrap();
+            if entry.file_type().is_file() {
+                panic!("there should be not file left")
+            }
+        }
+    }
+    Ok(())
+}
+
 async fn test_drive(
     test_db: Option<&str>,
     test_tbl: Option<&str>,
@@ -268,10 +360,26 @@ async fn execute_query(query: &str, ctx: Arc<QueryContext>) -> Result<SendableDa
         .await
 }
 
+async fn execute_command(query: &str, ctx: Arc<QueryContext>) -> Result<()> {
+    let res = execute_query(query, ctx).await?;
+    res.try_collect::<Vec<DataBlock>>().await?;
+    Ok(())
+}
+
 async fn append_sample_data(num_blocks: u32, fixture: &TestFixture) -> Result<()> {
+    append_sample_data_overwrite(num_blocks, false, fixture).await
+}
+
+async fn append_sample_data_overwrite(
+    num_blocks: u32,
+    overwrite: bool,
+    fixture: &TestFixture,
+) -> Result<()> {
     let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
     let table = fixture.latest_default_table().await?;
     let ctx = fixture.ctx();
     let stream = table.append_data(ctx.clone(), stream).await?;
-    table.commit(ctx, stream.try_collect().await?, false).await
+    table
+        .commit(ctx, stream.try_collect().await?, overwrite)
+        .await
 }

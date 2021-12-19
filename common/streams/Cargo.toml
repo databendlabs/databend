@@ -12,14 +12,14 @@ test = false
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-arrow = {path = "../arrow"}
-common-base = {path = "../base"}
-common-dal = {path = "../dal"}
-common-datablocks = {path = "../datablocks"}
-common-datavalues = {path = "../datavalues"}
-common-exception = {path = "../exception"}
-common-functions = {path = "../functions"}
-common-io = {path = "../io"}
+common-arrow = { path = "../arrow" }
+common-base = { path = "../base" }
+common-dal = { path = "../dal" }
+common-datablocks = { path = "../datablocks" }
+common-datavalues = { path = "../datavalues" }
+common-exception = { path = "../exception" }
+common-functions = { path = "../functions" }
+common-io = { path = "../io" }
 
 
 # Github dependencies
@@ -27,11 +27,8 @@ common-io = {path = "../io"}
 # Crates.io dependencies
 async-stream = "0.3.2"
 async-trait = "0.1.52"
-csv-async = {git = "https://github.com/datafuse-extras/csv-async", rev = "cb521c7"}
+csv-async = { git = "https://github.com/datafuse-extras/csv-async", rev = "cb521c7" }
 futures = "0.3.18"
 pin-project-lite = "0.2.7"
 tempfile = "3.2.0"
 tokio-stream = { version = "0.1.8", features = ["net"] }
-
-[dev-dependencies]
-pretty_assertions = "1.0.0"

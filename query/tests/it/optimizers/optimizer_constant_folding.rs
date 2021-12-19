@@ -110,7 +110,7 @@ fn test_constant_folding_optimizer() -> Result<()> {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: (number > 1)\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [(true AND (number > 1))]]",
             },
             Test {
                 name: "Filter cond and true",
@@ -118,7 +118,7 @@ fn test_constant_folding_optimizer() -> Result<()> {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: (number > 1)\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [((number > 1) AND true)]]",
             },
             Test {
                 name: "Filter false and cond",
@@ -126,7 +126,7 @@ fn test_constant_folding_optimizer() -> Result<()> {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: false\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [(false AND (number > 1))]]",
             },
             Test {
                 name: "Filter cond and false",
@@ -134,7 +134,7 @@ fn test_constant_folding_optimizer() -> Result<()> {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: false\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [((number > 1) AND false)]]",
             },
             Test {
                 name: "Filter false or cond",
@@ -142,7 +142,7 @@ fn test_constant_folding_optimizer() -> Result<()> {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: (number > 1)\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [(false OR (number > 1))]]",
             },
             Test {
                 name: "Filter cond or false",
@@ -150,7 +150,7 @@ fn test_constant_folding_optimizer() -> Result<()> {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: (number > 1)\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [((number > 1) OR false)]]",
             },
             Test {
                 name: "Filter true or cond",
@@ -158,7 +158,7 @@ fn test_constant_folding_optimizer() -> Result<()> {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: true\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [(true OR (number > 1))]]",
             },
             Test {
                 name: "Filter cond or true",
@@ -166,7 +166,7 @@ fn test_constant_folding_optimizer() -> Result<()> {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: true\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [((number > 1) OR true)]]",
             },
         ];
 

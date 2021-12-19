@@ -26,25 +26,20 @@ pub struct StageParams {
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "lowercase")]
+#[serde(default)]
 pub struct Credentials {
-    #[serde(default)]
     pub access_key_id: String,
-    #[serde(default)]
     pub secret_access_key: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
+#[serde(default)]
 pub struct FileFormat {
-    #[serde(default)]
     pub format: Format,
-    #[serde(default = "default_record_delimiter")]
     pub record_delimiter: String,
-    #[serde(default = "default_field_delimiter")]
     pub field_delimiter: String,
-    #[serde(default = "default_csv_header")]
     pub csv_header: bool,
-    #[serde(default)]
     pub compression: Compression,
 }
 
@@ -157,8 +152,8 @@ impl StageParams {
 }
 /// Stage for data stage location.
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, Eq, PartialEq)]
+#[serde(default)]
 pub struct UserStageInfo {
-    #[serde(default)]
     pub stage_name: String,
 
     pub stage_params: StageParams,

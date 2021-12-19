@@ -14,6 +14,7 @@
 //
 
 use std::any::Any;
+use std::any::TypeId;
 use std::convert::TryFrom;
 use std::sync::Arc;
 
@@ -115,6 +116,10 @@ impl Table for FuseTable {
     ) -> Result<()> {
         self.do_truncate(ctx, truncate_plan).await
     }
+
+    async fn optimize(&self, ctx: Arc<QueryContext>, keep_last_snapshot: bool) -> Result<()> {
+        self.do_truncate_history(ctx, keep_last_snapshot).await
+    }
 }
 
 impl FuseTable {
@@ -128,9 +133,16 @@ impl FuseTable {
     pub(crate) async fn table_snapshot(&self, ctx: &QueryContext) -> Result<Option<TableSnapshot>> {
         if let Some(loc) = self.snapshot_loc() {
             let da = ctx.get_data_accessor()?;
-            Ok(Some(io::read_obj(da.as_ref(), loc.to_string()).await?))
+            Ok(Some(
+                io::read_obj(da.as_ref(), loc.to_string(), ctx.get_table_cache()).await?,
+            ))
         } else {
             Ok(None)
         }
     }
+}
+
+pub fn is_fuse_table(table: &dyn Table) -> bool {
+    let tid = table.as_any().type_id();
+    tid == TypeId::of::<FuseTable>()
 }

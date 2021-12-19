@@ -29,6 +29,7 @@ use common_datavalues::prelude::DFUInt16Array;
 use common_datavalues::prelude::DFUInt32Array;
 use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::series::IntoSeries;
+use common_datavalues::series::Series;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
@@ -71,15 +72,16 @@ impl Function for CastFunction {
         if columns[0].data_type() == &self.cast_type {
             return Ok(columns[0].column().clone());
         }
-
         let series = columns[0].column().clone().to_minimal_array()?;
         const DATE_FMT: &str = "%Y-%m-%d";
         const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
 
-        let error = ErrorCode::BadDataValueType(format!(
-            "Unsupported cast_with_type from array: {:?} into data_type: {:?}",
-            series, self.cast_type,
-        ));
+        let error_fn = || -> Result<Series> {
+            Err(ErrorCode::BadDataValueType(format!(
+                "Unsupported cast_with_type from array: {:?} into data_type: {:?}",
+                series, self.cast_type,
+            )))
+        };
 
         let array = match (columns[0].data_type(), &self.cast_type) {
             // Date/DateTime to others
@@ -91,7 +93,7 @@ impl Function for CastFunction {
                 Date32 => Ok(arr.apply_cast_numeric(|v| v as i32).into_series()),
                 DateTime32(_) => Ok(arr.apply_cast_numeric(|v|  Utc.timestamp(v as i64 * 24 * 3600, 0_u32).timestamp() as u32 ).into_series() ),
                 String => Ok(DFStringArray::from_iter(arr.into_iter().map(|v| v.map(|x| datetime_to_string( Utc.timestamp(*x as i64 * 24 * 3600, 0_u32), DATE_FMT))) ).into_series()),
-                _ =>  Err(error)
+                _ => error_fn(),
                }
             }),
 
@@ -103,7 +105,7 @@ impl Function for CastFunction {
                 Date32 => Ok(arr.apply_cast_numeric(|v| v as i32).into_series()),
                 DateTime32(_) => Ok(arr.apply_cast_numeric(|v|  Utc.timestamp(v as i64 * 24 * 3600, 0_u32).timestamp()  as u32).into_series() ),
                 String => Ok(DFStringArray::from_iter(arr.into_iter().map(|v| v.map(|x| datetime_to_string( Utc.timestamp(*x as i64 * 24 * 3600, 0_u32), DATE_FMT))) ).into_series()),
-                _ =>  Err(error)
+                _ => error_fn(),
                }
             }),
 
@@ -115,7 +117,7 @@ impl Function for CastFunction {
                 Date16 => Ok(arr.apply_cast_numeric(|v| (v as i64 / 24/ 3600) as u16).into_series()),
                 Date32 => Ok(arr.apply_cast_numeric(|v| (v as i64 / 24/ 3600) as i32).into_series()),
                 String => Ok(DFStringArray::from_iter(arr.into_iter().map(|v| v.map(|x| datetime_to_string( Utc.timestamp(*x as i64, 0_u32), TIME_FMT))) ).into_series()),
-                _ =>  Err(error)
+                _ => error_fn(),
                }
             }),
 
@@ -130,7 +132,8 @@ impl Function for CastFunction {
                     });
                     Ok(DFUInt16Array::from_iter(it).into_series())
                 },
-                _ =>  Err(error)
+                _ => error_fn(),
+
                }
             }),
 
@@ -144,7 +147,8 @@ impl Function for CastFunction {
                     });
                     Ok(DFInt32Array::from_iter(it).into_series())
                 },
-                _ =>  Err(error)
+                _ => error_fn(),
+
                }
             }),
 
@@ -159,7 +163,7 @@ impl Function for CastFunction {
                         });
                         Ok(DFUInt32Array::from_iter(it).into_series())
                     },
-                    _ =>  Err(error)
+                    _ => error_fn(),
                    }
                 })
             }

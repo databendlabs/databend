@@ -22,6 +22,7 @@ use common_planners::Extras;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
+use crate::sessions::QueryContext;
 use crate::storages::fuse::io;
 use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::meta::BlockMeta;
@@ -31,18 +32,16 @@ use crate::storages::index::BlockStatistics;
 use crate::storages::index::RangeFilter;
 
 pub struct BlockPruner {
-    table_snapshot_loc: String,
-    da: Arc<dyn DataAccessor>,
+    table_snapshot_location: String,
+    data_accessor: Arc<dyn DataAccessor>,
 }
 
 type Pred = Box<dyn Fn(&BlockStatistics) -> Result<bool> + Send + Sync + Unpin>;
 impl BlockPruner {
-    pub fn new(table_snapshot: &TableSnapshot, da: Arc<dyn DataAccessor>) -> Self {
+    pub fn new(table_snapshot: &TableSnapshot, data_accessor: Arc<dyn DataAccessor>) -> Self {
         Self {
-            table_snapshot_loc: snapshot_location(
-                table_snapshot.snapshot_id.to_simple().to_string(),
-            ),
-            da,
+            table_snapshot_location: snapshot_location(&table_snapshot.snapshot_id),
+            data_accessor,
         }
     }
 
@@ -50,6 +49,7 @@ impl BlockPruner {
         &self,
         schema: DataSchemaRef,
         push_down: &Option<Extras>,
+        ctx: Arc<QueryContext>,
     ) -> Result<Vec<BlockMeta>> {
         let block_pred: Pred = match push_down {
             Some(exprs) if !exprs.filters.is_empty() => {
@@ -60,8 +60,12 @@ impl BlockPruner {
             _ => Box::new(|_: &BlockStatistics| Ok(true)),
         };
 
-        let snapshot: TableSnapshot =
-            io::read_obj(self.da.as_ref(), self.table_snapshot_loc.as_str()).await?;
+        let snapshot: TableSnapshot = io::read_obj(
+            self.data_accessor.as_ref(),
+            self.table_snapshot_location.as_str(),
+            ctx.get_table_cache(),
+        )
+        .await?;
         let segment_num = snapshot.segments.len();
         let segment_locs = snapshot.segments;
 
@@ -71,7 +75,9 @@ impl BlockPruner {
 
         let res = futures::stream::iter(segment_locs)
             .map(|seg_loc| async {
-                let segment_info: SegmentInfo = io::read_obj(self.da.as_ref(), seg_loc).await?;
+                let segment_info: SegmentInfo =
+                    io::read_obj(self.data_accessor.as_ref(), seg_loc, ctx.get_table_cache())
+                        .await?;
                 Self::filter_segment(segment_info, &block_pred)
             })
             // configuration of the max size of buffered futures
@@ -108,8 +114,9 @@ pub async fn apply_block_pruning(
     schema: DataSchemaRef,
     push_down: &Option<Extras>,
     data_accessor: Arc<dyn DataAccessor>,
+    ctx: Arc<QueryContext>,
 ) -> Result<Vec<BlockMeta>> {
     BlockPruner::new(table_snapshot, data_accessor)
-        .apply(schema, push_down)
+        .apply(schema, push_down, ctx)
         .await
 }

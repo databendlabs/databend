@@ -161,7 +161,7 @@ async fn test_scatter_optimizer() -> Result<()> {
             \n    Create sub queries sets: [_subquery_1]\
             \n      Projection: number:UInt64\
             \n        ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8], push_downs: [projections: [0]]\
-            \n      ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8], push_downs: [projections: [0]]",
+            \n      ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8], push_downs: [projections: [0], filters: [exists(subquery(_subquery_1))]]",
         },
         Test {
             name: "Standalone query with cluster subquery",
@@ -172,7 +172,7 @@ async fn test_scatter_optimizer() -> Result<()> {
             \n      RedistributeStage[expr: 0]\
             \n        Projection: number:UInt64\
             \n          ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8], push_downs: [projections: [0]]\
-            \n      ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8], push_downs: [projections: [0]]",
+            \n      ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8], push_downs: [projections: [0], filters: [exists(subquery(_subquery_1))]]",
         },
         Test {
             name: "Cluster query with standalone subquery",
@@ -185,7 +185,7 @@ async fn test_scatter_optimizer() -> Result<()> {
             \n        Broadcast in cluster\
             \n          Projection: number:UInt64\
             \n            ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8], push_downs: [projections: [0]]\
-            \n        ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8], push_downs: [projections: [0]]",
+            \n        ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8], push_downs: [projections: [0], filters: [exists(subquery(_subquery_1))]]",
         },
         Test {
             name: "Cluster query with cluster subquery",
@@ -198,7 +198,7 @@ async fn test_scatter_optimizer() -> Result<()> {
             \n        Broadcast in cluster\
             \n          Projection: number:UInt64\
             \n            ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8], push_downs: [projections: [0]]\
-            \n        ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8], push_downs: [projections: [0]]",
+            \n        ReadDataSource: scan partitions: [1], scan schema: [number:UInt64], statistics: [read_rows: 1, read_bytes: 8], push_downs: [projections: [0], filters: [exists(subquery(_subquery_1))]]",
         },
     ];
 

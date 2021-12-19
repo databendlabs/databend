@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use structopt::StructOpt;
-use structopt_toml::StructOptToml;
+use clap::Args;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::configs::Config;
 
@@ -22,28 +23,29 @@ pub const LOG_LEVEL: &str = "LOG_LEVEL";
 pub const LOG_DIR: &str = "LOG_DIR";
 
 /// Log config group.
-/// serde(default) make the toml de to default working.
-#[derive(
-    Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
-)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
+#[serde(default)]
+
 pub struct LogConfig {
-    #[structopt(long, env = LOG_LEVEL, default_value = "INFO" , help = "Log level <DEBUG|INFO|ERROR>")]
-    #[serde(default)]
+    /// Log level <DEBUG|INFO|ERROR>
+    #[clap(long, env = LOG_LEVEL, default_value = "INFO")]
     pub log_level: String,
 
-    #[structopt(required = false, long, env = LOG_DIR, default_value = "./_logs", help = "Log file dir")]
-    #[serde(default)]
+    /// Log file dir
+    #[clap(required = false, long, env = LOG_DIR, default_value = "./_logs")]
     pub log_dir: String,
 }
 
-impl LogConfig {
-    pub fn default() -> Self {
-        LogConfig {
+impl Default for LogConfig {
+    fn default() -> Self {
+        Self {
             log_level: "INFO".to_string(),
             log_dir: "./_logs".to_string(),
         }
     }
+}
 
+impl LogConfig {
     pub fn load_from_env(mut_config: &mut Config) {
         env_helper!(mut_config, log, log_level, String, LOG_LEVEL);
         env_helper!(mut_config, log, log_dir, String, LOG_DIR);

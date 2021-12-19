@@ -984,7 +984,7 @@ fn test_context_nodes(tcs: &[MetaSrvTestContext]) -> Vec<Arc<MetaNode>> {
         .collect::<Vec<_>>()
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_node_cluster_write_on_non_leader() -> anyhow::Result<()> {
     // - Bring up a cluster of one leader and one non-voter
     // - Assert that writing on the non-voter returns ForwardToLeader error
@@ -1015,10 +1015,10 @@ async fn test_meta_node_cluster_write_on_non_leader() -> anyhow::Result<()> {
                 panic!("expect node")
             }
         }
-        mn1.raft.wait(None).state(State::NonVoter, "").await?;
-        mn1.raft.wait(None).current_leader(0, "").await?;
+        mn1.raft.wait(timeout()).state(State::NonVoter, "").await?;
+        mn1.raft.wait(timeout()).current_leader(0, "").await?;
         // 3 log: init blank log, add-node-0 log, add-node-1 log
-        mn1.raft.wait(None).log(3, "replicated log").await?;
+        mn1.raft.wait(timeout()).log(3, "replicated log").await?;
     }
 
     let mut client1 = tc1.raft_client().await?;
@@ -1057,7 +1057,7 @@ async fn test_meta_node_cluster_write_on_non_leader() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_node_upsert_kv() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
@@ -1102,7 +1102,7 @@ async fn test_meta_node_upsert_kv() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_node_incr_seq() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();

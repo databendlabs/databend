@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::AuthType;
+use common_meta_types::PasswordType;
 use common_planners::CreateUserPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
@@ -30,7 +30,7 @@ pub struct DfCreateUser {
     /// User name
     pub name: String,
     pub hostname: String,
-    pub auth_type: AuthType,
+    pub password_type: PasswordType,
     pub password: String,
 }
 
@@ -43,7 +43,7 @@ impl AnalyzableStatement for DfCreateUser {
                 name: self.name.clone(),
                 password: Vec::from(self.password.clone()),
                 hostname: self.hostname.clone(),
-                auth_type: self.auth_type.clone(),
+                password_type: self.password_type.clone(),
             },
         ))))
     }

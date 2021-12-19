@@ -30,7 +30,7 @@ fn test_expression_transform_optimizer() -> Result<()> {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: ((number <= 1) or (number > 3))\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [(NOT ((number > 1) AND (number <= 3)))]]",
             },
             Test {
                 name: "Complex expression",
@@ -38,7 +38,7 @@ fn test_expression_transform_optimizer() -> Result<()> {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: ((number < 5) and ((number >= 3) or (NOT toBoolean(number))))\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [(NOT ((number >= 5) OR ((number < 3) AND toBoolean(number))))]]",
             },
             Test {
                 name: "Like and isNotNull expression",
@@ -46,7 +46,7 @@ fn test_expression_transform_optimizer() -> Result<()> {
                 expect: "\
                 Projection: name:String\
                 \n  Filter: (isnull(name) or (name not like %sys%))\
-                \n    ReadDataSource: scan partitions: [1], scan schema: [name:String], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0]]",
+                \n    ReadDataSource: scan partitions: [1], scan schema: [name:String], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0], filters: [(NOT (isNotNull(name) AND (name LIKE %sys%)))]]",
             },
             Test {
                 name: "Not like and isNull expression",
@@ -54,7 +54,7 @@ fn test_expression_transform_optimizer() -> Result<()> {
                 expect: "\
                 Projection: name:String\
                 \n  Filter: (isnotnull(name) and (name like a%))\
-                \n    ReadDataSource: scan partitions: [1], scan schema: [name:String], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0]]",
+                \n    ReadDataSource: scan partitions: [1], scan schema: [name:String], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0], filters: [(NOT (isnull(name) OR (name NOT LIKE a%)))]]",
             },
             Test {
                 name: "Equal expression",
@@ -62,7 +62,7 @@ fn test_expression_transform_optimizer() -> Result<()> {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: ((number <> 1) and (number < 5))\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [((NOT (number = 1)) AND (number < 5))]]",
             },
             Test {
                 name: "Not equal expression",
@@ -70,7 +70,7 @@ fn test_expression_transform_optimizer() -> Result<()> {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: ((number = 1) or (number < 5))\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [((NOT (number <> 1)) OR (number < 5))]]",
             },
             Test {
                 name: "Not expression",
@@ -78,7 +78,7 @@ fn test_expression_transform_optimizer() -> Result<()> {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: toBoolean(number)\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [(NOT (NOT toBoolean(number)))]]",
             },
             Test {
                 name: "Boolean transform",
@@ -86,7 +86,7 @@ fn test_expression_transform_optimizer() -> Result<()> {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: (number != 0)\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [number]]",
             },
             Test {
                 name: "Boolean and truth transform",
@@ -94,7 +94,7 @@ fn test_expression_transform_optimizer() -> Result<()> {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: (number = 0)\
-                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+                \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [(NOT number)]]",
             },
             Test {
                 name: "Literal boolean transform",
@@ -102,7 +102,7 @@ fn test_expression_transform_optimizer() -> Result<()> {
                 expect: "\
                 Projection: number:UInt64\
                 \n  Filter: false\
-                \n    ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0]]",
+                \n    ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0], filters: [false]]",
             },
             Test {
                 name: "Limit zero transform",
@@ -111,7 +111,7 @@ fn test_expression_transform_optimizer() -> Result<()> {
                 Limit: 0\
                 \n  Projection: number:UInt64\
                 \n    Filter: true\
-                \n      ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0]]",
+                \n      ReadDataSource: scan partitions: [0], scan schema: [number:UInt64], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0], filters: [true]]",
             },
         ];
 

@@ -123,12 +123,15 @@ impl AggregateFunction for AggregateCountFunction {
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
         let state = place.get::<AggregateCountState>();
-        writer.write_uvarint(state.count)
+        let writer = BufMut::writer(writer);
+        bincode::serialize_into(writer, &state.count)?;
+        Ok(())
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateCountState>();
-        reader.read_to_uvarint(&mut state.count)
+        state.count = bincode::deserialize_from(reader)?;
+        Ok(())
     }
 
     fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
