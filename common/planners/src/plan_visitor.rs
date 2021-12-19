@@ -29,6 +29,7 @@ use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
 use crate::DropUserPlan;
+use crate::DropUserStagePlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
 use crate::Expression;
@@ -137,6 +138,7 @@ pub trait PlanVisitor {
             PlanNode::Sink(plan) => self.visit_append(plan),
             PlanNode::CreateUserStage(plan) => self.visit_create_stage(plan),
             PlanNode::ShowGrants(plan) => self.visit_show_grants(plan),
+            PlanNode::DropUserStage(plan) => self.visit_drop_stage(plan),
         }
     }
 
@@ -320,6 +322,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_create_stage(&mut self, _: &CreateUserStagePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_drop_stage(&mut self, _: &DropUserStagePlan) -> Result<()> {
         Ok(())
     }
 

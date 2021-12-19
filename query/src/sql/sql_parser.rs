@@ -60,6 +60,7 @@ use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropDatabase;
+use crate::sql::statements::DfDropStage;
 use crate::sql::statements::DfDropTable;
 use crate::sql::statements::DfDropUser;
 use crate::sql::statements::DfExplain;
@@ -582,12 +583,18 @@ impl<'a> DfParser<'a> {
     /// Drop database/table.
     fn parse_drop(&mut self) -> Result<DfStatement, ParserError> {
         match self.parser.next_token() {
-            Token::Word(w) => match w.keyword {
-                Keyword::DATABASE => self.parse_drop_database(),
-                Keyword::TABLE => self.parse_drop_table(),
-                Keyword::USER => self.parse_drop_user(),
-                _ => self.expected("drop statement", Token::Word(w)),
-            },
+            Token::Word(w) => {
+                if w.value.to_uppercase() == "STAGE" {
+                    self.parse_drop_stage()
+                } else {
+                    match w.keyword {
+                        Keyword::DATABASE => self.parse_drop_database(),
+                        Keyword::TABLE => self.parse_drop_table(),
+                        Keyword::USER => self.parse_drop_user(),
+                        _ => self.expected("drop statement", Token::Word(w)),
+                    }
+                }
+            }
             unexpected => self.expected("drop statement", unexpected),
         }
     }
@@ -822,6 +829,17 @@ impl<'a> DfParser<'a> {
         };
 
         Ok(DfStatement::CreateStage(create))
+    }
+
+    fn parse_drop_stage(&mut self) -> Result<DfStatement, ParserError> {
+        let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let stage_name = self.parser.parse_literal_string()?;
+
+        let drop = DfDropStage {
+            if_exists,
+            stage_name,
+        };
+        Ok(DfStatement::DropStage(drop))
     }
 
     fn parse_create_table(&mut self) -> Result<DfStatement, ParserError> {

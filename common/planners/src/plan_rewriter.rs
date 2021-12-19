@@ -36,6 +36,7 @@ use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
 use crate::DropUserPlan;
+use crate::DropUserStagePlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
 use crate::Expression;
@@ -124,6 +125,7 @@ pub trait PlanRewriter {
             PlanNode::CreateUserStage(plan) => self.rewrite_create_stage(plan),
             PlanNode::Sink(plan) => self.rewrite_sink(plan),
             PlanNode::ShowGrants(plan) => self.rewrite_show_grants(plan),
+            PlanNode::DropUserStage(plan) => self.rewrite_drop_stage(plan),
         }
     }
 
@@ -388,6 +390,10 @@ pub trait PlanRewriter {
 
     fn rewrite_create_stage(&mut self, plan: &CreateUserStagePlan) -> Result<PlanNode> {
         Ok(PlanNode::CreateUserStage(plan.clone()))
+    }
+
+    fn rewrite_drop_stage(&mut self, plan: &DropUserStagePlan) -> Result<PlanNode> {
+        Ok(PlanNode::DropUserStage(plan.clone()))
     }
 
     fn rewrite_show_grants(&mut self, plan: &ShowGrantsPlan) -> Result<PlanNode> {

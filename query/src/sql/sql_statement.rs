@@ -29,6 +29,7 @@ use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropDatabase;
+use crate::sql::statements::DfDropStage;
 use crate::sql::statements::DfDropTable;
 use crate::sql::statements::DfDropUser;
 use crate::sql::statements::DfExplain;
@@ -110,6 +111,7 @@ pub enum DfStatement {
 
     // Stage
     CreateStage(DfCreateStage),
+    DropStage(DfDropStage),
 }
 
 /// Comment hints from SQL.
