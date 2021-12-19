@@ -46,6 +46,7 @@ use crate::scalars::ReplaceFunction;
 use crate::scalars::ReverseFunction;
 use crate::scalars::RightFunction;
 use crate::scalars::RightPadFunction;
+use crate::scalars::SoundexFunction;
 use crate::scalars::SpaceFunction;
 use crate::scalars::StrcmpFunction;
 use crate::scalars::SubstringFunction;
@@ -96,6 +97,7 @@ impl StringFunction {
         factory.register("ord", OrdFunction::desc());
         factory.register("bin", BinFunction::desc());
         factory.register("export_set", ExportSetFunction::desc());
+        factory.register("soundex", SoundexFunction::desc());
         factory.register("find_in_set", FindInSetFunction::desc());
         factory.register("length", LengthFunction::desc());
         factory.register("format", FormatFunction::desc());
