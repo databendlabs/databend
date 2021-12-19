@@ -52,6 +52,10 @@ impl SharedStatus {
             }
         }
     }
+
+    pub fn set_flags(&self, flags: usize) {
+        // let mut expected = std::ptr::null_mut();
+    }
 }
 
 pub trait PortReactor<Data> {
@@ -96,6 +100,18 @@ impl<Data: Copy, T: PortReactor<Data> + Sized> ReactiveOutputPort<Data, T> {
             // It shouldn't have happened
             unreachable!("Cannot push data to port which already has data.");
         }
+    }
+
+    pub fn finish(&self) {
+        unimplemented!()
+    }
+
+    pub fn is_finished(&self) -> bool {
+        unimplemented!()
+    }
+
+    pub fn can_push(&self) -> bool {
+        unimplemented!()
     }
 }
 

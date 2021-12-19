@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use futures::future::{BoxFuture, JoinAll};
 use futures::FutureExt;
 use common_base::{Runtime, TrySpawn};
@@ -7,7 +8,7 @@ use common_exception::ErrorCode;
 use crate::pipelines::new::executor::pipeline_executor::PipelineExecutor;
 
 pub struct PipelineRuntimeExecutor {
-    base: PipelineExecutor,
+    base: Arc<PipelineExecutor>,
     is_started: bool,
     workers_join_handler: Option<BoxFuture<'static, ()>>,
 }
@@ -18,29 +19,31 @@ impl PipelineRuntimeExecutor {
             return Err(ErrorCode::PipelineAreadlyStarted("PipelineThreadsExecutor already started."));
         }
 
+        self.is_started = true;
         self.base.initialize_executor(workers)?;
-        // let mut join_handler = Vec::with_capacity(workers);
-        // for worker_index in 0..workers {
-        //     join_handler.push(runtime.spawn(async move {
-        //         self.base.schedule(worker_index);
-        //         ()
-        //     }));
-        // }
-
-        // self.workers_join_handler = Some(futures::future::join_all(join_handler).boxed());
+        for worker_num in 0..workers {
+            let worker_executor = self.base.clone();
+            // TODO: wait runtime shutdown.
+            runtime.spawn(async move {
+                if let Err(cause) = worker_executor.execute_with_single_worker(worker_num) {
+                    // TODO: worker
+                    println!("Worker {} failure, cause {:?}", worker_num, cause);
+                }
+            });
+        }
         Ok(())
     }
 
-    pub async fn finish(&mut self) -> Result<()> {
-        if !self.is_started || self.workers_join_handler.is_none() {
-            return Err(ErrorCode::PipelineNotStarted("PipelineThreadsExecutor not started."));
-        }
-
-        if let Some(workers_join_handler) = self.workers_join_handler.take() {
-            // TODO: maybe sync?
-            workers_join_handler.await;
-        }
-
-        Ok(())
-    }
+    // pub async fn finish(&mut self) -> Result<()> {
+    //     if !self.is_started || self.workers_join_handler.is_none() {
+    //         return Err(ErrorCode::PipelineNotStarted("PipelineThreadsExecutor not started."));
+    //     }
+    //
+    //     if let Some(workers_join_handler) = self.workers_join_handler.take() {
+    //         // TODO: maybe sync?
+    //         workers_join_handler.await;
+    //     }
+    //
+    //     Ok(())
+    // }
 }

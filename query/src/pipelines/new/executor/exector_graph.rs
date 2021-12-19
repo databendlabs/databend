@@ -35,6 +35,8 @@ struct RunningGraphState {
     raw_processors: UnsafeCell<Processors>,
 }
 
+type StateGuard<'a> = RwLockUpgradableReadGuard<'a, RunningGraphState>;
+
 impl RunningGraphState {
     pub fn create(mut processors: Processors, edges: Vec<(usize, usize)>) -> Result<RunningGraphState> {
         let mut nodes = Vec::with_capacity(processors.len());
@@ -49,24 +51,21 @@ impl RunningGraphState {
             }
 
             let (input_port, output_port) = create_port(&nodes, input, output);
-            processors[input].connect_input(input_port)?;
-            processors[output].connect_output(output_port)?;
+            // processors[input].connect_input(input_port)?;
+            // processors[output].connect_output(output_port)?;
         }
 
         Ok(RunningGraphState { nodes, raw_processors: UnsafeCell::new(processors) })
     }
 
     pub fn initialize_executor(state: &RwLock<RunningGraphState>) -> Result<()> {
-        {
-            let graph = state.read();
-            // TODO: init executor
-        }
-
-        RunningGraphState::schedule_next(state)
+        let graph = state.upgradable_read();
+        // TODO: init executor
+        RunningGraphState::schedule_next(&graph)
     }
 
-    pub fn schedule_next(state: &RwLock<RunningGraphState>) -> Result<()> {
-        let graph = state.upgradable_read();
+    pub fn schedule_next(graph: &StateGuard) -> Result<()> {
+        // let graph = state.upgradable_read();
         // TODO:
 
         unimplemented!()
@@ -83,7 +82,9 @@ impl RunningGraph {
 
 impl RunningGraph {
     pub fn schedule_next(&self) -> Result<()> {
-        RunningGraphState::schedule_next(&self.0)
+        RunningGraphState::schedule_next(
+            &self.0.upgradable_read()
+        )
     }
 
     pub fn initialize_executor(&self) -> Result<()> {

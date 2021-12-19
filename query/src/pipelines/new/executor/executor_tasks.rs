@@ -1,7 +1,11 @@
 use std::collections::VecDeque;
 use std::intrinsics::unreachable;
+use std::sync::{Condvar};
+use std::sync::atomic::{AtomicBool, Ordering};
 use common_exception::ErrorCode;
 use common_infallible::Mutex;
+use common_exception::Result;
+use crate::pipelines::new::executor::exector_graph::RunningGraph;
 
 struct WorkersTasks<T> {
     tasks_size: usize,
@@ -16,10 +20,7 @@ impl<T> WorkersTasks<T> {
             workers_tasks.push(VecDeque::new());
         }
 
-        WorkersTasks {
-            tasks_size: 0,
-            workers_tasks: workers_tasks/*vec![VecDeque::new(); workers_size]*/,
-        }
+        WorkersTasks { tasks_size: 0, workers_tasks }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -49,29 +50,42 @@ impl<T> WorkersTasks<T> {
 
 pub struct GlobalExecutorTasks<T> {
     workers_tasks: Mutex<WorkersTasks<T>>,
+    finished: AtomicBool,
 }
 
 impl<T> GlobalExecutorTasks<T> {
     pub fn create(workers_size: usize) -> GlobalExecutorTasks<T> {
         GlobalExecutorTasks {
+            finished: AtomicBool::new(false),
             workers_tasks: Mutex::new(WorkersTasks::create(workers_size)),
         }
     }
 
+    pub fn is_finished(&self) -> bool {
+        self.finished.load(Ordering::Relaxed)
+    }
+
     // Pull task from the global task queue
-    pub fn fetch_task(&self, priority_works_id: usize, thread: &mut ThreadExecutorTasks<T>) {
+    pub fn steal_task(&self, best_worker_num: usize, thread: &mut ThreadExecutorTasks<T>) {
         unsafe {
             let mut workers_tasks = self.workers_tasks.lock();
-
             if !workers_tasks.is_empty() {
-                let best_worker_id = workers_tasks.best_worker_id(priority_works_id);
+                let best_worker_id = workers_tasks.best_worker_id(best_worker_num);
                 thread.task = workers_tasks.pop_task(best_worker_id);
-            }
 
-            if thread.task.is_some() && !workers_tasks.is_empty() {
-                // TODO:
+                // if thread.task.is_some() && !workers_tasks.is_empty() {
+                //     // TODO:
+                // }
+
+                return;
             }
         }
+
+        self.wait_wakeup(thread)
+    }
+
+    pub fn wait_wakeup(&self, thread: &mut ThreadExecutorTasks<T>) {
+        // condvar.wait(guard);
     }
 }
 
@@ -79,3 +93,30 @@ pub struct ThreadExecutorTasks<T> {
     task: Option<T>,
     async_tasks: VecDeque<T>,
 }
+
+impl<T> ThreadExecutorTasks<T> {
+    pub fn create(worker_num: usize) -> Self {
+        ThreadExecutorTasks::<T> {
+            task: None,
+            async_tasks: VecDeque::new(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.task.is_none()
+    }
+
+    pub fn execute_task(&self, graph: &RunningGraph) -> Result<()> {
+        // TODO: try execute sync or async task.
+        if let Some(task) = &self.task {}
+
+        unimplemented!("")
+    }
+
+    pub fn wait_wakeup(&self) {
+        // condvar.wait(guard);
+    }
+}
+
+pub type ThreadTasksQueue = ThreadExecutorTasks<usize>;
+pub type GlobalTasksQueue = GlobalExecutorTasks<usize>;
