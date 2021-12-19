@@ -63,5 +63,10 @@ impl ToCastFunction {
             "toDateTime32",
             Self::cast_function_creator(DataType::DateTime32(None)),
         );
+        // TODO support precision parameter
+        factory.register(
+            "toDateTime64",
+            Self::cast_function_creator(DataType::DateTime64(3, None)),
+        );
     }
 }
