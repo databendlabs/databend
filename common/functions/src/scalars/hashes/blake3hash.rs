@@ -18,20 +18,20 @@ use crate::scalars::strings::String2StringFunction;
 use crate::scalars::strings::StringOperator;
 
 #[derive(Clone, Default)]
-pub struct Md5 {}
+pub struct Blake3Hash {}
 
-impl StringOperator for Md5 {
+impl StringOperator for Blake3Hash {
     #[inline]
     fn apply_with_no_null<'a>(&'a mut self, s: &'a [u8], buffer: &mut [u8]) -> usize {
-        let buffer = &mut buffer[0..32];
-        // TODO md5 lib doesn't allow encode into buffer...
-        hex::encode_to_slice(md5::compute(s).as_ref(), buffer).unwrap();
-        32
+        let buffer = &mut buffer[0..64];
+        // TODO blake3 lib doesn't allow encode into buffer...
+        hex::encode_to_slice(blake3::hash(s).as_bytes(), buffer).unwrap();
+        64
     }
 
     fn estimate_bytes(&self, array: &DFStringArray) -> usize {
-        array.len() * 32
+        array.len() * 64
     }
 }
 
-pub type Md5HashFunction = String2StringFunction<Md5>;
+pub type Blake3HashFunction = String2StringFunction<Blake3Hash>;

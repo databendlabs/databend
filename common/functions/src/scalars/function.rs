@@ -50,3 +50,5 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool>;
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn>;
 }
+
+dyn_clone::clone_trait_object!(Function);
