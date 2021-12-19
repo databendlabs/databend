@@ -15,10 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::UserGrantSet;
-use common_meta_types::UserInfo;
-use common_meta_types::UserQuota;
-use common_planners::CreateUserPlan;
+use common_planners::DropUserStagePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
@@ -28,21 +25,21 @@ use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]
-pub struct CreateUserInterpreter {
+pub struct DropStageInterpreter {
     ctx: Arc<QueryContext>,
-    plan: CreateUserPlan,
+    plan: DropUserStagePlan,
 }
 
-impl CreateUserInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateUserPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(CreateUserInterpreter { ctx, plan }))
+impl DropStageInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropUserStagePlan) -> Result<InterpreterPtr> {
+        Ok(Arc::new(DropStageInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for CreateUserInterpreter {
+impl Interpreter for DropStageInterpreter {
     fn name(&self) -> &str {
-        "CreateUserInterpreter"
+        "DropStageInterpreter"
     }
 
     #[tracing::instrument(level = "info", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
@@ -52,15 +49,9 @@ impl Interpreter for CreateUserInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
         let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
-        let user_info = UserInfo {
-            name: plan.name,
-            hostname: plan.hostname,
-            password: plan.password,
-            password_type: plan.password_type,
-            grants: UserGrantSet::empty(),
-            quota: UserQuota::no_limit(),
-        };
-        user_mgr.add_user(user_info).await?;
+        user_mgr
+            .drop_stage(plan.name.as_str(), plan.if_exists)
+            .await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

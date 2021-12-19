@@ -32,6 +32,7 @@ use databend_query::sql::statements::DfCreateTable;
 use databend_query::sql::statements::DfCreateUser;
 use databend_query::sql::statements::DfDescribeTable;
 use databend_query::sql::statements::DfDropDatabase;
+use databend_query::sql::statements::DfDropStage;
 use databend_query::sql::statements::DfDropTable;
 use databend_query::sql::statements::DfDropUser;
 use databend_query::sql::statements::DfGrantObject;
@@ -1183,6 +1184,27 @@ fn create_table_select() -> Result<()> {
             options: maplit::hashmap! {},
             like: None,
             query: Some(verified_query("SELECT a, b FROM bar")?),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn drop_stage_test() -> Result<()> {
+    expect_parse_ok(
+        "DROP STAGE test_stage",
+        DfStatement::DropStage(DfDropStage {
+            if_exists: false,
+            stage_name: "test_stage".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "DROP STAGE IF EXISTS test_stage",
+        DfStatement::DropStage(DfDropStage {
+            if_exists: true,
+            stage_name: "test_stage".to_string(),
         }),
     )?;
 
