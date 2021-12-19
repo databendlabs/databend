@@ -226,7 +226,7 @@ impl InterpreterQueryLog {
         self.write_log(&log_event).await
     }
 
-    pub async fn log_finish(&self, result_rows: u64, result_bytes: u64) -> Result<()> {
+    pub async fn log_finish(&self) -> Result<()> {
         // User.
         let handler_type = self.ctx.get_session().get_type();
         let tenant_id = self.ctx.get_config().query.tenant_id;
@@ -251,10 +251,14 @@ impl InterpreterQueryLog {
         let written_rows = 0u64;
         let dal_metrics = self.ctx.get_dal_metrics();
         let written_bytes = dal_metrics.write_bytes as u64;
-        let read_rows = self.ctx.get_progress_value().read_rows as u64;
-        let read_bytes = self.ctx.get_progress_value().read_bytes as u64;
+        let read_rows = self.ctx.get_scan_progress_value().read_rows as u64;
+        let read_bytes = self.ctx.get_scan_progress_value().read_bytes as u64;
         let cpu_usage = self.ctx.get_settings().get_max_threads()? as u32;
         let memory_usage = self.ctx.get_session().get_memory_usage() as u64;
+
+        // Result.
+        let result_rows = self.ctx.get_result_progress_value().read_rows as u64;
+        let result_bytes = self.ctx.get_result_progress_value().read_bytes as u64;
 
         // Client.
         let client_address = format!("{:?}", self.ctx.get_client_address());
