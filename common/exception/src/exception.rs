@@ -189,6 +189,7 @@ build_exceptions! {
     UnknownColumn(58),
     InvalidSourceFormat(59),
     StrParseError(60),
+    IllegalGrant(1144),
 
     // uncategorized
     UnexpectedResponseType(600),
