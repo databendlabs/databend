@@ -972,10 +972,24 @@ impl<'a> DfParser<'a> {
             match self.parser.next_token() {
                 Token::Word(w) => match w.keyword {
                     // Keyword::USAGE => privileges.set_privilege(UserPrivilegeType::Usage),
-                    Keyword::CREATE => privileges.set_privilege(UserPrivilegeType::Create),
+                    Keyword::CREATE => {
+                        if self.consume_token("USER") {
+                            privileges.set_privilege(UserPrivilegeType::CreateUser)
+                        } else if self.consume_token("ROLE") {
+                            privileges.set_privilege(UserPrivilegeType::CreateRole)
+                        } else {
+                            privileges.set_privilege(UserPrivilegeType::Create)
+                        }
+                    }
+                    Keyword::DROP => privileges.set_privilege(UserPrivilegeType::Drop),
+                    Keyword::ALTER => privileges.set_privilege(UserPrivilegeType::Alter),
                     Keyword::SELECT => privileges.set_privilege(UserPrivilegeType::Select),
                     Keyword::INSERT => privileges.set_privilege(UserPrivilegeType::Insert),
-                    Keyword::SET => privileges.set_privilege(UserPrivilegeType::Set),
+                    Keyword::UPDATE => privileges.set_privilege(UserPrivilegeType::Update),
+                    Keyword::DELETE => privileges.set_privilege(UserPrivilegeType::Delete),
+                    // TODO: uncomment this after sqlparser-rs accepts the SUPER keyword
+                    // Keyword::SUPER => privileges.set_privilege(UserPrivilegeType::Super)
+                    Keyword::GRANT => privileges.set_privilege(UserPrivilegeType::Grant),
                     Keyword::ALL => {
                         privileges.set_all_privileges();
                         // GRANT ALL [PRIVILEGES]

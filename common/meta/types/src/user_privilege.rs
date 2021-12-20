@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::fmt;
 use std::ops;
 
@@ -25,21 +26,46 @@ use enumflags2::BitFlags;
 pub enum UserPrivilegeType {
     // UsagePrivilege is a synonym for “no privileges”
     Usage = 1 << 0,
-    // Privilege to create databases and tables.
-    Create = 1 << 1,
     // Privilege to select rows from tables in a database.
     Select = 1 << 2,
     // Privilege to insert into tables in a database.
     Insert = 1 << 3,
-    // Privilege to SET variables.
+    // Privilege to update rows in a table
+    Update = 1 << 5,
+    // Privilege to delete rows in a table
+    Delete = 1 << 6,
+    // Privilege to create databases or tables.
+    Create = 1 << 1,
+    // Privilege to drop databases or tables.
+    Drop = 1 << 7,
+    // Privilege to delete rows in a table
+    Alter = 1 << 8,
+    // Privilege to Kill query, Set global configs, etc.
+    Super = 1 << 9,
+    // Privilege to Create User.
+    CreateUser = 1 << 10,
+    // Privilege to Create Role.
+    CreateRole = 1 << 11,
+    // Privilege to Grant/Revoke privileges to users or roles
+    Grant = 1 << 12,
+    // TODO: remove this later
     Set = 1 << 4,
 }
 
 const ALL_PRIVILEGES: BitFlags<UserPrivilegeType> = make_bitflags!(
-    UserPrivilegeType::{Create
+    UserPrivilegeType::{
+        Create
         | Select
         | Insert
-        | Set}
+        | Update
+        | Delete
+        | Drop
+        | Alter
+        | Super
+        | CreateUser
+        | CreateRole
+        | Grant
+    }
 );
 
 impl std::fmt::Display for UserPrivilegeType {
@@ -47,10 +73,55 @@ impl std::fmt::Display for UserPrivilegeType {
         write!(f, "{}", match self {
             UserPrivilegeType::Usage => "USAGE",
             UserPrivilegeType::Create => "CREATE",
+            UserPrivilegeType::Update => "UPDATE",
             UserPrivilegeType::Select => "SELECT",
             UserPrivilegeType::Insert => "INSERT",
+            UserPrivilegeType::Delete => "DELETE",
+            UserPrivilegeType::Drop => "DROP",
+            UserPrivilegeType::Alter => "ALTER",
+            UserPrivilegeType::Super => "SUPER",
+            UserPrivilegeType::CreateUser => "CREATE USER",
+            UserPrivilegeType::CreateRole => "CREATE ROLE",
+            UserPrivilegeType::Grant => "GRANT",
             UserPrivilegeType::Set => "SET",
         })
+    }
+}
+
+/// Each privilege has a set of contexts, which limits the grant objects which the privilege can
+/// take effects on, for example, we can not grant a SUPER privilege (which is Global level)
+/// to a table (in a table level).
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub enum UserPrivilegeContext {
+    /// the SystemAddmin context includes the system admin privileges, like SUPER, CREATE USER,
+    /// CREATE ROLE, GRANT, etc
+    SystemAdmin,
+    /// the Tables context includes most of the DML and DDL privileges, like INSERT, UPDATE,
+    /// ALTER, etc.
+    Tables,
+    /// the Database context includes CREATE/DROP DATABASE
+    Databases,
+}
+
+impl UserPrivilegeType {
+    // The system admin privileges only takes effect on the global grant object
+    pub fn global_only(self) -> bool {
+        self.contexts().contains(&UserPrivilegeContext::SystemAdmin)
+    }
+
+    // TODO: display the Context column in the SHOW PRIVILEGE statement
+    pub fn contexts(self) -> HashSet<UserPrivilegeContext> {
+        use UserPrivilegeType::*;
+        match self {
+            Usage | Super | CreateUser | CreateRole | Grant => {
+                HashSet::from([UserPrivilegeContext::SystemAdmin])
+            }
+            Create => HashSet::from([
+                UserPrivilegeContext::Tables,
+                UserPrivilegeContext::Databases,
+            ]),
+            _ => HashSet::from([UserPrivilegeContext::Tables]),
+        }
     }
 }
 
