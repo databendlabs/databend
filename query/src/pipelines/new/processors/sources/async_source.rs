@@ -13,7 +13,7 @@ use crate::pipelines::new::processors::sources::SyncSource;
 use crate::pipelines::new::processors::Processor;
 
 #[async_trait::async_trait]
-pub trait AsyncSource: Send + Sync {
+pub trait AsyncSource: Send {
     async fn generate(&mut self) -> Result<Option<DataBlock>>;
 }
 
