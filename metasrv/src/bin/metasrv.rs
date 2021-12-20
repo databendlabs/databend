@@ -39,10 +39,6 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     );
 
     tracing::info!("{:?}", conf.clone());
-    tracing::info!(
-        "Databend-meta v-{}",
-        *databend_meta::configs::config::DATABEND_COMMIT_VERSION
-    );
 
     init_sled_db(conf.raft_config.raft_dir.clone());
     init_default_metrics_recorder();

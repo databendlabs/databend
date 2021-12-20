@@ -21,13 +21,6 @@ use databend_meta::configs::Config;
 use tempfile::tempdir;
 
 #[test]
-fn test_bin_commit_version() -> anyhow::Result<()> {
-    let v = &databend_meta::configs::DATABEND_COMMIT_VERSION;
-    assert!(v.len() > 0);
-    Ok(())
-}
-
-#[test]
 fn test_tls_rpc_enabled() -> anyhow::Result<()> {
     let mut conf = Config::empty();
     assert!(!conf.tls_rpc_server_enabled());

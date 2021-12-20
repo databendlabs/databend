@@ -15,4 +15,3 @@
 pub mod config;
 
 pub use config::Config;
-pub use config::DATABEND_COMMIT_VERSION;

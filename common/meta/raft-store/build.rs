@@ -16,7 +16,9 @@
 
 use std::env;
 use std::path::Path;
+
 fn main() {
+    common_building::setup();
     build_proto();
 }
 
