@@ -993,7 +993,7 @@ fn grant_privilege_test() -> Result<()> {
     )?;
 
     expect_parse_ok(
-        "GRANT CREATE USER, CREATE ROLE, CREATE, SELECT, SUPER ON * TO 'test'@'localhost'",
+        "GRANT CREATE USER, CREATE ROLE, CREATE, SELECT ON * TO 'test'@'localhost'",
         DfStatement::GrantPrivilege(DfGrantStatement {
             name: String::from("test"),
             hostname: String::from("localhost"),
