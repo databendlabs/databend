@@ -1,7 +1,9 @@
 use std::sync::Arc;
+
 use common_base::Thread;
 use common_exception::ErrorCode;
 use common_exception::Result;
+
 use crate::pipelines::new::executor::pipeline_executor::PipelineExecutor;
 
 pub struct PipelineThreadsExecutor {
@@ -12,7 +14,9 @@ pub struct PipelineThreadsExecutor {
 impl PipelineThreadsExecutor {
     pub fn start(&mut self, workers: usize) -> Result<()> {
         if self.is_started {
-            return Err(ErrorCode::PipelineAreadlyStarted("PipelineThreadsExecutor already started."));
+            return Err(ErrorCode::PipelineAreadlyStarted(
+                "PipelineThreadsExecutor already started.",
+            ));
         }
 
         self.is_started = true;

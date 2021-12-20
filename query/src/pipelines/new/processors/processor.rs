@@ -1,8 +1,12 @@
 use std::cell::UnsafeCell;
 use std::sync::Arc;
-use common_exception::{ErrorCode, Result};
+
 use common_base::Runtime;
-use crate::pipelines::new::processors::port::{InputPort, OutputPort};
+use common_exception::ErrorCode;
+use common_exception::Result;
+
+use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::processors::port::OutputPort;
 
 pub enum PrepareState {
     NeedData,
@@ -14,7 +18,7 @@ pub enum PrepareState {
 
 // The design is inspired by ClickHouse processors
 #[async_trait::async_trait]
-pub trait Processor {
+pub trait Processor: Send {
     fn prepare(&mut self) -> Result<PrepareState>;
 
     // Synchronous work.
@@ -26,18 +30,8 @@ pub trait Processor {
     async fn async_process(&mut self) -> Result<()> {
         Err(ErrorCode::UnImplement("Unimplemented async_process."))
     }
-
-    // TODO: maybe remove it?
-    fn connect_input(&mut self, input: InputPort) -> Result<()> {
-        unimplemented!("")
-    }
-
-    // TODO: maybe remove it?
-    fn connect_output(&mut self, output: OutputPort) -> Result<()> {
-        unimplemented!("")
-    }
 }
 
 pub type ProcessorPtr = Arc<UnsafeCell<dyn Processor>>;
 
-pub type Processors = Vec<Box<dyn Processor>>;
+pub type Processors = Vec<ProcessorPtr>;

@@ -5,7 +5,6 @@ mod sources;
 mod transforms;
 
 pub use port::create_port;
+pub use port::PortReactor;
 pub use processor::Processor;
 pub use processor::Processors;
-
-pub use port::PortReactor;

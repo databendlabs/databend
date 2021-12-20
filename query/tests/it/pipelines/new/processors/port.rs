@@ -1,8 +1,12 @@
 use std::sync::Arc;
+
 use common_base::tokio;
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_infallible::Mutex;
-use databend_query::pipelines::new::processors::port::{ReactiveInputPort, ReactiveOutputPort, SharedStatus};
+use databend_query::pipelines::new::processors::port::ReactiveInputPort;
+use databend_query::pipelines::new::processors::port::ReactiveOutputPort;
+use databend_query::pipelines::new::processors::port::SharedStatus;
 use databend_query::pipelines::new::processors::PortReactor;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -21,7 +25,11 @@ async fn test_input_and_output_port() -> Result<()> {
 
     let reactor = Arc::new(TestPortReactor {});
     let shared_status = SharedStatus::create();
-    let input = ReactiveInputPort::<usize, TestPortReactor>::create(shared_status.clone(), reactor.clone(), 1);
+    let input = ReactiveInputPort::<usize, TestPortReactor>::create(
+        shared_status.clone(),
+        reactor.clone(),
+        1,
+    );
     let output = ReactiveOutputPort::<usize, TestPortReactor>::create(shared_status, reactor, 2);
     assert!(input.pull_data().is_none());
     output.push_data(Err(ErrorCode::LogicalError("Logical error")));

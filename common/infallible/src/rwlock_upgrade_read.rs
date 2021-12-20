@@ -1,4 +1,5 @@
 use std::ops::Deref;
+
 use parking_lot::RwLockUpgradableReadGuard as ParkingUpgradableReadGuard;
 use parking_lot::RwLockWriteGuard;
 
@@ -22,5 +23,3 @@ impl<'a, T: ?Sized + 'a> Deref for RwLockUpgradableReadGuard<'a, T> {
         self.0.deref()
     }
 }
-
-

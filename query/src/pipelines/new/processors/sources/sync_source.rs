@@ -1,16 +1,20 @@
 use std::cell::UnsafeCell;
 use std::sync::Arc;
+
 use common_datablocks::DataBlock;
 use common_exception::ErrorCode;
-use crate::pipelines::new::processors::port::{InputPort, OutputPort};
-use crate::pipelines::new::processors::Processor;
-use crate::pipelines::new::processors::processor::{PrepareState, ProcessorPtr};
 use common_exception::Result;
+
+use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::PrepareState;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
+use crate::pipelines::new::processors::Processor;
 
 /// Synchronized source. such as:
 ///     - Memory storage engine.
 ///     - SELECT * FROM numbers_mt(1000)
-pub trait SyncSource {
+pub trait SyncSource: Send {
     fn generate(&mut self) -> Result<Option<DataBlock>>;
 }
 
@@ -28,14 +32,17 @@ impl<T: 'static + SyncSource> SyncSourceProcessorWrap<T> {
     pub fn create(mut outputs: Vec<OutputPort>, inner: T) -> Result<ProcessorPtr> {
         match outputs.len() {
             0 => Err(ErrorCode::LogicalError("Source output port is empty.")),
-            1 => Ok(SingleOutputSyncSourceProcessorWrap::create(outputs.remove(0), inner)),
+            1 => Ok(SingleOutputSyncSourceProcessorWrap::create(
+                outputs.remove(0),
+                inner,
+            )),
             _ => Ok(Arc::new(UnsafeCell::new(Self {
                 inner,
                 outputs,
                 is_finish: false,
                 best_push_pos: 0,
                 generated_data: None,
-            })))
+            }))),
         }
     }
 
@@ -124,14 +131,12 @@ struct SingleOutputSyncSourceProcessorWrap<T: 'static + SyncSource> {
 
 impl<T: 'static + SyncSource> SingleOutputSyncSourceProcessorWrap<T> {
     pub fn create(output: OutputPort, inner: T) -> ProcessorPtr {
-        Arc::new(UnsafeCell::new(
-            Self {
-                inner,
-                output,
-                is_finish: false,
-                generated_data: None,
-            }
-        ))
+        Arc::new(UnsafeCell::new(Self {
+            inner,
+            output,
+            is_finish: false,
+            generated_data: None,
+        }))
     }
 
     #[inline(always)]

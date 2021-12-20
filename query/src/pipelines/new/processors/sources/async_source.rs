@@ -1,17 +1,21 @@
 use std::cell::UnsafeCell;
 use std::sync::Arc;
+
 use common_datablocks::DataBlock;
-use common_exception::{ErrorCode, Result};
-use crate::pipelines::new::processors::port::{InputPort, OutputPort};
-use crate::pipelines::new::processors::Processor;
-use crate::pipelines::new::processors::processor::{PrepareState, ProcessorPtr};
+use common_exception::ErrorCode;
+use common_exception::Result;
+
+use crate::pipelines::new::processors::port::InputPort;
+use crate::pipelines::new::processors::port::OutputPort;
+use crate::pipelines::new::processors::processor::PrepareState;
+use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::sources::SyncSource;
+use crate::pipelines::new::processors::Processor;
 
 #[async_trait::async_trait]
 pub trait AsyncSource: Send + Sync {
     async fn generate(&mut self) -> Result<Option<DataBlock>>;
 }
-
 
 // TODO: This can be refactored using proc macros
 // TODO: Most of its current code is consistent with sync. We need refactor this with better async
@@ -29,14 +33,17 @@ impl<T: 'static + AsyncSource> ASyncSourceProcessorWrap<T> {
     pub fn create(mut outputs: Vec<OutputPort>, inner: T) -> Result<ProcessorPtr> {
         match outputs.len() {
             0 => Err(ErrorCode::LogicalError("Source output port is empty.")),
-            1 => Ok(SingleOutputASyncSourceProcessorWrap::create(outputs.remove(0), inner)),
+            1 => Ok(SingleOutputASyncSourceProcessorWrap::create(
+                outputs.remove(0),
+                inner,
+            )),
             _ => Ok(Arc::new(UnsafeCell::new(Self {
                 inner,
                 outputs,
                 is_finish: false,
                 best_push_pos: 0,
                 generated_data: None,
-            })))
+            }))),
         }
     }
 
@@ -125,14 +132,12 @@ struct SingleOutputASyncSourceProcessorWrap<T: 'static + AsyncSource> {
 
 impl<T: 'static + AsyncSource> SingleOutputASyncSourceProcessorWrap<T> {
     pub fn create(output: OutputPort, inner: T) -> ProcessorPtr {
-        Arc::new(UnsafeCell::new(
-            Self {
-                inner,
-                output,
-                is_finish: false,
-                generated_data: None,
-            }
-        ))
+        Arc::new(UnsafeCell::new(Self {
+            inner,
+            output,
+            is_finish: false,
+            generated_data: None,
+        }))
     }
 
     #[inline(always)]

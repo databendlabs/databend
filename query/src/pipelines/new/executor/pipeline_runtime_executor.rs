@@ -1,9 +1,12 @@
 use std::sync::Arc;
-use futures::future::{BoxFuture, JoinAll};
-use futures::FutureExt;
-use common_base::{Runtime, TrySpawn};
-use common_exception::Result;
+
+use common_base::Runtime;
+use common_base::TrySpawn;
 use common_exception::ErrorCode;
+use common_exception::Result;
+use futures::future::BoxFuture;
+use futures::future::JoinAll;
+use futures::FutureExt;
 
 use crate::pipelines::new::executor::pipeline_executor::PipelineExecutor;
 
@@ -16,7 +19,9 @@ pub struct PipelineRuntimeExecutor {
 impl PipelineRuntimeExecutor {
     pub fn start(&mut self, workers: usize, runtime: Runtime) -> Result<()> {
         if self.is_started {
-            return Err(ErrorCode::PipelineAreadlyStarted("PipelineThreadsExecutor already started."));
+            return Err(ErrorCode::PipelineAreadlyStarted(
+                "PipelineThreadsExecutor already started.",
+            ));
         }
 
         self.is_started = true;

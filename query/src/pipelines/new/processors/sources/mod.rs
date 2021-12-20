@@ -1,17 +1,21 @@
-mod sync_source;
 mod async_source;
+mod sync_source;
 
-pub use sync_source::SyncSource;
-pub use async_source::AsyncSource;
-pub use sync_source::SyncSourceProcessorWrap;
 pub use async_source::ASyncSourceProcessorWrap;
+pub use async_source::AsyncSource;
+pub use sync_source::SyncSource;
+pub use sync_source::SyncSourceProcessorWrap;
 
 mod source_example {
-    use common_exception::Result;
     use common_datablocks::DataBlock;
+    use common_exception::Result;
+
     use crate::pipelines::new::processors::port::OutputPort;
     use crate::pipelines::new::processors::processor::ProcessorPtr;
-    use crate::pipelines::new::processors::sources::{AsyncSource, ASyncSourceProcessorWrap, SyncSource, SyncSourceProcessorWrap};
+    use crate::pipelines::new::processors::sources::ASyncSourceProcessorWrap;
+    use crate::pipelines::new::processors::sources::AsyncSource;
+    use crate::pipelines::new::processors::sources::SyncSource;
+    use crate::pipelines::new::processors::sources::SyncSourceProcessorWrap;
 
     struct ExampleSyncSource {
         pos: usize,
@@ -19,7 +23,10 @@ mod source_example {
     }
 
     impl ExampleSyncSource {
-        pub fn create(data_blocks: Vec<DataBlock>, outputs: Vec<OutputPort>) -> Result<ProcessorPtr> {
+        pub fn create(
+            data_blocks: Vec<DataBlock>,
+            outputs: Vec<OutputPort>,
+        ) -> Result<ProcessorPtr> {
             SyncSourceProcessorWrap::create(outputs, ExampleSyncSource {
                 pos: 0,
                 data_blocks,
@@ -43,7 +50,10 @@ mod source_example {
     }
 
     impl ExampleAsyncSource {
-        pub fn create(data_blocks: Vec<DataBlock>, outputs: Vec<OutputPort>) -> Result<ProcessorPtr> {
+        pub fn create(
+            data_blocks: Vec<DataBlock>,
+            outputs: Vec<OutputPort>,
+        ) -> Result<ProcessorPtr> {
             ASyncSourceProcessorWrap::create(outputs, ExampleAsyncSource {
                 pos: 0,
                 data_blocks,
@@ -62,4 +72,3 @@ mod source_example {
         }
     }
 }
-

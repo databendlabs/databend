@@ -15,6 +15,7 @@
 use parking_lot::RwLock as ParkingRwLock;
 use parking_lot::RwLockReadGuard;
 use parking_lot::RwLockWriteGuard;
+
 use crate::RwLockUpgradableReadGuard;
 
 /// A simple wrapper around the lock() function of a std::sync::RwLock
