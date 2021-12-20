@@ -14,6 +14,7 @@
 
 use std::fmt;
 
+use common_exception::Result;
 use enumflags2::BitFlags;
 
 use crate::UserPrivilegeSet;
@@ -26,8 +27,26 @@ pub enum GrantObject {
     Table(String, String),
 }
 
+impl GrantObject {
+    pub fn allow_privilege(&self, privilege: UserPrivilegeType) -> bool {
+        if privilege.global_only() && !matches!(self, GrantObject::Global) {
+            return false;
+        }
+        true
+    }
+
+    pub fn validate_privileges(&self, privileges: UserPrivilegeSet) -> Result<()> {
+        let privileges: BitFlags<UserPrivilegeType> = privileges.into();
+        let ok = privileges.iter().all(|p| self.allow_privilege(p));
+        if !ok {
+            return Err(common_exception::ErrorCode::IllegalGrant("Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used"));
+        }
+        Ok(())
+    }
+}
+
 impl fmt::Display for GrantObject {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
         match self {
             GrantObject::Global => write!(f, "*.*"),
             GrantObject::Database(ref db) => write!(f, "'{}'.*", db),
@@ -141,7 +160,7 @@ impl GrantEntry {
 }
 
 impl fmt::Display for GrantEntry {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
         let privileges: UserPrivilegeSet = self.privileges.into();
         write!(
             f,
