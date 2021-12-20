@@ -43,8 +43,7 @@ impl FuseTable {
 
             if plan.purge {
                 let keep_last_snapshot = false;
-                self.do_truncate_history(ctx.clone(), keep_last_snapshot)
-                    .await?
+                self.do_optimize(ctx.clone(), keep_last_snapshot).await?
             }
             ctx.get_catalog()
                 .upsert_table_option(UpsertTableOptionReq::new(

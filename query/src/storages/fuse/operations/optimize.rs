@@ -30,7 +30,7 @@ use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 use crate::storages::Table;
 
 impl FuseTable {
-    pub async fn do_truncate_history(
+    pub async fn do_optimize(
         &self,
         ctx: Arc<QueryContext>,
         keep_last_snapshot: bool,

@@ -70,6 +70,7 @@ impl Interpreter for OptimizeTableInterpreter {
         let mut table = self.ctx.get_table(&plan.database, &plan.table).await?;
 
         if do_compact {
+            // it is a "simple and violent" strategy, to be optimized later
             let obj_name = format!("{}.{}", &plan.database, &plan.table);
             let rewritten_query =
                 format!("INSERT OVERWRITE {} SELECT * FROM {}", obj_name, obj_name);

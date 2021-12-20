@@ -11,11 +11,9 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
+//
 
-mod io;
-mod operations;
-mod pruning;
-mod statistics;
-mod table;
-mod table_functions;
-mod table_test_fixture;
+mod optimize;
+mod purge_drop;
+mod purge_truncate;
+mod read_plan;

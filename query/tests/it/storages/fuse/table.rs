@@ -262,7 +262,8 @@ async fn test_fuse_table_optimize() -> Result<()> {
     assert_eq!(parts.len(), n);
 
     // do compact
-    let query = format!("compact table {}.{}", db_name, tbl_name);
+    let query = format!("optimize table {}.{} compact", db_name, tbl_name);
+
     let plan = PlanParser::parse(&query, ctx.clone()).await?;
     let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
 

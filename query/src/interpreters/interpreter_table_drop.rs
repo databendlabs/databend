@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::DropTablePlan;
 use common_streams::DataBlockStream;
@@ -37,9 +38,15 @@ impl DropTableInterpreter {
     async fn truncate_history(&self) -> Result<()> {
         let db_name = self.plan.db.as_str();
         let tbl_name = self.plan.table.as_str();
-        let tbl = self.ctx.get_table(db_name, tbl_name).await?;
-        let keep_last_snapshot = false;
-        tbl.optimize(self.ctx.clone(), keep_last_snapshot).await
+        let tbl = self.ctx.get_table(db_name, tbl_name).await;
+        match tbl {
+            Ok(tbl) => {
+                let keep_last_snapshot = false;
+                tbl.optimize(self.ctx.clone(), keep_last_snapshot).await
+            }
+            Err(e) if e.code() == ErrorCode::unknown_table_code() && self.plan.if_exists => Ok(()),
+            Err(e) => Err(e),
+        }
     }
 }
 

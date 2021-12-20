@@ -263,25 +263,7 @@ fn drop_table() -> Result<()> {
     }
 
     {
-        let sql = "DROP TABLE t1 purge";
-        let expected = DfStatement::DropTable(DfDropTable {
-            if_exists: false,
-            name: ObjectName(vec![Ident::new("t1")]),
-        });
-        expect_parse_ok(sql, expected)?;
-    }
-
-    {
         let sql = "DROP TABLE IF EXISTS t1";
-        let expected = DfStatement::DropTable(DfDropTable {
-            if_exists: true,
-            name: ObjectName(vec![Ident::new("t1")]),
-        });
-        expect_parse_ok(sql, expected)?;
-    }
-
-    {
-        let sql = "DROP TABLE IF EXISTS t1 purge";
         let expected = DfStatement::DropTable(DfDropTable {
             if_exists: true,
             name: ObjectName(vec![Ident::new("t1")]),

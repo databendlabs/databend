@@ -27,7 +27,7 @@ mod interpreter_show_create_table;
 mod interpreter_stage_create;
 mod interpreter_table_create;
 mod interpreter_table_drop;
-mod interpreter_truncate_table;
+mod interpreter_table_truncate;
 mod interpreter_use_database;
 mod interpreter_user_alter;
 mod interpreter_user_create;

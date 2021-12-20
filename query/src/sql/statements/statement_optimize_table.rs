@@ -36,11 +36,7 @@ pub struct DfOptimizeTable {
 impl AnalyzableStatement for DfOptimizeTable {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let (database, table) = self.resolve_table(ctx.clone())?;
-        //let table = format!("{}.{}", db, table);
-        //let rewritten_query = format!("INSERT OVERWRITE {} SELECT * FROM {}", table, table);
-        //let rewritten_plan = PlanParser::parse(rewritten_query.as_str(), ctx).await?;
-        //Ok(AnalyzedResult::SimpleQuery(Box::new(rewritten_plan)))
+        let (database, table) = self.resolve_table(ctx)?;
         let plan_node = OptimizeTablePlan {
             database,
             table,
