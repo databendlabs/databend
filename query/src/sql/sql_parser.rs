@@ -31,6 +31,7 @@ use common_meta_types::UserPrivilegeType;
 use common_planners::ExplainType;
 use metrics::histogram;
 use serde::Deserialize;
+use sqlparser::ast::AlterTableOperation;
 use sqlparser::ast::BinaryOperator;
 use sqlparser::ast::ColumnDef;
 use sqlparser::ast::ColumnOptionDef;
@@ -543,7 +544,8 @@ impl<'a> DfParser<'a> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::USER => self.parse_alter_user(),
-                _ => self.expected("alter statement", Token::Word(w)),
+                //                Keyword::TABLE => self.parse_alter_table(),
+                _ => self.expected("keyword USER or TABLE", Token::Word(w)),
             },
             unexpected => self.expected("alter statement", unexpected),
         }
@@ -609,12 +611,10 @@ impl<'a> DfParser<'a> {
     fn parse_drop_table(&mut self) -> Result<DfStatement, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
         let table_name = self.parser.parse_object_name()?;
-        let purge = self.parse_purge()?;
 
         let drop = DfDropTable {
             if_exists,
             name: table_name,
-            purge,
         };
 
         Ok(DfStatement::DropTable(drop))
@@ -703,6 +703,18 @@ impl<'a> DfParser<'a> {
 
         Ok(DfStatement::AlterUser(alter))
     }
+
+    //    fn parse_alter_table(&mut self) -> Result<DfStatement, ParserError> {
+    //        // in order to reuse self.parser.parse_alter() later, here we peek the next token
+    //        match self.parser.peek_nth_token(1) {
+    //            Token::Word(Word { value, keyword, .. })
+    //                if keyword == Keyword::NoKeyword && value.to_lowercase().as_str() == "purge" =>
+    //            {
+    //               Ok(DfStatement::AlterTablePurge(DfAlterTablePurge {object name}))
+    //            }
+    //            _ => todo!(),
+    //        }
+    //    }
 
     fn parse_drop_user(&mut self) -> Result<DfStatement, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
@@ -932,12 +944,12 @@ impl<'a> DfParser<'a> {
             Token::Word(w) => match w.keyword {
                 Keyword::TABLE => {
                     let table_name = self.parser.parse_object_name()?;
-                    let purge = self.parse_purge()?;
-                    let trunc = DfTruncateTable {
+                    let purge = self.parser.parse_keyword(Keyword::PURGE);
+                    let statement = DfTruncateTable {
                         name: table_name,
                         purge,
                     };
-                    Ok(DfStatement::TruncateTable(trunc))
+                    Ok(DfStatement::TruncateTable(statement))
                 }
                 _ => self.expected("truncate statement", Token::Word(w)),
             },
@@ -945,16 +957,25 @@ impl<'a> DfParser<'a> {
         }
     }
 
-    fn parse_non_keyword(&mut self, value: &str) -> Result<bool, ParserError> {
+    fn parse_non_keyword(&mut self, expected: &str) -> Result<bool, ParserError> {
         match self.parser.next_token() {
-            Token::Word(word) if word.value.to_lowercase() == value => Ok(true),
+            Token::Word(Word { value, .. }) if value.to_lowercase() == expected => Ok(true),
             Token::EOF => Ok(false),
-            t => self.expected("expected purge", t),
+            t => self.expected(expected, t),
         }
     }
 
-    fn parse_purge(&mut self) -> Result<bool, ParserError> {
-        self.parse_non_keyword("purge")
+    fn expect_non_keywords(&mut self, value: &[&str]) -> Result<(), ParserError> {
+        for v in value {
+            match self.parser.next_token() {
+                Token::Word(word) if word.value.to_lowercase().as_str() == *v => {
+                    continue;
+                }
+                Token::EOF => self.expected(v, Token::EOF)?,
+                t => self.expected(format!("expects {}", v).as_str(), t)?,
+            }
+        }
+        Ok(())
     }
 
     fn parse_privileges(&mut self) -> Result<UserPrivilegeSet, ParserError> {
@@ -1119,17 +1140,20 @@ impl<'a> DfParser<'a> {
     }
 
     fn parse_compact(&mut self) -> Result<DfStatement, ParserError> {
-        self.parser.next_token();
-        match self.parser.next_token() {
-            Token::Word(w) => match w.keyword {
-                Keyword::TABLE => {
-                    let table_name = self.parser.parse_object_name()?;
-                    let compact = DfCompactTable { name: table_name };
-                    Ok(DfStatement::CompactTable(compact))
-                }
-                _ => self.expected("TABLE", Token::Word(w)),
-            },
-            unexpected => self.expected("compact statement", unexpected),
+        if self.consume_token("COMPACT") {
+            match self.parser.next_token() {
+                Token::Word(w) => match w.keyword {
+                    Keyword::TABLE => {
+                        let object_name = self.parser.parse_object_name()?;
+                        let compact = DfCompactTable { name: object_name };
+                        Ok(DfStatement::CompactTable(compact))
+                    }
+                    _ => self.expected("TABLE", Token::Word(w)),
+                },
+                unexpected => self.expected("compact statement", unexpected),
+            }
+        } else {
+            self.expected("COMPACT", self.parser.peek_token())?
         }
     }
 

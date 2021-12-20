@@ -53,9 +53,7 @@ impl Interpreter for DropTableInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        if self.plan.purge {
-            self.truncate_history().await?
-        }
+        self.truncate_history().await?;
 
         let catalog = self.ctx.get_catalog();
         catalog.drop_table(self.plan.clone().into()).await?;

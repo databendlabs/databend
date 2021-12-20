@@ -72,6 +72,7 @@ pub enum DfStatement {
     DropTable(DfDropTable),
     TruncateTable(DfTruncateTable),
     CompactTable(DfCompactTable),
+    // AlterTablePurge(DfAlterTable),
 
     // Settings.
     ShowSettings(DfShowSettings),
