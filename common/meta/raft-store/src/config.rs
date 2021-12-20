@@ -26,11 +26,6 @@ lazy_static! {
         let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
         let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
 
-        let b = build_semver.unwrap();
-        let g = git_sha.unwrap();
-        let r = rustc_semver.unwrap();
-        let t = timestamp.unwrap();
-        println!("{}-{}-{}-{}", b, g, r, t);
         let ver = match (build_semver, git_sha, rustc_semver, timestamp) {
             #[cfg(not(feature = "simd"))]
             (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}({}-{})", v1, v2, v3, v4),
