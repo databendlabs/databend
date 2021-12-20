@@ -20,12 +20,12 @@ use common_base::tokio;
 use common_base::GlobalSequence;
 use common_base::Stoppable;
 use common_meta_flight::MetaFlightClient;
+use common_meta_raft_store::protobuf::meta_service_client::MetaServiceClient;
+use common_meta_raft_store::protobuf::GetReq;
 use common_tracing::tracing;
 use databend_meta::api::FlightServer;
 use databend_meta::configs;
 use databend_meta::meta_service::MetaNode;
-use databend_meta::proto::meta_service_client::MetaServiceClient;
-use databend_meta::proto::GetReq;
 
 // Start one random service and get the session manager.
 #[tracing::instrument(level = "info")]

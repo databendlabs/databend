@@ -14,9 +14,6 @@
 
 #![feature(backtrace)]
 
-#[allow(clippy::all)]
-pub mod proto;
-
 pub mod any_error;
 pub mod api;
 pub mod configs;

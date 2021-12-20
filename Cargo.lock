@@ -1452,6 +1452,7 @@ dependencies = [
  "clap 3.0.0-rc.7",
  "common-arrow",
  "common-base",
+ "common-building",
  "common-exception",
  "common-io",
  "common-meta-api",
@@ -1459,12 +1460,17 @@ dependencies = [
  "common-meta-types",
  "common-tracing",
  "derive_more",
+ "lazy_static",
  "maplit",
  "pretty_assertions",
+ "prost",
  "rand 0.8.4",
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror",
+ "tonic",
+ "tonic-build",
 ]
 
 [[package]]
@@ -1950,7 +1956,6 @@ dependencies = [
  "clap 3.0.0-rc.7",
  "common-arrow",
  "common-base",
- "common-building",
  "common-containers",
  "common-datavalues",
  "common-exception",
@@ -1967,7 +1972,6 @@ dependencies = [
  "derive_more",
  "futures",
  "indexmap",
- "lazy_static",
  "maplit",
  "metrics",
  "metrics-exporter-prometheus",
@@ -1988,7 +1992,6 @@ dependencies = [
  "tokio-stream",
  "toml",
  "tonic",
- "tonic-build",
  "uuid",
 ]
 
