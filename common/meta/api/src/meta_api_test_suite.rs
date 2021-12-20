@@ -22,6 +22,7 @@ use common_exception::ErrorCode;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
+use common_meta_types::DatabaseMeta;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReq;
 use common_meta_types::GetDatabaseReq;
@@ -50,8 +51,10 @@ impl MetaApiTestSuite {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 db: "db1".to_string(),
-                engine: "github".to_string(),
-                options: Default::default(),
+                meta: DatabaseMeta {
+                    engine: "github".to_string(),
+                    ..Default::default()
+                },
             };
 
             let res = mt.create_database(req).await;
@@ -65,8 +68,10 @@ impl MetaApiTestSuite {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 db: "db1".to_string(),
-                engine: "".to_string(),
-                options: Default::default(),
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..Default::default()
+                },
             };
 
             let res = mt.create_database(req).await;
@@ -80,8 +85,10 @@ impl MetaApiTestSuite {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 db: "db1".to_string(),
-                engine: "".to_string(),
-                options: Default::default(),
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
             };
 
             let res = mt.create_database(req).await;
@@ -104,8 +111,10 @@ impl MetaApiTestSuite {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 db: "db2".to_string(),
-                engine: "".to_string(),
-                options: Default::default(),
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
             };
 
             let res = mt.create_database(req).await;
@@ -191,8 +200,10 @@ impl MetaApiTestSuite {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
                 db: db_name.to_string(),
-                engine: "".to_string(),
-                options: Default::default(),
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
             };
 
             let res = mt.create_database(plan).await?;
@@ -223,6 +234,7 @@ impl MetaApiTestSuite {
                     engine: "JSON".to_string(),
                     options: options.clone(),
                     created_on,
+                    ..TableMeta::default()
                 },
             };
 
@@ -241,6 +253,7 @@ impl MetaApiTestSuite {
                         engine: "JSON".to_owned(),
                         options: options.clone(),
                         created_on,
+                        ..Default::default()
                     },
                 };
                 assert_eq!(want, got.as_ref().clone(), "get created table");
@@ -262,6 +275,7 @@ impl MetaApiTestSuite {
                         engine: "JSON".to_owned(),
                         options: options.clone(),
                         created_on,
+                        ..Default::default()
                     },
                 };
                 assert_eq!(want, got.as_ref().clone(), "get created table");
@@ -292,6 +306,7 @@ impl MetaApiTestSuite {
                         engine: "JSON".to_owned(),
                         options: options.clone(),
                         created_on,
+                        ..Default::default()
                     },
                 };
                 assert_eq!(want, got.as_ref().clone(), "get old table");
@@ -451,8 +466,10 @@ impl MetaApiTestSuite {
         let req = CreateDatabaseReq {
             if_not_exists: false,
             db: db_name.to_string(),
-            engine: "".to_string(),
-            options: Default::default(),
+            meta: DatabaseMeta {
+                engine: "".to_string(),
+                ..Default::default()
+            },
         };
 
         let res = mt.create_database(req).await?;
@@ -475,8 +492,10 @@ impl MetaApiTestSuite {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 db: "db1".to_string(),
-                engine: "github".to_string(),
-                options: Default::default(),
+                meta: DatabaseMeta {
+                    engine: "github".to_string(),
+                    ..Default::default()
+                },
             };
 
             let res = node_a.create_database(req).await;
@@ -522,8 +541,10 @@ impl MetaApiTestSuite {
                 let req = CreateDatabaseReq {
                     if_not_exists: false,
                     db: db_name.to_string(),
-                    engine: "github".to_string(),
-                    options: Default::default(),
+                    meta: DatabaseMeta {
+                        engine: "github".to_string(),
+                        ..Default::default()
+                    },
                 };
                 let res = node_a.create_database(req).await;
                 tracing::info!("create database res: {:?}", res);
@@ -558,8 +579,10 @@ impl MetaApiTestSuite {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 db: db_name.to_string(),
-                engine: "github".to_string(),
-                options: Default::default(),
+                meta: DatabaseMeta {
+                    engine: "github".to_string(),
+                    ..Default::default()
+                },
             };
             let res = node_a.create_database(req).await;
             tracing::info!("create database res: {:?}", res);
@@ -618,8 +641,10 @@ impl MetaApiTestSuite {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
                 db: db_name.to_string(),
-                engine: "github".to_string(),
-                options: Default::default(),
+                meta: DatabaseMeta {
+                    engine: "github".to_string(),
+                    ..Default::default()
+                },
             };
             let res = node_a.create_database(req).await;
             tracing::info!("create database res: {:?}", res);

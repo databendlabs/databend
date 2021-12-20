@@ -176,6 +176,7 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::Copy(v) => v.analyze(ctx).await,
             DfStatement::CreateStage(v) => v.analyze(ctx).await,
             DfStatement::ShowFunctions(v) => v.analyze(ctx).await,
+            DfStatement::DropStage(v) => v.analyze(ctx).await,
         }
     }
 }

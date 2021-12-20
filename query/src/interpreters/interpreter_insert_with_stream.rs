@@ -47,7 +47,7 @@ impl<'a> InsertWithStream<'a> {
     ) -> common_exception::Result<SendableDataBlockStream> {
         let progress_stream = Box::pin(ProgressStream::try_create(
             input,
-            self.ctx.progress_callback()?,
+            self.ctx.get_scan_progress(),
         )?);
         self.table
             .append_data(self.ctx.clone(), progress_stream)

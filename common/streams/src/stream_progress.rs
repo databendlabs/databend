@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 
-use common_base::ProgressCallback;
+use common_base::Progress;
 use common_base::ProgressValues;
 use common_datablocks::DataBlock;
 use common_exception::Result;
@@ -28,13 +29,13 @@ pin_project! {
     pub struct ProgressStream {
         #[pin]
         input: SendableDataBlockStream,
-        callback: ProgressCallback,
+        progress:Arc<Progress>,
     }
 }
 
 impl ProgressStream {
-    pub fn try_create(input: SendableDataBlockStream, callback: ProgressCallback) -> Result<Self> {
-        Ok(Self { input, callback })
+    pub fn try_create(input: SendableDataBlockStream, progress: Arc<Progress>) -> Result<Self> {
+        Ok(Self { input, progress })
     }
 }
 
@@ -55,8 +56,7 @@ impl Stream for ProgressStream {
                             read_rows: block.num_rows(),
                             read_bytes: block.memory_size(),
                         };
-
-                        (this.callback)(&progress_values);
+                        this.progress.incr(&progress_values);
                         Poll::Ready(Some(Ok(block)))
                     }
                     Err(e) => Poll::Ready(Some(Err(e))),

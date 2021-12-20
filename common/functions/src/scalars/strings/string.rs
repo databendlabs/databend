@@ -34,6 +34,7 @@ use crate::scalars::LeftFunction;
 use crate::scalars::LeftPadFunction;
 use crate::scalars::LengthFunction;
 use crate::scalars::LocateFunction;
+use crate::scalars::LowerFunction;
 use crate::scalars::OctFunction;
 use crate::scalars::OctetLengthFunction;
 use crate::scalars::OrdFunction;
@@ -45,12 +46,14 @@ use crate::scalars::ReplaceFunction;
 use crate::scalars::ReverseFunction;
 use crate::scalars::RightFunction;
 use crate::scalars::RightPadFunction;
+use crate::scalars::SoundexFunction;
 use crate::scalars::SpaceFunction;
 use crate::scalars::StrcmpFunction;
 use crate::scalars::SubstringFunction;
 use crate::scalars::SubstringIndexFunction;
 use crate::scalars::TrimFunction;
 use crate::scalars::UnhexFunction;
+use crate::scalars::UpperFunction;
 
 #[derive(Clone)]
 pub struct StringFunction;
@@ -95,8 +98,13 @@ impl StringFunction {
         factory.register("ord", OrdFunction::desc());
         factory.register("bin", BinFunction::desc());
         factory.register("export_set", ExportSetFunction::desc());
+        factory.register("soundex", SoundexFunction::desc());
         factory.register("find_in_set", FindInSetFunction::desc());
         factory.register("length", LengthFunction::desc());
         factory.register("format", FormatFunction::desc());
+        factory.register("lower", LowerFunction::desc());
+        factory.register("lcase", LowerFunction::desc());
+        factory.register("upper", UpperFunction::desc());
+        factory.register("ucase", UpperFunction::desc());
     }
 }

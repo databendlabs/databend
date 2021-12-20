@@ -25,6 +25,7 @@ use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::Result;
+use common_meta_types::DatabaseMeta;
 use common_meta_types::TableMeta;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
@@ -72,8 +73,10 @@ impl TestFixture {
         let plan = CreateDatabasePlan {
             if_not_exists: false,
             db: db_name,
-            engine: "".to_string(),
-            options: Default::default(),
+            meta: DatabaseMeta {
+                engine: "".to_string(),
+                ..Default::default()
+            },
         };
         ctx.get_catalog()
             .create_database(plan.into())

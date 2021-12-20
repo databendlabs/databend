@@ -93,7 +93,7 @@ fn test_session_status() -> Result<()> {
             sessions.get_conf().clone(),
             Arc::new(dummy_session.as_ref().clone()),
             Cluster::empty(),
-        );
+        )?;
 
         mutable_status.set_context_shared(Some(shared.clone()));
         let val = mutable_status.get_context_shared();

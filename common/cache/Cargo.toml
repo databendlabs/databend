@@ -17,6 +17,7 @@ amortized = ["ritelinked/ahash-amortized", "ritelinked/inline-more-amortized"]
 [dependencies] # In alphabetical order
 common-tracing = {path = "../tracing" }
 # Workspace dependencies
+common-exception = { path = "../exception" }
 
 # Github dependencies
 

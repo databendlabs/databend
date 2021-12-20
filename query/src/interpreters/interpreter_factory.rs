@@ -19,13 +19,14 @@ use common_exception::Result;
 use common_planners::PlanNode;
 
 use super::DescribeStageInterpreter;
+use crate::interpreters::interpreter_stage_drop::DropStageInterpreter;
 use crate::interpreters::interpreter_table_optimize::OptimizeTableInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CopyInterpreter;
 use crate::interpreters::CreatStageInterpreter;
-use crate::interpreters::CreatUserInterpreter;
 use crate::interpreters::CreateDatabaseInterpreter;
 use crate::interpreters::CreateTableInterpreter;
+use crate::interpreters::CreateUserInterpreter;
 use crate::interpreters::DescribeTableInterpreter;
 use crate::interpreters::DropDatabaseInterpreter;
 use crate::interpreters::DropTableInterpreter;
@@ -65,13 +66,14 @@ impl InterpreterFactory {
             PlanNode::Insert(v) => InsertInterpreter::try_create(ctx_clone, v),
             PlanNode::ShowCreateTable(v) => ShowCreateTableInterpreter::try_create(ctx_clone, v),
             PlanNode::Kill(v) => KillInterpreter::try_create(ctx_clone, v),
-            PlanNode::CreateUser(v) => CreatUserInterpreter::try_create(ctx_clone, v),
+            PlanNode::CreateUser(v) => CreateUserInterpreter::try_create(ctx_clone, v),
             PlanNode::AlterUser(v) => AlterUserInterpreter::try_create(ctx_clone, v),
             PlanNode::DropUser(v) => DropUserInterpreter::try_create(ctx_clone, v),
             PlanNode::GrantPrivilege(v) => GrantPrivilegeInterpreter::try_create(ctx_clone, v),
             PlanNode::RevokePrivilege(v) => RevokePrivilegeInterpreter::try_create(ctx_clone, v),
             PlanNode::Copy(v) => CopyInterpreter::try_create(ctx_clone, v),
             PlanNode::CreateUserStage(v) => CreatStageInterpreter::try_create(ctx_clone, v),
+            PlanNode::DropUserStage(v) => DropStageInterpreter::try_create(ctx_clone, v),
             PlanNode::ShowGrants(v) => ShowGrantsInterpreter::try_create(ctx_clone, v),
             PlanNode::DescribeStage(v) => DescribeStageInterpreter::try_create(ctx_clone, v),
             _ => Result::Err(ErrorCode::UnknownTypeOfQuery(format!(

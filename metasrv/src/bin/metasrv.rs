@@ -27,11 +27,10 @@ use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::metrics::MetricService;
-use structopt::StructOpt;
 
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
-    let conf = Config::from_args();
+    let conf = Config::load()?;
 
     let _guards = init_global_tracing(
         "databend-meta",
@@ -40,10 +39,6 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     );
 
     tracing::info!("{:?}", conf.clone());
-    tracing::info!(
-        "Databend-meta v-{}",
-        *databend_meta::configs::config::DATABEND_COMMIT_VERSION
-    );
 
     init_sled_db(conf.raft_config.raft_dir.clone());
     init_default_metrics_recorder();

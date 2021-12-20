@@ -12,18 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+use serde::Deserialize;
+use serde::Serialize;
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+#[serde(default)]
 pub struct UserQuota {
     // The max cpu can be used (0 is no limited).
-    #[serde(default)]
     pub max_cpu: u64,
 
     // The max memory(bytes) can be used(0 is no limited).
-    #[serde(default)]
     pub max_memory_in_bytes: u64,
 
     // The max storage(bytes) can be used(0 is no limited).
-    #[serde(default)]
     pub max_storage_in_bytes: u64,
 }
 

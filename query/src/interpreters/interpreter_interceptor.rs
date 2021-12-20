@@ -14,9 +14,6 @@
 
 use std::sync::Arc;
 
-use common_base::Progress;
-use common_base::ProgressCallback;
-use common_base::ProgressValues;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_streams::ProgressStream;
@@ -28,26 +25,18 @@ use crate::interpreters::InterpreterQueryLog;
 use crate::sessions::QueryContext;
 
 pub struct InterceptorInterpreter {
+    ctx: Arc<QueryContext>,
     inner: InterpreterPtr,
     query_log: InterpreterQueryLog,
-    result_metric: Arc<Progress>,
 }
 
 impl InterceptorInterpreter {
     pub fn create(ctx: Arc<QueryContext>, inner: InterpreterPtr, plan: PlanNode) -> Self {
         InterceptorInterpreter {
+            ctx: ctx.clone(),
             inner,
             query_log: InterpreterQueryLog::create(ctx, plan),
-            result_metric: Arc::new(Progress::create()),
         }
-    }
-
-    /// Get the last sink stream progress values.
-    fn result_metric_callback(&self) -> Result<ProgressCallback> {
-        let current = self.result_metric.clone();
-        Ok(Box::new(move |value: &ProgressValues| {
-            current.incr(value);
-        }))
     }
 }
 
@@ -63,7 +52,7 @@ impl Interpreter for InterceptorInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let result_stream = self.inner.execute(input_stream).await?;
         let metric_stream =
-            ProgressStream::try_create(result_stream, self.result_metric_callback()?)?;
+            ProgressStream::try_create(result_stream, self.ctx.get_result_progress())?;
         Ok(Box::pin(metric_stream))
     }
 
@@ -72,12 +61,6 @@ impl Interpreter for InterceptorInterpreter {
     }
 
     async fn finish(&self) -> Result<()> {
-        let result_metrics = self.result_metric.get_values();
-        self.query_log
-            .log_finish(
-                result_metrics.read_rows as u64,
-                result_metrics.read_bytes as u64,
-            )
-            .await
+        self.query_log.log_finish().await
     }
 }

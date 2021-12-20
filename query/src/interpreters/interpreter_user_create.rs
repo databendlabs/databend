@@ -28,19 +28,19 @@ use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]
-pub struct CreatUserInterpreter {
+pub struct CreateUserInterpreter {
     ctx: Arc<QueryContext>,
     plan: CreateUserPlan,
 }
 
-impl CreatUserInterpreter {
+impl CreateUserInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CreateUserPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(CreatUserInterpreter { ctx, plan }))
+        Ok(Arc::new(CreateUserInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for CreatUserInterpreter {
+impl Interpreter for CreateUserInterpreter {
     fn name(&self) -> &str {
         "CreateUserInterpreter"
     }

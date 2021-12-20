@@ -20,17 +20,13 @@ use common_meta_types::UserInfo;
 fn test_user_info() -> Result<()> {
     // This test will introduce a older UserInfo struct and a new UserInfo struct.
     // And check the serialize(old_userinfo) can be deserialized by the new UserInfo.
-    #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+    #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+    #[serde(default)]
+
     pub struct OldUserInfo {
-        #[serde(default)]
         pub name: String,
-        #[serde(default)]
         pub hostname: String,
-
-        #[serde(default)]
         pub password: Vec<u8>,
-
-        #[serde(default)]
         pub password_type: PasswordType,
     }
 

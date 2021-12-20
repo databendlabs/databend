@@ -34,8 +34,8 @@ fn test_filter_non_const_data_block() -> Result<()> {
         Series::new(vec!["x1", "x1", "x2", "x1", "x2", "x3"]),
     ]);
 
-    let predicate = Series::new(vec![true, false, true, true, false, false]);
-    let block = DataBlock::filter_block(&block, predicate)?;
+    let predicate = Series::new(vec![true, false, true, true, false, false]).into();
+    let block = DataBlock::filter_block(&block, &predicate)?;
 
     common_datablocks::assert_blocks_eq(
         vec![
@@ -65,8 +65,8 @@ fn test_filter_all_false_data_block() -> Result<()> {
         Series::new(vec!["x1", "x1", "x2", "x1", "x2", "x3"]),
     ]);
 
-    let predicate = Series::new(vec![false, false, false, false, false, false]);
-    let block = DataBlock::filter_block(&block, predicate)?;
+    let predicate = Series::new(vec![false, false, false, false, false, false]).into();
+    let block = DataBlock::filter_block(&block, &predicate)?;
 
     common_datablocks::assert_blocks_eq(
         vec!["+---+---+", "| a | b |", "+---+---+", "+---+---+"],
@@ -88,8 +88,8 @@ fn test_filter_const_data_block() -> Result<()> {
         DataColumn::Constant(DataValue::String(Some(vec![b'x', b'1'])), 6),
     ]);
 
-    let predicate = Series::new(vec![true, false, true, true, false, false]);
-    let block = DataBlock::filter_block(&block, predicate)?;
+    let predicate = Series::new(vec![true, false, true, true, false, false]).into();
+    let block = DataBlock::filter_block(&block, &predicate)?;
 
     common_datablocks::assert_blocks_eq(
         vec![
@@ -119,8 +119,8 @@ fn test_filter_all_const_data_block() -> Result<()> {
         DataColumn::Constant(DataValue::String(Some(vec![b'x', b'1'])), 6),
     ]);
 
-    let predicate = Series::new(vec![true, false, true, true, false, false]);
-    let block = DataBlock::filter_block(&block, predicate)?;
+    let predicate = Series::new(vec![true, false, true, true, false, false]).into();
+    let block = DataBlock::filter_block(&block, &predicate)?;
 
     common_datablocks::assert_blocks_eq(
         vec![

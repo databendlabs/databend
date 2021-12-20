@@ -13,8 +13,11 @@
 // limitations under the License.
 
 mod locate;
+mod lower;
 mod substring;
 mod trim;
 
+mod upper;
 mod utils;
+
 pub use utils::*;

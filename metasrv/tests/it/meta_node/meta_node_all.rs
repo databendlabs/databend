@@ -20,9 +20,11 @@ use async_raft::State;
 use common_base::tokio;
 use common_base::tokio::time::Duration;
 use common_meta_api::KVApi;
+use common_meta_raft_store::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
+use common_meta_types::DatabaseMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
 use common_meta_types::NodeId;
@@ -38,7 +40,6 @@ use databend_meta::meta_service::ForwardRequest;
 use databend_meta::meta_service::ForwardRequestBody;
 use databend_meta::meta_service::JoinRequest;
 use databend_meta::meta_service::MetaNode;
-use databend_meta::proto::meta_service_client::MetaServiceClient;
 use databend_meta::Opened;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
@@ -242,7 +243,11 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
                     txid: None,
                     cmd: Cmd::CreateDatabase {
                         name: name.to_string(),
-                        engine: "default".to_string(),
+                        meta: DatabaseMeta {
+                            engine: "default".to_string(),
+                            engine_options: Default::default(),
+                            options: Default::default(),
+                        },
                     },
                 })
                 .await;

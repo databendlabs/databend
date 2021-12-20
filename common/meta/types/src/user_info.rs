@@ -17,29 +17,26 @@ use std::convert::TryFrom;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::user_grant::UserGrantSet;
 use crate::PasswordType;
 use crate::UserQuota;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+#[serde(default)]
 pub struct UserInfo {
-    #[serde(default)]
     pub name: String,
 
-    #[serde(default)]
     pub hostname: String,
 
-    #[serde(default)]
     pub password: Vec<u8>,
 
-    #[serde(default)]
     pub password_type: PasswordType,
 
-    #[serde(default)]
     pub grants: UserGrantSet,
 
-    #[serde(default)]
     pub quota: UserQuota,
 }
 

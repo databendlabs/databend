@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use structopt::StructOpt;
-use structopt_toml::StructOptToml;
+use clap::Args;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::configs::Config;
 
@@ -33,6 +34,16 @@ pub const QUERY_HTTP_API_ADDRESS: &str = "QUERY_HTTP_API_ADDRESS";
 pub const QUERY_METRICS_API_ADDRESS: &str = "QUERY_METRIC_API_ADDRESS";
 pub const QUERY_WAIT_TIMEOUT_MILLS: &str = "QUERY_WAIT_TIMEOUT_MILLS";
 pub const QUERY_MAX_QUERY_LOG_SIZE: &str = "QUERY_MAX_QUERY_LOG_SIZE";
+pub const QUERY_TABLE_CACHE_ENABLED: &str = "QUERY_TABLE_CACHE_ENABLED";
+pub const QUERY_TABLE_MEMORY_CACHE_MB_SIZE: &str = "QUERY_TABLE_MEMORY_CACHE_MB_SIZE";
+pub const QUERY_TABLE_DISK_CACHE_ROOT: &str = "QUERY_TABLE_DISK_CACHE_ROOT";
+pub const QUERY_TABLE_DISK_CACHE_MB_SIZE: &str = "QUERY_TABLE_DISK_CACHE_MB_SIZE";
+
+const QUERY_HTTP_HANDLER_TLS_SERVER_CERT: &str = "QUERY_HTTP_HANDLER_TLS_SERVER_CERT";
+const QUERY_HTTP_HANDLER_TLS_SERVER_KEY: &str = "QUERY_HTTP_HANDLER_TLS_SERVER_KEY";
+const QUERY_HTTP_HANDLER_TLS_SERVER_ROOT_CA_CERT: &str =
+    "QUERY_HTTP_HANDLER_TLS_SERVER_ROOT_CA_CERT";
+
 const QUERY_API_TLS_SERVER_CERT: &str = "QUERY_API_TLS_SERVER_CERT";
 const QUERY_API_TLS_SERVER_KEY: &str = "QUERY_API_TLS_SERVER_KEY";
 const QUERY_API_TLS_SERVER_ROOT_CA_CERT: &str = "QUERY_API_TLS_SERVER_ROOT_CA_CERT";
@@ -45,196 +56,142 @@ const QUERY_RPC_TLS_SERVICE_DOMAIN_NAME: &str = "QUERY_RPC_TLS_SERVICE_DOMAIN_NA
 const QUERY_TABLE_ENGINE_CSV_ENABLED: &str = "QUERY_TABLE_ENGINE_CSV_ENABLED";
 const QUERY_TABLE_ENGINE_PARQUET_ENABLED: &str = "QUERY_TABLE_ENGINE_PARQUET_ENABLED";
 const QUERY_TABLE_ENGINE_MEMORY_ENABLED: &str = "QUERY_TABLE_ENGINE_MEMORY_ENABLED";
-const QUERY_TABLE_ENGINE_GITHUB_ENABLED: &str = "QUERY_TABLE_ENGINE_GITHUB_ENABLED";
+const QUERY_DATABASE_ENGINE_GITHUB_ENABLED: &str = "QUERY_DATABASE_ENGINE_GITHUB_ENABLED";
 
 /// Query config group.
-/// serde(default) make the toml de to default working.
-#[derive(
-    Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
-)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
+#[serde(default)]
 pub struct QueryConfig {
-    #[structopt(long, env = QUERY_TENANT_ID, default_value = "", help = "Tenant id for get the information from the MetaStore")]
-    #[serde(default)]
+    /// Tenant id for get the information from the MetaStore
+    #[clap(long, env = QUERY_TENANT_ID, default_value = "")]
     pub tenant_id: String,
 
-    #[structopt(long, env = QUERY_CLUSTER_ID, default_value = "", help = "ID for construct the cluster")]
-    #[serde(default)]
+    /// ID for construct the cluster
+    #[clap(long, env = QUERY_CLUSTER_ID, default_value = "")]
     pub cluster_id: String,
 
-    #[structopt(long, env = QUERY_NUM_CPUS, default_value = "0")]
-    #[serde(default)]
+    #[clap(long, env = QUERY_NUM_CPUS, default_value = "0")]
     pub num_cpus: u64,
 
-    #[structopt(
-    long,
-    env = QUERY_MYSQL_HANDLER_HOST,
-    default_value = "127.0.0.1"
-    )]
-    #[serde(default)]
+    #[clap(long, env = QUERY_MYSQL_HANDLER_HOST, default_value = "127.0.0.1")]
     pub mysql_handler_host: String,
 
-    #[structopt(long, env = QUERY_MYSQL_HANDLER_PORT, default_value = "3307")]
-    #[serde(default)]
+    #[clap(long, env = QUERY_MYSQL_HANDLER_PORT, default_value = "3307")]
     pub mysql_handler_port: u16,
 
-    #[structopt(
-    long,
-    env = QUERY_MAX_ACTIVE_SESSIONS,
-    default_value = "256"
-    )]
-    #[serde(default)]
+    #[clap(long, env = QUERY_MAX_ACTIVE_SESSIONS, default_value = "256")]
     pub max_active_sessions: u64,
 
-    #[structopt(
-    long,
-    env = QUERY_CLICKHOUSE_HANDLER_HOST,
-    default_value = "127.0.0.1"
-    )]
-    #[serde(default)]
+    #[clap(long, env = QUERY_CLICKHOUSE_HANDLER_HOST, default_value = "127.0.0.1")]
     pub clickhouse_handler_host: String,
 
-    #[structopt(
-    long,
-    env = QUERY_CLICKHOUSE_HANDLER_PORT,
-    default_value = "9000"
-    )]
-    #[serde(default)]
+    #[clap(long, env = QUERY_CLICKHOUSE_HANDLER_PORT, default_value = "9000")]
     pub clickhouse_handler_port: u16,
 
-    #[structopt(
-    long,
-    env = QUERY_HTTP_HANDLER_HOST,
-    default_value = "127.0.0.1"
-    )]
-    #[serde(default)]
+    #[clap(long, env = QUERY_HTTP_HANDLER_HOST, default_value = "127.0.0.1")]
     pub http_handler_host: String,
 
-    #[structopt(
-    long,
-    env = QUERY_HTTP_HANDLER_PORT,
-    default_value = "8000"
-    )]
-    #[serde(default)]
+    #[clap(long, env = QUERY_HTTP_HANDLER_PORT, default_value = "8000")]
     pub http_handler_port: u16,
 
-    #[structopt(
-    long,
-    env = QUERY_FLIGHT_API_ADDRESS,
-    default_value = "127.0.0.1:9090"
-    )]
-    #[serde(default)]
+    #[clap(long, env = QUERY_FLIGHT_API_ADDRESS, default_value = "127.0.0.1:9090")]
     pub flight_api_address: String,
 
-    #[structopt(
-    long,
-    env = QUERY_HTTP_API_ADDRESS,
-    default_value = "127.0.0.1:8080"
-    )]
-    #[serde(default)]
+    #[clap(long, env = QUERY_HTTP_API_ADDRESS, default_value = "127.0.0.1:8080")]
     pub http_api_address: String,
 
-    #[structopt(
-    long,
-    env = QUERY_METRICS_API_ADDRESS,
-    default_value = "127.0.0.1:7070"
-    )]
-    #[serde(default)]
+    #[clap(long,env = QUERY_METRICS_API_ADDRESS, default_value = "127.0.0.1:7070")]
     pub metric_api_address: String,
 
-    #[structopt(long, env = QUERY_API_TLS_SERVER_CERT, default_value = "")]
-    #[serde(default)]
+    #[clap(long, env = QUERY_HTTP_HANDLER_TLS_SERVER_CERT, default_value = "")]
+    pub http_handler_tls_server_cert: String,
+
+    #[clap(long, env = QUERY_HTTP_HANDLER_TLS_SERVER_KEY, default_value = "")]
+    pub http_handler_tls_server_key: String,
+
+    #[clap(long, env = QUERY_HTTP_HANDLER_TLS_SERVER_ROOT_CA_CERT, default_value = "")]
+    pub http_handler_tls_server_root_ca_cert: String,
+
+    #[clap(long, env = QUERY_API_TLS_SERVER_CERT, default_value = "")]
     pub api_tls_server_cert: String,
 
-    #[structopt(long, env = QUERY_API_TLS_SERVER_KEY, default_value = "")]
-    #[serde(default)]
+    #[clap(long, env = QUERY_API_TLS_SERVER_KEY, default_value = "")]
     pub api_tls_server_key: String,
 
-    #[structopt(long, env = QUERY_API_TLS_SERVER_ROOT_CA_CERT, default_value = "")]
-    #[serde(default)]
+    #[clap(long, env = QUERY_API_TLS_SERVER_ROOT_CA_CERT, default_value = "")]
     pub api_tls_server_root_ca_cert: String,
 
-    #[structopt(
-        long,
-        env = "QUERY_RPC_TLS_SERVER_CERT",
-        default_value = "",
-        help = "rpc server cert"
-    )]
-    #[serde(default)]
+    /// rpc server cert
+    #[clap(long, env = "QUERY_RPC_TLS_SERVER_CERT", default_value = "")]
     pub rpc_tls_server_cert: String,
 
-    #[structopt(
-        long,
-        env = "QUERY_RPC_TLS_SERVER_KEY",
-        default_value = "key for rpc server cert"
-    )]
-    #[serde(default)]
+    /// key for rpc server cert
+    #[clap(long, env = "QUERY_RPC_TLS_SERVER_KEY", default_value = "")]
     pub rpc_tls_server_key: String,
 
-    #[structopt(
-        long,
-        env = "QUERY_RPC_TLS_SERVER_ROOT_CA_CERT",
-        default_value = "",
-        help = "Certificate for client to identify query rpc server"
-    )]
-    #[serde(default)]
+    /// Certificate for client to identify query rpc server
+    #[clap(long, env = "QUERY_RPC_TLS_SERVER_ROOT_CA_CERT", default_value = "")]
     pub rpc_tls_query_server_root_ca_cert: String,
 
-    #[structopt(
+    #[clap(
         long,
         env = "QUERY_RPC_TLS_SERVICE_DOMAIN_NAME",
         default_value = "localhost"
     )]
-    #[serde(default)]
     pub rpc_tls_query_service_domain_name: String,
 
-    #[structopt(long, env = QUERY_TABLE_ENGINE_CSV_ENABLED, help = "Table engine csv enabled")]
-    #[serde(default)]
+    /// Table engine csv enabled
+    #[clap(long, env = QUERY_TABLE_ENGINE_CSV_ENABLED)]
     pub table_engine_csv_enabled: bool,
 
-    #[structopt(long, env = QUERY_TABLE_ENGINE_PARQUET_ENABLED, help = "Table engine parquet enabled")]
-    #[serde(default)]
+    /// Table engine parquet enabled
+    #[clap(long, env = QUERY_TABLE_ENGINE_PARQUET_ENABLED)]
     pub table_engine_parquet_enabled: bool,
 
-    #[structopt(
+    /// Table engine memory enabled
+    #[clap(
         long,
         env = QUERY_TABLE_ENGINE_MEMORY_ENABLED,
         parse(try_from_str),
         default_value = "true",
-        help = "Table engine memory enabled"
     )]
-    #[serde(default)]
     pub table_engine_memory_enabled: bool,
 
-    #[structopt(
+    /// Database engine github enabled
+    #[clap(
         long,
-        env = QUERY_TABLE_ENGINE_GITHUB_ENABLED,
+        env = QUERY_DATABASE_ENGINE_GITHUB_ENABLED,
         parse(try_from_str),
         default_value = "true",
-        help = "Table engine github enabled"
     )]
-    #[serde(default)]
-    pub table_engine_github_enabled: bool,
+    pub database_engine_github_enabled: bool,
 
-    #[structopt(
-    long,
-    env = QUERY_WAIT_TIMEOUT_MILLS,
-    default_value = "5000"
-    )]
-    #[serde(default)]
+    #[clap(long, env = QUERY_WAIT_TIMEOUT_MILLS, default_value = "5000")]
     pub wait_timeout_mills: u64,
 
-    #[structopt(
-    long,
-    env = QUERY_MAX_QUERY_LOG_SIZE,
-    default_value = "10000"
-    )]
-    #[serde(default)]
+    #[clap(long, env = QUERY_MAX_QUERY_LOG_SIZE, default_value = "10000")]
     pub max_query_log_size: usize,
+
+    /// Table Cached enabled
+    #[clap(long, env = QUERY_TABLE_CACHE_ENABLED)]
+    pub table_cache_enabled: bool,
+
+    /// Table memory cache size (mb)
+    #[clap(long, env = QUERY_TABLE_MEMORY_CACHE_MB_SIZE, default_value = "256")]
+    pub table_memory_cache_mb_size: u64,
+
+    /// Table disk cache folder root
+    #[clap(long, env = QUERY_TABLE_DISK_CACHE_ROOT, default_value = "_cache")]
+    pub table_disk_cache_root: String,
+
+    /// Table disk cache size (mb)
+    #[clap(long, env = QUERY_TABLE_DISK_CACHE_MB_SIZE, default_value = "1024")]
+    pub table_disk_cache_mb_size: u64,
 }
 
-impl QueryConfig {
-    pub fn default() -> Self {
-        QueryConfig {
+impl Default for QueryConfig {
+    fn default() -> Self {
+        Self {
             tenant_id: "".to_string(),
             cluster_id: "".to_string(),
             num_cpus: 8,
@@ -251,6 +208,9 @@ impl QueryConfig {
             api_tls_server_cert: "".to_string(),
             api_tls_server_key: "".to_string(),
             api_tls_server_root_ca_cert: "".to_string(),
+            http_handler_tls_server_cert: "".to_string(),
+            http_handler_tls_server_key: "".to_string(),
+            http_handler_tls_server_root_ca_cert: "".to_string(),
             rpc_tls_server_cert: "".to_string(),
             rpc_tls_server_key: "".to_string(),
             rpc_tls_query_server_root_ca_cert: "".to_string(),
@@ -258,12 +218,18 @@ impl QueryConfig {
             table_engine_csv_enabled: false,
             table_engine_parquet_enabled: false,
             table_engine_memory_enabled: true,
-            table_engine_github_enabled: true,
+            database_engine_github_enabled: true,
             wait_timeout_mills: 5000,
             max_query_log_size: 10000,
+            table_cache_enabled: false,
+            table_memory_cache_mb_size: 256,
+            table_disk_cache_root: "_cache".to_string(),
+            table_disk_cache_mb_size: 1024,
         }
     }
+}
 
+impl QueryConfig {
     pub fn load_from_env(mut_config: &mut Config) {
         env_helper!(mut_config, query, tenant_id, String, QUERY_TENANT_ID);
         env_helper!(mut_config, query, cluster_id, String, QUERY_CLUSTER_ID);
@@ -342,6 +308,31 @@ impl QueryConfig {
             QUERY_API_TLS_SERVER_KEY
         );
 
+        // for http handler service
+        env_helper!(
+            mut_config,
+            query,
+            http_handler_tls_server_cert,
+            String,
+            QUERY_HTTP_HANDLER_TLS_SERVER_CERT
+        );
+
+        env_helper!(
+            mut_config,
+            query,
+            http_handler_tls_server_key,
+            String,
+            QUERY_HTTP_HANDLER_TLS_SERVER_KEY
+        );
+
+        env_helper!(
+            mut_config,
+            query,
+            http_handler_tls_server_root_ca_cert,
+            String,
+            QUERY_HTTP_HANDLER_TLS_SERVER_ROOT_CA_CERT
+        );
+
         // for query rpc server
         env_helper!(
             mut_config,
@@ -412,9 +403,37 @@ impl QueryConfig {
         env_helper!(
             mut_config,
             query,
-            table_engine_github_enabled,
+            database_engine_github_enabled,
             bool,
-            QUERY_TABLE_ENGINE_GITHUB_ENABLED
+            QUERY_DATABASE_ENGINE_GITHUB_ENABLED
+        );
+        env_helper!(
+            mut_config,
+            query,
+            table_cache_enabled,
+            bool,
+            QUERY_TABLE_CACHE_ENABLED
+        );
+        env_helper!(
+            mut_config,
+            query,
+            table_memory_cache_mb_size,
+            u64,
+            QUERY_TABLE_MEMORY_CACHE_MB_SIZE
+        );
+        env_helper!(
+            mut_config,
+            query,
+            table_disk_cache_root,
+            String,
+            QUERY_TABLE_DISK_CACHE_ROOT
+        );
+        env_helper!(
+            mut_config,
+            query,
+            table_disk_cache_mb_size,
+            u64,
+            QUERY_TABLE_DISK_CACHE_MB_SIZE
         );
     }
 }

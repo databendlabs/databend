@@ -25,6 +25,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
 
+use clap::Parser;
 use clickhouse_rs::Pool;
 use common_base::tokio;
 use common_base::RuntimeTracker;
@@ -39,32 +40,31 @@ use futures::future::try_join_all;
 use futures::StreamExt;
 use quantiles::ckms::CKMS;
 use rand::Rng;
-use structopt::StructOpt;
-use structopt_toml::StructOptToml;
+use serde::Deserialize;
 
 /// echo "select avg(number) from numbers(1000000)" |  ./target/debug/databend-benchmark -c 1  -i 10
-#[derive(Clone, Debug, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
-#[serde(default)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Parser)]
+#[clap(about, version, author)]
 pub struct Config {
-    #[structopt(long, default_value = "")]
+    #[clap(long, default_value = "")]
     pub query: String,
 
-    #[structopt(long, short = "h", default_value = "127.0.0.1")]
+    #[clap(long, short = 'h', default_value = "127.0.0.1")]
     pub host: String,
-    #[structopt(long, short = "p", default_value = "9000")]
+    #[clap(long, short = 'p', default_value = "9000")]
     pub port: u32,
-    #[structopt(long, short = "i", default_value = "0")]
+    #[clap(long, short = 'i', default_value = "0")]
     pub iterations: usize,
-    #[structopt(long, short = "c", default_value = "1")]
+    #[clap(long, short = 'c', default_value = "1")]
     pub concurrency: usize,
-    #[structopt(long, default_value = "")]
+    #[clap(long, default_value = "")]
     pub json: String,
 }
 
 impl Config {
     /// Load configs from args.
     pub fn load_from_args() -> Self {
-        Config::from_args()
+        Config::parse()
     }
 }
 

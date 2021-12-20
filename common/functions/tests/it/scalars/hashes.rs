@@ -15,10 +15,13 @@
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
 use common_exception::Result;
+use common_functions::scalars::Blake3HashFunction;
 use common_functions::scalars::Md5HashFunction;
 use common_functions::scalars::Sha1HashFunction;
 use common_functions::scalars::Sha2HashFunction;
 use common_functions::scalars::SipHashFunction;
+use common_functions::scalars::XxHash32Function;
+use common_functions::scalars::XxHash64Function;
 
 #[test]
 fn test_siphash_function() -> Result<()> {
@@ -451,6 +454,158 @@ fn test_sha2hash_function() -> Result<()> {
     let func = Sha2HashFunction::try_create("sha2")?;
     for t in tests {
         let got = func.eval(&t.arg, 1);
+        match t.expect {
+            Ok(expected) => {
+                assert_eq!(&got.unwrap(), &expected, "case: {}", t.name);
+            }
+            Err(expected_err) => {
+                assert_eq!(got.unwrap_err().to_string(), expected_err.to_string());
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_blake3hash_function() -> Result<()> {
+    struct Test {
+        name: &'static str,
+        arg: DataColumnWithField,
+        expect: Result<DataColumn>,
+    }
+    let tests = vec![
+        Test {
+            name: "valid input",
+            arg: DataColumnWithField::new(
+                Series::new([Some("testing")]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(DataColumn::Constant(
+                DataValue::String(Some(
+                    "61cc98e42ded96807806bf1620e13c4e6a1b85068cad93382a2e3107c269aefe"
+                        .as_bytes()
+                        .to_vec(),
+                )),
+                1,
+            )),
+        },
+        Test {
+            name: "valid input with null",
+            arg: DataColumnWithField::new(
+                Series::new([Some("testing"), None]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(DataColumn::Array(Series::new(vec![
+                Some(
+                    "61cc98e42ded96807806bf1620e13c4e6a1b85068cad93382a2e3107c269aefe"
+                        .as_bytes()
+                        .to_vec(),
+                ),
+                None,
+            ]))),
+        },
+    ];
+
+    let func = Blake3HashFunction::try_create("blake3")?;
+    for t in tests {
+        let got = func.return_type(&[t.arg.data_type().clone()]);
+        let got = got.and_then(|_| func.eval(&[t.arg], 1));
+        match t.expect {
+            Ok(expected) => {
+                assert_eq!(&got.unwrap(), &expected, "case: {}", t.name);
+            }
+            Err(expected_err) => {
+                assert_eq!(got.unwrap_err().to_string(), expected_err.to_string());
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_xxhash32_function() -> Result<()> {
+    struct Test {
+        name: &'static str,
+        arg: DataColumnWithField,
+        expect: Result<DataColumn>,
+    }
+    let tests = vec![
+        Test {
+            name: "valid input",
+            arg: DataColumnWithField::new(
+                Series::new([Some("testing")]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(DataColumn::Constant(
+                DataValue::UInt32(Some(210358520u32)),
+                1,
+            )),
+        },
+        Test {
+            name: "valid input with null",
+            arg: DataColumnWithField::new(
+                Series::new([Some("testing"), None]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(DataColumn::Array(Series::new(vec![
+                Some(210358520u32),
+                None,
+            ]))),
+        },
+    ];
+
+    let func = XxHash32Function::try_create("xxhash32")?;
+    for t in tests {
+        let got = func.return_type(&[t.arg.data_type().clone()]);
+        let got = got.and_then(|_| func.eval(&[t.arg], 1));
+        match t.expect {
+            Ok(expected) => {
+                assert_eq!(&got.unwrap(), &expected, "case: {}", t.name);
+            }
+            Err(expected_err) => {
+                assert_eq!(got.unwrap_err().to_string(), expected_err.to_string());
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_xxhash64_function() -> Result<()> {
+    struct Test {
+        name: &'static str,
+        arg: DataColumnWithField,
+        expect: Result<DataColumn>,
+    }
+    let tests = vec![
+        Test {
+            name: "valid input",
+            arg: DataColumnWithField::new(
+                Series::new([Some("testing")]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(DataColumn::Constant(
+                DataValue::UInt64(Some(5654940910216186247u64)),
+                1,
+            )),
+        },
+        Test {
+            name: "valid input with null",
+            arg: DataColumnWithField::new(
+                Series::new([Some("testing"), None]).into(),
+                DataField::new("arg1", DataType::String, true),
+            ),
+            expect: Ok(DataColumn::Array(Series::new(vec![
+                Some(5654940910216186247u64),
+                None,
+            ]))),
+        },
+    ];
+
+    let func = XxHash64Function::try_create("xxhash64")?;
+    for t in tests {
+        let got = func.return_type(&[t.arg.data_type().clone()]);
+        let got = got.and_then(|_| func.eval(&[t.arg], 1));
         match t.expect {
             Ok(expected) => {
                 assert_eq!(&got.unwrap(), &expected, "case: {}", t.name);

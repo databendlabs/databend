@@ -17,7 +17,6 @@ use std::sync::Arc;
 use async_raft::raft::AppendEntriesRequest;
 use async_raft::raft::InstallSnapshotRequest;
 use async_raft::raft::VoteRequest;
-use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::DatabaseInfo;
 use common_meta_types::GetDatabaseReq;
 use common_meta_types::GetKVActionReply;
@@ -35,10 +34,19 @@ use common_meta_types::TableInfo;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
+use thiserror::Error;
 
-use crate::errors::RetryableError;
-use crate::proto::RaftReply;
-use crate::proto::RaftRequest;
+use crate::protobuf::RaftReply;
+use crate::protobuf::RaftRequest;
+use crate::state_machine::AppliedState;
+
+#[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum RetryableError {
+    /// Trying to write to a non-leader returns the latest leader the raft node knows,
+    /// to indicate the client to retry.
+    #[error("request must be forwarded to leader: {leader}")]
+    ForwardToLeader { leader: NodeId },
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct JoinRequest {

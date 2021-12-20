@@ -40,3 +40,5 @@ SELECT '====END TEST CREATE TABLE AS SELECT STATEMENT====';
 -- clean up test databases
 DROP DATABASE db1;
 DROP DATABASE db2;
+
+CREATE TABLE system.test; -- {ErrorCode 2}

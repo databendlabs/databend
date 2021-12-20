@@ -12,30 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use clap::Parser;
+use common_exception::ErrorCode;
+use common_meta_raft_store::config as raft_config;
 use common_meta_raft_store::config::RaftConfig;
-use lazy_static::lazy_static;
 use serde::Deserialize;
 use serde::Serialize;
-use structopt::StructOpt;
-use structopt_toml::StructOptToml;
 
-lazy_static! {
-    pub static ref DATABEND_COMMIT_VERSION: String = {
-        let build_semver = option_env!("VERGEN_BUILD_SEMVER");
-        let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
-        let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
-        let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
-
-        let ver = match (build_semver, git_sha, rustc_semver, timestamp) {
-            #[cfg(not(feature = "simd"))]
-            (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}({}-{})", v1, v2, v3, v4),
-            #[cfg(feature = "simd")]
-            (Some(v1), Some(v2), Some(v3), Some(v4)) => {
-                format!("{}-{}-simd({}-{})", v1, v2, v3, v4)
-            }
-            _ => String::new(),
-        };
-        ver
+macro_rules! load_field_from_env {
+    ($field:expr, $field_type: ty, $env:expr) => {
+        if let Some(env_var) = std::env::var_os($env) {
+            $field = env_var
+                .into_string()
+                .expect(format!("connot convert {} to string", $env).as_str())
+                .parse::<$field_type>()
+                .expect(format!("cannot convert {} to {}", $env, stringify!($field_type)).as_str());
+        }
     };
 }
 
@@ -49,50 +41,64 @@ pub const METASRV_FLIGHT_API_ADDRESS: &str = "METASRV_FLIGHT_API_ADDRESS";
 pub const FLIGHT_TLS_SERVER_CERT: &str = "FLIGHT_TLS_SERVER_CERT";
 pub const FLIGHT_TLS_SERVER_KEY: &str = "FLIGHT_TLS_SERVER_KEY";
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, StructOpt, StructOptToml)]
+/// METASRV Config file.
+const METASRV_CONFIG_FILE: &str = "METASRV_CONFIG_FILE";
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
+#[clap(about, version, author)]
+#[serde(default)]
 pub struct Config {
-    #[structopt(long, env = METASRV_LOG_LEVEL, default_value = "INFO")]
+    #[clap(long, short = 'c', env = METASRV_CONFIG_FILE, default_value = "")]
+    pub config_file: String,
+
+    #[clap(long, env = METASRV_LOG_LEVEL, default_value = "INFO")]
     pub log_level: String,
 
-    #[structopt(long, env = METASRV_LOG_DIR, default_value = "./_logs")]
+    #[clap(long, env = METASRV_LOG_DIR, default_value = "./_logs")]
     pub log_dir: String,
 
-    #[structopt(
-    long,
-    env = METASRV_METRIC_API_ADDRESS,
-    default_value = "127.0.0.1:28001"
-    )]
+    #[clap(long, env = METASRV_METRIC_API_ADDRESS, default_value = "127.0.0.1:28001")]
     pub metric_api_address: String,
 
-    #[structopt(long, env = ADMIN_API_ADDRESS, default_value = "127.0.0.1:28002")]
+    #[clap(long, env = ADMIN_API_ADDRESS, default_value = "127.0.0.1:28002")]
     pub admin_api_address: String,
 
-    #[structopt(long, env = ADMIN_TLS_SERVER_CERT, default_value = "")]
+    #[clap(long, env = ADMIN_TLS_SERVER_CERT, default_value = "")]
     pub admin_tls_server_cert: String,
 
-    #[structopt(long, env = ADMIN_TLS_SERVER_KEY, default_value = "")]
+    #[clap(long, env = ADMIN_TLS_SERVER_KEY, default_value = "")]
     pub admin_tls_server_key: String,
 
-    #[structopt(
-    long,
-    env = METASRV_FLIGHT_API_ADDRESS,
-    default_value = "127.0.0.1:9191"
-    )]
+    #[clap(long, env = METASRV_FLIGHT_API_ADDRESS, default_value = "127.0.0.1:9191")]
     pub flight_api_address: String,
 
-    #[structopt(
-    long,
-    env = FLIGHT_TLS_SERVER_CERT,
-    default_value = "",
-    help = "Certificate for server to identify itself"
-    )]
+    /// Certificate for server to identify itself
+    #[clap(long, env = FLIGHT_TLS_SERVER_CERT, default_value = "")]
     pub flight_tls_server_cert: String,
 
-    #[structopt(long, env = FLIGHT_TLS_SERVER_KEY, default_value = "")]
+    #[clap(long, env = FLIGHT_TLS_SERVER_KEY, default_value = "")]
     pub flight_tls_server_key: String,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub raft_config: RaftConfig,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            config_file: "".to_string(),
+            log_level: "INFO".to_string(),
+            log_dir: "./_logs".to_string(),
+            metric_api_address: "127.0.0.1:28001".to_string(),
+            admin_api_address: "127.0.0.1:28002".to_string(),
+            admin_tls_server_cert: "".to_string(),
+            admin_tls_server_key: "".to_string(),
+            flight_api_address: "127.0.0.1:9191".to_string(),
+            flight_tls_server_cert: "".to_string(),
+            flight_tls_server_key: "".to_string(),
+            raft_config: Default::default(),
+        }
+    }
 }
 
 impl Config {
@@ -102,10 +108,80 @@ impl Config {
     ///
     /// Thus we need another method to generate an empty default instance.
     pub fn empty() -> Self {
-        <Self as StructOpt>::from_iter(&Vec::<&'static str>::new())
+        <Self as Parser>::parse_from(&Vec::<&'static str>::new())
     }
 
     pub fn tls_rpc_server_enabled(&self) -> bool {
         !self.flight_tls_server_key.is_empty() && !self.flight_tls_server_cert.is_empty()
+    }
+
+    /// First load configs from args.
+    /// If config file is not empty, e.g: `-c xx.toml`, reload config from the file.
+    /// Prefer to use environment variables in cloud native deployment.
+    /// Override configs base on environment variables.
+    pub fn load() -> Result<Self, ErrorCode> {
+        let mut cfg = Config::parse();
+        if !cfg.config_file.is_empty() {
+            cfg = Self::load_from_toml(cfg.config_file.as_str())?;
+        }
+
+        Self::load_from_env(&mut cfg);
+        Ok(cfg)
+    }
+
+    /// Load configs from toml file.
+    pub fn load_from_toml(file: &str) -> Result<Self, ErrorCode> {
+        let txt = std::fs::read_to_string(file)
+            .map_err(|e| ErrorCode::CannotReadFile(format!("File: {}, err: {:?}", file, e)))?;
+        let cfg = toml::from_str::<Config>(txt.as_str())
+            .map_err(|e| ErrorCode::BadArguments(format!("{:?}", e)))?;
+        Ok(cfg)
+    }
+
+    /// Load configs from environment variables.
+    pub fn load_from_env(cfg: &mut Config) {
+        load_field_from_env!(cfg.log_level, String, METASRV_LOG_LEVEL);
+        load_field_from_env!(cfg.log_dir, String, METASRV_LOG_DIR);
+        load_field_from_env!(cfg.metric_api_address, String, METASRV_METRIC_API_ADDRESS);
+        load_field_from_env!(cfg.admin_api_address, String, ADMIN_API_ADDRESS);
+        load_field_from_env!(cfg.admin_tls_server_cert, String, ADMIN_TLS_SERVER_CERT);
+        load_field_from_env!(cfg.admin_tls_server_key, String, ADMIN_TLS_SERVER_KEY);
+        load_field_from_env!(cfg.flight_api_address, String, METASRV_FLIGHT_API_ADDRESS);
+        load_field_from_env!(cfg.flight_tls_server_cert, String, FLIGHT_TLS_SERVER_CERT);
+        load_field_from_env!(cfg.flight_tls_server_key, String, FLIGHT_TLS_SERVER_KEY);
+        load_field_from_env!(
+            cfg.raft_config.raft_api_host,
+            String,
+            raft_config::KVSRV_API_HOST
+        );
+        load_field_from_env!(
+            cfg.raft_config.raft_api_port,
+            u32,
+            raft_config::KVSRV_API_PORT
+        );
+        load_field_from_env!(
+            cfg.raft_config.raft_dir,
+            String,
+            raft_config::KVSRV_RAFT_DIR
+        );
+        load_field_from_env!(cfg.raft_config.no_sync, bool, raft_config::KVSRV_NO_SYNC);
+        load_field_from_env!(
+            cfg.raft_config.snapshot_logs_since_last,
+            u64,
+            raft_config::KVSRV_SNAPSHOT_LOGS_SINCE_LAST
+        );
+        load_field_from_env!(
+            cfg.raft_config.heartbeat_interval,
+            u64,
+            raft_config::KVSRV_HEARTBEAT_INTERVAL
+        );
+        load_field_from_env!(
+            cfg.raft_config.install_snapshot_timeout,
+            u64,
+            raft_config::KVSRV_INSTALL_SNAPSHOT_TIMEOUT
+        );
+        load_field_from_env!(cfg.raft_config.boot, bool, raft_config::KVSRV_BOOT);
+        load_field_from_env!(cfg.raft_config.single, bool, raft_config::KVSRV_SINGLE);
+        load_field_from_env!(cfg.raft_config.id, u64, raft_config::KVSRV_ID);
     }
 }

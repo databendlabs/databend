@@ -44,17 +44,12 @@ impl fmt::Display for Node {
 }
 
 /// Query node
-#[derive(
-    serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Default,
-)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Default)]
+#[serde(default)]
 pub struct NodeInfo {
-    #[serde(default)]
     pub id: String,
-    #[serde(default)]
     pub cpu_nums: u64,
-    #[serde(default)]
     pub version: u32,
-    #[serde(default)]
     pub flight_address: String,
 }
 

@@ -21,7 +21,7 @@ use std::sync::atomic::Ordering::Acquire;
 use std::sync::Arc;
 
 use common_base::tokio::task::JoinHandle;
-use common_base::ProgressCallback;
+use common_base::Progress;
 use common_base::ProgressValues;
 use common_base::Runtime;
 use common_base::TrySpawn;
@@ -45,6 +45,7 @@ use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
+use crate::cache::QueryCache;
 use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::Cluster;
@@ -104,22 +105,24 @@ impl QueryContext {
         }
     }
 
-    /// Set progress callback to context.
-    /// By default, it is called for leaf sources, after each block
-    /// Note that the callback can be called from different threads.
-    pub fn progress_callback(&self) -> Result<ProgressCallback> {
-        let current_progress = self.shared.progress.clone();
-        Ok(Box::new(move |value: &ProgressValues| {
-            current_progress.incr(value);
-        }))
+    pub fn get_scan_progress(&self) -> Arc<Progress> {
+        self.shared.scan_progress.clone()
     }
 
-    pub fn get_progress_value(&self) -> ProgressValues {
-        self.shared.progress.as_ref().get_values()
+    pub fn get_result_progress(&self) -> Arc<Progress> {
+        self.shared.result_progress.clone()
     }
 
-    pub fn get_and_reset_progress_value(&self) -> ProgressValues {
-        self.shared.progress.as_ref().get_and_reset()
+    pub fn get_result_progress_value(&self) -> ProgressValues {
+        self.shared.result_progress.as_ref().get_values()
+    }
+
+    pub fn get_scan_progress_value(&self) -> ProgressValues {
+        self.shared.scan_progress.as_ref().get_values()
+    }
+
+    pub fn get_and_reset_scan_progress_value(&self) -> ProgressValues {
+        self.shared.scan_progress.as_ref().get_and_reset()
     }
 
     // Steal n partitions from the partition pool by the pipeline worker.
@@ -294,6 +297,11 @@ impl QueryContext {
     // Get the client socket address.
     pub fn get_client_address(&self) -> Option<SocketAddr> {
         self.shared.session.mutable_state.get_client_host()
+    }
+
+    // Get table cache
+    pub fn get_table_cache(&self) -> Arc<Option<Box<dyn QueryCache>>> {
+        self.shared.get_table_cache()
     }
 }
 

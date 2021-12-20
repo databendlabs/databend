@@ -29,6 +29,7 @@ use common_planners::PlanNode;
 use futures::future::AbortHandle;
 use uuid::Uuid;
 
+use crate::cache::QueryCache;
 use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::Cluster;
@@ -51,7 +52,8 @@ type DatabaseAndTable = (String, String);
 /// For each subquery, they will share a runtime, session, progress, init_query_id
 pub struct QueryContextShared {
     pub conf: Config,
-    pub(in crate::sessions) progress: Arc<Progress>,
+    pub(in crate::sessions) scan_progress: Arc<Progress>,
+    pub(in crate::sessions) result_progress: Arc<Progress>,
     pub(in crate::sessions) session: Arc<Session>,
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
@@ -71,11 +73,12 @@ impl QueryContextShared {
         conf: Config,
         session: Arc<Session>,
         cluster_cache: Arc<Cluster>,
-    ) -> Arc<QueryContextShared> {
-        Arc::new(QueryContextShared {
+    ) -> Result<Arc<QueryContextShared>> {
+        Ok(Arc::new(QueryContextShared {
             conf,
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
-            progress: Arc::new(Progress::create()),
+            scan_progress: Arc::new(Progress::create()),
+            result_progress: Arc::new(Progress::create()),
             session,
             cluster_cache,
             runtime: Arc::new(RwLock::new(None)),
@@ -87,7 +90,7 @@ impl QueryContextShared {
             running_plan: Arc::new(RwLock::new(None)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
             dal_ctx: Arc::new(Default::default()),
-        })
+        }))
     }
 
     pub fn kill(&self) {
@@ -198,6 +201,10 @@ impl QueryContextShared {
     pub fn add_source_abort_handle(&self, handle: AbortHandle) {
         let mut sources_abort_handle = self.sources_abort_handle.write();
         sources_abort_handle.push(handle);
+    }
+
+    pub fn get_table_cache(&self) -> Arc<Option<Box<dyn QueryCache>>> {
+        self.session.sessions.get_table_cache()
     }
 }
 

@@ -15,6 +15,7 @@
 use common_base::tokio::time::Duration;
 use common_base::Profiling;
 use common_tracing::tracing;
+use poem::error::InternalServerError;
 use poem::web::Query;
 use poem::IntoResponse;
 
@@ -47,7 +48,7 @@ pub async fn debug_pprof_handler(
             Profiling::create(duration, i32::from(PProfRequest::default_frequency()))
         }
     };
-    let body = profile.dump_flamegraph().await?;
+    let body = profile.dump_proto().await.map_err(InternalServerError)?;
 
     tracing::info!("finished pprof request");
     Ok(body)

@@ -33,6 +33,7 @@ use databend_query::sql::statements::DfCreateTable;
 use databend_query::sql::statements::DfCreateUser;
 use databend_query::sql::statements::DfDescribeTable;
 use databend_query::sql::statements::DfDropDatabase;
+use databend_query::sql::statements::DfDropStage;
 use databend_query::sql::statements::DfDropTable;
 use databend_query::sql::statements::DfDropUser;
 use databend_query::sql::statements::DfGrantObject;
@@ -112,6 +113,7 @@ fn create_database() -> Result<()> {
             if_not_exists: false,
             name: ObjectName(vec![Ident::new("db1")]),
             engine: "".to_string(),
+            engine_options: HashMap::new(),
             options: HashMap::new(),
         });
         expect_parse_ok(sql, expected)?;
@@ -123,6 +125,7 @@ fn create_database() -> Result<()> {
             if_not_exists: false,
             name: ObjectName(vec![Ident::new("db1")]),
             engine: "github".to_string(),
+            engine_options: HashMap::new(),
             options: HashMap::new(),
         });
         expect_parse_ok(sql, expected)?;
@@ -134,6 +137,7 @@ fn create_database() -> Result<()> {
             if_not_exists: true,
             name: ObjectName(vec![Ident::new("db1")]),
             engine: "".to_string(),
+            engine_options: HashMap::new(),
             options: HashMap::new(),
         });
         expect_parse_ok(sql, expected)?;
@@ -1266,6 +1270,27 @@ fn optimize_table() -> Result<()> {
                 .to_string(),
         )?;
     }
+
+    Ok(())
+}
+
+#[test]
+fn drop_stage_test() -> Result<()> {
+    expect_parse_ok(
+        "DROP STAGE test_stage",
+        DfStatement::DropStage(DfDropStage {
+            if_exists: false,
+            stage_name: "test_stage".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "DROP STAGE IF EXISTS test_stage",
+        DfStatement::DropStage(DfDropStage {
+            if_exists: true,
+            stage_name: "test_stage".to_string(),
+        }),
+    )?;
 
     Ok(())
 }
