@@ -18,34 +18,36 @@ use super::String2StringFunction;
 use super::StringOperator;
 
 #[derive(Clone, Default)]
-pub struct Soundex {}
+pub struct Soundex {
+    buf: String,
+}
 
 impl Soundex {
     #[inline(always)]
-    fn number_map(i: u8) -> Option<u8> {
+    fn number_map(i: char) -> Option<u8> {
         match i.to_ascii_lowercase() {
-            b'b' | b'f' | b'p' | b'v' => Some(b'1'),
-            b'c' | b'g' | b'j' | b'k' | b'q' | b's' | b'x' | b'z' => Some(b'2'),
-            b'd' | b't' => Some(b'3'),
-            b'l' => Some(b'4'),
-            b'm' | b'n' => Some(b'5'),
-            b'r' => Some(b'6'),
+            'b' | 'f' | 'p' | 'v' => Some(b'1'),
+            'c' | 'g' | 'j' | 'k' | 'q' | 's' | 'x' | 'z' => Some(b'2'),
+            'd' | 't' => Some(b'3'),
+            'l' => Some(b'4'),
+            'm' | 'n' => Some(b'5'),
+            'r' => Some(b'6'),
             _ => Some(b'0'),
         }
     }
 
     #[inline(always)]
-    fn is_drop(c: u8) -> bool {
+    fn is_drop(c: char) -> bool {
         matches!(
             c.to_ascii_lowercase(),
-            b'a' | b'e' | b'i' | b'o' | b'u' | b'y' | b'h' | b'w'
+            'a' | 'e' | 'i' | 'o' | 'u' | 'y' | 'h' | 'w'
         )
     }
 
     // https://github.com/mysql/mysql-server/blob/3290a66c89eb1625a7058e0ef732432b6952b435/sql/item_strfunc.cc#L1919
     #[inline(always)]
-    fn is_uni_alphabetic(c: u8) -> bool {
-        (b'a'..=b'z').contains(&c) || (b'A'..=b'Z').contains(&c) || c as i32 >= 0xC0
+    fn is_uni_alphabetic(c: char) -> bool {
+        ('a'..='z').contains(&c) || ('A'..='Z').contains(&c) || c as i32 >= 0xC0
     }
 }
 
@@ -55,36 +57,44 @@ impl StringOperator for Soundex {
         let mut last = None;
         let mut count = 0;
 
-        for b in data {
-            let score = Self::number_map(*b);
+        self.buf.clear();
+
+        for ch in String::from_utf8_lossy(data).chars() {
+            let score = Self::number_map(ch);
             if last.is_none() {
-                if !Self::is_uni_alphabetic(*b) {
+                if !Self::is_uni_alphabetic(ch) {
                     continue;
                 }
 
                 last = score;
-                buffer.put_slice(&[b.to_ascii_uppercase()]);
+                self.buf.push(ch.to_ascii_uppercase());
             } else {
-                if !b.is_ascii_alphabetic() || Self::is_drop(*b) || score.is_none() || score == last
+                if !ch.is_ascii_alphabetic()
+                    || Self::is_drop(ch)
+                    || score.is_none()
+                    || score == last
                 {
                     continue;
                 }
 
                 last = score;
-                buffer.put_slice(&[score.unwrap()]);
+                self.buf.push(score.unwrap() as char);
             }
 
             count += 1;
         }
 
         // add '0'
-        if count != 0 && count < 4 {
-            for _ in 0..4 - count {
-                buffer.put_slice(&[b'0']);
-            }
+        if !self.buf.is_empty() && count < 4 {
+            self.buf.extend(vec!['0'; 4 - count])
         }
+        let bytes = self.buf.as_bytes();
+        buffer.put_slice(bytes);
+        bytes.len()
+    }
 
-        count
+    fn estimate_bytes(&self, array: &common_datavalues::prelude::DFStringArray) -> usize {
+        usize::max(array.inner().values().len(), 4 * array.len())
     }
 }
 
