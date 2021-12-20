@@ -1,20 +1,20 @@
 ---
-title: LOWER
+title: UPPER
 ---
 
-Returns the string str with all characters changed to lowercase.
+Returns the string str with all characters changed to uppercase.
 
 ## Syntax
 
 ```sql
-LOWER(str);
+UPPER(str);
 ```
 
 ## Arguments
 
 | Arguments | Description                |
 |-----------|----------------------------|
-| str       | The string to be lowercase |
+| str       | The string to be uppercase |
 
 
 ## Return Type
@@ -24,10 +24,10 @@ A string data type value.
 ## Examples
 
 ```txt
-SELECT LOWER('Hello, World!')
+SELECT UPPER('Hello, World!')
 +------------------------+
-| lower('Hello, World!') |
+| upper('Hello, World!') |
 +------------------------+
-| hello, world!          |
+| HELLO, WORLD!          |
 +------------------------+
 ```
