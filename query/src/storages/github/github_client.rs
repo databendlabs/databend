@@ -13,47 +13,26 @@
 //  limitations under the License.
 //
 
+use std::sync::Arc;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::TableInfo;
 use octocrab::Octocrab;
 use reqwest::header::AUTHORIZATION;
 
-use crate::storages::github::OWNER;
-use crate::storages::github::REPO;
-
-pub fn create_github_client() -> Result<Octocrab> {
-    let github_token_res = std::env::var("GITHUB_TOKEN");
-    if let Err(e) = github_token_res {
-        return Err(ErrorCode::SecretKeyNotSet(format!(
-            "Github Access Token is not set, see how to set at https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token, {}",
-            e
-        )));
+pub fn create_github_client(token: &str) -> Result<Arc<Octocrab>> {
+    if token.is_empty() {
+        return Ok(octocrab::instance());
     }
-    let github_token = github_token_res.unwrap();
-    octocrab::OctocrabBuilder::new()
-        .add_header(AUTHORIZATION, format!("token {}", github_token))
-        .build()
-        .map_err(|err| {
-            ErrorCode::UnexpectedError(format!(
-                "Error Occured when creating octorab client, err: {}",
-                err
-            ))
-        })
-}
-
-pub fn get_own_repo_from_table_info(table_info: &TableInfo) -> Result<(String, String)> {
-    let owner = table_info
-        .meta
-        .options
-        .get(OWNER)
-        .ok_or_else(|| ErrorCode::UnexpectedError("Github table need owner in its mata"))?
-        .clone();
-    let repo = table_info
-        .meta
-        .options
-        .get(REPO)
-        .ok_or_else(|| ErrorCode::UnexpectedError("Github table need repo in its mata"))?
-        .clone();
-    Ok((owner, repo))
+    Ok(Arc::new(
+        octocrab::OctocrabBuilder::new()
+            .add_header(AUTHORIZATION, format!("token {}", token))
+            .build()
+            .map_err(|err| {
+                ErrorCode::UnexpectedError(format!(
+                    "Error Occured when creating octorab client, err: {}",
+                    err
+                ))
+            })?,
+    ))
 }

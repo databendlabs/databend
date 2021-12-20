@@ -23,6 +23,7 @@ use common_meta_api::KVApi;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
+use common_meta_types::DatabaseMeta;
 use common_meta_types::LogEntry;
 use common_meta_types::MatchSeq;
 use common_meta_types::NodeId;
@@ -242,7 +243,11 @@ async fn test_meta_node_add_database() -> anyhow::Result<()> {
                     txid: None,
                     cmd: Cmd::CreateDatabase {
                         name: name.to_string(),
-                        engine: "default".to_string(),
+                        meta: DatabaseMeta {
+                            engine: "default".to_string(),
+                            engine_options: Default::default(),
+                            options: Default::default(),
+                        },
                     },
                 })
                 .await;

@@ -62,7 +62,7 @@ rpc_tls_query_service_domain_name = \"localhost\"
 table_engine_csv_enabled = false
 table_engine_parquet_enabled = false
 table_engine_memory_enabled = true
-table_engine_github_enabled = true
+database_engine_github_enabled = true
 wait_timeout_mills = 5000
 max_query_log_size = 10000
 table_cache_enabled = false
@@ -138,7 +138,7 @@ fn test_env_config() -> Result<()> {
     std::env::set_var("QUERY_TABLE_ENGINE_CSV_ENABLED", "true");
     std::env::set_var("QUERY_TABLE_ENGINE_PARQUET_ENABLED", "true");
     std::env::set_var("QUERY_TABLE_ENGINE_MEMORY_ENABLED", "true");
-    std::env::set_var("QUERY_TABLE_ENGINE_GITHUB_ENABLED", "false");
+    std::env::set_var("QUERY_DATABASE_ENGINE_GITHUB_ENABLED", "false");
     std::env::remove_var("CONFIG_FILE");
 
     let default = Config::default();
@@ -171,7 +171,7 @@ fn test_env_config() -> Result<()> {
     assert!(configured.query.table_engine_csv_enabled);
     assert!(configured.query.table_engine_parquet_enabled);
     assert!(configured.query.table_engine_memory_enabled);
-    assert!(!configured.query.table_engine_github_enabled);
+    assert!(!configured.query.database_engine_github_enabled);
 
     assert!(configured.query.table_cache_enabled);
     assert_eq!(512, configured.query.table_memory_cache_mb_size);
@@ -205,7 +205,7 @@ fn test_env_config() -> Result<()> {
     std::env::remove_var("QUERY_TABLE_ENGINE_CSV_ENABLED");
     std::env::remove_var("QUERY_TABLE_ENGINE_PARQUET_ENABLED");
     std::env::remove_var("QUERY_TABLE_ENGINE_MEMORY_ENABLED");
-    std::env::remove_var("QUERY_TABLE_ENGINE_GITHUB_ENABLED");
+    std::env::remove_var("QUERY_DATABASE_ENGINE_GITHUB_ENABLED");
     Ok(())
 }
 

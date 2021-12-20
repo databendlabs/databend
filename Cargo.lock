@@ -1986,6 +1986,7 @@ dependencies = [
  "thiserror",
  "threadpool",
  "tokio-stream",
+ "toml",
  "tonic",
  "tonic-build",
  "uuid",

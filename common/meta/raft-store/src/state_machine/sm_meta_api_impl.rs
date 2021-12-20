@@ -52,7 +52,7 @@ impl MetaApi for StateMachine {
     ) -> Result<CreateDatabaseReply, ErrorCode> {
         let cmd = Cmd::CreateDatabase {
             name: req.db.clone(),
-            engine: req.engine.clone(),
+            meta: req.meta.clone(),
         };
 
         let res = self.sm_tree.txn(true, |t| {

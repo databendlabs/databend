@@ -14,6 +14,8 @@
 //
 
 use std::collections::HashMap;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::ops::Deref;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
@@ -32,6 +34,18 @@ pub struct DatabaseInfo {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseMeta {
     pub engine: String,
+    pub engine_options: HashMap<String, String>,
+    pub options: HashMap<String, String>,
+}
+
+impl Display for DatabaseMeta {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Engine: {}={:?}, Options: {:?}",
+            self.engine, self.engine_options, self.options
+        )
+    }
 }
 
 impl DatabaseInfo {
@@ -44,8 +58,7 @@ impl DatabaseInfo {
 pub struct CreateDatabaseReq {
     pub if_not_exists: bool,
     pub db: String,
-    pub engine: String,
-    pub options: HashMap<String, String>,
+    pub meta: DatabaseMeta,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
