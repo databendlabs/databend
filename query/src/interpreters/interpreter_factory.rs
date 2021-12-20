@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_planners::PlanNode;
 
 use super::DescribeStageInterpreter;
+use crate::interpreters::interpreter_table_optimize::OptimizeTableInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CopyInterpreter;
 use crate::interpreters::CreatStageInterpreter;
@@ -58,6 +59,7 @@ impl InterpreterFactory {
             PlanNode::DropTable(v) => DropTableInterpreter::try_create(ctx_clone, v),
             PlanNode::DescribeTable(v) => DescribeTableInterpreter::try_create(ctx_clone, v),
             PlanNode::TruncateTable(v) => TruncateTableInterpreter::try_create(ctx_clone, v),
+            PlanNode::OptimizeTable(v) => OptimizeTableInterpreter::try_create(ctx_clone, v),
             PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx_clone, v),
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx_clone, v),
             PlanNode::Insert(v) => InsertInterpreter::try_create(ctx_clone, v),
