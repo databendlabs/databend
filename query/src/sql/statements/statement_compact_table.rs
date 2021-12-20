@@ -32,13 +32,13 @@ pub enum Optimization {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct DfCompactTable {
+pub struct DfOptimizeTable {
     pub name: ObjectName,
     pub operation: Optimization,
 }
 
 #[async_trait::async_trait]
-impl AnalyzableStatement for DfCompactTable {
+impl AnalyzableStatement for DfOptimizeTable {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let (db, table) = self.resolve_table(ctx.clone())?;
@@ -49,9 +49,9 @@ impl AnalyzableStatement for DfCompactTable {
     }
 }
 
-impl DfCompactTable {
+impl DfOptimizeTable {
     fn resolve_table(&self, ctx: Arc<QueryContext>) -> Result<(String, String)> {
-        let DfCompactTable {
+        let DfOptimizeTable {
             name: ObjectName(idents),
             ..
         } = self;

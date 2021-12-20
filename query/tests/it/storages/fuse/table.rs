@@ -227,7 +227,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_fuse_table_compact() -> Result<()> {
+async fn test_fuse_table_optimize() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
 

@@ -55,7 +55,7 @@ pub use analyzer_statement::QueryAnalyzeState;
 pub use analyzer_statement::QueryRelation;
 pub use query::QueryASTIR;
 pub use statement_alter_user::DfAlterUser;
-pub use statement_compact_table::DfCompactTable;
+pub use statement_compact_table::DfOptimizeTable;
 pub use statement_compact_table::Optimization;
 pub use statement_copy::DfCopy;
 pub use statement_create_database::DfCreateDatabase;

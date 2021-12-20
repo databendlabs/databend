@@ -25,7 +25,6 @@ use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use databend_query::sql::statements::DfAlterUser;
-use databend_query::sql::statements::DfCompactTable;
 use databend_query::sql::statements::DfCopy;
 use databend_query::sql::statements::DfCreateDatabase;
 use databend_query::sql::statements::DfCreateStage;
@@ -37,6 +36,7 @@ use databend_query::sql::statements::DfDropTable;
 use databend_query::sql::statements::DfDropUser;
 use databend_query::sql::statements::DfGrantObject;
 use databend_query::sql::statements::DfGrantStatement;
+use databend_query::sql::statements::DfOptimizeTable;
 use databend_query::sql::statements::DfQueryStatement;
 use databend_query::sql::statements::DfRevokeStatement;
 use databend_query::sql::statements::DfShowDatabases;
@@ -1224,7 +1224,7 @@ fn create_table_select() -> Result<()> {
 fn optimize_table() -> Result<()> {
     {
         let sql = "optimize TABLE t1";
-        let expected = DfStatement::CompactTable(DfCompactTable {
+        let expected = DfStatement::OptimizeTable(DfOptimizeTable {
             name: ObjectName(vec![Ident::new("t1")]),
             operation: Optimization::PURGE,
         });
@@ -1233,7 +1233,7 @@ fn optimize_table() -> Result<()> {
 
     {
         let sql = "OPTIMIZE tABLE t1";
-        let expected = DfStatement::CompactTable(DfCompactTable {
+        let expected = DfStatement::OptimizeTable(DfOptimizeTable {
             name: ObjectName(vec![Ident::new("t1")]),
             operation: Optimization::PURGE,
         });
@@ -1242,7 +1242,7 @@ fn optimize_table() -> Result<()> {
 
     {
         let sql = "optimize TABLE t1 purge";
-        let expected = DfStatement::CompactTable(DfCompactTable {
+        let expected = DfStatement::OptimizeTable(DfOptimizeTable {
             name: ObjectName(vec![Ident::new("t1")]),
             operation: Optimization::PURGE,
         });
@@ -1251,7 +1251,7 @@ fn optimize_table() -> Result<()> {
 
     {
         let sql = "optimize TABLE t1 compact";
-        let expected = DfStatement::CompactTable(DfCompactTable {
+        let expected = DfStatement::OptimizeTable(DfOptimizeTable {
             name: ObjectName(vec![Ident::new("t1")]),
             operation: Optimization::COMPACT,
         });
@@ -1260,7 +1260,7 @@ fn optimize_table() -> Result<()> {
 
     {
         let sql = "optimize TABLE t1 all";
-        let expected = DfStatement::CompactTable(DfCompactTable {
+        let expected = DfStatement::OptimizeTable(DfOptimizeTable {
             name: ObjectName(vec![Ident::new("t1")]),
             operation: Optimization::ALL,
         });
