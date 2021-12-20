@@ -117,10 +117,7 @@ impl Catalog for DatabaseCatalog {
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<()> {
         // drop db in BOTTOM layer only
         if self.immutable_catalog.exists_database(&req.db).await? {
-            return Err(ErrorCode::UnexpectedError(format!(
-                "user can not drop {} database",
-                req.db
-            )));
+            return self.immutable_catalog.drop_database(req).await;
         }
         self.mutable_catalog.drop_database(req).await
     }
@@ -178,21 +175,17 @@ impl Catalog for DatabaseCatalog {
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<()> {
+        if self.immutable_catalog.exists_database(&req.db).await? {
+            return self.immutable_catalog.create_table(req).await;
+        }
         self.mutable_catalog.create_table(req).await
     }
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
-        let r = self.immutable_catalog.drop_table(req.clone()).await;
-        match r {
-            Err(e) => {
-                if e.code() == ErrorCode::UnknownTableCode() {
-                    self.mutable_catalog.drop_table(req).await
-                } else {
-                    Err(e)
-                }
-            }
-            Ok(x) => Ok(x),
+        if self.immutable_catalog.exists_database(&req.db).await? {
+            return self.immutable_catalog.drop_table(req).await;
         }
+        self.mutable_catalog.drop_table(req).await
     }
 
     async fn upsert_table_option(

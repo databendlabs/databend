@@ -128,18 +128,10 @@ impl Catalog for ImmutableCatalog {
         ))
     }
 
-    async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply> {
-        let db_name = &req.db;
-        let table_name = &req.table;
-        if db_name == "system" {
-            return Err(ErrorCode::UnImplement(
-                "Cannot drop table in system database",
-            ));
-        }
-        return Err(ErrorCode::UnknownTable(format!(
-            "Unknown table: '{}'",
-            table_name
-        )));
+    async fn drop_table(&self, _req: DropTableReq) -> Result<DropTableReply> {
+        Err(ErrorCode::UnImplement(
+            "Cannot drop table in system database",
+        ))
     }
 
     async fn upsert_table_option(
