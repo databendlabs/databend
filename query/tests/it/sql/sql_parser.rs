@@ -25,6 +25,7 @@ use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use databend_query::sql::statements::DfAlterUser;
+use databend_query::sql::statements::DfCompactTable;
 use databend_query::sql::statements::DfCopy;
 use databend_query::sql::statements::DfCreateDatabase;
 use databend_query::sql::statements::DfCreateStage;
@@ -43,6 +44,7 @@ use databend_query::sql::statements::DfShowGrants;
 use databend_query::sql::statements::DfShowTables;
 use databend_query::sql::statements::DfTruncateTable;
 use databend_query::sql::statements::DfUseDatabase;
+use databend_query::sql::statements::Optimization;
 use databend_query::sql::*;
 use sqlparser::ast::*;
 use sqlparser::dialect::GenericDialect;
@@ -256,7 +258,6 @@ fn drop_table() -> Result<()> {
         let expected = DfStatement::DropTable(DfDropTable {
             if_exists: false,
             name: ObjectName(vec![Ident::new("t1")]),
-            purge: false,
         });
         expect_parse_ok(sql, expected)?;
     }
@@ -266,7 +267,6 @@ fn drop_table() -> Result<()> {
         let expected = DfStatement::DropTable(DfDropTable {
             if_exists: false,
             name: ObjectName(vec![Ident::new("t1")]),
-            purge: true,
         });
         expect_parse_ok(sql, expected)?;
     }
@@ -276,7 +276,6 @@ fn drop_table() -> Result<()> {
         let expected = DfStatement::DropTable(DfDropTable {
             if_exists: true,
             name: ObjectName(vec![Ident::new("t1")]),
-            purge: false,
         });
         expect_parse_ok(sql, expected)?;
     }
@@ -286,7 +285,6 @@ fn drop_table() -> Result<()> {
         let expected = DfStatement::DropTable(DfDropTable {
             if_exists: true,
             name: ObjectName(vec![Ident::new("t1")]),
-            purge: true,
         });
         expect_parse_ok(sql, expected)?;
     }
@@ -1218,6 +1216,74 @@ fn create_table_select() -> Result<()> {
             query: Some(verified_query("SELECT a, b FROM bar")?),
         }),
     )?;
+
+    Ok(())
+}
+
+#[test]
+fn optimize_table() -> Result<()> {
+    {
+        let sql = "optimize TABLE t1";
+        let expected = DfStatement::CompactTable(DfCompactTable {
+            name: ObjectName(vec![Ident::new("t1")]),
+            operation: Optimization::PURGE,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        let sql = "OPTIMIZE tABLE t1";
+        let expected = DfStatement::CompactTable(DfCompactTable {
+            name: ObjectName(vec![Ident::new("t1")]),
+            operation: Optimization::PURGE,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        let sql = "optimize TABLE t1 purge";
+        let expected = DfStatement::CompactTable(DfCompactTable {
+            name: ObjectName(vec![Ident::new("t1")]),
+            operation: Optimization::PURGE,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        let sql = "optimize TABLE t1 compact";
+        let expected = DfStatement::CompactTable(DfCompactTable {
+            name: ObjectName(vec![Ident::new("t1")]),
+            operation: Optimization::COMPACT,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        let sql = "optimize TABLE t1 all";
+        let expected = DfStatement::CompactTable(DfCompactTable {
+            name: ObjectName(vec![Ident::new("t1")]),
+            operation: Optimization::ALL,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        let sql = "optimize TABLE t1 unacceptable";
+        expect_parse_err(
+            sql,
+            "sql parser error: Expected one of PURGE, COMPACT, ALL, found: unacceptable"
+                .to_string(),
+        )?;
+    }
+
+    {
+        let sql = "optimize TABLE t1 (";
+        expect_parse_err(
+            sql,
+            "sql parser error: Expected Nothing, or one of PURGE, COMPACT, ALL, found: ("
+                .to_string(),
+        )?;
+    }
 
     Ok(())
 }

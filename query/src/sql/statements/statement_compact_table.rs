@@ -25,8 +25,16 @@ use crate::sql::statements::AnalyzedResult;
 use crate::sql::PlanParser;
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum Optimization {
+    PURGE,
+    COMPACT,
+    ALL,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct DfCompactTable {
     pub name: ObjectName,
+    pub operation: Optimization,
 }
 
 #[async_trait::async_trait]
