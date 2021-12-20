@@ -334,7 +334,7 @@ where T: AggregateArgMinMaxState //  std::cmp::PartialOrd + DFTryFrom<DataValue>
         state.merge(rhs, self.is_min)
     }
 
-    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+    fn merge_result(&self, place: StateAddr, array: &dyn MutableArray) -> Result<DataValue> {
         let state = place.get::<T>();
         state.merge_result()
     }

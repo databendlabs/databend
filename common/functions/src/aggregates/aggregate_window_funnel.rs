@@ -251,7 +251,7 @@ where
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+    fn merge_result(&self, place: StateAddr, array: &dyn MutableArray) -> Result<DataValue> {
         let result = self.get_event_level(place);
         Ok(DataValue::UInt8(Some(result)))
     }

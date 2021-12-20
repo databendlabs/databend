@@ -179,7 +179,7 @@ where T: DFPrimitiveType + AsPrimitive<f64>
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+    fn merge_result(&self, place: StateAddr, array: &dyn MutableArray) -> Result<DataValue> {
         let state = place.get::<AggregateStddevPopState>();
         if state.count == 0 {
             return Ok(DataValue::Float64(None));

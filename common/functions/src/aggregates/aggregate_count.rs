@@ -142,7 +142,7 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+    fn merge_result(&self, place: StateAddr, array: &dyn MutableArray) -> Result<DataValue> {
         let state = place.get::<AggregateCountState>();
         Ok(state.count.into())
     }

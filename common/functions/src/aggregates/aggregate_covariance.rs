@@ -248,7 +248,7 @@ where
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+    fn merge_result(&self, place: StateAddr, array: &dyn MutableArray) -> Result<DataValue> {
         let state = place.get::<AggregateCovarianceState>();
         Ok(R::apply(state).map_or(DataValue::Float64(None), |val| {
             DataValue::Float64(Some(val))

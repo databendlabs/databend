@@ -88,7 +88,7 @@ impl Processor for GroupByFinalTransform {
             .iter()
             .map(|x| x.to_aggregate_function(&self.schema_before_group_by))
             .collect::<Result<Vec<_>>>()?;
-
+        let typ = funcs[0].return_type()?;
         let aggr_funcs_len = funcs.len();
         let group_expr_len = self.group_exprs.len();
 
@@ -178,10 +178,35 @@ impl Processor for GroupByFinalTransform {
                 // Collect the merge states.
                 let groups = groups_locker.read();
 
-                let mut aggr_values: Vec<Vec<DataValue>> = {
+                let mut aggr_values: Vec<Box<dyn MutableArray>> = {
                     let mut values = vec![];
-                    for _i in 0..aggr_funcs_len {
-                        values.push(vec![])
+                    for i in 0..aggr_funcs_len {
+                        // 这里根据不同的类型生成不同的 MutableArray，其实一共也就三种
+                        let array = match funcs[0].return_type()? {
+                                DataType::Int8 =>
+                                    Ok(MutablePrimitiveArray::<i8>::new()),
+                                DataType::Int16 =>
+                                Ok(MutablePrimitiveArray::<i16>::new()),
+                                DataType::Int32 =>
+                                Ok(MutablePrimitiveArray::<i32>::new()),
+                                DataType::Int64 => Ok(MutablePrimitiveArray::<i64>::new()),
+                                DataType::UInt8 => Ok(MutablePrimitiveArray::<u8>::new()),
+                                DataType::UInt16 => Ok(MutablePrimitiveArray::<u16>::new()),
+                                DataType::UInt32 => Ok(MutablePrimitiveArray::<u32>::new()),
+                                DataType::UInt64 => Ok(MutablePrimitiveArray::<u64>::new()),
+                                DataType::Float32 => Ok(MutablePrimitiveArray::<f32>::new()),
+                                DataType::Float64 => Ok(MutablePrimitiveArray::<f64>::new()),
+                                DataType::Boolean =>  Ok(MutableBoolean::new()),
+                                DataType::String =>  Ok(MutableBinaryArray::<i64>::new()),
+                                DataType::Date16 => Ok(MutablePrimitiveArray::<u16>::new()),
+                                DataType::Date32 => Ok(MutablePrimitiveArray::<u32>::new()),
+                                DataType::DateTime32(_) => Ok(MutablePrimitiveArray::<u32>::new()),
+                                other => Err(ErrorCode::BadDataValueType(format!(
+                                    "Unexpected type:{} for DataValue List",
+                                    other
+                                ))),
+                        }?;
+                        values.push(array)
                     }
                     values
                 };
@@ -192,7 +217,8 @@ impl Processor for GroupByFinalTransform {
                     let place: StateAddr = (*place).into();
                     for (idx, func) in funcs.iter().enumerate() {
                         let arg_place = place.next(offsets_aggregate_states[idx]);
-                        let merge = func.merge_result(arg_place)?;
+                        let array: &dyn MutableArray = &*aggr_values[idx];
+                        let merge = func.merge_result(arg_place, array)?;
                         aggr_values[idx].push(merge);
                     }
                 }

@@ -151,8 +151,8 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.merge(place, rhs)
     }
 
-    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
-        self.nested.merge_result(place)
+    fn merge_result(&self, place: StateAddr, array: &dyn MutableArray) -> Result<DataValue> {
+        self.nested.merge_result(place, array)
     }
 }
 

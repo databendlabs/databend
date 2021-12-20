@@ -199,7 +199,7 @@ impl AggregateFunction for AggregateDistinctCombinator {
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+    fn merge_result(&self, place: StateAddr, array: &dyn MutableArray) -> Result<DataValue> {
         let state = place.get::<AggregateDistinctState>();
 
         let layout = Layout::new::<AggregateDistinctState>();
@@ -210,7 +210,7 @@ impl AggregateFunction for AggregateDistinctCombinator {
             Ok(DataValue::UInt64(Some(state.set.len() as u64)))
         } else {
             if state.set.is_empty() {
-                return self.nested.merge_result(netest_place);
+                return self.nested.merge_result(netest_place, array);
             }
             let mut results = Vec::with_capacity(state.set.len());
 
