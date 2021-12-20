@@ -40,6 +40,7 @@ use crate::InsertPlan;
 use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
+use crate::OptimizeTablePlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
@@ -115,6 +116,7 @@ pub trait PlanVisitor {
             PlanNode::CreateTable(plan) => self.visit_create_table(plan),
             PlanNode::DropTable(plan) => self.visit_drop_table(plan),
             PlanNode::DescribeTable(plan) => self.visit_describe_table(plan),
+            PlanNode::OptimizeTable(plan) => self.visit_optimize_table(plan),
             PlanNode::DescribeStage(plan) => self.visit_describe_stage(plan),
             PlanNode::TruncateTable(plan) => self.visit_truncate_table(plan),
             PlanNode::UseDatabase(plan) => self.visit_use_database(plan),
@@ -277,6 +279,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_describe_table(&mut self, _: &DescribeTablePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_optimize_table(&mut self, _: &OptimizeTablePlan) -> Result<()> {
         Ok(())
     }
 

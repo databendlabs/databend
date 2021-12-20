@@ -29,6 +29,7 @@ use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use common_planners::ExplainType;
+use common_planners::Optimization;
 use metrics::histogram;
 use serde::Deserialize;
 use sqlparser::ast::BinaryOperator;
@@ -81,7 +82,6 @@ use crate::sql::statements::DfShowTables;
 use crate::sql::statements::DfShowUsers;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
-use crate::sql::statements::Optimization;
 use crate::sql::DfHint;
 use crate::sql::DfStatement;
 

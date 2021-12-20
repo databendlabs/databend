@@ -16,20 +16,15 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::Optimization;
+use common_planners::OptimizeTablePlan;
+use common_planners::PlanNode;
 use common_tracing::tracing;
 use sqlparser::ast::ObjectName;
 
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
-use crate::sql::PlanParser;
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Optimization {
-    PURGE,
-    COMPACT,
-    ALL,
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfOptimizeTable {
@@ -41,11 +36,19 @@ pub struct DfOptimizeTable {
 impl AnalyzableStatement for DfOptimizeTable {
     #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        let (db, table) = self.resolve_table(ctx.clone())?;
-        let table = format!("{}.{}", db, table);
-        let rewritten_query = format!("INSERT OVERWRITE {} SELECT * FROM {}", table, table);
-        let rewritten_plan = PlanParser::parse(rewritten_query.as_str(), ctx).await?;
-        Ok(AnalyzedResult::SimpleQuery(Box::new(rewritten_plan)))
+        let (database, table) = self.resolve_table(ctx.clone())?;
+        //let table = format!("{}.{}", db, table);
+        //let rewritten_query = format!("INSERT OVERWRITE {} SELECT * FROM {}", table, table);
+        //let rewritten_plan = PlanParser::parse(rewritten_query.as_str(), ctx).await?;
+        //Ok(AnalyzedResult::SimpleQuery(Box::new(rewritten_plan)))
+        let plan_node = OptimizeTablePlan {
+            database,
+            table,
+            operation: self.operation.clone(),
+        };
+        Ok(AnalyzedResult::SimpleQuery(Box::new(
+            PlanNode::OptimizeTable(plan_node),
+        )))
     }
 }
 

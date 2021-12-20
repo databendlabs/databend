@@ -48,6 +48,7 @@ use crate::InsertPlan;
 use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
+use crate::OptimizeTablePlan;
 use crate::PlanBuilder;
 use crate::PlanNode;
 use crate::ProjectionPlan;
@@ -98,6 +99,7 @@ pub trait PlanRewriter {
             PlanNode::Select(plan) => self.rewrite_select(plan),
             PlanNode::Explain(plan) => self.rewrite_explain(plan),
             PlanNode::CreateTable(plan) => self.rewrite_create_table(plan),
+            PlanNode::OptimizeTable(plan) => self.rewrite_optimize_table(plan),
             PlanNode::CreateDatabase(plan) => self.rewrite_create_database(plan),
             PlanNode::UseDatabase(plan) => self.rewrite_use_database(plan),
             PlanNode::SetVariable(plan) => self.rewrite_set_variable(plan),
@@ -316,6 +318,10 @@ pub trait PlanRewriter {
 
     fn rewrite_create_table(&mut self, plan: &CreateTablePlan) -> Result<PlanNode> {
         Ok(PlanNode::CreateTable(plan.clone()))
+    }
+
+    fn rewrite_optimize_table(&mut self, plan: &OptimizeTablePlan) -> Result<PlanNode> {
+        Ok(PlanNode::OptimizeTable(plan.clone()))
     }
 
     fn rewrite_create_database(&mut self, plan: &CreateDatabasePlan) -> Result<PlanNode> {
