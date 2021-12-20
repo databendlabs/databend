@@ -77,7 +77,7 @@ async fn test_configs_table() -> Result<()> {
         "| rpc_tls_server_cert                  |                  | query |             |",
         "| rpc_tls_server_key                   |                  | query |             |",
         "| table_engine_csv_enabled             | false            | query |             |",
-        "| table_engine_github_enabled          | true             | query |             |",
+        "| database_engine_github_enabled       | true             | query |             |",
         "| table_engine_memory_enabled          | true             | query |             |",
         "| table_engine_parquet_enabled         | false            | query |             |",
         "| tenant_id                            |                  | query |             |",

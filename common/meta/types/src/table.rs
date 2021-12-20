@@ -99,6 +99,7 @@ pub struct TableInfo {
 pub struct TableMeta {
     pub schema: Arc<DataSchema>,
     pub engine: String,
+    pub engine_options: HashMap<String, String>,
     pub options: HashMap<String, String>,
     pub created_on: DateTime<Utc>,
 }
@@ -138,6 +139,10 @@ impl TableInfo {
         &self.meta.engine
     }
 
+    pub fn engine_options(&self) -> &HashMap<String, String> {
+        &self.meta.engine_options
+    }
+
     pub fn set_schema(mut self, schema: Arc<DataSchema>) -> TableInfo {
         self.meta.schema = schema;
         self
@@ -149,6 +154,7 @@ impl Default for TableMeta {
         TableMeta {
             schema: Arc::new(DataSchema::empty()),
             engine: "".to_string(),
+            engine_options: HashMap::new(),
             options: HashMap::new(),
             created_on: Utc::now(),
         }
@@ -159,8 +165,8 @@ impl Display for TableMeta {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "Engine: {}, Schema: {}, Options: {:?} CreatedOn: {:?}",
-            self.engine, self.schema, self.options, self.created_on
+            "Engine: {}={:?}, Schema: {}, Options: {:?} CreatedOn: {:?}",
+            self.engine, self.engine_options, self.schema, self.options, self.created_on
         )
     }
 }

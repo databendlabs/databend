@@ -161,7 +161,10 @@ async fn test_state_machine_apply_add_database() -> anyhow::Result<()> {
             Ok(m.apply_cmd(
                 &Cmd::CreateDatabase {
                     name: c.name.to_string(),
-                    engine: c.engine.to_string(),
+                    meta: DatabaseMeta {
+                        engine: c.engine.to_string(),
+                        ..Default::default()
+                    },
                 },
                 &t,
             )
@@ -200,7 +203,10 @@ async fn test_state_machine_apply_upsert_table_option() -> anyhow::Result<()> {
         Ok(m.apply_cmd(
             &Cmd::CreateDatabase {
                 name: "db1".to_string(),
-                engine: "default".to_string(),
+                meta: DatabaseMeta {
+                    engine: "defeault".to_string(),
+                    ..Default::default()
+                },
             },
             &t,
         )

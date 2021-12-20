@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_meta_types::DatabaseMeta;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
@@ -26,7 +27,7 @@ impl DefaultDatabase {
     pub fn try_create(
         _ctx: DatabaseContext,
         db_name: &str,
-        _db_engine: &str,
+        _db_meta: DatabaseMeta,
     ) -> Result<Box<dyn Database>> {
         Ok(Box::new(Self {
             db_name: db_name.to_string(),

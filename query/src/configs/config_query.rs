@@ -56,7 +56,7 @@ const QUERY_RPC_TLS_SERVICE_DOMAIN_NAME: &str = "QUERY_RPC_TLS_SERVICE_DOMAIN_NA
 const QUERY_TABLE_ENGINE_CSV_ENABLED: &str = "QUERY_TABLE_ENGINE_CSV_ENABLED";
 const QUERY_TABLE_ENGINE_PARQUET_ENABLED: &str = "QUERY_TABLE_ENGINE_PARQUET_ENABLED";
 const QUERY_TABLE_ENGINE_MEMORY_ENABLED: &str = "QUERY_TABLE_ENGINE_MEMORY_ENABLED";
-const QUERY_TABLE_ENGINE_GITHUB_ENABLED: &str = "QUERY_TABLE_ENGINE_GITHUB_ENABLED";
+const QUERY_DATABASE_ENGINE_GITHUB_ENABLED: &str = "QUERY_DATABASE_ENGINE_GITHUB_ENABLED";
 
 /// Query config group.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
@@ -157,14 +157,14 @@ pub struct QueryConfig {
     )]
     pub table_engine_memory_enabled: bool,
 
-    /// Table engine github enabled
+    /// Database engine github enabled
     #[clap(
         long,
-        env = QUERY_TABLE_ENGINE_GITHUB_ENABLED,
+        env = QUERY_DATABASE_ENGINE_GITHUB_ENABLED,
         parse(try_from_str),
         default_value = "true",
     )]
-    pub table_engine_github_enabled: bool,
+    pub database_engine_github_enabled: bool,
 
     #[clap(long, env = QUERY_WAIT_TIMEOUT_MILLS, default_value = "5000")]
     pub wait_timeout_mills: u64,
@@ -218,7 +218,7 @@ impl Default for QueryConfig {
             table_engine_csv_enabled: false,
             table_engine_parquet_enabled: false,
             table_engine_memory_enabled: true,
-            table_engine_github_enabled: true,
+            database_engine_github_enabled: true,
             wait_timeout_mills: 5000,
             max_query_log_size: 10000,
             table_cache_enabled: false,
@@ -403,9 +403,9 @@ impl QueryConfig {
         env_helper!(
             mut_config,
             query,
-            table_engine_github_enabled,
+            database_engine_github_enabled,
             bool,
-            QUERY_TABLE_ENGINE_GITHUB_ENABLED
+            QUERY_DATABASE_ENGINE_GITHUB_ENABLED
         );
         env_helper!(
             mut_config,

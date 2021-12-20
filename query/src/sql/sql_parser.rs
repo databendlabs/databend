@@ -554,13 +554,14 @@ impl<'a> DfParser<'a> {
         let if_not_exists =
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
-        let db_name = self.parser.parse_object_name()?;
-        let db_engine = self.parse_database_engine()?;
+        let name = self.parser.parse_object_name()?;
+        let (engine, engine_options) = self.parse_database_engine()?;
 
         let create = DfCreateDatabase {
             if_not_exists,
-            name: db_name,
-            engine: db_engine,
+            name,
+            engine,
+            engine_options,
             options: HashMap::new(),
         };
 
@@ -891,14 +892,22 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::CreateTable(create))
     }
 
-    fn parse_database_engine(&mut self) -> Result<String, ParserError> {
+    fn parse_database_engine(&mut self) -> Result<(String, HashMap<String, String>), ParserError> {
         // TODO make ENGINE as a keyword
         if !self.consume_token("ENGINE") {
-            return Ok("".to_string());
+            return Ok(("".to_string(), HashMap::new()));
         }
 
         self.parser.expect_token(&Token::Eq)?;
-        Ok(self.parser.next_token().to_string())
+        let engine = self.parser.next_token().to_string();
+        let options = if self.parser.consume_token(&Token::LParen) {
+            let options = self.parse_options()?;
+            self.parser.expect_token(&Token::RParen)?;
+            options
+        } else {
+            HashMap::new()
+        };
+        Ok((engine, options))
     }
 
     /// Parses the set of valid formats

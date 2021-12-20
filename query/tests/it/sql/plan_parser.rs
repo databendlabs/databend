@@ -34,6 +34,18 @@ fn test_plan_parser() -> Result<()> {
             error: "",
         },
         Test {
+            name: "create-database-default-engine-passed",
+            sql: "CREATE DATABASE db1 ENGINE=default",
+            expect: "Create database db1, if_not_exists:false, engine: default={}, option: {}",
+            error: "",
+        },
+        Test {
+            name: "create-database-github-engine-passed",
+            sql: "CREATE DATABASE db1 ENGINE=github(token='abc')",
+            expect: "Create database db1, if_not_exists:false, engine: github={\"token\": \"abc\"}, option: {}",
+            error: "",
+        },
+        Test {
             name: "create-database-if-not-exists-passed",
             sql: "CREATE DATABASE IF NOT EXISTS db1",
             expect: "Create database db1, if_not_exists:true, option: {}",
