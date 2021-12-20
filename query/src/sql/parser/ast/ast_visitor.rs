@@ -301,6 +301,7 @@ pub trait AstVisitor {
                 columns,
                 engine,
                 options,
+                ..
             } => self.visit_create_table(if_not_exists, database, table, columns, engine, options),
             Statement::Describe { database, table } => self.visit_describe(database, table),
             Statement::DropTable {
