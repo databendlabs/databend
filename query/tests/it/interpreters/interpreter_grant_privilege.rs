@@ -43,14 +43,20 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
     let user_mgr = ctx.get_sessions_manager().get_user_manager();
     user_mgr.add_user(user_info).await?;
 
-    let test_query = format!("GRANT ALL ON *.* TO '{}'@'{}'", name, hostname);
-    if let PlanNode::GrantPrivilege(plan) = PlanParser::parse(&test_query, ctx.clone()).await? {
-        let executor = GrantPrivilegeInterpreter::try_create(ctx, plan.clone())?;
-        assert_eq!(executor.name(), "GrantPrivilegeInterpreter");
-        let mut stream = executor.execute(None).await?;
-        while let Some(_block) = stream.next().await {}
-        let new_user = user_mgr.get_user(name, hostname).await?;
-        assert_eq!(new_user.grants, {
+    #[allow(dead_code)]
+    struct Test {
+        name: &'static str,
+        query: String,
+        user_identity: Option<(&'static str, &'static str)>,
+        expected_grants: Option<UserGrantSet>,
+        expected_err: Option<&'static str>,
+    }
+
+    let tests: Vec<Test> = vec![Test {
+        name: "grant all",
+        query: format!("GRANT ALL ON *.* TO '{}'@'{}'", name, hostname),
+        user_identity: Some((name, hostname)),
+        expected_grants: Some({
             let mut grants = UserGrantSet::empty();
             grants.grant_privileges(
                 name,
@@ -59,9 +65,31 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
                 UserPrivilegeSet::all_privileges(),
             );
             grants
-        })
-    } else {
-        panic!()
+        }),
+        expected_err: None,
+    }];
+
+    for tt in tests {
+        if let PlanNode::GrantPrivilege(plan) = PlanParser::parse(&tt.query, ctx.clone()).await? {
+            let executor = GrantPrivilegeInterpreter::try_create(ctx.clone(), plan.clone())?;
+            assert_eq!(executor.name(), "GrantPrivilegeInterpreter");
+            match executor.execute(None).await {
+                Err(err) => {
+                    if tt.expected_err.is_some() {
+                        assert_eq!(tt.expected_err.unwrap(), err.to_string());
+                    } else {
+                        return Err(err);
+                    }
+                }
+                Ok(mut stream) => while let Some(_block) = stream.next().await {},
+            };
+            if let Some((name, hostname)) = tt.user_identity {
+                let new_user = user_mgr.get_user(name, hostname).await?;
+                assert_eq!(new_user.grants, tt.expected_grants.unwrap())
+            }
+        } else {
+            panic!()
+        }
     }
 
     Ok(())
