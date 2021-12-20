@@ -140,10 +140,6 @@ impl Function for ConcatFunction {
         let result = Self::concat_column(columns[0].column().clone(), &columns[1..])?;
         Ok(result)
     }
-
-    fn passthrough_null(&self) -> bool {
-        false
-    }
 }
 
 impl fmt::Display for ConcatFunction {

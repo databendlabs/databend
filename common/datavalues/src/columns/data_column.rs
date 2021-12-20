@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::bitmap::Bitmap;
-use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::prelude::*;
@@ -41,6 +40,7 @@ pub enum DataColumnValidity {
 
 impl DataColumnValidity {
     // Return whether the validity are all invalid, e.g., every value is null.
+    #[inline(always)]
     pub fn all_null(&self) -> bool {
         match self {
             DataColumnValidity::Array(validity, _) => match validity {
@@ -52,6 +52,7 @@ impl DataColumnValidity {
     }
 
     // Return whether the validity are all valid, e.g., no null exists.
+    #[inline(always)]
     pub fn all_valid(&self) -> bool {
         match self {
             DataColumnValidity::Array(validity, _) => match validity {
@@ -62,19 +63,13 @@ impl DataColumnValidity {
         }
     }
 
+    // Keep the function here, mostly for error checking -- the validity's length should be the same as column length.
+    #[allow(dead_code)]
     #[inline(always)]
     fn len(&self) -> usize {
         match self {
             DataColumnValidity::Array(_, size) => *size,
             DataColumnValidity::Constant(_, size) => *size,
-        }
-    }
-
-    #[inline(always)]
-    fn is_constant(&self) -> bool {
-        match self {
-            DataColumnValidity::Array(_, _) => false,
-            DataColumnValidity::Constant(_, _) => true,
         }
     }
 }
@@ -315,15 +310,14 @@ impl DataColumn {
         };
 
         match self {
-            DataColumn::Array(_) => {
-                let array_ref = self.get_array_ref()?;
-                let current_bitmap: Option<&Bitmap> = array_ref.validity();
+            DataColumn::Array(series) => {
+                let current_bitmap: Option<&Bitmap> = series.validity();
                 let bitmap_mask: Option<&Bitmap> = match &bitmap_to_apply {
                     Some(bitmap) => Some(bitmap),
                     None => None,
                 };
                 let new_bitmap = combine_validities(current_bitmap, bitmap_mask);
-                let array = self.get_array_ref()?.with_validity(new_bitmap);
+                let array = series.get_array_ref().with_validity(new_bitmap);
                 let array_ref: ArrayRef = Arc::from(array);
                 let col = DataColumn::Array(array_ref.into_series());
                 Ok(col)
@@ -344,31 +338,18 @@ impl DataColumn {
     fn merge_validities(&self, validities: &[DataColumnValidity]) -> Result<DataColumnValidity> {
         let array_len = self.len();
 
-        let mut bitmap_vec = vec![];
+        let mut bitmap_vec: Vec<&Option<Bitmap>> = vec![];
 
-        // Keep the index of the validity that is all null.
-        let mut all_null_index: i32 = -1;
+        for validity in validities.iter() {
+            // 1. If we find one validity that is all null, the masked result must be all null.
+            // Thus we just return a all-null validity.
+            if validity.all_null() {
+                return Ok(DataColumnValidity::Constant(false, array_len));
+            }
 
-        for (i, v) in validities.iter().enumerate() {
-            if v.len() != array_len {
-                return Err(ErrorCode::BadArguments(format!(
-                    "Validity's length {} doesn't match column array len {}",
-                    v.len(),
-                    array_len
-                )));
+            if let DataColumnValidity::Array(bitmap, _) = validity {
+                bitmap_vec.push(bitmap)
             }
-            if v.all_null() {
-                all_null_index = i as i32;
-            }
-            if !v.is_constant() {
-                bitmap_vec.push(v);
-            }
-        }
-
-        // 1. If we find one validity that is all null, the masked result must be all null.
-        // Thus we just return a all-null validity.
-        if all_null_index >= 0 {
-            return Ok(DataColumnValidity::Constant(false, array_len));
         }
 
         // 2. If we didn't find any array validity, that is, all of them are constant.
@@ -377,17 +358,12 @@ impl DataColumn {
             return Ok(DataColumnValidity::Constant(true, array_len));
         }
 
-        // 3. After excluding constants case, we start to process bitmap array.
-        let mut bitmap = match bitmap_vec[0] {
-            DataColumnValidity::Array(validity, _) => validity.clone(),
-            _ => unreachable!(),
-        };
-        for v in bitmap_vec.iter() {
-            bitmap = match v {
-                DataColumnValidity::Array(validity, _) => combine_validities_2(&bitmap, validity),
-                _ => unreachable!(),
-            };
+        // 3. After excluding constants case, we merge all validity bitmap
+        let mut bitmap = bitmap_vec[0].clone();
+        for v in bitmap_vec.into_iter().skip(1) {
+            bitmap = combine_validities_2(&bitmap, v);
         }
+
         Ok(DataColumnValidity::Array(bitmap, array_len))
     }
 }
