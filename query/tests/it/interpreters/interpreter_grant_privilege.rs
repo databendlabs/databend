@@ -19,6 +19,7 @@ use common_meta_types::PasswordType;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
 use common_meta_types::UserPrivilegeSet;
+use common_meta_types::UserPrivilegeType;
 use common_planners::*;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
@@ -52,22 +53,47 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
         expected_err: Option<&'static str>,
     }
 
-    let tests: Vec<Test> = vec![Test {
-        name: "grant all",
-        query: format!("GRANT ALL ON *.* TO '{}'@'{}'", name, hostname),
-        user_identity: Some((name, hostname)),
-        expected_grants: Some({
-            let mut grants = UserGrantSet::empty();
-            grants.grant_privileges(
-                name,
-                hostname,
-                &GrantObject::Global,
-                UserPrivilegeSet::all_privileges(),
-            );
-            grants
-        }),
-        expected_err: None,
-    }];
+    let tests: Vec<Test> = vec![
+        Test {
+            name: "grant create user to global",
+            query: format!("GRANT CREATE USER ON *.* TO '{}'@'{}'", name, hostname),
+            user_identity: Some((name, hostname)),
+            expected_grants: Some({
+                let mut grants = UserGrantSet::empty();
+                grants.grant_privileges(
+                    name,
+                    hostname,
+                    &GrantObject::Global,
+                    vec![UserPrivilegeType::CreateUser].into(),
+                );
+                grants
+            }),
+            expected_err: None,
+        },
+        Test {
+            name: "grant create user to current database and expect err",
+            query: format!("GRANT CREATE USER ON * TO '{}'@'{}'", name, hostname),
+            user_identity: None,
+            expected_grants: None,
+            expected_err: Some("Code: 1144, displayText = Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used."),
+        },
+        Test {
+            name: "grant all",
+            query: format!("GRANT ALL ON *.* TO '{}'@'{}'", name, hostname),
+            user_identity: Some((name, hostname)),
+            expected_grants: Some({
+                let mut grants = UserGrantSet::empty();
+                grants.grant_privileges(
+                    name,
+                    hostname,
+                    &GrantObject::Global,
+                    UserPrivilegeSet::all_privileges(),
+                );
+                grants
+            }),
+            expected_err: None,
+        },
+    ];
 
     for tt in tests {
         if let PlanNode::GrantPrivilege(plan) = PlanParser::parse(&tt.query, ctx.clone()).await? {

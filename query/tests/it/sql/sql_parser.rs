@@ -1003,7 +1003,6 @@ fn grant_privilege_test() -> Result<()> {
                 privileges.set_privilege(UserPrivilegeType::Create);
                 privileges.set_privilege(UserPrivilegeType::CreateUser);
                 privileges.set_privilege(UserPrivilegeType::CreateRole);
-                privileges.set_privilege(UserPrivilegeType::Super);
                 privileges.set_privilege(UserPrivilegeType::Select);
                 privileges
             },

@@ -196,3 +196,13 @@ impl From<BitFlags<UserPrivilegeType>> for UserPrivilegeSet {
         UserPrivilegeSet { privileges }
     }
 }
+
+impl From<Vec<UserPrivilegeType>> for UserPrivilegeSet {
+    fn from(privileges: Vec<UserPrivilegeType>) -> UserPrivilegeSet {
+        let mut result = UserPrivilegeSet::empty();
+        for privilege in privileges {
+            result.set_privilege(privilege)
+        }
+        result
+    }
+}
