@@ -48,6 +48,7 @@ mod substring;
 mod substring_index;
 mod trim;
 mod unhex;
+mod upper;
 
 pub use ascii::AsciiFunction;
 pub use base_64::Base64DecodeFunction;
@@ -93,5 +94,6 @@ pub use trim::LTrimFunction;
 pub use trim::RTrimFunction;
 pub use trim::TrimFunction;
 pub use unhex::UnhexFunction;
+pub use upper::UpperFunction;
 
 pub use self::hex::HexFunction;
