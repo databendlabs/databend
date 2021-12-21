@@ -18,7 +18,6 @@ use common_meta_types::GrantObject;
 use common_meta_types::PasswordType;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
-use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use common_planners::*;
 use databend_query::interpreters::*;
@@ -78,7 +77,7 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
             expected_err: Some("Code: 61, displayText = Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used."),
         },
         Test {
-            name: "grant all",
+            name: "grant all on global",
             query: format!("GRANT ALL ON *.* TO '{}'@'{}'", name, hostname),
             user_identity: Some((name, hostname)),
             expected_grants: Some({
@@ -87,7 +86,7 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
                     name,
                     hostname,
                     &GrantObject::Global,
-                    UserPrivilegeSet::all_privileges(),
+                    GrantObject::Global.available_privileges(),
                 );
                 grants
             }),
@@ -99,16 +98,23 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
         if let PlanNode::GrantPrivilege(plan) = PlanParser::parse(&tt.query, ctx.clone()).await? {
             let executor = GrantPrivilegeInterpreter::try_create(ctx.clone(), plan.clone())?;
             assert_eq!(executor.name(), "GrantPrivilegeInterpreter");
-            match executor.execute(None).await {
-                Err(err) => {
-                    if tt.expected_err.is_some() {
-                        assert_eq!(tt.expected_err.unwrap(), err.to_string());
-                    } else {
-                        return Err(err);
-                    }
+            let r = match executor.execute(None).await {
+                Err(err) => Err(err),
+                Ok(mut stream) => {
+                    while let Some(_block) = stream.next().await {}
+                    Ok(())
                 }
-                Ok(mut stream) => while let Some(_block) = stream.next().await {},
             };
+            if tt.expected_err.is_some() {
+                assert_eq!(
+                    tt.expected_err.unwrap(),
+                    r.unwrap_err().to_string(),
+                    "expected_err eq failed on query: {}",
+                    tt.query
+                );
+            } else {
+                assert!(r.is_ok(), "got err on query {}: {:?}", tt.query, r);
+            }
             if let Some((name, hostname)) = tt.user_identity {
                 let new_user = user_mgr.get_user(name, hostname).await?;
                 assert_eq!(new_user.grants, tt.expected_grants.unwrap())

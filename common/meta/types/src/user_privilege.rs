@@ -88,17 +88,6 @@ impl std::fmt::Display for UserPrivilegeType {
     }
 }
 
-impl UserPrivilegeType {
-    // The system admin privileges only takes effect on the global grant object
-    pub fn global_only(self) -> bool {
-        use UserPrivilegeType::*;
-        match self {
-            Usage | Super | CreateUser | CreateRole | Grant => true,
-            _ => false,
-        }
-    }
-}
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Default, Debug, Eq, PartialEq)]
 pub struct UserPrivilegeSet {
     privileges: BitFlags<UserPrivilegeType>,
@@ -111,6 +100,28 @@ impl UserPrivilegeSet {
         }
     }
 
+    /// The all privileges which available to the global grant object. It contains ALL the privileges
+    /// on databases and tables, and has some Global only privileges.
+    pub fn available_privileges_on_global() -> Self {
+        let database_privs = Self::available_privileges_on_database();
+        let privs =
+            make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | CreateRole | Grant });
+        (database_privs.privileges | privs).into()
+    }
+
+    /// The availabe privileges on database object contains ALL the available privileges to a table.
+    /// Currently the privileges available to a database and a table are the same, it might becomes
+    /// some differences in the future.
+    pub fn available_privileges_on_database() -> Self {
+        UserPrivilegeSet::available_privileges_on_table()
+    }
+
+    /// The all privileges global which available to the table object
+    pub fn available_privileges_on_table() -> Self {
+        make_bitflags!(UserPrivilegeType::{ Create | Update | Select | Insert | Delete | Drop | Alter | Grant }).into()
+    }
+
+    // TODO: remove this, as ALL has different meanings on different objects
     pub fn all_privileges() -> Self {
         ALL_PRIVILEGES.into()
     }
@@ -125,6 +136,10 @@ impl UserPrivilegeSet {
 
     pub fn set_all_privileges(&mut self) {
         self.privileges |= ALL_PRIVILEGES;
+    }
+
+    pub fn is_all_privileges(&self) -> bool {
+        self.privileges == ALL_PRIVILEGES
     }
 }
 
