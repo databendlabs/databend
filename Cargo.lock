@@ -4859,9 +4859,9 @@ dependencies = [
 
 [[package]]
 name = "poem"
-version = "1.2.4"
+version = "1.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff3b1c277c3a5edbf753dcb170b00f933aaa8f3c6d197bd062cd66f1228bdb39"
+checksum = "c43aad9e9a34c69e660b3e649735e0888a4c33d0e999528a1644d6fd443116b1"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4891,9 +4891,9 @@ dependencies = [
 
 [[package]]
 name = "poem-derive"
-version = "1.2.4"
+version = "1.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24e67ffa7542acf57cecf886c3fef6374f1a08b0aafc9105e04e5cf693b03b8f"
+checksum = "06227b274d5daf3b45b6093691701332595bf4b93eb725318ffa7646f20678a0"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -5370,9 +5370,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.11.7"
+version = "0.11.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07bea77bc708afa10e59905c3d4af7c8fd43c9214251673095ff8b14345fcbc5"
+checksum = "7c4e0a76dc12a116108933f6301b95e83634e0c47b0afbed6abbaa0601e99258"
 dependencies = [
  "base64 0.13.0",
  "bytes",
@@ -5406,7 +5406,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
- "webpki-roots 0.21.1",
+ "webpki-roots",
  "winreg 0.7.0",
 ]
 
@@ -7129,7 +7129,7 @@ dependencies = [
  "serde_json",
  "url",
  "webpki 0.22.0",
- "webpki-roots 0.22.1",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -7376,15 +7376,6 @@ checksum = "f095d78192e208183081cc07bc5515ef55216397af48b873e5edcd72637fa1bd"
 dependencies = [
  "ring",
  "untrusted",
-]
-
-[[package]]
-name = "webpki-roots"
-version = "0.21.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aabe153544e473b775453675851ecc86863d2a81d786d741f6b76778f2a48940"
-dependencies = [
- "webpki 0.21.4",
 ]
 
 [[package]]
