@@ -1523,6 +1523,7 @@ dependencies = [
 name = "common-planners"
 version = "0.1.0"
 dependencies = [
+ "bitflags",
  "common-datablocks",
  "common-datavalues",
  "common-exception",

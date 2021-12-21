@@ -13,14 +13,14 @@ insert into t values (7);
 optimize table t compact;
 
 -- expects 4 history items, 3 of previous insertion, 1 for last compaction
-select count(*) from fuse_history('db_09_0008', 't');
+select count(*)=4 from fuse_history('db_09_0008', 't');
 
 ---------------------------
 
 -- purge data and history
 optimize table 't' purge;
 -- expect 1 snapshot left
-select count(*) from fuse_history('db_09_0008', 't');
+select count(*)=1 from fuse_history('db_09_0008', 't');
 -- check the data
 select * from t order by a;
 -- purge again, nothing happens
@@ -35,7 +35,7 @@ insert into t values (10);
 -- purge and compact
 optimize table 't' all;
 -- expect 1 snapshot left
-select count(*) from fuse_history('db_09_0008', 't');
+select count(*)=1 from fuse_history('db_09_0008', 't');
 select * from t order by a;
 
 ---------------------

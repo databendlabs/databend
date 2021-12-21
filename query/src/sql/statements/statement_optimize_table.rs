@@ -40,7 +40,7 @@ impl AnalyzableStatement for DfOptimizeTable {
         let plan_node = OptimizeTablePlan {
             database,
             table,
-            operation: self.operation.clone(),
+            operation: self.operation,
         };
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::OptimizeTable(plan_node),

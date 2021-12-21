@@ -14,14 +14,17 @@
 
 use std::sync::Arc;
 
+use bitflags::bitflags;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Debug)]
-pub enum Optimization {
-    PURGE,
-    COMPACT,
-    ALL,
+bitflags! {
+    #[derive(serde::Serialize, serde::Deserialize)]
+    pub struct Optimization: u32 {
+        const PURGE   = 0b00000001;
+        const COMPACT = 0b00000010;
+        const ALL = Self::PURGE.bits | Self::COMPACT.bits;
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]

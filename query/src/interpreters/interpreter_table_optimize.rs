@@ -49,25 +49,12 @@ impl Interpreter for OptimizeTableInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let do_compact;
-        let do_purge;
         let plan = &self.plan;
-        match plan.operation {
-            Optimization::ALL => {
-                do_compact = true;
-                do_purge = true;
-            }
-            Optimization::PURGE => {
-                do_compact = false;
-                do_purge = true;
-            }
-            Optimization::COMPACT => {
-                do_compact = true;
-                do_purge = false;
-            }
-        };
-
         let mut table = self.ctx.get_table(&plan.database, &plan.table).await?;
+        let operation = &plan.operation;
+
+        let do_purge = operation.contains(Optimization::PURGE);
+        let do_compact = operation.contains(Optimization::COMPACT);
 
         if do_compact {
             // it is a "simple and violent" strategy, to be optimized later
@@ -80,6 +67,8 @@ impl Interpreter for OptimizeTableInterpreter {
             let mut stream = interpreter.execute(None).await?;
             while let Some(Ok(_)) = stream.next().await {}
             if do_purge {
+                // currently, context caches the table, we have to "refresh"
+                // the table by using the catalog API directly
                 table = self
                     .ctx
                     .get_catalog()
