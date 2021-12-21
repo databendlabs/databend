@@ -23,6 +23,7 @@ mod interpreter_interceptor;
 mod interpreter_revoke_previlege;
 mod interpreter_select;
 mod interpreter_setting;
+mod interpreter_show_create_database;
 mod interpreter_show_create_table;
 mod interpreter_stage_create;
 mod interpreter_stage_drop;

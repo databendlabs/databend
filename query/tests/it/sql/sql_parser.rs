@@ -39,6 +39,8 @@ use databend_query::sql::statements::DfGrantObject;
 use databend_query::sql::statements::DfGrantStatement;
 use databend_query::sql::statements::DfQueryStatement;
 use databend_query::sql::statements::DfRevokeStatement;
+use databend_query::sql::statements::DfShowCreateDatabase;
+use databend_query::sql::statements::DfShowCreateTable;
 use databend_query::sql::statements::DfShowDatabases;
 use databend_query::sql::statements::DfShowGrants;
 use databend_query::sql::statements::DfShowTables;
@@ -603,6 +605,25 @@ fn show_databases_test() -> Result<()> {
                     ))),
                 }),
             }),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn show_create_test() -> Result<()> {
+    expect_parse_ok(
+        "SHOW CREATE TABLE test",
+        DfStatement::ShowCreateTable(DfShowCreateTable {
+            name: ObjectName(vec![Ident::new("test")]),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "SHOW CREATE DATABASE test",
+        DfStatement::ShowCreateDatabase(DfShowCreateDatabase {
+            name: ObjectName(vec![Ident::new("test")]),
         }),
     )?;
 
