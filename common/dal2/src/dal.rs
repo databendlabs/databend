@@ -29,7 +29,7 @@ where S: Read<S>
     }
 }
 
-// FIXME: maybe we need to mv StreamAccessor to parquet maybe.
+// TODO: maybe we need to mv StreamAccessor to parquet maybe.
 pub struct StreamAccessor<'d, S> {
     s: Arc<S>,
     path: &'d str,
