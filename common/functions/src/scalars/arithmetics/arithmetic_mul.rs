@@ -48,7 +48,7 @@ impl ArithmeticMulFunction {
         assert_binary_arguments(op.clone(), arguments.len())?;
 
         let left_type = arguments[0].data_type();
-        let right_type = arguments[0].data_type();
+        let right_type = arguments[1].data_type();
         let result_type = numerical_arithmetic_coercion(&op, left_type, right_type)?;
 
         let e = Result::Err(ErrorCode::BadDataValueType(format!(

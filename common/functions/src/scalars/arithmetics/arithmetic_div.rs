@@ -43,7 +43,7 @@ impl ArithmeticDivFunction {
         assert_binary_arguments(op.clone(), arguments.len())?;
 
         let left_type = arguments[0].data_type();
-        let right_type = arguments[0].data_type();
+        let right_type = arguments[1].data_type();
         let e = Result::Err(ErrorCode::BadDataValueType(format!(
             "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
             left_type, op, right_type

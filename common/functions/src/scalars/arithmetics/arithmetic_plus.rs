@@ -53,7 +53,7 @@ impl ArithmeticPlusFunction {
         assert_binary_arguments(op.clone(), arguments.len())?;
 
         let left_type = arguments[0].data_type();
-        let right_type = arguments[0].data_type();
+        let right_type = arguments[1].data_type();
         let result_type = if left_type.is_interval() || right_type.is_interval() {
             return Self::try_create_interval(left_type, right_type);
         } else if left_type.is_date_or_date_time() || right_type.is_date_or_date_time() {
