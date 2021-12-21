@@ -39,6 +39,7 @@ use crate::sql::statements::DfKillStatement;
 use crate::sql::statements::DfQueryStatement;
 use crate::sql::statements::DfRevokeStatement;
 use crate::sql::statements::DfSetVariable;
+use crate::sql::statements::DfShowCreateDatabase;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfShowDatabases;
 use crate::sql::statements::DfShowFunctions;
@@ -60,6 +61,7 @@ pub enum DfStatement {
 
     // Databases.
     ShowDatabases(DfShowDatabases),
+    ShowCreateDatabase(DfShowCreateDatabase),
     CreateDatabase(DfCreateDatabase),
     DropDatabase(DfDropDatabase),
     UseDatabase(DfUseDatabase),

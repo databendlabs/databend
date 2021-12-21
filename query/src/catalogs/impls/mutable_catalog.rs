@@ -123,9 +123,7 @@ impl MutableCatalog {
             meta: self.ctx.meta.clone(),
             in_memory_data: self.ctx.in_memory_data.clone(),
         };
-        self.ctx
-            .database_factory
-            .get_database(ctx, &db_info.db, &db_info.meta)
+        self.ctx.database_factory.get_database(ctx, db_info)
     }
 }
 
@@ -156,14 +154,12 @@ impl Catalog for MutableCatalog {
         tracing::error!("db name: {}, engine: {}", &req.db, &req.meta.engine);
 
         // Initial the database after creating.
-        let db_ctx = DatabaseContext {
-            meta: self.ctx.meta.clone(),
-            in_memory_data: self.ctx.in_memory_data.clone(),
-        };
-        let database = self
-            .ctx
-            .database_factory
-            .get_database(db_ctx, &req.db, &req.meta)?;
+        let db_info = Arc::new(DatabaseInfo {
+            database_id: res.database_id,
+            db: req.db.clone(),
+            meta: req.meta.clone(),
+        });
+        let database = self.build_db_instance(&db_info)?;
         database.init_database().await?;
         Ok(CreateDatabaseReply {
             database_id: res.database_id,

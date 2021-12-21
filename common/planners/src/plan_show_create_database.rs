@@ -12,24 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod csv;
-pub mod fuse;
-pub mod github;
-pub mod index;
-pub mod memory;
-pub mod null;
-pub mod parquet;
-pub mod system;
+use common_datavalues::DataSchemaRef;
 
-mod storage_context;
-mod storage_factory;
-mod storage_table;
-mod storage_table_read_plan;
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct ShowCreateDatabasePlan {
+    pub db: String,
+    pub schema: DataSchemaRef,
+}
 
-pub use fuse::FuseHistoryTable;
-pub use fuse::FUSE_FUNC_HIST;
-pub use storage_context::StorageContext;
-pub use storage_factory::StorageCreator;
-pub use storage_factory::StorageFactory;
-pub use storage_table::Table;
-pub use storage_table_read_plan::ToReadDataSourcePlan;
+impl ShowCreateDatabasePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        self.schema.clone()
+    }
+}

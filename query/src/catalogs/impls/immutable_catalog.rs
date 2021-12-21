@@ -35,7 +35,7 @@ use crate::catalogs::InMemoryMetas;
 use crate::catalogs::SYS_TBL_ID_BEGIN;
 use crate::configs::Config;
 use crate::databases::Database;
-use crate::storages::SystemDatabase;
+use crate::databases::SystemDatabase;
 use crate::storages::Table;
 
 /// System Catalog contains ... all the system databases (no surprise :)

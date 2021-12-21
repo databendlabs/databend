@@ -15,13 +15,18 @@
 
 use std::sync::Arc;
 
+use common_meta_types::DatabaseInfo;
+use common_meta_types::DatabaseMeta;
+
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
 use crate::storages::system;
 use crate::storages::Table;
 
 #[derive(Clone)]
-pub struct SystemDatabase {}
+pub struct SystemDatabase {
+    db_info: DatabaseInfo,
+}
 
 impl SystemDatabase {
     pub fn create(sys_db_meta: &mut InMemoryMetas) -> Self {
@@ -47,7 +52,16 @@ impl SystemDatabase {
             sys_db_meta.insert(tbl);
         }
 
-        Self {}
+        let db_info = DatabaseInfo {
+            database_id: 0,
+            db: "system".to_string(),
+            meta: DatabaseMeta {
+                engine: "SYSTEM".to_string(),
+                ..Default::default()
+            },
+        };
+
+        Self { db_info }
     }
 }
 
@@ -55,5 +69,9 @@ impl SystemDatabase {
 impl Database for SystemDatabase {
     fn name(&self) -> &str {
         "system"
+    }
+
+    fn get_db_info(&self) -> &DatabaseInfo {
+        &self.db_info
     }
 }

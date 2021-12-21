@@ -48,6 +48,7 @@ use crate::RemotePlan;
 use crate::RevokePrivilegePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
+use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
 use crate::ShowGrantsPlan;
 use crate::SinkPlan;
@@ -139,6 +140,7 @@ pub trait PlanVisitor {
             PlanNode::CreateUserStage(plan) => self.visit_create_stage(plan),
             PlanNode::ShowGrants(plan) => self.visit_show_grants(plan),
             PlanNode::DropUserStage(plan) => self.visit_drop_stage(plan),
+            PlanNode::ShowCreateDatabase(plan) => self.visit_show_create_database(plan),
         }
     }
 
@@ -330,6 +332,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_show_grants(&mut self, _: &ShowGrantsPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_show_create_database(&mut self, _: &ShowCreateDatabasePlan) -> Result<()> {
         Ok(())
     }
 }
