@@ -57,6 +57,7 @@ use crate::RemotePlan;
 use crate::RevokePrivilegePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
+use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
 use crate::ShowGrantsPlan;
 use crate::SinkPlan;
@@ -126,6 +127,7 @@ pub trait PlanRewriter {
             PlanNode::Sink(plan) => self.rewrite_sink(plan),
             PlanNode::ShowGrants(plan) => self.rewrite_show_grants(plan),
             PlanNode::DropUserStage(plan) => self.rewrite_drop_stage(plan),
+            PlanNode::ShowCreateDatabase(plan) => self.rewrite_show_create_database(plan),
         }
     }
 
@@ -402,6 +404,10 @@ pub trait PlanRewriter {
 
     fn rewrite_sink(&mut self, plan: &SinkPlan) -> Result<PlanNode> {
         Ok(PlanNode::Sink(plan.clone()))
+    }
+
+    fn rewrite_show_create_database(&mut self, plan: &ShowCreateDatabasePlan) -> Result<PlanNode> {
+        Ok(PlanNode::ShowCreateDatabase(plan.clone()))
     }
 }
 

@@ -71,6 +71,7 @@ use crate::sql::statements::DfKillStatement;
 use crate::sql::statements::DfQueryStatement;
 use crate::sql::statements::DfRevokeStatement;
 use crate::sql::statements::DfSetVariable;
+use crate::sql::statements::DfShowCreateDatabase;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfShowDatabases;
 use crate::sql::statements::DfShowFunctions;
@@ -929,6 +930,12 @@ impl<'a> DfParser<'a> {
 
                     let show_create_table = DfShowCreateTable { name: table_name };
                     Ok(DfStatement::ShowCreateTable(show_create_table))
+                }
+                Keyword::DATABASE => {
+                    let db_name = self.parser.parse_object_name()?;
+
+                    let show_create_database = DfShowCreateDatabase { name: db_name };
+                    Ok(DfStatement::ShowCreateDatabase(show_create_database))
                 }
                 _ => self.expected("show create statement", Token::Word(w)),
             },

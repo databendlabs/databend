@@ -11,15 +11,7 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
-mod database;
-mod database_context;
-mod database_factory;
-mod default;
-mod github;
-mod system;
 
-pub use database::Database;
-pub use database_context::DatabaseContext;
-pub use database_factory::DatabaseFactory;
-pub use system::SystemDatabase;
+mod system_database;
+
+pub use system_database::SystemDatabase;

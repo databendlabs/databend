@@ -39,6 +39,7 @@ use crate::interpreters::KillInterpreter;
 use crate::interpreters::RevokePrivilegeInterpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::interpreters::SettingInterpreter;
+use crate::interpreters::ShowCreateDatabaseInterpreter;
 use crate::interpreters::ShowCreateTableInterpreter;
 use crate::interpreters::ShowGrantsInterpreter;
 use crate::interpreters::TruncateTableInterpreter;
@@ -74,6 +75,9 @@ impl InterpreterFactory {
             PlanNode::DropUserStage(v) => DropStageInterpreter::try_create(ctx_clone, v),
             PlanNode::ShowGrants(v) => ShowGrantsInterpreter::try_create(ctx_clone, v),
             PlanNode::DescribeStage(v) => DescribeStageInterpreter::try_create(ctx_clone, v),
+            PlanNode::ShowCreateDatabase(v) => {
+                ShowCreateDatabaseInterpreter::try_create(ctx_clone, v)
+            }
             _ => Result::Err(ErrorCode::UnknownTypeOfQuery(format!(
                 "Can't get the interpreter by plan:{}",
                 plan.name()

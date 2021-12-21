@@ -48,6 +48,7 @@ use crate::RemotePlan;
 use crate::RevokePrivilegePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
+use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
 use crate::ShowGrantsPlan;
 use crate::SinkPlan;
@@ -98,6 +99,7 @@ pub enum PlanNode {
     CreateUserStage(CreateUserStagePlan),
     DropUserStage(DropUserStagePlan),
     ShowGrants(ShowGrantsPlan),
+    ShowCreateDatabase(ShowCreateDatabasePlan),
 }
 
 impl PlanNode {
@@ -143,6 +145,7 @@ impl PlanNode {
             PlanNode::CreateUserStage(v) => v.schema(),
             PlanNode::DropUserStage(v) => v.schema(),
             PlanNode::ShowGrants(v) => v.schema(),
+            PlanNode::ShowCreateDatabase(v) => v.schema(),
         }
     }
 
@@ -187,6 +190,7 @@ impl PlanNode {
             PlanNode::CreateUserStage(_) => "CreateUserStagePlan",
             PlanNode::DropUserStage(_) => "DropUserStagePlan",
             PlanNode::ShowGrants(_) => "ShowGrantsPlan",
+            PlanNode::ShowCreateDatabase(_) => "ShowCreateDatabasePlan",
         }
     }
 
