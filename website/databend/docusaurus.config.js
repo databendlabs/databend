@@ -113,7 +113,7 @@ const config = {
                         items: [
                             {
                                 label: 'CLI Reference',
-                                to: '/user/cli'
+                                to: '/user/cli/index'
                             },
                             {
                                 label: 'Performance',
