@@ -88,39 +88,13 @@ impl std::fmt::Display for UserPrivilegeType {
     }
 }
 
-/// Each privilege has a set of contexts, which limits the grant objects which the privilege can
-/// take effects on, for example, we can not grant a SUPER privilege (which is Global level)
-/// to a table (in a table level).
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub enum UserPrivilegeContext {
-    /// the SystemAddmin context includes the system admin privileges, like SUPER, CREATE USER,
-    /// CREATE ROLE, GRANT, etc
-    SystemAdmin,
-    /// the Tables context includes most of the DML and DDL privileges, like INSERT, UPDATE,
-    /// ALTER, etc.
-    Tables,
-    /// the Database context includes CREATE/DROP DATABASE
-    Databases,
-}
-
 impl UserPrivilegeType {
     // The system admin privileges only takes effect on the global grant object
     pub fn global_only(self) -> bool {
-        self.contexts().contains(&UserPrivilegeContext::SystemAdmin)
-    }
-
-    // TODO: display the Context column in the SHOW PRIVILEGE statement
-    pub fn contexts(self) -> HashSet<UserPrivilegeContext> {
         use UserPrivilegeType::*;
         match self {
-            Usage | Super | CreateUser | CreateRole | Grant => {
-                HashSet::from([UserPrivilegeContext::SystemAdmin])
-            }
-            Create => HashSet::from([
-                UserPrivilegeContext::Tables,
-                UserPrivilegeContext::Databases,
-            ]),
-            _ => HashSet::from([UserPrivilegeContext::Tables]),
+            Usage | Super | CreateUser | CreateRole | Grant => true,
+            _ => false,
         }
     }
 }

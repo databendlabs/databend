@@ -28,6 +28,7 @@ pub enum GrantObject {
 }
 
 impl GrantObject {
+    /// The global privileges can not be granted to a database or table
     pub fn allow_privilege(&self, privilege: UserPrivilegeType) -> bool {
         if privilege.global_only() && !matches!(self, GrantObject::Global) {
             return false;
@@ -35,6 +36,7 @@ impl GrantObject {
         true
     }
 
+    /// Check if there's any privilege which can not be granted to this GrantObject
     pub fn validate_privileges(&self, privileges: UserPrivilegeSet) -> Result<()> {
         let privileges: BitFlags<UserPrivilegeType> = privileges.into();
         let ok = privileges.iter().all(|p| self.allow_privilege(p));
