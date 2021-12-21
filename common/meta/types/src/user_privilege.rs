@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::fmt;
 use std::ops;
 
@@ -65,6 +64,7 @@ const ALL_PRIVILEGES: BitFlags<UserPrivilegeType> = make_bitflags!(
         | CreateUser
         | CreateRole
         | Grant
+        | Set
     }
 );
 
