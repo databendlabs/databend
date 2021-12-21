@@ -223,9 +223,11 @@ async fn test_user_manager_with_root_user() -> Result<()> {
             hostname1,
             UserPrivilegeType::Insert
         ));
-        assert!(user
-            .grants
-            .verify_global_privilege(username1, hostname1, UserPrivilegeType::Set));
+        assert!(user.grants.verify_global_privilege(
+            username1,
+            hostname1,
+            UserPrivilegeType::Super
+        ));
     }
 
     // Get user via username `default` and hostname `localhost`.
@@ -248,9 +250,11 @@ async fn test_user_manager_with_root_user() -> Result<()> {
             hostname2,
             UserPrivilegeType::Insert
         ));
-        assert!(user
-            .grants
-            .verify_global_privilege(username1, hostname2, UserPrivilegeType::Set));
+        assert!(user.grants.verify_global_privilege(
+            username1,
+            hostname2,
+            UserPrivilegeType::Super
+        ));
     }
 
     // Get user via username `default` and hostname `otherhost`.
@@ -281,9 +285,11 @@ async fn test_user_manager_with_root_user() -> Result<()> {
             hostname1,
             UserPrivilegeType::Insert
         ));
-        assert!(user
-            .grants
-            .verify_global_privilege(username2, hostname1, UserPrivilegeType::Set));
+        assert!(user.grants.verify_global_privilege(
+            username2,
+            hostname1,
+            UserPrivilegeType::Super
+        ));
     }
 
     // Get user via username `root` and hostname `localhost`.
@@ -306,9 +312,11 @@ async fn test_user_manager_with_root_user() -> Result<()> {
             hostname2,
             UserPrivilegeType::Insert
         ));
-        assert!(user
-            .grants
-            .verify_global_privilege(username2, hostname2, UserPrivilegeType::Set));
+        assert!(user.grants.verify_global_privilege(
+            username2,
+            hostname2,
+            UserPrivilegeType::Super
+        ));
     }
 
     // Get user via username `root` and hostname `otherhost`.
