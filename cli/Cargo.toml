@@ -52,7 +52,7 @@ ureq = { version = "2.3.1", features = ["json"] }
 nix = "0.23.1"
 serde_yaml = "0.8.21"
 portpicker = "0.1.1"
-reqwest = { version = "0.11.7", features = ["json", "native-tls", "multipart", "blocking", "tokio-rustls", "stream"] }
+reqwest = { version = "0.11.8", features = ["json", "native-tls", "multipart", "blocking", "tokio-rustls", "stream"] }
 libc = "0.2.109"
 lexical-util = "0.8.1"
 async-trait = "0.1.52"

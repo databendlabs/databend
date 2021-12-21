@@ -73,4 +73,4 @@ toml = "0.5.8"
 common-meta-api = { path = "../common/meta/api" }
 
 pretty_assertions = "1.0.0"
-reqwest = { version = "0.11.7", features = ["json"] }
+reqwest = { version = "0.11.8", features = ["json"] }
