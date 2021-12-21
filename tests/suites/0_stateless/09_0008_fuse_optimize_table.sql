@@ -40,5 +40,16 @@ select * from t order by a;
 
 ---------------------
 
+-- optimize memory table should not panic/throws exception
+
+create table m(a uint64) engine=Memory;
+optimize table m;
+optimize table m all;
+optimize table m purge;
+optimize table m compact;
+
+---------------------
+
 DROP TABLE t;
+DROP TABLE m;
 DROP DATABASE db_09_0008;

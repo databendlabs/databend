@@ -14,12 +14,11 @@
 //
 use common_base::tokio;
 use common_exception::Result;
-use walkdir::WalkDir;
 
 use crate::storages::fuse::table_test_fixture::append_sample_data;
+use crate::storages::fuse::table_test_fixture::check_data_dir;
 use crate::storages::fuse::table_test_fixture::execute_command;
-use crate::storages::fuse::table_test_fixture::execute_query;
-use crate::storages::fuse::table_test_fixture::expects_ok;
+use crate::storages::fuse::table_test_fixture::history_should_have_only_one_item;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test]
@@ -31,56 +30,24 @@ async fn test_fuse_truncate_purge_stmt() -> Result<()> {
     fixture.create_default_table().await?;
 
     // ingests some test data
-    append_sample_data(10, &fixture).await?;
-    let data_path = ctx.get_config().storage.disk.data_path;
-    let root = data_path.as_str();
+    append_sample_data(1, &fixture).await?;
+    append_sample_data(1, &fixture).await?;
 
-    // there should be some data there
-    {
-        let mut got_some_files = false;
-        for entry in WalkDir::new(root) {
-            let entry = entry.unwrap();
-            if entry.file_type().is_file() {
-                got_some_files = true;
-                break;
-            }
-        }
-        assert!(got_some_files, "there should be some files");
-    }
+    // there should be some data there: 1 snapshot, 1 segment, 1 block
+    check_data_dir(&fixture, "truncate_purge", 2, 2, 2).await;
 
     // let's truncate
-    {
-        let qry = format!("truncate table '{}'.'{}' purge", db, tbl);
-        execute_command(qry.as_str(), ctx.clone()).await?;
+    let qry = format!("truncate table '{}'.'{}' purge", db, tbl);
+    execute_command(qry.as_str(), ctx.clone()).await?;
 
-        let expected = vec![
-            "+-------+",
-            "| count |",
-            "+-------+",
-            "| 1     |",
-            "+-------+",
-        ];
-        let qry = format!(
-            "select count(*) as count from fuse_history('{}', '{}')",
-            db, tbl
-        );
+    // one history item left there
+    history_should_have_only_one_item(
+        &fixture,
+        "after_truncate_there_should_be_one_history_item_left",
+    )
+    .await?;
 
-        expects_ok(
-            "after_truncate_there_should_be_one_history_item_left",
-            execute_query(qry.as_str(), ctx.clone()).await,
-            expected,
-        )
-        .await?;
-
-        let mut got_some_files = false;
-        for entry in WalkDir::new(root) {
-            let entry = entry.unwrap();
-            if entry.file_type().is_file() {
-                got_some_files = true;
-                break;
-            }
-        }
-        assert!(got_some_files, "there should be some files");
-    }
+    // there should be only a snapshot file left there, no segments or blocks
+    check_data_dir(&fixture, "truncate_after_purge_check_file_items", 1, 0, 0).await;
     Ok(())
 }

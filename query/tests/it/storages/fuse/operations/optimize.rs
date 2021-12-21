@@ -23,6 +23,7 @@ use crate::storages::fuse::table_test_fixture::check_data_dir;
 use crate::storages::fuse::table_test_fixture::execute_command;
 use crate::storages::fuse::table_test_fixture::execute_query;
 use crate::storages::fuse::table_test_fixture::expects_ok;
+use crate::storages::fuse::table_test_fixture::history_should_have_only_one_item;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test]
@@ -49,7 +50,7 @@ async fn do_purge_test(case_name: &str, operation: &str) -> Result<()> {
     insert_test_data(&qry, &fixture).await?;
     // there should be only 1 snapshot, 1 segment, 1 block left
     check_data_dir(&fixture, case_name, 1, 1, 1).await;
-    check_history(&fixture, case_name).await
+    history_should_have_only_one_item(&fixture, case_name).await
 }
 
 async fn insert_test_data(qry: &str, fixture: &TestFixture) -> Result<()> {
@@ -61,30 +62,6 @@ async fn insert_test_data(qry: &str, fixture: &TestFixture) -> Result<()> {
     append_sample_data_overwrite(1, true, fixture).await?;
     execute_command(qry, ctx.clone()).await?;
     Ok(())
-}
-
-async fn check_history(fixture: &TestFixture, case_name: &str) -> Result<()> {
-    // check history
-    let db = fixture.default_db_name();
-    let tbl = fixture.default_table_name();
-    let expected = vec![
-        "+-------+",
-        "| count |",
-        "+-------+",
-        "| 1     |",
-        "+-------+",
-    ];
-    let qry = format!(
-        "select count(*) as count from fuse_history('{}', '{}')",
-        db, tbl
-    );
-
-    expects_ok(
-        format!("{}: count_should_be_1", case_name),
-        execute_query(qry.as_str(), fixture.ctx()).await,
-        expected,
-    )
-    .await
 }
 
 #[tokio::test]
@@ -111,6 +88,7 @@ async fn test_fuse_history_optimize_compact() -> Result<()> {
     let qry = format!("optimize table '{}'.'{}' compact", db, tbl);
     execute_command(qry.as_str(), ctx.clone()).await?;
 
+    // optimize compact should keep the histories
     // there should be 6 history items there, 5 for the above insertions, 1 for that compaction
     let expected = vec![
         "+----------+",

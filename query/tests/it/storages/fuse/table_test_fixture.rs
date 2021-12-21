@@ -310,3 +310,30 @@ pub async fn check_data_dir(
         case_name
     );
 }
+
+pub async fn history_should_have_only_one_item(
+    fixture: &TestFixture,
+    case_name: &str,
+) -> Result<()> {
+    // check history
+    let db = fixture.default_db_name();
+    let tbl = fixture.default_table_name();
+    let expected = vec![
+        "+-------+",
+        "| count |",
+        "+-------+",
+        "| 1     |",
+        "+-------+",
+    ];
+    let qry = format!(
+        "select count(*) as count from fuse_history('{}', '{}')",
+        db, tbl
+    );
+
+    expects_ok(
+        format!("{}: count_of_history_item_should_be_1", case_name),
+        execute_query(qry.as_str(), fixture.ctx()).await,
+        expected,
+    )
+    .await
+}

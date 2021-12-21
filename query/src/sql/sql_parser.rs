@@ -545,7 +545,7 @@ impl<'a> DfParser<'a> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::USER => self.parse_alter_user(),
-                _ => self.expected("keyword USER or TABLE", Token::Word(w)),
+                _ => self.expected("keyword USER", Token::Word(w)),
             },
             unexpected => self.expected("alter statement", unexpected),
         }
@@ -710,18 +710,6 @@ impl<'a> DfParser<'a> {
 
         Ok(DfStatement::AlterUser(alter))
     }
-
-    //    fn parse_alter_table(&mut self) -> Result<DfStatement, ParserError> {
-    //        // in order to reuse self.parser.parse_alter() later, here we peek the next token
-    //        match self.parser.peek_nth_token(1) {
-    //            Token::Word(Word { value, keyword, .. })
-    //                if keyword == Keyword::NoKeyword && value.to_lowercase().as_str() == "purge" =>
-    //            {
-    //               Ok(DfStatement::AlterTablePurge(DfAlterTablePurge {object name}))
-    //            }
-    //            _ => todo!(),
-    //        }
-    //    }
 
     fn parse_drop_user(&mut self) -> Result<DfStatement, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
