@@ -18,12 +18,12 @@ function HomepageHeader() {
             <Link
               className={clsx("button button--secondary button--lg", styles.link)}
               to="/user/index">
-              Quick start
+              Quick Start
             </Link>
             <Link
               className={clsx("button button--secondary button--lg", styles.link)}
               to="/overview/architecture">
-              Whitepapers
+              Architecture
             </Link>
             {/* <ArrowDownSvg className={styles.arrow}></ArrowDownSvg> */}
           </div>
