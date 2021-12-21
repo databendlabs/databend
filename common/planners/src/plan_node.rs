@@ -42,6 +42,7 @@ use crate::InsertPlan;
 use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
+use crate::OptimizeTablePlan;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
@@ -83,6 +84,7 @@ pub enum PlanNode {
     DescribeTable(DescribeTablePlan),
     DescribeStage(DescribeStagePlan),
     DropTable(DropTablePlan),
+    OptimizeTable(OptimizeTablePlan),
     TruncateTable(TruncateTablePlan),
     UseDatabase(UseDatabasePlan),
     SetVariable(SettingPlan),
@@ -126,6 +128,7 @@ impl PlanNode {
             PlanNode::CreateTable(v) => v.schema(),
             PlanNode::DropTable(v) => v.schema(),
             PlanNode::DescribeTable(v) => v.schema(),
+            PlanNode::OptimizeTable(v) => v.schema(),
             PlanNode::DescribeStage(v) => v.schema(),
             PlanNode::TruncateTable(v) => v.schema(),
             PlanNode::SetVariable(v) => v.schema(),
@@ -170,6 +173,7 @@ impl PlanNode {
             PlanNode::DropDatabase(_) => "DropDatabasePlan",
             PlanNode::CreateTable(_) => "CreateTablePlan",
             PlanNode::DescribeTable(_) => "DescribeTablePlan",
+            PlanNode::OptimizeTable(_) => "OptimizeTablePlan",
             PlanNode::DescribeStage(_) => "DescribeStagePlan",
             PlanNode::DropTable(_) => "DropTablePlan",
             PlanNode::TruncateTable(_) => "TruncateTablePlan",

@@ -12,21 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_datavalues::DataSchema;
-use common_datavalues::DataSchemaRef;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct TruncateTablePlan {
-    pub db: String,
-    /// The table name
-    pub table: String,
-    pub purge: bool,
-}
-
-impl TruncateTablePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
+// This is a place holder for the UT of `interpreter_table_optimize`
+//
+// For the convenience of testing, the unit test of `optimize table` statement
+// is implemented in  `query/tests/it/storages/fuse/operations/optimize.rs`

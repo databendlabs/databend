@@ -28,11 +28,7 @@ use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 
 impl FuseTable {
     #[inline]
-    pub async fn do_truncate(
-        &self,
-        ctx: Arc<QueryContext>,
-        _truncate_plan: TruncateTablePlan,
-    ) -> Result<()> {
+    pub async fn do_truncate(&self, ctx: Arc<QueryContext>, plan: TruncateTablePlan) -> Result<()> {
         if let Some(prev_snapshot) = self.table_snapshot(ctx.as_ref()).await? {
             let prev_id = prev_snapshot.snapshot_id;
             let mut new_snapshot = prev_snapshot;
@@ -45,10 +41,10 @@ impl FuseTable {
             let bytes = serde_json::to_vec(&new_snapshot)?;
             da.put(&new_snapshot_loc, bytes).await?;
 
-            let keep_last_snapshot = false;
-            let _ = self
-                .do_truncate_history(ctx.clone(), keep_last_snapshot)
-                .await;
+            if plan.purge {
+                let keep_last_snapshot = false;
+                self.do_optimize(ctx.clone(), keep_last_snapshot).await?
+            }
             ctx.get_catalog()
                 .upsert_table_option(UpsertTableOptionReq::new(
                     &self.table_info.ident,

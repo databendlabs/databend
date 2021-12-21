@@ -14,18 +14,27 @@
 
 use std::sync::Arc;
 
+use bitflags::bitflags;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct TruncateTablePlan {
-    pub db: String,
-    /// The table name
-    pub table: String,
-    pub purge: bool,
+bitflags! {
+    #[derive(serde::Serialize, serde::Deserialize)]
+    pub struct Optimization: u32 {
+        const PURGE   = 0b00000001;
+        const COMPACT = 0b00000010;
+        const ALL = Self::PURGE.bits | Self::COMPACT.bits;
+    }
 }
 
-impl TruncateTablePlan {
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct OptimizeTablePlan {
+    pub database: String,
+    pub table: String,
+    pub operation: Optimization,
+}
+
+impl OptimizeTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

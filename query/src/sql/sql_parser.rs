@@ -29,6 +29,7 @@ use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use common_planners::ExplainType;
+use common_planners::Optimization;
 use metrics::histogram;
 use serde::Deserialize;
 use sqlparser::ast::BinaryOperator;
@@ -53,7 +54,6 @@ use sqlparser::tokenizer::Word;
 use super::statements::DfCopy;
 use super::statements::DfDescribeStage;
 use crate::sql::statements::DfAlterUser;
-use crate::sql::statements::DfCompactTable;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfCreateStage;
 use crate::sql::statements::DfCreateTable;
@@ -68,6 +68,7 @@ use crate::sql::statements::DfGrantObject;
 use crate::sql::statements::DfGrantStatement;
 use crate::sql::statements::DfInsertStatement;
 use crate::sql::statements::DfKillStatement;
+use crate::sql::statements::DfOptimizeTable;
 use crate::sql::statements::DfQueryStatement;
 use crate::sql::statements::DfRevokeStatement;
 use crate::sql::statements::DfSetVariable;
@@ -245,7 +246,7 @@ impl<'a> DfParser<'a> {
                         // Use database
                         "USE" => self.parse_use_database(),
                         "KILL" => self.parse_kill_query(),
-                        "COMPACT" => self.parse_compact(),
+                        "OPTIMIZE" => self.parse_optimize(),
                         _ => self.expected("Keyword", self.parser.peek_token()),
                     },
                     _ => self.expected("an SQL statement", Token::Word(w)),
@@ -545,7 +546,7 @@ impl<'a> DfParser<'a> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::USER => self.parse_alter_user(),
-                _ => self.expected("alter statement", Token::Word(w)),
+                _ => self.expected("keyword USER", Token::Word(w)),
             },
             unexpected => self.expected("alter statement", unexpected),
         }
@@ -964,8 +965,12 @@ impl<'a> DfParser<'a> {
             Token::Word(w) => match w.keyword {
                 Keyword::TABLE => {
                     let table_name = self.parser.parse_object_name()?;
-                    let trunc = DfTruncateTable { name: table_name };
-                    Ok(DfStatement::TruncateTable(trunc))
+                    let purge = self.parser.parse_keyword(Keyword::PURGE);
+                    let statement = DfTruncateTable {
+                        name: table_name,
+                        purge,
+                    };
+                    Ok(DfStatement::TruncateTable(statement))
                 }
                 _ => self.expected("truncate statement", Token::Word(w)),
             },
@@ -1134,19 +1139,28 @@ impl<'a> DfParser<'a> {
         Ok(options)
     }
 
-    fn parse_compact(&mut self) -> Result<DfStatement, ParserError> {
-        self.parser.next_token();
-        match self.parser.next_token() {
+    fn parse_optimize(&mut self) -> Result<DfStatement, ParserError> {
+        // syntax: "optimize TABLE t [purge | compact | all]",  default action is "purge"
+        self.expect_token("OPTIMIZE")?;
+        self.parser.expect_keyword(Keyword::TABLE)?;
+        let object_name = self.parser.parse_object_name()?;
+        let operation = match self.parser.next_token() {
+            Token::EOF => Ok(Optimization::PURGE),
             Token::Word(w) => match w.keyword {
-                Keyword::TABLE => {
-                    let table_name = self.parser.parse_object_name()?;
-                    let compact = DfCompactTable { name: table_name };
-                    Ok(DfStatement::CompactTable(compact))
+                Keyword::ALL => Ok(Optimization::ALL),
+                Keyword::PURGE => Ok(Optimization::PURGE),
+                Keyword::NoKeyword if w.value.to_uppercase().as_str() == "COMPACT" => {
+                    Ok(Optimization::COMPACT)
                 }
-                _ => self.expected("TABLE", Token::Word(w)),
+                _ => self.expected("one of PURGE, COMPACT, ALL", Token::Word(w)),
             },
-            unexpected => self.expected("compact statement", unexpected),
-        }
+            t => self.expected("Nothing, or one of PURGE, COMPACT, ALL", t),
+        }?;
+
+        Ok(DfStatement::OptimizeTable(DfOptimizeTable {
+            name: object_name,
+            operation,
+        }))
     }
 
     fn consume_token(&mut self, expected: &str) -> bool {
@@ -1155,6 +1169,14 @@ impl<'a> DfParser<'a> {
             true
         } else {
             false
+        }
+    }
+
+    fn expect_token(&mut self, expected: &str) -> Result<(), ParserError> {
+        if self.consume_token(expected) {
+            Ok(())
+        } else {
+            self.expected(&expected.to_string(), self.parser.peek_token())
         }
     }
 

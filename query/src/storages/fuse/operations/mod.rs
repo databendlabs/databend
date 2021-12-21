@@ -15,10 +15,10 @@
 mod append;
 mod commit;
 mod operation_log;
+mod optimize;
 mod read;
 mod read_plan;
 mod truncate;
-mod truncate_history;
 
 pub use operation_log::AppendOperationLogEntry;
 pub use operation_log::TableOperationLog;

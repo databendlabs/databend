@@ -22,7 +22,6 @@ use nom::IResult;
 use super::statements::DfCopy;
 use super::statements::DfDescribeStage;
 use crate::sql::statements::DfAlterUser;
-use crate::sql::statements::DfCompactTable;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfCreateStage;
 use crate::sql::statements::DfCreateTable;
@@ -36,6 +35,7 @@ use crate::sql::statements::DfExplain;
 use crate::sql::statements::DfGrantStatement;
 use crate::sql::statements::DfInsertStatement;
 use crate::sql::statements::DfKillStatement;
+use crate::sql::statements::DfOptimizeTable;
 use crate::sql::statements::DfQueryStatement;
 use crate::sql::statements::DfRevokeStatement;
 use crate::sql::statements::DfSetVariable;
@@ -74,7 +74,7 @@ pub enum DfStatement {
     DescribeStage(DfDescribeStage),
     DropTable(DfDropTable),
     TruncateTable(DfTruncateTable),
-    CompactTable(DfCompactTable),
+    OptimizeTable(DfOptimizeTable),
 
     // Settings.
     ShowSettings(DfShowSettings),
