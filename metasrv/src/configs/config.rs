@@ -70,14 +70,14 @@ pub struct Config {
     pub admin_tls_server_key: String,
 
     #[clap(long, env = METASRV_FLIGHT_API_ADDRESS, default_value = "127.0.0.1:9191")]
-    pub flight_api_address: String,
+    pub grpc_api_address: String,
 
     /// Certificate for server to identify itself
     #[clap(long, env = FLIGHT_TLS_SERVER_CERT, default_value = "")]
-    pub flight_tls_server_cert: String,
+    pub grpc_tls_server_cert: String,
 
     #[clap(long, env = FLIGHT_TLS_SERVER_KEY, default_value = "")]
-    pub flight_tls_server_key: String,
+    pub grpc_tls_server_key: String,
 
     #[clap(flatten)]
     pub raft_config: RaftConfig,
@@ -93,9 +93,9 @@ impl Default for Config {
             admin_api_address: "127.0.0.1:28002".to_string(),
             admin_tls_server_cert: "".to_string(),
             admin_tls_server_key: "".to_string(),
-            flight_api_address: "127.0.0.1:9191".to_string(),
-            flight_tls_server_cert: "".to_string(),
-            flight_tls_server_key: "".to_string(),
+            grpc_api_address: "127.0.0.1:9191".to_string(),
+            grpc_tls_server_cert: "".to_string(),
+            grpc_tls_server_key: "".to_string(),
             raft_config: Default::default(),
         }
     }
@@ -112,7 +112,7 @@ impl Config {
     }
 
     pub fn tls_rpc_server_enabled(&self) -> bool {
-        !self.flight_tls_server_key.is_empty() && !self.flight_tls_server_cert.is_empty()
+        !self.grpc_tls_server_key.is_empty() && !self.grpc_tls_server_cert.is_empty()
     }
 
     /// First load configs from args.
@@ -146,9 +146,9 @@ impl Config {
         load_field_from_env!(cfg.admin_api_address, String, ADMIN_API_ADDRESS);
         load_field_from_env!(cfg.admin_tls_server_cert, String, ADMIN_TLS_SERVER_CERT);
         load_field_from_env!(cfg.admin_tls_server_key, String, ADMIN_TLS_SERVER_KEY);
-        load_field_from_env!(cfg.flight_api_address, String, METASRV_FLIGHT_API_ADDRESS);
-        load_field_from_env!(cfg.flight_tls_server_cert, String, FLIGHT_TLS_SERVER_CERT);
-        load_field_from_env!(cfg.flight_tls_server_key, String, FLIGHT_TLS_SERVER_KEY);
+        load_field_from_env!(cfg.grpc_api_address, String, METASRV_FLIGHT_API_ADDRESS);
+        load_field_from_env!(cfg.grpc_tls_server_cert, String, FLIGHT_TLS_SERVER_CERT);
+        load_field_from_env!(cfg.grpc_tls_server_key, String, FLIGHT_TLS_SERVER_KEY);
         load_field_from_env!(
             cfg.raft_config.raft_api_host,
             String,

@@ -304,7 +304,7 @@ impl LocalRuntime for LocalMetaConfig {
             )
             .env(
                 databend_meta::configs::config::METASRV_FLIGHT_API_ADDRESS,
-                conf.flight_api_address,
+                conf.grpc_api_address,
             )
             .env(
                 databend_meta::configs::config::ADMIN_API_ADDRESS,
@@ -316,11 +316,11 @@ impl LocalRuntime for LocalMetaConfig {
             )
             .env(
                 databend_meta::configs::config::FLIGHT_TLS_SERVER_CERT,
-                conf.flight_tls_server_cert,
+                conf.grpc_tls_server_cert,
             )
             .env(
                 databend_meta::configs::config::FLIGHT_TLS_SERVER_KEY,
-                conf.flight_tls_server_key,
+                conf.grpc_tls_server_key,
             )
             .env(
                 databend_meta::configs::config::ADMIN_TLS_SERVER_CERT,
@@ -366,11 +366,11 @@ impl LocalRuntime for LocalMetaConfig {
         return portpicker::is_free(self.config.raft_config.raft_api_port as u16)
             && portpicker::is_free(
                 self.config
-                    .flight_api_address
+                    .grpc_api_address
                     .parse::<SocketAddr>()
                     .expect(&*format!(
                         "cannot parse meta server address {} ",
-                        self.config.flight_api_address
+                        self.config.grpc_api_address
                     ))
                     .port(),
             )

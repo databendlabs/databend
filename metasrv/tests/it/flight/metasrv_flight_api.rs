@@ -145,8 +145,8 @@ async fn test_join() -> anyhow::Result<()> {
     start_metasrv_with_context(&mut tc0).await?;
     start_metasrv_with_context(&mut tc1).await?;
 
-    let addr0 = tc0.config.flight_api_address.clone();
-    let addr1 = tc1.config.flight_api_address.clone();
+    let addr0 = tc0.config.grpc_api_address.clone();
+    let addr1 = tc1.config.grpc_api_address.clone();
 
     let client0 = MetaFlightClient::try_create(addr0.as_str(), "root", "xxx").await?;
     let client1 = MetaFlightClient::try_create(addr1.as_str(), "root", "xxx").await?;

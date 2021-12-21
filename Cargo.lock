@@ -2107,6 +2107,7 @@ dependencies = [
  "clap 3.0.0-rc.9",
  "common-arrow",
  "common-base",
+ "common-building",
  "common-containers",
  "common-datavalues",
  "common-exception",
@@ -2143,6 +2144,7 @@ dependencies = [
  "tokio-stream",
  "toml",
  "tonic",
+ "tonic-build",
  "uuid",
 ]
 

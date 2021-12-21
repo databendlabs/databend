@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_arrow::arrow_format::flight::service::flight_service_server::FlightServiceServer;
 use common_base::tokio;
 use common_base::tokio::sync::oneshot;
 use common_base::tokio::sync::oneshot::Receiver;
@@ -22,6 +21,7 @@ use common_base::tokio::sync::oneshot::Sender;
 use common_base::tokio::task::JoinHandle;
 use common_base::Stoppable;
 use common_exception::ErrorCode;
+use common_meta_raft_store::protobuf::meta_service_server::MetaServiceServer;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
 use futures::future::Either;
@@ -30,11 +30,11 @@ use tonic::transport::Identity;
 use tonic::transport::Server;
 use transport::ServerTlsConfig;
 
-use crate::api::rpc::MetaFlightImpl;
 use crate::configs::Config;
 use crate::meta_service::MetaNode;
+use crate::meta_service::MetaServiceImpl;
 
-pub struct FlightServer {
+pub struct GrpcServer {
     conf: Config,
     meta_node: Arc<MetaNode>,
     join_handle: Option<JoinHandle<()>>,
@@ -42,7 +42,7 @@ pub struct FlightServer {
     fin_rx: Option<Receiver<()>>,
 }
 
-impl FlightServer {
+impl GrpcServer {
     pub fn create(conf: Config, meta_node: Arc<MetaNode>) -> Self {
         Self {
             conf,
@@ -84,16 +84,13 @@ impl FlightServer {
             builder
         };
 
-        let addr = conf.flight_api_address.parse::<std::net::SocketAddr>()?;
+        let addr = conf.grpc_api_address.parse::<std::net::SocketAddr>()?;
         tracing::info!("flight addr: {}", addr);
-
-        let flight_impl = MetaFlightImpl::create(conf, meta_node.clone());
-        let flight_srv = FlightServiceServer::new(flight_impl);
 
         let j = tokio::spawn(
             async move {
                 let res = builder
-                    .add_service(flight_srv)
+                    .add_service(grpc_srv) // TODO(ariesdevil)
                     .serve_with_shutdown(addr, async move {
                         let _ = started_tx.send(());
                         tracing::info!("metasrv start to wait for stop signal: {}", addr);
@@ -170,8 +167,8 @@ impl FlightServer {
 
     async fn tls_config(conf: &Config) -> anyhow::Result<Option<ServerTlsConfig>> {
         if conf.tls_rpc_server_enabled() {
-            let cert = tokio::fs::read(conf.flight_tls_server_cert.as_str()).await?;
-            let key = tokio::fs::read(conf.flight_tls_server_key.as_str()).await?;
+            let cert = tokio::fs::read(conf.grpc_tls_server_cert.as_str()).await?;
+            let key = tokio::fs::read(conf.grpc_tls_server_key.as_str()).await?;
             let server_identity = Identity::from_pem(cert, key);
 
             let tls = ServerTlsConfig::new().identity(server_identity);
@@ -183,7 +180,7 @@ impl FlightServer {
 }
 
 #[async_trait::async_trait]
-impl Stoppable for FlightServer {
+impl Stoppable for GrpcServer {
     async fn start(&mut self) -> Result<(), ErrorCode> {
         tracing::info!("FlightServer::start");
         let res = self.do_start().await;
