@@ -19,7 +19,7 @@ use common_functions::scalars::*;
 use pretty_assertions::assert_eq;
 
 #[test]
-fn test_uuid_emptyness_functions() -> Result<()> {
+fn test_uuid_verifier_functions() -> Result<()> {
     #[allow(dead_code)]
     struct Test {
         name: &'static str,
@@ -37,9 +37,9 @@ fn test_uuid_emptyness_functions() -> Result<()> {
     let tests = vec![
         Test {
             name: "is-empty-uuid-passed",
-            display: "isemptyUUID",
+            display: "()",
             nullable: false,
-            func: IsEmptyUUIDFunction::try_create_func("")?,
+            func: UUIDIsEmptyFunction::try_create("")?,
             args: vec![schema.field_with_name("a")?.data_type().clone()],
             columns: vec![
                 Series::new(vec![Some("00000000-0000-0000-0000-000000000000"), None]).into(),
@@ -49,9 +49,9 @@ fn test_uuid_emptyness_functions() -> Result<()> {
         },
         Test {
             name: "is-not-empty-uuid-passed",
-            display: "isnotemptyUUID",
+            display: "()",
             nullable: false,
-            func: IsNotEmptyUUIDFunction::try_create_func("")?,
+            func: UUIDIsNotEmptyFunction::try_create("")?,
             args: vec![schema.field_with_name("a")?.data_type().clone()],
             columns: vec![Series::new(vec![Some("59b69da3-81d0-4db2-96e8-3e20b505a7b2")]).into()],
             expect: Series::new(vec![true]),

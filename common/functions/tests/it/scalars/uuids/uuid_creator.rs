@@ -19,7 +19,7 @@ use common_functions::scalars::*;
 use pretty_assertions::assert_eq;
 
 #[test]
-fn test_uuid_generator_functions() -> Result<()> {
+fn test_uuid_creator_functions() -> Result<()> {
     #[allow(dead_code)]
     struct Test {
         name: &'static str,
@@ -37,9 +37,9 @@ fn test_uuid_generator_functions() -> Result<()> {
     let tests = vec![
         Test {
             name: "generateUUIDv4-passed",
-            display: "generateUUIDv4",
+            display: "()",
             nullable: false,
-            func: GenerateUUIDv4Function::try_create_func("")?,
+            func: UUIDv4Function::try_create("")?,
             args: vec![],
             columns: vec![],
             expect: None,
@@ -47,9 +47,9 @@ fn test_uuid_generator_functions() -> Result<()> {
         },
         Test {
             name: "zeroUUID-passed",
-            display: "zeroUUID",
+            display: "()",
             nullable: false,
-            func: ZeroUUIDFunction::try_create_func("")?,
+            func: UUIDZeroFunction::try_create("")?,
             args: vec![],
             columns: vec![],
             expect: Some(Series::new(vec!["00000000-0000-0000-0000-000000000000"])),
