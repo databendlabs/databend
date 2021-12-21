@@ -23,7 +23,7 @@ common-tracing = {path = "../tracing" }
 lazy_static = "1.4.0"
 thiserror = "1.0.30"
 chrono-tz = "0.6.1"
-futures = "0.3.18"
+futures = "0.3.19"
 futures-core = "0.3.18"
 futures-sink = "0.3.18"
 url= "2.2.2"

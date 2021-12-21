@@ -27,7 +27,7 @@ common-tracing = { path = "../../tracing" }
 # Crates.io dependencies
 async-trait = "0.1.52"
 derive_more = "0.99.17"
-futures = "0.3.18"
+futures = "0.3.19"
 prost = "0.9.0"
 # prost-derive = "0.9.0"
 rand = "0.8.4"
