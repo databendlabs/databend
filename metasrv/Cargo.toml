@@ -53,7 +53,7 @@ maplit = "1.0.2"
 metrics = "0.17.1"
 metrics-exporter-prometheus = "0.7.0"
 num = "0.4.0"
-num_cpus = "1.13.0"
+num_cpus = "1.13.1"
 prost = "0.9.0"
 rand = "0.8.4"
 serde = { version = "1.0.132", features = ["derive"] }
@@ -73,4 +73,4 @@ toml = "0.5.8"
 common-meta-api = { path = "../common/meta/api" }
 
 pretty_assertions = "1.0.0"
-reqwest = { version = "0.11.7", features = ["json"] }
+reqwest = { version = "0.11.8", features = ["json"] }
