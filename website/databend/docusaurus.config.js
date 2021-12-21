@@ -84,23 +84,20 @@ const config = {
                     {
                         to: '/user/index', label: 'User Guide', position: 'left', items: [
                             {label: 'Get Started', to: '/user/index'},
-                            {label: 'API', to: '/user/api/index'},
+                            {label: 'SQL', to: '/user/sqlstatement/index'},
                             {label: 'CLI', to: '/user/cli/index'},
-                            {label: 'SQL Statement', to: '/user/sqlstatement/index'},
-                            {label: 'System', to: '/user/system/index'}
+                            {label: 'APIs', to: '/user/api/index'}
                         ]
                     },
                     {
                         to: '/dev/index', label: 'Dev Guide', position: 'left', items: [
-                            {label: 'Get Started', to: '/dev/index'},
-                            {label: 'Roadmap', to: '/dev/roadmap'},
-                            {label: 'Building', to: '/dev/building/index'},
                             {label: 'Contributing', to: '/dev/contributing/index'},
-                            {label: 'RFCs', to: '/dev/rfcs/index'},
-                            {label: 'Policies', to: '/dev/policies/index'}
+                            {label: 'Development', to: '/dev/development/index'},
+                            {label: 'Roadmap', to: '/dev/roadmap'},
+                            {label: 'Policies', to: '/dev/policies/index'},
+                            {label: 'RFCs', to: '/dev/rfcs/index'}
                         ]
                     },
-                    {to: '/blog', label: 'Blog', position: 'left'},
                     {
                         href: 'https://github.com/datafuselabs/databend',
                         label: 'GitHub',
@@ -115,13 +112,13 @@ const config = {
                         title: 'Resources',
                         items: [
                             {
+                                label: 'CLI Reference',
+                                to: '/user/cli'
+                            },
+                            {
                                 label: 'Performance',
                                 to: '/overview/performance'
                             },
-                            {
-                                label: 'Whitepapers',
-                                to: '/overview/architecture'
-                            }
                         ]
                     },
                     {
@@ -140,10 +137,6 @@ const config = {
                     {
                         title: 'More',
                         items: [
-                            {
-                                label: 'Blog',
-                                to: '/blog',
-                            },
                             {
                                 label: 'Weekly',
                                 href: 'https://weekly.databend.rs/'
