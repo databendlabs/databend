@@ -54,7 +54,7 @@ version = "0.6.9"
 features = ["full"]
 
 [dependencies.futures-util]
-version = "0.3.18"
+version = "0.3.19"
 features = ["sink"]
 
 [dependencies.log]
