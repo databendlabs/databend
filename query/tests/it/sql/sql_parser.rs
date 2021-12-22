@@ -1026,6 +1026,23 @@ fn grant_privilege_test() -> Result<()> {
         }),
     )?;
 
+    expect_parse_ok(
+        "GRANT CREATE USER, CREATE ROLE, CREATE, SELECT ON * TO 'test'@'localhost'",
+        DfStatement::GrantPrivilege(DfGrantStatement {
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            on: DfGrantObject::Database(None),
+            priv_types: {
+                let mut privileges = UserPrivilegeSet::empty();
+                privileges.set_privilege(UserPrivilegeType::Create);
+                privileges.set_privilege(UserPrivilegeType::CreateUser);
+                privileges.set_privilege(UserPrivilegeType::CreateRole);
+                privileges.set_privilege(UserPrivilegeType::Select);
+                privileges
+            },
+        }),
+    )?;
+
     expect_parse_err(
         "GRANT TEST, ON * TO 'test'@'localhost'",
         String::from("sql parser error: Expected privilege type, found: TEST"),
