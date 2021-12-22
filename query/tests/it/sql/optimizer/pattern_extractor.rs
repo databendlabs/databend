@@ -42,7 +42,7 @@ fn test_unary_expression() {
 
     let mut pattern_extractor = PatternExtractor::create();
     let mut memo = Memo::create();
-    memo.init(expr.clone()).unwrap();
+    memo.init(expr).unwrap();
 
     let group_expression = memo
         .root()
@@ -86,7 +86,7 @@ fn test_multiple_expression() {
 
     let mut pattern_extractor = PatternExtractor::create();
     let mut memo = Memo::create();
-    memo.init(expr.clone()).unwrap();
+    memo.init(expr).unwrap();
 
     memo.insert_m_expr(
         0,
@@ -114,6 +114,6 @@ fn test_multiple_expression() {
         Some(1),
     );
 
-    let expected = vec![expected_expr.clone(), expected_expr.clone()];
+    let expected = vec![expected_expr.clone(), expected_expr];
     assert_eq!(result, expected);
 }
