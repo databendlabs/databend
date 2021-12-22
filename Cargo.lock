@@ -1322,6 +1322,7 @@ dependencies = [
  "sha1",
  "sha2 0.10.0",
  "twox-hash",
+ "uuid",
 ]
 
 [[package]]

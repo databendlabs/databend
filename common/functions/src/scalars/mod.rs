@@ -31,6 +31,7 @@ mod others;
 mod strings;
 mod tuples;
 mod udfs;
+mod uuids;
 
 pub use arithmetics::*;
 pub use comparisons::*;
@@ -51,3 +52,4 @@ pub use others::*;
 pub use strings::*;
 pub use tuples::*;
 pub use udfs::*;
+pub use uuids::*;

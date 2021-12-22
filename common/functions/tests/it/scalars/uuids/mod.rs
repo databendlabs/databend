@@ -12,18 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod arithmetics;
-mod comparisons;
-mod conditionals;
-mod dates;
-mod expressions;
-mod function_column;
-mod hashes;
-mod logics;
-mod maths;
-mod nullables;
-mod others;
-mod strings;
-mod tuples;
-mod udfs;
-mod uuids;
+mod uuid_creator;
+mod uuid_verifier;
