@@ -15,8 +15,10 @@
 use std::collections::HashMap;
 
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::FunctionFactory;
 
 use crate::Expression;
 use crate::ExpressionVisitor;
@@ -370,4 +372,99 @@ pub fn unwrap_alias_exprs(expr: &Expression) -> Result<Expression> {
         Expression::Alias(_, nested_expr) => Ok(Some(*nested_expr.clone())),
         _ => Ok(None),
     })
+}
+
+pub struct ExpressionDataTypeVisitor {
+    stack: Vec<DataType>,
+    input_schema: DataSchemaRef,
+}
+
+impl ExpressionDataTypeVisitor {
+    pub fn create(input_schema: DataSchemaRef) -> ExpressionDataTypeVisitor {
+        ExpressionDataTypeVisitor {
+            input_schema,
+            stack: vec![],
+        }
+    }
+
+    fn push_to_stack(mut self, data_type: DataType) -> Result<Self> {
+        self.stack.push(data_type);
+        Ok(self)
+    }
+
+    pub fn finalize(mut self) -> Result<DataType> {
+        match self.stack.len() {
+            1 => Ok(self.stack.remove(0)),
+            _ => Err(ErrorCode::LogicalError("")),
+        }
+    }
+}
+
+impl ExpressionVisitor for ExpressionDataTypeVisitor {
+    fn pre_visit(self, expr: &Expression) -> Result<Recursion<Self>> {
+        match expr {
+            Expression::Cast { .. } => Ok(Recursion::Stop(self)),
+            _ => Ok(Recursion::Continue(self)),
+        }
+    }
+
+    fn post_visit(mut self, expr: &Expression) -> Result<Self> {
+        match expr {
+            Expression::Column(s) => {
+                let column_type = self.input_schema.field_with_name(s)?.data_type().clone();
+                self.push_to_stack(column_type)
+            }
+            Expression::QualifiedColumn(_) => Err(ErrorCode::LogicalError(
+                "QualifiedColumn should be resolve in analyze.",
+            )),
+            Expression::Literal { data_type, .. } => self.push_to_stack(data_type.clone()),
+            Expression::Subquery { query_plan, .. } => {
+                self.push_to_stack(Expression::to_subquery_type(query_plan))
+            }
+            Expression::ScalarSubquery { query_plan, .. } => {
+                self.push_to_stack(Expression::to_subquery_type(query_plan))
+            }
+            Expression::BinaryExpression { op, .. } => {
+                let func = FunctionFactory::instance().get(op)?;
+                match (self.stack.pop(), self.stack.pop()) {
+                    (Some(left), Some(right)) => {
+                        self.push_to_stack(func.return_type(&[left, right])?)
+                    }
+                    (_, _) => Err(ErrorCode::LogicalError("")),
+                }
+            }
+            Expression::UnaryExpression { op, .. } => {
+                let func = FunctionFactory::instance().get(op)?;
+                match self.stack.pop() {
+                    None => Err(ErrorCode::LogicalError("")),
+                    Some(arg_type) => self.push_to_stack(func.return_type(&[arg_type])?),
+                }
+            }
+            Expression::ScalarFunction { op, args } => {
+                let mut arg_types = Vec::with_capacity(args.len());
+                for _index in 0..args.len() {
+                    match self.stack.pop() {
+                        None => {
+                            return Err(ErrorCode::LogicalError(""));
+                        }
+                        Some(arg_type) => arg_types.push(arg_type),
+                    };
+                }
+
+                let func = FunctionFactory::instance().get(op)?;
+                self.push_to_stack(func.return_type(&arg_types)?)
+            }
+            expr @ Expression::AggregateFunction { .. } => {
+                let agg_type = expr
+                    .to_aggregate_function(&self.input_schema)?
+                    .return_type()?;
+                self.push_to_stack(agg_type)
+            }
+            Expression::Wildcard => Result::Err(ErrorCode::IllegalDataType(
+                "Wildcard expressions are not valid to get return type",
+            )),
+            Expression::Cast { data_type, .. } => self.push_to_stack(data_type.clone()),
+            Expression::Alias(_, _) | Expression::Sort { .. } => Ok(self),
+        }
+    }
 }

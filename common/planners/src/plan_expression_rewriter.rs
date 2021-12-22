@@ -12,82 +12,247 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_datavalues::DataType;
+use common_datavalues::DataValue;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::Expression;
+use crate::ExpressionVisitor;
+use crate::PlanNode;
+use crate::Recursion;
 
 /// Trait for potentially recursively rewriting an [`Expr`] expression
 /// tree. When passed to `Expr::rewrite`, `ExprVisitor::mutate` is
 /// invoked recursively on all nodes of an expression tree. See the
 /// comments on `Expr::rewrite` for details on its use
-pub trait ExprRewriter: Sized {
+pub trait ExpressionRewriter: Sized {
     /// Invoked before any children of `expr` are rewritten /
     /// visited. Default implementation returns `Ok(true)`
     fn pre_visit(&mut self, _expr: &Expression) -> Result<bool> {
         Ok(true)
     }
 
+    fn mutate_binary(
+        &mut self,
+        op: &str,
+        left: Expression,
+        right: Expression,
+        _origin_expr: &Expression,
+    ) -> Result<Expression> {
+        Ok(Expression::BinaryExpression {
+            op: op.to_string(),
+            left: Box::new(left),
+            right: Box::new(right),
+        })
+    }
+
+    fn mutate_unary_expression(
+        &mut self,
+        op: &str,
+        expr: Expression,
+        _origin_expr: &Expression,
+    ) -> Result<Expression> {
+        Ok(Expression::UnaryExpression {
+            op: op.to_string(),
+            expr: Box::new(expr),
+        })
+    }
+
+    fn mutate_scalar_function(
+        &mut self,
+        name: &str,
+        args: Vec<Expression>,
+        _origin_expr: &Expression,
+    ) -> Result<Expression> {
+        Ok(Expression::ScalarFunction {
+            op: name.to_string(),
+            args,
+        })
+    }
+
+    fn mutate_subquery(
+        &mut self,
+        name: &str,
+        subquery: &Arc<PlanNode>,
+        _origin_expr: &Expression,
+    ) -> Result<Expression> {
+        Ok(Expression::Subquery {
+            name: name.to_string(),
+            query_plan: subquery.clone(),
+        })
+    }
+
+    fn mutate_scalar_subquery(
+        &mut self,
+        name: &str,
+        subquery: &Arc<PlanNode>,
+        _origin_expr: &Expression,
+    ) -> Result<Expression> {
+        Ok(Expression::ScalarSubquery {
+            name: name.to_string(),
+            query_plan: subquery.clone(),
+        })
+    }
+
+    fn mutate_wildcard(&mut self, _origin_expr: &Expression) -> Result<Expression> {
+        Ok(Expression::Wildcard)
+    }
+
+    fn mutate_column(
+        &mut self,
+        column_name: &str,
+        _origin_expr: &Expression,
+    ) -> Result<Expression> {
+        Ok(Expression::Column(column_name.to_string()))
+    }
+
+    fn mutate_aggregate_function(
+        &mut self,
+        name: &str,
+        distinct: bool,
+        params: &[DataValue],
+        args: Vec<Expression>,
+        _origin_expr: &Expression,
+    ) -> Result<Expression> {
+        Ok(Expression::AggregateFunction {
+            op: name.to_string(),
+            distinct,
+            args,
+            params: params.to_owned(),
+        })
+    }
+
+    fn mutate_cast(
+        &mut self,
+        typ: &DataType,
+        expr: Expression,
+        _origin_expr: &Expression,
+    ) -> Result<Expression> {
+        Ok(Expression::Cast {
+            expr: Box::new(expr),
+            data_type: typ.clone(),
+        })
+    }
+
+    fn mutate_alias(
+        &mut self,
+        alias: &str,
+        expr: Expression,
+        _origin_expr: &Expression,
+    ) -> Result<Expression> {
+        Ok(Expression::Alias(alias.to_string(), Box::new(expr)))
+    }
+
+    fn mutate_literal(
+        &mut self,
+        value: &DataValue,
+        column_name: &Option<String>,
+        data_type: &DataType,
+        _origin_expr: &Expression,
+    ) -> Result<Expression> {
+        Ok(Expression::Literal {
+            value: value.clone(),
+            column_name: column_name.clone(),
+            data_type: data_type.clone(),
+        })
+    }
+
+    fn mutate_qualified_column(
+        &mut self,
+        names: &[String],
+        _origin_expr: &Expression,
+    ) -> Result<Expression> {
+        Ok(Expression::QualifiedColumn(names.to_vec()))
+    }
+
+    fn mutate_sort(
+        &mut self,
+        expr: Expression,
+        asc: bool,
+        nulls_first: bool,
+        origin_expr: &Expression,
+    ) -> Result<Expression> {
+        Ok(Expression::Sort {
+            expr: Box::new(expr),
+            asc,
+            nulls_first,
+            origin_expr: Box::new(origin_expr.clone()),
+        })
+    }
+
     /// Invoked after all children of `expr` have been mutated and
     /// returns a potentially modified expr.
-    fn mutate(&mut self, expr: Expression) -> Result<Expression>;
+    fn mutate(self, expr: &Expression) -> Result<Expression> {
+        ExpressionRewriteVisitor::create(self)
+            .visit(expr)?
+            .finalize()
+    }
 }
 
-impl Expression {
-    /// Performs a depth first walk of an expression and its children
-    /// to rewrite an expression, consuming `self` producing a new
-    /// [`Expr`].
-    ///
-    /// Implements a modified version of the [visitor
-    /// pattern](https://en.wikipedia.org/wiki/Visitor_pattern) to
-    /// separate algorithms from the structure of the `Expr` tree and
-    /// make it easier to write new, efficient expression
-    /// transformation algorithms.
-    ///
-    /// For an expression tree such as
-    /// ```text
-    /// BinaryExpr (GT)
-    ///    left: Column("foo")
-    ///    right: Column("bar")
-    /// ```
-    ///
-    /// The nodes are visited using the following order
-    /// ```text
-    /// pre_visit(BinaryExpr(GT))
-    /// pre_visit(Column("foo"))
-    /// mutate(Column("foo"))
-    /// pre_visit(Column("bar"))
-    /// mutate(Column("bar"))
-    /// mutate(BinaryExpr(GT))
-    /// ```
-    ///
-    /// If an Err result is returned, recursion is stopped immediately
-    ///
-    /// If [`false`] is returned on a call to pre_visit, no
-    /// children of that expression are visited, nor is mutate
-    /// called on that expression
-    ///
-    pub fn rewrite<R>(self, rewriter: &mut R) -> Result<Self>
-    where R: ExprRewriter {
-        if !rewriter.pre_visit(&self)? {
-            return Ok(self);
-        };
-        // recurse into all sub expressions(and cover all expression types)
-        let expr = match self {
-            Expression::Alias(name, expr) => {
-                let expr = expr.rewrite(rewriter)?;
-                Expression::Alias(name, Box::new(expr))
-            }
-            Expression::BinaryExpression { op, left, right } => Expression::BinaryExpression {
-                op,
-                left: Box::new(left.rewrite(rewriter)?),
-                right: Box::new(right.rewrite(rewriter)?),
+struct ExpressionRewriteVisitor<T: ExpressionRewriter> {
+    inner: T,
+    stack: Vec<Expression>,
+}
+
+impl<T: ExpressionRewriter> ExpressionRewriteVisitor<T> {
+    pub fn create(inner: T) -> Self {
+        Self {
+            inner,
+            stack: vec![],
+        }
+    }
+
+    pub fn finalize(mut self) -> Result<Expression> {
+        match self.stack.len() {
+            1 => Ok(self.stack.remove(0)),
+            _ => Err(ErrorCode::LogicalError("")),
+        }
+    }
+}
+
+impl<T: ExpressionRewriter> ExpressionVisitor for ExpressionRewriteVisitor<T> {
+    fn pre_visit(mut self, expr: &Expression) -> Result<Recursion<Self>> {
+        match self.inner.pre_visit(expr)? {
+            true => Ok(Recursion::Continue(self)),
+            false => Ok(Recursion::Stop(self)),
+        }
+    }
+
+    fn post_visit(mut self, expr: &Expression) -> Result<Self> {
+        match expr {
+            Expression::BinaryExpression { op, .. } => match (self.stack.pop(), self.stack.pop()) {
+                (Some(left), Some(right)) => {
+                    self.stack
+                        .push(self.inner.mutate_binary(op, left, right, expr)?);
+                    Ok(self)
+                }
+                (_, _) => Err(ErrorCode::LogicalError("")),
+            },
+            Expression::UnaryExpression { op, .. } => match self.stack.pop() {
+                None => Err(ErrorCode::LogicalError("")),
+                Some(new_expr) => {
+                    self.stack
+                        .push(self.inner.mutate_unary_expression(op, new_expr, expr)?);
+                    Ok(self)
+                }
             },
             Expression::ScalarFunction { op, args } => {
-                let mut new_args = Vec::with_capacity(args.len());
-                for arg in args {
-                    new_args.push(arg.rewrite(rewriter)?);
+                let mut args_expr = Vec::with_capacity(args.len());
+                for _index in 0..args.len() {
+                    match self.stack.pop() {
+                        None => {
+                            return Err(ErrorCode::LogicalError(""));
+                        }
+                        Some(arg_type) => args_expr.push(arg_type),
+                    };
                 }
-                Expression::ScalarFunction { op, args: new_args }
+
+                self.stack
+                    .push(self.inner.mutate_scalar_function(op, args_expr, expr)?);
+                Ok(self)
             }
             Expression::AggregateFunction {
                 op,
@@ -95,42 +260,89 @@ impl Expression {
                 params,
                 args,
             } => {
-                let mut new_args = Vec::with_capacity(args.len());
-                for arg in args {
-                    new_args.push(arg.rewrite(rewriter)?);
+                let mut args_expr = Vec::with_capacity(args.len());
+
+                for _index in 0..args.len() {
+                    match self.stack.pop() {
+                        None => {
+                            return Err(ErrorCode::LogicalError(""));
+                        }
+                        Some(arg_type) => args_expr.push(arg_type),
+                    };
                 }
-                Expression::AggregateFunction {
-                    op,
-                    distinct,
-                    params,
-                    args: new_args,
-                }
+
+                let new_expr = self
+                    .inner
+                    .mutate_aggregate_function(op, *distinct, params, args_expr, expr)?;
+                self.stack.push(new_expr);
+                Ok(self)
             }
-            Expression::Cast { expr, data_type } => {
-                let expr = expr.rewrite(rewriter)?;
-                Expression::Cast {
-                    expr: Box::new(expr),
-                    data_type,
+            Expression::Cast { data_type, .. } => match self.stack.pop() {
+                None => Err(ErrorCode::LogicalError("")),
+                Some(new_expr) => {
+                    self.stack
+                        .push(self.inner.mutate_cast(data_type, new_expr, expr)?);
+                    Ok(self)
                 }
+            },
+            Expression::Subquery { name, query_plan } => {
+                self.stack
+                    .push(self.inner.mutate_subquery(name, query_plan, expr)?);
+                Ok(self)
+            }
+            Expression::ScalarSubquery { name, query_plan } => {
+                self.stack
+                    .push(self.inner.mutate_scalar_subquery(name, query_plan, expr)?);
+                Ok(self)
+            }
+            Expression::Wildcard => {
+                self.stack.push(self.inner.mutate_wildcard(expr)?);
+                Ok(self)
+            }
+            Expression::Column(column_name) => {
+                self.stack
+                    .push(self.inner.mutate_column(column_name, expr)?);
+                Ok(self)
             }
             Expression::Sort {
-                expr,
                 asc,
                 nulls_first,
                 origin_expr,
-            } => {
-                let expr = expr.rewrite(rewriter)?;
-                Expression::Sort {
-                    expr: Box::new(expr),
-                    asc,
-                    nulls_first,
-                    origin_expr,
+                ..
+            } => match self.stack.pop() {
+                None => Err(ErrorCode::LogicalError("")),
+                Some(expr) => {
+                    let new_expr = self
+                        .inner
+                        .mutate_sort(expr, *asc, *nulls_first, origin_expr)?;
+                    self.stack.push(new_expr);
+                    Ok(self)
                 }
+            },
+            Expression::Alias(alias, _) => match self.stack.pop() {
+                None => Err(ErrorCode::LogicalError("")),
+                Some(new_expr) => {
+                    let new_expr = self.inner.mutate_alias(alias, new_expr, expr);
+                    self.stack.push(new_expr?);
+                    Ok(self)
+                }
+            },
+            Expression::Literal {
+                value,
+                column_name,
+                data_type,
+            } => {
+                let new_expr = self
+                    .inner
+                    .mutate_literal(value, column_name, data_type, expr)?;
+                self.stack.push(new_expr);
+                Ok(self)
             }
-            _ => self,
-        };
-
-        // now rewrite this expression itself
-        rewriter.mutate(expr)
+            Expression::QualifiedColumn(names) => {
+                let new_expr = self.inner.mutate_qualified_column(names, expr)?;
+                self.stack.push(new_expr);
+                Ok(self)
+            }
+        }
     }
 }
