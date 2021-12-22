@@ -16,14 +16,13 @@ use std::collections::hash_map::Entry::Occupied;
 use std::collections::hash_map::Entry::Vacant;
 use std::collections::HashMap;
 use std::future::Future;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use common_base::tokio;
 use common_base::SignalStream;
-use common_cache::query::LocalCache;
-use common_cache::query::LocalCacheConfig;
-use common_cache::query::QueryCache;
+use common_cache::storage::StorageCache;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -34,10 +33,13 @@ use futures::StreamExt;
 
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
+use crate::configs::config_storage::StorageType;
 use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
+use crate::storages::fuse::cache::LocalCache;
+use crate::storages::fuse::cache::LocalCacheConfig;
 use crate::users::UserApiProvider;
 
 pub struct SessionManager {
@@ -49,12 +51,14 @@ pub struct SessionManager {
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
-    pub(in crate::sessions) table_cache: Arc<Option<Box<dyn QueryCache>>>,
+    pub(in crate::sessions) table_cache: Arc<Option<Box<dyn StorageCache>>>,
 }
 
 impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
-        let table_cache = if conf.query.table_cache_enabled {
+        let storage_type = StorageType::from_str(conf.storage.storage_type.as_str())
+            .map_err(|err| ErrorCode::InvalidConfig(format!("Invalid config: {}", err)))?;
+        let table_cache = if conf.query.table_cache_enabled && storage_type != StorageType::Disk {
             let cache_conf = LocalCacheConfig {
                 memory_cache_size_mb: conf.query.table_memory_cache_mb_size,
                 disk_cache_size_mb: conf.query.table_disk_cache_mb_size,
@@ -112,7 +116,7 @@ impl SessionManager {
         self.catalog.clone()
     }
 
-    pub fn get_table_cache(self: &Arc<Self>) -> Arc<Option<Box<dyn QueryCache>>> {
+    pub fn get_table_cache(self: &Arc<Self>) -> Arc<Option<Box<dyn StorageCache>>> {
         self.table_cache.clone()
     }
 

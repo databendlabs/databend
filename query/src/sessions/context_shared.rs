@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use common_base::Progress;
 use common_base::Runtime;
-use common_cache::query::QueryCache;
+use common_cache::storage::StorageCache;
 use common_dal::DalContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -203,7 +203,7 @@ impl QueryContextShared {
         sources_abort_handle.push(handle);
     }
 
-    pub fn get_table_cache(&self) -> Arc<Option<Box<dyn QueryCache>>> {
+    pub fn get_table_cache(&self) -> Arc<Option<Box<dyn StorageCache>>> {
         self.session.sessions.get_table_cache()
     }
 }
