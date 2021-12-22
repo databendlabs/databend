@@ -197,6 +197,10 @@ impl Function for ConcatWsFunction {
         let result = Self::concat_column_with_seperator(seperator.column(), acc, &columns[1..])?;
         Ok(result)
     }
+
+    fn passthrough_null(&self) -> bool {
+        false
+    }
 }
 
 impl fmt::Display for ConcatWsFunction {

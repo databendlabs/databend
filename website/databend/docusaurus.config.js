@@ -86,11 +86,12 @@ const config = {
                             {label: 'Get Started', to: '/user'},
                             {label: 'SQL', to: '/user/category/sql-statement'},
                             {label: 'CLI', to: '/user/category/cli'},
-                            {label: 'API', to: '/user/category/api'}
+                            {label: 'APIs', to: '/user/category/api'},
+                            {label: 'Data Load', to: '/user/data-loading/http-streaming-load'}
                         ]
                     },
                     {
-                        to: '/dev/index', label: 'Dev Guide', position: 'left', items: [
+                        label: 'Dev Guide', position: 'left', items: [
                             {label: 'Contributing', to: '/dev/category/contributing'},
                             {label: 'Development', to: '/dev/category/development'},
                             {label: 'Roadmap', to: '/dev/roadmap'},

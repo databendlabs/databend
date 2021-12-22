@@ -6,8 +6,7 @@
 .dir-locals.el
 
 # Rust
-target/*
-distro/*
+target/
 cli/e2e/bendctl
 .cargo/config.toml
 
@@ -28,14 +27,14 @@ perf.*
 *.err
 *.error
 *.swp
-_local_fs/*
-_meta*/*
-stateless_test_data/*
-**/_logs*/*
+_local_fs/
+**/_meta*/
+stateless_test_data/
+**/_logs*/
 _data/
 _cache/
-_tmp/*
-tls/certs/*
+_tmp/
+tls/certs/
 .databend/
 checksums.txt
 
@@ -47,5 +46,5 @@ tests/perfs/*-result.json
 # python
 venv/
 *.pyc
-__pycache__/*
+__pycache__/
 

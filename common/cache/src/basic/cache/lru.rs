@@ -62,9 +62,9 @@ use ritelinked::linked_hash_map;
 use ritelinked::DefaultHashBuilder;
 use ritelinked::LinkedHashMap;
 
-use crate::cache::Cache;
-use crate::meter::count_meter::Count;
-use crate::meter::count_meter::CountableMeter;
+use crate::basic::cache::Cache;
+use crate::basic::meter::count_meter::Count;
+use crate::basic::meter::count_meter::CountableMeter;
 
 /// An LRU cache.
 #[derive(Clone)]

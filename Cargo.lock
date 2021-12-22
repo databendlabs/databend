@@ -1135,7 +1135,11 @@ dependencies = [
 name = "common-cache"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "common-base",
+ "common-dal",
  "common-exception",
+ "common-metrics",
  "common-tracing",
  "filetime",
  "heapsize",
