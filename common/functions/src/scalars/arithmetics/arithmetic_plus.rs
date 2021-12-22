@@ -41,6 +41,8 @@ use crate::with_match_integer_32;
 use crate::with_match_integer_64;
 use crate::with_match_integer_8;
 use crate::with_match_primitive_type;
+use crate::impl_wrapping_arithmetic;
+use crate::impl_arithmetic;
 
 pub struct ArithmeticPlusFunction;
 
@@ -357,51 +359,10 @@ impl ArithmeticPlusFunction {
     }
 }
 
-macro_rules! wrapping_arithmetic_impl {
-    ($name: ident, $method: ident) => {
-        #[derive(Clone)]
-        pub struct $name<T, D, R> {
-            t: PhantomData<T>,
-            d: PhantomData<D>,
-            r: PhantomData<R>,
-        }
+impl_wrapping_arithmetic!(ArithmeticWrappingAdd, wrapping_add);
 
-        impl<T, D, R> ArithmeticTrait for $name<T, D, R>
-        where
-            T: DFPrimitiveType + AsPrimitive<R>,
-            D: DFPrimitiveType + AsPrimitive<R>,
-            R: DFIntegerType + WrappingAdd<Output = R> + WrappingSub<Output = R>,
-            DFPrimitiveArray<R>: IntoSeries,
-        {
-            fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
-                binary_arithmetic!(columns[0].column(), columns[1].column(), R, |l: R, r: R| l
-                    .$method(&r))
-            }
-        }
-    };
-}
+impl_arithmetic!(ArithmeticAdd, +);
 
-wrapping_arithmetic_impl!(ArithmeticWrappingAdd, wrapping_add);
-
-#[derive(Clone)]
-pub struct ArithmeticAdd<T, D, R> {
-    t: PhantomData<T>,
-    d: PhantomData<D>,
-    r: PhantomData<R>,
-}
-
-impl<T, D, R> ArithmeticTrait for ArithmeticAdd<T, D, R>
-where
-    T: DFPrimitiveType + AsPrimitive<R>,
-    D: DFPrimitiveType + AsPrimitive<R>,
-    R: DFPrimitiveType + Add<Output = R>,
-    DFPrimitiveArray<R>: IntoSeries,
-{
-    fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
-        binary_arithmetic!(columns[0].column(), columns[1].column(), R, |l: R, r: R| l
-            + r)
-    }
-}
 #[derive(Clone)]
 pub struct IntervalDaytimeAddDate16 {}
 

@@ -28,19 +28,13 @@ use crate::scalars::Function;
 pub struct GenericLogFunction {
     display_name: String,
     default_base: f64,
-    unary: bool,
 }
 
 impl GenericLogFunction {
-    pub fn try_create(
-        display_name: &str,
-        default_base: f64,
-        unary: bool,
-    ) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, default_base: f64) -> Result<Box<dyn Function>> {
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
             default_base,
-            unary,
         }))
     }
 }
@@ -118,7 +112,7 @@ pub struct LogFunction {}
 
 impl LogFunction {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        GenericLogFunction::try_create(display_name, E, false)
+        GenericLogFunction::try_create(display_name, E)
     }
 
     pub fn desc() -> FunctionDescription {
@@ -134,7 +128,7 @@ pub struct LnFunction {}
 
 impl LnFunction {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        GenericLogFunction::try_create(display_name, E, true)
+        GenericLogFunction::try_create(display_name, E)
     }
 
     pub fn desc() -> FunctionDescription {
@@ -147,7 +141,7 @@ pub struct Log10Function {}
 
 impl Log10Function {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        GenericLogFunction::try_create(display_name, 10_f64, true)
+        GenericLogFunction::try_create(display_name, 10_f64)
     }
 
     pub fn desc() -> FunctionDescription {
@@ -160,7 +154,7 @@ pub struct Log2Function {}
 
 impl Log2Function {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        GenericLogFunction::try_create(display_name, 2_f64, true)
+        GenericLogFunction::try_create(display_name, 2_f64)
     }
 
     pub fn desc() -> FunctionDescription {

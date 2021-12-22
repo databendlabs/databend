@@ -21,7 +21,6 @@ use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
 use super::arithmetic::ArithmeticTrait;
-use crate::scalars::function_factory::FunctionFactory;
 /*use crate::scalars::ArithmeticDivFunction;
 use crate::scalars::ArithmeticIntDivFunction;
 use crate::scalars::ArithmeticMinusFunction;

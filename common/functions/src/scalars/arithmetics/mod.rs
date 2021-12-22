@@ -20,6 +20,7 @@ mod arithmetic_modulo;
 mod arithmetic_mul;
 mod arithmetic_plus;
 mod binary_arithmetic;
+mod macros;
 mod utils;
 
 pub use arithmetic::ArithmeticFunction;
