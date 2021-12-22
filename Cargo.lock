@@ -588,6 +588,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bigdecimal"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6aaf33151a6429fe9211d1b276eafdf70cdff28b071e76c0b0e1503221ea3744"
+dependencies = [
+ "num-bigint 0.4.3",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
 name = "bincode"
 version = "1.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -748,12 +759,6 @@ dependencies = [
  "regex-automata",
  "serde",
 ]
-
-[[package]]
-name = "bufstream"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40e38929add23cdf8a366df9b0e088953150724bcbe5fc330b0d8eb3b328eec8"
 
 [[package]]
 name = "bumpalo"
@@ -1779,7 +1784,7 @@ dependencies = [
  "bitflags",
  "crossterm_winapi",
  "libc",
- "mio",
+ "mio 0.7.14",
  "parking_lot",
  "signal-hook",
  "signal-hook-mio",
@@ -2056,7 +2061,7 @@ dependencies = [
  "maplit",
  "metrics",
  "msql-srv",
- "mysql",
+ "mysql_async",
  "nom 7.1.0",
  "num",
  "num_cpus",
@@ -2113,17 +2118,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustc_version 0.4.0",
- "syn",
-]
-
-[[package]]
-name = "derive_utils"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "532b4c15dccee12c7044f1fcad956e98410860b22231e44a3b827464797ca7bf"
-dependencies = [
- "proc-macro2",
- "quote",
  "syn",
 ]
 
@@ -3333,18 +3327,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "io-enum"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03e3306b0f260aad2872563eb0d5d1a59f2420fad270a661dce59a01e92d806b"
-dependencies = [
- "autocfg 1.0.1",
- "derive_utils",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "ipconfig"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3435,7 +3417,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "afabcc15e437a6484fc4f12d0fd63068fe457bf93f1c148d3d9649c60b103f32"
 dependencies = [
  "base64 0.12.3",
- "pem",
+ "pem 0.8.3",
  "ring",
  "serde",
  "serde_json",
@@ -3553,6 +3535,15 @@ checksum = "f404a90a744e32e8be729034fc33b90cf2a56418fbf594d69aa3c0214ad414e5"
 dependencies = [
  "cfg-if 1.0.0",
  "lexical-core 0.7.6",
+]
+
+[[package]]
+name = "lexical"
+version = "6.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c34e981f88d060a67815388470172638f1af16b3a12e581cb75142f190161bf9"
+dependencies = [
+ "lexical-core 0.8.2",
 ]
 
 [[package]]
@@ -3722,9 +3713,9 @@ dependencies = [
 
 [[package]]
 name = "lru"
-version = "0.6.6"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ea2d928b485416e8908cff2d97d621db22b27f7b3b6729e438bcf42c671ba91"
+checksum = "469898e909a1774d844793b347135a0cd344ca2f69d082013ecb8061a2229a3a"
 dependencies = [
  "hashbrown",
 ]
@@ -3945,6 +3936,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mio"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba272f85fa0b41fc91872be579b3bbe0f56b792aa361a380eb669469f68dafb2"
+dependencies = [
+ "libc",
+ "log",
+ "miow",
+ "ntapi",
+ "winapi",
+]
+
+[[package]]
 name = "miow"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3987,7 +3991,7 @@ source = "git+https://github.com/datafuse-extras/msql-srv?rev=e4c8f3d#e4c8f3dd42
 dependencies = [
  "byteorder",
  "chrono",
- "mysql_common",
+ "mysql_common 0.27.5",
  "nom 7.1.0",
 ]
 
@@ -4037,28 +4041,36 @@ dependencies = [
 ]
 
 [[package]]
-name = "mysql"
-version = "21.0.2"
+name = "mysql_async"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06f5abe1c0f91831afd4d35298c08d958e80144869757b913891e5b0d00c2c96"
+checksum = "14bbbf716bc1db7b86157c4dc6936769efb666318bc1b7b7b046e4c53016e7ef"
 dependencies = [
- "bufstream",
  "bytes",
- "io-enum",
- "libc",
+ "crossbeam",
+ "flate2",
+ "futures-core",
+ "futures-sink",
+ "futures-util",
+ "lazy_static",
  "lru",
- "mysql_common",
- "named_pipe",
+ "mio 0.8.0",
+ "mysql_common 0.28.0",
  "native-tls",
- "nix",
  "once_cell",
- "pem",
+ "pem 1.0.1",
  "percent-encoding",
+ "pin-project",
  "serde",
  "serde_json",
  "socket2 0.4.2",
+ "thiserror",
+ "tokio",
+ "tokio-native-tls",
+ "tokio-util",
  "twox-hash",
  "url",
+ "uuid",
 ]
 
 [[package]]
@@ -4068,7 +4080,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "02fa08ec695a40ed899b1239e81d0d74de5b40802d4fc8b513e2c541717c434e"
 dependencies = [
  "base64 0.13.0",
- "bigdecimal",
+ "bigdecimal 0.2.2",
  "bindgen",
  "bitflags",
  "bitvec",
@@ -4081,7 +4093,7 @@ dependencies = [
  "flate2",
  "frunk",
  "lazy_static",
- "lexical",
+ "lexical 5.2.2",
  "num-bigint 0.4.3",
  "num-traits",
  "rand 0.8.4",
@@ -4100,19 +4112,47 @@ dependencies = [
 ]
 
 [[package]]
+name = "mysql_common"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24164fdbb4e4da19a37ad39f92faac0b09b3c8d8eca4104b0ec81807f39a893d"
+dependencies = [
+ "base64 0.13.0",
+ "bigdecimal 0.3.0",
+ "bindgen",
+ "bitflags",
+ "bitvec",
+ "byteorder",
+ "bytes",
+ "cc",
+ "cmake",
+ "crc32fast",
+ "flate2",
+ "frunk",
+ "lazy_static",
+ "lexical 6.0.1",
+ "num-bigint 0.4.3",
+ "num-traits",
+ "rand 0.8.4",
+ "regex",
+ "rust_decimal",
+ "saturating",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2 0.9.8",
+ "smallvec",
+ "subprocess",
+ "thiserror",
+ "time 0.3.5",
+ "uuid",
+]
+
+[[package]]
 name = "naive-cityhash"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e5641a0f564cf7c57a008d3ade6de749729f4eadf74e9222560c6a3a0d38cd2"
-
-[[package]]
-name = "named_pipe"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad9c443cce91fc3e12f017290db75dde490d685cdaaf508d7159d7cf41f0eb2b"
-dependencies = [
- "winapi",
-]
 
 [[package]]
 name = "native-tls"
@@ -4635,6 +4675,17 @@ name = "pem"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd56cbd21fea48d0c440b41cd69c589faacade08c992d9a54e471b79d0fd13eb"
+dependencies = [
+ "base64 0.13.0",
+ "once_cell",
+ "regex",
+]
+
+[[package]]
+name = "pem"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06673860db84d02a63942fa69cd9543f2624a5df3aea7f33173048fa7ad5cf1a"
 dependencies = [
  "base64 0.13.0",
  "once_cell",
@@ -5992,7 +6043,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29fd5867f1c4f2c5be079aee7a2adf1152ebb04a4bc4d341f504b7dece607ed4"
 dependencies = [
  "libc",
- "mio",
+ "mio 0.7.14",
  "signal-hook",
 ]
 
@@ -6673,7 +6724,7 @@ dependencies = [
  "bytes",
  "libc",
  "memchr",
- "mio",
+ "mio 0.7.14",
  "num_cpus",
  "once_cell",
  "pin-project-lite",

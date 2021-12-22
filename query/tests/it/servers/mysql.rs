@@ -14,8 +14,6 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::sync::Barrier;
-use std::thread::JoinHandle;
 use std::time::Duration;
 
 use common_base::tokio;
@@ -23,27 +21,26 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use databend_query::servers::MySQLHandler;
-use mysql::prelude::FromRow;
-use mysql::prelude::Queryable;
-use mysql::Conn;
-use mysql::FromRowError;
-use mysql::Row;
+use mysql_async::prelude::FromRow;
+use mysql_async::prelude::Queryable;
+use mysql_async::FromRowError;
+use mysql_async::Row;
+use tokio::sync::Barrier;
+use tokio::task::JoinHandle;
 
 use crate::tests::SessionManagerBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_use_database_with_on_query() -> Result<()> {
+async fn test_generic_code_with_on_query() -> Result<()> {
     let mut handler =
         MySQLHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let runnable_server = handler.start(listening).await?;
-    let mut connection = create_connection(runnable_server.port())?;
-    let received_data: Vec<String> = query(&mut connection, "SELECT database()")?;
-    assert_eq!(received_data, vec!["default"]);
-    query::<EmptyRow>(&mut connection, "USE system")?;
-    let received_data: Vec<String> = query(&mut connection, "SELECT database()")?;
-    assert_eq!(received_data, vec!["system"]);
+    let mut connection = create_connection(runnable_server.port()).await?;
+    let result = connection.query_iter("SELECT 1, 2, 3;").await;
+
+    assert!(result.is_ok());
 
     Ok(())
 }
@@ -58,14 +55,14 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
 
     {
         // Accepted connection
-        let conn = create_connection(listening.port())?;
+        let conn = create_connection(listening.port()).await?;
 
         // Rejected connection
-        match create_connection(listening.port()) {
+        match create_connection(listening.port()).await {
             Ok(_) => panic!("Expected rejected connection"),
             Err(error) => {
                 assert_eq!(error.code(), 1000);
-                assert_eq!(error.message(), "Reject connection, cause: MySqlError { ERROR 1203 (42000): The current accept connection has exceeded mysql_handler_thread_num config }");
+                assert_eq!(error.message(), "Reject connection, cause: Server error: `ERROR 42000 (1203): The current accept connection has exceeded mysql_handler_thread_num config'");
             }
         };
 
@@ -75,7 +72,7 @@ async fn test_rejected_session_with_sequence() -> Result<()> {
     // Wait for the connection to be destroyed
     std::thread::sleep(Duration::from_secs(5));
     // Accepted connection
-    create_connection(listening.port())?;
+    create_connection(listening.port()).await?;
 
     Ok(())
 }
@@ -87,22 +84,22 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
         Rejected,
     }
 
-    fn connect_server(
+    async fn connect_server(
         port: u16,
         start_barrier: Arc<Barrier>,
         destroy_barrier: Arc<Barrier>,
     ) -> JoinHandle<CreateServerResult> {
-        std::thread::spawn(move || {
-            start_barrier.wait();
-            match create_connection(port) {
+        tokio::spawn(async move {
+            start_barrier.wait().await;
+            match create_connection(port).await {
                 Ok(_conn) => {
-                    destroy_barrier.wait();
+                    destroy_barrier.wait().await;
                     CreateServerResult::Accept
                 }
                 Err(error) => {
-                    destroy_barrier.wait();
+                    destroy_barrier.wait().await;
                     assert_eq!(error.code(), 1000);
-                    assert_eq!(error.message(), "Reject connection, cause: MySqlError { ERROR 1203 (42000): The current accept connection has exceeded mysql_handler_thread_num config }");
+                    assert_eq!(error.message(), "Reject connection, cause: Server error: `ERROR 42000 (1203): The current accept connection has exceeded mysql_handler_thread_num config'");
                     CreateServerResult::Rejected
                 }
             }
@@ -123,17 +120,13 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
         let start_barrier = start_barriers.clone();
         let destroy_barrier = destroy_barriers.clone();
 
-        join_handlers.push(connect_server(
-            listening.port(),
-            start_barrier,
-            destroy_barrier,
-        ));
+        join_handlers.push(connect_server(listening.port(), start_barrier, destroy_barrier).await);
     }
 
     let mut accept = 0;
     let mut rejected = 0;
     for join_handler in join_handlers {
-        match join_handler.join() {
+        match join_handler.await {
             Err(error) => panic!("Unexpected error: {:?}", error),
             Ok(CreateServerResult::Accept) => accept += 1,
             Ok(CreateServerResult::Rejected) => rejected += 1,
@@ -146,16 +139,12 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
     Ok(())
 }
 
-fn query<T: FromRow>(connection: &mut Conn, query: &str) -> Result<Vec<T>> {
-    connection
-        .query::<T, &str>(query)
-        .map_err_to_code(ErrorCode::UnknownException, || "Query error")
-}
-
-fn create_connection(port: u16) -> Result<mysql::Conn> {
-    let uri = &format!("mysql://127.0.0.1:{}?user=default", port);
-    let opts = mysql::Opts::from_url(uri).unwrap();
-    mysql::Conn::new(opts).map_err_to_code(ErrorCode::UnknownException, || "Reject connection")
+async fn create_connection(port: u16) -> Result<mysql_async::Conn> {
+    let uri = &format!("mysql://127.0.0.1:{}", port);
+    let opts = mysql_async::Opts::from_url(uri).unwrap();
+    mysql_async::Conn::new(opts)
+        .await
+        .map_err_to_code(ErrorCode::UnknownException, || "Reject connection")
 }
 
 struct EmptyRow;
