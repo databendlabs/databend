@@ -12,22 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::sql::opt::s_expr::SExpr;
+use crate::sql::optimizer::RuleSet;
 
-pub struct TransformState {
-    results: Vec<SExpr>,
+pub fn get_explore_rule_set() -> RuleSet {
+    RuleSet::create_with_ids(vec![]).unwrap()
 }
 
-impl TransformState {
-    pub fn create() -> Self {
-        TransformState { results: vec![] }
-    }
+#[cfg(test)]
+mod test {
+    use crate::sql::optimizer::cascades::explore_rules::get_explore_rule_set;
 
-    pub fn add_result(&mut self, result: SExpr) {
-        self.results.push(result);
-    }
-
-    pub fn results(&self) -> &Vec<SExpr> {
-        &self.results
+    // Pass if don't panic
+    #[test]
+    fn test_get_explore_rule_set() {
+        get_explore_rule_set();
     }
 }

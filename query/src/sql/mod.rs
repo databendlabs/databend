@@ -15,7 +15,7 @@
 mod common;
 mod exec;
 mod metrics;
-mod opt;
+mod optimizer;
 pub mod parser;
 mod plan_parser;
 mod planner;

@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::sql::opt::group::Group;
-use crate::sql::opt::m_expr::MExpr;
-use crate::sql::opt::memo::Memo;
-use crate::sql::opt::SExpr;
+use crate::sql::optimizer::group::Group;
+use crate::sql::optimizer::m_expr::MExpr;
+use crate::sql::optimizer::memo::Memo;
+use crate::sql::optimizer::SExpr;
 
 /// A helper to extract `SExpr`s from `Memo` that match the given pattern.
 pub struct PatternExtractor {}
@@ -133,10 +133,10 @@ impl PatternExtractor {
 mod test {
     use std::rc::Rc;
 
-    use crate::sql::opt::m_expr::MExpr;
-    use crate::sql::opt::memo::Memo;
-    use crate::sql::opt::pattern_extractor::PatternExtractor;
-    use crate::sql::opt::SExpr;
+    use crate::sql::optimizer::m_expr::MExpr;
+    use crate::sql::optimizer::memo::Memo;
+    use crate::sql::optimizer::pattern_extractor::PatternExtractor;
+    use crate::sql::optimizer::SExpr;
     use crate::sql::LogicalGet;
     use crate::sql::LogicalProject;
     use crate::sql::Plan;

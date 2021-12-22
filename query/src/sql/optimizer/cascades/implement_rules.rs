@@ -12,19 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::sql::opt::RuleSet;
+use crate::sql::optimizer::RuleID;
+use crate::sql::optimizer::RuleSet;
 
-pub fn get_explore_rule_set() -> RuleSet {
-    RuleSet::create_with_ids(vec![]).unwrap()
+pub fn get_implement_rule_set() -> RuleSet {
+    RuleSet::create_with_ids(vec![RuleID::ImplementGet, RuleID::ImplementProject]).unwrap()
 }
 
 #[cfg(test)]
 mod test {
-    use crate::sql::opt::cascades::explore_rules::get_explore_rule_set;
+    use crate::sql::optimizer::cascades::implement_rules::get_implement_rule_set;
 
     // Pass if don't panic
     #[test]
-    fn test_get_explore_rule_set() {
-        get_explore_rule_set();
+    fn test_get_implement_rule_set() {
+        get_implement_rule_set();
     }
 }

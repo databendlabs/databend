@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::sql::opt::property::NamedColumn;
-use crate::sql::opt::property::RequiredProperty;
-use crate::sql::opt::ColumnSet;
+use crate::sql::optimizer::property::NamedColumn;
+use crate::sql::optimizer::property::RequiredProperty;
+use crate::sql::optimizer::ColumnSet;
 use crate::sql::BindContext;
 
 pub struct OptimizeContext {

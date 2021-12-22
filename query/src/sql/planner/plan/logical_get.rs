@@ -15,9 +15,9 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::sql::opt::ColumnSet;
-use crate::sql::opt::RelationalProperty;
-use crate::sql::opt::SExpr;
+use crate::sql::optimizer::ColumnSet;
+use crate::sql::optimizer::RelationalProperty;
+use crate::sql::optimizer::SExpr;
 use crate::sql::IndexType;
 use crate::sql::LogicalPlan;
 use crate::sql::Plan;

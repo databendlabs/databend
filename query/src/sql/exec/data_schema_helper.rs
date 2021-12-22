@@ -17,7 +17,7 @@ use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::sql::opt::SExpr;
+use crate::sql::optimizer::SExpr;
 use crate::sql::Metadata;
 use crate::sql::PhysicalProject;
 use crate::sql::PhysicalScan;

@@ -17,9 +17,9 @@ use std::fmt::Formatter;
 
 use common_exception::Result;
 
-use crate::sql::opt::group::Group;
-use crate::sql::opt::m_expr::MExpr;
-use crate::sql::opt::s_expr::SExpr;
+use crate::sql::optimizer::group::Group;
+use crate::sql::optimizer::m_expr::MExpr;
+use crate::sql::optimizer::s_expr::SExpr;
 use crate::sql::IndexType;
 
 /// `Memo` is a search space which memoize possible plans of a query.

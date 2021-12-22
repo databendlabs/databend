@@ -21,7 +21,7 @@ use common_exception::Result;
 
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
-use crate::sql::opt::SExpr;
+use crate::sql::optimizer::SExpr;
 use crate::sql::parser::ast::Expr;
 use crate::sql::parser::ast::Indirection;
 use crate::sql::parser::ast::Query;

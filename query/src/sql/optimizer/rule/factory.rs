@@ -14,10 +14,10 @@
 
 use common_exception::Result;
 
-use crate::sql::opt::rule::rule_implement_get::RuleImplementGet;
-use crate::sql::opt::rule::rule_implement_project::RuleImplementProject;
-use crate::sql::opt::rule::RuleID;
-use crate::sql::opt::rule::RulePtr;
+use crate::sql::optimizer::rule::rule_implement_get::RuleImplementGet;
+use crate::sql::optimizer::rule::rule_implement_project::RuleImplementProject;
+use crate::sql::optimizer::rule::RuleID;
+use crate::sql::optimizer::rule::RulePtr;
 
 pub struct RuleFactory;
 

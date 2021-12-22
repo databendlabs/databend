@@ -17,7 +17,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::sql::common::IndexType;
-use crate::sql::opt::SExpr;
+use crate::sql::optimizer::SExpr;
 use crate::sql::parser::ast::TableAlias;
 use crate::sql::planner::scalar::ScalarExpr;
 

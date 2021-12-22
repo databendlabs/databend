@@ -14,7 +14,7 @@
 
 use std::rc::Rc;
 
-use crate::sql::opt::property::RelationalProperty;
+use crate::sql::optimizer::property::RelationalProperty;
 use crate::sql::IndexType;
 use crate::sql::Plan;
 

@@ -18,8 +18,8 @@ use std::iter::Iterator;
 use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
 use common_exception::Result;
 
-use crate::sql::opt::m_expr::MExpr;
-use crate::sql::opt::property::RelationalProperty;
+use crate::sql::optimizer::m_expr::MExpr;
+use crate::sql::optimizer::property::RelationalProperty;
 use crate::sql::IndexType;
 
 /// `Group` is a set of logically equivalent relational expressions represented with `MExpr`.

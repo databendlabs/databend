@@ -16,9 +16,9 @@ mod rule_list;
 
 use common_exception::Result;
 
-use crate::sql::opt::heuristic::rule_list::RuleList;
-use crate::sql::opt::rule::TransformState;
-use crate::sql::opt::SExpr;
+use crate::sql::optimizer::heuristic::rule_list::RuleList;
+use crate::sql::optimizer::rule::TransformState;
+use crate::sql::optimizer::SExpr;
 
 /// A heuristic
 pub struct HeuristicOptimizer {

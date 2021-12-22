@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::sql::opt::SExpr;
+use crate::sql::optimizer::SExpr;
 
 // Check if all plans in an expression are physical plans
 pub fn check_physical(expression: &SExpr) -> bool {

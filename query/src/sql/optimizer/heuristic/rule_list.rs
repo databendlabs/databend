@@ -14,9 +14,9 @@
 
 use common_exception::Result;
 
-use crate::sql::opt::rule::RuleFactory;
-use crate::sql::opt::rule::RuleID;
-use crate::sql::opt::rule::RulePtr;
+use crate::sql::optimizer::rule::RuleFactory;
+use crate::sql::optimizer::rule::RuleID;
+use crate::sql::optimizer::rule::RulePtr;
 
 #[allow(dead_code)]
 // Ordered list of rules, may contain duplicated rules.

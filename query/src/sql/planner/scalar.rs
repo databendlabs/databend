@@ -15,7 +15,7 @@
 use common_datavalues::DataType;
 use common_exception::Result;
 
-use crate::sql::opt::ColumnSet;
+use crate::sql::optimizer::ColumnSet;
 use crate::sql::IndexType;
 
 /// Scalar operator

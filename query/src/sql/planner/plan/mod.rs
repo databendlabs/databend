@@ -23,10 +23,10 @@ pub use logical_project::ProjectItem;
 pub use physical_project::PhysicalProject;
 pub use physical_scan::PhysicalScan;
 
-use crate::sql::opt::PhysicalProperty;
-use crate::sql::opt::RelationalProperty;
-use crate::sql::opt::RequiredProperty;
-use crate::sql::opt::SExpr;
+use crate::sql::optimizer::PhysicalProperty;
+use crate::sql::optimizer::RelationalProperty;
+use crate::sql::optimizer::RequiredProperty;
+use crate::sql::optimizer::SExpr;
 
 pub trait LogicalPlan {
     fn compute_relational_prop(&self, expression: &SExpr) -> RelationalProperty;

@@ -18,18 +18,18 @@ mod implement_rules;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::sql::opt::cascades::explore_rules::get_explore_rule_set;
-use crate::sql::opt::cascades::implement_rules::get_implement_rule_set;
-use crate::sql::opt::group::Group;
-use crate::sql::opt::m_expr::MExpr;
-use crate::sql::opt::memo::Memo;
-use crate::sql::opt::optimize_context::OptimizeContext;
-use crate::sql::opt::rule::RulePtr;
-use crate::sql::opt::rule::RuleSet;
-use crate::sql::opt::rule::TransformState;
-use crate::sql::opt::PhysicalProperty;
-use crate::sql::opt::RequiredProperty;
-use crate::sql::opt::SExpr;
+use crate::sql::optimizer::cascades::explore_rules::get_explore_rule_set;
+use crate::sql::optimizer::cascades::implement_rules::get_implement_rule_set;
+use crate::sql::optimizer::group::Group;
+use crate::sql::optimizer::m_expr::MExpr;
+use crate::sql::optimizer::memo::Memo;
+use crate::sql::optimizer::optimize_context::OptimizeContext;
+use crate::sql::optimizer::rule::RulePtr;
+use crate::sql::optimizer::rule::RuleSet;
+use crate::sql::optimizer::rule::TransformState;
+use crate::sql::optimizer::PhysicalProperty;
+use crate::sql::optimizer::RequiredProperty;
+use crate::sql::optimizer::SExpr;
 use crate::sql::IndexType;
 
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and

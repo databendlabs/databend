@@ -17,12 +17,12 @@ use std::fmt::Formatter;
 
 use common_exception::Result;
 
-use crate::sql::opt::memo::Memo;
-use crate::sql::opt::pattern_extractor::PatternExtractor;
-use crate::sql::opt::rule::RulePtr;
-use crate::sql::opt::rule::TransformState;
-use crate::sql::opt::s_expr::PlanPtr;
-use crate::sql::opt::SExpr;
+use crate::sql::optimizer::memo::Memo;
+use crate::sql::optimizer::pattern_extractor::PatternExtractor;
+use crate::sql::optimizer::rule::RulePtr;
+use crate::sql::optimizer::rule::TransformState;
+use crate::sql::optimizer::s_expr::PlanPtr;
+use crate::sql::optimizer::SExpr;
 use crate::sql::IndexType;
 
 /// `MExpr` is abbreviation of multiple expression, which is the representation of relational

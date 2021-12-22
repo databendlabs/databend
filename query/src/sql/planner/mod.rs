@@ -24,8 +24,8 @@ pub use scalar::*;
 use crate::pipelines::processors::Pipeline;
 use crate::sessions::QueryContext;
 use crate::sql::exec::Executor;
-use crate::sql::opt::optimize;
-use crate::sql::opt::OptimizeContext;
+use crate::sql::optimizer::optimize;
+use crate::sql::optimizer::OptimizeContext;
 use crate::sql::parser::Parser;
 use crate::sql::planner::binder::Binder;
 

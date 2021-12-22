@@ -16,44 +16,37 @@ use std::rc::Rc;
 
 use common_exception::Result;
 
-use crate::sql::opt::rule::transform_state::TransformState;
-use crate::sql::opt::rule::Rule;
-use crate::sql::opt::rule::RuleID;
-use crate::sql::opt::SExpr;
-use crate::sql::LogicalProject;
-use crate::sql::PhysicalProject;
+use crate::sql::optimizer::rule::transform_state::TransformState;
+use crate::sql::optimizer::rule::Rule;
+use crate::sql::optimizer::rule::RuleID;
+use crate::sql::optimizer::SExpr;
+use crate::sql::LogicalGet;
+use crate::sql::PhysicalScan;
 use crate::sql::Plan;
 
-pub struct RuleImplementProject {
+pub struct RuleImplementGet {
     id: RuleID,
     pattern: SExpr,
 }
 
-impl RuleImplementProject {
+impl RuleImplementGet {
     pub fn create() -> Self {
-        RuleImplementProject {
-            id: RuleID::ImplementProject,
-            pattern: SExpr::create_unary(
-                Rc::new(Plan::LogicalProject(LogicalProject::default())),
-                SExpr::create_leaf(Rc::new(Plan::Pattern)),
-            ),
+        RuleImplementGet {
+            id: RuleID::ImplementGet,
+            pattern: SExpr::create_leaf(Rc::new(Plan::LogicalGet(LogicalGet::default()))),
         }
     }
 }
 
-impl Rule for RuleImplementProject {
+impl Rule for RuleImplementGet {
     fn id(&self) -> RuleID {
         self.id
     }
 
     fn apply(&self, expression: &SExpr, state: &mut TransformState) -> Result<()> {
-        let project = LogicalProject::from_plan((*expression.plan()).clone())?;
-        let physical = PhysicalProject::create(project.items);
-        let result = SExpr::create(
-            Rc::new(Plan::PhysicalProject(physical)),
-            expression.children().clone(),
-            None,
-        );
+        let get = LogicalGet::from_plan((*expression.plan()).clone())?;
+        let scan = PhysicalScan::create(get.table_index, get.columns);
+        let result = SExpr::create_leaf(Rc::new(Plan::PhysicalScan(scan)));
         state.add_result(result);
 
         Ok(())

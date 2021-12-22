@@ -31,10 +31,10 @@ pub use property::RelationalProperty;
 pub use property::RequiredProperty;
 pub use s_expr::SExpr;
 
-use crate::sql::opt::cascades::CascadesOptimizer;
-use crate::sql::opt::heuristic::HeuristicOptimizer;
-use crate::sql::opt::rule::RuleID;
-use crate::sql::opt::rule::RuleSet;
+use crate::sql::optimizer::cascades::CascadesOptimizer;
+use crate::sql::optimizer::heuristic::HeuristicOptimizer;
+use crate::sql::optimizer::rule::RuleID;
+use crate::sql::optimizer::rule::RuleSet;
 
 pub fn optimize(expression: SExpr, ctx: OptimizeContext) -> Result<SExpr> {
     let mut heuristic = HeuristicOptimizer::create()?;

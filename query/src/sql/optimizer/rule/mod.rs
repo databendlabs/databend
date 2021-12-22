@@ -14,7 +14,7 @@
 
 use common_exception::Result;
 
-use crate::sql::opt::SExpr;
+use crate::sql::optimizer::SExpr;
 
 mod factory;
 mod rule_implement_get;

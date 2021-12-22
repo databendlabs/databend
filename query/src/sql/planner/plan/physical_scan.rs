@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::sql::opt::ColumnSet;
-use crate::sql::opt::PhysicalProperty;
-use crate::sql::opt::RequiredProperty;
-use crate::sql::opt::SExpr;
+use crate::sql::optimizer::ColumnSet;
+use crate::sql::optimizer::PhysicalProperty;
+use crate::sql::optimizer::RequiredProperty;
+use crate::sql::optimizer::SExpr;
 use crate::sql::IndexType;
 use crate::sql::PhysicalPlan;
 use crate::sql::Plan;

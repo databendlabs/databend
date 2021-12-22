@@ -17,9 +17,9 @@ use std::collections::HashMap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::sql::opt::rule::factory::RuleFactory;
-use crate::sql::opt::rule::RuleID;
-use crate::sql::opt::rule::RulePtr;
+use crate::sql::optimizer::rule::factory::RuleFactory;
+use crate::sql::optimizer::rule::RuleID;
+use crate::sql::optimizer::rule::RulePtr;
 
 /// Set of `Rule`
 pub struct RuleSet {
