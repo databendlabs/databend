@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt;
+use std::marker::PhantomData;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
@@ -29,6 +30,10 @@ use crate::scalars::ArithmeticMulFunction;
 use crate::scalars::ArithmeticPlusFunction;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
+
+pub trait ArithmeticTrait {
+    fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn>;
+}
 
 #[derive(Clone)]
 pub struct ArithmeticFunction {
@@ -128,6 +133,77 @@ impl Function for ArithmeticFunction {
 }
 
 impl fmt::Display for ArithmeticFunction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.op)
+    }
+}
+
+#[derive(Clone)]
+pub struct BinaryArithmeticFunction<T> {
+    op: DataValueArithmeticOperator,
+    result_type: DataType,
+    t: PhantomData<T>,
+}
+
+impl<T> BinaryArithmeticFunction<T>
+where T: ArithmeticTrait + Clone + Sync + Send + 'static
+{
+    pub fn try_create_func(
+        op: DataValueArithmeticOperator,
+        result_type: DataType,
+    ) -> Result<Box<dyn Function>> {
+        Ok(Box::new(Self {
+            op,
+            result_type,
+            t: PhantomData,
+        }))
+    }
+}
+
+impl<T> Function for BinaryArithmeticFunction<T>
+where T: ArithmeticTrait + Clone + Sync + Send + 'static
+{
+    fn name(&self) -> &str {
+        "BinaryArithmeticFunction"
+    }
+
+    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+        Ok(self.result_type.clone())
+    }
+
+    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
+        Ok(false)
+    }
+
+    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        let result = T::arithmetic(columns)?;
+        if self.result_type.is_date_or_date_time() {
+            result.cast_with_type(&self.result_type)
+        } else {
+            Ok(result)
+        }
+    }
+
+    fn num_arguments(&self) -> usize {
+        2
+    }
+
+    fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
+        match self.op {
+            Plus => ArithmeticPlusFunction::get_monotonicity(args),
+            _ => unimplemented!(),
+            /* Minus => ArithmeticMinusFunction::get_monotonicity(args),
+            Mul => ArithmeticMulFunction::get_monotonicity(args),
+            Div => ArithmeticDivFunction::get_monotonicity(args),
+            IntDiv => ArithmeticIntDivFunction::get_monotonicity(args),
+            Modulo => ArithmeticModuloFunction::get_monotonicity(args),*/
+        }
+    }
+}
+
+impl<T> fmt::Display for BinaryArithmeticFunction<T>
+where T: ArithmeticTrait + Clone + Sync + Send + 'static
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.op)
     }
