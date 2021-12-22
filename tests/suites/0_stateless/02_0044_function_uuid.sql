@@ -1,3 +1,5 @@
+SELECT LENGTH(generateUUIDv4()) = 36;
+SELECT IGNORE(generateUUIDv4());
 SELECT zeroUUID();
 SELECT isemptyUUID(generateUUIDv4());
 SELECT isemptyUUID(zeroUUID());
