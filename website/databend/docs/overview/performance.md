@@ -32,4 +32,4 @@ DatabendQuery system.numbers_mt is **16-way** parallelism processing, [gist](htt
   <figcaption>100,000,000,000 records on laptop show</figcaption>
 </figure>
 
-Experience 100 billion performance on your laptop, [talk is cheap just bench it](/user/index)
+Experience 100 billion performance on your laptop, [talk is cheap just bench it](/user)
