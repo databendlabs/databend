@@ -84,10 +84,6 @@ where T: IntegerTypedArithmetic + Clone + Sync + Send + 'static
         Ok(false)
     }
 
-    fn num_arguments(&self) -> usize {
-        2
-    }
-
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         if !(matches!(
             self.op,

@@ -41,18 +41,18 @@ impl CeilFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic().monotonicity())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .monotonicity()
+                .num_arguments(1),
+        )
     }
 }
 
 impl Function for CeilFunction {
     fn name(&self) -> &str {
         &*self.display_name
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {

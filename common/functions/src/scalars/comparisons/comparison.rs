@@ -81,10 +81,6 @@ impl Function for ComparisonFunction {
             .column()
             .compare(self.op.clone(), columns[1].column())
     }
-
-    fn num_arguments(&self) -> usize {
-        2
-    }
 }
 
 impl fmt::Display for ComparisonFunction {

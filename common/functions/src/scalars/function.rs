@@ -27,17 +27,6 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
     /// Returns the name of the function, should be unique.
     fn name(&self) -> &str;
 
-    // Returns the number of arguments the function accepts.
-    fn num_arguments(&self) -> usize {
-        0
-    }
-
-    /// (1, 2) means we only accept [1, 2] arguments
-    /// None means it's not variadic function
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        None
-    }
-
     /// Calculate the monotonicity from arguments' monotonicity information.
     /// The input should be argument's monotonicity. For binary function it should be an
     /// array of left expression's monotonicity and right expression's monotonicity.

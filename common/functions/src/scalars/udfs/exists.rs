@@ -36,7 +36,7 @@ impl ExistsFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().bool_function())
+            .features(FunctionFeatures::default().bool_function().num_arguments(1))
     }
 }
 
@@ -77,10 +77,6 @@ impl Function for ExistsFunction {
                 )),
             },
         }
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
     }
 }
 

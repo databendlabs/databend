@@ -164,7 +164,7 @@ macro_rules! with_match_date_type {
 
 #[macro_export]
 macro_rules! binary_arithmetic_helper {
-    ($lhs: ident, $rhs: ident, $T:ident, $R:ident, $op: expr) => {{
+    ($lhs: ident, $rhs: ident, $T:ty, $R:ty, $op: expr) => {{
         match ($lhs.len(), $rhs.len()) {
             (a, b) if a == b => binary($lhs, $rhs, |l, r| $op(l.as_(), r.as_())),
             (_, 1) => {
@@ -195,7 +195,7 @@ macro_rules! binary_arithmetic_helper {
 
 #[macro_export]
 macro_rules! binary_arithmetic {
-    ($self: expr, $rhs: expr, $R:ident, $op: expr) => {{
+    ($self: expr, $rhs: expr, $R:ty, $op: expr) => {{
         let lhs = $self.to_minimal_array()?;
         let rhs = $rhs.to_minimal_array()?;
         let lhs: &DFPrimitiveArray<T> = lhs.static_cast();
@@ -208,7 +208,7 @@ macro_rules! binary_arithmetic {
 
 #[macro_export]
 macro_rules! interval_arithmetic {
-    ($self: expr, $rhs: expr, $R:ident, $op: expr) => {{
+    ($self: expr, $rhs: expr, $R:ty, $op: expr) => {{
         let (interval, datetime) = validate_input($self, $rhs);
         let lhs = datetime.column().to_minimal_array()?;
         let lhs: &DFPrimitiveArray<$R> = lhs.static_cast();
@@ -222,7 +222,7 @@ macro_rules! interval_arithmetic {
 
 #[macro_export]
 macro_rules! arithmetic_helper {
-    ($lhs: ident, $rhs: ident, $T: ident, $R: ident, $scalar: expr, $op: expr) => {{
+    ($lhs: ident, $rhs: ident, $T: ty, $R: ty, $scalar: expr, $op: expr) => {{
         match ($lhs.len(), $rhs.len()) {
             (a, b) if a == b => binary($lhs, $rhs, |l, r| $op(l.as_(), r.as_())),
             (_, 1) => {

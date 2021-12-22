@@ -41,17 +41,13 @@ impl SleepFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default())
+            .features(FunctionFeatures::default().num_arguments(1))
     }
 }
 
 impl Function for SleepFunction {
     fn name(&self) -> &str {
         "SleepFunction"
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {

@@ -37,17 +37,13 @@ impl FindInSetFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 }
 
 impl Function for FindInSetFunction {
     fn name(&self) -> &str {
         &*self.display_name
-    }
-
-    fn num_arguments(&self) -> usize {
-        2
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {

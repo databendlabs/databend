@@ -39,7 +39,7 @@ impl ToTypeNameFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
@@ -62,10 +62,6 @@ impl Function for ToTypeNameFunction {
             DataValue::String(Some(type_name.into_bytes())),
             input_rows,
         ))
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
     }
 }
 

@@ -35,8 +35,11 @@ impl ConcatWsFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(2, 1024),
+        )
     }
 
     fn concat_column_with_seperator(
@@ -177,10 +180,6 @@ impl Function for ConcatWsFunction {
             return Ok(DataType::Null);
         }
         Ok(DataType::String)
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((2, 1024))
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {

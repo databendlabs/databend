@@ -38,17 +38,13 @@ impl CrashMeFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default())
+            .features(FunctionFeatures::default().num_arguments(1))
     }
 }
 
 impl Function for CrashMeFunction {
     fn name(&self) -> &str {
         "CrashMeFunction"
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
     }
 
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {

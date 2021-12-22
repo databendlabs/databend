@@ -38,17 +38,13 @@ impl RepeatFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 }
 
 impl Function for RepeatFunction {
     fn name(&self) -> &str {
         "repeat"
-    }
-
-    fn num_arguments(&self) -> usize {
-        2
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {

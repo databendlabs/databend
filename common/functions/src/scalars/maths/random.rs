@@ -39,21 +39,13 @@ impl RandomFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default())
+            .features(FunctionFeatures::default().variadic_arguments(0, 1))
     }
 }
 
 impl Function for RandomFunction {
     fn name(&self) -> &str {
         &*self.display_name
-    }
-
-    fn num_arguments(&self) -> usize {
-        0
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((0, 1))
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {

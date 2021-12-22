@@ -30,7 +30,7 @@ impl ArithmeticModuloFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create_func))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 
     pub fn get_monotonicity(_args: &[Monotonicity]) -> Result<Monotonicity> {

@@ -21,6 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use num::cast::AsPrimitive;
 use num_traits::WrappingAdd;
+use num_traits::WrappingSub;
 
 use super::arithmetic::ArithmeticTrait;
 use super::utils::assert_binary_arguments;
@@ -29,9 +30,8 @@ use crate::binary_arithmetic;
 use crate::binary_arithmetic_helper;
 use crate::interval_arithmetic;
 use crate::scalars::dates::IntervalFunctionFactory;
-use crate::scalars::function_factory::FunctionDescription;
+use crate::scalars::function_factory::ArithmeticDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::ArithmeticFunction;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
@@ -45,13 +45,266 @@ use crate::with_match_primitive_type;
 pub struct ArithmeticPlusFunction;
 
 impl ArithmeticPlusFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
-        ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus)
+    pub fn try_create_func(
+        _display_name: &str,
+        arguments: Vec<DataField>,
+    ) -> Result<Box<dyn Function>> {
+        let op = DataValueArithmeticOperator::Plus;
+        assert_binary_arguments(op.clone(), arguments.len())?;
+
+        let left_type = arguments[0].data_type();
+        let right_type = arguments[1].data_type();
+        if left_type.is_interval() || right_type.is_interval() {
+            return Self::try_create_interval(left_type, right_type);
+        }
+        if left_type.is_date_or_date_time() || right_type.is_date_or_date_time() {
+            return try_create_datatime(&op, left_type, right_type);
+        }
+
+        let e = Result::Err(ErrorCode::BadDataValueType(format!(
+            "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
+            left_type, op, right_type
+        )));
+
+        if !left_type.is_numeric() || !right_type.is_numeric() {
+            return e;
+        };
+        let has_signed = left_type.is_signed_numeric() || right_type.is_signed_numeric();
+        match (left_type, right_type) {
+            (DataType::Float64, _) => with_match_primitive_type!(right_type, |$D| {
+                BinaryArithmeticFunction::<ArithmeticAdd<f64, $D, f64>>::try_create_func(
+                    op,
+                    DataType::Float64,
+                )
+            }, e),
+            (DataType::Float32, _) => with_match_primitive_type!(right_type, |$D| {
+                BinaryArithmeticFunction::<ArithmeticAdd<f32, $D, f64>>::try_create_func(
+                    op,
+                    DataType::Float64,
+                )
+            }, e),
+            (_, DataType::Float64) => with_match_integer_64!(left_type, |$T| {
+                BinaryArithmeticFunction::<ArithmeticAdd<$T, f64, f64>>::try_create_func(
+                    op,
+                    DataType::Float64,
+                )
+            }, e),
+            (_, DataType::Float32) => with_match_integer_64!(left_type, |$T| {
+                BinaryArithmeticFunction::<ArithmeticAdd<$T, f32, f64>>::try_create_func(
+                    op,
+                    DataType::Float64,
+                )
+            }, e),
+            (DataType::Int64, _) => with_match_integer_64!(right_type, |$D| {
+                BinaryArithmeticFunction::<ArithmeticWrappingAdd<i64, $D, i64>>::try_create_func(
+                    op,
+                    DataType::Int64,
+                )
+            }, e),
+            (DataType::UInt64, _) => with_match_integer_64!(right_type, |$D| {
+                if has_signed {
+                    BinaryArithmeticFunction::<ArithmeticWrappingAdd<u64, $D, i64>>::try_create_func(
+                        op,
+                        DataType::Int64,
+                    )
+                } else {
+                    BinaryArithmeticFunction::<ArithmeticWrappingAdd<u64, $D, u64>>::try_create_func(
+                        op,
+                        DataType::UInt64,
+                    )
+                }
+            }, e),
+            (_, DataType::UInt64) => with_match_integer_32!(left_type, |$T| {
+                if has_signed {
+                    BinaryArithmeticFunction::<ArithmeticWrappingAdd<$T, u64, i64>>::try_create_func(
+                        op,
+                        DataType::Int64,
+                    )
+                } else {
+                    BinaryArithmeticFunction::<ArithmeticWrappingAdd<$T, u64, u64>>::try_create_func(
+                        op,
+                        DataType::UInt64,
+                    )
+                }
+            }, e),
+            (_, DataType::Int64) => with_match_integer_32!(left_type, |$T| {
+                BinaryArithmeticFunction::<ArithmeticWrappingAdd<$T, i64, i64>>::try_create_func(
+                    op,
+                    DataType::Int64,
+                )
+            }, e),
+            (DataType::UInt32, _) => with_match_integer_32!(right_type, |$D| {
+                if has_signed {
+                    BinaryArithmeticFunction::<ArithmeticWrappingAdd<u32, $D, i64>>::try_create_func(
+                        op,
+                        DataType::Int64,
+                    )
+                } else {
+                    BinaryArithmeticFunction::<ArithmeticWrappingAdd<u32, $D, u64>>::try_create_func(
+                        op,
+                        DataType::UInt64,
+                    )
+                }
+            }, e),
+            (DataType::Int32, _) => with_match_integer_32!(right_type, |$D| {
+                BinaryArithmeticFunction::<ArithmeticWrappingAdd<i32, $D, i64>>::try_create_func(
+                    op,
+                    DataType::Int64,
+                )
+            }, e),
+            (_, DataType::UInt32) => with_match_integer_16!(left_type, |$T| {
+                if has_signed {
+                    BinaryArithmeticFunction::<ArithmeticWrappingAdd<$T, u32, i64>>::try_create_func(
+                        op,
+                        DataType::Int64,
+                    )
+                } else {
+                    BinaryArithmeticFunction::<ArithmeticWrappingAdd<$T, u32, u64>>::try_create_func(
+                        op,
+                        DataType::UInt64,
+                    )
+                }
+            }, e),
+            (_, DataType::Int32) => with_match_integer_16!(left_type, |$T| {
+                BinaryArithmeticFunction::<ArithmeticWrappingAdd<$T, i32, i64>>::try_create_func(
+                    op,
+                    DataType::Int64,
+                )
+            }, e),
+            (DataType::UInt16, _) => with_match_integer_16!(right_type, |$D| {
+                if has_signed {
+                    BinaryArithmeticFunction::<ArithmeticAdd<u16, $D, i32>>::try_create_func(
+                        op,
+                        DataType::Int32,
+                    )
+                } else {
+                    BinaryArithmeticFunction::<ArithmeticAdd<u16, $D, u32>>::try_create_func(
+                        op,
+                        DataType::UInt32,
+                    )
+                }
+            }, e),
+            (DataType::Int16, _) => with_match_integer_16!(right_type, |$D| {
+                BinaryArithmeticFunction::<ArithmeticAdd<i16, $D, i32>>::try_create_func(
+                    op,
+                    DataType::Int32,
+                )
+            }, e),
+            (_, DataType::UInt16) => match left_type {
+                DataType::UInt8 => {
+                    BinaryArithmeticFunction::<ArithmeticAdd<u8, u16, u32>>::try_create_func(
+                        op,
+                        DataType::UInt32,
+                    )
+                }
+                DataType::Int8 => {
+                    BinaryArithmeticFunction::<ArithmeticAdd<i8, u16, i32>>::try_create_func(
+                        op,
+                        DataType::Int32,
+                    )
+                }
+                _ => unreachable!(),
+            },
+            (_, DataType::Int16) => with_match_integer_8!(left_type, |$T| {
+                BinaryArithmeticFunction::<ArithmeticAdd<$T, i16, i32>>::try_create_func(
+                    op,
+                    DataType::Int32,
+                )
+            }, e),
+            (DataType::UInt8, _) => match right_type {
+                DataType::UInt8 => {
+                    BinaryArithmeticFunction::<ArithmeticAdd<u8, u8, u16>>::try_create_func(
+                        op,
+                        DataType::UInt16,
+                    )
+                }
+                DataType::Int8 => {
+                    BinaryArithmeticFunction::<ArithmeticAdd<i8, i8, i16>>::try_create_func(
+                        op,
+                        DataType::Int16,
+                    )
+                }
+                _ => unreachable!(),
+            },
+            (DataType::Int8, _) => with_match_integer_8!(right_type, |$D| {
+                BinaryArithmeticFunction::<ArithmeticAdd<i8, $D, i16>>::try_create_func(
+                    op,
+                    DataType::Int16,
+                )
+            }, e),
+            _ => unreachable!(),
+        }
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func))
-            .features(FunctionFeatures::default().deterministic().monotonicity())
+    fn try_create_interval(lhs_type: &DataType, rhs_type: &DataType) -> Result<Box<dyn Function>> {
+        let op = DataValueArithmeticOperator::Plus;
+        let e = Result::Err(ErrorCode::BadDataValueType(format!(
+            "DataValue Error: Unsupported date coercion ({:?}) {} ({:?})",
+            lhs_type, op, rhs_type
+        )));
+
+        let (interval, result_type) = if rhs_type.is_date_or_date_time() && lhs_type.is_interval() {
+            (lhs_type, rhs_type)
+        } else if lhs_type.is_date_or_date_time() && rhs_type.is_interval() {
+            (rhs_type, lhs_type)
+        } else {
+            return e;
+        };
+
+        match interval {
+            DataType::Interval(IntervalUnit::YearMonth) => match result_type.clone() {
+                DataType::Date16 => {
+                    BinaryArithmeticFunction::<IntervalMonthAddDate16>::try_create_func(
+                        op,
+                        result_type.clone(),
+                    )
+                }
+                DataType::Date32 => {
+                    BinaryArithmeticFunction::<IntervalMonthAddDate32>::try_create_func(
+                        op,
+                        result_type.clone(),
+                    )
+                }
+                DataType::DateTime32(_) => {
+                    BinaryArithmeticFunction::<IntervalMonthAddDatetime32>::try_create_func(
+                        op,
+                        result_type.clone(),
+                    )
+                }
+                _ => unreachable!(),
+            },
+            DataType::Interval(IntervalUnit::DayTime) => match result_type.clone() {
+                DataType::Date16 => {
+                    BinaryArithmeticFunction::<IntervalDaytimeAddDate16>::try_create_func(
+                        op,
+                        result_type.clone(),
+                    )
+                }
+                DataType::Date32 => {
+                    BinaryArithmeticFunction::<IntervalDaytimeAddDate32>::try_create_func(
+                        op,
+                        result_type.clone(),
+                    )
+                }
+                DataType::DateTime32(_) => {
+                    BinaryArithmeticFunction::<IntervalDaytimeAddDatetime32>::try_create_func(
+                        op,
+                        result_type.clone(),
+                    )
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn desc() -> ArithmeticDescription {
+        ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .monotonicity()
+                .num_arguments(2),
+        )
     }
 
     pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
@@ -104,216 +357,34 @@ impl ArithmeticPlusFunction {
     }
 }
 
-fn try_create_func(_display_name: &str, arguments: Vec<DataField>) -> Result<Box<dyn Function>> {
-    let op = DataValueArithmeticOperator::Plus;
-    assert_binary_arguments(op.clone(), arguments.len())?;
+macro_rules! wrapping_arithmetic_impl {
+    ($name: ident, $method: ident) => {
+        #[derive(Clone)]
+        pub struct $name<T, D, R> {
+            t: PhantomData<T>,
+            d: PhantomData<D>,
+            r: PhantomData<R>,
+        }
 
-    let left_type = arguments[0].data_type();
-    let right_type = arguments[1].data_type();
-    if left_type.is_interval() || right_type.is_interval() {
-        return try_create_interval(left_type, right_type);
-    }
-    if left_type.is_date_or_date_time() || right_type.is_date_or_date_time() {
-        return try_create_datatime(&op, left_type, right_type);
-    }
-
-    let e = Result::Err(ErrorCode::BadDataValueType(format!(
-        "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
-        left_type, op, right_type
-    )));
-
-    if !left_type.is_numeric() || !right_type.is_numeric() {
-        return e;
+        impl<T, D, R> ArithmeticTrait for $name<T, D, R>
+        where
+            T: DFPrimitiveType + AsPrimitive<R>,
+            D: DFPrimitiveType + AsPrimitive<R>,
+            R: DFIntegerType + WrappingAdd<Output = R> + WrappingSub<Output = R>,
+            DFPrimitiveArray<R>: IntoSeries,
+        {
+            fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
+                binary_arithmetic!(columns[0].column(), columns[1].column(), R, |l: R, r: R| l
+                    .$method(&r))
+            }
+        }
     };
-    let has_signed = left_type.is_signed_numeric() || right_type.is_signed_numeric();
-    match (left_type, right_type) {
-        (DataType::Float64, _) => with_match_primitive_type!(right_type, |$D| {
-            BinaryArithmeticFunction::<ArithmeticAdd<f64, $D, f64>>::try_create_func(
-                op,
-                DataType::Float64,
-            )
-        }, e),
-        (DataType::Float32, _) => with_match_primitive_type!(right_type, |$D| {
-            BinaryArithmeticFunction::<ArithmeticAdd<f32, $D, f64>>::try_create_func(
-                op,
-                DataType::Float64,
-            )
-        }, e),
-        (_, DataType::Float64) => with_match_integer_64!(left_type, |$T| {
-            BinaryArithmeticFunction::<ArithmeticAdd<$T, f64, f64>>::try_create_func(
-                op,
-                DataType::Float64,
-            )
-        }, e),
-        (_, DataType::Float32) => with_match_integer_64!(left_type, |$T| {
-            BinaryArithmeticFunction::<ArithmeticAdd<$T, f32, f64>>::try_create_func(
-                op,
-                DataType::Float64,
-            )
-        }, e),
-        (DataType::Int64, _) => with_match_integer_64!(right_type, |$D| {
-            BinaryArithmeticFunction::<ArithmeticWrappingAdd<i64, $D, i64>>::try_create_func(
-                op,
-                DataType::Int64,
-            )
-        }, e),
-        (DataType::UInt64, _) => with_match_integer_64!(right_type, |$D| {
-            if has_signed {
-                BinaryArithmeticFunction::<ArithmeticWrappingAdd<u64, $D, i64>>::try_create_func(
-                    op,
-                    DataType::Int64,
-                )
-            } else {
-                BinaryArithmeticFunction::<ArithmeticWrappingAdd<u64, $D, u64>>::try_create_func(
-                    op,
-                    DataType::UInt64,
-                )
-            }
-        }, e),
-        (_, DataType::UInt64) => with_match_integer_32!(left_type, |$T| {
-            if has_signed {
-                BinaryArithmeticFunction::<ArithmeticWrappingAdd<$T, u64, i64>>::try_create_func(
-                    op,
-                    DataType::Int64,
-                )
-            } else {
-                BinaryArithmeticFunction::<ArithmeticWrappingAdd<$T, u64, u64>>::try_create_func(
-                    op,
-                    DataType::UInt64,
-                )
-            }
-        }, e),
-        (_, DataType::Int64) => with_match_integer_32!(left_type, |$T| {
-            BinaryArithmeticFunction::<ArithmeticWrappingAdd<$T, i64, i64>>::try_create_func(
-                op,
-                DataType::Int64,
-            )
-        }, e),
-        (DataType::UInt32, _) => with_match_integer_32!(right_type, |$D| {
-            if has_signed {
-                BinaryArithmeticFunction::<ArithmeticWrappingAdd<u32, $D, i64>>::try_create_func(
-                    op,
-                    DataType::Int64,
-                )
-            } else {
-                BinaryArithmeticFunction::<ArithmeticWrappingAdd<u32, $D, u64>>::try_create_func(
-                    op,
-                    DataType::UInt64,
-                )
-            }
-        }, e),
-        (DataType::Int32, _) => with_match_integer_32!(right_type, |$D| {
-            BinaryArithmeticFunction::<ArithmeticWrappingAdd<i32, $D, i64>>::try_create_func(
-                op,
-                DataType::Int64,
-            )
-        }, e),
-        (_, DataType::UInt32) => with_match_integer_16!(left_type, |$T| {
-            if has_signed {
-                BinaryArithmeticFunction::<ArithmeticWrappingAdd<$T, u32, i64>>::try_create_func(
-                    op,
-                    DataType::Int64,
-                )
-            } else {
-                BinaryArithmeticFunction::<ArithmeticWrappingAdd<$T, u32, u64>>::try_create_func(
-                    op,
-                    DataType::UInt64,
-                )
-            }
-        }, e),
-        (_, DataType::Int32) => with_match_integer_16!(left_type, |$T| {
-            BinaryArithmeticFunction::<ArithmeticWrappingAdd<$T, i32, i64>>::try_create_func(
-                op,
-                DataType::Int64,
-            )
-        }, e),
-        (DataType::UInt16, _) => with_match_integer_16!(right_type, |$D| {
-            if has_signed {
-                BinaryArithmeticFunction::<ArithmeticAdd<u16, $D, i32>>::try_create_func(
-                    op,
-                    DataType::Int32,
-                )
-            } else {
-                BinaryArithmeticFunction::<ArithmeticAdd<u16, $D, u32>>::try_create_func(
-                    op,
-                    DataType::UInt32,
-                )
-            }
-        }, e),
-        (DataType::Int16, _) => with_match_integer_16!(right_type, |$D| {
-            BinaryArithmeticFunction::<ArithmeticAdd<i16, $D, i32>>::try_create_func(
-                op,
-                DataType::Int32,
-            )
-        }, e),
-        (_, DataType::UInt16) => match left_type {
-            DataType::UInt8 => {
-                BinaryArithmeticFunction::<ArithmeticAdd<u8, u16, u32>>::try_create_func(
-                    op,
-                    DataType::UInt32,
-                )
-            }
-            DataType::Int8 => {
-                BinaryArithmeticFunction::<ArithmeticAdd<i8, u16, i32>>::try_create_func(
-                    op,
-                    DataType::Int32,
-                )
-            }
-            _ => unreachable!(),
-        },
-        (_, DataType::Int16) => with_match_integer_8!(left_type, |$T| {
-            BinaryArithmeticFunction::<ArithmeticAdd<$T, i16, i32>>::try_create_func(
-                op,
-                DataType::Int32,
-            )
-        }, e),
-        (DataType::UInt8, _) => match right_type {
-            DataType::UInt8 => {
-                BinaryArithmeticFunction::<ArithmeticAdd<u8, u8, u16>>::try_create_func(
-                    op,
-                    DataType::UInt16,
-                )
-            }
-            DataType::Int8 => {
-                BinaryArithmeticFunction::<ArithmeticAdd<i8, i8, i16>>::try_create_func(
-                    op,
-                    DataType::Int16,
-                )
-            }
-            _ => unreachable!(),
-        },
-        (DataType::Int8, _) => with_match_integer_8!(right_type, |$D| {
-            BinaryArithmeticFunction::<ArithmeticAdd<i8, $D, i16>>::try_create_func(
-                op,
-                DataType::Int16,
-            )
-        }, e),
-        _ => unreachable!(),
-    }
 }
+
+wrapping_arithmetic_impl!(ArithmeticWrappingAdd, wrapping_add);
 
 #[derive(Clone)]
 pub struct ArithmeticAdd<T, D, R> {
-    t: PhantomData<T>,
-    d: PhantomData<D>,
-    r: PhantomData<R>,
-}
-
-impl<T, D, R> ArithmeticTrait for ArithmeticWrappingAdd<T, D, R>
-where
-    T: DFPrimitiveType + AsPrimitive<R>,
-    D: DFPrimitiveType + AsPrimitive<R>,
-    R: DFIntegerType + WrappingAdd<Output = R>,
-    DFPrimitiveArray<R>: IntoSeries,
-{
-    fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
-        binary_arithmetic!(columns[0].column(), columns[1].column(), R, |l: R, r: R| l
-            .wrapping_add(&r))
-    }
-}
-
-#[derive(Clone)]
-pub struct ArithmeticWrappingAdd<T, D, R> {
     t: PhantomData<T>,
     d: PhantomData<D>,
     r: PhantomData<R>,
@@ -400,74 +471,11 @@ impl ArithmeticTrait for IntervalMonthAddDatetime32 {
     }
 }
 
-fn try_create_interval(lhs_type: &DataType, rhs_type: &DataType) -> Result<Box<dyn Function>> {
-    let op = DataValueArithmeticOperator::Plus;
-    let e = Result::Err(ErrorCode::BadDataValueType(format!(
-        "DataValue Error: Unsupported date coercion ({:?}) {} ({:?})",
-        lhs_type, op, rhs_type
-    )));
-
-    let (interval, result_type) = if rhs_type.is_date_or_date_time() && lhs_type.is_interval() {
-        (lhs_type, rhs_type)
-    } else if lhs_type.is_date_or_date_time() && rhs_type.is_interval() {
-        (rhs_type, lhs_type)
-    } else {
-        return e;
-    };
-
-    match interval {
-        DataType::Interval(IntervalUnit::YearMonth) => match result_type.clone() {
-            DataType::Date16 => {
-                BinaryArithmeticFunction::<IntervalMonthAddDate16>::try_create_func(
-                    op,
-                    result_type.clone(),
-                )
-            }
-            DataType::Date32 => {
-                BinaryArithmeticFunction::<IntervalMonthAddDate32>::try_create_func(
-                    op,
-                    result_type.clone(),
-                )
-            }
-            DataType::DateTime32(_) => {
-                BinaryArithmeticFunction::<IntervalMonthAddDatetime32>::try_create_func(
-                    op,
-                    result_type.clone(),
-                )
-            }
-            _ => unreachable!(),
-        },
-        DataType::Interval(IntervalUnit::DayTime) => match result_type.clone() {
-            DataType::Date16 => {
-                BinaryArithmeticFunction::<IntervalDaytimeAddDate16>::try_create_func(
-                    op,
-                    result_type.clone(),
-                )
-            }
-            DataType::Date32 => {
-                BinaryArithmeticFunction::<IntervalDaytimeAddDate32>::try_create_func(
-                    op,
-                    result_type.clone(),
-                )
-            }
-            DataType::DateTime32(_) => {
-                BinaryArithmeticFunction::<IntervalDaytimeAddDatetime32>::try_create_func(
-                    op,
-                    result_type.clone(),
-                )
-            }
-            _ => unreachable!(),
-        },
-        _ => unreachable!(),
-    }
-}
-
 fn try_create_datatime(
     op: &DataValueArithmeticOperator,
     lhs_type: &DataType,
     rhs_type: &DataType,
 ) -> Result<Box<dyn Function>> {
-    //let op = DataValueArithmeticOperator::Plus;
     let e = Result::Err(ErrorCode::BadDataValueType(format!(
         "DataValue Error: Unsupported date coercion ({:?}) {} ({:?})",
         lhs_type, op, rhs_type

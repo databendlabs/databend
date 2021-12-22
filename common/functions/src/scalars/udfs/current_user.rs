@@ -33,8 +33,11 @@ impl CurrentUserFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().context_function())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .context_function()
+                .num_arguments(1),
+        )
     }
 }
 
@@ -53,10 +56,6 @@ impl Function for CurrentUserFunction {
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         Ok(columns[0].column().clone())
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
     }
 }
 

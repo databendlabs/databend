@@ -91,7 +91,9 @@ where
     }
 
     pub fn desc() -> FunctionDescription {
-        let mut features = FunctionFeatures::default().monotonicity();
+        let mut features = FunctionFeatures::default()
+            .monotonicity()
+            .variadic_arguments(1, 2);
 
         if T::IS_DETERMINISTIC {
             features = features.deterministic();
@@ -113,10 +115,6 @@ where
 
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         T::return_type()
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((1, 2))
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {

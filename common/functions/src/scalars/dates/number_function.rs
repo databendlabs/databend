@@ -395,7 +395,7 @@ where
     }
 
     pub fn desc() -> FunctionDescription {
-        let mut features = FunctionFeatures::default().monotonicity();
+        let mut features = FunctionFeatures::default().monotonicity().num_arguments(1);
 
         if T::IS_DETERMINISTIC {
             features = features.deterministic();
@@ -413,10 +413,6 @@ where
 {
     fn name(&self) -> &str {
         self.display_name.as_str()
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
     }
 
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {

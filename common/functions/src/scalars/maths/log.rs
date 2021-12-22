@@ -50,22 +50,6 @@ impl Function for GenericLogFunction {
         &*self.display_name
     }
 
-    fn num_arguments(&self) -> usize {
-        if self.unary {
-            1
-        } else {
-            0
-        }
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        if self.unary {
-            None
-        } else {
-            Some((1, 2))
-        }
-    }
-
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(DataType::Float64)
     }
@@ -138,8 +122,11 @@ impl LogFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(1, 2),
+        )
     }
 }
 
@@ -152,7 +139,7 @@ impl LnFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
@@ -165,7 +152,7 @@ impl Log10Function {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
@@ -178,6 +165,6 @@ impl Log2Function {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
