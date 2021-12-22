@@ -50,7 +50,7 @@ pub fn validate_input<'a>(
 }
 
 #[macro_export]
-macro_rules! with_match_integer_type {
+macro_rules! with_match_date_type {
     (
         $key_type:expr, | $_:tt $T:ident | $body:tt,  $nbody:tt
     ) => {{
@@ -61,45 +61,6 @@ macro_rules! with_match_integer_type {
         }
 
         match $key_type {
-            DataType::Int8 => __with_ty__! { i8 },
-            DataType::Int16 => __with_ty__! { i16 },
-            DataType::Int32 => __with_ty__! { i32 },
-            DataType::Int64 => __with_ty__! { i64 },
-            DataType::UInt8 => __with_ty__! { u8 },
-            DataType::UInt16 => __with_ty__! { u16 },
-            DataType::UInt32 => __with_ty__! { u32 },
-            DataType::UInt64 => __with_ty__! { u64 },
-            DataType::Date16 => __with_ty__! { u16 },
-            DataType::Date32 => __with_ty__! { i32 },
-            DataType::DateTime32(_) => __with_ty__! { u32 },
-
-            _ => $nbody,
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! with_match_arithmetic_type {
-    (
-        $key_type:expr, | $_:tt $T:ident | $body:tt,  $nbody:tt
-    ) => {{
-        macro_rules! __with_ty__ {
-            ( $_ $T:ident ) => {
-                $body
-            };
-        }
-
-        match $key_type {
-            DataType::Int8 => __with_ty__! { i8 },
-            DataType::Int16 => __with_ty__! { i16 },
-            DataType::Int32 => __with_ty__! { i32 },
-            DataType::Int64 => __with_ty__! { i64 },
-            DataType::UInt8 => __with_ty__! { u8 },
-            DataType::UInt16 => __with_ty__! { u16 },
-            DataType::UInt32 => __with_ty__! { u32 },
-            DataType::UInt64 => __with_ty__! { u64 },
-            DataType::Float32 => __with_ty__! { f32 },
-            DataType::Float64 => __with_ty__! { f64 },
             DataType::Date16 => __with_ty__! { u16 },
             DataType::Date32 => __with_ty__! { i32 },
             DataType::DateTime32(_) => __with_ty__! { u32 },

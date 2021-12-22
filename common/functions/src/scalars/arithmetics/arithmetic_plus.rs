@@ -34,8 +34,8 @@ use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
-use crate::with_match_arithmetic_type;
-use crate::with_match_integer_type;
+use crate::with_match_primitive_type;
+use crate::with_match_date_type;
 
 pub struct ArithmeticPlusFunction;
 
@@ -54,45 +54,55 @@ impl ArithmeticPlusFunction {
 
         let left_type = arguments[0].data_type();
         let right_type = arguments[1].data_type();
-        let result_type = if left_type.is_interval() || right_type.is_interval() {
+
+        if left_type.is_interval() || right_type.is_interval() {
             return Self::try_create_interval(left_type, right_type);
-        } else if left_type.is_date_or_date_time() || right_type.is_date_or_date_time() {
-            datetime_arithmetic_coercion(&op, left_type, right_type)?
-        } else {
-            numerical_arithmetic_coercion(&op, left_type, right_type)?
-        };
+        }
+
+        if left_type.is_date_or_date_time() || right_type.is_date_or_date_time() {
+           return Self::try_create_datatime(left_type, right_type);
+        }
+
+        let result_type = numerical_arithmetic_coercion(&op, left_type, right_type)?;
 
         let e = Result::Err(ErrorCode::BadDataValueType(format!(
             "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
             left_type, op, right_type
         )));
 
-        with_match_arithmetic_type!(left_type, |$T| {
-            with_match_arithmetic_type!(right_type, |$D| {
-                with_match_integer_type!(result_type, |$R| {
-                    BinaryArithmeticFunction::<IntegerAdd::<$T,$D,$R>>::try_create_func(
+        with_match_primitive_type!(left_type, |$T| {
+            with_match_primitive_type!(right_type, |$D| {
+                match result_type.clone() {
+                    DataType::Int16 => BinaryArithmeticFunction::<ArithmeticAdd::<$T,$D,i16>>::try_create_func(
                         op,
-                        result_type.clone(),
-                    )
-                },
-                {
-                    match result_type {
-                        DataType::Float32 => {
-                            BinaryArithmeticFunction::<FloatAdd::<$T,$D,f32>>::try_create_func(
-                                op,
-                                result_type.clone(),
-                            )
-                        }
-                        DataType::Float64 => {
-                            BinaryArithmeticFunction::<FloatAdd::<$T,$D,f64>>::try_create_func(
-                                op,
-                                result_type.clone(),
-                            )
-                        }
-                        _ => e,
-                    }
+                        DataType::Int16,
+                    ),
+                    DataType::Int32 => BinaryArithmeticFunction::<ArithmeticAdd::<$T,$D,i32>>::try_create_func(
+                        op,
+                        DataType::Int32,
+                    ),
+                    DataType::Int64 => BinaryArithmeticFunction::<ArithmeticWrappingAdd::<$T,$D,i64>>::try_create_func(
+                        op,
+                        DataType::Int64,
+                    ),
+                    DataType::UInt16 => BinaryArithmeticFunction::<ArithmeticAdd::<$T,$D,u16>>::try_create_func(
+                        op,
+                        DataType::UInt16,
+                    ),
+                    DataType::UInt32 => BinaryArithmeticFunction::<ArithmeticAdd::<$T,$D,u32>>::try_create_func(
+                        op,
+                        DataType::UInt32,
+                    ),
+                    DataType::UInt64 => BinaryArithmeticFunction::<ArithmeticWrappingAdd::<$T,$D,u64>>::try_create_func(
+                        op,
+                        DataType::UInt64,
+                    ),
+                    DataType::Float64 => BinaryArithmeticFunction::<ArithmeticAdd::<$T,$D,f64>>::try_create_func(
+                        op,
+                        DataType::Float64,
+                    ),
+                    _ => unreachable!(),
                 }
-                )
             }, e)
         }, e)
     }
@@ -159,6 +169,52 @@ impl ArithmeticPlusFunction {
         }
     }
 
+
+    fn try_create_datatime(
+        lhs_type: &DataType,
+        rhs_type: &DataType,
+    ) -> Result<Box<dyn Function>> {
+        let op = DataValueArithmeticOperator::Plus;
+        let e = Result::Err(ErrorCode::BadDataValueType(format!(
+            "DataValue Error: Unsupported date coercion ({:?}) {} ({:?})",
+            lhs_type, op, rhs_type
+        )));
+    
+        if lhs_type.is_date_or_date_time() {
+            with_match_date_type!(lhs_type, |$T| {
+                with_match_primitive_type!(rhs_type, |$D| {
+                    BinaryArithmeticFunction::<ArithmeticAdd<$T, $D, $T>>::try_create_func(
+                        op,
+                        lhs_type.clone(),
+                    )
+                },{
+                    with_match_date_type!(rhs_type, |$D| {
+                        match op.clone() {
+                            DataValueArithmeticOperator::Plus => BinaryArithmeticFunction::<ArithmeticAdd<$T, $D, $T>>::try_create_func(
+                                op,
+                                lhs_type.clone(),
+                            ),
+                            DataValueArithmeticOperator::Minus => BinaryArithmeticFunction::<ArithmeticAdd<$T, $D, i32>>::try_create_func(
+                                op,
+                                DataType::Int32,
+                            ),
+                            _ => e,
+                        }
+                    }, e)
+                })
+            },e)
+        } else {
+            with_match_primitive_type!(lhs_type, |$T| {
+                with_match_date_type!(rhs_type, |$D| {
+                    BinaryArithmeticFunction::<ArithmeticAdd<$T, $D, $D>>::try_create_func(
+                        op,
+                        rhs_type.clone(),
+                    )
+                },e)
+            },e)
+        }
+    }    
+
     pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
         if args.is_empty() || args.len() > 2 {
             return Err(ErrorCode::BadArguments(format!(
@@ -210,13 +266,13 @@ impl ArithmeticPlusFunction {
 }
 
 #[derive(Clone)]
-pub struct IntegerAdd<T, D, R> {
+pub struct ArithmeticWrappingAdd<T, D, R> {
     t: PhantomData<T>,
     d: PhantomData<D>,
     r: PhantomData<R>,
 }
 
-impl<T, D, R> ArithmeticTrait for IntegerAdd<T, D, R>
+impl<T, D, R> ArithmeticTrait for ArithmeticWrappingAdd<T, D, R>
 where
     T: DFPrimitiveType + AsPrimitive<R>,
     D: DFPrimitiveType + AsPrimitive<R>,
@@ -230,17 +286,17 @@ where
 }
 
 #[derive(Clone)]
-pub struct FloatAdd<T, D, R> {
+pub struct ArithmeticAdd<T, D, R> {
     t: PhantomData<T>,
     d: PhantomData<D>,
     r: PhantomData<R>,
 }
 
-impl<T, D, R> ArithmeticTrait for FloatAdd<T, D, R>
+impl<T, D, R> ArithmeticTrait for ArithmeticAdd<T, D, R>
 where
     T: DFPrimitiveType + AsPrimitive<R>,
     D: DFPrimitiveType + AsPrimitive<R>,
-    R: DFFloatType + Add<Output = R>,
+    R: DFPrimitiveType + Add<Output = R>,
     DFPrimitiveArray<R>: IntoSeries,
 {
     fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
