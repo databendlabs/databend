@@ -64,6 +64,10 @@ impl Function for IfFunction {
             .column()
             .if_then_else(columns[1].column(), columns[2].column())
     }
+
+    fn passthrough_null(&self) -> bool {
+        false
+    }
 }
 
 impl std::fmt::Display for IfFunction {

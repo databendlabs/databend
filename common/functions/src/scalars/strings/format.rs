@@ -136,6 +136,10 @@ impl Function for FormatFunction {
             _ => Ok(DataColumn::Constant(DataValue::String(None), input_rows)),
         }
     }
+
+    fn passthrough_null(&self) -> bool {
+        false
+    }
 }
 
 impl fmt::Display for FormatFunction {
