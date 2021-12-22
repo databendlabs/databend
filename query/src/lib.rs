@@ -17,7 +17,6 @@
 #![feature(arbitrary_self_types)]
 
 pub mod api;
-pub mod cache;
 pub mod catalogs;
 pub mod clusters;
 pub mod common;

@@ -18,17 +18,17 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_base::tokio::sync::RwLock;
-use common_cache::BytesMeter;
-use common_cache::Cache;
-use common_cache::DefaultHashBuilder;
-use common_cache::LruCache;
-use common_cache::LruDiskCache;
 use common_dal::DataAccessor;
 use common_exception::Result;
 use common_metrics::label_counter;
 use common_metrics::label_counter_with_val;
 
-use crate::cache::QueryCache;
+use crate::basic::BytesMeter;
+use crate::basic::Cache;
+use crate::basic::DefaultHashBuilder;
+use crate::basic::LruCache;
+use crate::basic::LruDiskCache;
+use crate::query::QueryCache;
 
 const CACHE_READ_BYTES_FROM_REMOTE: &str = "cache_read_bytes_from_remote";
 const CACHE_READ_BYTES_FROM_LOCAL: &str = "cache_read_bytes_from_local";

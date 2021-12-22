@@ -25,6 +25,7 @@ use common_base::Progress;
 use common_base::ProgressValues;
 use common_base::Runtime;
 use common_base::TrySpawn;
+use common_cache::query::QueryCache;
 use common_dal::AzureBlobAccessor;
 use common_dal::DalMetrics;
 use common_dal::DataAccessor;
@@ -45,7 +46,6 @@ use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
-use crate::cache::QueryCache;
 use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::Cluster;

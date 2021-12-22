@@ -14,9 +14,9 @@
 
 use std::borrow::Borrow;
 
-use common_cache::Cache;
-use common_cache::LruCache;
-use common_cache::Meter;
+use common_cache::basic::Cache;
+use common_cache::basic::LruCache;
+use common_cache::basic::Meter;
 
 #[test]
 fn test_put_and_get() {

@@ -14,12 +14,12 @@
 //
 use std::sync::Arc;
 
+use common_cache::query::QueryCache;
 use common_dal::DataAccessor;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::de::DeserializeOwned;
 
-use crate::cache::QueryCache;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::storages::fuse::constants::FUSE_TBL_SNAPSHOT_PREFIX;
