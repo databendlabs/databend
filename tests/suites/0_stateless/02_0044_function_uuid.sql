@@ -1,5 +1,9 @@
 SELECT zeroUUID();
 SELECT isemptyUUID(generateUUIDv4());
 SELECT isemptyUUID(zeroUUID());
+SELECT isemptyUUID('5');
+SELECT isemptyUUID(null);
 SELECT isnotemptyUUID(generateUUIDv4());
 SELECT isnotemptyUUID(zeroUUID());
+SELECT isnotemptyUUID('5');
+SELECT isnotemptyUUID(null);

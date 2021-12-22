@@ -61,6 +61,8 @@ impl<T> fmt::Display for UUIDVerifierFunction<T> {
 }
 
 pub trait UUIDVerifier {
+    fn default_verify() -> bool;
+
     fn verify(uuid: Uuid) -> bool;
 }
 
@@ -68,6 +70,10 @@ pub trait UUIDVerifier {
 pub struct UUIDIsEmpty;
 
 impl UUIDVerifier for UUIDIsEmpty {
+    fn default_verify() -> bool {
+        true
+    }
+
     fn verify(uuid: Uuid) -> bool {
         uuid.is_nil()
     }
@@ -77,6 +83,10 @@ impl UUIDVerifier for UUIDIsEmpty {
 pub struct UUIDIsNotEmpty;
 
 impl UUIDVerifier for UUIDIsNotEmpty {
+    fn default_verify() -> bool {
+        false
+    }
+
     fn verify(uuid: Uuid) -> bool {
         !uuid.is_nil()
     }
@@ -130,12 +140,12 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
                 }
 
                 Ok(DataColumn::Constant(
-                    DataValue::Boolean(Some(true)),
+                    DataValue::Boolean(Some(T::default_verify())),
                     input_rows,
                 ))
             }
             _ => Ok(DataColumn::Constant(
-                DataValue::Boolean(Some(true)),
+                DataValue::Boolean(Some(T::default_verify())),
                 input_rows,
             )),
         }
