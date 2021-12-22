@@ -15,13 +15,17 @@ heapsize = ["heapsize_"]
 amortized = ["ritelinked/ahash-amortized", "ritelinked/inline-more-amortized"]
 
 [dependencies] # In alphabetical order
-common-tracing = {path = "../tracing" }
 # Workspace dependencies
+common-base = { path = "../base" }
+common-dal = { path = "../dal" }
+common-metrics = { path = "../metrics" }
+common-tracing = { path = "../tracing" }
 common-exception = { path = "../exception" }
 
 # Github dependencies
 
 # Crates.io dependencies
+async-trait = "0.1.52"
 filetime = "0.2.15"
 ritelinked  = { version = "0.3.2", default-features = false, features = ["ahash", "inline-more"] }
 walkdir = "2.3.2"
