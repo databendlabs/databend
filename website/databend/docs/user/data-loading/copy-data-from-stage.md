@@ -1,5 +1,6 @@
 ---
-title: COPY DATA FROM STAGE
+title: Copy Data From Stage
+draft: true
 ---
 
 Copy data from stage.

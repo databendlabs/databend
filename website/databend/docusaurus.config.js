@@ -86,7 +86,8 @@ const config = {
                             {label: 'Get Started', to: '/user'},
                             {label: 'SQL', to: '/user/category/sql-statement'},
                             {label: 'CLI', to: '/user/category/cli'},
-                            {label: 'API', to: '/user/category/api'}
+                            {label: 'APIs', to: '/user/category/api'},
+                            {label: 'Data Load', to: '/user/data-loading/http-streaming-load'}
                         ]
                     },
                     {
