@@ -14,6 +14,8 @@
 
 pub use client_conf::FlightClientConf;
 pub use client_conf::FlightClientTlsConfig;
+pub use client_conf::GrpcClientConf;
+pub use client_conf::GrpcClientTlsConfig;
 pub use dns_resolver::ConnectionFactory;
 pub use dns_resolver::DNSResolver;
 pub use flight_token::FlightClaim;

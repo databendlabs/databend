@@ -16,33 +16,110 @@
 //! It also serves RPC for user-data access.
 
 use std::convert::TryInto;
+use std::pin::Pin;
 use std::sync::Arc;
 
+use common_arrow::arrow_format::flight::data::BasicAuth;
+use common_flight_rpc::FlightClaim;
+use common_flight_rpc::FlightToken;
 use common_meta_raft_store::message::ForwardRequest;
 use common_meta_raft_store::protobuf::meta_service_server::MetaService;
 use common_meta_raft_store::protobuf::GetReply;
 use common_meta_raft_store::protobuf::GetReq;
+use common_meta_raft_store::protobuf::HandshakeRequest;
+use common_meta_raft_store::protobuf::HandshakeResponse;
 use common_meta_raft_store::protobuf::RaftReply;
 use common_meta_raft_store::protobuf::RaftRequest;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::LogEntry;
 use common_tracing::tracing;
+use futures::StreamExt;
+use prost::Message;
+use tonic::codegen::futures_core::Stream;
+use tonic::metadata::MetadataMap;
+use tonic::Request;
+use tonic::Response;
+use tonic::Status;
+use tonic::Streaming;
 
 use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::MetaNode;
 
+pub type GrpcStream<T> =
+    Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
+
 pub struct MetaServiceImpl {
+    token: FlightToken,
     pub meta_node: Arc<MetaNode>,
 }
 
 impl MetaServiceImpl {
     pub fn create(meta_node: Arc<MetaNode>) -> Self {
-        Self { meta_node }
+        Self {
+            token: FlightToken::create(),
+            meta_node,
+        }
+    }
+
+    fn check_token(&self, metadata: &MetadataMap) -> Result<FlightClaim, Status> {
+        let token = metadata
+            .get_bin("auth-token-bin")
+            .and_then(|v| v.to_bytes().ok())
+            .and_then(|b| String::from_utf8(b.to_vec()).ok())
+            .ok_or_else(|| Status::internal("Error auth-token-bin is empty"))?;
+
+        let claim = self
+            .token
+            .try_verify_token(token)
+            .map_err(|e| Status::internal(e.to_string()))?;
+        Ok(claim)
     }
 }
 
 #[async_trait::async_trait]
 impl MetaService for MetaServiceImpl {
+    // rpc handshake related type
+    type HandshakeStream = GrpcStream<HandshakeResponse>;
+
+    // rpc handshake first
+    #[tracing::instrument(level = "info", skip(self))]
+    async fn handshake(
+        &self,
+        request: Request<Streaming<HandshakeRequest>>,
+    ) -> Result<Response<Self::HandshakeStream>, Status> {
+        let req = request
+            .into_inner()
+            .next()
+            .await
+            .ok_or_else(|| Status::internal("Error request next is None"))??;
+
+        let HandshakeRequest { payload, .. } = req;
+        let auth = BasicAuth::decode(&*payload).map_err(|e| Status::internal(e.to_string()))?;
+
+        let user = "root";
+        if auth.username == user {
+            let claim = FlightClaim {
+                username: user.to_string(),
+            };
+            let token = self
+                .token
+                .try_create_token(claim)
+                .map_err(|e| Status::internal(e.to_string()))?;
+
+            let resp = HandshakeResponse {
+                payload: token.into_bytes(),
+                ..HandshakeResponse::default()
+            };
+            let output = futures::stream::once(async { Ok(resp) });
+            Ok(Response::new(Box::pin(output)))
+        } else {
+            Err(Status::unauthenticated(format!(
+                "Unknown user: {}",
+                auth.username
+            )))
+        }
+    }
+
     /// Handles a write request.
     /// This node must be leader or an error returned.
     #[tracing::instrument(level = "info", skip(self))]
@@ -50,6 +127,7 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: tonic::Request<RaftRequest>,
     ) -> Result<tonic::Response<RaftReply>, tonic::Status> {
+        self.check_token(request.metadata())?;
         common_tracing::extract_remote_span_as_parent(&request);
 
         let mes = request.into_inner();
@@ -79,7 +157,7 @@ impl MetaService for MetaServiceImpl {
         request: tonic::Request<GetReq>,
     ) -> Result<tonic::Response<GetReply>, tonic::Status> {
         // TODO(xp): this method should be removed along with DFS
-
+        self.check_token(request.metadata())?;
         common_tracing::extract_remote_span_as_parent(&request);
 
         let req = request.into_inner();
@@ -97,6 +175,7 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: tonic::Request<RaftRequest>,
     ) -> Result<tonic::Response<RaftReply>, tonic::Status> {
+        self.check_token(request.metadata())?;
         common_tracing::extract_remote_span_as_parent(&request);
 
         let req = request.into_inner();

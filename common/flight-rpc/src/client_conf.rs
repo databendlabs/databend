@@ -38,3 +38,29 @@ impl FlightClientConf {
         self.address.is_empty()
     }
 }
+
+#[derive(Clone, Debug, Default)]
+pub struct GrpcClientTlsConfig {
+    pub rpc_tls_server_root_ca_cert: String,
+    pub domain_name: String,
+}
+
+impl GrpcClientTlsConfig {
+    pub fn enabled(&self) -> bool {
+        !self.rpc_tls_server_root_ca_cert.is_empty() && !self.domain_name.is_empty()
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct GrpcClientConf {
+    pub address: String,
+    pub username: String,
+    pub password: String,
+    pub tls_conf: Option<GrpcClientTlsConfig>,
+}
+
+impl GrpcClientConf {
+    pub fn local_mode(&self) -> bool {
+        self.address.is_empty()
+    }
+}

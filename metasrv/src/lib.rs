@@ -24,12 +24,6 @@ pub mod metrics;
 pub mod network;
 pub mod store;
 
-// ProtoBuf generated files.
-#[allow(clippy::all)]
-pub mod protobuf {
-    tonic::include_proto!("metasrv");
-}
-
 pub trait Opened {
     /// Return true if it is opened from a previous persistent state.
     /// Otherwise it is just created.

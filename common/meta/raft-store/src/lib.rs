@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod config;
+pub mod grpc;
 pub mod log;
 pub mod message;
 pub mod sled_key_spaces;
@@ -24,3 +25,6 @@ pub mod state_machine;
 pub mod protobuf {
     tonic::include_proto!("meta");
 }
+
+pub use grpc::MetaGrpcClient;
+pub use grpc::MetaGrpcClientConf;

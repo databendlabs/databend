@@ -43,6 +43,7 @@ common-meta-api = { path = "../common/meta/api" }
 common-meta-embedded = { path = "../common/meta/embedded" }
 common-meta-flight = { path = "../common/meta/flight" }
 common-meta-sled-store = { path = "../common/meta/sled-store" }
+common-meta-raft-store = { path="../common/meta/raft-store" }
 common-meta-types = { path = "../common/meta/types" }
 common-macros = { path = "../common/macros" }
 common-metrics = { path = "../common/metrics" }

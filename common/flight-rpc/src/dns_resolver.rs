@@ -37,6 +37,7 @@ use tonic::transport::ClientTlsConfig;
 use trust_dns_resolver::TokioAsyncResolver;
 
 use crate::FlightClientTlsConfig;
+use crate::GrpcClientTlsConfig;
 
 pub struct DNSResolver {
     inner: TokioAsyncResolver,
@@ -187,7 +188,68 @@ impl ConnectionFactory {
         }
     }
 
+    pub fn create_grpc_channel(
+        addr: impl ToString,
+        timeout: Option<Duration>,
+        rpc_client_config: Option<GrpcClientTlsConfig>,
+    ) -> Result<Channel> {
+        match format!("http://{}", addr.to_string()).parse::<Uri>() {
+            Err(err) => Result::Err(ErrorCode::BadAddressFormat(format!(
+                "Node address format is not parse: {}",
+                err
+            ))),
+            Ok(uri) => {
+                let mut inner_connector = HttpConnector::new_with_resolver(DNSService);
+                inner_connector.set_nodelay(true);
+                inner_connector.set_keepalive(None);
+                inner_connector.enforce_http(false);
+
+                let builder = Channel::builder(uri.clone());
+
+                let mut endpoint = if let Some(conf) = rpc_client_config {
+                    tracing::info!("tls rpc enabled");
+                    let client_tls_config = Self::grpc_client_tls_config(&conf).map_err(|e| {
+                        ErrorCode::TLSConfigurationFailure(format!(
+                            "loading client tls config failure: {} ",
+                            e
+                        ))
+                    })?;
+                    builder.tls_config(client_tls_config).map_err(|e| {
+                        ErrorCode::TLSConfigurationFailure(format!(
+                            "builder tls_config failure: {}",
+                            e
+                        ))
+                    })?
+                } else {
+                    builder
+                };
+
+                if let Some(timeout) = timeout {
+                    endpoint = endpoint.timeout(timeout)
+                }
+
+                match endpoint.connect_with_connector_lazy(inner_connector) {
+                    Ok(channel) => Result::Ok(channel),
+                    Err(error) => Result::Err(ErrorCode::CannotConnectNode(format!(
+                        "Cannot to RPC server: {:?} error: {}",
+                        uri, error
+                    ))),
+                }
+            }
+        }
+    }
+
     fn client_tls_config(conf: &FlightClientTlsConfig) -> Result<ClientTlsConfig> {
+        let server_root_ca_cert = std::fs::read(conf.rpc_tls_server_root_ca_cert.as_str())?;
+        let server_root_ca_cert = Certificate::from_pem(server_root_ca_cert);
+
+        let tls = ClientTlsConfig::new()
+            .domain_name(conf.domain_name.to_string())
+            .ca_certificate(server_root_ca_cert);
+        Ok(tls)
+    }
+
+    fn grpc_client_tls_config(conf: &GrpcClientTlsConfig) -> Result<ClientTlsConfig> {
         let server_root_ca_cert = std::fs::read(conf.rpc_tls_server_root_ca_cert.as_str())?;
         let server_root_ca_cert = Certificate::from_pem(server_root_ca_cert);
 

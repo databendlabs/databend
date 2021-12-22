@@ -33,6 +33,16 @@ message RaftReply {
   string error = 2;
 }
 
+message HandshakeRequest {
+  uint64 protocol_version = 1;
+  bytes payload = 2;
+}
+
+message HandshakeResponse {
+  uint64 protocol_version = 1;
+  bytes payload = 2;
+}
+
 service MetaService {
 
   rpc Write(RaftRequest) returns (RaftReply) {}
@@ -46,4 +56,14 @@ service MetaService {
   rpc AppendEntries(RaftRequest) returns (RaftReply);
   rpc InstallSnapshot(RaftRequest) returns (RaftReply);
   rpc vote(RaftRequest) returns (RaftReply);
+
+  // handshake
+  rpc Handshake(stream HandshakeRequest) returns (stream HandshakeResponse);
+}
+
+service GrpcMetaService {
+  // forward
+  rpc forward(RaftRequest) returns (RaftReply) {}
+  // handshake
+  rpc Handshake(stream HandshakeRequest) returns (stream HandshakeResponse) {}
 }

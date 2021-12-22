@@ -50,11 +50,11 @@ const AUTH_TOKEN_KEY: &str = "auth-token-bin";
 impl MetaFlightClient {
     pub async fn try_new(conf: &MetaFlightClientConf) -> Result<MetaFlightClient> {
         Self::with_tls_conf(
-            &conf.meta_service_config.address,
-            &conf.meta_service_config.username,
-            &conf.meta_service_config.password,
+            &conf.kv_service_config.address,
+            &conf.kv_service_config.username,
+            &conf.kv_service_config.password,
             Some(Duration::from_secs(conf.client_timeout_in_second)),
-            conf.meta_service_config.tls_conf.clone(),
+            conf.kv_service_config.tls_conf.clone(),
         )
         .await
     }

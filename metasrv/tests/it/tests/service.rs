@@ -23,7 +23,6 @@ use common_meta_flight::MetaFlightClient;
 use common_meta_raft_store::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_raft_store::protobuf::GetReq;
 use common_tracing::tracing;
-use databend_meta::api::GrpcServer;
 use databend_meta::configs;
 use databend_meta::meta_service::MetaNode;
 
