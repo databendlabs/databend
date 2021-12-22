@@ -24,7 +24,10 @@ mod rule;
 mod s_expr;
 
 use common_exception::Result;
+pub use m_expr::MExpr;
+pub use memo::Memo;
 pub use optimize_context::OptimizeContext;
+pub use pattern_extractor::PatternExtractor;
 pub use property::ColumnSet;
 pub use property::PhysicalProperty;
 pub use property::RelationalProperty;
