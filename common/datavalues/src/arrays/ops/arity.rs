@@ -39,3 +39,15 @@ where
     let av = AlignedVec::<_>::from_trusted_len_iter(values);
     to_primitive::<R>(av, validity)
 }
+
+#[inline]
+pub fn unary<I, O, F>(array: &DFPrimitiveArray<I>, op: F) -> DFPrimitiveArray<O>
+where
+    I: DFPrimitiveType,
+    O: DFPrimitiveType,
+    F: Fn(I) -> O,
+{
+    let values = array.into_no_null_iter().map(|v| op(*v));
+    let av = AlignedVec::<_>::from_trusted_len_iter(values);
+    to_primitive::<O>(av, array.inner().validity().cloned())
+}

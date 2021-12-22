@@ -184,9 +184,9 @@ pub struct IntervalFunctionFactory;
 impl IntervalFunctionFactory {
     pub fn try_get_arithmetic_func(
         columns: &DataColumnsWithField,
-    ) -> Option<IntervalArithmeticFunction> {
+    ) -> Result<Option<IntervalArithmeticFunction>> {
         if columns.len() != 2 {
-            return None;
+            return Ok(None);
         }
 
         let mut interval_opt = None;
@@ -199,13 +199,20 @@ impl IntervalFunctionFactory {
             _ => {}
         });
 
-        if interval_opt.is_none() || date_datetime_opt.is_none() {
-            return None;
+        if interval_opt.is_none() {
+            return Ok(None);
         }
-        Some(Self::get_interval_arithmetic_func(
+
+        if date_datetime_opt.is_none() {
+            return Err(ErrorCode::BadDataValueType(
+                "Only support interval and date/datetime",
+            ));
+        }
+
+        Ok(Some(Self::get_interval_arithmetic_func(
             interval_opt.unwrap().data_type(),
             date_datetime_opt.unwrap().data_type(),
-        ))
+        )))
     }
 
     #[inline]
@@ -333,7 +340,7 @@ impl IntervalFunctionFactory {
         Ok(res.into())
     }
 
-    fn interval_month_plus_minus_date16(
+    pub fn interval_month_plus_minus_date16(
         op: &DataValueArithmeticOperator,
         a: &DataColumnWithField,
         b: &DataColumnWithField,
@@ -342,7 +349,7 @@ impl IntervalFunctionFactory {
         Self::month_i64_plus_minus_date16(op, interval, date16, 1)
     }
 
-    fn interval_month_plus_minus_date32(
+    pub fn interval_month_plus_minus_date32(
         op: &DataValueArithmeticOperator,
         a: &DataColumnWithField,
         b: &DataColumnWithField,
@@ -351,7 +358,7 @@ impl IntervalFunctionFactory {
         Self::month_i64_plus_minus_date32(op, interval, date32, 1)
     }
 
-    fn interval_month_plus_minus_datetime32(
+    pub fn interval_month_plus_minus_datetime32(
         op: &DataValueArithmeticOperator,
         a: &DataColumnWithField,
         b: &DataColumnWithField,

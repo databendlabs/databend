@@ -11,27 +11,61 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+/*
+use std::marker::PhantomData;
+use std::ops::Mul;
 
+use common_datavalues::prelude::*;
 use common_datavalues::DataValueArithmeticOperator;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use num::cast::AsPrimitive;
 
-use crate::scalars::function_factory::FunctionDescription;
+use super::arithmetic::ArithmeticTrait;
+use super::utils::assert_binary_arguments;
+use crate::binary_arithmetic;
+use crate::binary_arithmetic_helper;
+use crate::scalars::function_factory::ArithmeticDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::ArithmeticFunction;
+use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
+use crate::with_match_arithmetic_type;
 
 pub struct ArithmeticMulFunction;
 
 impl ArithmeticMulFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
-        ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Mul)
+    pub fn desc() -> ArithmeticDescription {
+        ArithmeticDescription::creator(Box::new(Self::try_create_func))
+            .features(FunctionFeatures::default().deterministic().monotonicity())
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func))
-            .features(FunctionFeatures::default().deterministic().monotonicity())
+    pub fn try_create_func(
+        _display_name: &str,
+        arguments: Vec<DataField>,
+    ) -> Result<Box<dyn Function>> {
+        let op = DataValueArithmeticOperator::Mul;
+        assert_binary_arguments(op.clone(), arguments.len())?;
+
+        let left_type = arguments[0].data_type();
+        let right_type = arguments[0].data_type();
+        let result_type = numerical_arithmetic_coercion(&op, left_type, right_type)?;
+
+        let e = Result::Err(ErrorCode::BadDataValueType(format!(
+            "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
+            left_type, op, right_type
+        )));
+
+        with_match_arithmetic_type!(left_type, |$T| {
+            with_match_arithmetic_type!(right_type, |$D| {
+                with_match_arithmetic_type!(result_type, |$R| {
+                    BinaryArithmeticFunction::<PrimitiveMul::<$T,$D,$R>>::try_create_func(
+                        op,
+                        result_type.clone(),
+                    )
+                }, e)
+            }, e)
+        }, e)
     }
 
     pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
@@ -206,3 +240,42 @@ pub fn arithmetic_mul_div_monotonicity(
         }
     }
 }
+
+#[derive(Clone)]
+pub struct PrimitiveMul<T, D, R> {
+    t: PhantomData<T>,
+    d: PhantomData<D>,
+    r: PhantomData<R>,
+}
+
+impl<T, D, R> ArithmeticTrait for PrimitiveMul<T, D, R>
+where
+    T: DFPrimitiveType + AsPrimitive<R>,
+    T: AsPrimitive<u64>,
+    T: AsPrimitive<i64>,
+    D: DFPrimitiveType + AsPrimitive<R>,
+    D: AsPrimitive<u64>,
+    D: AsPrimitive<i64>,
+    R: DFPrimitiveType + Mul<Output = R>,
+    DFPrimitiveArray<R>: IntoSeries,
+{
+    fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
+        match R::data_type() {
+            DataType::UInt64 => binary_arithmetic!(
+                columns[0].column(),
+                columns[1].column(),
+                u64,
+                |l: u64, r: u64| l.wrapping_mul(r)
+            ),
+            DataType::Int64 => binary_arithmetic!(
+                columns[0].column(),
+                columns[1].column(),
+                i64,
+                |l: i64, r: i64| l.wrapping_mul(r)
+            ),
+            _ => binary_arithmetic!(columns[0].column(), columns[1].column(), R, |l: R, r: R| l
+                * r),
+        }
+    }
+}
+*/

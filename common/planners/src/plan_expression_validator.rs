@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_datavalues::DataField;
+use common_datavalues::DataType;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::Function;
@@ -90,7 +93,12 @@ fn validate_function_arg(func: Box<dyn Function>, args: &[Expression]) -> Result
 pub fn validate_expression(expr: &Expression) -> Result<()> {
     let validator = ExpressionValidator::new(&|expr: &Expression| match expr {
         Expression::ScalarFunction { op, args } => {
-            let func = FunctionFactory::instance().get(op)?;
+            let mut arg_fields = Vec::with_capacity(args.len());
+            for _ in 0..args.len() {
+                arg_fields.push(DataField::new("_dummy", DataType::UInt8, false));
+            }
+
+            let func = FunctionFactory::instance().get(op, arg_fields)?;
             validate_function_arg(func, args)
         }
 

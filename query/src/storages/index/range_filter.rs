@@ -85,7 +85,7 @@ impl RangeFilter {
                         c.column_id
                     ))
                 })?;
-                c.apply_stat_value(stat)?.to_array()
+                c.apply_stat_value(stat, self.schema.clone())?.to_array()
             })
             .collect::<Result<Vec<_>>>()?;
         let data_block = DataBlock::create_by_array(self.schema.clone(), columns);
@@ -195,7 +195,7 @@ impl StatColumn {
         }
     }
 
-    fn apply_stat_value(&self, column_stats: &ColumnStatistics) -> Result<DataValue> {
+    fn apply_stat_value(&self, column_stats: &ColumnStatistics, schema: DataSchemaRef) -> Result<DataValue> {
         if self.stat_type == StatType::Nulls {
             return Ok(DataValue::UInt64(Some(column_stats.null_count)));
         }
@@ -210,6 +210,7 @@ impl StatColumn {
         ));
 
         let monotonicity = MonotonicityCheckVisitor::check_expression(
+            schema,
             &self.expr,
             variable_left,
             variable_right,

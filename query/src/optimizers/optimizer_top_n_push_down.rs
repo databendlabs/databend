@@ -113,13 +113,13 @@ impl PlanRewriter for TopNPushDownImpl {
                         projection: extras.projection.clone(),
                         filters: extras.filters.clone(),
                         limit: Some(new_limit),
-                        order_by: self.get_sort_columns()?,
+                        order_by: self.get_sort_columns(plan.schema())?,
                     })
                 }
                 None => {
                     let mut extras = Extras::default();
                     extras.limit = Some(n);
-                    extras.order_by = self.get_sort_columns()?;
+                    extras.order_by = self.get_sort_columns(plan.schema())?;
                     Some(extras)
                 }
             };
@@ -156,7 +156,7 @@ impl TopNPushDownImpl {
     // For every order by columns, try the best to extract the native columns.
     // For example 'order by age+3, number+5', will return expression of two columns,
     // 'age' and 'number', since f(age)=age+3 and f(number)=number+5 are both monotonic functions.
-    fn get_sort_columns(&self) -> Result<Vec<Expression>> {
+    fn get_sort_columns(&self, schema: DataSchemaRef) -> Result<Vec<Expression>> {
         self.order_by
             .iter()
             .map(|expr| {
@@ -173,7 +173,7 @@ impl TopNPushDownImpl {
                     Some((l, r)) => (l.clone(), r.clone()),
                 };
 
-                match MonotonicityCheckVisitor::extract_sort_column(expr, left, right, column_name)
+                match MonotonicityCheckVisitor::extract_sort_column(schema.clone(), expr, left, right, column_name)
                 {
                     Ok(new_expr) => Ok(new_expr),
                     Err(error) => {
