@@ -12,21 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-mod exec;
-mod metrics;
-mod opt;
-pub mod parser;
-mod plan_parser;
-mod planner;
-mod sql_common;
-mod sql_parser;
-mod sql_statement;
-pub mod statements;
+use crate::sql::opt::RuleSet;
 
-pub use common::*;
-pub use plan_parser::PlanParser;
-pub use planner::*;
-pub use sql_common::SQLCommon;
-pub use sql_parser::DfParser;
-pub use sql_statement::*;
+pub fn get_explore_rule_set() -> RuleSet {
+    RuleSet::create_with_ids(vec![]).unwrap()
+}
+
+#[cfg(test)]
+mod test {
+    use crate::sql::opt::cascades::explore_rules::get_explore_rule_set;
+
+    // Pass if don't panic
+    #[test]
+    fn test_get_explore_rule_set() {
+        get_explore_rule_set();
+    }
+}

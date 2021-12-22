@@ -191,6 +191,8 @@ build_exceptions! {
     StrParseError(60),
     IllegalGrant(61),
 
+    SemanticError(100),
+
     // uncategorized
     UnexpectedResponseType(600),
 
