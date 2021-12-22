@@ -37,26 +37,58 @@ All scalar functions implement `Function` trait, and we register them into a glo
 ``` rust
 
 pub trait Function: fmt::Display + Sync + Send + DynClone {
+    /// Returns the name of the function, should be unique.
     fn name(&self) -> &str;
 
+    // Returns the number of arguments the function accepts.
     fn num_arguments(&self) -> usize {
         0
     }
 
-    // (1, 2) means we only accept [1, 2] arguments
-    // None means it's not variadic function
+    /// (1, 2) means we only accept [1, 2] arguments
+    /// None means it's not variadic function
     fn variadic_arguments(&self) -> Option<(usize, usize)> {
         None
     }
 
-    // return monotonicity node, should always return MonotonicityNode::Function
-    fn get_monotonicity(&self, _args: &[MonotonicityNode]) -> Result<MonotonicityNode> {
-        Ok(MonotonicityNode::Function(Monotonicity::default(), None))
+    /// Calculate the monotonicity from arguments' monotonicity information.
+    /// The input should be argument's monotonicity. For binary function it should be an
+    /// array of left expression's monotonicity and right expression's monotonicity.
+    /// For unary function, the input should be an array of the only argument's monotonicity.
+    /// The returned monotonicity should have 'left' and 'right' fields None -- the boundary
+    /// calculation relies on the function.eval method.
+    fn get_monotonicity(&self, _args: &[Monotonicity]) -> Result<Monotonicity> {
+        Ok(Monotonicity::default())
     }
 
+    /// The method returns the return_type of this function.
     fn return_type(&self, args: &[DataType]) -> Result<DataType>;
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool>;
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn>;
+
+    /// Whether the function may return null with specific input schema.
+    /// The default implementation check whether any nullable input exists.
+    /// If yes, return true; otherwise false.
+    fn nullable(&self, input_schema: &DataSchema) -> Result<bool> {
+        let any_input_nullable = input_schema
+            .fields()
+            .iter()
+            .any(|field| field.is_nullable());
+        Ok(any_input_nullable)
+    }
+
+    /// Evaluate the function, e.g. run/execute the function.
+    fn eval(&self, _columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn>;
+
+    /// Whether the function passes through null input.
+    /// Return true is the function just return null with any given null input.
+    /// Return false if the function may return non-null with null input.
+    ///
+    /// For example, arithmetic plus('+') will output null for any null input, like '12 + null = null'.
+    /// It has no idea of how to handle null, but just pass through.
+    ///
+    /// While ISNULL function  treats null input as a valid one. For example ISNULL(NULL, 'test') will return 'test'.
+    fn passthrough_null(&self) -> bool {
+        true
+    }
 }
 
 ```
@@ -68,9 +100,9 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
 - Some functions may accept variadic arguments, that's the `variadic_arguments` function works. For example, `round` function accepts one or two functions, its range is [1,2], we use closed interval here.
 - The function `get_monotonicity` indicates the monotonicity of this function, it can be used to optimize the execution.
 - The function `return_type` indicates the return type of this function, we can also validate the `args` in this function.
-- The function `nullable` indicates whether this function can return a column with a nullable field(For the time being, return true/false is ok).
-- `eval` is the main function to execute the ScalarFunction, `columns` is the input columns, `input_rows` is the number of input rows, we will explain how to write `eval` function later.
-
+- The function `nullable` indicates whether this function can return a column with a nullable field. The default behavior is checking if any nullable input column exists, return true if it does exist, otherwise false.
+- `eval` is the main function to execute the ScalarFunction, `columns` is the input columns, `input_rows` is the number of input rows, we will explain how to write `eval` function false.
+- `passthrough_null` indicates whether the function return null if one of the input is null. For most function it should be true (which is the default behavior). But some exceptions do exist, like `ISNULL, CONCAT_WS` etc.
 
 ### Knowledge before writing the eval function
 
@@ -135,6 +167,8 @@ Noticed that we should take care of the Constant Column match case to improve me
 
 
 #### Column Iteration and validity bitmap combination
+Most functions have default null behavior, see [Pass through null](###pass-through-null). We don't need to combine validity bitmap. But for functions that can produce valid result with null input, we need to generate our own bitmap inside the function `eval`.
+
 To iterate the column, we can use `column.iter()` to generate an iterator, the item is `Option<T>`, `None` means it's null.
 But this's inefficient because we need to check the null value every time we iterate the column inside the loop which will pollute the CPU cache.
 
@@ -154,12 +188,13 @@ binary(x_series.f64()?, y_series.f64()?, |x, y| x.pow(y))
 ```
 
 ### Nullable check
-Nullable is annoying, but we can accept `DataType::Null` argument in most cases.
+Nullable is annoying, but we can accept `DataType::Null` argument in most cases. The default implementation is to return true if any of the inputs is nullable, otherwise false. Some function may return null, even when none of the inputs is nullable. Thus we need to override the function to return true.
 
 ### Implicit cast
 Databend can accept implicit cast, eg: `pow('3', 2)`, `sign('1232')` we can cast the argument to specific column using `cast_with_type`.
 
-
+### Pass through null
+Most functions have default null behavior (thus you don't need to override), that is, a null value in any of the input produces a null result. For functions like this, the `eval` method doesn't need to conditionally calculate the result with checking the input is null or not. The bitmap with null bits will be applied outside the function by masking the return column. For example, arithmetic plus operation with inputs`[1, None, 1], [None, 2, 2]` doesn't need to check if every column value is null. The bitmap of `[1, 0, 1], [0, 1, 1]` will be merged to `[0, 0, 1]` and applied to the results, which ensures the first two values are none.
 
 ## Refer to other examples
 As you see, adding a new scalar function in Databend is not as hard as you think.
