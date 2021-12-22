@@ -24,7 +24,6 @@ use num_traits::WrappingAdd;
 
 use super::arithmetic::ArithmeticTrait;
 use super::utils::assert_binary_arguments;
-use crate::with_match_integer_type;
 use super::utils::validate_input;
 use crate::binary_arithmetic;
 use crate::binary_arithmetic_helper;
@@ -36,6 +35,7 @@ use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
 use crate::with_match_arithmetic_type;
+use crate::with_match_integer_type;
 
 pub struct ArithmeticPlusFunction;
 
@@ -224,12 +224,8 @@ where
     DFPrimitiveArray<R>: IntoSeries,
 {
     fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
-        binary_arithmetic!(
-            columns[0].column(),
-            columns[1].column(),
-            R,
-            |l: R, r: R| l.wrapping_add(&r)
-        )
+        binary_arithmetic!(columns[0].column(), columns[1].column(), R, |l: R, r: R| l
+            .wrapping_add(&r))
     }
 }
 
@@ -249,7 +245,7 @@ where
 {
     fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
         binary_arithmetic!(columns[0].column(), columns[1].column(), R, |l: R, r: R| l
-                + r)
+            + r)
     }
 }
 

@@ -49,7 +49,6 @@ pub fn validate_input<'a>(
     }
 }
 
-
 #[macro_export]
 macro_rules! with_match_integer_type {
     (

@@ -195,7 +195,11 @@ impl StatColumn {
         }
     }
 
-    fn apply_stat_value(&self, column_stats: &ColumnStatistics, schema: DataSchemaRef) -> Result<DataValue> {
+    fn apply_stat_value(
+        &self,
+        column_stats: &ColumnStatistics,
+        schema: DataSchemaRef,
+    ) -> Result<DataValue> {
         if self.stat_type == StatType::Nulls {
             return Ok(DataValue::UInt64(Some(column_stats.null_count)));
         }

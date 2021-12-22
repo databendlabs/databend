@@ -134,7 +134,7 @@ where T: ArithmeticTrait + Clone + Sync + Send + 'static
         match self.op {
             Plus => ArithmeticPlusFunction::get_monotonicity(args),
             _ => unimplemented!(),
-           /* Minus => ArithmeticMinusFunction::get_monotonicity(args),
+            /* Minus => ArithmeticMinusFunction::get_monotonicity(args),
             Mul => ArithmeticMulFunction::get_monotonicity(args),
             Div => ArithmeticDivFunction::get_monotonicity(args),
             IntDiv => ArithmeticIntDivFunction::get_monotonicity(args),

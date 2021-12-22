@@ -14,10 +14,10 @@
 
 use std::collections::HashSet;
 
-use common_datavalues::DataSchemaRef;
 use common_datavalues::prelude::DataColumn;
 use common_datavalues::prelude::DataColumnWithField;
 use common_datavalues::DataField;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::Function;

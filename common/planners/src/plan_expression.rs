@@ -240,7 +240,11 @@ impl Expression {
     }
 
     #[inline(always)]
-    pub fn function_nullable(op: &str, input_schema: &DataSchemaRef, arg_fields: Vec<DataField>) -> Result<bool> {
+    pub fn function_nullable(
+        op: &str,
+        input_schema: &DataSchemaRef,
+        arg_fields: Vec<DataField>,
+    ) -> Result<bool> {
         let f = FunctionFactory::instance().get(op, arg_fields)?;
         f.nullable(input_schema)
     }
@@ -258,15 +262,24 @@ impl Expression {
             }
             Expression::Subquery { query_plan, .. } => Self::subquery_nullable(query_plan),
             Expression::ScalarSubquery { query_plan, .. } => Self::subquery_nullable(query_plan),
-            Expression::BinaryExpression { left,op, right } => {
-                let arg_fields = vec![left.to_data_field(input_schema)?, right.to_data_field(input_schema)?];
-                Self::function_nullable(op, input_schema, arg_fields)},
+            Expression::BinaryExpression { left, op, right } => {
+                let arg_fields = vec![
+                    left.to_data_field(input_schema)?,
+                    right.to_data_field(input_schema)?,
+                ];
+                Self::function_nullable(op, input_schema, arg_fields)
+            }
             Expression::UnaryExpression { op, expr } => {
                 let arg_fields = vec![expr.to_data_field(input_schema)?];
-                Self::function_nullable(op, input_schema, arg_fields)},
+                Self::function_nullable(op, input_schema, arg_fields)
+            }
             Expression::ScalarFunction { op, args } => {
-                let arg_fields = args.iter().map(|expr| expr.to_data_field(input_schema)).collect::<Result<Vec<_>>>()?;
-                Self::function_nullable(op, input_schema, arg_fields)},
+                let arg_fields = args
+                    .iter()
+                    .map(|expr| expr.to_data_field(input_schema))
+                    .collect::<Result<Vec<_>>>()?;
+                Self::function_nullable(op, input_schema, arg_fields)
+            }
             Expression::AggregateFunction { .. } => {
                 let f = self.to_aggregate_function(input_schema)?;
                 f.nullable(input_schema)

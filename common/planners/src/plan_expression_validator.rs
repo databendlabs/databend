@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use common_datavalues::DataField;
-use common_datavalues::DataType;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::Function;

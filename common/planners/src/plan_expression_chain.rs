@@ -105,9 +105,8 @@ impl ExpressionChain {
                 self.add_expr(nested_expr)?;
 
                 let arg_fields = vec![expr.to_data_field(&self.schema)?];
-
-                let func = FunctionFactory::instance().get(op, arg_fields.clone())?;
                 let arg_types = vec![nested_expr.to_data_type(&self.schema)?];
+                let func = FunctionFactory::instance().get(op, arg_fields.clone())?;
                 let is_nullable = func.nullable(self.schema.as_ref())?;
                 let return_type = func.return_type(&arg_types)?;
 
