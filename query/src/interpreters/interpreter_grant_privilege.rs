@@ -50,6 +50,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
 
+        plan.on.validate_privileges(plan.priv_types)?;
         grant_object_exists_or_err(&self.ctx, &plan.on).await?;
 
         // TODO: check user existence

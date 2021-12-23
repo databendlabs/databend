@@ -41,7 +41,8 @@ impl IsNotNullFunction {
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function("isnull")
-                .bool_function(),
+                .bool_function()
+                .num_arguments(1),
         )
     }
 }
@@ -49,10 +50,6 @@ impl IsNotNullFunction {
 impl Function for IsNotNullFunction {
     fn name(&self) -> &str {
         "IsNotNullFunction"
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
     }
 
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {

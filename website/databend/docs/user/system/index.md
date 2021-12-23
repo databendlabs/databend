@@ -14,7 +14,7 @@ Reads from this table are parallelized too.
 
 Used for tests.
 
-```
+```sql
 mysql> SELECT avg(number) FROM numbers(100000000);
 +-------------+
 | avg(number) |
@@ -33,7 +33,7 @@ The same as system.numbers
 
 Contains information about session settings for current user.
 
-```
+```sql
 mysql> SELECT * FROM system.settings;
 +----------------+---------+---------------------------------------------------------------------------------------------------+
 | name           | value   | description                                                                                       |
@@ -49,7 +49,7 @@ mysql> SELECT * FROM system.settings;
 
 Contains information about normal and aggregate functions.
 
-```
+```sql
 mysql> SELECT * FROM system.functions limit 10;
 +----------+--------------+
 | name     | is_aggregate |
@@ -66,13 +66,13 @@ mysql> SELECT * FROM system.functions limit 10;
 | modulo   |        false |
 +----------+--------------+
 10 rows in set (0.01 sec)
-
 ```
+
 ## system.contributors
 
 Contains information about contributors.
 
-```
+```sql
 mysql> SELECT * FROM system.contributors LIMIT 20;
 +-------------------------+
 | name                    |
@@ -105,7 +105,7 @@ mysql> SELECT * FROM system.contributors LIMIT 20;
 
 Contains information about credits.
 
-```
+```sql
 mysql> SELECT * FROM system.credits LIMIT 20;
 +-------------------+---------+---------------------------+
 | name              | version | license                   |

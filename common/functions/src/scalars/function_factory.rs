@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_datavalues::DataField;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use lazy_static::lazy_static;
@@ -32,9 +33,14 @@ use crate::scalars::OtherFunction;
 use crate::scalars::StringFunction;
 use crate::scalars::ToCastFunction;
 use crate::scalars::TupleClassFunction;
+use crate::scalars::UUIDFunction;
 use crate::scalars::UdfFunction;
 
 pub type FactoryCreator = Box<dyn Fn(&str) -> Result<Box<dyn Function>> + Send + Sync>;
+
+// Temporary adaptation for arithmetic.
+pub type ArithmeticCreator =
+    Box<dyn Fn(&str, Vec<DataField>) -> Result<Box<dyn Function>> + Send + Sync>;
 
 #[derive(Clone)]
 pub struct FunctionFeatures {
@@ -43,6 +49,10 @@ pub struct FunctionFeatures {
     pub is_bool_func: bool,
     pub is_context_func: bool,
     pub maybe_monotonic: bool,
+    pub num_arguments: usize,
+    // (1, 2) means we only accept [1, 2] arguments
+    // None means it's not variadic function
+    pub variadic_arguments: Option<(usize, usize)>,
 }
 
 impl FunctionFeatures {
@@ -53,6 +63,8 @@ impl FunctionFeatures {
             is_bool_func: false,
             is_context_func: false,
             maybe_monotonic: false,
+            num_arguments: 0,
+            variadic_arguments: None,
         }
     }
 
@@ -80,6 +92,16 @@ impl FunctionFeatures {
         self.maybe_monotonic = true;
         self
     }
+
+    pub fn num_arguments(mut self, num_arguments: usize) -> FunctionFeatures {
+        self.num_arguments = num_arguments;
+        self
+    }
+
+    pub fn variadic_arguments(mut self, min: usize, max: usize) -> FunctionFeatures {
+        self.variadic_arguments = Some((min, max));
+        self
+    }
 }
 
 pub struct FunctionDescription {
@@ -103,8 +125,28 @@ impl FunctionDescription {
     }
 }
 
+pub struct ArithmeticDescription {
+    features: FunctionFeatures,
+    arithmetic_creator: ArithmeticCreator,
+}
+
+impl ArithmeticDescription {
+    pub fn creator(creator: ArithmeticCreator) -> ArithmeticDescription {
+        ArithmeticDescription {
+            arithmetic_creator: creator,
+            features: FunctionFeatures::default(),
+        }
+    }
+
+    pub fn features(mut self, features: FunctionFeatures) -> ArithmeticDescription {
+        self.features = features;
+        self
+    }
+}
+
 pub struct FunctionFactory {
     case_insensitive_desc: HashMap<String, FunctionDescription>,
+    case_insensitive_arithmetic_desc: HashMap<String, ArithmeticDescription>,
 }
 
 lazy_static! {
@@ -123,6 +165,7 @@ lazy_static! {
         OtherFunction::register(&mut function_factory);
         MathsFunction::register(&mut function_factory);
         TupleClassFunction::register(&mut function_factory);
+        UUIDFunction::register(&mut function_factory);
 
         Arc::new(function_factory)
     };
@@ -132,6 +175,7 @@ impl FunctionFactory {
     pub(in crate::scalars::function_factory) fn create() -> FunctionFactory {
         FunctionFactory {
             case_insensitive_desc: Default::default(),
+            case_insensitive_arithmetic_desc: Default::default(),
         }
     }
 
@@ -144,15 +188,27 @@ impl FunctionFactory {
         case_insensitive_desc.insert(name.to_lowercase(), desc);
     }
 
-    pub fn get(&self, name: impl AsRef<str>) -> Result<Box<dyn Function>> {
+    pub fn register_arithmetic(&mut self, name: &str, desc: ArithmeticDescription) {
+        let case_insensitive_arithmetic_desc = &mut self.case_insensitive_arithmetic_desc;
+        case_insensitive_arithmetic_desc.insert(name.to_lowercase(), desc);
+    }
+
+    pub fn get(
+        &self,
+        name: impl AsRef<str>,
+        arguments: Vec<DataField>,
+    ) -> Result<Box<dyn Function>> {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
         match self.case_insensitive_desc.get(&lowercase_name) {
             // TODO(Winter): we should write similar function names into error message if function name is not found.
-            None => Err(ErrorCode::UnknownFunction(format!(
-                "Unsupported Function: {}",
-                origin_name
-            ))),
+            None => match self.case_insensitive_arithmetic_desc.get(&lowercase_name) {
+                None => Err(ErrorCode::UnknownFunction(format!(
+                    "Unsupported Function: {}",
+                    origin_name
+                ))),
+                Some(desc) => (desc.arithmetic_creator)(origin_name, arguments),
+            },
             Some(desc) => (desc.function_creator)(origin_name),
         }
     }
@@ -162,10 +218,13 @@ impl FunctionFactory {
         let lowercase_name = origin_name.to_lowercase();
         match self.case_insensitive_desc.get(&lowercase_name) {
             // TODO(Winter): we should write similar function names into error message if function name is not found.
-            None => Err(ErrorCode::UnknownFunction(format!(
-                "Unsupported Function: {}",
-                origin_name
-            ))),
+            None => match self.case_insensitive_arithmetic_desc.get(&lowercase_name) {
+                None => Err(ErrorCode::UnknownFunction(format!(
+                    "Unsupported Function: {}",
+                    origin_name
+                ))),
+                Some(desc) => Ok(desc.features.clone()),
+            },
             Some(desc) => Ok(desc.features.clone()),
         }
     }
@@ -173,12 +232,17 @@ impl FunctionFactory {
     pub fn check(&self, name: impl AsRef<str>) -> bool {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
-        self.case_insensitive_desc.contains_key(&lowercase_name)
+        if self.case_insensitive_desc.contains_key(&lowercase_name) {
+            return true;
+        }
+        self.case_insensitive_arithmetic_desc
+            .contains_key(&lowercase_name)
     }
 
     pub fn registered_names(&self) -> Vec<String> {
         self.case_insensitive_desc
             .keys()
+            .chain(self.case_insensitive_arithmetic_desc.keys())
             .cloned()
             .collect::<Vec<_>>()
     }

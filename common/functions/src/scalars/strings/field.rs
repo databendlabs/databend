@@ -34,22 +34,17 @@ impl FieldFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(2, usize::MAX - 1),
+        )
     }
 }
 
 impl Function for FieldFunction {
     fn name(&self) -> &str {
         &*self.display_name
-    }
-
-    fn num_arguments(&self) -> usize {
-        0
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((2, usize::MAX - 1))
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {

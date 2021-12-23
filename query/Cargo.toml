@@ -82,7 +82,7 @@ maplit = "1.0.2"
 metrics = "0.17.1"
 nom = "7.1.0"
 num = "0.4.0"
-num_cpus = "1.13.0"
+num_cpus = "1.13.1"
 octocrab = "0.15.2"
 paste = "1.0.6"
 prost = "0.9.0"
@@ -104,7 +104,7 @@ parquet-format-async-temp = "0.2.0"
 
 [dev-dependencies]
 criterion = "0.3.5"
-mysql = "21.0.2"
+mysql_async = "0.29.0"
 pretty_assertions = "1.0.0"
 reqwest = { version = "0.11.8", features = ["json", "native-tls"] }
 tempfile = "3.2.0"

@@ -77,6 +77,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                 DataType::Boolean => Ok(ColumnType::MYSQL_TYPE_SHORT),
                 DataType::Date16 | DataType::Date32 => Ok(ColumnType::MYSQL_TYPE_DATE),
                 DataType::DateTime32(_) => Ok(ColumnType::MYSQL_TYPE_DATETIME),
+                DataType::DateTime64(_, _) => Ok(ColumnType::MYSQL_TYPE_DATETIME),
                 DataType::Null => Ok(ColumnType::MYSQL_TYPE_NULL),
                 DataType::Interval(_) => Ok(ColumnType::MYSQL_TYPE_LONG),
                 DataType::Struct(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
@@ -163,6 +164,22 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                     let tz = tz.unwrap_or_else(|| "UTC".to_string());
                                     let tz: Tz = tz.parse().unwrap();
                                     row_writer.write_col(v.to_date_time(&tz).naive_local())?
+                                }
+                                (
+                                    DataType::DateTime64(precision, tz),
+                                    DataValue::UInt64(Some(v)),
+                                ) => {
+                                    let tz = tz.clone();
+                                    let tz = tz.unwrap_or_else(|| "UTC".to_string());
+                                    let tz: Tz = tz.parse().unwrap();
+                                    let fmt = format!("%Y-%m-%d %H:%M:%S%.{}f", precision);
+
+                                    row_writer.write_col(
+                                        v.to_date_time64(precision, &tz)
+                                            .naive_local()
+                                            .format(fmt.as_str())
+                                            .to_string(),
+                                    )?
                                 }
                                 (DataType::String, DataValue::String(Some(v))) => {
                                     row_writer.write_col(v)?

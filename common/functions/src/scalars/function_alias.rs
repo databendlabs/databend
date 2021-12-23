@@ -49,10 +49,6 @@ impl Function for AliasFunction {
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         Ok(columns[0].column().clone())
     }
-
-    fn num_arguments(&self) -> usize {
-        1
-    }
 }
 
 impl fmt::Display for AliasFunction {

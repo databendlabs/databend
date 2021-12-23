@@ -45,14 +45,6 @@ impl Function for RoundingFunction {
         &*self.display_name
     }
 
-    fn num_arguments(&self) -> usize {
-        0
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((1, 2))
-    }
-
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
         Ok(true)
     }
@@ -138,8 +130,11 @@ impl RoundNumberFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(1, 2),
+        )
     }
 }
 
@@ -151,7 +146,10 @@ impl TruncNumberFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(1, 2),
+        )
     }
 }

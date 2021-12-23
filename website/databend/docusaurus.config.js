@@ -82,20 +82,21 @@ const config = {
                         ]
                     },
                     {
-                        to: '/user/index', label: 'User Guide', position: 'left', items: [
-                            {label: 'Get Started', to: '/user/index'},
-                            {label: 'SQL', to: '/user/sqlstatement/index'},
-                            {label: 'CLI', to: '/user/cli/index'},
-                            {label: 'APIs', to: '/user/api/index'}
+                        to: '/user', label: 'User Guide', position: 'left', items: [
+                            {label: 'Get Started', to: '/user'},
+                            {label: 'SQL', to: '/user/category/sql-statement'},
+                            {label: 'CLI', to: '/user/category/cli'},
+                            {label: 'APIs', to: '/user/category/api'},
+                            {label: 'Data Load', to: '/user/data-loading/http-streaming-load'}
                         ]
                     },
                     {
-                        to: '/dev/index', label: 'Dev Guide', position: 'left', items: [
-                            {label: 'Contributing', to: '/dev/contributing/index'},
-                            {label: 'Development', to: '/dev/development/index'},
+                        label: 'Dev Guide', position: 'left', items: [
+                            {label: 'Contributing', to: '/dev/category/contributing'},
+                            {label: 'Development', to: '/dev/category/development'},
                             {label: 'Roadmap', to: '/dev/roadmap'},
-                            {label: 'Policies', to: '/dev/policies/index'},
-                            {label: 'RFCs', to: '/dev/rfcs/index'}
+                            {label: 'Policies', to: '/dev/category/policies'},
+                            {label: 'RFCs', to: '/dev/category/rfcs'}
                         ]
                     },
                     {
@@ -113,7 +114,7 @@ const config = {
                         items: [
                             {
                                 label: 'CLI Reference',
-                                to: '/user/cli/index'
+                                to: '/user/category/cli'
                             },
                             {
                                 label: 'Performance',

@@ -75,17 +75,13 @@ impl<T: ReplaceOperator> ReplaceImplFunction<T> {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(3))
     }
 }
 
 impl<T: ReplaceOperator> Function for ReplaceImplFunction<T> {
     fn name(&self) -> &str {
         &*self.display_name
-    }
-
-    fn num_arguments(&self) -> usize {
-        3
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {

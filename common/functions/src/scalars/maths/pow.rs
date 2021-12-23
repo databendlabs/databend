@@ -39,17 +39,13 @@ impl PowFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 }
 
 impl Function for PowFunction {
     fn name(&self) -> &str {
         &*self.display_name
-    }
-
-    fn num_arguments(&self) -> usize {
-        2
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {

@@ -40,8 +40,11 @@ impl FormatFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(2, 3),
+        )
     }
 
     fn format_en_us(number: Option<f64>, precision: Option<i64>) -> Option<Vec<u8>> {
@@ -71,14 +74,6 @@ impl FormatFunction {
 impl Function for FormatFunction {
     fn name(&self) -> &str {
         "format"
-    }
-
-    fn num_arguments(&self) -> usize {
-        0
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((2, 3))
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
@@ -135,6 +130,10 @@ impl Function for FormatFunction {
             }
             _ => Ok(DataColumn::Constant(DataValue::String(None), input_rows)),
         }
+    }
+
+    fn passthrough_null(&self) -> bool {
+        false
     }
 }
 

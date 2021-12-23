@@ -56,17 +56,13 @@ impl<T: StringOperator> String2StringFunction<T> {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
 impl<T: StringOperator> Function for String2StringFunction<T> {
     fn name(&self) -> &str {
         &self.display_name
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {

@@ -47,10 +47,6 @@ impl Function for PiFunction {
         &*self.display_name
     }
 
-    fn num_arguments(&self) -> usize {
-        0
-    }
-
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(DataType::Float64)
     }

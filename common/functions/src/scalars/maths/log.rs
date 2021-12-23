@@ -28,19 +28,13 @@ use crate::scalars::Function;
 pub struct GenericLogFunction {
     display_name: String,
     default_base: f64,
-    unary: bool,
 }
 
 impl GenericLogFunction {
-    pub fn try_create(
-        display_name: &str,
-        default_base: f64,
-        unary: bool,
-    ) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, default_base: f64) -> Result<Box<dyn Function>> {
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
             default_base,
-            unary,
         }))
     }
 }
@@ -48,22 +42,6 @@ impl GenericLogFunction {
 impl Function for GenericLogFunction {
     fn name(&self) -> &str {
         &*self.display_name
-    }
-
-    fn num_arguments(&self) -> usize {
-        if self.unary {
-            1
-        } else {
-            0
-        }
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        if self.unary {
-            None
-        } else {
-            Some((1, 2))
-        }
     }
 
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
@@ -134,12 +112,15 @@ pub struct LogFunction {}
 
 impl LogFunction {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        GenericLogFunction::try_create(display_name, E, false)
+        GenericLogFunction::try_create(display_name, E)
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(1, 2),
+        )
     }
 }
 
@@ -147,12 +128,12 @@ pub struct LnFunction {}
 
 impl LnFunction {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        GenericLogFunction::try_create(display_name, E, true)
+        GenericLogFunction::try_create(display_name, E)
     }
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
@@ -160,12 +141,12 @@ pub struct Log10Function {}
 
 impl Log10Function {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        GenericLogFunction::try_create(display_name, 10_f64, true)
+        GenericLogFunction::try_create(display_name, 10_f64)
     }
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
@@ -173,11 +154,11 @@ pub struct Log2Function {}
 
 impl Log2Function {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        GenericLogFunction::try_create(display_name, 2_f64, true)
+        GenericLogFunction::try_create(display_name, 2_f64)
     }
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }

@@ -21,6 +21,9 @@ use std::time::Duration;
 
 use common_base::tokio;
 use common_base::SignalStream;
+use common_cache::query::LocalCache;
+use common_cache::query::LocalCacheConfig;
+use common_cache::query::QueryCache;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -29,9 +32,6 @@ use common_tracing::tracing;
 use futures::future::Either;
 use futures::StreamExt;
 
-use crate::cache::LocalCache;
-use crate::cache::LocalCacheConfig;
-use crate::cache::QueryCache;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
 use crate::configs::Config;

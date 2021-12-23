@@ -42,22 +42,17 @@ impl TupleFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func))
-            .features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(1, usize::MAX),
+        )
     }
 }
 
 impl Function for TupleFunction {
     fn name(&self) -> &str {
         "TupleFunction"
-    }
-
-    fn num_arguments(&self) -> usize {
-        0
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((1, usize::MAX))
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {

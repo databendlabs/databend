@@ -32,7 +32,8 @@ impl ComparisonNotLikeFunction {
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function("like")
-                .bool_function(),
+                .bool_function()
+                .num_arguments(2),
         )
     }
 }
