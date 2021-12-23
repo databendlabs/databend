@@ -12,31 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
-
 use common_datavalues::prelude::DataColumnWithField;
-use common_exception::ErrorCode;
-use common_exception::Result;
-/*
-pub fn assert_unary_arguments<D: Display>(name: D, actual: usize) -> Result<()> {
-    if actual != 1 {
-        return Err(ErrorCode::NumberArgumentsNotMatch(format!(
-            "{} expect to have single arguments, but got {}",
-            name, actual
-        )));
-    }
-    Ok(())
-}*/
-
-pub fn assert_binary_arguments<D: Display>(name: D, actual: usize) -> Result<()> {
-    if actual != 2 {
-        return Err(ErrorCode::NumberArgumentsNotMatch(format!(
-            "{} expect to have two arguments, but got {}",
-            name, actual
-        )));
-    }
-    Ok(())
-}
 
 pub fn validate_input<'a>(
     col0: &'a DataColumnWithField,

@@ -20,6 +20,7 @@ mod arithmetic_modulo;
 mod arithmetic_mul;
 mod arithmetic_plus;
 mod binary_arithmetic;
+mod interval;
 mod macros;
 mod utils;
 

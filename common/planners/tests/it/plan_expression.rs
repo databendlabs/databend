@@ -82,7 +82,7 @@ fn test_expression_validate() -> Result<()> {
                 args: vec![],
             },
             error: Some(ErrorCode::NumberArgumentsNotMatch(
-                "ToTypeNameFunction expect to have 1 arguments, but got 0",
+                "Function `toTypeName` expect to have 1 arguments, but got 0",
             )),
         },
         Test {
@@ -92,7 +92,7 @@ fn test_expression_validate() -> Result<()> {
                 args: vec![col("33")],
             },
             error: Some(ErrorCode::NumberArgumentsNotMatch(
-                "UdfExampleFunction expect to have 0 arguments, but got 1",
+                "Function `example` expect to have 0 arguments, but got 1",
             )),
         },
         Test {

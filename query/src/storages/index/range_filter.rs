@@ -42,6 +42,7 @@ pub struct ColumnStatistics {
 
 #[derive(Debug, Clone)]
 pub struct RangeFilter {
+    origin: DataSchemaRef,
     schema: DataSchemaRef,
     executor: Arc<ExpressionExecutor>,
     stat_columns: StatColumns,
@@ -68,6 +69,7 @@ impl RangeFilter {
         )?;
 
         Ok(Self {
+            origin: schema,
             schema: input_schema,
             executor: Arc::new(expr_executor),
             stat_columns,
@@ -85,7 +87,7 @@ impl RangeFilter {
                         c.column_id
                     ))
                 })?;
-                c.apply_stat_value(stat, self.schema.clone())?.to_array()
+                c.apply_stat_value(stat, self.origin.clone())?.to_array()
             })
             .collect::<Result<Vec<_>>>()?;
         let data_block = DataBlock::create_by_array(self.schema.clone(), columns);

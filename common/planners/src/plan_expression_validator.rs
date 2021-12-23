@@ -64,7 +64,7 @@ fn validate_function_arg(
         Some((start, end)) => {
             return if args_len < start || args_len > end {
                 Err(ErrorCode::NumberArgumentsNotMatch(format!(
-                    "{} expect to have [{}, {}] arguments, but got {}",
+                    "Function `{}` expect to have [{}, {}] arguments, but got {}",
                     name, start, end, args_len
                 )))
             } else {
@@ -74,7 +74,7 @@ fn validate_function_arg(
         None => {
             return if num_arguments != args_len {
                 Err(ErrorCode::NumberArgumentsNotMatch(format!(
-                    "{} expect to have {} arguments, but got {}",
+                    "Function `{}` expect to have {} arguments, but got {}",
                     name, num_arguments, args_len
                 )))
             } else {

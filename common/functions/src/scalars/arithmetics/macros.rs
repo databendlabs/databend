@@ -13,6 +13,297 @@
 // limitations under the License.
 
 #[macro_export]
+macro_rules! impl_try_create_datetime {
+    ($op: expr, $func: ident) => {
+        fn try_create_datetime(
+            lhs_type: &DataType,
+            rhs_type: &DataType,
+        ) -> Result<Box<dyn Function>> {
+            let op = $op;
+            let e = Result::Err(ErrorCode::BadDataValueType(format!(
+                "DataValue Error: Unsupported date coercion ({:?}) {} ({:?})",
+                lhs_type, op, rhs_type
+            )));
+
+            if lhs_type.is_date_or_date_time() {
+                with_match_date_type!(lhs_type, |$T| {
+                    with_match_primitive_type!(rhs_type, |$D| {
+                        BinaryArithmeticFunction::<$func<$T, $D, $T>>::try_create_func(
+                            op.clone(),
+                            lhs_type.clone(),
+                        )
+                    },{
+                        if !rhs_type.is_date_or_date_time() {
+                            return e;
+                        }
+                        with_match_date_type!(rhs_type, |$D| {
+                            match op {
+                                DataValueArithmeticOperator::Plus => BinaryArithmeticFunction::<ArithmeticAdd<$T, $D, $T>>::try_create_func(
+                                    op.clone(),
+                                    lhs_type.clone(),
+                                ),
+                                DataValueArithmeticOperator::Minus => BinaryArithmeticFunction::<ArithmeticAdd<$T, $D, i32>>::try_create_func(
+                                    op.clone(),
+                                    DataType::Int32,
+                                ),
+                                _ => e,
+                            }
+                        }, e)
+                    })
+                },e)
+            } else {
+                with_match_primitive_type!(lhs_type, |$T| {
+                    with_match_date_type!(rhs_type, |$D| {
+                        BinaryArithmeticFunction::<$func<$T, $D, $D>>::try_create_func(
+                            op.clone(),
+                            rhs_type.clone(),
+                        )
+                    },e)
+                },e)
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_try_create_func {
+    ($lhs: ident, $rhs: ident, $op: expr, $is_signed: tt, $func: ident, $wrapping_func: ident) => {{
+        let op = $op;
+        let e = Result::Err(ErrorCode::BadDataValueType(format!(
+            "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
+            $lhs, op, $rhs
+        )));
+
+        if !$lhs.is_numeric() || !$rhs.is_numeric() {
+            return e;
+        };
+
+        match ($lhs, $rhs) {
+            (DataType::Float64, _) => with_match_primitive_type!(
+                $rhs,
+                |$D| {
+                    BinaryArithmeticFunction::<$func<f64, $D, f64>>::try_create_func(
+                        op,
+                        DataType::Float64,
+                    )
+                },
+                e
+            ),
+            (DataType::Float32, _) => with_match_primitive_type!(
+                $rhs,
+                |$D| {
+                    BinaryArithmeticFunction::<$func<f32, $D, f64>>::try_create_func(
+                        op,
+                        DataType::Float64,
+                    )
+                },
+                e
+            ),
+            (_, DataType::Float64) => with_match_integer_64!(
+                $lhs,
+                |$T| {
+                    BinaryArithmeticFunction::<$func<$T, f64, f64>>::try_create_func(
+                        op,
+                        DataType::Float64,
+                    )
+                },
+                e
+            ),
+            (_, DataType::Float32) => with_match_integer_64!(
+                $lhs,
+                |$T| {
+                    BinaryArithmeticFunction::<$func<$T, f32, f64>>::try_create_func(
+                        op,
+                        DataType::Float64,
+                    )
+                },
+                e
+            ),
+            (DataType::Int64, _) => with_match_integer_64!(
+                $rhs,
+                |$D| {
+                    BinaryArithmeticFunction::<$wrapping_func<i64, $D, i64>>::try_create_func(
+                        op,
+                        DataType::Int64,
+                    )
+                },
+                e
+            ),
+            (DataType::UInt64, _) => with_match_integer_64!(
+                $rhs,
+                |$D| {
+                    if $is_signed {
+                        BinaryArithmeticFunction::<$wrapping_func<u64, $D, i64>>::try_create_func(
+                            op,
+                            DataType::Int64,
+                        )
+                    } else {
+                        BinaryArithmeticFunction::<$wrapping_func<u64, $D, u64>>::try_create_func(
+                            op,
+                            DataType::UInt64,
+                        )
+                    }
+                },
+                e
+            ),
+            (_, DataType::UInt64) => with_match_integer_32!(
+                $lhs,
+                |$T| {
+                    if $is_signed {
+                        BinaryArithmeticFunction::<$wrapping_func<$T, u64, i64>>::try_create_func(
+                            op,
+                            DataType::Int64,
+                        )
+                    } else {
+                        BinaryArithmeticFunction::<$wrapping_func<$T, u64, u64>>::try_create_func(
+                            op,
+                            DataType::UInt64,
+                        )
+                    }
+                },
+                e
+            ),
+            (_, DataType::Int64) => with_match_integer_32!(
+                $lhs,
+                |$T| {
+                    BinaryArithmeticFunction::<$wrapping_func<$T, i64, i64>>::try_create_func(
+                        op,
+                        DataType::Int64,
+                    )
+                },
+                e
+            ),
+            (DataType::UInt32, _) => with_match_integer_32!(
+                $rhs,
+                |$D| {
+                    if $is_signed {
+                        BinaryArithmeticFunction::<$wrapping_func<u32, $D, i64>>::try_create_func(
+                            op,
+                            DataType::Int64,
+                        )
+                    } else {
+                        BinaryArithmeticFunction::<$wrapping_func<u32, $D, u64>>::try_create_func(
+                            op,
+                            DataType::UInt64,
+                        )
+                    }
+                },
+                e
+            ),
+            (DataType::Int32, _) => with_match_integer_32!(
+                $rhs,
+                |$D| {
+                    BinaryArithmeticFunction::<$wrapping_func<i32, $D, i64>>::try_create_func(
+                        op,
+                        DataType::Int64,
+                    )
+                },
+                e
+            ),
+            (_, DataType::UInt32) => with_match_integer_16!(
+                $lhs,
+                |$T| {
+                    if $is_signed {
+                        BinaryArithmeticFunction::<$wrapping_func<$T, u32, i64>>::try_create_func(
+                            op,
+                            DataType::Int64,
+                        )
+                    } else {
+                        BinaryArithmeticFunction::<$wrapping_func<$T, u32, u64>>::try_create_func(
+                            op,
+                            DataType::UInt64,
+                        )
+                    }
+                },
+                e
+            ),
+            (_, DataType::Int32) => with_match_integer_16!(
+                $lhs,
+                |$T| {
+                    BinaryArithmeticFunction::<$wrapping_func<$T, i32, i64>>::try_create_func(
+                        op,
+                        DataType::Int64,
+                    )
+                },
+                e
+            ),
+            (DataType::UInt16, _) => with_match_integer_16!(
+                $rhs,
+                |$D| {
+                    if $is_signed {
+                        BinaryArithmeticFunction::<$func<u16, $D, i32>>::try_create_func(
+                            op,
+                            DataType::Int32,
+                        )
+                    } else {
+                        BinaryArithmeticFunction::<$func<u16, $D, u32>>::try_create_func(
+                            op,
+                            DataType::UInt32,
+                        )
+                    }
+                },
+                e
+            ),
+            (DataType::Int16, _) => with_match_integer_16!(
+                $rhs,
+                |$D| {
+                    BinaryArithmeticFunction::<$func<i16, $D, i32>>::try_create_func(
+                        op,
+                        DataType::Int32,
+                    )
+                },
+                e
+            ),
+            (_, DataType::UInt16) => match $lhs {
+                DataType::UInt8 => {
+                    BinaryArithmeticFunction::<$func<u8, u16, u32>>::try_create_func(
+                        op,
+                        DataType::UInt32,
+                    )
+                }
+                DataType::Int8 => BinaryArithmeticFunction::<$func<i8, u16, i32>>::try_create_func(
+                    op,
+                    DataType::Int32,
+                ),
+                _ => unreachable!(),
+            },
+            (_, DataType::Int16) => with_match_integer_8!(
+                $lhs,
+                |$T| {
+                    BinaryArithmeticFunction::<$func<$T, i16, i32>>::try_create_func(
+                        op,
+                        DataType::Int32,
+                    )
+                },
+                e
+            ),
+            (DataType::UInt8, _) => match $rhs {
+                DataType::UInt8 => BinaryArithmeticFunction::<$func<u8, u8, u16>>::try_create_func(
+                    op,
+                    DataType::UInt16,
+                ),
+                DataType::Int8 => BinaryArithmeticFunction::<$func<i8, i8, i16>>::try_create_func(
+                    op,
+                    DataType::Int16,
+                ),
+                _ => unreachable!(),
+            },
+            (DataType::Int8, _) => with_match_integer_8!(
+                $rhs,
+                |$D| {
+                    BinaryArithmeticFunction::<$func<i8, $D, i16>>::try_create_func(
+                        op,
+                        DataType::Int16,
+                    )
+                },
+                e
+            ),
+            _ => unreachable!(),
+        }
+    }};
+}
+
+#[macro_export]
 macro_rules! impl_wrapping_arithmetic {
     ($name: ident, $method: ident) => {
         #[derive(Clone)]

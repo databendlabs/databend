@@ -15,6 +15,7 @@
 use common_datavalues::prelude::DataColumn;
 use common_datavalues::prelude::DataColumnWithField;
 use common_datavalues::DataField;
+use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::Result;
@@ -51,8 +52,14 @@ fn create_datetime(d: u32) -> Option<DataColumnWithField> {
 }
 
 fn verify_test(t: Test) -> Result<()> {
-    let mono = match MonotonicityCheckVisitor::check_expression(&t.expr, t.left, t.right, t.column)
-    {
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new("x", DataType::Float64, false),
+        DataField::new("y", DataType::Int64, false),
+        DataField::new("z", DataType::DateTime32(None), false),
+    ]);
+    let mono = match MonotonicityCheckVisitor::check_expression(
+        schema, &t.expr, t.left, t.right, t.column,
+    ) {
         Ok(mono) => mono,
         Err(e) => {
             assert_eq!(t.error, e.to_string(), "{}", t.name);
@@ -566,9 +573,9 @@ fn test_dates_function() -> Result<()> {
             error: "",
         },
         Test {
-            name: "f(x) = toSecond(x)",
-            expr: Expression::create_scalar_function("toSecond", vec![col("x")]),
-            column: "x",
+            name: "f(z) = toSecond(z)",
+            expr: Expression::create_scalar_function("toSecond", vec![col("z")]),
+            column: "z",
             left: create_datetime(1638288000),
             right: create_datetime(1638288059),
             expect_mono: Monotonicity {
@@ -581,9 +588,9 @@ fn test_dates_function() -> Result<()> {
             error: "",
         },
         Test {
-            name: "f(x) = toDayOfYear(x)",
-            expr: Expression::create_scalar_function("toDayOfYear", vec![col("x")]),
-            column: "x",
+            name: "f(z) = toDayOfYear(z)",
+            expr: Expression::create_scalar_function("toDayOfYear", vec![col("z")]),
+            column: "z",
             left: create_datetime(1606752119),
             right: create_datetime(1638288059),
             expect_mono: Monotonicity {
@@ -596,9 +603,9 @@ fn test_dates_function() -> Result<()> {
             error: "",
         },
         Test {
-            name: "f(x) = toStartOfHour(x)",
-            expr: Expression::create_scalar_function("toStartOfHour", vec![col("x")]),
-            column: "x",
+            name: "f(z) = toStartOfHour(z)",
+            expr: Expression::create_scalar_function("toStartOfHour", vec![col("z")]),
+            column: "z",
             left: None,
             right: None,
             expect_mono: Monotonicity {
