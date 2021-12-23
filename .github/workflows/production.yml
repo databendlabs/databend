@@ -6,7 +6,6 @@ on:
       - main
     paths-ignore:
       - 'website/'
-      - '*.md'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}

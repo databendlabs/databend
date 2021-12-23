@@ -6,11 +6,9 @@ on:
       - main
     paths-ignore:
       - 'website/'
-      - '*.md'
   pull_request:
     paths-ignore:
       - 'website/'
-      - '*.md'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
