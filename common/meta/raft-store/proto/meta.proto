@@ -60,10 +60,3 @@ service MetaService {
   // handshake
   rpc Handshake(stream HandshakeRequest) returns (stream HandshakeResponse);
 }
-
-service GrpcMetaService {
-  // forward
-  rpc forward(RaftRequest) returns (RaftReply) {}
-  // handshake
-  rpc Handshake(stream HandshakeRequest) returns (stream HandshakeResponse) {}
-}
