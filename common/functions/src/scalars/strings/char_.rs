@@ -13,9 +13,10 @@
 // limitations under the License.
 
 use std::fmt;
+use common_arrow::arrow::buffer::MutableBuffer;
 
 use common_datavalues::prelude::*;
-use common_exception::Result;
+use common_exception::{ErrorCode, Result};
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
@@ -35,7 +36,7 @@ impl CharFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().variadic_arguments(1, 1024))
     }
 }
 
@@ -44,11 +45,15 @@ impl Function for CharFunction {
         "char"
     }
 
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((1, 1024))
-    }
-
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+        for arg in args {
+            if !arg.is_numeric() {
+                return Err(ErrorCode::IllegalDataType(format!(
+                    "Expected numeric type, but got {}",
+                    arg
+                )));
+            }
+        }
         Ok(DataType::String)
     }
 
@@ -57,65 +62,60 @@ impl Function for CharFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        let len = columns[0].column().len();
-        let mut l_array = DFStringArray::full(&[], len);
+        let row_count = columns[0].column().len();
+        let column_count = columns.len();
+        let mut values: MutableBuffer<u8> = MutableBuffer::with_capacity(row_count * column_count);
+        let mut offsets: MutableBuffer<i64> = MutableBuffer::with_capacity(row_count + 1);
+        offsets.push(0);
 
-        for column in columns.iter() {
+        for (i, column) in columns.iter().enumerate() {
             let column = column.column();
             if column.data_type().is_null() {
                 continue;
             }
-            let column = column.cast_with_type(&DataType::UInt32)?;
+            let column = column.cast_with_type(&DataType::UInt8)?;
             match column {
-                DataColumn::Array(r_array) => {
-                    let r_array = r_array.u32()?;
-                    l_array = DFStringArray::new_from_iter_validity(
-                        l_array
-                            .into_no_null_iter()
-                            .zip(r_array.into_no_null_iter())
-                            .map(|(l, r)| {
-                                [
-                                    l,
-                                    &r.to_be_bytes()
-                                        .iter()
-                                        .filter(|&x| *x != 0u8)
-                                        .cloned()
-                                        .collect::<Vec<u8>>(),
-                                ]
-                                .concat()
-                            }),
-                        combine_validities(l_array.inner().validity(), r_array.inner().validity()),
-                    );
-                }
-                DataColumn::Constant(r_array, _) => match r_array {
-                    DataValue::UInt32(Some(constant_uint)) => {
-                        let mut builder = StringArrayBuilder::with_capacity(len);
-                        let iter = l_array.into_no_null_iter();
-                        for (_, val) in iter.enumerate() {
-                            builder.append_value(
-                                [
-                                    val,
-                                    &constant_uint
-                                        .to_be_bytes()
-                                        .iter()
-                                        .filter(|&x| *x != 0u8)
-                                        .cloned()
-                                        .collect::<Vec<u8>>(),
-                                ]
-                                .concat(),
-                            );
+                DataColumn::Array(uint8_arr) => {
+                    let uint8_arr = uint8_arr.u8()?;
+                    for (j, ch) in uint8_arr.into_iter().enumerate() {
+                        match ch {
+                            Some(&ch) => {
+                                unsafe {
+                                    *values.as_mut_ptr().add(column_count * j + i) = ch;
+                                }
+                            }
+                            None => {
+                                return Err(ErrorCode::IllegalDataType(
+                                    "Expected args a const, an expression, an expression, a const and a const"
+                                ));
+                            }
                         }
-                        l_array = builder.finish();
+                    }
+                }
+                DataColumn::Constant(uint8_arr, _) => match uint8_arr {
+                    DataValue::UInt8(Some(ch)) => {
+                        unsafe {
+                            for j in 0..row_count {
+                                *values.as_mut_ptr().add(column_count * j + i) = ch;
+                            }
+                        }
                     }
                     _ => {
-                        return Ok(DataColumn::Array(
-                            DFStringArray::full_null(len).into_series(),
+                        return Err(ErrorCode::IllegalDataType(
+                            "Expected args a const, an expression, an expression, a const and a const"
                         ));
                     }
                 },
             }
         }
-        Ok(DataColumn::Array(l_array.into_series()))
+        for i in 1..row_count+1 {
+            offsets.push(i as i64 * column_count as i64);
+        }
+        unsafe {
+            offsets.set_len(row_count + 1);
+            values.set_len(row_count * column_count);
+            Ok(DataColumn::from(DFStringArray::from_data_unchecked(offsets.into(), values.into(), None)))
+        }
     }
 }
 
