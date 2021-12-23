@@ -15,9 +15,8 @@
 //! Test arrow-flight API of metasrv
 
 use common_base::tokio;
-use common_base::Stoppable;
 use common_meta_api::KVApi;
-use common_meta_flight::MetaFlightClient;
+use common_meta_raft_store::MetaGrpcClient;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
@@ -44,7 +43,7 @@ async fn test_restart() -> anyhow::Result<()> {
 
     let (mut tc, addr) = crate::tests::start_metasrv().await?;
 
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     tracing::info!("--- upsert kv");
     {
@@ -91,9 +90,6 @@ async fn test_restart() -> anyhow::Result<()> {
 
     tracing::info!("--- stop metasrv");
     {
-        let mut srv = tc.flight_srv.take().unwrap();
-        srv.stop(None).await?;
-
         drop(client);
 
         tokio::time::sleep(Duration::from_millis(1000)).await;
@@ -106,7 +102,7 @@ async fn test_restart() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_millis(10_000)).await;
 
     // try to reconnect the restarted server.
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     tracing::info!("--- get kv");
     {
@@ -148,8 +144,8 @@ async fn test_join() -> anyhow::Result<()> {
     let addr0 = tc0.config.grpc_api_address.clone();
     let addr1 = tc1.config.grpc_api_address.clone();
 
-    let client0 = MetaFlightClient::try_create(addr0.as_str(), "root", "xxx").await?;
-    let client1 = MetaFlightClient::try_create(addr1.as_str(), "root", "xxx").await?;
+    let client0 = MetaGrpcClient::try_create(addr0.as_str(), "root", "xxx").await?;
+    let client1 = MetaGrpcClient::try_create(addr1.as_str(), "root", "xxx").await?;
 
     let clients = vec![client0, client1];
 

@@ -18,10 +18,9 @@ use anyhow::Result;
 use async_raft::NodeId;
 use common_base::tokio;
 use common_base::GlobalSequence;
-use common_base::Stoppable;
-use common_meta_flight::MetaFlightClient;
 use common_meta_raft_store::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_raft_store::protobuf::GetReq;
+use common_meta_raft_store::MetaGrpcClient;
 use common_tracing::tracing;
 use databend_meta::configs;
 use databend_meta::meta_service::MetaNode;
@@ -39,11 +38,8 @@ pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
 }
 
 pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<()> {
-    let mn = MetaNode::start(&tc.config.raft_config).await?;
-    let mut srv = GrpcServer::create(tc.config.clone(), mn);
-    srv.start().await?;
+    MetaNode::start(&tc.config.raft_config).await?;
 
-    tc.flight_srv = Some(Box::new(srv));
     Ok(())
 }
 
@@ -83,8 +79,6 @@ pub struct MetaSrvTestContext {
     pub config: configs::Config,
 
     pub meta_nodes: Vec<Arc<MetaNode>>,
-
-    pub flight_srv: Option<Box<GrpcServer>>,
 }
 
 impl MetaSrvTestContext {
@@ -134,14 +128,13 @@ impl MetaSrvTestContext {
         MetaSrvTestContext {
             config,
             meta_nodes: vec![],
-            flight_srv: None,
         }
     }
 
-    pub async fn flight_client(&self) -> anyhow::Result<MetaFlightClient> {
+    pub async fn grpc_client(&self) -> anyhow::Result<MetaGrpcClient> {
         let addr = self.config.grpc_api_address.clone();
 
-        let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
+        let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
         Ok(client)
     }
 

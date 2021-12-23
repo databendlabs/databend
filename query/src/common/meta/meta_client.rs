@@ -17,8 +17,6 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_api::KVApi;
-use common_meta_flight::MetaFlightClient;
-use common_meta_flight::MetaFlightClientConf;
 use common_meta_raft_store::MetaGrpcClient;
 use common_meta_raft_store::MetaGrpcClientConf;
 
@@ -30,15 +28,11 @@ use common_meta_raft_store::MetaGrpcClientConf;
 #[derive(Clone)]
 pub struct MetaClientProvider {
     grpc_conf: MetaGrpcClientConf,
-    flight_conf: MetaFlightClientConf,
 }
 
 impl MetaClientProvider {
-    pub fn new(grpc_conf: MetaGrpcClientConf, flight_conf: MetaFlightClientConf) -> Self {
-        MetaClientProvider {
-            grpc_conf,
-            flight_conf,
-        }
+    pub fn new(grpc_conf: MetaGrpcClientConf) -> Self {
+        MetaClientProvider { grpc_conf }
     }
 
     /// Get meta async client, trait is defined in MetaApi.
@@ -49,12 +43,12 @@ impl MetaClientProvider {
 
     /// Get kv async client, operations trait defined in KVApi.
     pub async fn try_get_kv_client(&self) -> Result<Arc<dyn KVApi>> {
-        let local = self.flight_conf.kv_service_config.address.is_empty();
+        let local = self.grpc_conf.meta_service_config.address.is_empty();
         if local {
             let meta_store = common_meta_embedded::MetaEmbedded::get_meta().await?;
             Ok(meta_store)
         } else {
-            let client = MetaFlightClient::try_new(&self.flight_conf).await?;
+            let client = MetaGrpcClient::try_new(&self.grpc_conf).await?;
             Ok(Arc::new(client))
         }
     }

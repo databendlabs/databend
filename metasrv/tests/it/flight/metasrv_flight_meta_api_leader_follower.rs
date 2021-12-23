@@ -26,8 +26,8 @@ async fn test_meta_api_database_create_get_drop() -> anyhow::Result<()> {
 
     let tcs = start_metasrv_cluster(&[0, 1]).await?;
 
-    let client0 = tcs[0].flight_client().await?;
-    let client1 = tcs[1].flight_client().await?;
+    let client0 = tcs[0].grpc_client().await?;
+    let client1 = tcs[1].grpc_client().await?;
 
     MetaApiTestSuite {}
         .database_get_diff_nodes(&client0, &client1)
@@ -41,8 +41,8 @@ async fn test_meta_api_list_database() -> anyhow::Result<()> {
 
     let tcs = start_metasrv_cluster(&[0, 1]).await?;
 
-    let client0 = tcs[0].flight_client().await?;
-    let client1 = tcs[1].flight_client().await?;
+    let client0 = tcs[0].grpc_client().await?;
+    let client1 = tcs[1].grpc_client().await?;
 
     MetaApiTestSuite {}
         .list_database_diff_nodes(&client0, &client1)
@@ -56,8 +56,8 @@ async fn test_meta_api_table_create_get_drop() -> anyhow::Result<()> {
 
     let tcs = start_metasrv_cluster(&[0, 1]).await?;
 
-    let client0 = tcs[0].flight_client().await?;
-    let client1 = tcs[1].flight_client().await?;
+    let client0 = tcs[0].grpc_client().await?;
+    let client1 = tcs[1].grpc_client().await?;
     MetaApiTestSuite {}
         .table_get_diff_nodes(&client0, &client1)
         .await
@@ -70,8 +70,8 @@ async fn test_meta_api_list_table() -> anyhow::Result<()> {
 
     let tcs = start_metasrv_cluster(&[0, 1]).await?;
 
-    let client0 = tcs[0].flight_client().await?;
-    let client1 = tcs[1].flight_client().await?;
+    let client0 = tcs[0].grpc_client().await?;
+    let client1 = tcs[1].grpc_client().await?;
 
     MetaApiTestSuite {}
         .list_table_diff_nodes(&client0, &client1)

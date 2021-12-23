@@ -18,7 +18,6 @@
 use std::time::Duration;
 
 use common_base::tokio;
-use common_base::Stoppable;
 use common_meta_api::KVApi;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
@@ -51,7 +50,7 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
         tracing::info!("--- test write on every node: {}", key_suffix);
 
         for tc in tcs.iter() {
-            let client = tc.flight_client().await?;
+            let client = tc.grpc_client().await?;
 
             let k = make_key(tc, key_suffix);
             let res = client
@@ -82,13 +81,10 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
     tracing::info!("--- shutdown the cluster");
     let stopped_tcs = {
         let mut stopped_tcs = vec![];
-        for mut tc in tcs {
+        for tc in tcs {
             // TODO(xp): remove this field, or split MetaSrvTestContext into two struct:
             //           one for metasrv and one for meta_node
             assert!(tc.meta_nodes.is_empty());
-
-            let mut f = tc.flight_srv.take().unwrap();
-            f.stop(None).await?;
 
             stopped_tcs.push(tc);
         }
@@ -103,10 +99,7 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
             tcs.push(tc);
         }
 
-        for tc in tcs.iter() {
-            let flight = tc.flight_srv.as_ref().unwrap();
-            let meta_node = flight.get_meta_node();
-
+        for meta_node in &tcs[0].meta_nodes {
             tracing::info!("--- wait until a leader is observed");
 
             let metrics = meta_node

@@ -57,6 +57,7 @@ pub enum MetaGrpcWriteAction {
     CreateTable(CreateTableReq),
     DropTable(DropTableReq),
     CommitTable(UpsertTableOptionReq),
+    UpsertKV(UpsertKVAction),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
@@ -66,6 +67,9 @@ pub enum MetaGrpcGetAction {
     GetTable(GetTableReq),
     GetTableExt(GetTableExtReq),
     ListTables(ListTableReq),
+    GetKV(GetKVAction),
+    MGetKV(MGetKVAction),
+    PrefixListKV(PrefixListReq),
 }
 
 /// Try convert tonic::Request<RaftRequest> to DoActionAction.

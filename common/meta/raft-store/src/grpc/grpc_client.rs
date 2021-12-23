@@ -46,6 +46,11 @@ impl MetaGrpcClient {
     }
 
     #[tracing::instrument(level = "debug", skip(password))]
+    pub async fn try_create(addr: &str, username: &str, password: &str) -> Result<Self> {
+        Self::with_tls_conf(addr, username, password, None, None).await
+    }
+
+    #[tracing::instrument(level = "debug", skip(password))]
     pub async fn with_tls_conf(
         addr: &str,
         username: &str,

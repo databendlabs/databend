@@ -55,10 +55,7 @@ pub struct ClusterDiscovery {
 
 impl ClusterDiscovery {
     async fn create_meta_client(cfg: &Config) -> Result<Arc<dyn KVApi>> {
-        let meta_api_provider = MetaClientProvider::new(
-            cfg.meta.to_grpc_client_config(),
-            cfg.meta.to_flight_client_config(),
-        );
+        let meta_api_provider = MetaClientProvider::new(cfg.meta.to_grpc_client_config());
         match meta_api_provider.try_get_kv_client().await {
             Ok(client) => Ok(client),
             Err(cause) => Err(cause.add_message_back("(while create cluster api).")),

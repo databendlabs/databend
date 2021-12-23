@@ -15,11 +15,8 @@
 use std::fmt;
 
 use clap::Args;
-use common_flight_rpc::FlightClientConf;
-use common_flight_rpc::FlightClientTlsConfig;
 use common_flight_rpc::GrpcClientConf;
 use common_flight_rpc::GrpcClientTlsConfig;
-use common_meta_flight::MetaFlightClientConf;
 use common_meta_raft_store::MetaGrpcClientConf;
 use serde::Deserialize;
 use serde::Serialize;
@@ -114,17 +111,6 @@ impl MetaConfig {
             && !self.rpc_tls_meta_service_domain_name.is_empty()
     }
 
-    pub fn to_flight_tls_config(&self) -> Option<FlightClientTlsConfig> {
-        if !self.is_tls_enabled() {
-            return None;
-        }
-
-        Some(FlightClientTlsConfig {
-            rpc_tls_server_root_ca_cert: self.rpc_tls_meta_server_root_ca_cert.clone(),
-            domain_name: self.rpc_tls_meta_service_domain_name.clone(),
-        })
-    }
-
     pub fn to_grpc_tls_config(&self) -> Option<GrpcClientTlsConfig> {
         if !self.is_tls_enabled() {
             return None;
@@ -136,21 +122,6 @@ impl MetaConfig {
         })
     }
 
-    pub fn to_flight_client_config(&self) -> MetaFlightClientConf {
-        let meta_config = FlightClientConf {
-            address: self.meta_address.clone(),
-            username: self.meta_username.clone(),
-            password: self.meta_password.clone(),
-            tls_conf: self.to_flight_tls_config(),
-        };
-
-        MetaFlightClientConf {
-            // kv service is configured by conf.meta
-            kv_service_config: meta_config,
-            client_timeout_in_second: self.meta_client_timeout_in_second,
-        }
-    }
-
     pub fn to_grpc_client_config(&self) -> MetaGrpcClientConf {
         let meta_config = GrpcClientConf {
             address: self.meta_address.clone(),
@@ -160,7 +131,8 @@ impl MetaConfig {
         };
 
         MetaGrpcClientConf {
-            meta_service_config: meta_config,
+            meta_service_config: meta_config.clone(),
+            kv_service_config: meta_config,
             client_timeout_in_second: self.meta_client_timeout_in_second,
         }
     }

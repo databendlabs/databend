@@ -25,8 +25,8 @@ async fn test_kv_api_write_read_cross_nodes() -> anyhow::Result<()> {
 
     let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
-    let follower1 = tcs[1].flight_client().await?;
-    let follower2 = tcs[2].flight_client().await?;
+    let follower1 = tcs[1].grpc_client().await?;
+    let follower2 = tcs[2].grpc_client().await?;
 
     KVApiTestSuite {}
         .kv_write_read_cross_nodes(&follower1, &follower2)

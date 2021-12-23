@@ -35,12 +35,9 @@ pub struct UserApiProvider {
 
 impl UserApiProvider {
     async fn create_kv_client(cfg: &Config) -> Result<Arc<dyn KVApi>> {
-        match MetaClientProvider::new(
-            cfg.meta.to_grpc_client_config(),
-            cfg.meta.to_flight_client_config(),
-        )
-        .try_get_kv_client()
-        .await
+        match MetaClientProvider::new(cfg.meta.to_grpc_client_config())
+            .try_get_kv_client()
+            .await
         {
             Ok(client) => Ok(client),
             Err(cause) => Err(cause.add_message_back("(while create user api).")),
