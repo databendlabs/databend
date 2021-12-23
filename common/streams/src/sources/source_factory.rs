@@ -47,11 +47,31 @@ impl SourceFactory {
                     .cloned()
                     .unwrap_or_else(|| "0".to_string());
 
+                let field_delimitor = params
+                    .options
+                    .get("field_delimitor")
+                    .and_then(|v| match v.len() {
+                        n if n >= 1 => Some(v.as_bytes()[0]),
+                        _ => Some(b','),
+                    })
+                    .unwrap_or_else(|| b',');
+
+                let record_delimitor = params
+                    .options
+                    .get("record_delimitor")
+                    .and_then(|v| match v.len() {
+                        n if n >= 1 => Some(v.as_bytes()[0]),
+                        _ => Some(b'\n'),
+                    })
+                    .unwrap_or_else(|| b'\n');
+
                 let reader = params.acc.get_input_stream(params.path, None)?;
                 Ok(Box::new(CsvSource::try_create(
                     reader,
                     params.schema,
                     has_header.eq_ignore_ascii_case("1"),
+                    field_delimitor,
+                    record_delimitor,
                     params.max_block_size,
                 )?))
             }
