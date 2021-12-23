@@ -38,18 +38,17 @@ impl ExportSetFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(3, 5),
+        )
     }
 }
 
 impl Function for ExportSetFunction {
     fn name(&self) -> &str {
         &*self.display_name
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((3, 5))
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {

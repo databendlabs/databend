@@ -42,18 +42,17 @@ impl IgnoreFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(0, usize::MAX),
+        )
     }
 }
 
 impl Function for IgnoreFunction {
     fn name(&self) -> &str {
         &*self.display_name
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((0, usize::MAX))
     }
 
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {

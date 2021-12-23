@@ -62,10 +62,6 @@ impl Function for UdfExampleFunction {
             input_rows,
         ))
     }
-
-    fn num_arguments(&self) -> usize {
-        0
-    }
 }
 
 impl fmt::Display for UdfExampleFunction {

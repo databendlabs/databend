@@ -30,6 +30,10 @@ use crate::scalars::ArithmeticPlusFunction;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
 
+pub trait ArithmeticTrait {
+    fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn>;
+}
+
 #[derive(Clone)]
 pub struct ArithmeticFunction {
     op: DataValueArithmeticOperator,
@@ -37,8 +41,8 @@ pub struct ArithmeticFunction {
 
 impl ArithmeticFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register("+", ArithmeticPlusFunction::desc());
-        factory.register("plus", ArithmeticPlusFunction::desc());
+        factory.register_arithmetic("+", ArithmeticPlusFunction::desc());
+        factory.register_arithmetic("plus", ArithmeticPlusFunction::desc());
         factory.register("-", ArithmeticMinusFunction::desc());
         factory.register("minus", ArithmeticMinusFunction::desc());
         factory.register("*", ArithmeticMulFunction::desc());
@@ -107,22 +111,14 @@ impl Function for ArithmeticFunction {
         }
     }
 
-    fn num_arguments(&self) -> usize {
-        0
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((1, 2))
-    }
-
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
         match self.op {
-            Plus => ArithmeticPlusFunction::get_monotonicity(args),
             Minus => ArithmeticMinusFunction::get_monotonicity(args),
             Mul => ArithmeticMulFunction::get_monotonicity(args),
             Div => ArithmeticDivFunction::get_monotonicity(args),
             IntDiv => ArithmeticIntDivFunction::get_monotonicity(args),
             Modulo => ArithmeticModuloFunction::get_monotonicity(args),
+            _ => unimplemented!(),
         }
     }
 }

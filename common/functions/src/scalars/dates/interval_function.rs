@@ -84,10 +84,6 @@ where T: IntegerTypedArithmetic + Clone + Sync + Send + 'static
         Ok(false)
     }
 
-    fn num_arguments(&self) -> usize {
-        2
-    }
-
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         if !(matches!(
             self.op,
@@ -333,7 +329,7 @@ impl IntervalFunctionFactory {
         Ok(res.into())
     }
 
-    fn interval_month_plus_minus_date16(
+    pub fn interval_month_plus_minus_date16(
         op: &DataValueArithmeticOperator,
         a: &DataColumnWithField,
         b: &DataColumnWithField,
@@ -342,7 +338,7 @@ impl IntervalFunctionFactory {
         Self::month_i64_plus_minus_date16(op, interval, date16, 1)
     }
 
-    fn interval_month_plus_minus_date32(
+    pub fn interval_month_plus_minus_date32(
         op: &DataValueArithmeticOperator,
         a: &DataColumnWithField,
         b: &DataColumnWithField,
@@ -351,7 +347,7 @@ impl IntervalFunctionFactory {
         Self::month_i64_plus_minus_date32(op, interval, date32, 1)
     }
 
-    fn interval_month_plus_minus_datetime32(
+    pub fn interval_month_plus_minus_datetime32(
         op: &DataValueArithmeticOperator,
         a: &DataColumnWithField,
         b: &DataColumnWithField,

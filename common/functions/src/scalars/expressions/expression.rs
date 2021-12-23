@@ -24,7 +24,10 @@ pub struct ToCastFunction;
 
 impl ToCastFunction {
     fn cast_function_creator(to_type: DataType) -> FunctionDescription {
-        let mut features = FunctionFeatures::default().deterministic().monotonicity();
+        let mut features = FunctionFeatures::default()
+            .deterministic()
+            .monotonicity()
+            .num_arguments(1);
         if to_type == DataType::Boolean {
             features = features.bool_function();
         }

@@ -174,10 +174,6 @@ impl Function for CastFunction {
         let column: DataColumn = array.into();
         Ok(column.resize_constant(input_rows))
     }
-
-    fn num_arguments(&self) -> usize {
-        1
-    }
 }
 
 impl fmt::Display for CastFunction {

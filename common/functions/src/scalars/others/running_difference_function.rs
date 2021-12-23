@@ -41,7 +41,7 @@ impl RunningDifferenceFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default())
+            .features(FunctionFeatures::default().num_arguments(1))
     }
 }
 
@@ -91,10 +91,6 @@ impl Function for RunningDifferenceFunction {
                     columns[0].field().name(),
                 ))),
         }
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
     }
 }
 

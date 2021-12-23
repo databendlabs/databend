@@ -517,7 +517,9 @@ impl ExprRPNBuilder {
 
     fn visit_unary_expr(&mut self, op: &UnaryOperator, expr: &Expr) -> Result<()> {
         self.visit(expr)?;
-        self.rpn.push(ExprRPNItem::unary_operator(op.to_string()));
+        if !matches!(op, UnaryOperator::Plus) {
+            self.rpn.push(ExprRPNItem::unary_operator(op.to_string()));
+        }
         Ok(())
     }
 

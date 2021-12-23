@@ -44,11 +44,13 @@ fn test_arithmetic_function() -> Result<()> {
             display: "plus",
             nullable: false,
             arg_names: vec!["a", "b"],
-            func: ArithmeticPlusFunction::try_create_func("")?,
+            func: ArithmeticPlusFunction::try_create_func("", vec![
+                DataField::new("a", DataType::Int64, false),
+                DataField::new("b", DataType::Int64, false),
+            ])?,
             columns: vec![
                 Series::new(vec![4i64, 3, 2, 1]).into(),
                 Series::new(vec![1i64, 2, 3, 4]).into(),
-                Series::new(vec![1i16, 2, 3, 4]).into(),
             ],
             expect: Series::new(vec![5i64, 5, 5, 5]).into(),
             error: "",
@@ -58,13 +60,15 @@ fn test_arithmetic_function() -> Result<()> {
             display: "plus",
             nullable: false,
             arg_names: vec!["c", "b"],
-            func: ArithmeticPlusFunction::try_create_func("")?,
+            func: ArithmeticPlusFunction::try_create_func("", vec![
+                DataField::new("c", DataType::Int16, false),
+                DataField::new("b", DataType::Int64, false),
+            ])?,
             columns: vec![
-                Series::new(vec![4i64, 3, 2, 1]).into(),
-                Series::new(vec![1i64, 2, 3, 4]).into(),
                 Series::new(vec![1i16, 2, 3, 4]).into(),
+                Series::new(vec![1i64, 2, 3, 4]).into(),
             ],
-            expect: Series::new(vec![5i64, 5, 5, 5]).into(),
+            expect: Series::new(vec![2i64, 4, 6, 8]).into(),
             error: "",
         },
         Test {
@@ -76,7 +80,6 @@ fn test_arithmetic_function() -> Result<()> {
             columns: vec![
                 Series::new(vec![4i64, 3, 2]).into(),
                 Series::new(vec![1i64, 2, 3]).into(),
-                Series::new(vec![1i16, 2, 3]).into(),
             ],
             expect: Series::new(vec![3i64, 1, -1]).into(),
             error: "",
@@ -90,7 +93,6 @@ fn test_arithmetic_function() -> Result<()> {
             columns: vec![
                 Series::new(vec![4i64, 3, 2]).into(),
                 Series::new(vec![1i64, 2, 3]).into(),
-                Series::new(vec![1i16, 2, 3]).into(),
             ],
             expect: Series::new(vec![4i64, 6, 6]).into(),
             error: "",
@@ -104,7 +106,6 @@ fn test_arithmetic_function() -> Result<()> {
             columns: vec![
                 Series::new(vec![4i64, 3, 2]).into(),
                 Series::new(vec![1i64, 2, 3]).into(),
-                Series::new(vec![1i16, 2, 3]).into(),
             ],
             expect: Series::new(vec![4.0, 1.5, 0.6666666666666666]).into(),
             error: "",
@@ -118,7 +119,6 @@ fn test_arithmetic_function() -> Result<()> {
             columns: vec![
                 Series::new(vec![4i64, 3, 2]).into(),
                 Series::new(vec![1i64, 2, 3]).into(),
-                Series::new(vec![1i16, 2, 3]).into(),
             ],
             expect: Series::new(vec![0i64, 1, 2]).into(),
             error: "",

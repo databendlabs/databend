@@ -50,10 +50,6 @@ impl Function for LiteralFunction {
     fn eval(&self, _columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         Ok(DataColumn::Constant(self.value.clone(), input_rows))
     }
-
-    fn num_arguments(&self) -> usize {
-        0
-    }
 }
 
 impl fmt::Display for LiteralFunction {

@@ -38,17 +38,13 @@ impl IfFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create_func))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(3))
     }
 }
 
 impl Function for IfFunction {
     fn name(&self) -> &str {
         "IfFunction"
-    }
-
-    fn num_arguments(&self) -> usize {
-        3
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
