@@ -101,7 +101,7 @@ impl PlanScheduler {
     }
 
     /// Schedule the plan to Local or Remote mode.
-    #[tracing::instrument(level = "debug", skip(self, plan))]
+    #[tracing::instrument(level = "info", skip(self, plan))]
     pub fn reschedule(mut self, plan: &PlanNode) -> Result<Tasks> {
         let context = self.query_context.clone();
         let cluster = context.get_cluster();

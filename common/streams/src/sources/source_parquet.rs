@@ -123,7 +123,7 @@ impl Source for ParquetSource {
                 let array: Arc<dyn common_arrow::arrow::array::Array> = array.into();
                 Ok::<_, ErrorCode>(DataColumn::Array(array.into_series()))
             }
-            .instrument(debug_span!("parquet_source_read_column"))
+            .instrument(debug_span!("parquet_source_read_column").or_current())
         });
 
         // TODO configuration of the buffer size

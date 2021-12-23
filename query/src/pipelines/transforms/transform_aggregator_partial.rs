@@ -88,7 +88,6 @@ impl Processor for AggregatorPartialTransform {
 
     #[tracing::instrument(level = "info", name = "aggregator_partial_execute", skip(self))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
-        tracing::info!("enter");
         tracing::debug!("execute...");
         let start = Instant::now();
 
@@ -145,7 +144,6 @@ impl Processor for AggregatorPartialTransform {
 
         let block = DataBlock::create_by_array(self.schema.clone(), columns);
 
-        tracing::info!("return");
         Ok(Box::pin(DataBlockStream::create(
             self.schema.clone(),
             None,

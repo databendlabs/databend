@@ -28,6 +28,7 @@ use common_exception::ToErrorCode;
 use common_infallible::RwLock;
 use common_tracing::tracing;
 use common_tracing::tracing::Instrument;
+use common_tracing::tracing::Span;
 use tokio_stream::StreamExt;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
@@ -72,6 +73,7 @@ impl DatabendQueryFlightDispatcher {
         self.abort.load(Ordering::Relaxed)
     }
 
+    #[tracing::instrument(level = "info", skip_all)]
     pub fn get_stream(&self, ticket: &StreamTicket) -> Result<mpsc::Receiver<Result<DataBlock>>> {
         let stage_name = format!("{}/{}", ticket.query_id, ticket.stage_id);
         if let Some(notify) = self.stages_notify.write().remove(&stage_name) {
@@ -85,6 +87,7 @@ impl DatabendQueryFlightDispatcher {
         }
     }
 
+    #[tracing::instrument(level = "info", skip_all, fields(session.id = session.get_id().as_str()))]
     pub async fn broadcast_action(&self, session: SessionRef, action: FlightAction) -> Result<()> {
         let query_id = action.get_query_id();
         let stage_id = action.get_stage_id();
@@ -120,6 +123,7 @@ impl DatabendQueryFlightDispatcher {
         }
     }
 
+    #[tracing::instrument(level = "info", skip_all, fields(session.id = session.get_id().as_str()))]
     async fn one_sink_action(&self, session: SessionRef, action: &FlightAction) -> Result<()> {
         let query_context = session.create_context().await?;
         let action_context = QueryContext::new(query_context.clone());
@@ -163,11 +167,12 @@ impl DatabendQueryFlightDispatcher {
                     }
                 };
             }
-            .instrument(common_tracing::tracing::info_span!("sink_action_inner")),
+            .instrument(Span::current()),
         )?;
         Ok(())
     }
 
+    #[tracing::instrument(level = "info", skip_all, fields(session.id = session.get_id().as_str()))]
     async fn action_with_scatter<T>(
         &self,
         session: SessionRef,
@@ -253,9 +258,7 @@ impl DatabendQueryFlightDispatcher {
                     }
                 }
             }
-            .instrument(common_tracing::tracing::info_span!(
-                "action_with_scatter_inner"
-            )),
+            .instrument(Span::current()),
         )?;
 
         Ok(())
