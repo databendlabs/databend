@@ -20,7 +20,7 @@ max(distinct(expression))
 
 ## Examples
 
-```
+```sql
 mysql> SELECT sum(distinct(number%3)) FROM numbers_mt(10);
 +----------------------------+
 | sum(distinct (number % 3)) |

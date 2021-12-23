@@ -15,7 +15,7 @@ toInt64(expr) — Results in the Int64 data type.
 
 ## Examples
 
-```
+```sql
 mysql> SELECT toInt8(1);
 +-----------+
 | toInt8(1) |

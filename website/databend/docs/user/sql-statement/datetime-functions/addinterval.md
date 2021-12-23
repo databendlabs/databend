@@ -20,7 +20,7 @@ Date16, Date32 or DateTime32, depends on the input.
 
 ## Examples
 
-```
+```sql
 mysql> select toDate(18875), addYears(toDate(18875), 2);
 +---------------+-----------------------------+
 | toDate(18875) | addYears(toDate(18875), 10) |

@@ -30,7 +30,7 @@ A double if the input type is double, otherwise integer.
 numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
 :::
 
-```
+```sql
 mysql> SELECT SUM(number) FROM numbers(3);
 +-------------+
 | sum(number) |

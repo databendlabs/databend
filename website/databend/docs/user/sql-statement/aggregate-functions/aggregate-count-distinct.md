@@ -27,7 +27,7 @@ UInt64
 
 ## Examples
 
-```
+```sql
 mysql> SELECT count(distinct number % 3) FROM numbers(1000);
 +------------------------------+
 | count(distinct (number % 3)) |

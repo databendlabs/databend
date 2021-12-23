@@ -16,7 +16,7 @@ Random UUID.
 
 ## Examples
 
-```
+```sql
 mysql> select generateUUIDv4();
 +--------------------------------------+
 | generateUUIDv4()                     |

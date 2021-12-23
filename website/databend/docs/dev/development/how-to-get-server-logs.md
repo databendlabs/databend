@@ -3,13 +3,15 @@ title: How to get server logs
 ---
 
 If you get an error from the client, such as:
-```
+
+```mysql
 ERROR 2013 (HY000): Lost connection to MySQL server during query
 No connection. Trying to reconnect...
 ```
 
 You can get the server logs from the `system.tracing` table(level=50 only shows the ERROR logs):
-```
+
+```sql
 mysql> select * from system.tracing where level=50;
 +------+----------------+----------------------------------------------------------------------------------------------------------------------------------+-------+----------+--------+-------------------------------------+
 | v    | name           | msg                                                                                                                              | level | hostname | pid    | time                                |

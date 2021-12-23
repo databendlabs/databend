@@ -22,7 +22,7 @@ If x is not empty, isnotemptyUUID() returns 1, otherwise it returns 0.
 
 ## Examples
 
-```
+```sql
 mysql> select isnotemptyUUID(generateUUIDv4());
 +----------------------------------+
 | isnotemptyUUID(generateUUIDv4()) |

@@ -22,7 +22,7 @@ UInt32.
 
 ## Examples
 
-```
+```sql
 mysql> SELECT CRC32('MySQL');
 +----------------+
 | CRC32('MySQL') |

@@ -12,7 +12,7 @@ SHOW USERS
 
 ## Examples
 
-```
+```sql
 mysql> SHOW USERS;
 +------+-----------+----------+-----------+
 | name | hostname  | password | auth_type |

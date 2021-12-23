@@ -24,7 +24,7 @@ The return type is determined by expr2 and expr3, they must have the lowest comm
 
 ## Examples
 
-```
+```sql
 mysql> select if(number=0, true, false) from numbers(1);
 +-------------------------------+
 | if((number = 0), true, false) |
@@ -34,7 +34,7 @@ mysql> select if(number=0, true, false) from numbers(1);
 1 row in set (0.01 sec)
 ```
 
-```
+```sql
 mysql> SELECT if(number > 5, number*5, number+5 ) FROM numbers(10);
 +----------------------------------------------+
 | if((number > 5), (number * 5), (number + 5)) |

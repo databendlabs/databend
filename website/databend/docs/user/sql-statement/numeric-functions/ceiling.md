@@ -23,7 +23,7 @@ A Float64 data type value.
 
 ## Examples
 
-```
+```sql
 mysql> SELECT CEILING(1.23);
 +---------------+
 | CEILING(1.23) |

@@ -23,7 +23,7 @@ A Float64 data type value.
 
 ## Examples
 
-```
+```sql
 mysql> SELECT FLOOR(1.23);
 +-------------+
 | FLOOR(1.23) |

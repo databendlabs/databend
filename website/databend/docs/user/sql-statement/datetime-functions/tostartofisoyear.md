@@ -14,7 +14,7 @@ Datetime object, returns date in “YYYY-MM-DD” format.
 
 ## Examples
 
-```
+```sql
 mysql> select toStartOfISOYear(toDate(18869));
 +---------------------------------+
 | toStartOfISOYear(toDate(18869)) |

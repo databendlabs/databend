@@ -14,7 +14,7 @@ SHOW SETTINGS
 
 ## Examples
 
-```
+```sql
 mysql> SHOW SETTINGS;
 +-----------------------+-----------+
 | name                  | value     |

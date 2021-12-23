@@ -24,7 +24,7 @@ A UInt64 data type hash value.
 
 ## Examples
 
-```
+```sql
 mysql> SELECT SIPHASH('1234567890');
 +---------------------+
 | SIPHASH(1234567890) |

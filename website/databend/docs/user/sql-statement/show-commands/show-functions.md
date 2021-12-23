@@ -12,7 +12,7 @@ SHOW FUNCTIONS  [LIKE 'pattern' | WHERE expr]
 
 ## Example
 
-```
+```sql
 mysql> SHOW FUNCTIONS;
 +-------------------------+
 | name                    |
@@ -37,7 +37,7 @@ mysql> SHOW FUNCTIONS;
 ```
 
 Showing the functions begin with `"today"`:
-```
+```sql
 mysql> SHOW FUNCTIONS LIKE 'today%';
 +--------------+
 | name         |
@@ -50,7 +50,7 @@ mysql> SHOW FUNCTIONS LIKE 'today%';
 ```
 
 Showing the functions begin with `"today"` with `WHERE`:
-```
+```sql
 mysql> SHOW FUNCTIONS WHERE name LIKE 'today%';
 +--------------+
 | name         |

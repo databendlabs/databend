@@ -25,7 +25,7 @@ A Float64 data type value.
 
 ## Examples
 
-```
+```sql
 mysql> SELECT CEIL(1.23);
 +------------+
 | CEIL(1.23) |

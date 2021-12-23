@@ -23,7 +23,7 @@ A Float64 data type value.
 
 ## Examples
 
-```
+```sql
 mysql> SELECT COT(12);
 +---------------------+
 | COT(12)             |

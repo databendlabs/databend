@@ -12,7 +12,7 @@ SHOW TABLES  [LIKE 'pattern' | WHERE expr | FROM 'pattern' | IN 'pattern']
 
 ## Examples
 
-```
+```sql
 mysql> SHOW TABLES;
 +---------------+
 | name          |
@@ -33,7 +33,7 @@ mysql> SHOW TABLES;
 ```
 
 Showing the tables with table name `"numbers_local"`:
-```
+```sql
 mysql> SHOW TABLES LIKE 'numbers_local';
 +---------------+
 | name          |
@@ -43,7 +43,7 @@ mysql> SHOW TABLES LIKE 'numbers_local';
 ```
 
 Showing the tables begin with `"numbers"`:
-```
+```sql
 mysql> SHOW TABLES LIKE 'numbers%';
 +---------------+
 | name          |
@@ -55,7 +55,7 @@ mysql> SHOW TABLES LIKE 'numbers%';
 ```
 
 Showing the tables begin with `"numbers"` with `WHERE`:
-```
+```sql
 mysql> SHOW TABLES WHERE name LIKE 'numbers%';
 +---------------+
 | name          |
@@ -67,7 +67,7 @@ mysql> SHOW TABLES WHERE name LIKE 'numbers%';
 ```
 
 Showing the tables are inside `"ss"`:
-```
+```sql
 mysql> SHOW TABLES FROM 'ss';
 +---------------+
 | name          |

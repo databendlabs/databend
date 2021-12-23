@@ -8,7 +8,7 @@ This document describes the coding guidelines for the Databend Rust codebase.
 
 All code formatting is enforced with [rustfmt](https://github.com/rust-lang/rustfmt) with a project-specific configuration.  Below is an example command:
 
-```
+```shell
 $ make fmt
 ```
 
@@ -16,7 +16,7 @@ $ make fmt
 
 [Clippy](https://github.com/rust-lang/rust-clippy) is used to catch common mistakes and is run as a part of continuous integration.  Before submitting your code for review, you can run lint:
 
-```
+```shell
 $ make lint
 ```
 
@@ -53,12 +53,12 @@ struct Point {
 
 *Unit tests*
 
-```
+```shell
 $ make unit-test
 ```
 
 *Stateless tests*
 
-```
+```shell
 $ make stateless-test
 ```
