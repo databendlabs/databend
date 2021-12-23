@@ -27,7 +27,7 @@ A Float64 data type value.
 
 ## Examples
 
-```
+```sql
 mysql> SELECT POW(-2,2);
 +---------------+
 | POW((- 2), 2) |

@@ -29,7 +29,7 @@ Null
 
 ## Examples
 
-```
+```sql
 mysql> SELECT * FROM (SELECT crashme(sleep(1)));;
 
 ERROR 2013 (HY000) at line 2: Lost connection to MySQL server during query

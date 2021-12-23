@@ -7,7 +7,7 @@ Writing data.
 ## Insert Into Statement
 ### Syntax
 
-```
+```sql
 INSERT INTO|OVERWRITE [db.]table [(c1, c2, c3)] VALUES (v11, v12, v13), (v21, v22, v23), ...
 ```
 

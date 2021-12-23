@@ -26,7 +26,7 @@ A Float64 data type value.
 
 ## Examples
 
-```
+```sql
 mysql> SELECT ATAN2(-2, 2);
 +---------------------+
 | ATAN2((- 2), 2)     |

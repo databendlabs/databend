@@ -22,7 +22,7 @@ If x is NULL, ISNULL() returns 1, otherwise it returns 0.
 
 ## Examples
 
-```
+```sql
 mysql> CREATE TABLE nullable_test (a UInt32, b UInt32) engine=Memory;
 Query OK, 0 rows affected (3.19 sec)
 

@@ -16,7 +16,7 @@ Zero UUID.
 
 ## Examples
 
-```
+```sql
 mysql> select zeroUUID();
 +--------------------------------------+
 | zeroUUID()                           |

@@ -22,7 +22,7 @@ If x is empty, isemptyUUID() returns 1, otherwise it returns 0.
 
 ## Examples
 
-```
+```sql
 mysql> select isemptyUUID(generateUUIDv4());
 +-------------------------------+
 | isemptyUUID(generateUUIDv4()) |

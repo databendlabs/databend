@@ -23,7 +23,7 @@ A Float64 data type value.
 
 ## Examples
 
-```
+```sql
 mysql> SELECT SIN(PI());
 +------------------------------------+
 | SIN(PI())                          |

@@ -12,7 +12,7 @@ SELECT DATABASE()
 
 ## Examples
 
-```
+```sql
 mysql> SELECT DATABASE();
 +------------+
 | DATABASE() |

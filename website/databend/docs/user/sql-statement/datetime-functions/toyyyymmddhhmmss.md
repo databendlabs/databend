@@ -15,7 +15,7 @@ UInt64, returns in `YYYYMMDDhhmmss` format.
 
 ## Examples
 
-```
+```sql
 mysql> select toDate(18875);
 +---------------+
 | toDate(18875) |

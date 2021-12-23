@@ -22,7 +22,7 @@ String
 
 ## Examples
 
-```
+```sql
 mysql> SELECT ToTypeName(number) FROM numbers(2);
 +--------------------+
 | ToTypeName(number) |

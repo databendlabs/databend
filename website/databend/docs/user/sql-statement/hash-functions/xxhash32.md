@@ -23,7 +23,7 @@ A UInt32 data type hash value.
 
 ## Examples
 
-```
+```sql
 mysql> SELECT XXHASH32('1234567890');
 +------------------------+
 | XXHASH32('1234567890') |

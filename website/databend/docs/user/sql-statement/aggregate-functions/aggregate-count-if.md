@@ -17,7 +17,7 @@ countIf(column, cond)
 numbers_mt(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
 :::
 
-```
+```sql
 mysql> SELECT count(number) FROM numbers(10);
 +---------------+
 | count(number) |

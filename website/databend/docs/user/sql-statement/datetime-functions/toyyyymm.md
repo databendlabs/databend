@@ -16,7 +16,7 @@ UInt32, returns in `YYYYMM` format.
 
 ## Examples
 
-```
+```sql
 mysql> select toDate(18875);
 +---------------+
 | toDate(18875) |

@@ -23,7 +23,7 @@ Converted value.
 
 ## Examples
 
-```
+```sql
 mysql> SELECT CAST(1 AS VARCHAR);
 +-------------------+
 | cast(1 as String) |

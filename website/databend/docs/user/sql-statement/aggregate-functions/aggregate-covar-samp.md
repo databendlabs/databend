@@ -29,7 +29,7 @@ float64, when n <= 1, returns +∞.
 
 ## Examples
 
-```
+```sql
 mysql> SELECT covar_samp(number, number) from (select * from numbers_mt(2) order by number asc);
 +----------------------------+
 | covar_samp(number, number) |

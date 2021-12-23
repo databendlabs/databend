@@ -6,7 +6,7 @@ title: How to profile Databend
 
 `go tool pprof http://localhost:8080/debug/pprof/profile?seconds=20`
 
-```
+```shell
 Fetching profile over HTTP from http://localhost:8080/debug/pprof/profile?seconds=20
 Saved profile in /home/bohu/pprof/pprof.cpu.007.pb.gz
 Type: cpu
@@ -29,6 +29,6 @@ Showing top 10 nodes out of 204
 ```
 
 Or
-```
+```shell
 go tool pprof -http=0.0.0.0:8081 $HOME/pprof/pprof.cpu.007.pb.gz
 ```

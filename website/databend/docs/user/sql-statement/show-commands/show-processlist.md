@@ -14,7 +14,7 @@ SHOW PROCESSLIST
 
 ## Examples
 
-```
+```sql
 mysql> SHOW PROCESSLIST;
 +--------------------------------------+-----------------+-------+----------+------------------+------------------+
 | id                                   | host            | state | database | extra_info       | memory_usage     |

@@ -28,7 +28,7 @@ The maximum value, in the type of the value.
     numbers(N) – A table for test with the single `number` column (UInt64) that contains integers from 0 to N-1.
 :::
 
-```
+```sql
 mysql> SELECT MAX(*) FROM numbers(3);
 +--------+
 | max(*) |

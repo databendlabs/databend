@@ -12,7 +12,7 @@ DESC|DESCRIBE [database.]table_name
 
 ## Examples
 
-```
+```sql
 mysql> describe system.numbers;
 +--------+--------+------+
 | Field  | Type   | Null |

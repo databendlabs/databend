@@ -6,7 +6,7 @@ title: How to write scalar functions
 
 Scalar functions (sometimes referred to as User-Defined Functions / UDFs) return a single value as a return value for each row, not as a result set, and can be used in most places within a query or SET statement, except for the FROM clause.
 
-```
+```text
 One to One Mapping execution
 
 ┌─────┐                    ┌──────┐
@@ -124,7 +124,7 @@ For example a primitive array of int32s:
 Would look like this:
 
 
-```
+```text
 * Length: 5, Null count: 1
 * Validity bitmap buffer:
 
@@ -146,7 +146,7 @@ Sometimes column is constant in the block, such as: `select 3 from table`, the c
 
 So databend's DataColumn is represented by:
 
-```
+```rust
 pub enum DataColumn {
     // Array of values. Series is wrap of arrow's array
     Array(Series),

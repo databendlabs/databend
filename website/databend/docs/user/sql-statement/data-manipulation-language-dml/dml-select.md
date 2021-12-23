@@ -6,7 +6,7 @@ Retrieves data from a table.
 
 ## Syntax
 
-```
+```sql
 SELECT
     [ALL | DISTINCT]
     select_expr [[AS] alias], ...
@@ -28,7 +28,7 @@ numbers(N) – A table for test with the single `number` column (UInt64) that co
 
 ## SELECT clause
 
-```
+```sql
 mysql> SELECT number FROM numbers(3);
 +--------+
 | number |
@@ -41,7 +41,7 @@ mysql> SELECT number FROM numbers(3);
 
 ## FROM clause
 
-```
+```sql
 mysql> SELECT number FROM numbers(3) AS a; 
 +--------+
 | number |
@@ -54,7 +54,7 @@ mysql> SELECT number FROM numbers(3) AS a;
 
 ## WHERE clause
 
-```
+```sql
 mysql> SELECT number FROM numbers(3) WHERE number > 1;
 +--------+
 | number |
@@ -66,7 +66,7 @@ mysql> SELECT number FROM numbers(3) WHERE number > 1;
 
 ## GROUP BY clause
 
-```
+```sql
 mysql> SELECT number%2 as c1, number%3 as c2, MAX(number) FROM numbers(10000) GROUP BY c1, c2;
 +------+------+-------------+
 | c1   | c2   | MAX(number) |
@@ -83,7 +83,7 @@ mysql> SELECT number%2 as c1, number%3 as c2, MAX(number) FROM numbers(10000) GR
 
 ## HAVING clause
 
-```
+```sql
 mysql> SELECT number%2 as c1, number%3 as c2, MAX(number) as max FROM numbers(10000) GROUP BY c1, c2 HAVING max>9996;
 +------+------+------+
 | c1   | c2   | max  |
@@ -97,7 +97,7 @@ mysql> SELECT number%2 as c1, number%3 as c2, MAX(number) as max FROM numbers(10
 
 ## ORDER By clause
 
-```
+```sql
 mysql> SELECT number FROM numbers(5) ORDER BY number ASC;
 +--------+
 | number |
@@ -137,7 +137,7 @@ mysql> SELECT number%2 AS c1, number%3 AS c2  FROM numbers(5) ORDER BY c1 ASC, c
 
 ## LIMIT clause
 
-```
+```sql
 mysql> SELECT number FROM numbers(1000000000) LIMIT 1;
 +--------+
 | number |
@@ -158,7 +158,7 @@ mysql> SELECT number FROM numbers(100000) ORDER BY number LIMIT 2 OFFSET 10;
 
 ## OFFSET clause
 
-```
+```sql
 mysql> SELECT number FROM numbers(5) ORDER BY number OFFSET 2;
 +--------+
 | number |
@@ -178,7 +178,7 @@ SELECT statements can be nested in queries.
 SELECT ... [SELECT ...[SELECT [...]]]
 ```
 
-```
+```sql
 mysql> SELECT MIN(number) FROM (SELECT number%3 AS number FROM numbers(10)) GROUP BY number%2;
 +-------------+
 | min(number) |

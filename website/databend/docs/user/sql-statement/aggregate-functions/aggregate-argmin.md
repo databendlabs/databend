@@ -42,7 +42,7 @@ numbers(N) – A table for test with the single `number` column (UInt64) that co
     ```
 
 
-```
+```sql
 mysql> SELECT argMin(user, salary)  FROM (SELECT sum(number) AS salary, number%3 AS user FROM numbers_mt(10000) GROUP BY user);
 +----------------------+
 | argMin(user, salary) |

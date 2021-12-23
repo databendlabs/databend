@@ -26,7 +26,7 @@ UInt8
 
 ## Examples
 
-```
+```sql
 mysql> SELECT sleep(2);
 +----------+
 | sleep(2) |
