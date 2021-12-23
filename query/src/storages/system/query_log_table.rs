@@ -65,8 +65,9 @@ impl QueryLogTable {
             // Stats.
             DataField::new("written_rows", DataType::UInt64, false),
             DataField::new("written_bytes", DataType::UInt64, false),
-            DataField::new("read_rows", DataType::UInt64, false),
-            DataField::new("read_bytes", DataType::UInt64, false),
+            DataField::new("scan_rows", DataType::UInt64, false),
+            DataField::new("scan_bytes", DataType::UInt64, false),
+            DataField::new("scan_cost_ms", DataType::UInt64, false),
             DataField::new("result_rows", DataType::UInt64, false),
             DataField::new("result_bytes", DataType::UInt64, false),
             DataField::new("cpu_usage", DataType::UInt32, false),

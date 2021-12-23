@@ -16,6 +16,7 @@
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Poll;
+use std::time::Instant;
 
 use common_base::tokio::io::SeekFrom;
 
@@ -26,11 +27,16 @@ use crate::InputStream;
 pub struct InputStreamInterceptor {
     ctx: Arc<DalContext>,
     inner: InputStream,
+    cost_ms: u128,
 }
 
 impl InputStreamInterceptor {
     pub fn new(ctx: Arc<DalContext>, inner: InputStream) -> Self {
-        Self { ctx, inner }
+        Self {
+            ctx,
+            inner,
+            cost_ms: 0,
+        }
     }
 }
 
@@ -40,9 +46,14 @@ impl futures::AsyncRead for InputStreamInterceptor {
         ctx: &mut std::task::Context<'_>,
         buf: &mut [u8],
     ) -> Poll<std::result::Result<usize, std::io::Error>> {
+        let start = Instant::now();
         let r = Pin::new(&mut self.inner).poll_read(ctx, buf);
+        let duration = start.elapsed();
+        self.cost_ms += duration.as_millis();
         if let Poll::Ready(Ok(len)) = r {
             self.ctx.inc_read_bytes(len as usize);
+            self.ctx.inc_cost_ms(self.cost_ms as usize);
+            self.cost_ms = 0;
         };
         r
     }

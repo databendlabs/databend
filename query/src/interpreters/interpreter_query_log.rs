@@ -61,8 +61,9 @@ pub struct LogEvent {
     // Stats.
     pub written_rows: u64,
     pub written_bytes: u64,
-    pub read_rows: u64,
-    pub read_bytes: u64,
+    pub scan_rows: u64,
+    pub scan_bytes: u64,
+    pub scan_cost_ms: u64,
     pub result_rows: u64,
     pub result_bytes: u64,
     pub cpu_usage: u32,
@@ -123,8 +124,9 @@ impl InterpreterQueryLog {
             // Stats.
             Series::new(vec![event.written_rows as u64]),
             Series::new(vec![event.written_bytes as u64]),
-            Series::new(vec![event.read_rows as u64]),
-            Series::new(vec![event.read_bytes as u64]),
+            Series::new(vec![event.scan_rows as u64]),
+            Series::new(vec![event.scan_bytes as u64]),
+            Series::new(vec![event.scan_cost_ms as u64]),
             Series::new(vec![event.result_rows as u64]),
             Series::new(vec![event.result_bytes as u64]),
             Series::new(vec![event.cpu_usage]),
@@ -177,8 +179,9 @@ impl InterpreterQueryLog {
 
         let written_rows = 0u64;
         let written_bytes = 0u64;
-        let read_rows = 0u64;
-        let read_bytes = 0u64;
+        let scan_rows = 0u64;
+        let scan_bytes = 0u64;
+        let scan_cost_ms = 0u64;
         let result_rows = 0u64;
         let result_bytes = 0u64;
         let cpu_usage = self.ctx.get_settings().get_max_threads()? as u32;
@@ -207,8 +210,9 @@ impl InterpreterQueryLog {
             projections: "".to_string(),
             written_rows,
             written_bytes,
-            read_rows,
-            read_bytes,
+            scan_rows,
+            scan_bytes,
+            scan_cost_ms,
             result_rows,
             result_bytes,
             cpu_usage,
@@ -251,8 +255,9 @@ impl InterpreterQueryLog {
         let written_rows = 0u64;
         let dal_metrics = self.ctx.get_dal_metrics();
         let written_bytes = dal_metrics.write_bytes as u64;
-        let read_rows = self.ctx.get_scan_progress_value().read_rows as u64;
-        let read_bytes = self.ctx.get_scan_progress_value().read_bytes as u64;
+        let scan_rows = self.ctx.get_scan_progress_value().read_rows as u64;
+        let scan_bytes = self.ctx.get_scan_progress_value().read_bytes as u64;
+        let scan_cost_ms = dal_metrics.cost_ms as u64;
         let cpu_usage = self.ctx.get_settings().get_max_threads()? as u32;
         let memory_usage = self.ctx.get_session().get_memory_usage() as u64;
 
@@ -285,8 +290,9 @@ impl InterpreterQueryLog {
             projections: "".to_string(),
             written_rows,
             written_bytes,
-            read_rows,
-            read_bytes,
+            scan_rows,
+            scan_bytes,
+            scan_cost_ms,
             result_rows,
             result_bytes,
             cpu_usage,

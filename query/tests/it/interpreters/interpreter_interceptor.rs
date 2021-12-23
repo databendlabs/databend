@@ -55,7 +55,7 @@ async fn test_interpreter_interceptor() -> Result<()> {
 
     // Check.
     {
-        let query = "select log_type, handler_type, cpu_usage, memory_usage, read_rows, read_bytes, written_rows, written_bytes, result_rows, result_bytes, query_kind, query_text, sql_user, sql_user_quota, sql_user_privileges from system.query_log";
+        let query = "select log_type, handler_type, cpu_usage, memory_usage, scan_rows, scan_bytes, written_rows, written_bytes, result_rows, result_bytes, query_kind, query_text, sql_user, sql_user_quota, sql_user_privileges from system.query_log";
         let plan = PlanParser::parse(query, ctx.clone()).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
 
@@ -64,7 +64,7 @@ async fn test_interpreter_interceptor() -> Result<()> {
 
         let expected = vec![
             "+----------+--------------+-----------+--------------+-----------+------------+--------------+---------------+-------------+--------------+------------+------------------------------------------------------+-----------+-----------------------------+---------------------------------------------------------------------------+",
-            "| log_type | handler_type | cpu_usage | memory_usage | read_rows | read_bytes | written_rows | written_bytes | result_rows | result_bytes | query_kind | query_text                                           | sql_user  | sql_user_quota              | sql_user_privileges                                                       |",
+            "| log_type | handler_type | cpu_usage | memory_usage | scan_rows | scan_bytes | written_rows | written_bytes | result_rows | result_bytes | query_kind | query_text                                           | sql_user  | sql_user_quota              | sql_user_privileges                                                       |",
             "+----------+--------------+-----------+--------------+-----------+------------+--------------+---------------+-------------+--------------+------------+------------------------------------------------------+-----------+-----------------------------+---------------------------------------------------------------------------+",
             "| 1        | TestSession  | 8         | 3533         | 0         | 0          | 0            | 0             | 0           | 0            | SelectPlan | select number from numbers_mt(100) where number > 90 | test_user | UserGrantSet { grants: [] } | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
             "| 2        | TestSession  | 8         | 3533         | 100       | 800        | 0            | 0             | 9           | 72           | SelectPlan | select number from numbers_mt(100) where number > 90 | test_user | UserGrantSet { grants: [] } | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
