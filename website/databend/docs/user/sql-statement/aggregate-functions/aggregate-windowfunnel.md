@@ -50,7 +50,7 @@ Set the following chain of events:
 
 Input table:
 
-``` text
+``` sql
 ┌─user_id─┬─timestamp─┬─eventID─┬─product─┐
 │       1 │        20 │    1003 │ phone   │
 │       1 │       200 │    1007 │ phone   │
