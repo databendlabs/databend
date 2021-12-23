@@ -113,7 +113,7 @@ impl InterpreterQueryLog {
             Series::new(vec![event.query_kind.as_str()]),
             Series::new(vec![event.query_text.as_str()]),
             Series::new(vec![event.event_date as i32]),
-            Series::new(vec![event.event_time as u32]),
+            Series::new(vec![event.event_time as u64]),
             // Schema.
             Series::new(vec![event.current_database.as_str()]),
             Series::new(vec![event.databases.as_str()]),
