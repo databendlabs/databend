@@ -5,10 +5,10 @@ on:
     branches-ignore:
       - main
     paths-ignore:
-      - 'website/'
+      - 'website/**'
   pull_request:
     paths-ignore:
-      - 'website/'
+      - 'website/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
