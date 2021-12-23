@@ -50,7 +50,7 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default())
+            .features(FunctionFeatures::default().num_arguments(1))
     }
 }
 
@@ -97,10 +97,6 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
 {
     fn name(&self) -> &str {
         self.display_name.as_str()
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {

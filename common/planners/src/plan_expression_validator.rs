@@ -90,7 +90,7 @@ pub fn validate_expression(expr: &Expression) -> Result<()> {
         Expression::ScalarFunction { op, args } => {
             let features = FunctionFactory::instance().get_features(op)?;
             validate_function_arg(
-                &op,
+                op,
                 args.len(),
                 features.variadic_arguments,
                 features.num_arguments,
