@@ -22,8 +22,8 @@ use common_planners::Extras;
 use common_streams::ParquetSource;
 use common_streams::SendableDataBlockStream;
 use common_streams::Source;
+use common_tracing::tracing_futures::Instrument;
 use futures::StreamExt;
-use tracing_futures::Instrument;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::FuseTable;

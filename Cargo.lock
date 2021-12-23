@@ -1569,6 +1569,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-bunyan-formatter",
+ "tracing-futures",
  "tracing-opentelemetry",
  "tracing-subscriber",
 ]
@@ -2076,7 +2077,6 @@ dependencies = [
  "tokio-stream",
  "toml",
  "tonic",
- "tracing-futures",
  "uuid",
  "walkdir",
 ]

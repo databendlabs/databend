@@ -28,13 +28,10 @@ use common_datavalues::series::IntoSeries;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_tracing::tracing;
 use common_tracing::tracing::debug_span;
 use common_tracing::tracing::Instrument;
 use futures::StreamExt;
 use futures::TryStreamExt;
-//use tracing::debug_span;
-use tracing::info_span;
 
 use crate::Source;
 
@@ -81,7 +78,7 @@ impl Source for ParquetSource {
                     .data_accessor
                     .get_input_stream(self.path.as_str(), None)?;
                 let m = read_metadata_async(&mut reader)
-                    .instrument(info_span!("parquet_source_read_meta"))
+                    .instrument(debug_span!("parquet_source_read_meta"))
                     .await
                     .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
                 self.metadata = Some(m.clone());
@@ -126,7 +123,7 @@ impl Source for ParquetSource {
                 let array: Arc<dyn common_arrow::arrow::array::Array> = array.into();
                 Ok::<_, ErrorCode>(DataColumn::Array(array.into_series()))
             }
-            .instrument(info_span!("parquet_source_read_column"))
+            .instrument(debug_span!("parquet_source_read_column"))
         });
 
         // TODO configuration of the buffer size
