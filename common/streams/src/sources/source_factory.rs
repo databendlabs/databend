@@ -50,20 +50,20 @@ impl SourceFactory {
                 let field_delimitor = params
                     .options
                     .get("field_delimitor")
-                    .and_then(|v| match v.len() {
-                        n if n >= 1 => Some(v.as_bytes()[0]),
-                        _ => Some(b','),
+                    .map(|v| match v.len() {
+                        n if n >= 1 => v.as_bytes()[0],
+                        _ => b',',
                     })
-                    .unwrap_or_else(|| b',');
+                    .unwrap_or(b',');
 
                 let record_delimitor = params
                     .options
                     .get("record_delimitor")
-                    .and_then(|v| match v.len() {
-                        n if n >= 1 => Some(v.as_bytes()[0]),
-                        _ => Some(b'\n'),
+                    .map(|v| match v.len() {
+                        n if n >= 1 => v.as_bytes()[0],
+                        _ => b'\n',
                     })
-                    .unwrap_or_else(|| b'\n');
+                    .unwrap_or(b'\n');
 
                 let reader = params.acc.get_input_stream(params.path, None)?;
                 Ok(Box::new(CsvSource::try_create(

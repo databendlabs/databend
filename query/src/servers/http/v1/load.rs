@@ -86,9 +86,9 @@ pub async fn streaming_load(
         .headers()
         .get("field_delimitor")
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| match v.len() {
-            n if n >= 1 => Some(v.as_bytes()[0]),
-            _ => Some(b','),
+        .map(|v| match v.len() {
+            n if n >= 1 => v.as_bytes()[0],
+            _ => b',',
         })
         .unwrap_or(b',');
 
@@ -96,9 +96,9 @@ pub async fn streaming_load(
         .headers()
         .get("record_delimitor")
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| match v.len() {
-            n if n >= 1 => Some(v.as_bytes()[0]),
-            _ => Some(b'\n'),
+        .map(|v| match v.len() {
+            n if n >= 1 => v.as_bytes()[0],
+            _ => b'\n',
         })
         .unwrap_or(b'\n');
 
