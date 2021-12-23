@@ -59,7 +59,10 @@ fn test_arithmetic_function() -> Result<()> {
             },
         ),
         (
-            ArithmeticMinusFunction::try_create_func("")?,
+            ArithmeticMinusFunction::try_create_func("", &[
+                DataTypeAndNullable::create(&DataType::Int64, false),
+                DataTypeAndNullable::create(&DataType::Int64, false),
+            ])?,
             ScalarFunctionTest {
                 name: "sub-int64-passed",
                 nullable: false,
@@ -72,7 +75,10 @@ fn test_arithmetic_function() -> Result<()> {
             },
         ),
         (
-            ArithmeticMulFunction::try_create_func("")?,
+            ArithmeticMulFunction::try_create_func("", &[
+                DataTypeAndNullable::create(&DataType::Int64, false),
+                DataTypeAndNullable::create(&DataType::Int64, false),
+            ])?,
             ScalarFunctionTest {
                 name: "mul-int64-passed",
                 nullable: false,
@@ -85,7 +91,10 @@ fn test_arithmetic_function() -> Result<()> {
             },
         ),
         (
-            ArithmeticDivFunction::try_create_func("")?,
+            ArithmeticDivFunction::try_create_func("", &[
+                DataTypeAndNullable::create(&DataType::Int64, false),
+                DataTypeAndNullable::create(&DataType::Int64, false),
+            ])?,
             ScalarFunctionTest {
                 name: "div-int64-passed",
                 nullable: false,
@@ -98,7 +107,10 @@ fn test_arithmetic_function() -> Result<()> {
             },
         ),
         (
-            ArithmeticModuloFunction::try_create_func("")?,
+            ArithmeticModuloFunction::try_create_func("", &[
+                DataTypeAndNullable::create(&DataType::Int64, false),
+                DataTypeAndNullable::create(&DataType::Int64, false),
+            ])?,
             ScalarFunctionTest {
                 name: "mod-int64-passed",
                 nullable: false,

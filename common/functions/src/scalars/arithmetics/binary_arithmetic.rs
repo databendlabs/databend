@@ -23,6 +23,7 @@ use common_exception::Result;
 
 use super::arithmetic::ArithmeticTrait;
 use crate::scalars::ArithmeticPlusFunction;
+use crate::scalars::ArithmeticMulFunction;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
 
@@ -71,6 +72,7 @@ where T: ArithmeticTrait + Clone + Sync + Send + 'static
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
         match self.op {
             Plus => ArithmeticPlusFunction::get_monotonicity(args),
+            Mul => ArithmeticMulFunction::get_monotonicity(args),
             _ => unimplemented!(),
         }
     }

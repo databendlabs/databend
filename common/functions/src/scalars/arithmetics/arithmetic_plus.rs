@@ -14,6 +14,11 @@
 
 use std::marker::PhantomData;
 use std::ops::Add;
+use std::ops::Div;
+use std::ops::Mul;
+use std::ops::Neg;
+use std::ops::Rem;
+use std::ops::Sub;
 
 use common_datavalues::prelude::*;
 use common_datavalues::DataTypeAndNullable;
@@ -23,6 +28,7 @@ use common_exception::Result;
 use num::cast::AsPrimitive;
 use num_traits::WrappingAdd;
 use num_traits::WrappingSub;
+use num_traits::WrappingMul;
 
 use super::arithmetic::ArithmeticTrait;
 use super::interval::*;
@@ -169,15 +175,11 @@ impl ArithmeticPlusFunction {
     }
 
     pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
-        if args.is_empty() || args.len() > 2 {
+        if args.len() != 2 {
             return Err(ErrorCode::BadArguments(format!(
                 "Invalid argument lengths {} for get_monotonicity",
                 args.len()
             )));
-        }
-
-        if args.len() == 1 {
-            return Ok(args[0].clone());
         }
 
         // For expression f(x) + g(x), only when both f(x) and g(x) are monotonic and have

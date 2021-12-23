@@ -12,25 +12,61 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::marker::PhantomData;
+use std::ops::Add;
+use std::ops::Div;
+use std::ops::Mul;
+use std::ops::Neg;
+use std::ops::Rem;
+use std::ops::Sub;
+
+use common_datavalues::prelude::*;
 use common_datavalues::DataValueArithmeticOperator;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use num::cast::AsPrimitive;
+use num_traits::WrappingAdd;
+use num_traits::WrappingSub;
+use num_traits::WrappingMul;
 
-use crate::scalars::function_factory::FunctionDescription;
+use super::arithmetic::ArithmeticTrait;
+use crate::binary_arithmetic;
+use crate::binary_arithmetic_helper;
+use crate::impl_arithmetic;
+use crate::impl_try_create_func;
+use crate::impl_wrapping_arithmetic;
+use crate::scalars::function_factory::ArithmeticDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::ArithmeticFunction;
+use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
+use crate::with_match_integer_16;
+use crate::with_match_integer_32;
+use crate::with_match_integer_64;
+use crate::with_match_integer_8;
+use crate::with_match_primitive_type;
+
+impl_wrapping_arithmetic!(ArithmeticWrappingMul, wrapping_mul);
+
+impl_arithmetic!(ArithmeticMul, *);
 
 pub struct ArithmeticMulFunction;
 
 impl ArithmeticMulFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
-        ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Mul)
+    pub fn try_create_func(
+        _display_name: &str,
+        arguments: Vec<DataField>,
+    ) -> Result<Box<dyn Function>> {
+        let left_type = arguments[0].data_type();
+        let right_type = arguments[1].data_type();
+
+        let has_signed = left_type.is_signed_numeric() || right_type.is_signed_numeric();
+
+        impl_try_create_func! {left_type, right_type, DataValueArithmeticOperator::Mul, has_signed, ArithmeticMul, ArithmeticWrappingMul}
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc() -> ArithmeticDescription {
+        ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .monotonicity()
