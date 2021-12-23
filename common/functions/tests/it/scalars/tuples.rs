@@ -54,7 +54,7 @@ fn test_tuple_function() -> Result<()> {
     assert_eq!(expect_display, actual_display);
 
     // Nullable check.
-    let actual_null = func.nullable(&schema)?;
+    let actual_null = func.nullable(schema.fields())?;
     assert!(!actual_null);
 
     let expect_type = func.return_type(&args)?;

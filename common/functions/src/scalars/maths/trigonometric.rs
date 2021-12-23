@@ -15,7 +15,6 @@
 use std::fmt;
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -77,10 +76,6 @@ impl Function for TrigonometricFunction {
                 args[0]
             )))
         }
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

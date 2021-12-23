@@ -19,7 +19,6 @@ use common_datavalues::prelude::ArrayApply;
 use common_datavalues::prelude::DataColumn;
 use common_datavalues::prelude::DataColumnWithField;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -79,10 +78,6 @@ impl Function for SignFunction {
                 args[0]
             )))
         }
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

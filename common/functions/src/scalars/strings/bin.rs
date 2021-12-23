@@ -56,10 +56,6 @@ impl Function for BinFunction {
         Ok(DataType::String)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
-    }
-
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let mut string_array = StringArrayBuilder::with_capacity(input_rows);
         println!("bin's data type =>> {:?}", columns[0].data_type());

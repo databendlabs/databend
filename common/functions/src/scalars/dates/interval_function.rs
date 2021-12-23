@@ -80,10 +80,6 @@ where T: IntegerTypedArithmetic + Clone + Sync + Send + 'static
         }
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
-    }
-
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         if !(matches!(
             self.op,

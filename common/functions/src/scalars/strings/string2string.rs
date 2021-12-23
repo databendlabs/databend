@@ -76,8 +76,14 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
         Ok(DataType::String)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
+    fn nullable(&self, arg_fields: &[DataField]) -> Result<bool> {
+        let op = T::default();
+        if op.may_turn_to_null() {
+            // decode base64 may return Null
+            return Ok(true);
+        }
+        let nullable = arg_fields.iter().any(|field| field.is_nullable());
+        Ok(nullable)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

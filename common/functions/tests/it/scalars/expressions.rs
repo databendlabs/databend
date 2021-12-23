@@ -158,7 +158,8 @@ fn test_cast_function() -> Result<()> {
 
         // Nullable check.
         let expect_null = t.nullable;
-        let actual_null = func.nullable(&DataSchema::empty())?;
+        let data_fields = vec![];
+        let actual_null = func.nullable(&data_fields)?;
         assert_eq!(expect_null, actual_null);
 
         let v = &(func.eval(&columns, rows)?);

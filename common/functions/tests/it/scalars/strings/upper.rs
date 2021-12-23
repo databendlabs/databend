@@ -26,7 +26,7 @@ fn test_upper_function() -> Result<()> {
         Test {
             name: "upper-abc-passed",
             display: "upper",
-            nullable: true,
+            nullable: false,
             arg_names: vec!["a"],
             columns: vec![Series::new(vec!["Abc"]).into()],
             func: UpperFunction::try_create("upper")?,
@@ -36,7 +36,7 @@ fn test_upper_function() -> Result<()> {
         Test {
             name: "upper-utf8-passed",
             display: "upper",
-            nullable: true,
+            nullable: false,
             arg_names: vec!["a"],
             columns: vec![Series::new(vec!["Dobrý den"]).into()],
             func: UpperFunction::try_create("upper")?,
@@ -49,7 +49,7 @@ fn test_upper_function() -> Result<()> {
         Test {
             name: "ucase-utf8-passed",
             display: "ucase",
-            nullable: true,
+            nullable: false,
             arg_names: vec!["a"],
             columns: vec![Series::new(vec!["Dobrý den"]).into()],
             func: UpperFunction::try_create("ucase")?,
@@ -59,16 +59,23 @@ fn test_upper_function() -> Result<()> {
             ),
             error: "",
         },
-        Test {
-            name: "ucase-null-passed",
-            display: "ucase",
-            nullable: true,
-            arg_names: vec!["a"],
-            columns: vec![Series::new(vec![Option::<Vec<u8>>::None]).into()],
-            func: UpperFunction::try_create("ucase")?,
-            expect: DataColumn::Constant(DataValue::String(None), 1),
-            error: "",
-        },
     ];
+    run_tests(tests, schema)
+}
+
+#[test]
+fn test_upper_nullable() -> Result<()> {
+    let schema = DataSchemaRefExt::create(vec![DataField::new("nullable", DataType::String, true)]);
+
+    let tests = vec![Test {
+        name: "ucase-null-passed",
+        display: "ucase",
+        nullable: true,
+        arg_names: vec!["nullable"],
+        columns: vec![Series::new(vec![Option::<Vec<u8>>::None]).into()],
+        func: UpperFunction::try_create("ucase")?,
+        expect: DataColumn::Constant(DataValue::String(None), 1),
+        error: "",
+    }];
     run_tests(tests, schema)
 }

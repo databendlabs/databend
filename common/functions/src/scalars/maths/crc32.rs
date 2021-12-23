@@ -15,7 +15,6 @@
 use std::fmt;
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::Result;
 use crc32fast::Hasher;
@@ -49,10 +48,6 @@ impl Function for CRC32Function {
 
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(DataType::UInt32)
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

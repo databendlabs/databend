@@ -73,10 +73,6 @@ impl<T: SpaceGenOperator> Function for SpaceGenFunction<T> {
         &*self.display_name
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
-    }
-
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
         if !args[0].is_unsigned_integer()
             && args[0] != DataType::String

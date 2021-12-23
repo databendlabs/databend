@@ -18,7 +18,6 @@ use common_arrow::arrow::array::Array;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::prelude::*;
-use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -65,10 +64,6 @@ impl Function for RunningDifferenceFunction {
                 "Argument for function runningDifference must have numeric type",
             )),
         }
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

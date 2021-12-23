@@ -240,13 +240,13 @@ impl Expression {
     }
 
     #[inline(always)]
-    pub fn function_nullable(
-        op: &str,
-        input_schema: &DataSchemaRef,
-        args_type: Vec<DataType>,
-    ) -> Result<bool> {
-        let f = FunctionFactory::instance().get(op, &args_type)?;
-        f.nullable(input_schema)
+    pub fn function_nullable(op: &str, arg_fields: Vec<DataField>) -> Result<bool> {
+        let arg_types = arg_fields
+            .iter()
+            .map(|field| field.data_type().clone())
+            .collect::<Vec<_>>();
+        let f = FunctionFactory::instance().get(op, &arg_types)?;
+        f.nullable(&arg_fields)
     }
 
     pub fn nullable(&self, input_schema: &DataSchemaRef) -> Result<bool> {
@@ -256,29 +256,26 @@ impl Expression {
             Expression::QualifiedColumn(_) => Err(ErrorCode::LogicalError(
                 "QualifiedColumn should be resolve in analyze.",
             )),
-            Expression::Literal { .. } => {
-                // For literal value, which represents a constant value, we say it is nullable.
-                Ok(true)
-            }
+            Expression::Literal { value, .. } => Ok(value.is_null()),
             Expression::Subquery { query_plan, .. } => Self::subquery_nullable(query_plan),
             Expression::ScalarSubquery { query_plan, .. } => Self::subquery_nullable(query_plan),
             Expression::BinaryExpression { left, op, right } => {
-                let args_type = vec![
-                    left.to_data_type(input_schema)?,
-                    right.to_data_type(input_schema)?,
+                let arg_fields = vec![
+                    left.to_data_field(input_schema)?,
+                    right.to_data_field(input_schema)?,
                 ];
-                Self::function_nullable(op, input_schema, args_type)
+                Self::function_nullable(op, arg_fields)
             }
             Expression::UnaryExpression { op, expr } => {
-                let args_type = vec![expr.to_data_type(input_schema)?];
-                Self::function_nullable(op, input_schema, args_type)
+                let arg_fields = vec![expr.to_data_field(input_schema)?];
+                Self::function_nullable(op, arg_fields)
             }
             Expression::ScalarFunction { op, args } => {
-                let args_type = args
+                let arg_fields = args
                     .iter()
-                    .map(|expr| expr.to_data_type(input_schema))
+                    .map(|expr| expr.to_data_field(input_schema))
                     .collect::<Result<Vec<_>>>()?;
-                Self::function_nullable(op, input_schema, args_type)
+                Self::function_nullable(op, arg_fields)
             }
             Expression::AggregateFunction { .. } => {
                 let f = self.to_aggregate_function(input_schema)?;

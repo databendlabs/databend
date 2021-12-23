@@ -149,7 +149,7 @@ fn test_arithmetic_function() -> Result<()> {
 
         // Nullable check.
         let expect_null = t.nullable;
-        let actual_null = func.nullable(&schema)?;
+        let actual_null = func.nullable(schema.fields())?;
         assert_eq!(expect_null, actual_null);
 
         let expect_type = func.return_type(&args)?.clone();
@@ -441,7 +441,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
 
         // Nullable check.
         let expect_null = t.nullable;
-        let actual_null = func.nullable(&schema)?;
+        let actual_null = func.nullable(schema.fields())?;
         assert_eq!(expect_null, actual_null);
 
         let v = &(func.eval(&columns, rows)?);

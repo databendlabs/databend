@@ -131,10 +131,6 @@ impl Function for ConcatFunction {
         Ok(DataType::String)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
-    }
-
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         let result = Self::concat_column(columns[0].column().clone(), &columns[1..])?;
         Ok(result)

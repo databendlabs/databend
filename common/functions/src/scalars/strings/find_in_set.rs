@@ -46,10 +46,6 @@ impl Function for FindInSetFunction {
         &*self.display_name
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
-    }
-
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
         if !args[0].is_integer() && args[0] != DataType::String && args[0] != DataType::Null {
             return Err(ErrorCode::IllegalDataType(format!(

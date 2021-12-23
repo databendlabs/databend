@@ -19,6 +19,7 @@ mod dates;
 mod expressions;
 mod function_column;
 mod hashes;
+mod helpers;
 mod logics;
 mod maths;
 mod nullables;

@@ -17,7 +17,6 @@ use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
-use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::Result;
 
@@ -43,10 +42,6 @@ impl RoundingFunction {
 impl Function for RoundingFunction {
     fn name(&self) -> &str {
         &*self.display_name
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
     }
 
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {

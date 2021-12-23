@@ -61,7 +61,7 @@ pub fn run_tests(tests: Vec<Test>, schema: Arc<DataSchema>) -> Result<()> {
 
         // Nullable check.
         let expect_null = t.nullable;
-        let actual_null = func.nullable(&schema)?;
+        let actual_null = func.nullable(schema.fields())?;
         assert_eq!(expect_null, actual_null, "case: {}", t.name);
 
         let v = &(func.eval(&columns, rows)?);

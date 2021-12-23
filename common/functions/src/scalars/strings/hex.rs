@@ -57,10 +57,6 @@ impl Function for HexFunction {
         Ok(DataType::String)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
-    }
-
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         match columns[0].data_type() {
             DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64 => {

@@ -86,10 +86,6 @@ impl Function for AbsFunction {
         }
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
-    }
-
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         match columns[0].data_type() {
             DataType::Int8 => impl_abs_function!(columns[0], i8, DataType::UInt8),
