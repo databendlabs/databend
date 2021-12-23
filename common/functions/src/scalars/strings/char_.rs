@@ -13,10 +13,11 @@
 // limitations under the License.
 
 use std::fmt;
-use common_arrow::arrow::buffer::MutableBuffer;
 
+use common_arrow::arrow::buffer::MutableBuffer;
 use common_datavalues::prelude::*;
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
@@ -35,8 +36,11 @@ impl CharFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic().variadic_arguments(1, 1024))
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(1, 1024),
+        )
     }
 }
 
@@ -79,11 +83,9 @@ impl Function for CharFunction {
                     let uint8_arr = uint8_arr.u8()?;
                     for (j, ch) in uint8_arr.into_iter().enumerate() {
                         match ch {
-                            Some(&ch) => {
-                                unsafe {
-                                    *values.as_mut_ptr().add(column_count * j + i) = ch;
-                                }
-                            }
+                            Some(&ch) => unsafe {
+                                *values.as_mut_ptr().add(column_count * j + i) = ch;
+                            },
                             None => {
                                 return Err(ErrorCode::IllegalDataType(
                                     "Expected args a const, an expression, an expression, a const and a const"
@@ -93,13 +95,11 @@ impl Function for CharFunction {
                     }
                 }
                 DataColumn::Constant(uint8_arr, _) => match uint8_arr {
-                    DataValue::UInt8(Some(ch)) => {
-                        unsafe {
-                            for j in 0..row_count {
-                                *values.as_mut_ptr().add(column_count * j + i) = ch;
-                            }
+                    DataValue::UInt8(Some(ch)) => unsafe {
+                        for j in 0..row_count {
+                            *values.as_mut_ptr().add(column_count * j + i) = ch;
                         }
-                    }
+                    },
                     _ => {
                         return Err(ErrorCode::IllegalDataType(
                             "Expected args a const, an expression, an expression, a const and a const"
@@ -108,13 +108,17 @@ impl Function for CharFunction {
                 },
             }
         }
-        for i in 1..row_count+1 {
+        for i in 1..row_count + 1 {
             offsets.push(i as i64 * column_count as i64);
         }
         unsafe {
             offsets.set_len(row_count + 1);
             values.set_len(row_count * column_count);
-            Ok(DataColumn::from(DFStringArray::from_data_unchecked(offsets.into(), values.into(), None)))
+            Ok(DataColumn::from(DFStringArray::from_data_unchecked(
+                offsets.into(),
+                values.into(),
+                None,
+            )))
         }
     }
 }
