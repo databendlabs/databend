@@ -27,6 +27,7 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_infallible::RwLock;
 use common_tracing::tracing;
+use common_tracing::tracing::Instrument;
 use tokio_stream::StreamExt;
 
 use crate::api::rpc::flight_scatter::FlightScatter;
@@ -101,6 +102,7 @@ impl DatabendQueryFlightDispatcher {
         }
     }
 
+    #[tracing::instrument(level = "info", skip_all, fields(session.id = session.get_id().as_str()))]
     pub async fn shuffle_action(&self, session: SessionRef, action: FlightAction) -> Result<()> {
         let query_id = action.get_query_id();
         let stage_id = action.get_stage_id();
@@ -139,27 +141,30 @@ impl DatabendQueryFlightDispatcher {
         let tx_ref = self.streams.read().get(&stream_name).map(|x| x.tx.clone());
         let tx = tx_ref.ok_or_else(|| ErrorCode::NotFoundStream("Not found stream"))?;
 
-        query_context.try_spawn(async move {
-            let _session = session;
-            wait_start(stage_name, stages_notify).await;
+        query_context.try_spawn(
+            async move {
+                let _session = session;
+                wait_start(stage_name, stages_notify).await;
 
-            match pipeline.execute().await {
-                Err(error) => {
-                    tx.send(Err(error)).await.ok();
-                }
-                Ok(mut abortable_stream) => {
-                    while let Some(item) = abortable_stream.next().await {
-                        if let Err(error) = tx.send(item).await {
-                            tracing::error!(
-                                "Cannot push data when run_action_without_scatters. {}",
-                                error
-                            );
-                            break;
+                match pipeline.execute().await {
+                    Err(error) => {
+                        tx.send(Err(error)).await.ok();
+                    }
+                    Ok(mut abortable_stream) => {
+                        while let Some(item) = abortable_stream.next().await {
+                            if let Err(error) = tx.send(item).await {
+                                tracing::error!(
+                                    "Cannot push data when run_action_without_scatters. {}",
+                                    error
+                                );
+                                break;
+                            }
                         }
                     }
-                }
-            };
-        })?;
+                };
+            }
+            .instrument(common_tracing::tracing::info_span!("sink_action_inner")),
+        )?;
         Ok(())
     }
 
@@ -213,40 +218,45 @@ impl DatabendQueryFlightDispatcher {
             action.get_sinks().len(),
         )?;
 
-        query_context.try_spawn(async move {
-            let _session = session;
-            wait_start(stage_name, stages_notify).await;
+        query_context.try_spawn(
+            async move {
+                let _session = session;
+                wait_start(stage_name, stages_notify).await;
 
-            let sinks_tx_ref = &sinks_tx;
-            let forward_blocks = async move {
-                let mut abortable_stream = pipeline.execute().await?;
-                while let Some(item) = abortable_stream.next().await {
-                    let forward_blocks = flight_scatter.execute(&item?)?;
+                let sinks_tx_ref = &sinks_tx;
+                let forward_blocks = async move {
+                    let mut abortable_stream = pipeline.execute().await?;
+                    while let Some(item) = abortable_stream.next().await {
+                        let forward_blocks = flight_scatter.execute(&item?)?;
 
-                    assert_eq!(forward_blocks.len(), sinks_tx_ref.len());
+                        assert_eq!(forward_blocks.len(), sinks_tx_ref.len());
 
-                    for (index, forward_block) in forward_blocks.iter().enumerate() {
-                        let tx: &Sender<Result<DataBlock>> = &sinks_tx_ref[index];
-                        tx.send(Ok(forward_block.clone()))
-                            .await
-                            .map_err_to_code(ErrorCode::LogicalError, || {
-                                "Cannot push data when run_action"
-                            })?;
+                        for (index, forward_block) in forward_blocks.iter().enumerate() {
+                            let tx: &Sender<Result<DataBlock>> = &sinks_tx_ref[index];
+                            tx.send(Ok(forward_block.clone()))
+                                .await
+                                .map_err_to_code(ErrorCode::LogicalError, || {
+                                    "Cannot push data when run_action"
+                                })?;
+                        }
                     }
-                }
 
-                Result::Ok(())
-            };
+                    Result::Ok(())
+                };
 
-            if let Err(error) = forward_blocks.await {
-                for tx in &sinks_tx {
-                    if !tx.is_closed() {
-                        let send_error_message = tx.send(Err(error.clone()));
-                        let _ignore_send_error = send_error_message.await;
+                if let Err(error) = forward_blocks.await {
+                    for tx in &sinks_tx {
+                        if !tx.is_closed() {
+                            let send_error_message = tx.send(Err(error.clone()));
+                            let _ignore_send_error = send_error_message.await;
+                        }
                     }
                 }
             }
-        })?;
+            .instrument(common_tracing::tracing::info_span!(
+                "action_with_scatter_inner"
+            )),
+        )?;
 
         Ok(())
     }

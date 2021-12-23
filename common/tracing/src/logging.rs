@@ -35,11 +35,11 @@ use tracing_subscriber::EnvFilter;
 use crate::tracing::subscriber::DefaultGuard;
 
 /// Write logs to stdout.
-pub fn init_default_tracing() {
+pub fn init_default_tracing(app_name: &str) {
     static START: Once = Once::new();
 
     START.call_once(|| {
-        init_tracing_stdout();
+        init_tracing_stdout(app_name);
     });
 }
 
@@ -71,7 +71,7 @@ lazy_static! {
 ///   DATABEND_JAEGER=on RUST_LOG=trace OTEL_BSP_SCHEDULE_DELAY=1 cargo test
 ///
 // TODO(xp): use DATABEND_JAEGER to assign jaeger server address.
-fn init_tracing_stdout() {
+fn init_tracing_stdout(app_name: &str) {
     let fmt_layer = Layer::default()
         .with_thread_ids(true)
         .with_thread_names(false)
@@ -82,7 +82,7 @@ fn init_tracing_stdout() {
     let subscriber = Registry::default()
         .with(EnvFilter::from_default_env())
         .with(fmt_layer)
-        .with(jaeger_layer());
+        .with(jaeger_layer(app_name));
 
     tracing::subscriber::set_global_default(subscriber)
         .expect("error setting global tracing subscriber");
@@ -90,14 +90,15 @@ fn init_tracing_stdout() {
 
 fn jaeger_layer<
     S: tracing::Subscriber + for<'span> tracing_subscriber::registry::LookupSpan<'span>,
->() -> Option<impl tracing_subscriber::layer::Layer<S>> {
+>(
+    service_name: &str,
+) -> Option<impl tracing_subscriber::layer::Layer<S>> {
     let fuse_jaeger = env::var("DATABEND_JAEGER").unwrap_or_else(|_| "".to_string());
 
     if !fuse_jaeger.is_empty() {
         global::set_text_map_propagator(TraceContextPropagator::new());
-
         let tracer = opentelemetry_jaeger::new_pipeline()
-            .with_service_name("databend-meta")
+            .with_service_name(service_name)
             .install_batch(opentelemetry::runtime::Tokio)
             .expect("install");
 
@@ -127,7 +128,7 @@ pub fn init_tracing_with_file(app_name: &str, dir: &str, level: &str) -> Vec<Wor
         .with(stdout_logging_layer)
         .with(JsonStorageLayer)
         .with(file_logging_layer)
-        .with(jaeger_layer());
+        .with(jaeger_layer(app_name));
 
     tracing::subscriber::set_global_default(subscriber)
         .expect("error setting global tracing subscriber");
@@ -188,7 +189,7 @@ pub fn init_file_subscriber(
     let subscriber = Registry::default()
         .with(env_filter)
         .with(f_layer)
-        .with(jaeger_layer());
+        .with(jaeger_layer(app_name));
 
     (writer_guard, subscriber)
 }
