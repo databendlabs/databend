@@ -113,7 +113,7 @@ impl InterpreterQueryLog {
             Series::new(vec![event.query_kind.as_str()]),
             Series::new(vec![event.query_text.as_str()]),
             Series::new(vec![event.event_date as i32]),
-            Series::new(vec![event.event_time as u32]),
+            Series::new(vec![event.event_time as u64]),
             // Schema.
             Series::new(vec![event.current_database.as_str()]),
             Series::new(vec![event.databases.as_str()]),
@@ -172,8 +172,8 @@ impl InterpreterQueryLog {
         let event_time = now
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards")
-            .as_secs();
-        let event_date = (event_time / (24 * 3600)) as i32;
+            .as_millis() as u64;
+        let event_date = (event_time / (24 * 3600000)) as i32;
 
         let written_rows = 0u64;
         let written_bytes = 0u64;
@@ -246,8 +246,8 @@ impl InterpreterQueryLog {
         let event_time = now
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards")
-            .as_secs();
-        let event_date = (event_time / (24 * 3600)) as i32;
+            .as_millis() as u64;
+        let event_date = (event_time / (24 * 3600000)) as i32;
         let written_rows = 0u64;
         let dal_metrics = self.ctx.get_dal_metrics();
         let written_bytes = dal_metrics.write_bytes as u64;
