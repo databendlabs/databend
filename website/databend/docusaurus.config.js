@@ -71,6 +71,7 @@ const config = {
         [
           '@docusaurus/plugin-client-redirects',
           {
+            // this will be removed later, make a mark~.
             redirects: [
               {
                 to: '/', // string
