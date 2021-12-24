@@ -17,7 +17,10 @@ use std::fmt;
 use std::sync::Arc;
 
 use bytes::BytesMut;
+use common_arrow::arrow::array::MutableArray;
+use common_arrow::arrow::array::MutablePrimitiveArray;
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 
@@ -142,9 +145,16 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr, array: &dyn MutableArray) -> Result<DataValue> {
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArray) -> Result<()> {
+        let mut array = array
+            .as_mut_any()
+            .downcast_mut::<MutablePrimitiveArray<u64>>()
+            .ok_or(ErrorCode::UnexpectedError(format!(
+                "error occured when downcast MutableArray"
+            )))?;
         let state = place.get::<AggregateCountState>();
-        Ok(state.count.into())
+        array.push(Some(state.count));
+        Ok(())
     }
 }
 

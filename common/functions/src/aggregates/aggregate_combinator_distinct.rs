@@ -19,7 +19,10 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::sync::Arc;
 
+use common_arrow::arrow::array::MutableArray;
+use common_arrow::arrow::array::MutablePrimitiveArray;
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 use serde::Deserialize;
@@ -199,7 +202,7 @@ impl AggregateFunction for AggregateDistinctCombinator {
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr, array: &dyn MutableArray) -> Result<DataValue> {
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArray) -> Result<()> {
         let state = place.get::<AggregateDistinctState>();
 
         let layout = Layout::new::<AggregateDistinctState>();
@@ -207,7 +210,14 @@ impl AggregateFunction for AggregateDistinctCombinator {
 
         // faster path for count
         if self.nested.name() == "AggregateFunctionCount" {
-            Ok(DataValue::UInt64(Some(state.set.len() as u64)))
+            let mut array = array
+                .as_mut_any()
+                .downcast_mut::<MutablePrimitiveArray<u64>>()
+                .ok_or(ErrorCode::UnexpectedError(format!(
+                    "error occured when downcast MutableArray"
+                )))?;
+            array.push(Some(state.set.len() as u64));
+            return Ok(());
         } else {
             if state.set.is_empty() {
                 return self.nested.merge_result(netest_place, array);
@@ -241,7 +251,7 @@ impl AggregateFunction for AggregateDistinctCombinator {
             self.nested
                 .accumulate(netest_place, &arrays, state.set.len())?;
             // merge_result
-            self.nested.merge_result(netest_place)
+            self.nested.merge_result(netest_place, array)
         }
     }
 }

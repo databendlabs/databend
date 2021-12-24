@@ -17,6 +17,8 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use common_arrow::arrow::array::MutableArray;
+use common_arrow::arrow::array::MutablePrimitiveArray;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -248,11 +250,16 @@ where
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr, array: &dyn MutableArray) -> Result<DataValue> {
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArray) -> Result<()> {
+        let mut array = array
+            .as_mut_any()
+            .downcast_mut::<MutablePrimitiveArray<f64>>()
+            .ok_or(ErrorCode::UnexpectedError(format!(
+                "error occured when downcast MutableArray"
+            )))?;
         let state = place.get::<AggregateCovarianceState>();
-        Ok(R::apply(state).map_or(DataValue::Float64(None), |val| {
-            DataValue::Float64(Some(val))
-        }))
+        array.push(R::apply(state));
+        Ok(())
     }
 }
 

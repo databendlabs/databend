@@ -13,14 +13,22 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
 use bumpalo::Bump;
+use common_arrow::arrow::array::Array;
+use common_arrow::arrow::array::MutableArray;
+use common_arrow::arrow::array::MutableBinaryArray;
+use common_arrow::arrow::array::MutableBooleanArray;
+use common_arrow::arrow::array::MutablePrimitiveArray;
+use common_arrow::arrow::datatypes::PhysicalType;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethodKind;
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::StateAddr;
@@ -61,6 +69,27 @@ impl GroupByFinalTransform {
         }
     }
 }
+
+macro_rules! with_match_primitive_type {(
+    $key_type:expr, | $_:tt $T:ident | $($body:tt)*
+) => ({
+    macro_rules! __with_ty__ {( $_ $T:ident ) => ( $($body)* )}
+    use common_arrow::arrow::datatypes::PrimitiveType::*;
+    // use common_arrow::arrow::types::{days_ms, months_days_ns};
+    match $key_type {
+        Int8 => __with_ty__! { i8 },
+        Int16 => __with_ty__! { i16 },
+        Int32 => __with_ty__! { i32 },
+        Int64 => __with_ty__! { i64 },
+        UInt8 => __with_ty__! { u8 },
+        UInt16 => __with_ty__! { u16 },
+        UInt32 => __with_ty__! { u32 },
+        UInt64 => __with_ty__! { u64 },
+        Float32 => __with_ty__! { f32 },
+        Float64 => __with_ty__! { f64 },
+        _ => {}
+    }
+})}
 
 #[async_trait::async_trait]
 impl Processor for GroupByFinalTransform {
@@ -181,30 +210,46 @@ impl Processor for GroupByFinalTransform {
                 let mut aggr_values: Vec<Box<dyn MutableArray>> = {
                     let mut values = vec![];
                     for i in 0..aggr_funcs_len {
-                        // 这里根据不同的类型生成不同的 MutableArray，其实一共也就三种
-                        let array = match funcs[0].return_type()? {
-                                DataType::Int8 =>
-                                    Ok(MutablePrimitiveArray::<i8>::new()),
-                                DataType::Int16 =>
-                                Ok(MutablePrimitiveArray::<i16>::new()),
-                                DataType::Int32 =>
-                                Ok(MutablePrimitiveArray::<i32>::new()),
-                                DataType::Int64 => Ok(MutablePrimitiveArray::<i64>::new()),
-                                DataType::UInt8 => Ok(MutablePrimitiveArray::<u8>::new()),
-                                DataType::UInt16 => Ok(MutablePrimitiveArray::<u16>::new()),
-                                DataType::UInt32 => Ok(MutablePrimitiveArray::<u32>::new()),
-                                DataType::UInt64 => Ok(MutablePrimitiveArray::<u64>::new()),
-                                DataType::Float32 => Ok(MutablePrimitiveArray::<f32>::new()),
-                                DataType::Float64 => Ok(MutablePrimitiveArray::<f64>::new()),
-                                DataType::Boolean =>  Ok(MutableBoolean::new()),
-                                DataType::String =>  Ok(MutableBinaryArray::<i64>::new()),
-                                DataType::Date16 => Ok(MutablePrimitiveArray::<u16>::new()),
-                                DataType::Date32 => Ok(MutablePrimitiveArray::<u32>::new()),
-                                DataType::DateTime32(_) => Ok(MutablePrimitiveArray::<u32>::new()),
-                                other => Err(ErrorCode::BadDataValueType(format!(
-                                    "Unexpected type:{} for DataValue List",
-                                    other
-                                ))),
+                        let array: Box<dyn MutableArray> = match funcs[i].return_type()? {
+                            DataType::Int8 => Ok(Box::new(MutablePrimitiveArray::<i8>::new())
+                                as Box<dyn MutableArray>),
+                            DataType::Int16 => Ok(Box::new(MutablePrimitiveArray::<i16>::new())
+                                as Box<dyn MutableArray>),
+                            DataType::Int32 => Ok(Box::new(MutablePrimitiveArray::<i32>::new())
+                                as Box<dyn MutableArray>),
+                            DataType::Int64 => Ok(Box::new(MutablePrimitiveArray::<i64>::new())
+                                as Box<dyn MutableArray>),
+                            DataType::UInt8 => Ok(Box::new(MutablePrimitiveArray::<u8>::new())
+                                as Box<dyn MutableArray>),
+                            DataType::UInt16 => Ok(Box::new(MutablePrimitiveArray::<u16>::new())
+                                as Box<dyn MutableArray>),
+                            DataType::UInt32 => Ok(Box::new(MutablePrimitiveArray::<u32>::new())
+                                as Box<dyn MutableArray>),
+                            DataType::UInt64 => Ok(Box::new(MutablePrimitiveArray::<u64>::new())
+                                as Box<dyn MutableArray>),
+                            DataType::Float32 => Ok(Box::new(MutablePrimitiveArray::<f32>::new())
+                                as Box<dyn MutableArray>),
+                            DataType::Float64 => Ok(Box::new(MutablePrimitiveArray::<f64>::new())
+                                as Box<dyn MutableArray>),
+                            DataType::Boolean => {
+                                Ok(Box::new(MutableBooleanArray::new()) as Box<dyn MutableArray>)
+                            }
+                            DataType::String => {
+                                Ok(Box::new(MutableBinaryArray::<i64>::new())
+                                    as Box<dyn MutableArray>)
+                            }
+                            DataType::Date16 => Ok(Box::new(MutablePrimitiveArray::<u16>::new())
+                                as Box<dyn MutableArray>),
+                            DataType::Date32 => Ok(Box::new(MutablePrimitiveArray::<u32>::new())
+                                as Box<dyn MutableArray>),
+                            DataType::DateTime32(_) => {
+                                Ok(Box::new(MutablePrimitiveArray::<u32>::new())
+                                    as Box<dyn MutableArray>)
+                            }
+                            other => Err(ErrorCode::BadDataValueType(format!(
+                                "Unexpected type:{} for DataValue List",
+                                other
+                            ))),
                         }?;
                         values.push(array)
                     }
@@ -217,20 +262,36 @@ impl Processor for GroupByFinalTransform {
                     let place: StateAddr = (*place).into();
                     for (idx, func) in funcs.iter().enumerate() {
                         let arg_place = place.next(offsets_aggregate_states[idx]);
-                        let array: &dyn MutableArray = &*aggr_values[idx];
+                        let array: &mut dyn MutableArray = aggr_values[idx].borrow_mut();
                         let merge = func.merge_result(arg_place, array)?;
-                        aggr_values[idx].push(merge);
                     }
                 }
 
                 // Build final state block.
                 let mut columns: Vec<Series> = Vec::with_capacity(aggr_funcs_len + group_expr_len);
-
-                for (i, value) in aggr_values.iter().enumerate() {
-                    columns.push(DataValue::try_into_data_array(
-                        value.as_slice(),
-                        &self.aggr_exprs[i].to_data_type(&self.schema_before_group_by)?,
-                    )?);
+                tracing::error!("group by final");
+                for mut array in aggr_values {
+                    match array.data_type().to_physical_type() {
+                        PhysicalType::Boolean => {
+                            let array = DFBooleanArray::from_arrow_array(array.as_arc().as_ref());
+                            columns.push(array.into_series());
+                        }
+                        PhysicalType::Primitive(primitive) => {
+                            with_match_primitive_type!(primitive, |$T| {
+                                let array = DFPrimitiveArray::<$T>::from_arrow_array(
+                                    array.as_arc().as_ref(),
+                                );
+                                columns.push(array.into_series());
+                            })
+                        }
+                        PhysicalType::Binary => {
+                            let array = DFStringArray::from_arrow_array(array.as_arc().as_ref());
+                            columns.push(array.into_series());
+                        }
+                        _ => {
+                            tracing::debug!("should not be here");
+                        }
+                    };
                 }
 
                 {

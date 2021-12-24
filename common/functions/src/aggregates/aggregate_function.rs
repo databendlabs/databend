@@ -59,5 +59,5 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn merge(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()>;
 
     // TODO append the value into the column builder
-    fn merge_result(&self, _place: StateAddr, array: &dyn MutableArray) -> Result<DataValue>;
+    fn merge_result(&self, _place: StateAddr, array: &mut dyn MutableArray) -> Result<()>;
 }
