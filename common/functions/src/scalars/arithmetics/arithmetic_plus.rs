@@ -50,12 +50,9 @@ impl_arithmetic!(ArithmeticAdd, +);
 pub struct ArithmeticPlusFunction;
 
 impl ArithmeticPlusFunction {
-    pub fn try_create_func(
-        _display_name: &str,
-        arguments: Vec<DataField>,
-    ) -> Result<Box<dyn Function>> {
-        let left_type = arguments[0].data_type();
-        let right_type = arguments[1].data_type();
+    pub fn try_create_func(_display_name: &str, args: &[DataType]) -> Result<Box<dyn Function>> {
+        let left_type = &args[0];
+        let right_type = &args[1];
         if left_type.is_interval() || right_type.is_interval() {
             return Self::try_create_interval(left_type, right_type);
         }

@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datavalues::DataField;
+use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::Lazy;
@@ -40,7 +40,7 @@ pub type FactoryCreator = Box<dyn Fn(&str) -> Result<Box<dyn Function>> + Send +
 
 // Temporary adaptation for arithmetic.
 pub type ArithmeticCreator =
-    Box<dyn Fn(&str, Vec<DataField>) -> Result<Box<dyn Function>> + Send + Sync>;
+    Box<dyn Fn(&str, &[DataType]) -> Result<Box<dyn Function>> + Send + Sync>;
 
 #[derive(Clone)]
 pub struct FunctionFeatures {
@@ -191,11 +191,7 @@ impl FunctionFactory {
         case_insensitive_arithmetic_desc.insert(name.to_lowercase(), desc);
     }
 
-    pub fn get(
-        &self,
-        name: impl AsRef<str>,
-        arguments: Vec<DataField>,
-    ) -> Result<Box<dyn Function>> {
+    pub fn get(&self, name: impl AsRef<str>, args: &[DataType]) -> Result<Box<dyn Function>> {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
         match self.case_insensitive_desc.get(&lowercase_name) {
@@ -205,7 +201,7 @@ impl FunctionFactory {
                     "Unsupported Function: {}",
                     origin_name
                 ))),
-                Some(desc) => (desc.arithmetic_creator)(origin_name, arguments),
+                Some(desc) => (desc.arithmetic_creator)(origin_name, args),
             },
             Some(desc) => (desc.function_creator)(origin_name),
         }
