@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::Once;
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use opentelemetry::global;
 use opentelemetry::sdk::propagation::TraceContextPropagator;
 use tracing::Subscriber;
@@ -54,9 +54,8 @@ pub fn init_default_ut_tracing() {
     });
 }
 
-lazy_static! {
-    static ref GLOBAL_UT_LOG_GUARD: Arc<Mutex<Option<WorkerGuard>>> = Arc::new(Mutex::new(None));
-}
+static GLOBAL_UT_LOG_GUARD: Lazy<Arc<Mutex<Option<WorkerGuard>>>> =
+    Lazy::new(|| Arc::new(Mutex::new(None)));
 
 /// Init logging and tracing.
 ///
