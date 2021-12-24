@@ -173,12 +173,12 @@ fn drop_database() -> Result<()> {
 #[test]
 fn create_table() -> Result<()> {
     // positive case
-    let sql = "CREATE TABLE t(c1 int) ENGINE = CSV location = '/data/33.csv' ";
+    let sql = "CREATE TABLE t(c1 int) ENGINE = Fuse location = '/data/33.csv' ";
     let expected = DfStatement::CreateTable(DfCreateTable {
         if_not_exists: false,
         name: ObjectName(vec![Ident::new("t")]),
         columns: vec![make_column_def("c1", DataType::Int(None))],
-        engine: "CSV".to_string(),
+        engine: "Fuse".to_string(),
         options: maplit::hashmap! {"location".into() => "/data/33.csv".into()},
         like: None,
         query: None,
@@ -186,7 +186,7 @@ fn create_table() -> Result<()> {
     expect_parse_ok(sql, expected)?;
 
     // positive case: it is ok for parquet files not to have columns specified
-    let sql = "CREATE TABLE t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Parquet location = 'foo.parquet' comment = 'foo'";
+    let sql = "CREATE TABLE t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Fuse location = 'foo.parquet' comment = 'foo'";
     let expected = DfStatement::CreateTable(DfCreateTable {
         if_not_exists: false,
         name: ObjectName(vec![Ident::new("t")]),
@@ -195,7 +195,7 @@ fn create_table() -> Result<()> {
             make_column_def("c2", DataType::BigInt(None)),
             make_column_def("c3", DataType::Varchar(Some(255))),
         ],
-        engine: "Parquet".to_string(),
+        engine: "Fuse".to_string(),
 
         options: maplit::hashmap! {
             "location".into() => "foo.parquet".into(),

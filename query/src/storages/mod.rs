@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod csv;
 pub mod fuse;
 pub mod github;
 pub mod index;
 pub mod memory;
 pub mod null;
-pub mod parquet;
 pub mod system;
 
 mod storage_context;
