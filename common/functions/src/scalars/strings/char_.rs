@@ -51,9 +51,9 @@ impl Function for CharFunction {
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
         for arg in args {
-            if !arg.is_numeric() {
+            if !arg.is_numeric() && !arg.is_null() {
                 return Err(ErrorCode::IllegalDataType(format!(
-                    "Expected numeric type, but got {}",
+                    "Expected numeric type or null, but got {}",
                     arg
                 )));
             }
@@ -71,39 +71,28 @@ impl Function for CharFunction {
         let mut values: MutableBuffer<u8> = MutableBuffer::with_capacity(row_count * column_count);
         let mut offsets: MutableBuffer<i64> = MutableBuffer::with_capacity(row_count + 1);
         offsets.push(0);
+        let mut validity = None;
 
         for (i, column) in columns.iter().enumerate() {
             let column = column.column();
             if column.data_type().is_null() {
-                continue;
+                return Ok(DataColumn::Constant(DataValue::Null, row_count));
             }
             let column = column.cast_with_type(&DataType::UInt8)?;
             match column {
                 DataColumn::Array(uint8_arr) => {
                     let uint8_arr = uint8_arr.u8()?;
-                    for (j, ch) in uint8_arr.into_iter().enumerate() {
-                        match ch {
-                            Some(&ch) => unsafe {
-                                *values.as_mut_ptr().add(column_count * j + i) = ch;
-                            },
-                            None => {
-                                return Err(ErrorCode::IllegalDataType(
-                                    "Expected args a const, an expression, an expression, a const and a const"
-                                ));
-                            }
+                    for (j, ch) in uint8_arr.into_no_null_iter().enumerate() {
+                        unsafe {
+                            *values.as_mut_ptr().add(column_count * j + i) = *ch;
                         }
                     }
+                    validity = combine_validities(validity.as_ref(), uint8_arr.inner().validity());
                 }
-                DataColumn::Constant(uint8_arr, _) => match uint8_arr {
-                    DataValue::UInt8(Some(ch)) => unsafe {
-                        for j in 0..row_count {
-                            *values.as_mut_ptr().add(column_count * j + i) = ch;
-                        }
-                    },
-                    _ => {
-                        return Err(ErrorCode::IllegalDataType(
-                            "Expected args a const, an expression, an expression, a const and a const"
-                        ));
+                DataColumn::Constant(uint8_arr, _) => unsafe {
+                    for j in 0..row_count {
+                        *values.as_mut_ptr().add(column_count * j + i) =
+                            uint8_arr.as_i64().unwrap_or(0) as u8;
                     }
                 },
             }
@@ -117,7 +106,7 @@ impl Function for CharFunction {
             Ok(DataColumn::from(DFStringArray::from_data_unchecked(
                 offsets.into(),
                 values.into(),
-                None,
+                validity,
             )))
         }
     }
