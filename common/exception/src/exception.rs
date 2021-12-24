@@ -285,6 +285,8 @@ build_exceptions! {
 
     // user defined function error.
     IllegalUDFFormat(4070),
+    UnknownUDF(4071),
+    UDFAlreadyExists(4072),
 
     // storage-api error codes
     ReadFileError(5001),
