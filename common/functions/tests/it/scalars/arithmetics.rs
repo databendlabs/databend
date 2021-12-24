@@ -44,10 +44,7 @@ fn test_arithmetic_function() -> Result<()> {
             display: "plus",
             nullable: false,
             arg_names: vec!["a", "b"],
-            func: ArithmeticPlusFunction::try_create_func("", vec![
-                DataField::new("a", DataType::Int64, false),
-                DataField::new("b", DataType::Int64, false),
-            ])?,
+            func: ArithmeticPlusFunction::try_create_func("", &[DataType::Int64, DataType::Int64])?,
             columns: vec![
                 Series::new(vec![4i64, 3, 2, 1]).into(),
                 Series::new(vec![1i64, 2, 3, 4]).into(),
@@ -60,10 +57,7 @@ fn test_arithmetic_function() -> Result<()> {
             display: "plus",
             nullable: false,
             arg_names: vec!["c", "b"],
-            func: ArithmeticPlusFunction::try_create_func("", vec![
-                DataField::new("c", DataType::Int16, false),
-                DataField::new("b", DataType::Int64, false),
-            ])?,
+            func: ArithmeticPlusFunction::try_create_func("", &[DataType::Int16, DataType::Int64])?,
             columns: vec![
                 Series::new(vec![1i16, 2, 3, 4]).into(),
                 Series::new(vec![1i64, 2, 3, 4]).into(),

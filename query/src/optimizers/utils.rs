@@ -188,7 +188,7 @@ impl MonotonicityCheckVisitor {
         let mut monotonicity_vec = vec![];
         let mut left_vec = vec![];
         let mut right_vec = vec![];
-        let mut arg_fields = vec![];
+        let mut args_type = vec![];
 
         for child_expr in children.iter() {
             let monotonicity = self.visit(child_expr)?;
@@ -198,11 +198,11 @@ impl MonotonicityCheckVisitor {
 
             left_vec.push(monotonicity.left.clone());
             right_vec.push(monotonicity.right.clone());
-            arg_fields.push(child_expr.to_data_field(&self.schema)?);
+            args_type.push(child_expr.to_data_type(&self.schema)?);
             monotonicity_vec.push(monotonicity);
         }
 
-        let func = FunctionFactory::instance().get(op, arg_fields)?;
+        let func = FunctionFactory::instance().get(op, &args_type)?;
         let mut root_mono = func.get_monotonicity(monotonicity_vec.as_ref())?;
 
         // neither a monotonic expression nor constant, no need to calculating boundary
