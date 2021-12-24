@@ -20,15 +20,28 @@ use common_io::prelude::BinaryRead;
 use crate::prelude::*;
 
 pub struct StringDeserializer {
+    pub buffer: Vec<u8>,
     pub builder: StringArrayBuilder,
 }
 
+impl StringDeserializer {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            buffer: Vec::new(),
+            builder: StringArrayBuilder::with_capacity(capacity),
+        }
+    }
+}
+
 impl TypeDeserializer for StringDeserializer {
+    // See GroupHash.rs for DFStringArray
     fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
         let offset: u64 = reader.read_uvarint()?;
-        let mut values: Vec<u8> = Vec::with_capacity(offset as usize);
-        reader.read_exact(&mut values)?;
-        self.builder.append_value(reader);
+        self.buffer.clear();
+        self.buffer.reserve(offset as usize);
+
+        reader.read_exact(&mut self.buffer)?;
+        self.builder.append_value(&self.buffer);
         Ok(())
     }
 
