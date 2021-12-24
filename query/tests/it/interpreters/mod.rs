@@ -35,4 +35,4 @@ mod interpreter_use_database;
 mod interpreter_user_alter;
 mod interpreter_user_create;
 mod interpreter_user_drop;
-mod plan_scheduler;
+mod plan_schedulers;

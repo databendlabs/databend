@@ -23,7 +23,6 @@ mod interpreter_explain;
 mod interpreter_factory;
 mod interpreter_grant_privilege;
 mod interpreter_insert;
-mod interpreter_insert_with_plan;
 mod interpreter_insert_with_stream;
 mod interpreter_interceptor;
 mod interpreter_kill;

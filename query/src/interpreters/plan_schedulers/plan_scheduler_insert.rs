@@ -24,7 +24,6 @@ use common_planners::SinkPlan;
 use common_planners::StagePlan;
 use common_streams::SendableDataBlockStream;
 
-use crate::interpreters::interpreter_common::apply_plan_rewrite;
 use crate::interpreters::plan_schedulers;
 use crate::optimizers::Optimizers;
 use crate::sessions::QueryContext;
@@ -72,8 +71,10 @@ impl<'a> InsertWithPlan<'a> {
         let cast_needed = self.check_schema_cast(select_plan)?;
 
         // optimize and rewrite the SelectPlan.input
-        let optimized_plan =
-            apply_plan_rewrite(Optimizers::create(self.ctx.clone()), &select_plan.input)?;
+        let optimized_plan = plan_schedulers::apply_plan_rewrite(
+            Optimizers::create(self.ctx.clone()),
+            &select_plan.input,
+        )?;
 
         // rewrite the optimized the plan
         let rewritten_plan = match optimized_plan {
