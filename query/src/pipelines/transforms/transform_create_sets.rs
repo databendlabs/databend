@@ -25,6 +25,7 @@ use common_infallible::Mutex;
 use common_planners::Expression;
 use common_streams::SendableDataBlockStream;
 use common_streams::SubQueriesStream;
+use common_tracing::tracing;
 use futures::future::join_all;
 use futures::future::BoxFuture;
 use futures::future::JoinAll;
@@ -118,6 +119,7 @@ impl Processor for CreateSetsTransform {
         self
     }
 
+    #[tracing::instrument(level = "info", name = "create_sets_execute", skip(self))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let data = self.execute_sub_queries()?.await;
 
@@ -155,6 +157,7 @@ impl<'a> SubQueriesPuller<'a> {
         self.expressions.len()
     }
 
+    #[tracing::instrument(level = "info", skip(self))]
     pub fn take_subquery_data(
         &mut self,
         pos: usize,

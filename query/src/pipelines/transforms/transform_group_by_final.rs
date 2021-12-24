@@ -81,6 +81,7 @@ impl Processor for GroupByFinalTransform {
         self
     }
 
+    #[tracing::instrument(level = "info", name = "group_by_final_execute", skip(self))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!("execute...");
         let funcs = self

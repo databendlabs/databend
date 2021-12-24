@@ -19,6 +19,7 @@ use common_dal::DataAccessor;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_planners::Extras;
+use common_tracing::tracing;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
@@ -113,6 +114,7 @@ impl BlockPruner {
     }
 }
 
+#[tracing::instrument(level = "info", skip(table_snapshot, schema, push_down, data_accessor, ctx), fields(ctx.id = ctx.get_id().as_str()))]
 pub async fn apply_block_pruning(
     table_snapshot: &TableSnapshot,
     schema: DataSchemaRef,

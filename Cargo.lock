@@ -1571,6 +1571,7 @@ dependencies = [
  "common-exception",
  "common-functions",
  "common-io",
+ "common-tracing",
  "csv-async",
  "futures",
  "pin-project-lite",
@@ -1589,6 +1590,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-bunyan-formatter",
+ "tracing-futures",
  "tracing-opentelemetry",
  "tracing-subscriber",
 ]
@@ -6979,6 +6981,8 @@ version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
 dependencies = [
+ "futures",
+ "futures-task",
  "pin-project",
  "tracing",
 ]

@@ -100,6 +100,7 @@ impl<const HAVING: bool> Processor for FilterTransform<HAVING> {
         self
     }
 
+    #[tracing::instrument(level = "info", name = "filter_execute", skip(self))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let input_stream = self.input.execute().await?;
         let executor = self.executor.clone();
