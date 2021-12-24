@@ -1541,7 +1541,7 @@ dependencies = [
  "common-infallible",
  "common-meta-types",
  "futures",
- "lazy_static",
+ "once_cell",
  "pretty_assertions",
  "serde",
 ]
