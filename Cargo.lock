@@ -1522,9 +1522,9 @@ dependencies = [
  "common-exception",
  "common-infallible",
  "common-tracing",
- "lazy_static",
  "metrics",
  "metrics-exporter-prometheus",
+ "once_cell",
  "prometheus-parse",
  "serde",
 ]
