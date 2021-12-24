@@ -263,22 +263,22 @@ impl Expression {
             Expression::Subquery { query_plan, .. } => Self::subquery_nullable(query_plan),
             Expression::ScalarSubquery { query_plan, .. } => Self::subquery_nullable(query_plan),
             Expression::BinaryExpression { left, op, right } => {
-                let arg_fields = vec![
+                let args_type = vec![
                     left.to_data_type(input_schema)?,
                     right.to_data_type(input_schema)?,
                 ];
-                Self::function_nullable(op, input_schema, arg_fields)
+                Self::function_nullable(op, input_schema, args_type)
             }
             Expression::UnaryExpression { op, expr } => {
                 let args_type = vec![expr.to_data_type(input_schema)?];
                 Self::function_nullable(op, input_schema, args_type)
             }
             Expression::ScalarFunction { op, args } => {
-                let arg_fields = args
+                let args_type = args
                     .iter()
                     .map(|expr| expr.to_data_type(input_schema))
                     .collect::<Result<Vec<_>>>()?;
-                Self::function_nullable(op, input_schema, arg_fields)
+                Self::function_nullable(op, input_schema, args_type)
             }
             Expression::AggregateFunction { .. } => {
                 let f = self.to_aggregate_function(input_schema)?;
