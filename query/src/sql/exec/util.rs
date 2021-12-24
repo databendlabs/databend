@@ -12,21 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-mod exec;
-mod metrics;
-pub mod optimizer;
-pub mod parser;
-mod plan_parser;
-mod planner;
-mod sql_common;
-mod sql_parser;
-mod sql_statement;
-pub mod statements;
+use crate::sql::optimizer::SExpr;
 
-pub use common::*;
-pub use plan_parser::PlanParser;
-pub use planner::*;
-pub use sql_common::SQLCommon;
-pub use sql_parser::DfParser;
-pub use sql_statement::*;
+// Check if all plans in an expression are physical plans
+pub fn check_physical(expression: &SExpr) -> bool {
+    if !expression.plan().is_physical() {
+        return false;
+    }
+
+    for child in expression.children() {
+        if !child.plan().is_physical() {
+            return false;
+        }
+    }
+
+    true
+}
