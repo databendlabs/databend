@@ -18,7 +18,7 @@ use std::sync::Arc;
 use common_datavalues::DataField;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 use crate::scalars::ArithmeticFunction;
 use crate::scalars::ComparisonFunction;
@@ -149,27 +149,25 @@ pub struct FunctionFactory {
     case_insensitive_arithmetic_desc: HashMap<String, ArithmeticDescription>,
 }
 
-lazy_static! {
-    static ref FUNCTION_FACTORY: Arc<FunctionFactory> = {
-        let mut function_factory = FunctionFactory::create();
-        ArithmeticFunction::register(&mut function_factory);
-        ComparisonFunction::register(&mut function_factory);
-        LogicFunction::register(&mut function_factory);
-        NullableFunction::register(&mut function_factory);
-        StringFunction::register(&mut function_factory);
-        UdfFunction::register(&mut function_factory);
-        HashesFunction::register(&mut function_factory);
-        ToCastFunction::register(&mut function_factory);
-        ConditionalFunction::register(&mut function_factory);
-        DateFunction::register(&mut function_factory);
-        OtherFunction::register(&mut function_factory);
-        MathsFunction::register(&mut function_factory);
-        TupleClassFunction::register(&mut function_factory);
-        UUIDFunction::register(&mut function_factory);
+static FUNCTION_FACTORY: Lazy<Arc<FunctionFactory>> = Lazy::new(|| {
+    let mut function_factory = FunctionFactory::create();
+    ArithmeticFunction::register(&mut function_factory);
+    ComparisonFunction::register(&mut function_factory);
+    LogicFunction::register(&mut function_factory);
+    NullableFunction::register(&mut function_factory);
+    StringFunction::register(&mut function_factory);
+    UdfFunction::register(&mut function_factory);
+    HashesFunction::register(&mut function_factory);
+    ToCastFunction::register(&mut function_factory);
+    ConditionalFunction::register(&mut function_factory);
+    DateFunction::register(&mut function_factory);
+    OtherFunction::register(&mut function_factory);
+    MathsFunction::register(&mut function_factory);
+    TupleClassFunction::register(&mut function_factory);
+    UUIDFunction::register(&mut function_factory);
 
-        Arc::new(function_factory)
-    };
-}
+    Arc::new(function_factory)
+});
 
 impl FunctionFactory {
     pub(in crate::scalars::function_factory) fn create() -> FunctionFactory {
