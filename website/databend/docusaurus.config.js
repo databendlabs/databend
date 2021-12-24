@@ -63,7 +63,18 @@ const config = {
                 sidebarPath: require.resolve('./docs/dev/sidebars.js'),
                 editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
             },
-        ]
+        ],
+        [
+          '@docusaurus/plugin-client-redirects',
+          {
+            redirects: [
+              {
+                to: '/', // string
+                from: '/overview/building-and-running', // string | string[]
+              },
+            ],
+          },
+        ],
     ],
     themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
