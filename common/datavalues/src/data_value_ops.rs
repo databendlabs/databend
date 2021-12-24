@@ -28,10 +28,12 @@ impl DataValue {
         s
     }
 
-    pub fn try_from_literal(literal: &str) -> Result<DataValue> {
+    pub fn try_from_literal(literal: &str, radix: Option<u32>) -> Result<DataValue> {
+        let radix = radix.unwrap_or(10);
+
         let result;
         if literal.starts_with(char::from_u32(45).unwrap()) {
-            result = match literal.parse::<i64>() {
+            result = match i64::from_str_radix(literal, radix) {
                 Ok(n) => {
                     if n >= i8::MIN as i64 {
                         return Ok(DataValue::Int8(Some(n as i8)));
@@ -47,7 +49,7 @@ impl DataValue {
                 Err(_) => Ok(DataValue::Float64(Some(literal.parse::<f64>()?))),
             };
         } else {
-            result = match literal.parse::<u64>() {
+            result = match u64::from_str_radix(literal, radix) {
                 Ok(n) => {
                     if n <= u8::MAX as u64 {
                         return Ok(DataValue::UInt8(Some(n as u8)));

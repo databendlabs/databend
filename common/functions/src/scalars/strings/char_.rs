@@ -69,9 +69,10 @@ impl Function for CharFunction {
         let row_count = columns[0].column().len();
         let column_count = columns.len();
         let mut values: MutableBuffer<u8> = MutableBuffer::with_capacity(row_count * column_count);
+        let values_ptr = values.as_mut_ptr();
+
         let mut offsets: MutableBuffer<i64> = MutableBuffer::with_capacity(row_count + 1);
         offsets.push(0);
-        let mut validity = None;
 
         for (i, column) in columns.iter().enumerate() {
             let column = column.column();
@@ -84,15 +85,14 @@ impl Function for CharFunction {
                     let uint8_arr = uint8_arr.u8()?;
                     for (j, ch) in uint8_arr.into_no_null_iter().enumerate() {
                         unsafe {
-                            *values.as_mut_ptr().add(column_count * j + i) = *ch;
+                            *values_ptr.add(column_count * j + i) = *ch;
                         }
                     }
-                    validity = combine_validities(validity.as_ref(), uint8_arr.inner().validity());
                 }
                 DataColumn::Constant(uint8_arr, _) => unsafe {
+                    let value = uint8_arr.as_u64().unwrap_or(0) as u8;
                     for j in 0..row_count {
-                        *values.as_mut_ptr().add(column_count * j + i) =
-                            uint8_arr.as_i64().unwrap_or(0) as u8;
+                        *values_ptr.add(column_count * j + i) = value;
                     }
                 },
             }
@@ -100,13 +100,16 @@ impl Function for CharFunction {
         for i in 1..row_count + 1 {
             offsets.push(i as i64 * column_count as i64);
         }
+
         unsafe {
             offsets.set_len(row_count + 1);
             values.set_len(row_count * column_count);
+
+            // Validity will be injected after evaluation.
             Ok(DataColumn::from(DFStringArray::from_data_unchecked(
                 offsets.into(),
                 values.into(),
-                validity,
+                None,
             )))
         }
     }
