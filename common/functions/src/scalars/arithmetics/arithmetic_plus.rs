@@ -27,8 +27,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use num::cast::AsPrimitive;
 use num_traits::WrappingAdd;
-use num_traits::WrappingSub;
 use num_traits::WrappingMul;
+use num_traits::WrappingSub;
 
 use super::arithmetic::ArithmeticTrait;
 use super::interval::*;

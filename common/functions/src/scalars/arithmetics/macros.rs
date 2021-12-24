@@ -79,7 +79,10 @@ macro_rules! impl_wrapping_arithmetic {
         where
             T: DFPrimitiveType + AsPrimitive<R>,
             D: DFPrimitiveType + AsPrimitive<R>,
-            R: DFIntegerType + WrappingAdd<Output = R> + WrappingSub<Output = R> + WrappingMul<Output = R>,
+            R: DFIntegerType
+                + WrappingAdd<Output = R>
+                + WrappingSub<Output = R>
+                + WrappingMul<Output = R>,
             DFPrimitiveArray<R>: IntoSeries,
         {
             fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
