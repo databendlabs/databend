@@ -30,7 +30,7 @@ use common_streams::SendableDataBlockStream;
 use futures::StreamExt;
 
 use crate::sessions::QueryContext;
-use crate::storages::fuse::io;
+use crate::storages::fuse::io::SnapshotReader;
 use crate::storages::fuse::meta::TableSnapshot;
 use crate::storages::fuse::operations::AppendOperationLogEntry;
 use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
@@ -134,7 +134,7 @@ impl FuseTable {
         if let Some(loc) = self.snapshot_loc() {
             let da = ctx.get_data_accessor()?;
             Ok(Some(
-                io::read_obj(da.as_ref(), loc.to_string(), ctx.get_table_cache()).await?,
+                SnapshotReader::read(da.as_ref(), loc.to_string(), ctx.get_table_cache()).await?,
             ))
         } else {
             Ok(None)

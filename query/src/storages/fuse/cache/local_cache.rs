@@ -18,17 +18,41 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_base::tokio::sync::RwLock;
+use common_cache::basic::BytesMeter;
+use common_cache::basic::Cache;
+use common_cache::basic::DefaultHashBuilder;
+use common_cache::basic::LruCache;
+use common_cache::basic::LruDiskCache;
+use common_cache::storage::StorageCache;
 use common_dal::DataAccessor;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_metrics::label_counter;
 use common_metrics::label_counter_with_val;
 
-use crate::basic::BytesMeter;
-use crate::basic::Cache;
-use crate::basic::DefaultHashBuilder;
-use crate::basic::LruCache;
-use crate::basic::LruDiskCache;
-use crate::query::QueryCache;
+use crate::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
+use crate::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
+use crate::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
+
+enum ObjectType {
+    TableSnapshot,
+    TableSegment,
+    TableBlock,
+    Unknown,
+}
+
+fn get_object_type(location: &str) -> ObjectType {
+    if location.starts_with(FUSE_TBL_SNAPSHOT_PREFIX) {
+        return ObjectType::TableSnapshot;
+    }
+    if location.starts_with(FUSE_TBL_SEGMENT_PREFIX) {
+        return ObjectType::TableSegment;
+    }
+    if location.starts_with(FUSE_TBL_BLOCK_PREFIX) {
+        return ObjectType::TableBlock;
+    }
+    ObjectType::Unknown
+}
 
 const CACHE_READ_BYTES_FROM_REMOTE: &str = "cache_read_bytes_from_remote";
 const CACHE_READ_BYTES_FROM_LOCAL: &str = "cache_read_bytes_from_local";
@@ -84,7 +108,7 @@ pub struct LocalCache {
 }
 
 impl LocalCache {
-    pub fn create(conf: LocalCacheConfig) -> Result<Box<dyn QueryCache>> {
+    pub fn create(conf: LocalCacheConfig) -> Result<Box<dyn StorageCache>> {
         let disk_cache = Arc::new(RwLock::new(LruDiskCache::new(
             conf.disk_cache_root,
             conf.disk_cache_size_mb * 1024 * 1024,
@@ -102,9 +126,9 @@ impl LocalCache {
 }
 
 #[async_trait]
-impl QueryCache for LocalCache {
+impl StorageCache for LocalCache {
     async fn get(&self, location: &str, da: &dyn DataAccessor) -> Result<Vec<u8>> {
-        let location: OsString = location.to_owned().into();
+        let loc: OsString = location.to_owned().into();
         let mut metrics = CacheDeferMetrics {
             tenant_id: self.tenant_id.as_str(),
             cluster_id: self.cluster_id.as_str(),
@@ -112,45 +136,42 @@ impl QueryCache for LocalCache {
             read_bytes: 0,
         };
 
-        // get data from memory cache
-        let mut mem_cache = self.mem_cache.write().await;
-        if let Some(data) = mem_cache.get(&location) {
-            metrics.cache_hit = true;
-            metrics.read_bytes = data.len() as u64;
+        match get_object_type(location) {
+            ObjectType::TableSnapshot | ObjectType::TableSegment => {
+                // get data from memory cache
+                let mut mem_cache = self.mem_cache.write().await;
+                if let Some(data) = mem_cache.get(&loc) {
+                    metrics.cache_hit = true;
+                    metrics.read_bytes = data.len() as u64;
 
-            return Ok(data.clone());
-        }
-
-        // get data from disk cache
-        let mut disk_cache = self.disk_cache.write().await;
-        if disk_cache.contains_key(location.clone()) {
-            let mut path = disk_cache.get(location)?;
-            let data = read_all(&mut path)?;
-
-            metrics.cache_hit = true;
-            metrics.read_bytes = data.len() as u64;
-            return Ok(data);
-        }
-
-        let data = da.read(location.to_str().unwrap()).await?;
-
-        if (data.len() as u64) > mem_cache.capacity() {
-            disk_cache.insert_bytes(location, data.as_slice())?;
-        } else {
-            // update cache, if memory cache is full, move to disk cache
-            let mut mem_remove_data = Vec::new();
-            while mem_cache.size() + (data.len() as u64) > mem_cache.capacity() {
-                mem_remove_data.push(mem_cache.pop_by_policy());
+                    return Ok(data.clone());
+                }
+                let data = da.read(location).await?;
+                mem_cache.put(loc, data.clone());
+                metrics.read_bytes = data.len() as u64;
+                return Ok(data);
             }
-            mem_cache.put(location.clone(), data.clone());
-            for (location, bytes) in mem_remove_data.iter().flatten() {
-                disk_cache.insert_bytes(location, bytes.as_slice())?;
+            ObjectType::TableBlock => {
+                // get data from disk cache
+                let mut disk_cache = self.disk_cache.write().await;
+                if disk_cache.contains_key(loc.clone()) {
+                    let mut path = disk_cache.get(loc)?;
+                    let data = read_all(&mut path)?;
+
+                    metrics.cache_hit = true;
+                    metrics.read_bytes = data.len() as u64;
+                    return Ok(data);
+                }
+                let data = da.read(location).await?;
+                disk_cache.insert_bytes(loc, data.as_slice())?;
+                metrics.read_bytes = data.len() as u64;
+                return Ok(data);
             }
+            ObjectType::Unknown => Err(ErrorCode::UnexpectedError(format!(
+                "'{}' is not supported reading from fuse local cache",
+                location
+            ))),
         }
-
-        metrics.read_bytes = data.len() as u64;
-
-        Ok(data)
     }
 }
 

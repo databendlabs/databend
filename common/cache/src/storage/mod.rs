@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// use common_exception::Result;
-
 use async_trait::async_trait;
 use common_dal::DataAccessor;
 use common_exception::Result;
 
 #[async_trait]
-pub trait QueryCache: Send + Sync {
+pub trait StorageCache: Send + Sync {
     async fn get(&self, location: &str, da: &dyn DataAccessor) -> Result<Vec<u8>>;
 }

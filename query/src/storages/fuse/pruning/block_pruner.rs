@@ -23,8 +23,9 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 
 use crate::sessions::QueryContext;
-use crate::storages::fuse::io;
 use crate::storages::fuse::io::snapshot_location;
+use crate::storages::fuse::io::SegmentReader;
+use crate::storages::fuse::io::SnapshotReader;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
@@ -60,7 +61,7 @@ impl BlockPruner {
             _ => Box::new(|_: &BlockStatistics| Ok(true)),
         };
 
-        let snapshot: TableSnapshot = io::read_obj(
+        let snapshot = SnapshotReader::read(
             self.data_accessor.as_ref(),
             self.table_snapshot_location.as_str(),
             ctx.get_table_cache(),
@@ -75,9 +76,12 @@ impl BlockPruner {
 
         let res = futures::stream::iter(segment_locs)
             .map(|seg_loc| async {
-                let segment_info: SegmentInfo =
-                    io::read_obj(self.data_accessor.as_ref(), seg_loc, ctx.get_table_cache())
-                        .await?;
+                let segment_info = SegmentReader::read(
+                    self.data_accessor.as_ref(),
+                    seg_loc,
+                    ctx.get_table_cache(),
+                )
+                .await?;
                 Self::filter_segment(segment_info, &block_pred)
             })
             // configuration of the max size of buffered futures

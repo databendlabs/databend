@@ -13,4 +13,4 @@
 // limitations under the License.
 
 pub mod basic;
-pub mod query;
+pub mod storage;
