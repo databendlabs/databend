@@ -1880,6 +1880,22 @@
     "@types/react-router-config" "*"
     "@types/react-router-dom" "*"
 
+"@docusaurus/plugin-client-redirects@^2.0.0-beta.14":
+  version "2.0.0-beta.14"
+  resolved "https://registry.yarnpkg.com/@docusaurus/plugin-client-redirects/-/plugin-client-redirects-2.0.0-beta.14.tgz#1646bf6bf99889747b7edfa3f1cb4dd3c1f2f471"
+  integrity sha512-CHxEZk20URQb3CU6l4egXYpSVMpgIQ3/niTrx8MCjyfQVnLl/yIKiLeYA1ja4i/wa8UmQnJwKUL7mZDbuP9qeg==
+  dependencies:
+    "@docusaurus/core" "2.0.0-beta.14"
+    "@docusaurus/logger" "2.0.0-beta.14"
+    "@docusaurus/utils" "2.0.0-beta.14"
+    "@docusaurus/utils-common" "2.0.0-beta.14"
+    "@docusaurus/utils-validation" "2.0.0-beta.14"
+    chalk "^4.1.2"
+    eta "^1.12.3"
+    fs-extra "^10.0.0"
+    lodash "^4.17.20"
+    tslib "^2.3.1"
+
 "@docusaurus/plugin-content-blog@2.0.0-beta.14":
   version "2.0.0-beta.14"
   resolved "https://registry.yarnpkg.com/@docusaurus/plugin-content-blog/-/plugin-content-blog-2.0.0-beta.14.tgz#d390ab0ab3aceaeb0be7d49ccde0cf5a2e0b1566"

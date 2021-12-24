@@ -35,6 +35,10 @@ const config = {
                 theme: {
                     customCss: require.resolve('./src/css/custom.scss'),
                 },
+                googleAnalytics: {
+                  trackingID: 'G-WBQPTTG4ZG',
+                  anonymizeIP: true,
+                },
             }),
         ],
     ],
@@ -63,7 +67,19 @@ const config = {
                 sidebarPath: require.resolve('./docs/dev/sidebars.js'),
                 editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
             },
-        ]
+        ],
+        [
+          '@docusaurus/plugin-client-redirects',
+          {
+            // this will be removed later, make a mark~.
+            redirects: [
+              {
+                to: '/', // string
+                from: '/overview/building-and-running', // string | string[]
+              },
+            ],
+          },
+        ],
     ],
     themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
