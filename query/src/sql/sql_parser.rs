@@ -57,6 +57,7 @@ use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfCreateStage;
 use crate::sql::statements::DfCreateUDF;
+use crate::sql::statements::DfDropUDF;
 use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfDescribeTable;
@@ -596,6 +597,7 @@ impl<'a> DfParser<'a> {
                         Keyword::DATABASE => self.parse_drop_database(),
                         Keyword::TABLE => self.parse_drop_table(),
                         Keyword::USER => self.parse_drop_user(),
+                        Keyword::FUNCTION => self.parse_drop_udf(),
                         _ => self.expected("drop statement", Token::Word(w)),
                     }
                 }
@@ -836,6 +838,17 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::CreateStage(create))
     }
 
+    fn parse_drop_stage(&mut self) -> Result<DfStatement, ParserError> {
+        let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let stage_name = self.parser.parse_literal_string()?;
+
+        let drop = DfDropStage {
+            if_exists,
+            stage_name,
+        };
+        Ok(DfStatement::DropStage(drop))
+    }
+
     fn parse_create_udf(&mut self) -> Result<DfStatement, ParserError> {
         let if_not_exists =
             self.parser
@@ -860,15 +873,15 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::CreateUDF(create_udf))
     }
 
-    fn parse_drop_stage(&mut self) -> Result<DfStatement, ParserError> {
+    fn parse_drop_udf(&mut self) -> Result<DfStatement, ParserError> {
         let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
-        let stage_name = self.parser.parse_literal_string()?;
+        let udf_name = self.parser.parse_literal_string()?;
 
-        let drop = DfDropStage {
+        let drop_udf = DfDropUDF {
             if_exists,
-            stage_name,
+            udf_name,
         };
-        Ok(DfStatement::DropStage(drop))
+        Ok(DfStatement::DropUDF(drop_udf))
     }
 
     fn parse_create_table(&mut self) -> Result<DfStatement, ParserError> {

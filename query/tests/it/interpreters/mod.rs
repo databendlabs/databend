@@ -37,3 +37,4 @@ mod interpreter_user_create;
 mod interpreter_user_drop;
 mod plan_schedulers;
 mod interpreter_udf_create;
+mod interpreter_udf_drop;

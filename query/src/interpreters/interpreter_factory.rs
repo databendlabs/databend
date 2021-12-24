@@ -28,6 +28,7 @@ use crate::interpreters::CreateDatabaseInterpreter;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::CreateUserInterpreter;
 use crate::interpreters::CreatUDFInterpreter;
+use crate::interpreters::DropUDFInterpreter;
 use crate::interpreters::DescribeTableInterpreter;
 use crate::interpreters::DropDatabaseInterpreter;
 use crate::interpreters::DropTableInterpreter;
@@ -82,6 +83,7 @@ impl InterpreterFactory {
                 ShowCreateDatabaseInterpreter::try_create(ctx_clone, v)
             }
             PlanNode::CreateUDF(v) => CreatUDFInterpreter::try_create(ctx_clone, v),
+            PlanNode::DropUDF(v) => DropUDFInterpreter::try_create(ctx_clone, v),
             _ => Result::Err(ErrorCode::UnknownTypeOfQuery(format!(
                 "Can't get the interpreter by plan:{}",
                 plan.name()
