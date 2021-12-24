@@ -6,4 +6,7 @@ pull_request_rules:
       - "#approved-reviews-by >= 2"
     actions:
       comment:
-        message: This pull request has merge conflicts that must be resolved before it can be merged. @{{author}} please rebase it 🙏
+        message: |
+          This pull request has merge conflicts that must be resolved before it can be merged. @{{author}} please update it 🙏.
+
+          Try `@mergify update` or update manually.
