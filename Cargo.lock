@@ -1176,11 +1176,11 @@ dependencies = [
  "futures-sink",
  "futures-util",
  "hostname",
- "lazy_static",
  "log",
  "lz4",
  "naive-cityhash",
  "native-tls",
+ "once_cell",
  "pin-project",
  "rand 0.8.4",
  "thiserror",
@@ -1296,7 +1296,7 @@ dependencies = [
  "futures",
  "hyper",
  "jwt-simple",
- "lazy_static",
+ "once_cell",
  "prost",
  "serde",
  "serde_json",
@@ -1326,11 +1326,11 @@ dependencies = [
  "hex",
  "indexmap",
  "itertools",
- "lazy_static",
  "md5",
  "num",
  "num-format",
  "num-traits",
+ "once_cell",
  "ordered-float 2.8.0",
  "pretty_assertions",
  "rand 0.8.4",
@@ -1381,7 +1381,6 @@ dependencies = [
  "common-meta-embedded",
  "common-meta-types",
  "common-tracing",
- "lazy_static",
  "mockall",
  "serde",
  "serde_json",
@@ -1431,8 +1430,8 @@ dependencies = [
  "common-tracing",
  "derive_more",
  "futures",
- "lazy_static",
  "maplit",
+ "once_cell",
  "tempfile",
 ]
 
@@ -1453,7 +1452,6 @@ dependencies = [
  "derive_more",
  "futures",
  "hyper",
- "lazy_static",
  "prost",
  "rand 0.8.4",
  "serde",
@@ -1483,8 +1481,8 @@ dependencies = [
  "common-meta-types",
  "common-tracing",
  "derive_more",
- "lazy_static",
  "maplit",
+ "once_cell",
  "pretty_assertions",
  "prost",
  "rand 0.8.4",
@@ -1507,7 +1505,7 @@ dependencies = [
  "common-exception",
  "common-meta-types",
  "common-tracing",
- "lazy_static",
+ "once_cell",
  "serde",
  "serde_json",
  "sled",
@@ -1535,9 +1533,9 @@ dependencies = [
  "common-exception",
  "common-infallible",
  "common-tracing",
- "lazy_static",
  "metrics",
  "metrics-exporter-prometheus",
+ "once_cell",
  "prometheus-parse",
  "serde",
 ]
@@ -1554,7 +1552,7 @@ dependencies = [
  "common-infallible",
  "common-meta-types",
  "futures",
- "lazy_static",
+ "once_cell",
  "pretty_assertions",
  "serde",
 ]
@@ -1584,7 +1582,7 @@ dependencies = [
 name = "common-tracing"
 version = "0.1.0"
 dependencies = [
- "lazy_static",
+ "once_cell",
  "opentelemetry",
  "opentelemetry-jaeger",
  "tonic",
@@ -2071,7 +2069,6 @@ dependencies = [
  "headers",
  "hyper",
  "indexmap",
- "lazy_static",
  "maplit",
  "metrics",
  "msql-srv",
@@ -2080,6 +2077,7 @@ dependencies = [
  "num",
  "num_cpus",
  "octocrab",
+ "once_cell",
  "parquet-format-async-temp",
  "paste",
  "poem",
@@ -4450,9 +4448,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.8.0"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "692fcb63b64b1758029e0a96ee63e049ce8c5948587f2f7208df04625e5f6b56"
+checksum = "da32515d9f6e6e489d7bc9d84c71b060db7247dc035bbe44eac88cf87486d8d5"
 
 [[package]]
 name = "oorandom"

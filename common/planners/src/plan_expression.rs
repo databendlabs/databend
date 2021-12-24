@@ -25,16 +25,16 @@ use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::FunctionFactory;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 use crate::PlanNode;
 
-lazy_static! {
-    static ref OP_SET: HashSet<&'static str> = ["database", "version", "current_user"]
+static OP_SET: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    ["database", "version", "current_user"]
         .iter()
         .copied()
-        .collect();
-}
+        .collect()
+});
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct ExpressionPlan {
