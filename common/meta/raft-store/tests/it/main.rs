@@ -15,6 +15,7 @@
 mod log;
 #[macro_use]
 mod testing;
+mod grpc;
 mod state;
 mod state_machine;
 mod types;

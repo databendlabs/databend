@@ -173,11 +173,11 @@ impl MetaSrvTestContext {
 pub async fn assert_metasrv_connection(addr: &str) -> anyhow::Result<()> {
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
-    let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
+    let client = MetaGrpcClient::try_create(addr, "root", "xxx").await?;
     let req = tonic::Request::new(GetReq {
         key: "ensure-connection".into(),
     });
-    let rst = client.get(req).await?.into_inner();
+    let rst = client.check_connection(req).await?;
     assert_eq!("", rst.value, "connected");
     Ok(())
 }

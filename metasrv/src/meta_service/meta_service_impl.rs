@@ -127,7 +127,7 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: tonic::Request<RaftRequest>,
     ) -> Result<tonic::Response<RaftReply>, tonic::Status> {
-        self.check_token(request.metadata())?;
+        // self.check_token(request.metadata())?;
         common_tracing::extract_remote_span_as_parent(&request);
 
         let mes = request.into_inner();
@@ -157,7 +157,7 @@ impl MetaService for MetaServiceImpl {
         request: tonic::Request<GetReq>,
     ) -> Result<tonic::Response<GetReply>, tonic::Status> {
         // TODO(xp): this method should be removed along with DFS
-        self.check_token(request.metadata())?;
+        // self.check_token(request.metadata())?;
         common_tracing::extract_remote_span_as_parent(&request);
 
         let req = request.into_inner();

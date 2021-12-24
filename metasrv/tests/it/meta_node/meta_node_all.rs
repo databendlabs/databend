@@ -22,6 +22,7 @@ use common_base::tokio::time::Duration;
 use common_meta_api::KVApi;
 use common_meta_raft_store::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_raft_store::state_machine::AppliedState;
+use common_meta_raft_store::MetaGrpcClient;
 use common_meta_types::Change;
 use common_meta_types::Cmd;
 use common_meta_types::DatabaseMeta;
@@ -30,6 +31,7 @@ use common_meta_types::MatchSeq;
 use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
+use common_meta_types::UpsertKVAction;
 use common_tracing::tracing;
 use databend_meta::configs;
 use databend_meta::errors::ForwardToLeader;
@@ -1071,35 +1073,27 @@ async fn test_meta_node_upsert_kv() -> anyhow::Result<()> {
     let addr = tc.config.raft_config.raft_api_addr();
 
     let _mn = MetaNode::boot(&tc.config.raft_config).await?;
-    assert_metasrv_connection(&addr).await?;
+    // assert_metasrv_connection(&addr).await?;
 
-    let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     {
         // add: ok
-        let req = LogEntry {
-            txid: None,
-            cmd: Cmd::UpsertKV {
-                key: "foo".to_string(),
-                seq: MatchSeq::Exact(0),
-                value: Operation::Update(b"bar".to_vec()),
-                value_meta: None,
-            },
+        let req = UpsertKVAction {
+            key: "foo".to_string(),
+            seq: MatchSeq::Exact(0),
+            value: Operation::Update(b"bar".to_vec()),
+            value_meta: None,
         };
-        let raft_mes = client.write(req).await?.into_inner();
+        let raft_mes = client.upsert_kv(req).await?;
 
-        let rst: Result<AppliedState, RetryableError> = raft_mes.into();
-        let resp: AppliedState = rst?;
-        match resp {
-            AppliedState::KV(Change { prev, result, .. }) => {
+        match raft_mes {
+            Change { prev, result, .. } => {
                 assert!(prev.is_none());
                 let sv = result.unwrap();
                 assert!(sv.seq > 0);
                 assert!(sv.meta.is_none());
                 assert_eq!(b"bar".to_vec(), sv.data);
-            }
-            _ => {
-                panic!("not KV")
             }
         }
     }

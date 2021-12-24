@@ -33,6 +33,7 @@ use crate::grpc::grpc_action::MetaGrpcGetAction;
 use crate::grpc::grpc_action::MetaGrpcWriteAction;
 use crate::grpc::grpc_action::RequestFor;
 use crate::protobuf::meta_service_client::MetaServiceClient;
+use crate::protobuf::GetReply;
 use crate::protobuf::GetReq;
 use crate::protobuf::HandshakeRequest;
 use crate::protobuf::RaftRequest;
@@ -162,6 +163,19 @@ impl MetaGrpcClient {
             Err(ErrorCode::EmptyData(format!(
                 "Can not receive data from grpc server, action: {:?}",
                 act
+            )))
+        }
+    }
+
+    #[tracing::instrument(level = "debug", skip(self, req))]
+    pub async fn check_connection(&self, req: Request<GetReq>) -> Result<GetReply> {
+        let result = self.client.clone().get(req).await?.into_inner();
+        if result.ok {
+            Ok(result)
+        } else {
+            Err(ErrorCode::EmptyData(format!(
+                "Can not receive data from grpc server, {:?}",
+                result.key
             )))
         }
     }
