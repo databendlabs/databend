@@ -24,9 +24,9 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
 use crate::catalogs::Catalog;
-use crate::interpreters::AddOnStream;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
+use crate::pipelines::transforms::AddOnStream;
 use crate::sessions::QueryContext;
 
 pub struct SinkTransform {
