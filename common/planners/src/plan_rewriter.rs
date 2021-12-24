@@ -32,6 +32,7 @@ use crate::CreateTablePlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
 use crate::CreateUDFPlan;
+use crate::DropUDFPlan;
 use crate::DescribeStagePlan;
 use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
@@ -132,6 +133,7 @@ pub trait PlanRewriter {
             PlanNode::DropUserStage(plan) => self.rewrite_drop_stage(plan),
             PlanNode::ShowCreateDatabase(plan) => self.rewrite_show_create_database(plan),
             PlanNode::CreateUDF(plan) => self.rewrite_create_udf(plan),
+            PlanNode::DropUDF(plan) => self.rewrite_drop_udf(plan),
         }
     }
 
@@ -420,6 +422,10 @@ pub trait PlanRewriter {
 
     fn rewrite_create_udf(&mut self, plan: &CreateUDFPlan) -> Result<PlanNode> {
         Ok(PlanNode::CreateUDF(plan.clone()))
+    }
+
+    fn rewrite_drop_udf(&mut self, plan: &DropUDFPlan) -> Result<PlanNode> {
+        Ok(PlanNode::DropUDF(plan.clone()))
     }
 }
 

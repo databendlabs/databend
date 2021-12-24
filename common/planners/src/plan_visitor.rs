@@ -25,6 +25,7 @@ use crate::CreateTablePlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
 use crate::CreateUDFPlan;
+use crate::DropUDFPlan;
 use crate::DescribeStagePlan;
 use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
@@ -145,6 +146,7 @@ pub trait PlanVisitor {
             PlanNode::DropUserStage(plan) => self.visit_drop_stage(plan),
             PlanNode::ShowCreateDatabase(plan) => self.visit_show_create_database(plan),
             PlanNode::CreateUDF(plan) => self.visit_create_udf(plan),
+            PlanNode::DropUDF(plan) => self.visit_drop_udf(plan),
         }
     }
 
@@ -348,6 +350,10 @@ pub trait PlanVisitor {
     }
 
     fn visit_create_udf(&mut self, _: &CreateUDFPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_drop_udf(&mut self, _: &DropUDFPlan) -> Result<()> {
         Ok(())
     }
 }
