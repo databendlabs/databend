@@ -1285,7 +1285,7 @@ dependencies = [
  "futures",
  "hyper",
  "jwt-simple",
- "lazy_static",
+ "once_cell",
  "prost",
  "serde",
  "serde_json",
