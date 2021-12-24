@@ -17,6 +17,8 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_management::StageMgr;
 use common_management::StageMgrApi;
+use common_management::UdfMgr;
+use common_management::UdfMgrApi;
 use common_management::UserMgr;
 use common_management::UserMgrApi;
 use common_meta_api::KVApi;
@@ -27,6 +29,7 @@ use crate::configs::Config;
 pub struct UserApiProvider {
     user_api_provider: Arc<dyn UserMgrApi>,
     stage_api_provider: Arc<dyn StageMgrApi>,
+    udf_api_provider: Arc<dyn UdfMgrApi>,
 }
 
 impl UserApiProvider {
@@ -46,7 +49,8 @@ impl UserApiProvider {
 
         Ok(Arc::new(UserApiProvider {
             user_api_provider: Arc::new(UserMgr::new(client.clone(), tenant_id)),
-            stage_api_provider: Arc::new(StageMgr::new(client, tenant_id)),
+            stage_api_provider: Arc::new(StageMgr::new(client.clone(), tenant_id)),
+            udf_api_provider: Arc::new(UdfMgr::new(client, tenant_id)),
         }))
     }
 
@@ -56,5 +60,9 @@ impl UserApiProvider {
 
     pub fn get_stage_api_client(&self) -> Arc<dyn StageMgrApi> {
         self.stage_api_provider.clone()
+    }
+
+    pub fn get_udf_api_client(&self) -> Arc<dyn UdfMgrApi> {
+        self.udf_api_provider.clone()
     }
 }
