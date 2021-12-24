@@ -35,10 +35,15 @@ impl StringDeserializer {
 
 impl TypeDeserializer for StringDeserializer {
     // See GroupHash.rs for DFStringArray
+    #[allow(clippy::uninit_vec)]
     fn de(&mut self, reader: &mut &[u8]) -> Result<()> {
         let offset: u64 = reader.read_uvarint()?;
+
         self.buffer.clear();
         self.buffer.reserve(offset as usize);
+        unsafe {
+            self.buffer.set_len(offset as usize);
+        }
 
         reader.read_exact(&mut self.buffer)?;
         self.builder.append_value(&self.buffer);
