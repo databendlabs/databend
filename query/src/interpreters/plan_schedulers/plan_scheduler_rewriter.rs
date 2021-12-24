@@ -12,18 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[allow(clippy::needless_range_loop)]
-mod plan_scheduler;
-mod plan_scheduler_error;
-mod plan_scheduler_insert;
-mod plan_scheduler_query;
-mod plan_scheduler_rewriter;
-mod plan_scheduler_stream;
+use common_exception::Result;
+use common_planners::PlanNode;
 
-pub use plan_scheduler::PlanScheduler;
-pub use plan_scheduler_error::handle_error;
-pub use plan_scheduler_insert::InsertWithPlan;
-pub use plan_scheduler_query::schedule_query;
-pub use plan_scheduler_rewriter::apply_plan_rewrite;
-pub use plan_scheduler_stream::Scheduled;
-pub use plan_scheduler_stream::ScheduledStream;
+use crate::optimizers::Optimizers;
+
+pub fn apply_plan_rewrite(mut optimizer: Optimizers, plan: &PlanNode) -> Result<PlanNode> {
+    optimizer.optimize(plan)
+}

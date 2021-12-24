@@ -21,7 +21,6 @@ use common_planners::SelectPlan;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
-use super::interpreter_common::apply_plan_rewrite;
 use crate::interpreters::plan_schedulers;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -39,7 +38,10 @@ impl SelectInterpreter {
     }
 
     fn rewrite_plan(&self) -> Result<PlanNode> {
-        apply_plan_rewrite(Optimizers::create(self.ctx.clone()), &self.select.input)
+        plan_schedulers::apply_plan_rewrite(
+            Optimizers::create(self.ctx.clone()),
+            &self.select.input,
+        )
     }
 }
 

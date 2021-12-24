@@ -24,9 +24,9 @@ use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
 
 use crate::catalogs::Catalog;
-use crate::interpreters::AddOnStream;
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
+use crate::pipelines::transforms::AddOnStream;
 use crate::sessions::QueryContext;
 
 pub struct SinkTransform {
@@ -83,7 +83,9 @@ impl Processor for SinkTransform {
             .ctx
             .get_catalog()
             .get_table_by_info(self.table_info())?;
-        let mut upstream = self.input.execute().await?;
+        let mut input_stream = self.input.execute().await?;
+
+        let input_schema = self.input_schema.clone();
         let output_schema = self.table_info.schema();
         if self.cast_needed {
             let mut functions = Vec::with_capacity(output_schema.fields().len());
@@ -92,21 +94,21 @@ impl Processor for SinkTransform {
                     CastFunction::create("cast".to_string(), field.data_type().clone())?;
                 functions.push(cast_function);
             }
-            upstream = Box::pin(CastStream::try_create(
-                upstream,
+            input_stream = Box::pin(CastStream::try_create(
+                input_stream,
                 output_schema.clone(),
                 functions,
             )?);
         };
 
-        if self.input_schema != self.table_info.schema() {
-            upstream = Box::pin(AddOnStream::try_create(
-                upstream,
+        if self.input_schema != output_schema {
+            input_stream = Box::pin(AddOnStream::try_create(
+                input_stream,
+                input_schema,
                 output_schema,
-                self.table_info.schema(),
             )?)
         }
 
-        tbl.append_data(self.ctx.clone(), upstream).await
+        tbl.append_data(self.ctx.clone(), input_stream).await
     }
 }
