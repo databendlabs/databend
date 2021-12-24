@@ -56,6 +56,7 @@ use super::statements::DfDescribeStage;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfCreateStage;
+use crate::sql::statements::DfCreateUDF;
 use crate::sql::statements::DfCreateTable;
 use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfDescribeTable;
@@ -534,6 +535,7 @@ impl<'a> DfParser<'a> {
                         Keyword::TABLE => self.parse_create_table(),
                         Keyword::DATABASE => self.parse_create_database(),
                         Keyword::USER => self.parse_create_user(),
+                        Keyword::FUNCTION => self.parse_create_udf(),
                         _ => self.expected("create statement", Token::Word(w)),
                     }
                 }
@@ -832,6 +834,30 @@ impl<'a> DfParser<'a> {
         };
 
         Ok(DfStatement::CreateStage(create))
+    }
+
+    fn parse_create_udf(&mut self) -> Result<DfStatement, ParserError> {
+        let if_not_exists =
+            self.parser
+                .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let udf_name = self.parser.parse_literal_string()?;
+        self.parser.expect_token(&Token::Eq)?;
+        // TODO verify the definition as a legal expr
+        let definition = self.parser.parse_literal_string()?;
+        let description = if self.consume_token("DESC") {
+            self.parser.expect_token(&Token::Eq)?;
+            self.parser.parse_literal_string()?
+        } else {
+            String::from("")
+        };
+        let create_udf = DfCreateUDF {
+            if_not_exists,
+            udf_name,
+            definition,
+            description,
+        };
+
+        Ok(DfStatement::CreateUDF(create_udf))
     }
 
     fn parse_drop_stage(&mut self) -> Result<DfStatement, ParserError> {

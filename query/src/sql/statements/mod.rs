@@ -50,6 +50,7 @@ mod statement_show_tables;
 mod statement_show_users;
 mod statement_truncate_table;
 mod statement_use_database;
+mod statement_create_udf;
 
 pub use analyzer_statement::AnalyzableStatement;
 pub use analyzer_statement::AnalyzedResult;
@@ -89,3 +90,4 @@ pub use statement_show_tables::DfShowTables;
 pub use statement_show_users::DfShowUsers;
 pub use statement_truncate_table::DfTruncateTable;
 pub use statement_use_database::DfUseDatabase;
+pub use statement_create_udf::DfCreateUDF;
