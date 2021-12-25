@@ -13,14 +13,10 @@
 // limitations under the License.
 
 use std::env;
-use std::sync::Arc;
-use std::sync::Mutex;
 use std::sync::Once;
 
-use once_cell::sync::Lazy;
 use opentelemetry::global;
 use opentelemetry::sdk::propagation::TraceContextPropagator;
-use tracing::Subscriber;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::RollingFileAppender;
 use tracing_appender::rolling::Rotation;
@@ -32,30 +28,15 @@ use tracing_subscriber::prelude::*;
 use tracing_subscriber::registry::Registry;
 use tracing_subscriber::EnvFilter;
 
-use crate::tracing::subscriber::DefaultGuard;
-
-/// Write logs to stdout.
-pub fn init_default_tracing(app_name: &str) {
-    static START: Once = Once::new();
-
-    START.call_once(|| {
-        init_tracing_stdout(app_name);
-    });
-}
-
 /// Init tracing for unittest.
 /// Write logs to file `unittest`.
 pub fn init_default_ut_tracing() {
     static START: Once = Once::new();
 
     START.call_once(|| {
-        let mut g = GLOBAL_UT_LOG_GUARD.as_ref().lock().unwrap();
-        *g = Some(init_global_tracing("unittest", "_logs", "DEBUG"));
+        let _ = init_global_tracing("unittest", "_logs", "DEBUG");
     });
 }
-
-static GLOBAL_UT_LOG_GUARD: Lazy<Arc<Mutex<Option<WorkerGuard>>>> =
-    Lazy::new(|| Arc::new(Mutex::new(None)));
 
 /// Init logging and tracing.
 ///
@@ -70,125 +51,65 @@ static GLOBAL_UT_LOG_GUARD: Lazy<Arc<Mutex<Option<WorkerGuard>>>> =
 ///   DATABEND_JAEGER=on RUST_LOG=trace OTEL_BSP_SCHEDULE_DELAY=1 cargo test
 ///
 // TODO(xp): use DATABEND_JAEGER to assign jaeger server address.
-fn init_tracing_stdout(app_name: &str) {
-    let fmt_layer = Layer::default()
-        .with_thread_ids(true)
-        .with_thread_names(false)
-        // .pretty()
-        .with_ansi(false)
-        .with_span_events(fmt::format::FmtSpan::FULL);
-
-    let subscriber = Registry::default()
-        .with(EnvFilter::from_default_env())
-        .with(fmt_layer)
-        .with(jaeger_layer(app_name));
-
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("error setting global tracing subscriber");
-}
-
-fn jaeger_layer<
-    S: tracing::Subscriber + for<'span> tracing_subscriber::registry::LookupSpan<'span>,
->(
-    service_name: &str,
-) -> Option<impl tracing_subscriber::layer::Layer<S>> {
-    let fuse_jaeger = env::var("DATABEND_JAEGER").unwrap_or_else(|_| "".to_string());
-
-    if !fuse_jaeger.is_empty() {
-        global::set_text_map_propagator(TraceContextPropagator::new());
-        let tracer = opentelemetry_jaeger::new_pipeline()
-            .with_service_name(service_name)
-            .install_batch(opentelemetry::runtime::Tokio)
-            .expect("install");
-
-        let ot_layer = tracing_opentelemetry::layer().with_tracer(tracer);
-        Some(ot_layer)
-    } else {
-        None
-    }
-}
-
-/// Write logs to file and rotation by HOUR.
-pub fn init_tracing_with_file(app_name: &str, dir: &str, level: &str) -> Vec<WorkerGuard> {
+pub fn init_global_tracing(app_name: &str, dir: &str, level: &str) -> Vec<WorkerGuard> {
     let mut guards = vec![];
 
+    // Stdout layer.
     let (stdout_writer, stdout_guard) = tracing_appender::non_blocking(std::io::stdout());
     let stdout_logging_layer = Layer::new().with_writer(stdout_writer);
     guards.push(stdout_guard);
 
-    let file_appender = RollingFileAppender::new(Rotation::HOURLY, dir, app_name);
-    let (file_writer, file_guard) = tracing_appender::non_blocking(file_appender);
+    // JSON log layer.
+    let rolling_appender = RollingFileAppender::new(Rotation::HOURLY, dir, app_name);
+    let (rolling_writer, rolling_writer_guard) = tracing_appender::non_blocking(rolling_appender);
+    let file_logging_layer = BunyanFormattingLayer::new(app_name.to_string(), rolling_writer);
+    guards.push(rolling_writer_guard);
 
-    let file_logging_layer = BunyanFormattingLayer::new(app_name.to_string(), file_writer);
-    guards.push(file_guard);
+    // Span layer.
+    let mut file_span_layer = None;
+    let mut jaeger_layer = None;
+    let fuse_jaeger_env = env::var("DATABEND_JAEGER").unwrap_or_else(|_| "".to_string());
+    if !fuse_jaeger_env.is_empty() {
+        {
+            let span_dir = format!("{}_span", dir);
+            let span_rolling_appender =
+                RollingFileAppender::new(Rotation::HOURLY, span_dir, app_name);
+            let (span_rolling_writer, span_rolling_writer_guard) =
+                tracing_appender::non_blocking(span_rolling_appender);
+            file_span_layer = Some(
+                Layer::new()
+                    .with_writer(span_rolling_writer)
+                    .with_thread_ids(true)
+                    .with_thread_names(false)
+                    .with_ansi(false)
+                    .with_span_events(fmt::format::FmtSpan::FULL),
+            );
+            guards.push(span_rolling_writer_guard);
+        }
 
-    let subscriber = Registry::default()
-        .with(EnvFilter::new(level))
-        .with(stdout_logging_layer)
-        .with(JsonStorageLayer)
-        .with(file_logging_layer)
-        .with(jaeger_layer(app_name));
-
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("error setting global tracing subscriber");
-
-    guards
-}
-
-/// Creates a tracing/logging subscriber that is valid until the guards are dropped.
-/// The format layer logging span/event in plain text, without color, one event per line.
-/// This is useful in a unit test.
-pub fn init_tracing(app_name: &str, dir: &str, level: &str) -> (WorkerGuard, DefaultGuard) {
-    let (g, sub) = init_file_subscriber(app_name, dir, level);
-
-    let subs_guard = tracing::subscriber::set_default(sub);
-
-    tracing::info!("initialized tracing");
-    (g, subs_guard)
-}
-
-/// Creates a global tracing/logging subscriber which saves events in one log file.
-pub fn init_global_tracing(app_name: &str, dir: &str, level: &str) -> WorkerGuard {
-    let (g, sub) = init_file_subscriber(app_name, dir, level);
-    tracing::subscriber::set_global_default(sub).expect("error setting global tracing subscriber");
-
-    tracing::info!("initialized global tracing");
-    g
-}
-
-/// Create a file based tracing/logging subscriber.
-/// A guard must be held during using the logging.
-/// The format layer logging span/event in plain text, without color, one event per line.
-/// Optionally it adds a layer to send to opentelemetry if env var `DATABEND_JAEGER` is present.
-pub fn init_file_subscriber(
-    app_name: &str,
-    dir: &str,
-    level: &str,
-) -> (WorkerGuard, impl Subscriber) {
-    // open log file
-
-    let f = RollingFileAppender::new(Rotation::HOURLY, dir, app_name);
-
-    // build subscriber
-
-    let (writer, writer_guard) = tracing_appender::non_blocking(f);
-
-    let f_layer = Layer::new()
-        .with_writer(writer)
-        .with_thread_ids(true)
-        .with_thread_names(false)
-        .with_ansi(false)
-        .with_span_events(fmt::format::FmtSpan::FULL);
+        {
+            global::set_text_map_propagator(TraceContextPropagator::new());
+            let tracer = opentelemetry_jaeger::new_pipeline()
+                .with_service_name(app_name)
+                .install_batch(opentelemetry::runtime::Tokio)
+                .expect("install");
+            jaeger_layer = Some(tracing_opentelemetry::layer().with_tracer(tracer));
+        }
+    }
 
     // Use env RUST_LOG to initialize log if present.
     // Otherwise use the specified level.
     let directives = env::var(EnvFilter::DEFAULT_ENV).unwrap_or_else(|_x| level.to_string());
     let env_filter = EnvFilter::new(directives);
-
     let subscriber = Registry::default()
         .with(env_filter)
-        .with(f_layer)
-        .with(jaeger_layer(app_name));
+        .with(JsonStorageLayer)
+        .with(stdout_logging_layer)
+        .with(file_logging_layer)
+        .with(file_span_layer)
+        .with(jaeger_layer);
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("error setting global tracing subscriber");
 
-    (writer_guard, subscriber)
+    guards
 }
