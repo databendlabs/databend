@@ -14,6 +14,7 @@
 
 mod common;
 mod exec;
+pub mod expr_visitor;
 mod metrics;
 pub mod optimizer;
 pub mod parser;
@@ -25,6 +26,8 @@ mod sql_statement;
 pub mod statements;
 
 pub use common::*;
+pub use expr_visitor::ExprTraverser;
+pub use expr_visitor::ExprVisitor;
 pub use plan_parser::PlanParser;
 pub use planner::*;
 pub use sql_common::SQLCommon;
