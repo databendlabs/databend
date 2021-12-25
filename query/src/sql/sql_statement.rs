@@ -53,6 +53,7 @@ use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
 use crate::sql::statements::DfCreateUDF;
 use crate::sql::statements::DfDropUDF;
+use crate::sql::statements::DfShowUDF;
 
 /// Tokens parsed by `DFParser` are converted into these values.
 #[derive(Debug, Clone, PartialEq)]
@@ -120,6 +121,7 @@ pub enum DfStatement {
     // UDF
     CreateUDF(DfCreateUDF),
     DropUDF(DfDropUDF),
+    ShowUDF(DfShowUDF),
 }
 
 /// Comment hints from SQL.

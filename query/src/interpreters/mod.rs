@@ -46,6 +46,7 @@ mod interpreter_user_drop;
 mod plan_schedulers;
 mod interpreter_udf_create;
 mod interpreter_udf_drop;
+mod interpreter_udf_show;
 
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
@@ -81,3 +82,4 @@ pub use interpreter_user_drop::DropUserInterpreter;
 pub use plan_schedulers::PlanScheduler;
 pub use interpreter_udf_create::CreatUDFInterpreter;
 pub use interpreter_udf_drop::DropUDFInterpreter;
+pub use interpreter_udf_show::ShowUDFInterpreter;
