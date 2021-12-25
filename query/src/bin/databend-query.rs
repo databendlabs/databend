@@ -18,7 +18,7 @@ use common_base::RuntimeTracker;
 use common_macros::databend_main;
 use common_meta_embedded::MetaEmbedded;
 use common_metrics::init_default_metrics_recorder;
-use common_tracing::init_global_tracing;
+use common_tracing::init_tracing_with_file;
 use common_tracing::set_panic_hook;
 use common_tracing::tracing;
 use databend_query::api::HttpService;
@@ -57,8 +57,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         "databend-query-{}@{}:{}",
         conf.query.cluster_id, conf.query.mysql_handler_host, conf.query.mysql_handler_port
     );
-    //let _guards = init_tracing_with_file(
-    let _guards = init_global_tracing(
+    let _guards = init_tracing_with_file(
         app_name.as_str(),
         conf.log.log_dir.as_str(),
         conf.log.log_level.as_str(),
