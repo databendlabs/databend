@@ -15,8 +15,8 @@
 use common_base::tokio;
 use common_exception::Result;
 use common_planners::*;
-use databend_query::sql::*;
 use databend_query::interpreters::*;
+use databend_query::sql::*;
 use futures::stream::StreamExt;
 use futures::TryStreamExt;
 use pretty_assertions::assert_eq;
@@ -27,7 +27,8 @@ use crate::tests::parse_query;
 async fn test_show_create_udf_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
-    static CREATE_UDF: &str = "CREATE FUNCTION IF NOT EXISTS isnotnull='not(isnull(@0))' desc='This is a description'";
+    static CREATE_UDF: &str =
+        "CREATE FUNCTION IF NOT EXISTS isnotnull='not(isnull(@0))' desc='This is a description'";
 
     if let PlanNode::CreateUDF(plan) = PlanParser::parse(CREATE_UDF, ctx.clone()).await? {
         let executor = CreatUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
@@ -47,9 +48,7 @@ async fn test_show_create_udf_interpreter() -> Result<()> {
         panic!()
     }
 
-    if let PlanNode::ShowUDF(plan) =
-        parse_query("show function isnotnull", &ctx)?
-    {
+    if let PlanNode::ShowUDF(plan) = parse_query("show function isnotnull", &ctx)? {
         let executor = ShowUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowUDFInterpreter");
         let stream = executor.execute(None).await?;

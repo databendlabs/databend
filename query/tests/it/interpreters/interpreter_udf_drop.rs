@@ -26,7 +26,8 @@ async fn test_drop_udf_interpreter() -> Result<()> {
 
     let ctx = crate::tests::create_query_context()?;
 
-    static CREATE_UDF: &str = "CREATE FUNCTION IF NOT EXISTS isnotnull='not(isnull(@0))' desc='This is a description'";
+    static CREATE_UDF: &str =
+        "CREATE FUNCTION IF NOT EXISTS isnotnull='not(isnull(@0))' desc='This is a description'";
 
     static DROP_UDF_IF_EXISTS: &str = "DROP FUNCTION IF EXISTS isnotnull";
     static DROP_UDF: &str = "DROP FUNCTION isnotnull";
@@ -58,9 +59,7 @@ async fn test_drop_udf_interpreter() -> Result<()> {
         panic!()
     }
 
-    if let PlanNode::DropUDF(plan) =
-        PlanParser::parse(DROP_UDF_IF_EXISTS, ctx.clone()).await?
-    {
+    if let PlanNode::DropUDF(plan) = PlanParser::parse(DROP_UDF_IF_EXISTS, ctx.clone()).await? {
         let executor = DropUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropUDFInterpreter");
         let res = executor.execute(None).await;
@@ -96,9 +95,7 @@ async fn test_drop_udf_interpreter() -> Result<()> {
         panic!()
     }
 
-    if let PlanNode::DropUDF(plan) =
-        PlanParser::parse(DROP_UDF_IF_EXISTS, ctx.clone()).await?
-    {
+    if let PlanNode::DropUDF(plan) = PlanParser::parse(DROP_UDF_IF_EXISTS, ctx.clone()).await? {
         let executor = DropUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "DropUDFInterpreter");
         let res = executor.execute(None).await;

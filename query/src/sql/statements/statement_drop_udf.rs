@@ -33,11 +33,11 @@ pub struct DfDropUDF {
 impl AnalyzableStatement for DfDropUDF {
     #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        Ok(AnalyzedResult::SimpleQuery(Box::new(
-            PlanNode::DropUDF(DropUDFPlan {
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::DropUDF(
+            DropUDFPlan {
                 if_exists: self.if_exists,
                 name: self.udf_name.clone(),
-            }),
-        )))
+            },
+        ))))
     }
 }

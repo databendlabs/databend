@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_planners::ShowUDFPlan;
 use common_planners::PlanNode;
+use common_planners::ShowUDFPlan;
 use common_tracing::tracing;
 
 use crate::sessions::QueryContext;
@@ -32,10 +32,10 @@ pub struct DfShowUDF {
 impl AnalyzableStatement for DfShowUDF {
     #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
-        Ok(AnalyzedResult::SimpleQuery(Box::new(
-            PlanNode::ShowUDF(ShowUDFPlan {
+        Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::ShowUDF(
+            ShowUDFPlan {
                 name: self.udf_name.clone(),
-            }),
-        )))
+            },
+        ))))
     }
 }
