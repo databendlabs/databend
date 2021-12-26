@@ -42,7 +42,7 @@ impl MergeProcessor {
         }
     }
 
-    #[tracing::instrument(level = "info", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     pub fn merge(&self) -> Result<SendableDataBlockStream> {
         let len = self.inputs.len();
         if len == 0 {
@@ -112,7 +112,7 @@ impl Processor for MergeProcessor {
         self
     }
 
-    #[tracing::instrument(level = "info", name="merge_processor_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", name="merge_processor_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         match self.inputs.len() {
             1 => self.inputs[0].execute().await,

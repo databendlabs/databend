@@ -55,7 +55,7 @@ impl Interpreter for SelectInterpreter {
         self.select.schema()
     }
 
-    #[tracing::instrument(level = "info", name="select_interpreter_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", name="select_interpreter_execute", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,

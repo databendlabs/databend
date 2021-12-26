@@ -58,7 +58,7 @@ pub struct DfQueryStatement {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfQueryStatement {
-    #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let analyzer = JoinedSchemaAnalyzer::create(ctx.clone());
         let mut joined_schema = analyzer.analyze(self).await?;
