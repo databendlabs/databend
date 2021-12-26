@@ -154,7 +154,7 @@ Jun 10 16:40:36.168 DEBUG ThreadId(309) databend_query::pipelines::transforms::t
 
 ### Start Databend
 ```
-QUERY_LOG_LEVEL="DEBUG" ./databend-query
+LOG_LEVEL="DEBUG" ./databend-query
 ```
 
 ###  Start jaeger
