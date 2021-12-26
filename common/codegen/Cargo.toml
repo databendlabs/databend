@@ -6,5 +6,9 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
+[[bin]]
+name = "codegen"
+path = "src/bin/codegen.rs"
+
 [dependencies]
 common-datavalues = {path = "../datavalues"}
