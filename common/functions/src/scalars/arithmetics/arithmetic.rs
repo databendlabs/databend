@@ -52,7 +52,7 @@ impl ArithmeticFunction {
         factory.register_arithmetic("divide", ArithmeticDivFunction::desc());
         factory.register("%", ArithmeticModuloFunction::desc());
         factory.register("modulo", ArithmeticModuloFunction::desc());
-        factory.register("div", ArithmeticIntDivFunction::desc());
+        factory.register_arithmetic("div", ArithmeticIntDivFunction::desc());
     }
 
     pub fn try_create_func(op: DataValueArithmeticOperator) -> Result<Box<dyn Function>> {
@@ -115,7 +115,6 @@ impl Function for ArithmeticFunction {
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
         match self.op {
             Minus => ArithmeticMinusFunction::get_monotonicity(args),
-            IntDiv => ArithmeticIntDivFunction::get_monotonicity(args),
             Modulo => ArithmeticModuloFunction::get_monotonicity(args),
             _ => unimplemented!(),
         }

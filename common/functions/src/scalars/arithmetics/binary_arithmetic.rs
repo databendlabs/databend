@@ -25,6 +25,7 @@ use super::arithmetic::ArithmeticTrait;
 use crate::scalars::ArithmeticDivFunction;
 use crate::scalars::ArithmeticMulFunction;
 use crate::scalars::ArithmeticPlusFunction;
+use crate::scalars::ArithmeticIntDivFunction;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
 
@@ -75,6 +76,7 @@ where T: ArithmeticTrait + Clone + Sync + Send + 'static
             Plus => ArithmeticPlusFunction::get_monotonicity(args),
             Mul => ArithmeticMulFunction::get_monotonicity(args),
             Div => ArithmeticDivFunction::get_monotonicity(args),
+            IntDiv => ArithmeticIntDivFunction::get_monotonicity(args),
             _ => unimplemented!(),
         }
     }
