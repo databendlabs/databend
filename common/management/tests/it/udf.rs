@@ -105,7 +105,7 @@ async fn test_unknown_udf_drop_udf() -> Result<()> {
 }
 
 fn create_test_udf() -> UserDefinedFunction {
-    UserDefinedFunction::new("isnotempty", "not(isnull(@1))", "This is a description")
+    UserDefinedFunction::new("isnotempty", "not(isnull(@0))", "This is a description")
 }
 
 async fn new_udf_api() -> Result<(Arc<MetaEmbedded>, UdfMgr)> {

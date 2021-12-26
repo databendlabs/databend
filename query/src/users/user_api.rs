@@ -22,6 +22,7 @@ use common_management::UdfMgrApi;
 use common_management::UserMgr;
 use common_management::UserMgrApi;
 use common_meta_api::KVApi;
+use common_functions::udfs::UDFFactory;
 
 use crate::common::MetaClientProvider;
 use crate::configs::Config;
@@ -64,5 +65,15 @@ impl UserApiProvider {
 
     pub fn get_udf_api_client(&self) -> Arc<dyn UdfMgrApi> {
         self.udf_api_provider.clone()
+    }
+
+    pub async fn load_udfs(&self, cfg: Config) -> Result<()> {
+        let udfs = self.get_udf_api_client().get_udfs().await?;
+
+        for udf in udfs.iter() {
+            UDFFactory::register(&cfg.query.tenant_id, udf.name.as_str(), udf.definition.as_str())?;
+        }
+
+        Ok(())
     }
 }

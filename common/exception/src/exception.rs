@@ -288,6 +288,7 @@ build_exceptions! {
     UnknownUDF(4071),
     UDFAlreadyExists(4072),
     IllegalUDFParams(4073),
+    RegisterUDFError(4074),
 
     // storage-api error codes
     ReadFileError(5001),

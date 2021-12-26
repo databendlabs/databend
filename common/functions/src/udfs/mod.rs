@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod udf_factory;
 mod udf_parser;
 
+pub use udf_factory::UDFFactory;
 pub use udf_parser::UDFParser;
