@@ -17,6 +17,7 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use bincode::Options;
 use bytes::BytesMut;
 use common_datavalues::prelude::*;
 use common_datavalues::DFTryFrom;
@@ -53,12 +54,20 @@ where
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
         let writer = BufMut::writer(writer);
-        bincode::serialize_into(writer, &self.value)?;
+        bincode::DefaultOptions::new()
+            .with_fixint_encoding()
+            .with_varint_length_offset_encoding()
+            .serialize_into(writer, &self.value)?;
+
         Ok(())
     }
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.value = bincode::deserialize_from(reader)?;
+        self.value = bincode::DefaultOptions::new()
+            .with_fixint_encoding()
+            .with_varint_length_offset_encoding()
+            .deserialize_from(reader)?;
+
         Ok(())
     }
 }
