@@ -14,10 +14,7 @@
 
 use std::marker::PhantomData;
 use std::ops::Add;
-use std::ops::Div;
 use std::ops::Mul;
-use std::ops::Neg;
-use std::ops::Rem;
 use std::ops::Sub;
 
 use common_datavalues::prelude::*;
@@ -30,20 +27,16 @@ use num_traits::WrappingMul;
 use num_traits::WrappingSub;
 
 use super::arithmetic::ArithmeticTrait;
+use super::result_type::ResultTypeOfArithmetic;
 use crate::binary_arithmetic;
 use crate::binary_arithmetic_helper;
 use crate::impl_arithmetic;
-use crate::impl_try_create_func;
 use crate::impl_wrapping_arithmetic;
 use crate::scalars::function_factory::ArithmeticDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
-use crate::with_match_integer_16;
-use crate::with_match_integer_32;
-use crate::with_match_integer_64;
-use crate::with_match_integer_8;
 use crate::with_match_primitive_type;
 
 impl_wrapping_arithmetic!(ArithmeticWrappingMul, wrapping_mul);
@@ -53,16 +46,45 @@ impl_arithmetic!(ArithmeticMul, *);
 pub struct ArithmeticMulFunction;
 
 impl ArithmeticMulFunction {
-    pub fn try_create_func(
-        _display_name: &str,
-        arguments: Vec<DataField>,
-    ) -> Result<Box<dyn Function>> {
-        let left_type = arguments[0].data_type();
-        let right_type = arguments[1].data_type();
+    pub fn try_create_func(_display_name: &str, args: &[DataType]) -> Result<Box<dyn Function>> {
+        let left_type = &args[0];
+        let right_type = &args[1];
+        let op = DataValueArithmeticOperator::Mul;
 
-        let has_signed = left_type.is_signed_numeric() || right_type.is_signed_numeric();
+        let error_fn = || -> Result<Box<dyn Function>> {
+            Err(ErrorCode::BadDataValueType(format!(
+                "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
+                left_type, op, right_type
+            )))
+        };
 
-        impl_try_create_func! {left_type, right_type, DataValueArithmeticOperator::Mul, has_signed, ArithmeticMul, ArithmeticWrappingMul}
+        if !left_type.is_numeric() || !right_type.is_numeric() {
+            return error_fn();
+        };
+
+        with_match_primitive_type!(left_type, |$T| {
+            with_match_primitive_type!(right_type, |$D| {
+                let result_type = <($T, $D) as ResultTypeOfArithmetic>::AddMul::data_type();
+                match result_type {
+                    DataType::UInt64 => BinaryArithmeticFunction::<ArithmeticWrappingMul<$T, $D, u64>>::try_create_func(
+                        op,
+                        result_type,
+                    ),
+                    DataType::Int64 => BinaryArithmeticFunction::<ArithmeticWrappingMul<$T, $D, i64>>::try_create_func(
+                        op,
+                        result_type,
+                    ),
+                    _ => BinaryArithmeticFunction::<ArithmeticMul<$T, $D, <($T, $D) as ResultTypeOfArithmetic>::AddMul>>::try_create_func(
+                        op,
+                        result_type,
+                    ),
+                }
+            }, {
+                error_fn()
+            })
+        }, {
+            error_fn()
+        })
     }
 
     pub fn desc() -> ArithmeticDescription {

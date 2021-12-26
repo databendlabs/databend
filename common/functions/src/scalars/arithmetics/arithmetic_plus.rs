@@ -14,10 +14,7 @@
 
 use std::marker::PhantomData;
 use std::ops::Add;
-use std::ops::Div;
 use std::ops::Mul;
-use std::ops::Neg;
-use std::ops::Rem;
 use std::ops::Sub;
 
 use common_datavalues::prelude::*;

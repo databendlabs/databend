@@ -115,7 +115,6 @@ impl Function for ArithmeticFunction {
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
         match self.op {
             Minus => ArithmeticMinusFunction::get_monotonicity(args),
-
             IntDiv => ArithmeticIntDivFunction::get_monotonicity(args),
             Modulo => ArithmeticModuloFunction::get_monotonicity(args),
             _ => unimplemented!(),

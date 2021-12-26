@@ -31,7 +31,6 @@ fn test_arithmetic_function() -> Result<()> {
                 DataTypeAndNullable::create(&DataType::Int64, false),
                 DataTypeAndNullable::create(&DataType::Int64, false),
             ])?,
-<<<<<<< HEAD
             ScalarFunctionTest {
                 name: "add-int64-passed",
                 nullable: false,
@@ -123,44 +122,6 @@ fn test_arithmetic_function() -> Result<()> {
                 error: "",
             },
         ),
-=======
-            columns: vec![
-                Series::new(vec![4i64, 3, 2]).into(),
-                Series::new(vec![1i64, 2, 3]).into(),
-            ],
-            expect: Series::new(vec![4i64, 6, 6]).into(),
-            error: "",
-        },
-        Test {
-            name: "div-int64-passed",
-            display: "divide",
-            arg_names: vec!["a", "b"],
-            nullable: false,
-            func: ArithmeticDivFunction::try_create_func("", vec![
-                DataField::new("a", DataType::Int64, false),
-                DataField::new("b", DataType::Int64, false),
-            ])?,
-            columns: vec![
-                Series::new(vec![4i64, 3, 2]).into(),
-                Series::new(vec![1i64, 2, 3]).into(),
-            ],
-            expect: Series::new(vec![4.0, 1.5, 0.6666666666666666]).into(),
-            error: "",
-        },
-        Test {
-            name: "mod-int64-passed",
-            display: "modulo",
-            arg_names: vec!["a", "b"],
-            nullable: false,
-            func: ArithmeticModuloFunction::try_create_func("")?,
-            columns: vec![
-                Series::new(vec![4i64, 3, 2]).into(),
-                Series::new(vec![1i64, 2, 3]).into(),
-            ],
-            expect: Series::new(vec![0i64, 1, 2]).into(),
-            error: "",
-        },
->>>>>>> b4608b3c0 (Refactor arithmetics div function)
     ];
 
     for (test_function, test) in tests {

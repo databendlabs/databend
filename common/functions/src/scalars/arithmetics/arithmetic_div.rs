@@ -55,22 +55,20 @@ where
 pub struct ArithmeticDivFunction;
 
 impl ArithmeticDivFunction {
-    pub fn try_create_func(
-        _display_name: &str,
-        arguments: Vec<DataField>,
-    ) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(_display_name: &str, args: &[DataType]) -> Result<Box<dyn Function>> {
+        let left_type = &args[0];
+        let right_type = &args[1];
         let op = DataValueArithmeticOperator::Div;
-        let left_type = arguments[0].data_type();
-        let right_type = arguments[1].data_type();
-
-        let e = Result::Err(ErrorCode::BadDataValueType(format!(
-            "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
-            left_type, op, right_type
-        )));
+        let error_fn = || -> Result<Box<dyn Function>> {
+            Err(ErrorCode::BadDataValueType(format!(
+                "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
+                left_type, op, right_type
+            )))
+        };
 
         // error on any non-numeric type
         if !left_type.is_numeric() || !right_type.is_numeric() {
-            return e;
+            return error_fn();
         };
 
         with_match_primitive_type!(left_type, |$T| {
@@ -79,8 +77,12 @@ impl ArithmeticDivFunction {
                     op,
                     DataType::Float64,
                 )
-            }, e)
-        }, e)
+            }, {
+                error_fn()
+            })
+        }, {
+            error_fn()
+        })
     }
 
     pub fn desc() -> ArithmeticDescription {
