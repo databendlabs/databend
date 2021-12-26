@@ -18,7 +18,7 @@ use std::path::Path;
 
 use common_datavalues::prelude::*;
 
-fn main() {
+fn write_arithmetic_result_type() {
     use DataType::*;
     use DataValueArithmeticOperator::*;
 
@@ -60,12 +60,12 @@ pub trait ResultTypeOfArithmetic {{
         UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64, Float32, Float64,
     ];
     let rhs = lhs.clone();
-    for i in 0..lhs.len() {
-        for j in 0..rhs.len() {
-            let add_mul = numerical_arithmetic_coercion(&Plus, &lhs[i], &rhs[j]).unwrap();
-            let minus = numerical_arithmetic_coercion(&Minus, &lhs[i], &rhs[j]).unwrap();
-            let int_div = numerical_arithmetic_coercion(&IntDiv, &lhs[i], &rhs[j]).unwrap();
-            let modulo = numerical_arithmetic_coercion(&Modulo, &lhs[i], &rhs[j]).unwrap();
+    for left in &lhs {
+        for right in &rhs {
+            let add_mul = numerical_arithmetic_coercion(&Plus, left, right).unwrap();
+            let minus = numerical_arithmetic_coercion(&Minus, left, right).unwrap();
+            let int_div = numerical_arithmetic_coercion(&IntDiv, left, right).unwrap();
+            let modulo = numerical_arithmetic_coercion(&Modulo, left, right).unwrap();
             writeln!(
                 file,
                 "
@@ -75,8 +75,8 @@ impl ResultTypeOfArithmetic for ({}, {}) {{
     type IntDiv = {};
     type Modulo = {};
 }}",
-                to_primitive_str(&lhs[i]),
-                to_primitive_str(&rhs[j]),
+                to_primitive_str(left),
+                to_primitive_str(right),
                 to_primitive_str(&add_mul),
                 to_primitive_str(&minus),
                 to_primitive_str(&int_div),
@@ -103,4 +103,8 @@ fn to_primitive_str(dt: &DataType) -> &str {
         Float64 => "f64",
         _ => panic!("unsupported data type"),
     }
+}
+
+fn main() {
+    write_arithmetic_result_type();
 }

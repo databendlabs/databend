@@ -57,13 +57,15 @@ impl ArithmeticPlusFunction {
             return Self::try_create_datetime(left_type, right_type);
         }
 
-        let e = Result::Err(ErrorCode::BadDataValueType(format!(
-            "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
-            left_type, op, right_type
-        )));
+        let error_fn = || -> Result<Box<dyn Function>> {
+            Err(ErrorCode::BadDataValueType(format!(
+                "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
+                left_type, op, right_type
+            )))
+        };
 
         if !left_type.is_numeric() || !right_type.is_numeric() {
-            return e;
+            return error_fn();
         };
 
         with_match_primitive_type!(left_type, |$T| {
@@ -83,23 +85,25 @@ impl ArithmeticPlusFunction {
                         result_type,
                     ),
                 }
-            }, e)
-        }, e)
+            }, {
+                error_fn()
+            })
+        }, {
+            error_fn()
+        })
     }
 
     fn try_create_interval(lhs_type: &DataType, rhs_type: &DataType) -> Result<Box<dyn Function>> {
         let op = DataValueArithmeticOperator::Plus;
-        let e = Result::Err(ErrorCode::BadDataValueType(format!(
-            "DataValue Error: Unsupported date coercion ({:?}) {} ({:?})",
-            lhs_type, op, rhs_type
-        )));
-
         let (interval, result_type) = if rhs_type.is_date_or_date_time() && lhs_type.is_interval() {
             (lhs_type, rhs_type)
         } else if lhs_type.is_date_or_date_time() && rhs_type.is_interval() {
             (rhs_type, lhs_type)
         } else {
-            return e;
+            return Err(ErrorCode::BadDataValueType(format!(
+                "DataValue Error: Unsupported date coercion ({:?}) {} ({:?})",
+                lhs_type, op, rhs_type
+            )));
         };
 
         match interval {
