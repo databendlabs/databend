@@ -25,7 +25,6 @@ use tracing_appender::rolling::RollingFileAppender;
 use tracing_appender::rolling::Rotation;
 use tracing_bunyan_formatter::BunyanFormattingLayer;
 use tracing_bunyan_formatter::JsonStorageLayer;
-use tracing_subscriber::fmt;
 use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::registry::Registry;
@@ -72,37 +71,13 @@ pub fn init_global_tracing(app_name: &str, dir: &str, level: &str) -> Vec<Worker
     let file_logging_layer = BunyanFormattingLayer::new(app_name.to_string(), rolling_writer);
     guards.push(rolling_writer_guard);
 
-    // Span layer.
-    let mut file_span_layer = None;
-    let mut jaeger_layer = None;
-    let fuse_jaeger_env = env::var("DATABEND_JAEGER").unwrap_or_else(|_| "".to_string());
-    if !fuse_jaeger_env.is_empty() {
-        {
-            let span_dir = format!("{}_span", dir);
-            let span_rolling_appender =
-                RollingFileAppender::new(Rotation::HOURLY, span_dir, app_name);
-            let (span_rolling_writer, span_rolling_writer_guard) =
-                tracing_appender::non_blocking(span_rolling_appender);
-            file_span_layer = Some(
-                Layer::new()
-                    .with_writer(span_rolling_writer)
-                    .with_thread_ids(true)
-                    .with_thread_names(false)
-                    .with_ansi(false)
-                    .with_span_events(fmt::format::FmtSpan::FULL),
-            );
-            guards.push(span_rolling_writer_guard);
-        }
-
-        {
-            global::set_text_map_propagator(TraceContextPropagator::new());
-            let tracer = opentelemetry_jaeger::new_pipeline()
-                .with_service_name(app_name)
-                .install_batch(opentelemetry::runtime::Tokio)
-                .expect("install");
-            jaeger_layer = Some(tracing_opentelemetry::layer().with_tracer(tracer));
-        }
-    }
+    // Jaeger layer.
+    global::set_text_map_propagator(TraceContextPropagator::new());
+    let tracer = opentelemetry_jaeger::new_pipeline()
+        .with_service_name(app_name)
+        .install_batch(opentelemetry::runtime::Tokio)
+        .expect("install");
+    let jaeger_layer = Some(tracing_opentelemetry::layer().with_tracer(tracer));
 
     // Use env RUST_LOG to initialize log if present.
     // Otherwise use the specified level.
@@ -113,7 +88,6 @@ pub fn init_global_tracing(app_name: &str, dir: &str, level: &str) -> Vec<Worker
         .with(JsonStorageLayer)
         .with(stdout_logging_layer)
         .with(file_logging_layer)
-        .with(file_span_layer)
         .with(jaeger_layer);
     tracing::subscriber::set_global_default(subscriber)
         .expect("error setting global tracing subscriber");
