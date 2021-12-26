@@ -80,7 +80,7 @@ impl Processor for RemoteTransform {
         self
     }
 
-    #[tracing::instrument(level = "info", name = "remote_execute", skip(self))]
+    #[tracing::instrument(level = "debug", name = "remote_execute", skip(self))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!(
             "execute, flight_ticket {:?}, node name:{:#}...",

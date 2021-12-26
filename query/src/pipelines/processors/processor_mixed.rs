@@ -133,7 +133,7 @@ impl Processor for MixedProcessor {
         self
     }
 
-    #[tracing::instrument(level = "info", name = "mixed_processor_execute", skip(self))]
+    #[tracing::instrument(level = "debug", name = "mixed_processor_execute", skip(self))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let receiver = {
             let mut worker = self.worker.write();

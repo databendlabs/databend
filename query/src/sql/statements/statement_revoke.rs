@@ -35,7 +35,7 @@ pub struct DfRevokeStatement {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfRevokeStatement {
-    #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let grant_object = self.on.convert_to_grant_object(ctx);
 
