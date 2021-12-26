@@ -11,7 +11,7 @@ Databend default log level is `INFO`.
 ## Enable Tracing
 
 ```
-QUERY_LOG_LEVEL="DEBUG" ./databend-query
+LOG_LEVEL=DEBUG ./databend-query
 ```
 
 If we want to track the execution of a query:
@@ -154,12 +154,12 @@ Jun 10 16:40:36.168 DEBUG ThreadId(309) databend_query::pipelines::transforms::t
 
 ### Start Databend
 ```
-LOG_LEVEL="DEBUG" ./databend-query
+LOG_LEVEL=DEBUG ./databend-query
 ```
 
 ###  Start jaeger
 ```
-docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest"
+docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest
 ```
 ### Create table and init datas
 ```
