@@ -25,19 +25,19 @@ async fn test_user_udf() -> Result<()> {
     config.query.tenant_id = "tenant1".to_string();
 
     let description = "this is a description";
-    let isnotnull = "isnotnull";
+    let isempty = "isempty";
     let isnotempty = "isnotempty";
     let user_mgr = UserApiProvider::create_global(config).await?;
 
-    // add isnotnull.
+    // add isempty.
     {
-        let udf = UserDefinedFunction::new(isnotnull, "not(isnull(@1))", description);
+        let udf = UserDefinedFunction::new(isempty, "isnull(@0)", description);
         user_mgr.add_udf(udf).await?;
     }
 
     // add isnotempty.
     {
-        let udf = UserDefinedFunction::new(isnotempty, "not(isempty(@1))", description);
+        let udf = UserDefinedFunction::new(isnotempty, "not(isempty(@0))", description);
         user_mgr.add_udf(udf).await?;
     }
 
@@ -46,13 +46,13 @@ async fn test_user_udf() -> Result<()> {
         let udfs = user_mgr.get_udfs().await?;
         assert_eq!(2, udfs.len());
         assert_eq!(isnotempty, udfs[0].name);
-        assert_eq!(isnotnull, udfs[1].name);
+        assert_eq!(isempty, udfs[1].name);
     }
 
     // get.
     {
-        let udf = user_mgr.get_udf(isnotnull).await?;
-        assert_eq!(isnotnull, udf.name);
+        let udf = user_mgr.get_udf(isempty).await?;
+        assert_eq!(isempty, udf.name);
     }
 
     // drop.
@@ -60,7 +60,7 @@ async fn test_user_udf() -> Result<()> {
         user_mgr.drop_udf(isnotempty, false).await?;
         let udfs = user_mgr.get_udfs().await?;
         assert_eq!(1, udfs.len());
-        assert_eq!(isnotnull, udfs[0].name);
+        assert_eq!(isempty, udfs[0].name);
     }
 
     // repeat drop same one not with if exist.

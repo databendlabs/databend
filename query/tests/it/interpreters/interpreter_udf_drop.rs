@@ -27,10 +27,10 @@ async fn test_drop_udf_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
     static CREATE_UDF: &str =
-        "CREATE FUNCTION IF NOT EXISTS isnotnull='not(isnull(@0))' desc='This is a description'";
+        "CREATE FUNCTION IF NOT EXISTS isnotempty='not(isnull(@0))' desc='This is a description'";
 
-    static DROP_UDF_IF_EXISTS: &str = "DROP FUNCTION IF EXISTS isnotnull";
-    static DROP_UDF: &str = "DROP FUNCTION isnotnull";
+    static DROP_UDF_IF_EXISTS: &str = "DROP FUNCTION IF EXISTS isnotempty";
+    static DROP_UDF: &str = "DROP FUNCTION isnotempty";
 
     if let PlanNode::CreateUDF(plan) = PlanParser::parse(CREATE_UDF, ctx.clone()).await? {
         let executor = CreatUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
@@ -40,10 +40,10 @@ async fn test_drop_udf_interpreter() -> Result<()> {
         let udf = ctx
             .get_sessions_manager()
             .get_user_manager()
-            .get_udf("isnotnull")
+            .get_udf("isnotempty")
             .await?;
 
-        assert_eq!(udf.name, "isnotnull");
+        assert_eq!(udf.name, "isnotempty");
         assert_eq!(udf.definition, "not(isnull(@0))");
         assert_eq!(udf.description, "This is a description")
     } else {
@@ -85,10 +85,10 @@ async fn test_drop_udf_interpreter() -> Result<()> {
         let udf = ctx
             .get_sessions_manager()
             .get_user_manager()
-            .get_udf("isnotnull")
+            .get_udf("isnotempty")
             .await?;
 
-        assert_eq!(udf.name, "isnotnull");
+        assert_eq!(udf.name, "isnotempty");
         assert_eq!(udf.definition, "not(isnull(@0))");
         assert_eq!(udf.description, "This is a description")
     } else {
