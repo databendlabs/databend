@@ -36,6 +36,7 @@ else
 fi
 
 export RUST_LOG=${RUST_LOG}${TRACE_RPC}${TRACE_PARQUET_READER}
+export LOG_LEVEL=${RUST_LOG}${TRACE_RPC}${TRACE_PARQUET_READER}
 echo ""
 echo "envs:"
 echo "*** RUST_LOG=$RUST_LOG"
