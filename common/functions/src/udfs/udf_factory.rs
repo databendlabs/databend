@@ -21,6 +21,8 @@ use once_cell::sync::Lazy;
 use sqlparser::ast::Expr;
 
 use super::UDFParser;
+use crate::aggregates::AggregateFunctionFactory;
+use crate::scalars::FunctionFactory;
 
 #[derive(Default)]
 pub struct UDFFactory {
@@ -31,6 +33,13 @@ static UDF_FACTORY: Lazy<Mutex<UDFFactory>> = Lazy::new(|| Mutex::new(UDFFactory
 
 impl UDFFactory {
     pub fn register(tenant: &str, name: &str, definition: &str) -> Result<()> {
+        if UDFFactory::is_builtin_function(name) {
+            return Err(ErrorCode::RegisterUDFError(format!(
+                "Can not register builtin functions: {} - {}",
+                name, definition
+            )));
+        }
+
         match UDF_FACTORY.lock() {
             Ok(mut factory) => {
                 let mut udf_parser = UDFParser::default();
@@ -77,6 +86,10 @@ impl UDFFactory {
                 name, lock_error
             ))),
         }
+    }
+
+    fn is_builtin_function(name: &str) -> bool {
+        FunctionFactory::instance().check(name) || AggregateFunctionFactory::instance().check(name)
     }
 
     fn get_udf_key(tenant: &str, name: &str) -> String {
