@@ -22,6 +22,7 @@ mod arithmetic_plus;
 mod binary_arithmetic;
 mod interval;
 mod macros;
+mod result_type;
 mod utils;
 
 pub use arithmetic::ArithmeticFunction;
