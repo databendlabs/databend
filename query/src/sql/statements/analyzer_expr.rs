@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::udfs::UDFTransformer;
 use common_planners::Expression;
 use common_sql::expr::ExprTraverser;
 use common_sql::expr::ExprVisitor;
@@ -49,7 +50,7 @@ impl ExpressionAnalyzer {
         let mut stack = Vec::new();
 
         // Build RPN for expr. because async function unsupported recursion
-        for rpn_item in &ExprRPNBuilder::build(expr)? {
+        for rpn_item in &ExprRPNBuilder::build(self.context.clone(), expr)? {
             match rpn_item {
                 ExprRPNItem::Value(v) => Self::analyze_value(v, &mut stack)?,
                 ExprRPNItem::Identifier(v) => self.analyze_identifier(v, &mut stack)?,
@@ -372,11 +373,15 @@ impl ExprRPNItem {
 
 struct ExprRPNBuilder {
     rpn: Vec<ExprRPNItem>,
+    context: Arc<QueryContext>,
 }
 
 impl ExprRPNBuilder {
-    pub fn build(expr: &Expr) -> Result<Vec<ExprRPNItem>> {
-        let mut builder = ExprRPNBuilder { rpn: Vec::new() };
+    pub fn build(context: Arc<QueryContext>, expr: &Expr) -> Result<Vec<ExprRPNItem>> {
+        let mut builder = ExprRPNBuilder {
+            context,
+            rpn: Vec::new(),
+        };
         ExprTraverser::accept(expr, &mut builder)?;
         Ok(builder.rpn)
     }
@@ -480,6 +485,19 @@ impl ExprRPNBuilder {
 }
 
 impl ExprVisitor for ExprRPNBuilder {
+    fn pre_visit(&mut self, expr: &Expr) -> Result<Expr> {
+        if let Expr::Function(function) = expr {
+            if let Some(transformed_expr) = UDFTransformer::transform_function(
+                self.context.get_config().query.tenant_id.as_str(),
+                function,
+            ) {
+                return Ok(transformed_expr);
+            }
+        }
+
+        Ok(expr.clone())
+    }
+
     fn post_visit(&mut self, expr: &Expr) -> Result<()> {
         self.process_expr(expr)
     }

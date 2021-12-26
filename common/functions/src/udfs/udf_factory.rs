@@ -63,6 +63,22 @@ impl UDFFactory {
         }
     }
 
+    pub fn get_definition(tenant: &str, name: &str) -> Result<Option<Expr>> {
+        match UDF_FACTORY.lock() {
+            Ok(factory) => match factory
+                .definitions
+                .get(&UDFFactory::get_udf_key(tenant, name))
+            {
+                Some(expr) => Ok(Some(expr.clone())),
+                None => Ok(None),
+            },
+            Err(lock_error) => Err(ErrorCode::UnknownUDF(format!(
+                "Can not get UDF: {}, error: {:?}",
+                name, lock_error
+            ))),
+        }
+    }
+
     fn get_udf_key(tenant: &str, name: &str) -> String {
         format!("{}/{}", tenant, name.to_lowercase())
     }

@@ -14,6 +14,8 @@
 
 mod udf_factory;
 mod udf_parser;
+mod udf_transformer;
 
 pub use udf_factory::UDFFactory;
 pub use udf_parser::UDFParser;
+pub use udf_transformer::UDFTransformer;

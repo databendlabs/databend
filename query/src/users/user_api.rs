@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_functions::udfs::UDFFactory;
 use common_management::StageMgr;
 use common_management::StageMgrApi;
 use common_management::UdfMgr;
@@ -22,7 +23,6 @@ use common_management::UdfMgrApi;
 use common_management::UserMgr;
 use common_management::UserMgrApi;
 use common_meta_api::KVApi;
-use common_functions::udfs::UDFFactory;
 
 use crate::common::MetaClientProvider;
 use crate::configs::Config;
@@ -71,7 +71,11 @@ impl UserApiProvider {
         let udfs = self.get_udf_api_client().get_udfs().await?;
 
         for udf in udfs.iter() {
-            UDFFactory::register(&cfg.query.tenant_id, udf.name.as_str(), udf.definition.as_str())?;
+            UDFFactory::register(
+                &cfg.query.tenant_id,
+                udf.name.as_str(),
+                udf.definition.as_str(),
+            )?;
         }
 
         Ok(())
