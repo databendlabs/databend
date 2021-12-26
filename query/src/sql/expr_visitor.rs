@@ -28,15 +28,15 @@ pub struct ExprTraverser;
 
 impl ExprTraverser {
     pub fn accept<V: ExprVisitor>(expr: &Expr, visitor: &mut V) -> Result<()> {
-        visitor.pre_visit(expr)?;
-        visitor.visit(expr)?;
-        visitor.post_visit(expr)
+        let expr = visitor.pre_visit(expr)?;
+        visitor.visit(&expr)?;
+        visitor.post_visit(&expr)
     }
 }
 
 pub trait ExprVisitor: Sized {
-    fn pre_visit(&mut self, _expr: &Expr) -> Result<()> {
-        Ok(())
+    fn pre_visit(&mut self, expr: &Expr) -> Result<Expr> {
+        Ok(expr.clone())
     }
 
     fn visit(&mut self, expr: &Expr) -> Result<()> {
