@@ -29,7 +29,7 @@ async fn test_add_udf() -> Result<()> {
 
     let udf = create_test_udf();
     udf_api.add_udf(udf.clone()).await?;
-    let value = kv_api.get_kv("__fd_udfs/databend_query/isnotnull").await?;
+    let value = kv_api.get_kv("__fd_udfs/databend_query/isnotempty").await?;
 
     match value {
         Some(SeqV {
@@ -105,7 +105,7 @@ async fn test_unknown_udf_drop_udf() -> Result<()> {
 }
 
 fn create_test_udf() -> UserDefinedFunction {
-    UserDefinedFunction::new("isnotnull", "not(isnull(@1))", "This is a description")
+    UserDefinedFunction::new("isnotempty", "not(isnull(@1))", "This is a description")
 }
 
 async fn new_udf_api() -> Result<(Arc<MetaEmbedded>, UdfMgr)> {

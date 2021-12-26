@@ -1,8 +1,8 @@
-DROP FUNCTION IF EXISTS isnotnull;
+DROP FUNCTION IF EXISTS isnotempty;
 
-CREATE FUNCTION isnotnull='not(isnull(@0))';
-DROP FUNCTION isnotnull;
+CREATE FUNCTION isnotempty='not(isnull(@0))';
+DROP FUNCTION isnotempty;
 
-DROP FUNCTION IF EXISTS isnotnull;
+DROP FUNCTION IF EXISTS isnotempty;
 
-DROP FUNCTION isnotnull; -- {ErrorCode 4071}
+DROP FUNCTION isnotempty; -- {ErrorCode 4071}

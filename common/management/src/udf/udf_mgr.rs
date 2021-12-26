@@ -17,6 +17,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::scalars::FunctionFactory;
 use common_meta_api::KVApi;
 use common_meta_types::IntoSeqV;
 use common_meta_types::MatchSeq;
@@ -44,11 +46,22 @@ impl UdfMgr {
             udf_prefix: format!("{}/{}", UDF_API_KEY_PREFIX, tenant),
         }
     }
+
+    fn is_builtin_function(name: &str) -> bool {
+        FunctionFactory::instance().check(name) || AggregateFunctionFactory::instance().check(name)
+    }
 }
 
 #[async_trait::async_trait]
 impl UdfMgrApi for UdfMgr {
     async fn add_udf(&self, info: UserDefinedFunction) -> Result<u64> {
+        if UdfMgr::is_builtin_function(info.name.as_str()) {
+            return Err(ErrorCode::UDFAlreadyExists(format!(
+                "It's a builtin function: {}",
+                info.name.as_str()
+            )));
+        }
+
         let seq = MatchSeq::Exact(0);
         let val = Operation::Update(serde_json::to_vec(&info)?);
         let key = format!("{}/{}", self.udf_prefix, info.name);
