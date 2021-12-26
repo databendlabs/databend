@@ -45,8 +45,8 @@ async fn test_user_udf() -> Result<()> {
     {
         let udfs = user_mgr.get_udfs().await?;
         assert_eq!(2, udfs.len());
-        assert_eq!(isnotempty, udfs[0].name);
-        assert_eq!(isempty, udfs[1].name);
+        assert_eq!(isempty, udfs[0].name);
+        assert_eq!(isnotempty, udfs[1].name);
     }
 
     // get.

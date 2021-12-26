@@ -48,7 +48,7 @@ async fn test_show_create_udf_interpreter() -> Result<()> {
         panic!()
     }
 
-    if let PlanNode::ShowUDF(plan) = parse_query("show function isnotnull", &ctx)? {
+    if let PlanNode::ShowUDF(plan) = parse_query("show function isnotempty", &ctx)? {
         let executor = ShowUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "ShowUDFInterpreter");
         let stream = executor.execute(None).await?;

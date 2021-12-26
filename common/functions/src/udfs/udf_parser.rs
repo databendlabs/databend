@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_sql::expr::ExprTraverser;
+use common_sql::expr::ExprVisitor;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use sqlparser::ast::Expr;
@@ -24,15 +26,12 @@ use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 use sqlparser::tokenizer::Tokenizer;
 
-use crate::sql::ExprTraverser;
-use crate::sql::ExprVisitor;
-
 #[derive(Default)]
-pub struct UDF {
+pub struct UDFParser {
     params: Vec<u8>,
 }
 
-impl UDF {
+impl UDFParser {
     pub fn parse_definition(&mut self, definition: &str) -> Result<Expr> {
         let dialect = &GenericDialect {};
         let mut tokenizer = Tokenizer::new(dialect, definition);
@@ -86,7 +85,7 @@ impl UDF {
     }
 }
 
-impl ExprVisitor for UDF {
+impl ExprVisitor for UDFParser {
     fn post_visit(&mut self, expr: &Expr) -> Result<()> {
         if let Expr::Identifier(Ident { value, .. }) = expr {
             static RE: Lazy<Arc<Regex>> =

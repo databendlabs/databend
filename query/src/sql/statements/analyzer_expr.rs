@@ -19,6 +19,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_planners::Expression;
+use common_sql::expr::ExprTraverser;
+use common_sql::expr::ExprVisitor;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Ident;
 use sqlparser::ast::Query;
@@ -31,8 +33,6 @@ use crate::sql::statements::analyzer_value_expr::ValueExprAnalyzer;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
 use crate::sql::statements::DfQueryStatement;
-use crate::sql::ExprTraverser;
-use crate::sql::ExprVisitor;
 use crate::sql::PlanParser;
 use crate::sql::SQLCommon;
 

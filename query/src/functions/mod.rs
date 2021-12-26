@@ -13,7 +13,5 @@
 // limitations under the License.
 
 mod context_function;
-mod udf;
 
 pub use context_function::ContextFunction;
-pub use udf::UDF;
