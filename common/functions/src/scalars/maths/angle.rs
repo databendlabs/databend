@@ -16,7 +16,6 @@ use std::fmt;
 use std::marker::PhantomData;
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -67,10 +66,6 @@ where T: AngleConvertFunction + Clone + Sync + Send + 'static
                 args[0]
             )))
         }
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

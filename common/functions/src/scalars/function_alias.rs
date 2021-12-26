@@ -16,7 +16,6 @@ use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::Result;
 
@@ -40,10 +39,6 @@ impl Function for AliasFunction {
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
         Ok(args[0].clone())
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

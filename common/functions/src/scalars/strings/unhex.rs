@@ -56,10 +56,6 @@ impl Function for UnhexFunction {
         Ok(DataType::String)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
-    }
-
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         const BUFFER_SIZE: usize = 32;
 

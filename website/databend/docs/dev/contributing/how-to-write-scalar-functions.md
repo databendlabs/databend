@@ -64,14 +64,10 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
     /// The method returns the return_type of this function.
     fn return_type(&self, args: &[DataType]) -> Result<DataType>;
 
-    /// Whether the function may return null with specific input schema.
-    /// The default implementation check whether any nullable input exists.
-    /// If yes, return true; otherwise false.
-    fn nullable(&self, input_schema: &DataSchema) -> Result<bool> {
-        let any_input_nullable = input_schema
-            .fields()
-            .iter()
-            .any(|field| field.is_nullable());
+    /// Whether the function may return null.
+    /// The default implementation checks if any nullable input exists and returns true if exist; otherwise false.
+    fn nullable(&self, arg_fields: &[DataField]) -> Result<bool> {
+        let any_input_nullable = arg_fields.iter().any(|field| field.is_nullable());
         Ok(any_input_nullable)
     }
 
@@ -167,7 +163,7 @@ Noticed that we should take care of the Constant Column match case to improve me
 
 
 #### Column Iteration and validity bitmap combination
-Most functions have default null behavior, see [Pass through null](###pass-through-null). We don't need to combine validity bitmap. But for functions that can produce valid result with null input, we need to generate our own bitmap inside the function `eval`.
+Most functions have default null behavior, see [Pass through null](#pass-through-null). We don't need to combine validity bitmap. But for functions that can produce valid result with null input, we need to generate our own bitmap inside the function `eval`.
 
 To iterate the column, we can use `column.iter()` to generate an iterator, the item is `Option<T>`, `None` means it's null.
 But this's inefficient because we need to check the null value every time we iterate the column inside the loop which will pollute the CPU cache.

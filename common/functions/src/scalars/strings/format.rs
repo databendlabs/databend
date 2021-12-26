@@ -89,8 +89,11 @@ impl Function for FormatFunction {
         }
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
+    // Format(value, format, culture), the 'culture' is optional.
+    // if 'value' or 'format' is nullable, the result should be nullable.
+    fn nullable(&self, arg_fields: &[DataField]) -> Result<bool> {
+        let nullable = arg_fields[0].is_nullable() || arg_fields[1].is_nullable();
+        Ok(nullable)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

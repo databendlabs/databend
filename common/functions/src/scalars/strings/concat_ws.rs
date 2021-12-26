@@ -182,8 +182,10 @@ impl Function for ConcatWsFunction {
         Ok(DataType::String)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
+    // concat_ws(NULL, "a", "b") -> NULL
+    // concat_ws(",", NULL, NULL) -> ""
+    fn nullable(&self, arg_fields: &[DataField]) -> Result<bool> {
+        Ok(arg_fields[0].is_nullable())
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

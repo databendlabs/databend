@@ -419,10 +419,6 @@ where
         T::return_type()
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
-    }
-
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let data_type = columns[0].data_type();
         let number_array: DataColumn = match data_type {

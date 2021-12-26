@@ -63,10 +63,6 @@ impl Function for ComparisonFunction {
         Ok(DataType::Boolean)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
-    }
-
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         if columns[0].data_type() != columns[1].data_type() {
             let compare_coercion_type =

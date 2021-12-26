@@ -92,10 +92,6 @@ impl<T: InsertOperator> Function for InsFunction<T> {
         &*self.display_name
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
-    }
-
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
         if !args[1].is_integer() && args[1] != DataType::String && args[1] != DataType::Null {
             return Err(ErrorCode::IllegalDataType(format!(

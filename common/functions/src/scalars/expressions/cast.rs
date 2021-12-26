@@ -31,7 +31,6 @@ use common_datavalues::prelude::DFUInt64Array;
 use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::series::IntoSeries;
 use common_datavalues::series::Series;
-use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -62,11 +61,6 @@ impl Function for CastFunction {
 
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(self.cast_type.clone())
-    }
-
-    // TODO
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

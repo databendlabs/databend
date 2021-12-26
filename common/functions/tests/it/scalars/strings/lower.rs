@@ -26,7 +26,7 @@ fn test_lower_function() -> Result<()> {
         Test {
             name: "lower-abc-passed",
             display: "lower",
-            nullable: true,
+            nullable: false,
             arg_names: vec!["a"],
             columns: vec![Series::new(vec!["Abc"]).into()],
             func: LowerFunction::try_create("lower")?,
@@ -36,7 +36,7 @@ fn test_lower_function() -> Result<()> {
         Test {
             name: "lower-utf8-passed",
             display: "lower",
-            nullable: true,
+            nullable: false,
             arg_names: vec!["a"],
             columns: vec![Series::new(vec!["Dobrý den"]).into()],
             func: LowerFunction::try_create("lower")?,
@@ -49,7 +49,7 @@ fn test_lower_function() -> Result<()> {
         Test {
             name: "lcase-utf8-passed",
             display: "lcase",
-            nullable: true,
+            nullable: false,
             arg_names: vec!["a"],
             columns: vec![Series::new(vec!["Dobrý den"]).into()],
             func: LowerFunction::try_create("lcase")?,
@@ -59,16 +59,23 @@ fn test_lower_function() -> Result<()> {
             ),
             error: "",
         },
-        Test {
-            name: "lcase-null-passed",
-            display: "lcase",
-            nullable: true,
-            arg_names: vec!["a"],
-            columns: vec![Series::new(vec![Option::<Vec<u8>>::None]).into()],
-            func: LowerFunction::try_create("lcase")?,
-            expect: DataColumn::Constant(DataValue::String(None), 1),
-            error: "",
-        },
     ];
+    run_tests(tests, schema)
+}
+
+#[test]
+fn test_lower_nullable() -> Result<()> {
+    let schema = DataSchemaRefExt::create(vec![DataField::new("nullable", DataType::String, true)]);
+
+    let tests = vec![Test {
+        name: "lcase-null-passed",
+        display: "lcase",
+        nullable: true,
+        arg_names: vec!["nullable"],
+        columns: vec![Series::new(vec![Option::<Vec<u8>>::None]).into()],
+        func: LowerFunction::try_create("lcase")?,
+        expect: DataColumn::Constant(DataValue::String(None), 1),
+        error: "",
+    }];
     run_tests(tests, schema)
 }

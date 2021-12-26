@@ -16,7 +16,6 @@ use std::f64::consts::E;
 use std::fmt;
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::Result;
 
@@ -46,10 +45,6 @@ impl Function for GenericLogFunction {
 
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(DataType::Float64)
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
@@ -90,9 +85,14 @@ impl Function for GenericLogFunction {
                     let base_series = base_column.to_minimal_array()?;
                     let num_series = num_column.to_minimal_array()?;
 
-                    binary(num_series.f64()?, base_series.f64()?, |num, base| {
-                        num.log(base)
-                    })
+                    // The log function has default null behavior for null input, that is, LOG(null) = null.
+                    // So the passthrough_null method has default behavior to be true, we don't need to zip validity.
+                    binary_with_validity(
+                        num_series.f64()?,
+                        base_series.f64()?,
+                        |num, base| num.log(base),
+                        None,
+                    )
                 }
             }
         };

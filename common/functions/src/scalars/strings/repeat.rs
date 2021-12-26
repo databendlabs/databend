@@ -68,10 +68,6 @@ impl Function for RepeatFunction {
         Ok(DataType::String)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
-    }
-
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         match (
             columns[0].column().cast_with_type(&DataType::String)?,

@@ -54,10 +54,6 @@ where T: ArithmeticTrait + Clone + Sync + Send + 'static
         "BinaryArithmeticFunction"
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
-    }
-
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(self.result_type.clone())
     }
