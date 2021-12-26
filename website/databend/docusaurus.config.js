@@ -35,7 +35,7 @@ const config = {
                 theme: {
                     customCss: require.resolve('./src/css/custom.scss'),
                 },
-                googleAnalytics: {
+                gtag: {
                   trackingID: 'G-WBQPTTG4ZG',
                   anonymizeIP: true,
                 },
@@ -79,7 +79,7 @@ const config = {
               },
             ],
           },
-        ],
+        ]
     ],
     themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
@@ -176,10 +176,7 @@ const config = {
                 indexName: 'TBD',
                 contextualSearch: true,
                 searchParameters: {},
-            },
-            gtag: {
-                trackingID: 'TBD',
-            },
+            }
         }),
 };
 
