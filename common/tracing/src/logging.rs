@@ -13,8 +13,11 @@
 // limitations under the License.
 
 use std::env;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::Once;
 
+use once_cell::sync::Lazy;
 use opentelemetry::global;
 use opentelemetry::sdk::propagation::TraceContextPropagator;
 use tracing_appender::non_blocking::WorkerGuard;
@@ -34,9 +37,13 @@ pub fn init_default_ut_tracing() {
     static START: Once = Once::new();
 
     START.call_once(|| {
-        let _ = init_global_tracing("unittest", "_logs", "DEBUG");
+        let mut g = GLOBAL_UT_LOG_GUARD.as_ref().lock().unwrap();
+        *g = Some(init_global_tracing("unittest", "_logs_unittest", "DEBUG"));
     });
 }
+
+static GLOBAL_UT_LOG_GUARD: Lazy<Arc<Mutex<Option<Vec<WorkerGuard>>>>> =
+    Lazy::new(|| Arc::new(Mutex::new(None)));
 
 /// Init logging and tracing.
 ///
