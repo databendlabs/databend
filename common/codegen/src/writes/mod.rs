@@ -12,24 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod arithmetic;
-mod arithmetic_div;
-mod arithmetic_intdiv;
-mod arithmetic_minus;
-mod arithmetic_modulo;
-mod arithmetic_mul;
-mod arithmetic_plus;
-mod binary_arithmetic;
-mod interval;
-mod macros;
 mod result_type;
-mod utils;
 
-pub use arithmetic::ArithmeticFunction;
-pub use arithmetic_div::ArithmeticDivFunction;
-pub use arithmetic_intdiv::ArithmeticIntDivFunction;
-pub use arithmetic_minus::ArithmeticMinusFunction;
-pub use arithmetic_modulo::ArithmeticModuloFunction;
-pub use arithmetic_mul::ArithmeticMulFunction;
-pub use arithmetic_plus::ArithmeticPlusFunction;
-pub use binary_arithmetic::BinaryArithmeticFunction;
+pub use result_type::*;
