@@ -20,6 +20,7 @@ use common_planners::CreateUDFPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
 
+use crate::functions::UDF;
 use crate::sessions::QueryContext;
 use crate::sql::statements::AnalyzableStatement;
 use crate::sql::statements::AnalyzedResult;
@@ -36,6 +37,9 @@ pub struct DfCreateUDF {
 impl AnalyzableStatement for DfCreateUDF {
     #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
+        let mut udf = UDF::default();
+        udf.parse_definition(self.definition.as_str())?;
+
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::CreateUDF(
             CreateUDFPlan {
                 if_not_exists: self.if_not_exists,
