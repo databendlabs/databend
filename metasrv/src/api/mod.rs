@@ -14,6 +14,7 @@
 
 // The api module only used for internal communication, such as GRPC between cluster and the managed HTTP REST API.
 
+mod grpc_service;
 pub mod http;
 mod http_service;
 

@@ -94,7 +94,7 @@ impl MetaApi for MetaGrpcClient {
         &self,
         table_id: MetaId,
     ) -> common_exception::Result<(TableIdent, Arc<TableMeta>)> {
-        let x = self.do_get(GetTableExtReq { tbl_id: table_id }).await?;
+        let x: TableInfo = self.do_get(GetTableExtReq { tbl_id: table_id }).await?;
         Ok((x.ident, Arc::new(x.meta)))
     }
 

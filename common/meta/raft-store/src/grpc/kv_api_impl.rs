@@ -14,7 +14,6 @@
 
 use common_meta_api::KVApi;
 use common_meta_types::GetKVActionReply;
-use common_meta_types::LogEntry;
 use common_meta_types::MGetKVActionReply;
 use common_meta_types::PrefixListReply;
 use common_meta_types::UpsertKVAction;
@@ -31,8 +30,7 @@ impl KVApi for MetaGrpcClient {
         &self,
         act: UpsertKVAction,
     ) -> common_exception::Result<UpsertKVActionReply> {
-        let ent: LogEntry = act.into();
-        self.do_write(ent).await
+        self.do_write(act).await
     }
 
     async fn get_kv(&self, key: &str) -> common_exception::Result<GetKVActionReply> {

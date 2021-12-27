@@ -1520,7 +1520,6 @@ dependencies = [
  "clap 3.0.0-rc.9",
  "common-arrow",
  "common-base",
- "common-building",
  "common-exception",
  "common-flight-rpc",
  "common-io",
@@ -1539,7 +1538,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tonic",
- "tonic-build",
 ]
 
 [[package]]
@@ -1565,13 +1563,18 @@ name = "common-meta-types"
 version = "0.1.0"
 dependencies = [
  "async-raft",
+ "common-building",
  "common-datavalues",
  "common-exception",
  "derive_more",
  "enumflags2",
  "maplit",
+ "prost",
  "serde",
  "serde_json",
+ "thiserror",
+ "tonic",
+ "tonic-build",
 ]
 
 [[package]]

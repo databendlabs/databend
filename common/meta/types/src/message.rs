@@ -17,20 +17,6 @@ use std::sync::Arc;
 use async_raft::raft::AppendEntriesRequest;
 use async_raft::raft::InstallSnapshotRequest;
 use async_raft::raft::VoteRequest;
-use common_meta_types::DatabaseInfo;
-use common_meta_types::GetDatabaseReq;
-use common_meta_types::GetKVActionReply;
-use common_meta_types::GetKVReq;
-use common_meta_types::GetTableReq;
-use common_meta_types::ListDatabaseReq;
-use common_meta_types::ListKVReq;
-use common_meta_types::ListTableReq;
-use common_meta_types::LogEntry;
-use common_meta_types::MGetKVActionReply;
-use common_meta_types::MGetKVReq;
-use common_meta_types::NodeId;
-use common_meta_types::PrefixListReply;
-use common_meta_types::TableInfo;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
@@ -38,7 +24,21 @@ use thiserror::Error;
 
 use crate::protobuf::RaftReply;
 use crate::protobuf::RaftRequest;
-use crate::state_machine::AppliedState;
+use crate::AppliedState;
+use crate::DatabaseInfo;
+use crate::GetDatabaseReq;
+use crate::GetKVActionReply;
+use crate::GetKVReq;
+use crate::GetTableReq;
+use crate::ListDatabaseReq;
+use crate::ListKVReq;
+use crate::ListTableReq;
+use crate::LogEntry;
+use crate::MGetKVActionReply;
+use crate::MGetKVReq;
+use crate::NodeId;
+use crate::PrefixListReply;
+use crate::TableInfo;
 
 #[derive(Error, Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum RetryableError {
@@ -81,6 +81,7 @@ pub struct ForwardRequest {
 }
 
 impl ForwardRequest {
+    #[allow(dead_code)]
     pub fn decr_forward(&mut self) {
         self.forward_to_leader -= 1;
     }

@@ -16,13 +16,14 @@ use std::fmt::Debug;
 
 use async_raft::AppDataResponse;
 use common_exception::ErrorCode;
-use common_meta_types::AddResult;
-use common_meta_types::Change;
-use common_meta_types::DatabaseMeta;
-use common_meta_types::Node;
-use common_meta_types::TableMeta;
 use serde::Deserialize;
 use serde::Serialize;
+
+use crate::AddResult;
+use crate::Change;
+use crate::DatabaseMeta;
+use crate::Node;
+use crate::TableMeta;
 
 /// The state of an applied raft log.
 /// Normally it includes two fields: the state before applying and the state after applying the log.

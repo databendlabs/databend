@@ -17,6 +17,8 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
+use common_meta_types::protobuf::GetReq;
+use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReply;
@@ -40,9 +42,6 @@ use common_meta_types::UpsertKVActionReply;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use tonic::Request;
-
-use crate::protobuf::GetReq;
-use crate::protobuf::RaftRequest;
 
 pub trait RequestFor {
     type Reply;

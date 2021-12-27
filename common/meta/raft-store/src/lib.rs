@@ -15,16 +15,13 @@
 pub mod config;
 pub mod grpc;
 pub mod log;
-pub mod message;
 pub mod sled_key_spaces;
 pub mod state;
 pub mod state_machine;
 
-// ProtoBuf generated files.
-#[allow(clippy::all)]
-pub mod protobuf {
-    tonic::include_proto!("meta");
-}
-
+pub use grpc::GetTableExtReq;
 pub use grpc::MetaGrpcClient;
 pub use grpc::MetaGrpcClientConf;
+pub use grpc::MetaGrpcGetAction;
+pub use grpc::MetaGrpcWriteAction;
+pub use grpc::RequestFor;

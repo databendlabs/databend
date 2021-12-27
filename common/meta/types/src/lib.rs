@@ -14,6 +14,7 @@
 
 //! This crate defines data types used in meta data storage service.
 
+mod applied_state;
 mod change;
 mod cluster;
 mod cmd;
@@ -22,6 +23,7 @@ mod errors;
 mod kv_message;
 mod log_entry;
 mod match_seq;
+mod message;
 mod operation;
 mod raft_txid;
 mod raft_types;
@@ -37,6 +39,13 @@ mod user_privilege;
 mod user_quota;
 mod user_stage;
 
+// ProtoBuf generated files.
+#[allow(clippy::all)]
+pub mod protobuf {
+    tonic::include_proto!("meta");
+}
+
+pub use applied_state::AppliedState;
 pub use change::AddResult;
 pub use change::Change;
 pub use change::OkOrExist;
@@ -64,6 +73,10 @@ pub use kv_message::UpsertKVActionReply;
 pub use log_entry::LogEntry;
 pub use match_seq::MatchSeq;
 pub use match_seq::MatchSeqExt;
+pub use message::ForwardRequest;
+pub use message::ForwardRequestBody;
+pub use message::ForwardResponse;
+pub use message::JoinRequest;
 pub use operation::MetaId;
 pub use operation::MetaVersion;
 pub use operation::Operation;

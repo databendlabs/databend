@@ -39,10 +39,6 @@ prost = "0.9.0"
 thiserror = "1.0.30"
 tonic = { version = "0.6.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
 
-[build-dependencies]
-tonic-build = "0.6.2"
-common-building = { path = "../../building" }
-
 [dev-dependencies]
 common-base = { path = "../../base" }
 pretty_assertions = "1.0.0"

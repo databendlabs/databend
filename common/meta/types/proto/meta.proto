@@ -56,7 +56,13 @@ service MetaService {
   rpc AppendEntries(RaftRequest) returns (RaftReply);
   rpc InstallSnapshot(RaftRequest) returns (RaftReply);
   rpc vote(RaftRequest) returns (RaftReply);
+}
 
+service Meta {
   // handshake
   rpc Handshake(stream HandshakeRequest) returns (stream HandshakeResponse);
+
+  // message
+  rpc WriteMsg(RaftRequest) returns (RaftReply);
+  rpc GetMsg(GetReq) returns (GetReply);
 }

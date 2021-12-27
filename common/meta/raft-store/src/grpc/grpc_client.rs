@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
 use std::time::Duration;
 
 use common_arrow::arrow_format::flight::data::BasicAuth;
@@ -19,6 +20,11 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_flight_rpc::ConnectionFactory;
 use common_flight_rpc::GrpcClientTlsConfig;
+use common_meta_types::protobuf::meta_client::MetaClient;
+use common_meta_types::protobuf::GetReply;
+use common_meta_types::protobuf::GetReq;
+use common_meta_types::protobuf::HandshakeRequest;
+use common_meta_types::protobuf::RaftRequest;
 use common_tracing::tracing;
 use futures::stream::StreamExt;
 use prost::Message;
@@ -32,18 +38,13 @@ use tonic::Request;
 use crate::grpc::grpc_action::MetaGrpcGetAction;
 use crate::grpc::grpc_action::MetaGrpcWriteAction;
 use crate::grpc::grpc_action::RequestFor;
-use crate::protobuf::meta_service_client::MetaServiceClient;
-use crate::protobuf::GetReply;
-use crate::protobuf::GetReq;
-use crate::protobuf::HandshakeRequest;
-use crate::protobuf::RaftRequest;
 use crate::MetaGrpcClientConf;
 
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct MetaGrpcClient {
     token: Vec<u8>,
-    pub(crate) client: MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>,
+    pub(crate) client: MetaClient<InterceptedService<Channel, AuthInterceptor>>,
 }
 
 const AUTH_TOKEN_KEY: &str = "auth-token-bin";
@@ -79,12 +80,12 @@ impl MetaGrpcClient {
 
         let channel = res?;
 
-        let mut client = MetaServiceClient::new(channel.clone());
+        let mut client = MetaClient::new(channel.clone());
         let token = MetaGrpcClient::handshake(&mut client, username, password).await?;
 
         let client = {
             let token = token.clone();
-            MetaServiceClient::with_interceptor(channel, AuthInterceptor { token })
+            MetaClient::with_interceptor(channel, AuthInterceptor { token })
         };
 
         let rx = Self { token, client };
@@ -94,7 +95,7 @@ impl MetaGrpcClient {
     /// Handshake.
     #[tracing::instrument(level = "debug", skip(client, password))]
     async fn handshake(
-        client: &mut MetaServiceClient<Channel>,
+        client: &mut MetaClient<Channel>,
         username: &str,
         password: &str,
     ) -> Result<Vec<u8>> {
@@ -123,15 +124,14 @@ impl MetaGrpcClient {
     #[tracing::instrument(level = "debug", skip(self, v))]
     pub(crate) async fn do_write<T, R>(&self, v: T) -> Result<R>
     where
-        T: RequestFor<Reply = R>,
-        T: Into<MetaGrpcWriteAction>,
+        T: RequestFor<Reply = R> + Into<MetaGrpcWriteAction>,
         R: DeserializeOwned,
     {
         let act: MetaGrpcWriteAction = v.into();
         let req: Request<RaftRequest> = (&act).try_into()?;
         let req = common_tracing::inject_span_to_tonic_request(req);
 
-        let result = self.client.clone().write(req).await?.into_inner();
+        let result = self.client.clone().write_msg(req).await?.into_inner();
 
         if result.error.is_empty() {
             let v = serde_json::from_str::<R>(&result.data)?;
@@ -155,7 +155,7 @@ impl MetaGrpcClient {
         let req: Request<GetReq> = (&act).try_into()?;
         let req = common_tracing::inject_span_to_tonic_request(req);
 
-        let result = self.client.clone().get(req).await?.into_inner();
+        let result = self.client.clone().get_msg(req).await?.into_inner();
         if result.ok {
             let v = serde_json::from_str::<R>(&result.value)?;
             Ok(v)
@@ -169,7 +169,7 @@ impl MetaGrpcClient {
 
     #[tracing::instrument(level = "debug", skip(self, req))]
     pub async fn check_connection(&self, req: Request<GetReq>) -> Result<GetReply> {
-        let result = self.client.clone().get(req).await?.into_inner();
+        let result = self.client.clone().get_msg(req).await?.into_inner();
         if result.ok {
             Ok(result)
         } else {
