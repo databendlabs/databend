@@ -31,6 +31,7 @@ use databend_query::sql::statements::DfCopy;
 use databend_query::sql::statements::DfCreateDatabase;
 use databend_query::sql::statements::DfCreateStage;
 use databend_query::sql::statements::DfCreateTable;
+use databend_query::sql::statements::DfCreateUDF;
 use databend_query::sql::statements::DfCreateUser;
 use databend_query::sql::statements::DfDescribeTable;
 use databend_query::sql::statements::DfDropDatabase;
@@ -1328,6 +1329,41 @@ fn drop_stage_test() -> Result<()> {
         DfStatement::DropStage(DfDropStage {
             if_exists: true,
             stage_name: "test_stage".to_string(),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_create_udf() -> Result<()> {
+    expect_parse_ok(
+        "CREATE FUNCTION test_udf='not(isnotnull(@0))'",
+        DfStatement::CreateUDF(DfCreateUDF {
+            if_not_exists: false,
+            udf_name: "test_udf".to_string(),
+            definition: "not(isnotnull(@0))".to_string(),
+            description: "".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE FUNCTION test_udf='not(isnotnull(@0))' desc='This is a description'",
+        DfStatement::CreateUDF(DfCreateUDF {
+            if_not_exists: false,
+            udf_name: "test_udf".to_string(),
+            definition: "not(isnotnull(@0))".to_string(),
+            description: "This is a description".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE FUNCTION IF NOT EXISTS test_udf='not(isnotnull(@0))' desc='This is a description'",
+        DfStatement::CreateUDF(DfCreateUDF {
+            if_not_exists: true,
+            udf_name: "test_udf".to_string(),
+            definition: "not(isnotnull(@0))".to_string(),
+            description: "This is a description".to_string(),
         }),
     )?;
 
