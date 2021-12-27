@@ -127,7 +127,7 @@ impl QueryContext {
 
     // Steal n partitions from the partition pool by the pipeline worker.
     // This also can steal the partitions from distributed node.
-    pub fn try_get_partitions(&self, num: usize) -> Result<Partitions> {
+    pub fn try_get_partitions(&self, num: u64) -> Result<Partitions> {
         let mut partitions = vec![];
         for _ in 0..num {
             match self.partition_queue.write().pop_back() {
