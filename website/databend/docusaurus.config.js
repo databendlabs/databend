@@ -100,10 +100,10 @@ const config = {
                     {
                         to: '/user', label: 'User Guide', position: 'left', items: [
                             {label: 'Get Started', to: '/user'},
-                            {label: 'SQL', to: '/user/category/sql-statement'},
+                            {label: 'SQL', to: '/user/category/sql'},
                             {label: 'CLI', to: '/user/category/cli'},
-                            {label: 'APIs', to: '/user/category/api'},
-                            {label: 'Data Load', to: '/user/data-loading/http-streaming-load'}
+                            {label: 'APIs', to: '/user/category/apis'},
+                            {label: 'Data Loading', to: '/user/category/data-loading'}
                         ]
                     },
                     {
