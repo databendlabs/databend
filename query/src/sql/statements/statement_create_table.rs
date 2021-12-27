@@ -55,7 +55,7 @@ pub struct DfCreateTable {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfCreateTable {
-    #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let mut table_meta = self.table_meta(ctx.clone()).await?;
         let if_not_exists = self.if_not_exists;

@@ -73,7 +73,7 @@ impl DatabendQueryFlightDispatcher {
         self.abort.load(Ordering::Relaxed)
     }
 
-    #[tracing::instrument(level = "info", skip_all)]
+    #[tracing::instrument(level = "debug", skip_all)]
     pub fn get_stream(&self, ticket: &StreamTicket) -> Result<mpsc::Receiver<Result<DataBlock>>> {
         let stage_name = format!("{}/{}", ticket.query_id, ticket.stage_id);
         if let Some(notify) = self.stages_notify.write().remove(&stage_name) {
@@ -87,7 +87,7 @@ impl DatabendQueryFlightDispatcher {
         }
     }
 
-    #[tracing::instrument(level = "info", skip_all, fields(session.id = session.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip_all, fields(session.id = session.get_id().as_str()))]
     pub async fn broadcast_action(&self, session: SessionRef, action: FlightAction) -> Result<()> {
         let query_id = action.get_query_id();
         let stage_id = action.get_stage_id();
@@ -105,7 +105,7 @@ impl DatabendQueryFlightDispatcher {
         }
     }
 
-    #[tracing::instrument(level = "info", skip_all, fields(session.id = session.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip_all, fields(session.id = session.get_id().as_str()))]
     pub async fn shuffle_action(&self, session: SessionRef, action: FlightAction) -> Result<()> {
         let query_id = action.get_query_id();
         let stage_id = action.get_stage_id();
@@ -123,7 +123,7 @@ impl DatabendQueryFlightDispatcher {
         }
     }
 
-    #[tracing::instrument(level = "info", skip_all, fields(session.id = session.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip_all, fields(session.id = session.get_id().as_str()))]
     async fn one_sink_action(&self, session: SessionRef, action: &FlightAction) -> Result<()> {
         let query_context = session.create_context().await?;
         let action_context = QueryContext::new(query_context.clone());
@@ -172,7 +172,7 @@ impl DatabendQueryFlightDispatcher {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", skip_all, fields(session.id = session.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip_all, fields(session.id = session.get_id().as_str()))]
     async fn action_with_scatter<T>(
         &self,
         session: SessionRef,

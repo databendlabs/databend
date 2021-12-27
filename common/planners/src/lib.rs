@@ -71,6 +71,9 @@ mod plan_user_create;
 mod plan_user_drop;
 mod plan_user_stage_create;
 mod plan_user_stage_drop;
+mod plan_user_udf_create;
+mod plan_user_udf_drop;
+mod plan_user_udf_show;
 mod plan_visitor;
 
 pub use plan_aggregator_final::AggregatorFinalPlan;
@@ -159,4 +162,7 @@ pub use plan_user_create::CreateUserPlan;
 pub use plan_user_drop::DropUserPlan;
 pub use plan_user_stage_create::CreateUserStagePlan;
 pub use plan_user_stage_drop::DropUserStagePlan;
+pub use plan_user_udf_create::CreateUDFPlan;
+pub use plan_user_udf_drop::DropUDFPlan;
+pub use plan_user_udf_show::ShowUDFPlan;
 pub use plan_visitor::PlanVisitor;

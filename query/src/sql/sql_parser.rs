@@ -57,11 +57,13 @@ use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfCreateStage;
 use crate::sql::statements::DfCreateTable;
+use crate::sql::statements::DfCreateUDF;
 use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropDatabase;
 use crate::sql::statements::DfDropStage;
 use crate::sql::statements::DfDropTable;
+use crate::sql::statements::DfDropUDF;
 use crate::sql::statements::DfDropUser;
 use crate::sql::statements::DfExplain;
 use crate::sql::statements::DfGrantObject;
@@ -81,6 +83,7 @@ use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
 use crate::sql::statements::DfShowSettings;
 use crate::sql::statements::DfShowTables;
+use crate::sql::statements::DfShowUDF;
 use crate::sql::statements::DfShowUsers;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
@@ -222,6 +225,8 @@ impl<'a> DfParser<'a> {
                             self.parse_show_grants()
                         } else if self.consume_token("FUNCTIONS") {
                             self.parse_show_functions()
+                        } else if self.consume_token("FUNCTION") {
+                            self.parse_show_udf()
                         } else {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
@@ -534,6 +539,7 @@ impl<'a> DfParser<'a> {
                         Keyword::TABLE => self.parse_create_table(),
                         Keyword::DATABASE => self.parse_create_database(),
                         Keyword::USER => self.parse_create_user(),
+                        Keyword::FUNCTION => self.parse_create_udf(),
                         _ => self.expected("create statement", Token::Word(w)),
                     }
                 }
@@ -594,6 +600,7 @@ impl<'a> DfParser<'a> {
                         Keyword::DATABASE => self.parse_drop_database(),
                         Keyword::TABLE => self.parse_drop_table(),
                         Keyword::USER => self.parse_drop_user(),
+                        Keyword::FUNCTION => self.parse_drop_udf(),
                         _ => self.expected("drop statement", Token::Word(w)),
                     }
                 }
@@ -843,6 +850,48 @@ impl<'a> DfParser<'a> {
             stage_name,
         };
         Ok(DfStatement::DropStage(drop))
+    }
+
+    fn parse_create_udf(&mut self) -> Result<DfStatement, ParserError> {
+        let if_not_exists =
+            self.parser
+                .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let udf_name = self.parser.parse_literal_string()?;
+        self.parser.expect_token(&Token::Eq)?;
+        // TODO verify the definition as a legal expr
+        let definition = self.parser.parse_literal_string()?;
+        let description = if self.consume_token("DESC") {
+            self.parser.expect_token(&Token::Eq)?;
+            self.parser.parse_literal_string()?
+        } else {
+            String::from("")
+        };
+        let create_udf = DfCreateUDF {
+            if_not_exists,
+            udf_name,
+            definition,
+            description,
+        };
+
+        Ok(DfStatement::CreateUDF(create_udf))
+    }
+
+    fn parse_drop_udf(&mut self) -> Result<DfStatement, ParserError> {
+        let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let udf_name = self.parser.parse_literal_string()?;
+
+        let drop_udf = DfDropUDF {
+            if_exists,
+            udf_name,
+        };
+        Ok(DfStatement::DropUDF(drop_udf))
+    }
+
+    fn parse_show_udf(&mut self) -> Result<DfStatement, ParserError> {
+        let udf_name = self.parser.parse_literal_string()?;
+        let show_udf = DfShowUDF { udf_name };
+
+        Ok(DfStatement::ShowUDF(show_udf))
     }
 
     fn parse_create_table(&mut self) -> Result<DfStatement, ParserError> {

@@ -151,7 +151,7 @@ impl Pipeline {
         Ok(())
     }
 
-    #[tracing::instrument(level = "info", name="pipeline_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", name="pipeline_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     pub async fn execute(&mut self) -> Result<SendableDataBlockStream> {
         if self.last_pipe()?.nums() > 1 {
             self.merge_processor()?;

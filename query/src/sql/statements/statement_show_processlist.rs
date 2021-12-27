@@ -27,7 +27,7 @@ pub struct DfShowProcessList;
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfShowProcessList {
-    #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let rewritten_query = "SELECT * FROM system.processes";
         let rewritten_query_plan = PlanParser::parse(rewritten_query, ctx);

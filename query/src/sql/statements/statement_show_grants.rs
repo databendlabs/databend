@@ -31,7 +31,7 @@ pub struct DfShowGrants {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfShowGrants {
-    #[tracing::instrument(level = "info", skip(self, _ctx), fields(_ctx.id = _ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(self, _ctx), fields(_ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::ShowGrants(
             ShowGrantsPlan {

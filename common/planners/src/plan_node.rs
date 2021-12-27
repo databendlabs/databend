@@ -19,6 +19,9 @@ use common_datavalues::DataSchemaRef;
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::plan_user_stage_create::CreateUserStagePlan;
+use crate::plan_user_udf_create::CreateUDFPlan;
+use crate::plan_user_udf_drop::DropUDFPlan;
+use crate::plan_user_udf_show::ShowUDFPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
@@ -102,6 +105,9 @@ pub enum PlanNode {
     DropUserStage(DropUserStagePlan),
     ShowGrants(ShowGrantsPlan),
     ShowCreateDatabase(ShowCreateDatabasePlan),
+    CreateUDF(CreateUDFPlan),
+    DropUDF(DropUDFPlan),
+    ShowUDF(ShowUDFPlan),
 }
 
 impl PlanNode {
@@ -149,6 +155,9 @@ impl PlanNode {
             PlanNode::DropUserStage(v) => v.schema(),
             PlanNode::ShowGrants(v) => v.schema(),
             PlanNode::ShowCreateDatabase(v) => v.schema(),
+            PlanNode::CreateUDF(v) => v.schema(),
+            PlanNode::DropUDF(v) => v.schema(),
+            PlanNode::ShowUDF(v) => v.schema(),
         }
     }
 
@@ -195,6 +204,9 @@ impl PlanNode {
             PlanNode::DropUserStage(_) => "DropUserStagePlan",
             PlanNode::ShowGrants(_) => "ShowGrantsPlan",
             PlanNode::ShowCreateDatabase(_) => "ShowCreateDatabasePlan",
+            PlanNode::CreateUDF(_) => "CreateUDFPlan",
+            PlanNode::DropUDF(_) => "DropUDFPlan",
+            PlanNode::ShowUDF(_) => "ShowUDF",
         }
     }
 

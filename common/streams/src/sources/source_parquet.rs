@@ -28,6 +28,7 @@ use common_datavalues::series::IntoSeries;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_tracing::tracing;
 use common_tracing::tracing::debug_span;
 use common_tracing::tracing::Instrument;
 use futures::StreamExt;
@@ -70,6 +71,7 @@ impl ParquetSource {
 
 #[async_trait]
 impl Source for ParquetSource {
+    #[tracing::instrument(level = "debug", skip_all)]
     async fn read(&mut self) -> Result<Option<DataBlock>> {
         let metadata = match self.metadata.clone() {
             Some(m) => m,
