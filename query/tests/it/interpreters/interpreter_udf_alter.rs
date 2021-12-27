@@ -54,7 +54,7 @@ async fn test_alter_udf_interpreter() -> Result<()> {
 
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
-        
+
         let udf = ctx
             .get_sessions_manager()
             .get_user_manager()
