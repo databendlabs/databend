@@ -74,7 +74,6 @@ macro_rules! with_match_primitive_type {(
 ) => ({
     macro_rules! __with_ty__ {( $_ $T:ident ) => ( $($body)* )}
     use common_arrow::arrow::datatypes::PrimitiveType::*;
-    // use common_arrow::arrow::types::{days_ms, months_days_ns};
     match $key_type {
         Int8 => __with_ty__! { i8 },
         Int16 => __with_ty__! { i16 },
@@ -272,6 +271,7 @@ impl Processor for GroupByFinalTransform {
                         PhysicalType::Boolean => {
                             let array = DFBooleanArray::from_arrow_array(array.as_arc().as_ref());
                             columns.push(array.into_series());
+                            Ok(())
                         }
                         PhysicalType::Primitive(primitive) => {
                             with_match_primitive_type!(primitive, |$T| {
@@ -279,17 +279,18 @@ impl Processor for GroupByFinalTransform {
                                     array.as_arc().as_ref(),
                                 );
                                 columns.push(array.into_series());
-                            })
+                            });
+                            Ok(())
                         }
                         PhysicalType::Binary => {
                             let array = DFStringArray::from_arrow_array(array.as_arc().as_ref());
                             columns.push(array.into_series());
-                            tracing::error!("try into string array");
+                            Ok(())
                         }
-                        _ => {
-                            tracing::error!("should not be here");
-                        }
-                    };
+                        _ => Err(ErrorCode::UnexpectedError(
+                            "unexpected datatype when transform group by final".to_string(),
+                        )),
+                    }?;
                 }
 
                 {

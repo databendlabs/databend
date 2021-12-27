@@ -40,12 +40,12 @@ fn test_aggregate_combinator_function() -> Result<()> {
     }
 
     let arrays: Vec<Series> = vec![
-        Series::new(vec![4_i64, 3, 2, 1, 3, 4]),
+        Series::new(vec![4_u64, 3, 2, 1, 3, 4]),
         Series::new(vec![true, true, false, true, true, true]),
     ];
 
     let args = vec![
-        DataField::new("a", DataType::Int64, false),
+        DataField::new("a", DataType::UInt64, false),
         DataField::new("b", DataType::Boolean, false),
     ];
 

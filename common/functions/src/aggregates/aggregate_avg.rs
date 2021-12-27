@@ -176,7 +176,7 @@ where
             }
             _ => {
                 return Err(ErrorCode::UnexpectedError(
-                    "aggregate result, unexpected datatype".to_string(),
+                    "aggregate avg unexpected datatype".to_string(),
                 ))
             }
         };
