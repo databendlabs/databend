@@ -20,13 +20,11 @@ use sqlparser::ast::Function;
 use sqlparser::ast::FunctionArg;
 use sqlparser::ast::Ident;
 
-use super::UDFFactory;
+use crate::functions::udf::UDFManager;
 
-pub struct UDFTransformer;
-
-impl UDFTransformer {
-    pub fn transform_function(tenant: &str, function: &Function) -> Option<Expr> {
-        if let Ok(Some(expr)) = UDFFactory::get_definition(tenant, &function.name.to_string()) {
+impl UDFManager {
+    pub async fn transform_function(&self, function: &Function) -> Option<Expr> {
+        if let Some(Some(expr)) = self.get(&function.name.to_string()).await.ok() {
             let mut args_map = HashMap::new();
             function.args.iter().enumerate().for_each(|(index, f_arg)| {
                 args_map.insert(format!("@{}", index), match f_arg {

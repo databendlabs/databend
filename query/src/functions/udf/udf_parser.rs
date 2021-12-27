@@ -16,8 +16,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_sql::expr::ExprTraverser;
-use common_sql::expr::ExprVisitor;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use sqlparser::ast::Expr;
@@ -25,6 +23,9 @@ use sqlparser::ast::Ident;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 use sqlparser::tokenizer::Tokenizer;
+
+use crate::functions::udf::ExprTraverser;
+use crate::functions::udf::ExprVisitor;
 
 #[derive(Default)]
 pub struct UDFParser {

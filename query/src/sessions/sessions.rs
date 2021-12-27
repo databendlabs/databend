@@ -35,6 +35,7 @@ use crate::catalogs::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
 use crate::configs::config_storage::StorageType;
 use crate::configs::Config;
+use crate::functions::UDFManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
@@ -47,6 +48,7 @@ pub struct SessionManager {
     pub(in crate::sessions) discovery: Arc<ClusterDiscovery>,
     pub(in crate::sessions) catalog: Arc<DatabaseCatalog>,
     pub(in crate::sessions) user: Arc<UserApiProvider>,
+    pub(in crate::sessions) udf_manager: Arc<UDFManager>,
     pub(in crate::sessions) http_query_manager: Arc<HttpQueryManager>,
 
     pub(in crate::sessions) max_sessions: usize,
@@ -79,8 +81,11 @@ impl SessionManager {
 
         // User manager and init the default users.
         let user = UserApiProvider::create_global(conf.clone()).await?;
-        user.load_udfs(conf.clone()).await?;
 
+        // UDF manager.
+        let udf_manager = Arc::new(UDFManager::create_global(conf.clone(), user.clone()));
+
+        // HTTP query manager.
         let http_query_manager = HttpQueryManager::create_global(conf.clone()).await?;
 
         let max_active_sessions = conf.query.max_active_sessions as usize;
@@ -89,6 +94,7 @@ impl SessionManager {
             conf,
             discovery,
             user,
+            udf_manager,
             http_query_manager,
             max_sessions: max_active_sessions,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
@@ -119,6 +125,10 @@ impl SessionManager {
 
     pub fn get_table_cache(self: &Arc<Self>) -> Arc<Option<Box<dyn StorageCache>>> {
         self.table_cache.clone()
+    }
+
+    pub fn get_udf_manager(self: &Arc<Self>) -> Arc<UDFManager> {
+        self.udf_manager.clone()
     }
 
     pub fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {

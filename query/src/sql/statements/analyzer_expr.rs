@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::udfs::UDFTransformer;
 use common_planners::Expression;
 use common_sql::expr::ExprTraverser;
 use common_sql::expr::ExprVisitor;
@@ -484,13 +483,16 @@ impl ExprRPNBuilder {
     }
 }
 
+#[async_trait::async_trait]
 impl ExprVisitor for ExprRPNBuilder {
-    fn pre_visit(&mut self, expr: &Expr) -> Result<Expr> {
+    async fn pre_visit(&mut self, expr: &Expr) -> Result<Expr> {
         if let Expr::Function(function) = expr {
-            if let Some(transformed_expr) = UDFTransformer::transform_function(
-                self.context.get_config().query.tenant_id.as_str(),
-                function,
-            ) {
+            let udf_manager = self
+                .context
+                .get_sessions_manager()
+                .get_udf_manager()
+                .await?;
+            if let Some(transformed_expr) = udf_manager.transform_function(function) {
                 return Ok(transformed_expr);
             }
         }

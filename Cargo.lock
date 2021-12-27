@@ -1326,7 +1326,6 @@ dependencies = [
  "common-datavalues",
  "common-exception",
  "common-io",
- "common-sql",
  "crc32fast",
  "dyn-clone",
  "float-cmp",
@@ -1565,14 +1564,6 @@ dependencies = [
  "once_cell",
  "pretty_assertions",
  "serde",
-]
-
-[[package]]
-name = "common-sql"
-version = "0.1.0"
-dependencies = [
- "common-exception",
- "sqlparser",
 ]
 
 [[package]]
@@ -2078,7 +2069,6 @@ dependencies = [
  "common-meta-types",
  "common-metrics",
  "common-planners",
- "common-sql",
  "common-streams",
  "common-tracing",
  "criterion",
@@ -2106,6 +2096,7 @@ dependencies = [
  "prost",
  "quantiles",
  "rand 0.8.4",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
