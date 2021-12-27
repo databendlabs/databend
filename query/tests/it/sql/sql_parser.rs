@@ -49,6 +49,7 @@ use databend_query::sql::statements::DfShowCreateTable;
 use databend_query::sql::statements::DfShowDatabases;
 use databend_query::sql::statements::DfShowGrants;
 use databend_query::sql::statements::DfShowTables;
+use databend_query::sql::statements::DfShowUDF;
 use databend_query::sql::statements::DfTruncateTable;
 use databend_query::sql::statements::DfUseDatabase;
 use databend_query::sql::*;
@@ -1385,6 +1386,18 @@ fn test_drop_udf() -> Result<()> {
         "DROP FUNCTION IF EXISTS test_udf",
         DfStatement::DropUDF(DfDropUDF {
             if_exists: true,
+            udf_name: "test_udf".to_string(),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_show_udf() -> Result<()> {
+    expect_parse_ok(
+        "SHOW FUNCTION test_udf",
+        DfStatement::ShowUDF(DfShowUDF {
             udf_name: "test_udf".to_string(),
         }),
     )?;
