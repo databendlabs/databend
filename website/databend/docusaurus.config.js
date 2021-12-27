@@ -103,7 +103,7 @@ const config = {
                             {label: 'SQL', to: '/user/category/sql'},
                             {label: 'CLI', to: '/user/category/cli'},
                             {label: 'APIs', to: '/user/category/apis'},
-                            {label: 'Data Loading', to: '/user/data-loading/http-streaming-load'}
+                            {label: 'Data Loading', to: '/user/category/data-loading'}
                         ]
                     },
                     {
