@@ -16,7 +16,7 @@ common-arrow = { path = "../arrow" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../exception" }
 common-io = { path = "../io" }
-common-sql = { path = "../sql" }
+common-ast = { path = "../ast" }
 
 # Github dependencies
 bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }

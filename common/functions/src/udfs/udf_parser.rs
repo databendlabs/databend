@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_sql::expr::ExprTraverser;
-use common_sql::expr::ExprVisitor;
+use common_ast::expr::ExprTraverser;
+use common_ast::expr::ExprVisitor;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use sqlparser::ast::Expr;

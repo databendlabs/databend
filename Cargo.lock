@@ -1125,6 +1125,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-ast"
+version = "0.1.0"
+dependencies = [
+ "common-exception",
+ "sqlparser",
+]
+
+[[package]]
 name = "common-base"
 version = "0.1.0"
 dependencies = [
@@ -1322,11 +1330,11 @@ dependencies = [
  "bumpalo",
  "bytes",
  "common-arrow",
+ "common-ast",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
  "common-io",
- "common-sql",
  "crc32fast",
  "dyn-clone",
  "float-cmp",
@@ -1565,14 +1573,6 @@ dependencies = [
  "once_cell",
  "pretty_assertions",
  "serde",
-]
-
-[[package]]
-name = "common-sql"
-version = "0.1.0"
-dependencies = [
- "common-exception",
- "sqlparser",
 ]
 
 [[package]]
@@ -2056,6 +2056,7 @@ dependencies = [
  "clap 3.0.0-rc.7",
  "clickhouse-rs",
  "common-arrow",
+ "common-ast",
  "common-base",
  "common-building",
  "common-cache",
@@ -2078,7 +2079,6 @@ dependencies = [
  "common-meta-types",
  "common-metrics",
  "common-planners",
- "common-sql",
  "common-streams",
  "common-tracing",
  "criterion",
