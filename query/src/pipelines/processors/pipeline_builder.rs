@@ -330,7 +330,7 @@ impl PipelineBuilder {
             Ok(Box::new(SinkTransform::create(
                 self.ctx.clone(),
                 plan.table_info.clone(),
-                plan.cast_needed,
+                plan.cast_schema.clone(),
                 plan.input.schema(),
             )))
         })?;
