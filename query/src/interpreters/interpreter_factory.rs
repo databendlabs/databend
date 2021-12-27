@@ -21,6 +21,7 @@ use common_planners::PlanNode;
 use super::DescribeStageInterpreter;
 use crate::interpreters::interpreter_stage_drop::DropStageInterpreter;
 use crate::interpreters::interpreter_table_optimize::OptimizeTableInterpreter;
+use crate::interpreters::AlterUDFInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CopyInterpreter;
 use crate::interpreters::CreatStageInterpreter;
@@ -86,6 +87,7 @@ impl InterpreterFactory {
             PlanNode::CreateUDF(v) => CreatUDFInterpreter::try_create(ctx_clone, v),
             PlanNode::DropUDF(v) => DropUDFInterpreter::try_create(ctx_clone, v),
             PlanNode::ShowUDF(v) => ShowUDFInterpreter::try_create(ctx_clone, v),
+            PlanNode::AlterUDF(v) => AlterUDFInterpreter::try_create(ctx_clone, v),
             _ => Result::Err(ErrorCode::UnknownTypeOfQuery(format!(
                 "Can't get the interpreter by plan:{}",
                 plan.name()

@@ -53,6 +53,7 @@ use sqlparser::tokenizer::Word;
 
 use super::statements::DfCopy;
 use super::statements::DfDescribeStage;
+use crate::sql::statements::DfAlterUDF;
 use crate::sql::statements::DfAlterUser;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfCreateStage;
@@ -552,7 +553,8 @@ impl<'a> DfParser<'a> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::USER => self.parse_alter_user(),
-                _ => self.expected("keyword USER", Token::Word(w)),
+                Keyword::FUNCTION => self.parse_alter_udf(),
+                _ => self.expected("keyword USER or FUNCTION", Token::Word(w)),
             },
             unexpected => self.expected("alter statement", unexpected),
         }
@@ -874,6 +876,26 @@ impl<'a> DfParser<'a> {
         };
 
         Ok(DfStatement::CreateUDF(create_udf))
+    }
+
+    fn parse_alter_udf(&mut self) -> Result<DfStatement, ParserError> {
+        let udf_name = self.parser.parse_literal_string()?;
+        self.parser.expect_token(&Token::Eq)?;
+        // TODO verify the definition as a legal expr
+        let definition = self.parser.parse_literal_string()?;
+        let description = if self.consume_token("DESC") {
+            self.parser.expect_token(&Token::Eq)?;
+            self.parser.parse_literal_string()?
+        } else {
+            String::from("")
+        };
+        let update_udf = DfAlterUDF {
+            udf_name,
+            definition,
+            description,
+        };
+
+        Ok(DfStatement::AlterUDF(update_udf))
     }
 
     fn parse_drop_udf(&mut self) -> Result<DfStatement, ParserError> {

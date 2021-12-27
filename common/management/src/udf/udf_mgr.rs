@@ -91,6 +91,33 @@ impl UdfMgrApi for UdfMgr {
         }
     }
 
+    async fn update_udf(&self, info: UserDefinedFunction, seq: Option<u64>) -> Result<u64> {
+        if UdfMgr::is_builtin_function(info.name.as_str()) {
+            return Err(ErrorCode::UDFAlreadyExists(format!(
+                "Builtin function can not be udpated: {}",
+                info.name.as_str()
+            )));
+        }
+
+        // Check if UDF is defined
+        let _ = self.get_udf(info.name.as_str(), seq).await?;
+
+        let val = Operation::Update(serde_json::to_vec(&info)?);
+        let key = format!("{}/{}", self.udf_prefix, info.name);
+        let upsert_info =
+            self.kv_api
+                .upsert_kv(UpsertKVAction::new(&key, MatchSeq::from(seq), val, None));
+
+        let res = upsert_info.await?;
+        match res.result {
+            Some(SeqV { seq: s, .. }) => Ok(s),
+            None => Err(ErrorCode::UnknownUDF(format!(
+                "unknown UDF, or seq not match {}",
+                info.name.clone()
+            ))),
+        }
+    }
+
     async fn get_udf(&self, udf_name: &str, seq: Option<u64>) -> Result<SeqV<UserDefinedFunction>> {
         let key = format!("{}/{}", self.udf_prefix, udf_name);
         let kv_api = self.kv_api.clone();

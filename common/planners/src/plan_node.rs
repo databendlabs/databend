@@ -19,6 +19,7 @@ use common_datavalues::DataSchemaRef;
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::plan_user_stage_create::CreateUserStagePlan;
+use crate::plan_user_udf_alter::AlterUDFPlan;
 use crate::plan_user_udf_create::CreateUDFPlan;
 use crate::plan_user_udf_drop::DropUDFPlan;
 use crate::plan_user_udf_show::ShowUDFPlan;
@@ -108,6 +109,7 @@ pub enum PlanNode {
     CreateUDF(CreateUDFPlan),
     DropUDF(DropUDFPlan),
     ShowUDF(ShowUDFPlan),
+    AlterUDF(AlterUDFPlan),
 }
 
 impl PlanNode {
@@ -158,6 +160,7 @@ impl PlanNode {
             PlanNode::CreateUDF(v) => v.schema(),
             PlanNode::DropUDF(v) => v.schema(),
             PlanNode::ShowUDF(v) => v.schema(),
+            PlanNode::AlterUDF(v) => v.schema(),
         }
     }
 
@@ -207,6 +210,7 @@ impl PlanNode {
             PlanNode::CreateUDF(_) => "CreateUDFPlan",
             PlanNode::DropUDF(_) => "DropUDFPlan",
             PlanNode::ShowUDF(_) => "ShowUDF",
+            PlanNode::AlterUDF(_) => "AlterUDF",
         }
     }
 
