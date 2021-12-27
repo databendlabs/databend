@@ -48,6 +48,7 @@ use databend_query::sql::statements::DfShowGrants;
 use databend_query::sql::statements::DfShowTables;
 use databend_query::sql::statements::DfTruncateTable;
 use databend_query::sql::statements::DfUseDatabase;
+use databend_query::sql::statements::DfAlterUDF;
 use databend_query::sql::*;
 use sqlparser::ast::*;
 use sqlparser::dialect::GenericDialect;
@@ -1327,6 +1328,29 @@ fn drop_stage_test() -> Result<()> {
         DfStatement::DropStage(DfDropStage {
             if_exists: true,
             stage_name: "test_stage".to_string(),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_alter_udf() -> Result<()> {
+    expect_parse_ok(
+        "ALTER FUNCTION test_udf='not(isnotnull(@0))'",
+        DfStatement::AlterUDF(DfAlterUDF {
+            udf_name: "test_udf".to_string(),
+            definition: "not(isnotnull(@0))".to_string(),
+            description: "".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "ALTER FUNCTION test_udf='not(isnotnull(@0))' desc='This is a description'",
+        DfStatement::AlterUDF(DfAlterUDF {
+            udf_name: "test_udf".to_string(),
+            definition: "not(isnotnull(@0))".to_string(),
+            description: "This is a description".to_string(),
         }),
     )?;
 
