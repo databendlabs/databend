@@ -157,9 +157,9 @@ impl Processor for AggregatorFinalTransform {
         let mut aggr_values: Vec<Box<dyn MutableArray>> =
             {
                 let mut values = vec![];
-                for i in 0..funcs_len {
+                for func in &funcs {
                     let array: Box<dyn MutableArray> =
-                        match funcs[i].return_type()? {
+                        match func.return_type()? {
                             DataType::Int8 => Ok(Box::new(MutablePrimitiveArray::<i8>::new())
                                 as Box<dyn MutableArray>),
                             DataType::Int16 => Ok(Box::new(MutablePrimitiveArray::<i16>::new())
@@ -211,7 +211,6 @@ impl Processor for AggregatorFinalTransform {
         }
 
         let mut columns: Vec<Series> = Vec::with_capacity(funcs_len);
-        tracing::error!("group by final");
         for mut array in aggr_values {
             match array.data_type().to_physical_type() {
                 PhysicalType::Boolean => {
@@ -223,15 +222,18 @@ impl Processor for AggregatorFinalTransform {
                         let array = DFPrimitiveArray::<$T>::from_arrow_array(
                             array.as_arc().as_ref(),
                         );
+
                         columns.push(array.into_series());
                     })
                 }
-                PhysicalType::Binary => {
+                PhysicalType::LargeBinary => {
                     let array = DFStringArray::from_arrow_array(array.as_arc().as_ref());
                     columns.push(array.into_series());
                 }
                 _ => {
-                    tracing::debug!("should not be here");
+                    return Err(ErrorCode::UnexpectedError(
+                        "transform aggregator encountered unexpected datatype",
+                    ))
                 }
             };
         }

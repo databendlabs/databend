@@ -145,13 +145,14 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(())
     }
 
+    #[allow(unused_mut)]
     fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArray) -> Result<()> {
         let mut array = array
             .as_mut_any()
             .downcast_mut::<MutablePrimitiveArray<u64>>()
-            .ok_or(ErrorCode::UnexpectedError(format!(
-                "error occured when downcast MutableArray"
-            )))?;
+            .ok_or_else(|| {
+                ErrorCode::UnexpectedError("error occured when downcast MutableArray".to_string())
+            })?;
         let state = place.get::<AggregateCountState>();
         array.push(Some(state.count));
         Ok(())

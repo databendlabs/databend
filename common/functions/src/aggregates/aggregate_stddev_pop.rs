@@ -181,6 +181,7 @@ where T: DFPrimitiveType + AsPrimitive<f64>
         Ok(())
     }
 
+    #[allow(unused_mut)]
     fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArray) -> Result<()> {
         let state = place.get::<AggregateStddevPopState>();
         if state.count == 0 {
@@ -190,9 +191,9 @@ where T: DFPrimitiveType + AsPrimitive<f64>
         let mut array = array
             .as_mut_any()
             .downcast_mut::<MutablePrimitiveArray<f64>>()
-            .ok_or(ErrorCode::UnexpectedError(format!(
-                "error occured when downcast MutableArray"
-            )))?;
+            .ok_or_else(|| {
+                ErrorCode::UnexpectedError("error occured when downcast MutableArray".to_string())
+            })?;
         let variance = state.variance / state.count as f64;
         array.push(Some(variance.sqrt()));
         Ok(())

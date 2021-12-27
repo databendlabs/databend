@@ -166,103 +166,137 @@ where
         Ok(())
     }
 
+    #[allow(unused_mut)]
     fn merge_result(&mut self, array: &mut dyn MutableArray) -> Result<()> {
         // TODO(veeupup) refactor them to use macro
-        match self.data {
+        match &self.data {
             DataValue::Int8(val) => {
                 let mut array = array
                     .as_mut_any()
                     .downcast_mut::<MutablePrimitiveArray<i8>>()
-                    .ok_or(ErrorCode::UnexpectedError(format!(
-                        "error occured when downcast MutableArray"
-                    )))?;
-                array.push(val);
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push(*val);
             }
             DataValue::Int16(val) => {
                 let mut array = array
                     .as_mut_any()
                     .downcast_mut::<MutablePrimitiveArray<i16>>()
-                    .ok_or(ErrorCode::UnexpectedError(format!(
-                        "error occured when downcast MutableArray"
-                    )))?;
-                array.push(val);
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push(*val);
             }
             DataValue::Int32(val) => {
                 let mut array = array
                     .as_mut_any()
                     .downcast_mut::<MutablePrimitiveArray<i32>>()
-                    .ok_or(ErrorCode::UnexpectedError(format!(
-                        "error occured when downcast MutableArray"
-                    )))?;
-                array.push(val);
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push(*val);
             }
             DataValue::Int64(val) => {
                 let mut array = array
                     .as_mut_any()
                     .downcast_mut::<MutablePrimitiveArray<i64>>()
-                    .ok_or(ErrorCode::UnexpectedError(format!(
-                        "error occured when downcast MutableArray"
-                    )))?;
-                array.push(val);
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push(*val);
             }
             DataValue::UInt8(val) => {
                 let mut array = array
                     .as_mut_any()
                     .downcast_mut::<MutablePrimitiveArray<u8>>()
-                    .ok_or(ErrorCode::UnexpectedError(format!(
-                        "error occured when downcast MutableArray"
-                    )))?;
-                array.push(val);
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push(*val);
             }
             DataValue::UInt16(val) => {
                 let mut array = array
                     .as_mut_any()
                     .downcast_mut::<MutablePrimitiveArray<u16>>()
-                    .ok_or(ErrorCode::UnexpectedError(format!(
-                        "error occured when downcast MutableArray"
-                    )))?;
-                array.push(val);
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push(*val);
             }
             DataValue::UInt32(val) => {
                 let mut array = array
                     .as_mut_any()
                     .downcast_mut::<MutablePrimitiveArray<u32>>()
-                    .ok_or(ErrorCode::UnexpectedError(format!(
-                        "error occured when downcast MutableArray"
-                    )))?;
-                array.push(val);
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push(*val);
             }
             DataValue::UInt64(val) => {
                 let mut array = array
                     .as_mut_any()
                     .downcast_mut::<MutablePrimitiveArray<u64>>()
-                    .ok_or(ErrorCode::UnexpectedError(format!(
-                        "error occured when downcast MutableArray"
-                    )))?;
-                array.push(val);
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push(*val);
             }
             DataValue::Float32(val) => {
                 let mut array = array
                     .as_mut_any()
                     .downcast_mut::<MutablePrimitiveArray<f32>>()
-                    .ok_or(ErrorCode::UnexpectedError(format!(
-                        "error occured when downcast MutableArray"
-                    )))?;
-                array.push(val);
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push(*val);
             }
             DataValue::Float64(val) => {
                 let mut array = array
                     .as_mut_any()
                     .downcast_mut::<MutablePrimitiveArray<f64>>()
-                    .ok_or(ErrorCode::UnexpectedError(format!(
-                        "error occured when downcast MutableArray"
-                    )))?;
-                array.push(val);
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push(*val);
+            }
+            DataValue::String(val) => {
+                let mut array = array
+                    .as_mut_any()
+                    .downcast_mut::<MutableBinaryArray<i64>>()
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+
+                println!("val {:#?}", val);
+                array.push(val.as_ref());
             }
             _ => {
-                return Err(ErrorCode::UnexpectedError(format!(
-                    "aggregate result, unexpected datatype"
-                )))
+                return Err(ErrorCode::UnexpectedError(
+                    "aggregate result, unexpected datatype  number state".to_string(),
+                ))
             }
         }
 
@@ -362,102 +396,134 @@ impl AggregateArgMinMaxState for StringState {
         Ok(())
     }
 
+    #[allow(unused_mut)]
     fn merge_result(&mut self, array: &mut dyn MutableArray) -> Result<()> {
-        match self.data {
+        match &self.data {
             DataValue::Int8(val) => {
                 let mut array = array
                     .as_mut_any()
                     .downcast_mut::<MutablePrimitiveArray<i8>>()
-                    .ok_or(ErrorCode::UnexpectedError(format!(
-                        "error occured when downcast MutableArray"
-                    )))?;
-                array.push(val);
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push(*val);
             }
             DataValue::Int16(val) => {
                 let mut array = array
                     .as_mut_any()
                     .downcast_mut::<MutablePrimitiveArray<i16>>()
-                    .ok_or(ErrorCode::UnexpectedError(format!(
-                        "error occured when downcast MutableArray"
-                    )))?;
-                array.push(val);
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push(*val);
             }
             DataValue::Int32(val) => {
                 let mut array = array
                     .as_mut_any()
                     .downcast_mut::<MutablePrimitiveArray<i32>>()
-                    .ok_or(ErrorCode::UnexpectedError(format!(
-                        "error occured when downcast MutableArray"
-                    )))?;
-                array.push(val);
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push(*val);
             }
             DataValue::Int64(val) => {
                 let mut array = array
                     .as_mut_any()
                     .downcast_mut::<MutablePrimitiveArray<i64>>()
-                    .ok_or(ErrorCode::UnexpectedError(format!(
-                        "error occured when downcast MutableArray"
-                    )))?;
-                array.push(val);
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push(*val);
             }
             DataValue::UInt8(val) => {
                 let mut array = array
                     .as_mut_any()
                     .downcast_mut::<MutablePrimitiveArray<u8>>()
-                    .ok_or(ErrorCode::UnexpectedError(format!(
-                        "error occured when downcast MutableArray"
-                    )))?;
-                array.push(val);
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push(*val);
             }
             DataValue::UInt16(val) => {
                 let mut array = array
                     .as_mut_any()
                     .downcast_mut::<MutablePrimitiveArray<u16>>()
-                    .ok_or(ErrorCode::UnexpectedError(format!(
-                        "error occured when downcast MutableArray"
-                    )))?;
-                array.push(val);
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push(*val);
             }
             DataValue::UInt32(val) => {
                 let mut array = array
                     .as_mut_any()
                     .downcast_mut::<MutablePrimitiveArray<u32>>()
-                    .ok_or(ErrorCode::UnexpectedError(format!(
-                        "error occured when downcast MutableArray"
-                    )))?;
-                array.push(val);
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push(*val);
             }
             DataValue::UInt64(val) => {
                 let mut array = array
                     .as_mut_any()
                     .downcast_mut::<MutablePrimitiveArray<u64>>()
-                    .ok_or(ErrorCode::UnexpectedError(format!(
-                        "error occured when downcast MutableArray"
-                    )))?;
-                array.push(val);
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push(*val);
             }
             DataValue::Float32(val) => {
                 let mut array = array
                     .as_mut_any()
                     .downcast_mut::<MutablePrimitiveArray<f32>>()
-                    .ok_or(ErrorCode::UnexpectedError(format!(
-                        "error occured when downcast MutableArray"
-                    )))?;
-                array.push(val);
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push(*val);
             }
             DataValue::Float64(val) => {
                 let mut array = array
                     .as_mut_any()
                     .downcast_mut::<MutablePrimitiveArray<f64>>()
-                    .ok_or(ErrorCode::UnexpectedError(format!(
-                        "error occured when downcast MutableArray"
-                    )))?;
-                array.push(val);
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push(*val);
+            }
+            DataValue::String(val) => {
+                let mut array = array
+                    .as_mut_any()
+                    .downcast_mut::<MutableBinaryArray<i64>>()
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push(val.as_ref());
             }
             _ => {
-                return Err(ErrorCode::UnexpectedError(format!(
-                    "aggregate result, unexpected datatype"
-                )))
+                return Err(ErrorCode::UnexpectedError(
+                    "aggregating in arg_min_max encountered unexpected datatype".to_string(),
+                ))
             }
         }
 

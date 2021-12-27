@@ -250,13 +250,14 @@ where
         Ok(())
     }
 
+    #[allow(unused_mut)]
     fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArray) -> Result<()> {
         let mut array = array
             .as_mut_any()
             .downcast_mut::<MutablePrimitiveArray<f64>>()
-            .ok_or(ErrorCode::UnexpectedError(format!(
-                "error occured when downcast MutableArray"
-            )))?;
+            .ok_or_else(|| {
+                ErrorCode::UnexpectedError("error occured when downcast MutableArray".to_string())
+            })?;
         let state = place.get::<AggregateCovarianceState>();
         array.push(R::apply(state));
         Ok(())

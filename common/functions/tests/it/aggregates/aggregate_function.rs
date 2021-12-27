@@ -20,7 +20,6 @@ use common_arrow::arrow::array::MutablePrimitiveArray;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::MutableBuffer;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use common_arrow::arrow::types::NativeType;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::*;
@@ -38,7 +37,6 @@ fn test_aggregate_function() -> Result<()> {
         args: Vec<DataField>,
         display: &'static str,
         arrays: Vec<Series>,
-        expect: DataValue,
         error: &'static str,
         func_name: &'static str,
         input_array: Box<dyn MutableArray>,
@@ -74,7 +72,6 @@ fn test_aggregate_function() -> Result<()> {
             display: "count",
             func_name: "count",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::UInt64(Some(4)),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<u64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -91,7 +88,6 @@ fn test_aggregate_function() -> Result<()> {
             display: "max",
             func_name: "max",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::Int64(Some(4)),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<i64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -108,7 +104,6 @@ fn test_aggregate_function() -> Result<()> {
             display: "min",
             func_name: "min",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::Int64(Some(1)),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<i64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -125,7 +120,6 @@ fn test_aggregate_function() -> Result<()> {
             display: "avg",
             func_name: "avg",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::Float64(Some(2.5)),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<f64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -142,7 +136,6 @@ fn test_aggregate_function() -> Result<()> {
             display: "sum",
             func_name: "sum",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::Int64(Some(10)),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<i64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -159,7 +152,6 @@ fn test_aggregate_function() -> Result<()> {
             display: "argmax",
             func_name: "argmax",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
-            expect: DataValue::Int64(Some(1)),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<i64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -176,7 +168,6 @@ fn test_aggregate_function() -> Result<()> {
             display: "argmin",
             func_name: "argmin",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
-            expect: DataValue::Int64(Some(4)),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<i64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -193,7 +184,6 @@ fn test_aggregate_function() -> Result<()> {
             display: "argmin",
             func_name: "argmin",
             arrays: arrays.clone(),
-            expect: DataValue::Int64(Some(4)),
             error: "Code: 28, displayText = argmin expect to have two arguments, but got 1.",
             input_array: Box::new(MutablePrimitiveArray::<i64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -210,7 +200,6 @@ fn test_aggregate_function() -> Result<()> {
             display: "uniq",
             func_name: "uniq",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::UInt64(Some(4)),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<u64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -227,7 +216,6 @@ fn test_aggregate_function() -> Result<()> {
             display: "std",
             func_name: "std",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::Float64(Some(1.118033988749895)),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<f64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -244,7 +232,6 @@ fn test_aggregate_function() -> Result<()> {
             display: "stddev",
             func_name: "stddev",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::Float64(Some(1.118033988749895)),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<f64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -261,7 +248,6 @@ fn test_aggregate_function() -> Result<()> {
             display: "stddev_pop",
             func_name: "stddev_pop",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::Float64(Some(1.118033988749895)),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<f64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -278,7 +264,6 @@ fn test_aggregate_function() -> Result<()> {
             display: "covar_samp",
             func_name: "covar_samp",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
-            expect: DataValue::Float64(Some(-1.6666666666666667)),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<f64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -295,7 +280,6 @@ fn test_aggregate_function() -> Result<()> {
             display: "covar_pop",
             func_name: "covar_pop",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
-            expect: DataValue::Float64(Some(-1.25000)),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<f64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -322,7 +306,6 @@ fn test_aggregate_function() -> Result<()> {
                 arrays[4].clone(),
                 arrays[5].clone(),
             ],
-            expect: DataValue::UInt8(Some(3)),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<u8>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -447,7 +430,6 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
         args: Vec<DataField>,
         display: &'static str,
         arrays: Vec<Series>,
-        expect: Vec<DataValue>,
         error: &'static str,
         func_name: &'static str,
         input_array: Box<dyn MutableArray>,
@@ -484,7 +466,6 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             display: "count",
             func_name: "count",
             arrays: vec![arrays[0].clone()],
-            expect: vec![DataValue::UInt64(Some(2)), DataValue::UInt64(Some(2))],
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<u64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -501,7 +482,6 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             display: "max",
             func_name: "max",
             arrays: vec![arrays[0].clone()],
-            expect: vec![DataValue::Int64(Some(4)), DataValue::Int64(Some(3))],
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<i64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -518,7 +498,6 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             display: "min",
             func_name: "min",
             arrays: vec![arrays[0].clone()],
-            expect: vec![DataValue::Int64(Some(2)), DataValue::Int64(Some(1))],
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<i64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -535,7 +514,6 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             display: "avg",
             func_name: "avg",
             arrays: vec![arrays[0].clone()],
-            expect: vec![DataValue::Float64(Some(3.0)), DataValue::Float64(Some(2.0))],
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<f64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -552,7 +530,6 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             display: "sum",
             func_name: "sum",
             arrays: vec![arrays[0].clone()],
-            expect: vec![DataValue::Int64(Some(6)), DataValue::Int64(Some(4))],
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<i64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -569,7 +546,6 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             display: "argmax",
             func_name: "argmax",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
-            expect: vec![DataValue::Int64(Some(2)), DataValue::Int64(Some(1))],
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<i64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -586,7 +562,6 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             display: "argmax",
             func_name: "argmax",
             arrays: vec![arrays[0].clone(), arrays[2].clone()],
-            expect: vec![DataValue::Int64(Some(2)), DataValue::Int64(Some(1))],
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<i64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -603,7 +578,6 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             display: "argmin",
             func_name: "argmin",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
-            expect: vec![DataValue::Int64(Some(4)), DataValue::Int64(Some(3))],
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<i64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -620,7 +594,6 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             display: "argmin",
             func_name: "argmin",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
-            expect: vec![DataValue::Int64(Some(4)), DataValue::Int64(Some(3))],
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<i64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -637,7 +610,6 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             display: "uniq",
             func_name: "uniq",
             arrays: vec![arrays[0].clone()],
-            expect: vec![DataValue::UInt64(Some(2)), DataValue::UInt64(Some(2))],
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<u64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -654,7 +626,6 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             display: "std",
             func_name: "std",
             arrays: vec![arrays[0].clone()],
-            expect: vec![DataValue::Float64(Some(1.0)), DataValue::Float64(Some(1.0))],
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<f64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -671,7 +642,6 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             display: "stddev",
             func_name: "stddev",
             arrays: vec![arrays[0].clone()],
-            expect: vec![DataValue::Float64(Some(1.0)), DataValue::Float64(Some(1.0))],
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<f64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -688,7 +658,6 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             display: "stddev_pop",
             func_name: "stddev_pop",
             arrays: vec![arrays[0].clone()],
-            expect: vec![DataValue::Float64(Some(1.0)), DataValue::Float64(Some(1.0))],
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<f64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -705,10 +674,6 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             display: "covar_samp",
             func_name: "covar_samp",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
-            expect: vec![
-                DataValue::Float64(Some(-2.0)),
-                DataValue::Float64(Some(-2.0)),
-            ],
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<f64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -725,10 +690,6 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             display: "covar_pop",
             func_name: "covar_pop",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
-            expect: vec![
-                DataValue::Float64(Some(-1.0)),
-                DataValue::Float64(Some(-1.0)),
-            ],
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<f64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -750,7 +711,6 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
                 arrays[5].clone(),
                 arrays[6].clone(),
             ],
-            expect: vec![DataValue::UInt8(Some(2)), DataValue::UInt8(Some(1))],
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<u8>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -870,7 +830,6 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         args: Vec<DataField>,
         display: &'static str,
         arrays: Vec<Series>,
-        expect: DataValue,
         error: &'static str,
         func_name: &'static str,
         input_array: Box<dyn MutableArray>,
@@ -896,7 +855,6 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             display: "count",
             func_name: "count",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::UInt64(Some(0)),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<u64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -913,7 +871,6 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             display: "max",
             func_name: "max",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::Int64(None),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<i64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -930,7 +887,6 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             display: "min",
             func_name: "min",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::Int64(None),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<i64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -947,7 +903,6 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             display: "avg",
             func_name: "avg",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::Float64(None),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<f64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -964,7 +919,6 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             display: "sum",
             func_name: "sum",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::Int64(None),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<i64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -981,7 +935,6 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             display: "argmax",
             func_name: "argmax",
             arrays: arrays.clone(),
-            expect: DataValue::Int64(None),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<i64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -998,7 +951,6 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             display: "argmin",
             func_name: "argmin",
             arrays: arrays.clone(),
-            expect: DataValue::Int64(None),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<i64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -1015,7 +967,6 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             display: "uniq",
             func_name: "uniq",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::UInt64(Some(0)),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<u64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -1032,7 +983,6 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             display: "std",
             func_name: "std",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::Float64(None),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<f64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -1049,7 +999,6 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             display: "stddev",
             func_name: "stddev",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::Float64(None),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<f64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -1066,7 +1015,6 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             display: "stddev_pop",
             func_name: "stddev_pop",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::Float64(None),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<f64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -1083,7 +1031,6 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             display: "covar_samp",
             func_name: "covar_samp",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
-            expect: DataValue::Float64(Some(f64::INFINITY)),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<f64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(
@@ -1100,7 +1047,6 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             display: "covar_pop",
             func_name: "covar_pop",
             arrays: vec![arrays[0].clone(), arrays[1].clone()],
-            expect: DataValue::Float64(Some(f64::INFINITY)),
             error: "",
             input_array: Box::new(MutablePrimitiveArray::<f64>::new()),
             expect_array: Box::new(MutablePrimitiveArray::from_data(

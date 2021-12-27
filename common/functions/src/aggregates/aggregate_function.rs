@@ -21,7 +21,6 @@ use common_arrow::arrow::array::MutableArray;
 use common_datavalues::series::Series;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
-use common_datavalues::DataValue;
 use common_exception::Result;
 
 use super::StateAddr;

@@ -202,6 +202,7 @@ impl AggregateFunction for AggregateDistinctCombinator {
         Ok(())
     }
 
+    #[allow(unused_mut)]
     fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArray) -> Result<()> {
         let state = place.get::<AggregateDistinctState>();
 
@@ -213,11 +214,13 @@ impl AggregateFunction for AggregateDistinctCombinator {
             let mut array = array
                 .as_mut_any()
                 .downcast_mut::<MutablePrimitiveArray<u64>>()
-                .ok_or(ErrorCode::UnexpectedError(format!(
-                    "error occured when downcast MutableArray"
-                )))?;
+                .ok_or_else(|| {
+                    ErrorCode::UnexpectedError(
+                        "error occured when downcast MutableArray".to_string(),
+                    )
+                })?;
             array.push(Some(state.set.len() as u64));
-            return Ok(());
+            Ok(())
         } else {
             if state.set.is_empty() {
                 return self.nested.merge_result(netest_place, array);

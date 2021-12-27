@@ -19,7 +19,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use bumpalo::Bump;
-use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::MutableArray;
 use common_arrow::arrow::array::MutableBinaryArray;
 use common_arrow::arrow::array::MutableBooleanArray;
@@ -117,7 +116,6 @@ impl Processor for GroupByFinalTransform {
             .iter()
             .map(|x| x.to_aggregate_function(&self.schema_before_group_by))
             .collect::<Result<Vec<_>>>()?;
-        let typ = funcs[0].return_type()?;
         let aggr_funcs_len = funcs.len();
         let group_expr_len = self.group_exprs.len();
 
@@ -209,8 +207,8 @@ impl Processor for GroupByFinalTransform {
 
                 let mut aggr_values: Vec<Box<dyn MutableArray>> = {
                     let mut values = vec![];
-                    for i in 0..aggr_funcs_len {
-                        let array: Box<dyn MutableArray> = match funcs[i].return_type()? {
+                    for func in &funcs {
+                        let array: Box<dyn MutableArray> = match func.return_type()? {
                             DataType::Int8 => Ok(Box::new(MutablePrimitiveArray::<i8>::new())
                                 as Box<dyn MutableArray>),
                             DataType::Int16 => Ok(Box::new(MutablePrimitiveArray::<i16>::new())
@@ -263,13 +261,12 @@ impl Processor for GroupByFinalTransform {
                     for (idx, func) in funcs.iter().enumerate() {
                         let arg_place = place.next(offsets_aggregate_states[idx]);
                         let array: &mut dyn MutableArray = aggr_values[idx].borrow_mut();
-                        let merge = func.merge_result(arg_place, array)?;
+                        func.merge_result(arg_place, array)?;
                     }
                 }
 
                 // Build final state block.
                 let mut columns: Vec<Series> = Vec::with_capacity(aggr_funcs_len + group_expr_len);
-                tracing::error!("group by final");
                 for mut array in aggr_values {
                     match array.data_type().to_physical_type() {
                         PhysicalType::Boolean => {
@@ -287,9 +284,10 @@ impl Processor for GroupByFinalTransform {
                         PhysicalType::Binary => {
                             let array = DFStringArray::from_arrow_array(array.as_arc().as_ref());
                             columns.push(array.into_series());
+                            tracing::error!("try into string array");
                         }
                         _ => {
-                            tracing::debug!("should not be here");
+                            tracing::error!("should not be here");
                         }
                     };
                 }
