@@ -44,8 +44,8 @@ impl ArithmeticFunction {
     pub fn register(factory: &mut FunctionFactory) {
         factory.register_arithmetic("+", ArithmeticPlusFunction::desc());
         factory.register_arithmetic("plus", ArithmeticPlusFunction::desc());
-        factory.register("-", ArithmeticMinusFunction::desc());
-        factory.register("minus", ArithmeticMinusFunction::desc());
+        factory.register_arithmetic("-", ArithmeticMinusFunction::desc());
+        factory.register_arithmetic("minus", ArithmeticMinusFunction::desc());
         factory.register_arithmetic("*", ArithmeticMulFunction::desc());
         factory.register_arithmetic("multiply", ArithmeticMulFunction::desc());
         factory.register_arithmetic("/", ArithmeticDivFunction::desc());
@@ -114,7 +114,6 @@ impl Function for ArithmeticFunction {
 
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
         match self.op {
-            Minus => ArithmeticMinusFunction::get_monotonicity(args),
             Modulo => ArithmeticModuloFunction::get_monotonicity(args),
             _ => unimplemented!(),
         }

@@ -91,3 +91,72 @@ impl ArithmeticTrait for IntervalMonthAddDatetime32 {
         )
     }
 }
+
+#[derive(Clone)]
+pub struct IntervalDaytimeSubDate16 {}
+
+impl ArithmeticTrait for IntervalDaytimeSubDate16 {
+    fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
+        let milliseconds_per_day = 24 * 3600 * 1000;
+        interval_arithmetic! {&columns[0], &columns[1], u16, |l: i64, r: i64| (l - r/milliseconds_per_day) as u16}
+    }
+}
+
+#[derive(Clone)]
+pub struct IntervalDaytimeSubDate32 {}
+
+impl ArithmeticTrait for IntervalDaytimeSubDate32 {
+    fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
+        let milliseconds_per_day = 24 * 3600 * 1000;
+        interval_arithmetic! {&columns[0], &columns[1], i32, |l: i64, r: i64| (l - r/milliseconds_per_day) as i32}
+    }
+}
+
+#[derive(Clone)]
+pub struct IntervalDaytimeSubDatetime32 {}
+
+impl ArithmeticTrait for IntervalDaytimeSubDatetime32 {
+    fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
+        let div = 1000;
+        interval_arithmetic! {&columns[0], &columns[1], u32, |l: i64, r: i64| (l - r/div) as u32}
+    }
+}
+
+#[derive(Clone)]
+pub struct IntervalMonthSubDate16 {}
+
+impl ArithmeticTrait for IntervalMonthSubDate16 {
+    fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
+        IntervalFunctionFactory::interval_month_plus_minus_date16(
+            &DataValueArithmeticOperator::Minus,
+            &columns[0],
+            &columns[1],
+        )
+    }
+}
+
+#[derive(Clone)]
+pub struct IntervalMonthSubDate32 {}
+
+impl ArithmeticTrait for IntervalMonthSubDate32 {
+    fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
+        IntervalFunctionFactory::interval_month_plus_minus_date32(
+            &DataValueArithmeticOperator::Minus,
+            &columns[0],
+            &columns[1],
+        )
+    }
+}
+
+#[derive(Clone)]
+pub struct IntervalMonthSubDatetime32 {}
+
+impl ArithmeticTrait for IntervalMonthSubDatetime32 {
+    fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
+        IntervalFunctionFactory::interval_month_plus_minus_datetime32(
+            &DataValueArithmeticOperator::Minus,
+            &columns[0],
+            &columns[1],
+        )
+    }
+}

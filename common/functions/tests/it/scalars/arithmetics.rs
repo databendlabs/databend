@@ -107,6 +107,22 @@ fn test_arithmetic_function() -> Result<()> {
             },
         ),
         (
+            ArithmeticIntDivFunction::try_create_func("", &[
+                DataTypeAndNullable::create(&DataType::Int64, false),
+                DataTypeAndNullable::create(&DataType::Int64, false),
+            ])?,
+            ScalarFunctionTest {
+                name: "intdiv-int64-passed",
+                nullable: false,
+                columns: vec![
+                    Series::new(vec![4i64, 3, 2]).into(),
+                    Series::new(vec![1i64, 2, 3]).into(),
+                ],
+                expect: Series::new(vec![4i64, 1, 0]).into(),
+                error: "",
+            },
+        )
+        (
             ArithmeticModuloFunction::try_create_func("", &[
                 DataTypeAndNullable::create(&DataType::Int64, false),
                 DataTypeAndNullable::create(&DataType::Int64, false),

@@ -160,7 +160,7 @@ impl ArithmeticPlusFunction {
         }
     }
 
-    impl_try_create_datetime!(DataValueArithmeticOperator::Plus, ArithmeticAdd);
+    impl_try_create_datetime!(DataValueArithmeticOperator::Plus, ArithmeticAdd, true);
 
     pub fn desc() -> ArithmeticDescription {
         ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(

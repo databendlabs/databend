@@ -14,7 +14,7 @@
 
 #[macro_export]
 macro_rules! impl_try_create_datetime {
-    ($op: expr, $func: ident) => {
+    ($op: expr, $func: ident, $add: expr) => {
         fn try_create_datetime(
             lhs_type: &DataType,
             rhs_type: &DataType,
@@ -33,20 +33,17 @@ macro_rules! impl_try_create_datetime {
                             lhs_type.clone(),
                         )
                     },{
-                        if !rhs_type.is_date_or_date_time() {
-                            return e;
-                        }
                         with_match_date_type!(rhs_type, |$D| {
-                            match op {
-                                DataValueArithmeticOperator::Plus => BinaryArithmeticFunction::<ArithmeticAdd<$T, $D, $T>>::try_create_func(
+                            if $add {
+                                BinaryArithmeticFunction::<$func<$T, $D, $T>>::try_create_func(
                                     op.clone(),
                                     lhs_type.clone(),
-                                ),
-                                DataValueArithmeticOperator::Minus => BinaryArithmeticFunction::<ArithmeticAdd<$T, $D, i32>>::try_create_func(
+                                )
+                            } else {
+                                BinaryArithmeticFunction::<$func<$T, $D, i32>>::try_create_func(
                                     op.clone(),
                                     DataType::Int32,
-                                ),
-                                _ => e,
+                                )
                             }
                         }, e)
                     })

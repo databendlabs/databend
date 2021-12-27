@@ -15,18 +15,18 @@
 use std::marker::PhantomData;
 
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use num::cast::AsPrimitive;
-use common_exception::ErrorCode;
 
 use super::arithmetic::ArithmeticTrait;
+use super::result_type::ResultTypeOfArithmetic;
+use crate::binary_arithmetic_helper;
 use crate::scalars::function_factory::ArithmeticDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
-use crate::binary_arithmetic_helper;
-use super::result_type::ResultTypeOfArithmetic;
 use crate::with_match_primitive_type;
 
 #[derive(Clone)]
