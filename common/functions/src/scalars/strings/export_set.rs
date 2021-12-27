@@ -20,6 +20,7 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::izip;
+use common_datavalues::DataTypeAndNullable;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
@@ -51,20 +52,20 @@ impl Function for ExportSetFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if !args[0].is_integer() && args[0] != DataType::String && args[0] != DataType::Null {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        if !args[0].is_integer() && !args[0].is_string() && !args[0].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[0]
             )));
         }
-        if !args[1].is_integer() && args[1] != DataType::String && args[1] != DataType::Null {
+        if !args[1].is_integer() && !args[1].is_string() && !args[1].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[1]
             )));
         }
-        if !args[2].is_integer() && args[2] != DataType::String && args[2] != DataType::Null {
+        if !args[2].is_integer() && !args[2].is_string() && !args[2].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[2]
@@ -72,8 +73,8 @@ impl Function for ExportSetFunction {
         }
         if args.len() > 3
             && !args[3].is_integer()
-            && args[3] != DataType::String
-            && args[3] != DataType::Null
+            && !args[3].is_string()
+            && !args[3].is_null()
         {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
@@ -82,8 +83,8 @@ impl Function for ExportSetFunction {
         }
         if args.len() > 4
             && !args[4].is_integer()
-            && args[4] != DataType::String
-            && args[4] != DataType::Null
+            && !args[4].is_string()
+            && !args[4].is_null()
         {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",

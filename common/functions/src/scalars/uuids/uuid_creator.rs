@@ -17,7 +17,7 @@ use std::marker::PhantomData;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataType;
+use common_datavalues::{DataType, DataTypeAndNullable};
 use common_datavalues::DataValue;
 use common_exception::Result;
 use uuid::Uuid;
@@ -86,7 +86,7 @@ where T: UUIDCreator + Clone + Sync + Send + 'static
         self.display_name.as_str()
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
         Ok(DataType::String)
     }
 

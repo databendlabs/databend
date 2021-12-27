@@ -15,7 +15,7 @@
 use std::fmt;
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataType;
+use common_datavalues::{DataType, DataTypeAndNullable};
 use common_exception::ErrorCode;
 use common_exception::Result;
 use rand::prelude::*;
@@ -47,10 +47,10 @@ impl Function for RandomFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
         if args.is_empty()
             || matches!(
-                args[0],
+                args[0].data_type(),
                 DataType::UInt8
                     | DataType::UInt16
                     | DataType::UInt32

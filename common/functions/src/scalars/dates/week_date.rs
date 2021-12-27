@@ -21,6 +21,7 @@ use common_datavalues::chrono::Datelike;
 use common_datavalues::chrono::Duration;
 use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::Utc;
+use common_datavalues::DataTypeAndNullable;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -113,7 +114,7 @@ where
         self.display_name.as_str()
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
         T::return_type()
     }
 

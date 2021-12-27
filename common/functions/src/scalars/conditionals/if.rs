@@ -16,7 +16,7 @@ use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataField;
+use common_datavalues::{DataField, DataTypeAndNullable};
 use common_datavalues::DataType;
 use common_exception::Result;
 
@@ -47,14 +47,18 @@ impl Function for IfFunction {
         "IfFunction"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        common_datavalues::aggregate_types(&args[1..])
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        let mut aggregate_args = Vec::with_capacity(args.len() - 1);
+        for index in 1..args.len() {
+            aggregate_args.push(args[index].data_type().clone())
+        }
+        common_datavalues::aggregate_types(&aggregate_args)
     }
 
     // IF(condition, value_if_true, value_if_false) is nullable if 'value_if_true' is nullable or 'value_if_false' is nullable.
     // The condition of 'Null' is treated as false.
-    fn nullable(&self, arg_fields: &[DataField]) -> Result<bool> {
-        let nullable = arg_fields[1].is_nullable() || arg_fields[2].is_nullable();
+    fn nullable(&self, args: &[DataTypeAndNullable]) -> Result<bool> {
+        let nullable = args[1].is_nullable() || args[2].is_nullable();
         Ok(nullable)
     }
 

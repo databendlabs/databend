@@ -19,6 +19,7 @@ use std::ops::Sub;
 use common_datavalues::chrono::Date;
 use common_datavalues::chrono::NaiveDate;
 use common_datavalues::chrono::Utc;
+use common_datavalues::DataTypeAndNullable;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 
@@ -111,7 +112,7 @@ where T: NoArgDateFunction + Clone + Sync + Send + 'static
         self.display_name.as_str()
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
         Ok(DataType::Date16)
     }
 

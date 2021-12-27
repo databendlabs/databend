@@ -18,7 +18,7 @@ use common_arrow::arrow::array::Array;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::prelude::*;
-use common_datavalues::DataType;
+use common_datavalues::{DataType, DataTypeAndNullable};
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -49,8 +49,8 @@ impl Function for RunningDifferenceFunction {
         self.display_name.as_str()
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        match args[0] {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        match args[0].data_type() {
             DataType::Int8 | DataType::UInt8 => Ok(DataType::Int16),
             DataType::Int16 | DataType::UInt16 | DataType::Date16 => Ok(DataType::Int32),
             DataType::Int32

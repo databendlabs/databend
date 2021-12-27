@@ -13,6 +13,7 @@
 // limitations under the License.
 use std::fmt;
 use std::marker::PhantomData;
+use common_datavalues::DataTypeAndNullable;
 
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -39,10 +40,10 @@ pub struct String2NumberFunction<T, R> {
 }
 
 impl<T, R> String2NumberFunction<T, R>
-where
-    T: NumberResultFunction<R> + Clone + Sync + Send + 'static,
-    R: DFPrimitiveType + Clone,
-    DFPrimitiveArray<R>: IntoSeries,
+    where
+        T: NumberResultFunction<R> + Clone + Sync + Send + 'static,
+        R: DFPrimitiveType + Clone,
+        DFPrimitiveArray<R>: IntoSeries,
 {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(String2NumberFunction::<T, R> {
@@ -70,17 +71,17 @@ where
 /// A common function template that transform string column into string column
 /// Eg: trim, lower, upper, etc.
 impl<T, R> Function for String2NumberFunction<T, R>
-where
-    T: NumberResultFunction<R> + Clone + Sync + Send,
-    R: DFPrimitiveType + Clone,
-    DFPrimitiveArray<R>: IntoSeries,
+    where
+        T: NumberResultFunction<R> + Clone + Sync + Send,
+        R: DFPrimitiveType + Clone,
+        DFPrimitiveArray<R>: IntoSeries,
 {
     fn name(&self) -> &str {
         self.display_name.as_str()
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if !args[0].is_numeric() && args[0] != DataType::String && args[0] != DataType::Null {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        if !args[0].is_numeric() && !args[0].is_string() && !args[0].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null, but got {}",
                 args[0]

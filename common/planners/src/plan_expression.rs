@@ -16,7 +16,7 @@ use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
-use common_datavalues::DataField;
+use common_datavalues::{DataField, DataTypeAndNullable};
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
@@ -229,6 +229,10 @@ impl Expression {
         })
     }
 
+    pub fn nullable(&self, input_schema: &DataSchemaRef) -> Result<bool> {
+        Ok(self.to_data_type_and_nullable(input_schema)?.is_nullable())
+    }
+
     #[inline(always)]
     pub fn subquery_nullable(subquery_plan: &PlanNode) -> Result<bool> {
         let subquery_schema = subquery_plan.schema();
@@ -239,61 +243,17 @@ impl Expression {
         Ok(nullable)
     }
 
-    #[inline(always)]
-    pub fn function_nullable(op: &str, arg_fields: Vec<DataField>) -> Result<bool> {
-        let arg_types = arg_fields
-            .iter()
-            .map(|field| field.data_type().clone())
-            .collect::<Vec<_>>();
-        let f = FunctionFactory::instance().get(op, &arg_types)?;
-        f.nullable(&arg_fields)
-    }
-
-    pub fn nullable(&self, input_schema: &DataSchemaRef) -> Result<bool> {
-        match self {
-            Expression::Alias(_, expr) => expr.nullable(input_schema),
-            Expression::Column(s) => Ok(input_schema.field_with_name(s)?.is_nullable()),
-            Expression::QualifiedColumn(_) => Err(ErrorCode::LogicalError(
-                "QualifiedColumn should be resolve in analyze.",
-            )),
-            Expression::Literal { value, .. } => Ok(value.is_null()),
-            Expression::Subquery { query_plan, .. } => Self::subquery_nullable(query_plan),
-            Expression::ScalarSubquery { query_plan, .. } => Self::subquery_nullable(query_plan),
-            Expression::BinaryExpression { left, op, right } => {
-                let arg_fields = vec![
-                    left.to_data_field(input_schema)?,
-                    right.to_data_field(input_schema)?,
-                ];
-                Self::function_nullable(op, arg_fields)
-            }
-            Expression::UnaryExpression { op, expr } => {
-                let arg_fields = vec![expr.to_data_field(input_schema)?];
-                Self::function_nullable(op, arg_fields)
-            }
-            Expression::ScalarFunction { op, args } => {
-                let arg_fields = args
-                    .iter()
-                    .map(|expr| expr.to_data_field(input_schema))
-                    .collect::<Result<Vec<_>>>()?;
-                Self::function_nullable(op, arg_fields)
-            }
-            Expression::AggregateFunction { .. } => {
-                let f = self.to_aggregate_function(input_schema)?;
-                f.nullable(input_schema)
-            }
-            Expression::Wildcard => Result::Err(ErrorCode::IllegalDataType(
-                "Wildcard expressions are not valid to get return nullable",
-            )),
-            Expression::Cast { expr, .. } => expr.nullable(input_schema),
-            Expression::Sort { expr, .. } => expr.nullable(input_schema),
-        }
-    }
-
-    pub fn to_subquery_type(subquery_plan: &PlanNode) -> DataType {
+    pub fn to_subquery_type(subquery_plan: &PlanNode) -> DataTypeAndNullable {
         let subquery_schema = subquery_plan.schema();
+        // TODO: This may be wrong.
+        let mut is_nullable = false;
         let mut columns_field = Vec::with_capacity(subquery_schema.fields().len());
 
         for column_field in subquery_schema.fields() {
+            if column_field.is_nullable() {
+                is_nullable = true;
+            }
+
             columns_field.push(DataField::new(
                 column_field.name(),
                 DataType::List(Box::new(DataField::new(
@@ -306,65 +266,92 @@ impl Expression {
         }
 
         match columns_field.len() {
-            1 => columns_field[0].data_type().clone(),
-            _ => DataType::Struct(columns_field),
+            1 => DataTypeAndNullable::create(columns_field[0].data_type(), is_nullable),
+            _ => DataTypeAndNullable::create(&DataType::Struct(columns_field), is_nullable),
         }
     }
 
-    pub fn to_scalar_subquery_type(subquery_plan: &PlanNode) -> DataType {
+    pub fn to_scalar_subquery_type(subquery_plan: &PlanNode) -> DataTypeAndNullable {
         let subquery_schema = subquery_plan.schema();
+        // TODO: This may be wrong.
+        let is_nullable = subquery_schema
+            .fields()
+            .iter()
+            .any(|field| field.is_nullable());
 
         match subquery_schema.fields().len() {
-            1 => subquery_schema.field(0).data_type().clone(),
-            _ => DataType::Struct(subquery_schema.fields().clone()),
+            1 => DataTypeAndNullable::create(subquery_schema.field(0).data_type(), is_nullable),
+            _ => DataTypeAndNullable::create(&DataType::Struct(subquery_schema.fields().clone()), is_nullable),
         }
     }
 
     pub fn to_data_type(&self, input_schema: &DataSchemaRef) -> Result<DataType> {
+        Ok(self.to_data_type_and_nullable(input_schema)?.data_type().clone())
+    }
+
+    pub fn to_data_type_and_nullable(&self, input_schema: &DataSchemaRef) -> Result<DataTypeAndNullable> {
         match self {
-            Expression::Alias(_, expr) => expr.to_data_type(input_schema),
-            Expression::Column(s) => Ok(input_schema.field_with_name(s)?.data_type().clone()),
+            Expression::Alias(_, expr) => expr.to_data_type_and_nullable(input_schema),
+            Expression::Column(s) => Ok(input_schema.field_with_name(s)?.data_type_and_nullable().clone()),
             Expression::QualifiedColumn(_) => Err(ErrorCode::LogicalError(
                 "QualifiedColumn should be resolve in analyze.",
             )),
-            Expression::Literal { data_type, .. } => Ok(data_type.clone()),
+            Expression::Literal { data_type, .. } => Ok(DataTypeAndNullable::create(data_type, true)),
             Expression::Subquery { query_plan, .. } => Ok(Self::to_subquery_type(query_plan)),
             Expression::ScalarSubquery { query_plan, .. } => {
                 Ok(Self::to_scalar_subquery_type(query_plan))
             }
             Expression::BinaryExpression { op, left, right } => {
-                let arg_types = vec![
-                    left.to_data_type(input_schema)?,
-                    right.to_data_type(input_schema)?,
+                let arguments = vec![
+                    left.to_data_type_and_nullable(input_schema)?,
+                    right.to_data_type_and_nullable(input_schema)?,
                 ];
-                let func = FunctionFactory::instance().get(op, &arg_types)?;
-                func.return_type(&arg_types)
+
+                let func = FunctionFactory::instance().get(op, &arguments)?;
+                Ok(DataTypeAndNullable::create(
+                    &func.return_type(&arguments)?,
+                    func.nullable(&arguments)?,
+                ))
             }
 
             Expression::UnaryExpression { op, expr } => {
-                let arg_types = vec![expr.to_data_type(input_schema)?];
-                let func = FunctionFactory::instance().get(op, &arg_types)?;
-                func.return_type(&arg_types)
+                let arguments = vec![expr.to_data_type_and_nullable(input_schema)?];
+                let func = FunctionFactory::instance().get(op, &arguments)?;
+                Ok(DataTypeAndNullable::create(
+                    &func.return_type(&arguments)?,
+                    func.nullable(&arguments)?,
+                ))
             }
 
             Expression::ScalarFunction { op, args } => {
-                let mut args_type = Vec::with_capacity(args.len());
+                let mut arguments = Vec::with_capacity(args.len());
                 for arg in args {
-                    args_type.push(arg.to_data_type(input_schema)?);
+                    arguments.push(arg.to_data_type_and_nullable(input_schema)?);
                 }
 
-                let func = FunctionFactory::instance().get(op, &args_type)?;
-                func.return_type(&args_type)
+                let func = FunctionFactory::instance().get(op, &arguments)?;
+                Ok(DataTypeAndNullable::create(
+                    &func.return_type(&arguments)?,
+                    func.nullable(&arguments)?,
+                ))
             }
             Expression::AggregateFunction { .. } => {
                 let func = self.to_aggregate_function(input_schema)?;
-                func.return_type()
+                Ok(DataTypeAndNullable::create(
+                    &func.return_type()?,
+                    func.nullable(input_schema)?,
+                ))
             }
             Expression::Wildcard => Result::Err(ErrorCode::IllegalDataType(
                 "Wildcard expressions are not valid to get return type",
             )),
-            Expression::Cast { data_type, .. } => Ok(data_type.clone()),
-            Expression::Sort { expr, .. } => expr.to_data_type(input_schema),
+            Expression::Cast { data_type, expr } => {
+                Ok(DataTypeAndNullable::create(
+                    data_type,
+                    expr.to_data_type_and_nullable(input_schema)?.is_nullable(),
+                ))
+            }
+            Expression::Sort { expr, .. } => expr.to_data_type_and_nullable(input_schema),
         }
     }
 
@@ -438,7 +425,7 @@ impl fmt::Debug for Expression {
             Expression::Subquery { name, .. } => write!(f, "subquery({})", name),
             Expression::ScalarSubquery { name, .. } => write!(f, "scalar subquery({})", name),
             Expression::BinaryExpression { op, left, right } => {
-                write!(f, "({:?} {} {:?})", left, op, right,)
+                write!(f, "({:?} {} {:?})", left, op, right, )
             }
 
             Expression::UnaryExpression { op, expr } => {
@@ -452,7 +439,7 @@ impl fmt::Debug for Expression {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{:?}", args[i],)?;
+                    write!(f, "{:?}", args[i], )?;
                 }
                 write!(f, ")")
             }

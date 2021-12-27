@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt;
+use common_datavalues::DataTypeAndNullable;
 
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -47,7 +48,7 @@ impl Function for FieldFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
         Ok(DataType::UInt64)
     }
 

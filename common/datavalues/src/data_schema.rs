@@ -22,7 +22,7 @@ use common_arrow::arrow::datatypes::SchemaRef as ArrowSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::DataField;
+use crate::{DataField, DataTypeAndNullable};
 
 /// memory layout.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -153,6 +153,7 @@ impl DataSchema {
 pub type DataSchemaRef = Arc<DataSchema>;
 
 pub struct DataSchemaRefExt;
+
 impl DataSchemaRefExt {
     pub fn create(fields: Vec<DataField>) -> DataSchemaRef {
         Arc::new(DataSchema::new(fields))

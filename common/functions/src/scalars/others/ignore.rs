@@ -17,7 +17,7 @@ use std::str;
 
 use common_datavalues::prelude::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataField;
+use common_datavalues::{DataField, DataTypeAndNullable};
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::Result;
@@ -55,11 +55,11 @@ impl Function for IgnoreFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
         Ok(DataType::UInt8)
     }
 
-    fn nullable(&self, _arg_fields: &[DataField]) -> Result<bool> {
+    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
         Ok(false)
     }
 

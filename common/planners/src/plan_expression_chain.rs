@@ -88,14 +88,14 @@ impl ExpressionChain {
                 // Subquery results are ready in the expression input
                 self.actions.push(ExpressionAction::Input(ActionInput {
                     name: name.clone(),
-                    return_type: Expression::to_subquery_type(query_plan),
+                    return_type: Expression::to_subquery_type(query_plan).data_type().clone(),
                 }));
             }
             Expression::ScalarSubquery { name, query_plan } => {
                 // Scalar subquery results are ready in the expression input
                 self.actions.push(ExpressionAction::Input(ActionInput {
                     name: name.to_string(),
-                    return_type: Expression::to_subquery_type(query_plan),
+                    return_type: Expression::to_subquery_type(query_plan).data_type().clone(),
                 }));
             }
             Expression::UnaryExpression {
@@ -104,13 +104,10 @@ impl ExpressionChain {
             } => {
                 self.add_expr(nested_expr)?;
 
-                let args_type = vec![expr.to_data_type(&self.schema)?];
-                let func = FunctionFactory::instance().get(op, &args_type)?;
-                let arg_types = vec![nested_expr.to_data_type(&self.schema)?];
+                let arg_types = vec![nested_expr.to_data_type_and_nullable(&self.schema)?];
+                let func = FunctionFactory::instance().get(op, &arg_types)?;
                 let return_type = func.return_type(&arg_types)?;
-
-                let arg_fields = vec![expr.to_data_field(&self.schema)?];
-                let is_nullable = func.nullable(&arg_fields)?;
+                let is_nullable = func.nullable(&arg_types)?;
 
                 let function = ActionFunction {
                     name: expr.column_name(),
@@ -129,17 +126,13 @@ impl ExpressionChain {
                 self.add_expr(left)?;
                 self.add_expr(right)?;
 
-                let arg_fields = vec![
-                    left.to_data_field(&self.schema)?,
-                    right.to_data_field(&self.schema)?,
+                let arg_types = vec![
+                    left.to_data_type_and_nullable(&self.schema)?,
+                    right.to_data_type_and_nullable(&self.schema)?,
                 ];
-                let arg_types = arg_fields
-                    .iter()
-                    .map(|field| field.data_type().clone())
-                    .collect::<Vec<_>>();
 
                 let func = FunctionFactory::instance().get(op, &arg_types)?;
-                let is_nullable = func.nullable(&arg_fields)?;
+                let is_nullable = func.nullable(&arg_types)?;
                 let return_type = func.return_type(&arg_types)?;
 
                 let function = ActionFunction {
@@ -147,7 +140,7 @@ impl ExpressionChain {
                     func_name: op.clone(),
                     func,
                     arg_names: vec![left.column_name(), right.column_name()],
-                    arg_types: arg_types.clone(),
+                    arg_types,
                     is_nullable,
                     return_type,
                 };
@@ -160,17 +153,13 @@ impl ExpressionChain {
                     self.add_expr(expr)?;
                 }
 
-                let arg_fields = args
+                let arg_types = args
                     .iter()
-                    .map(|action| action.to_data_field(&self.schema))
+                    .map(|action| action.to_data_type_and_nullable(&self.schema))
                     .collect::<Result<Vec<_>>>()?;
-                let arg_types = arg_fields
-                    .iter()
-                    .map(|field| field.data_type().clone())
-                    .collect::<Vec<_>>();
 
                 let func = FunctionFactory::instance().get(op, &arg_types)?;
-                let is_nullable = func.nullable(&arg_fields)?;
+                let is_nullable = func.nullable(&arg_types)?;
                 let return_type = func.return_type(&arg_types)?;
 
                 let function = ActionFunction {
@@ -209,7 +198,7 @@ impl ExpressionChain {
                     func_name,
                     func,
                     arg_names: vec![sub_expr.column_name()],
-                    arg_types: vec![sub_expr.to_data_type(&self.schema)?],
+                    arg_types: vec![sub_expr.to_data_type_and_nullable(&self.schema)?],
                     is_nullable: false,
                     return_type,
                 };

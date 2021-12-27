@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt;
+use common_datavalues::DataTypeAndNullable;
 
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -45,8 +46,8 @@ impl Function for UnhexFunction {
         "unhex"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if args[0] != DataType::String && args[0] != DataType::Null {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        if !args[0].is_string() && !args[0].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null, but got {}",
                 args[0]
@@ -78,7 +79,7 @@ impl Function for UnhexFunction {
                 None
             }
         })
-        .into();
+            .into();
         Ok(column)
     }
 }
