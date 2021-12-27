@@ -110,7 +110,15 @@ impl UdfMgrApi for UdfMgr {
 
         let res = upsert_info.await?;
         match res.result {
-            Some(SeqV { seq: s, .. }) => Ok(s),
+            Some(SeqV { seq: s, .. }) => {
+                UDFFactory::register(
+                    self.tenant.as_str(),
+                    info.name.as_str(),
+                    info.definition.as_str(),
+                )?;
+
+                Ok(s)
+            }
             None => Err(ErrorCode::UnknownUDF(format!(
                 "unknown UDF, or seq not match {}",
                 info.name.clone()
