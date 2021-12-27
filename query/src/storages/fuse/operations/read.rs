@@ -51,8 +51,7 @@ impl FuseTable {
             default_proj()
         };
 
-        // TODO we need a configuration to specify the unit of dequeue operation
-        let bite_size = 1;
+        let bite_size = ctx.get_settings().get_parallel_read_threads()?;
         let ctx_clone = ctx.clone();
         let iter =
             std::iter::from_fn(
@@ -86,7 +85,7 @@ impl FuseTable {
                     })
                 }
             })
-            .buffered(bite_size) // buffer_unordered?
+            .buffered(bite_size as usize) // buffer_unordered?
             .instrument(common_tracing::tracing::Span::current());
         Ok(Box::pin(stream))
     }
