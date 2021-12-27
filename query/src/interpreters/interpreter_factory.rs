@@ -24,12 +24,14 @@ use crate::interpreters::interpreter_table_optimize::OptimizeTableInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CopyInterpreter;
 use crate::interpreters::CreatStageInterpreter;
+use crate::interpreters::CreatUDFInterpreter;
 use crate::interpreters::CreateDatabaseInterpreter;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::CreateUserInterpreter;
 use crate::interpreters::DescribeTableInterpreter;
 use crate::interpreters::DropDatabaseInterpreter;
 use crate::interpreters::DropTableInterpreter;
+use crate::interpreters::DropUDFInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::ExplainInterpreter;
 use crate::interpreters::GrantPrivilegeInterpreter;
@@ -43,6 +45,7 @@ use crate::interpreters::SettingInterpreter;
 use crate::interpreters::ShowCreateDatabaseInterpreter;
 use crate::interpreters::ShowCreateTableInterpreter;
 use crate::interpreters::ShowGrantsInterpreter;
+use crate::interpreters::ShowUDFInterpreter;
 use crate::interpreters::TruncateTableInterpreter;
 use crate::interpreters::UseDatabaseInterpreter;
 use crate::sessions::QueryContext;
@@ -80,6 +83,9 @@ impl InterpreterFactory {
             PlanNode::ShowCreateDatabase(v) => {
                 ShowCreateDatabaseInterpreter::try_create(ctx_clone, v)
             }
+            PlanNode::CreateUDF(v) => CreatUDFInterpreter::try_create(ctx_clone, v),
+            PlanNode::DropUDF(v) => DropUDFInterpreter::try_create(ctx_clone, v),
+            PlanNode::ShowUDF(v) => ShowUDFInterpreter::try_create(ctx_clone, v),
             _ => Result::Err(ErrorCode::UnknownTypeOfQuery(format!(
                 "Can't get the interpreter by plan:{}",
                 plan.name()

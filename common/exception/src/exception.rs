@@ -283,6 +283,13 @@ build_exceptions! {
     StageAlreadyExists(4061),
     IllegalStageInfoFormat(4062),
 
+    // user defined function error.
+    IllegalUDFFormat(4070),
+    UnknownUDF(4071),
+    UDFAlreadyExists(4072),
+    IllegalUDFParams(4073),
+    RegisterUDFError(4074),
+
     // storage-api error codes
     ReadFileError(5001),
     BrokenChannel(5002),

@@ -49,6 +49,7 @@ common-metrics = { path = "../common/metrics" }
 common-planners = { path = "../common/planners" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
+common-sql = { path = "../common/sql" }
 
 # Github dependencies
 clickhouse-rs = { git = "https://github.com/datafuse-extras/clickhouse-rs", rev = "fe0406b" }
