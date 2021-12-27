@@ -16,7 +16,8 @@ use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::{DataType, DataTypeAndNullable};
+use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_datavalues::DataValueLogicOperator;
 use common_exception::Result;
 
@@ -48,7 +49,7 @@ impl Function for LogicFunction {
         "LogicFunction"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
         Ok(DataType::Boolean)
     }
 

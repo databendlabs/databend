@@ -17,7 +17,8 @@ use std::marker::PhantomData;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
-use common_datavalues::{DataTypeAndNullable, DataValueArithmeticOperator};
+use common_datavalues::DataTypeAndNullable;
+use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
 use super::arithmetic::ArithmeticTrait;
@@ -54,7 +55,7 @@ where T: ArithmeticTrait + Clone + Sync + Send + 'static
         "BinaryArithmeticFunction"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
         Ok(self.result_type.clone())
     }
 

@@ -14,9 +14,9 @@
 
 use std::fmt;
 use std::marker::PhantomData;
-use common_datavalues::DataTypeAndNullable;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -75,10 +75,7 @@ impl<T: SpaceGenOperator> Function for SpaceGenFunction<T> {
     }
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
-        if !args[0].is_unsigned_integer()
-            && !args[0].is_string()
-            && !args[0].is_null()
-        {
+        if !args[0].is_unsigned_integer() && !args[0].is_string() && !args[0].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected unsigned integer or null, but got {}",
                 args[0]

@@ -18,7 +18,8 @@ use common_arrow::arrow::array::Array;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::prelude::*;
-use common_datavalues::{DataType, DataTypeAndNullable};
+use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 

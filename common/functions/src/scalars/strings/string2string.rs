@@ -13,9 +13,9 @@
 // limitations under the License.
 use std::fmt;
 use std::marker::PhantomData;
-use common_datavalues::DataTypeAndNullable;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -98,12 +98,12 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
             transform(array.string()?, estimate_bytes, |val, buffer| {
                 op.apply(val, buffer)
             })
-                .into()
+            .into()
         } else {
             transform_with_no_null(array.string()?, estimate_bytes, |val, buffer| {
                 op.apply_with_no_null(val, buffer)
             })
-                .into()
+            .into()
         };
 
         Ok(column.resize_constant(input_rows))

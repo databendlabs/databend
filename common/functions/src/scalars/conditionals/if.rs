@@ -16,8 +16,8 @@ use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::{DataField, DataTypeAndNullable};
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
@@ -49,8 +49,8 @@ impl Function for IfFunction {
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
         let mut aggregate_args = Vec::with_capacity(args.len() - 1);
-        for index in 1..args.len() {
-            aggregate_args.push(args[index].data_type().clone())
+        for arg in args.iter().skip(1) {
+            aggregate_args.push(arg.data_type().clone())
         }
         common_datavalues::aggregate_types(&aggregate_args)
     }

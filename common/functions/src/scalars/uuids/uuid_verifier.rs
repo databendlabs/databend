@@ -18,8 +18,8 @@ use std::str;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::{DataField, DataTypeAndNullable};
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -39,7 +39,7 @@ pub struct UUIDVerifierFunction<T> {
 }
 
 impl<T> UUIDVerifierFunction<T>
-    where T: UUIDVerifier + Clone + Sync + Send + 'static
+where T: UUIDVerifier + Clone + Sync + Send + 'static
 {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(UUIDVerifierFunction::<T> {
@@ -93,7 +93,7 @@ impl UUIDVerifier for UUIDIsNotEmpty {
 }
 
 impl<T> Function for UUIDVerifierFunction<T>
-    where T: UUIDVerifier + Clone + Sync + Send + 'static
+where T: UUIDVerifier + Clone + Sync + Send + 'static
 {
     fn name(&self) -> &str {
         self.display_name.as_str()

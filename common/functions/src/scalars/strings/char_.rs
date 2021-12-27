@@ -15,8 +15,8 @@
 use std::fmt;
 
 use common_arrow::arrow::buffer::MutableBuffer;
-use common_datavalues::DataTypeAndNullable;
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 

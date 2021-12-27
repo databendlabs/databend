@@ -13,9 +13,9 @@
 // limitations under the License.
 use std::fmt;
 use std::marker::PhantomData;
-use common_datavalues::DataTypeAndNullable;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -40,10 +40,10 @@ pub struct String2NumberFunction<T, R> {
 }
 
 impl<T, R> String2NumberFunction<T, R>
-    where
-        T: NumberResultFunction<R> + Clone + Sync + Send + 'static,
-        R: DFPrimitiveType + Clone,
-        DFPrimitiveArray<R>: IntoSeries,
+where
+    T: NumberResultFunction<R> + Clone + Sync + Send + 'static,
+    R: DFPrimitiveType + Clone,
+    DFPrimitiveArray<R>: IntoSeries,
 {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
         Ok(Box::new(String2NumberFunction::<T, R> {
@@ -71,10 +71,10 @@ impl<T, R> String2NumberFunction<T, R>
 /// A common function template that transform string column into string column
 /// Eg: trim, lower, upper, etc.
 impl<T, R> Function for String2NumberFunction<T, R>
-    where
-        T: NumberResultFunction<R> + Clone + Sync + Send,
-        R: DFPrimitiveType + Clone,
-        DFPrimitiveArray<R>: IntoSeries,
+where
+    T: NumberResultFunction<R> + Clone + Sync + Send,
+    R: DFPrimitiveType + Clone,
+    DFPrimitiveArray<R>: IntoSeries,
 {
     fn name(&self) -> &str {
         self.display_name.as_str()

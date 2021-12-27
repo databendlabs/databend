@@ -15,10 +15,10 @@
 use std::fmt;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::izip;
-use common_datavalues::DataTypeAndNullable;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
@@ -63,11 +63,7 @@ impl Function for SubstringFunction {
                 args[1]
             )));
         }
-        if args.len() > 2
-            && !args[2].is_integer()
-            && !args[2].is_string()
-            && !args[2].is_null()
-        {
+        if args.len() > 2 && !args[2].is_integer() && !args[2].is_string() && !args[2].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[2]

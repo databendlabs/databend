@@ -16,7 +16,8 @@ use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
-use common_datavalues::{DataTypeAndNullable, DataValueArithmeticOperator};
+use common_datavalues::DataTypeAndNullable;
+use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
 use crate::scalars::dates::IntervalFunctionFactory;

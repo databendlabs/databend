@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use std::fmt;
-use common_datavalues::DataTypeAndNullable;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;

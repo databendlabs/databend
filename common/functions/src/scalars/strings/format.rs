@@ -16,11 +16,11 @@ use std::fmt;
 use std::ops::AddAssign;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num_format::Locale;
 use num_format::ToFormattedString;
-use common_datavalues::DataTypeAndNullable;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;

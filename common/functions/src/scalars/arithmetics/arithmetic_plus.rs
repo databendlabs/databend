@@ -16,7 +16,8 @@ use std::marker::PhantomData;
 use std::ops::Add;
 
 use common_datavalues::prelude::*;
-use common_datavalues::{DataTypeAndNullable, DataValueArithmeticOperator};
+use common_datavalues::DataTypeAndNullable;
+use common_datavalues::DataValueArithmeticOperator;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::cast::AsPrimitive;
@@ -46,7 +47,10 @@ impl_arithmetic!(ArithmeticAdd, +);
 pub struct ArithmeticPlusFunction;
 
 impl ArithmeticPlusFunction {
-    pub fn try_create_func(_display_name: &str, args: &[DataTypeAndNullable]) -> Result<Box<dyn Function>> {
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[DataTypeAndNullable],
+    ) -> Result<Box<dyn Function>> {
         let left_type = &args[0].data_type();
         let right_type = &args[1].data_type();
         let op = DataValueArithmeticOperator::Plus;

@@ -22,7 +22,7 @@ use common_arrow::arrow::datatypes::SchemaRef as ArrowSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::{DataField, DataTypeAndNullable};
+use crate::DataField;
 
 /// memory layout.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]

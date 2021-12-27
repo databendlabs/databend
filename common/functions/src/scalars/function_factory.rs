@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datavalues::{DataType, DataTypeAndNullable};
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::Lazy;
@@ -40,7 +40,7 @@ pub type FactoryCreator = Box<dyn Fn(&str) -> Result<Box<dyn Function>> + Send +
 
 // Temporary adaptation for arithmetic.
 pub type ArithmeticCreator =
-Box<dyn Fn(&str, &[DataTypeAndNullable]) -> Result<Box<dyn Function>> + Send + Sync>;
+    Box<dyn Fn(&str, &[DataTypeAndNullable]) -> Result<Box<dyn Function>> + Send + Sync>;
 
 #[derive(Clone)]
 pub struct FunctionFeatures {
@@ -191,7 +191,11 @@ impl FunctionFactory {
         case_insensitive_arithmetic_desc.insert(name.to_lowercase(), desc);
     }
 
-    pub fn get(&self, name: impl AsRef<str>, args: &[DataTypeAndNullable]) -> Result<Box<dyn Function>> {
+    pub fn get(
+        &self,
+        name: impl AsRef<str>,
+        args: &[DataTypeAndNullable],
+    ) -> Result<Box<dyn Function>> {
         let origin_name = name.as_ref();
         let lowercase_name = origin_name.to_lowercase();
         match self.case_insensitive_desc.get(&lowercase_name) {

@@ -19,7 +19,8 @@ use common_datavalues::prelude::DFStringArray;
 use common_datavalues::prelude::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::prelude::NewDataArray;
-use common_datavalues::{DataType, DataTypeAndNullable};
+use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 

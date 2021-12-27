@@ -22,8 +22,8 @@ use common_datavalues::chrono::NaiveDate;
 use common_datavalues::chrono::NaiveDateTime;
 use common_datavalues::chrono::Timelike;
 use common_datavalues::chrono::Utc;
-use common_datavalues::DataTypeAndNullable;
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 

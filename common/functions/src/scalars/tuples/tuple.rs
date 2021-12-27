@@ -20,8 +20,9 @@ use common_datavalues::arrays::DFStructArray;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::series::IntoSeries;
-use common_datavalues::{DataField, DataTypeAndNullable};
+use common_datavalues::DataField;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
@@ -58,7 +59,9 @@ impl Function for TupleFunction {
         let fields = args
             .iter()
             .enumerate()
-            .map(|(i, x)| DataField::new(format!("item_{}", i).as_str(), x.data_type().clone(), false))
+            .map(|(i, x)| {
+                DataField::new(format!("item_{}", i).as_str(), x.data_type().clone(), false)
+            })
             .collect::<Vec<_>>();
         Ok(DataType::Struct(fields))
     }

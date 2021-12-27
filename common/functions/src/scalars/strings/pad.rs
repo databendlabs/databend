@@ -16,10 +16,10 @@ use std::fmt;
 use std::marker::PhantomData;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::izip;
-use common_datavalues::DataTypeAndNullable;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
@@ -121,10 +121,7 @@ impl<T: PadOperator> Function for PadFunction<T> {
                 args[0]
             )));
         }
-        if !args[1].is_unsigned_integer()
-            && !args[1].is_string()
-            && !args[1].is_null()
-        {
+        if !args[1].is_unsigned_integer() && !args[1].is_string() && !args[1].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[1]

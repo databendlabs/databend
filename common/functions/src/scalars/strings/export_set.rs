@@ -17,10 +17,10 @@ use std::fmt;
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::buffer::MutableBuffer;
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::izip;
-use common_datavalues::DataTypeAndNullable;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
@@ -71,21 +71,13 @@ impl Function for ExportSetFunction {
                 args[2]
             )));
         }
-        if args.len() > 3
-            && !args[3].is_integer()
-            && !args[3].is_string()
-            && !args[3].is_null()
-        {
+        if args.len() > 3 && !args[3].is_integer() && !args[3].is_string() && !args[3].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[3]
             )));
         }
-        if args.len() > 4
-            && !args[4].is_integer()
-            && !args[4].is_string()
-            && !args[4].is_null()
-        {
+        if args.len() > 4 && !args[4].is_integer() && !args[4].is_string() && !args[4].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[4]

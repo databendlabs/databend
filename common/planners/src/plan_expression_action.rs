@@ -14,7 +14,8 @@
 
 use std::fmt;
 
-use common_datavalues::{DataType, DataTypeAndNullable};
+use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_datavalues::DataValue;
 use common_functions::scalars::Function;
 

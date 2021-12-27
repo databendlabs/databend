@@ -16,9 +16,10 @@ use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
-use common_datavalues::{DataField, DataTypeAndNullable};
+use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -281,22 +282,36 @@ impl Expression {
 
         match subquery_schema.fields().len() {
             1 => DataTypeAndNullable::create(subquery_schema.field(0).data_type(), is_nullable),
-            _ => DataTypeAndNullable::create(&DataType::Struct(subquery_schema.fields().clone()), is_nullable),
+            _ => DataTypeAndNullable::create(
+                &DataType::Struct(subquery_schema.fields().clone()),
+                is_nullable,
+            ),
         }
     }
 
     pub fn to_data_type(&self, input_schema: &DataSchemaRef) -> Result<DataType> {
-        Ok(self.to_data_type_and_nullable(input_schema)?.data_type().clone())
+        Ok(self
+            .to_data_type_and_nullable(input_schema)?
+            .data_type()
+            .clone())
     }
 
-    pub fn to_data_type_and_nullable(&self, input_schema: &DataSchemaRef) -> Result<DataTypeAndNullable> {
+    pub fn to_data_type_and_nullable(
+        &self,
+        input_schema: &DataSchemaRef,
+    ) -> Result<DataTypeAndNullable> {
         match self {
             Expression::Alias(_, expr) => expr.to_data_type_and_nullable(input_schema),
-            Expression::Column(s) => Ok(input_schema.field_with_name(s)?.data_type_and_nullable().clone()),
+            Expression::Column(s) => Ok(input_schema
+                .field_with_name(s)?
+                .data_type_and_nullable()
+                .clone()),
             Expression::QualifiedColumn(_) => Err(ErrorCode::LogicalError(
                 "QualifiedColumn should be resolve in analyze.",
             )),
-            Expression::Literal { data_type, .. } => Ok(DataTypeAndNullable::create(data_type, true)),
+            Expression::Literal { data_type, .. } => {
+                Ok(DataTypeAndNullable::create(data_type, true))
+            }
             Expression::Subquery { query_plan, .. } => Ok(Self::to_subquery_type(query_plan)),
             Expression::ScalarSubquery { query_plan, .. } => {
                 Ok(Self::to_scalar_subquery_type(query_plan))
@@ -345,12 +360,10 @@ impl Expression {
             Expression::Wildcard => Result::Err(ErrorCode::IllegalDataType(
                 "Wildcard expressions are not valid to get return type",
             )),
-            Expression::Cast { data_type, expr } => {
-                Ok(DataTypeAndNullable::create(
-                    data_type,
-                    expr.to_data_type_and_nullable(input_schema)?.is_nullable(),
-                ))
-            }
+            Expression::Cast { data_type, expr } => Ok(DataTypeAndNullable::create(
+                data_type,
+                expr.to_data_type_and_nullable(input_schema)?.is_nullable(),
+            )),
             Expression::Sort { expr, .. } => expr.to_data_type_and_nullable(input_schema),
         }
     }
@@ -425,7 +438,7 @@ impl fmt::Debug for Expression {
             Expression::Subquery { name, .. } => write!(f, "subquery({})", name),
             Expression::ScalarSubquery { name, .. } => write!(f, "scalar subquery({})", name),
             Expression::BinaryExpression { op, left, right } => {
-                write!(f, "({:?} {} {:?})", left, op, right, )
+                write!(f, "({:?} {} {:?})", left, op, right,)
             }
 
             Expression::UnaryExpression { op, expr } => {
@@ -439,7 +452,7 @@ impl fmt::Debug for Expression {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{:?}", args[i], )?;
+                    write!(f, "{:?}", args[i],)?;
                 }
                 write!(f, ")")
             }

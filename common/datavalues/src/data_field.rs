@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
+use std::fmt::Display;
 use std::ops::Deref;
 
 use common_arrow::arrow::datatypes::Field as ArrowField;
@@ -23,7 +24,7 @@ use common_macros::MallocSizeOf;
 use crate::DataType;
 
 #[derive(
-serde::Serialize, serde::Deserialize, Clone, PartialEq, Hash, Eq, PartialOrd, Ord, MallocSizeOf,
+    serde::Serialize, serde::Deserialize, Clone, PartialEq, Hash, Eq, PartialOrd, Ord, MallocSizeOf,
 )]
 pub struct DataTypeAndNullable {
     data_type: DataType,
@@ -76,7 +77,7 @@ impl Debug for DataTypeAndNullable {
 }
 
 #[derive(
-serde::Serialize, serde::Deserialize, Clone, PartialEq, Hash, Eq, PartialOrd, Ord, MallocSizeOf,
+    serde::Serialize, serde::Deserialize, Clone, PartialEq, Hash, Eq, PartialOrd, Ord, MallocSizeOf,
 )]
 pub struct DataField {
     name: String,
@@ -90,7 +91,10 @@ impl DataField {
         DataField {
             name: name.to_string(),
             default_expr: None,
-            data_type_and_nullable: DataTypeAndNullable { data_type, nullable },
+            data_type_and_nullable: DataTypeAndNullable {
+                data_type,
+                nullable,
+            },
         }
     }
 

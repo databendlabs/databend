@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use std::fmt;
-use common_datavalues::DataTypeAndNullable;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -56,10 +56,7 @@ impl Function for RepeatFunction {
             )));
         }
 
-        if !args[1].is_unsigned_integer()
-            && !args[1].is_string()
-            && !args[1].is_null()
-        {
+        if !args[1].is_unsigned_integer() && !args[1].is_string() && !args[1].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected parameter 2 is unsigned integer or string or null, but got {}",
                 args[1]
