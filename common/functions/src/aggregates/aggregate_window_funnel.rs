@@ -19,7 +19,6 @@ use std::marker::PhantomData;
 use std::ops::Sub;
 use std::sync::Arc;
 
-use bincode::Options;
 use bytes::BytesMut;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
@@ -142,20 +141,11 @@ where T: Ord
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        let writer = BufMut::writer(writer);
-        bincode::DefaultOptions::new()
-            .with_fixint_encoding()
-            .with_varint_length_offset_encoding()
-            .serialize_into(writer, self)?;
-
-        Ok(())
+        serialize_into_buf(writer, self)
     }
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        *self = bincode::DefaultOptions::new()
-            .with_fixint_encoding()
-            .with_varint_length_offset_encoding()
-            .deserialize_from(reader)?;
+        *self = deserialize_from_slice(reader)?;
 
         Ok(())
     }

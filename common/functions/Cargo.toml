@@ -18,7 +18,6 @@ common-exception = { path = "../exception" }
 common-io = { path = "../io" }
 
 # Github dependencies
-bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
 
 # Crates.io dependencies
 dyn-clone = "1.0.4"

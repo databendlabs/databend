@@ -1316,7 +1316,6 @@ name = "common-functions"
 version = "0.1.0"
 dependencies = [
  "base64 0.13.0",
- "bincode",
  "blake3",
  "bstr",
  "bumpalo",
@@ -1360,6 +1359,7 @@ dependencies = [
 name = "common-io"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "bytes",
  "common-exception",
  "rand 0.8.4",
