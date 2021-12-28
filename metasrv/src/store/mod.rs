@@ -13,5 +13,7 @@
 // limitations under the License.
 
 mod meta_raft_store;
+mod to_storage_error;
 
 pub use meta_raft_store::MetaRaftStore;
+pub use to_storage_error::ToStorageError;

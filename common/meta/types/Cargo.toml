@@ -14,11 +14,11 @@ test = false
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../exception" }
 
-async-raft = { git = "https://github.com/datafuselabs/openraft", tag = "v0.6.2-alpha.14.1" }
 derive_more = "0.99.17"
 enumflags2 = { version = "0.7.3", features = ["serde"] }
 lazy_static = "1.4.0"
 maplit = "1.0.2"
+openraft = { git = "https://github.com/datafuselabs/openraft", rev = "f633756d60152d171909aea56f80d18905cd4002"}
 once_cell = "1.9.0"
 prost = "0.9.0"
 serde = { version = "1.0.133", features = ["derive"] }

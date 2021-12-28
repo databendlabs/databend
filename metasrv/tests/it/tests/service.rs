@@ -15,11 +15,11 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use async_raft::NodeId;
 use common_base::tokio;
 use common_base::GlobalSequence;
 use common_base::Stoppable;
 use common_meta_grpc::MetaGrpcClient;
+use common_meta_sled_store::openraft::NodeId;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::GetRequest;
 use common_tracing::tracing;

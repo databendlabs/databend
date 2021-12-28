@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use async_raft::LogId;
-pub use async_raft::NodeId;
+pub use openraft::LogId;
+pub use openraft::NodeId;
 
 pub type LogIndex = u64;
 pub type Term = u64;
