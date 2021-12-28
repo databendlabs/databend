@@ -15,8 +15,10 @@
 mod builder;
 mod iterator;
 mod transform;
+mod mutable;
 
 pub use builder::*;
+pub use mutable::*;
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
