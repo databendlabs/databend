@@ -1,20 +1,16 @@
 use async_compat::CompatExt;
 use async_trait::async_trait;
-use azure_storage_mirror::MetadataDetail::Default;
 use common_exception::Result;
-use futures;
 use rusoto_core::Region;
 use rusoto_s3::GetObjectRequest;
 use rusoto_s3::S3Client;
 use rusoto_s3::S3 as RusotoS3;
-use tokio;
-use tokio::io::AsyncSeek;
-use tokio::io::AsyncSeekExt;
 
 use crate::ops::Read;
 use crate::ops::ReadBuilder;
 use crate::ops::Reader;
 
+/// TODO: https://github.com/datafuselabs/databend/issues/3677
 #[derive(Default)]
 pub struct Builder {
     pub bucket: String,
@@ -26,11 +22,12 @@ impl Builder {
     pub fn finish(self) -> Backend {
         Backend {
             client: S3Client::new(Region::default()),
-            bucket: self.bucket.clone(),
+            bucket: self.bucket,
         }
     }
 }
 
+/// TODO: https://github.com/datafuselabs/databend/issues/3677
 pub struct Backend {
     client: S3Client,
     bucket: String,
@@ -45,7 +42,7 @@ impl Backend {
 #[async_trait]
 impl<S: Send + Sync> Read<S> for Backend {
     async fn read(&self, args: &ReadBuilder<S>) -> Result<Reader> {
-        let mut req = GetObjectRequest {
+        let req = GetObjectRequest {
             bucket: self.bucket.clone(),
             key: args.path.to_string(),
             ..GetObjectRequest::default()
@@ -53,7 +50,7 @@ impl<S: Send + Sync> Read<S> for Backend {
 
         // TODO: Handle range header here.
 
-        let mut resp = self.client.get_object(req).await.unwrap();
+        let resp = self.client.get_object(req).await.unwrap();
 
         if resp.body.is_none() {
             panic!("Body is empty")

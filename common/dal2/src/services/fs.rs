@@ -3,15 +3,14 @@ use std::io::SeekFrom;
 use async_compat::CompatExt;
 use async_trait::async_trait;
 use common_exception::Result;
-use futures;
 use tokio;
-use tokio::io::AsyncSeek;
 use tokio::io::AsyncSeekExt;
 
 use crate::ops::Read;
 use crate::ops::ReadBuilder;
 use crate::ops::Reader;
 
+/// TODO: https://github.com/datafuselabs/databend/issues/3677
 #[derive(Default)]
 pub struct Builder {}
 
@@ -21,6 +20,7 @@ impl Builder {
     }
 }
 
+/// TODO: https://github.com/datafuselabs/databend/issues/3677
 pub struct Backend {}
 
 impl Backend {

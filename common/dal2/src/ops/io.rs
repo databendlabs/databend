@@ -1,15 +1,11 @@
 use std::pin::Pin;
 use std::task::Poll;
 
-use futures;
-use futures::prelude::*;
-use futures::AsyncRead;
-
 pub type Reader = Box<dyn futures::io::AsyncRead + Unpin + Send>;
 
 pub struct CallbackReader {
     inner: Reader,
-    f: Box<dyn Fn(usize) -> ()>,
+    f: Box<dyn Fn(usize)>,
 }
 
 impl futures::AsyncRead for CallbackReader {
