@@ -1340,7 +1340,7 @@ fn drop_stage_test() -> Result<()> {
 #[test]
 fn test_create_udf() -> Result<()> {
     expect_parse_ok(
-        "CREATE FUNCTION test_udf='not(isnotnull(@0))'",
+        "CREATE FUNCTION test_udf=not(isnotnull(@0))",
         DfStatement::CreateUDF(DfCreateUDF {
             if_not_exists: false,
             udf_name: "test_udf".to_string(),
@@ -1350,7 +1350,7 @@ fn test_create_udf() -> Result<()> {
     )?;
 
     expect_parse_ok(
-        "CREATE FUNCTION test_udf='not(isnotnull(@0))' desc='This is a description'",
+        "CREATE FUNCTION test_udf=not(isnotnull(@0)) desc='This is a description'",
         DfStatement::CreateUDF(DfCreateUDF {
             if_not_exists: false,
             udf_name: "test_udf".to_string(),
@@ -1360,7 +1360,7 @@ fn test_create_udf() -> Result<()> {
     )?;
 
     expect_parse_ok(
-        "CREATE FUNCTION IF NOT EXISTS test_udf='not(isnotnull(@0))' desc='This is a description'",
+        "CREATE FUNCTION IF NOT EXISTS test_udf=not(isnotnull(@0)) desc='This is a description'",
         DfStatement::CreateUDF(DfCreateUDF {
             if_not_exists: true,
             udf_name: "test_udf".to_string(),

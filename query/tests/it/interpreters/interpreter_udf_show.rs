@@ -28,7 +28,7 @@ async fn test_show_create_udf_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
     static CREATE_UDF: &str =
-        "CREATE FUNCTION IF NOT EXISTS isnotempty='not(isnull(@0))' desc='This is a description'";
+        "CREATE FUNCTION IF NOT EXISTS isnotempty=not(isnull(@0)) desc='This is a description'";
 
     if let PlanNode::CreateUDF(plan) = PlanParser::parse(CREATE_UDF, ctx.clone()).await? {
         let executor = CreatUDFInterpreter::try_create(ctx.clone(), plan.clone())?;

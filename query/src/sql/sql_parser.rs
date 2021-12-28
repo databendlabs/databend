@@ -861,8 +861,9 @@ impl<'a> DfParser<'a> {
         let udf_name = self.parser.parse_literal_string()?;
         self.parser.expect_token(&Token::Eq)?;
         // TODO verify the definition as a legal expr
-        let definition = self.parser.parse_literal_string()?;
-        let description = if self.consume_token("DESC") {
+        let desc_token = "DESC";
+        let definition = self.consume_token_until_or_end(vec![desc_token]).join("");
+        let description = if self.consume_token(desc_token) {
             self.parser.expect_token(&Token::Eq)?;
             self.parser.parse_literal_string()?
         } else {
@@ -1255,6 +1256,25 @@ impl<'a> DfParser<'a> {
         } else {
             false
         }
+    }
+
+    fn consume_token_until_or_end(&mut self, until_tokens: Vec<&str>) -> Vec<String> {
+        let mut tokens = vec![];
+
+        loop {
+            let next_token = self.parser.peek_token();
+
+            if next_token == Token::EOF
+                || next_token == Token::SemiColon
+                || until_tokens.contains(&next_token.to_string().to_uppercase().as_str())
+            {
+                break;
+            }
+
+            tokens.push(self.parser.next_token().to_string());
+        }
+
+        tokens
     }
 
     fn expect_token(&mut self, expected: &str) -> Result<(), ParserError> {
