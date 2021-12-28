@@ -103,9 +103,9 @@ mysql> SELECT * FROM copy1;
 mysql> CREATE TABLE copy2(x VARCHAR, y VARCHAR) AS SELECT * FROM source;
 
 mysql> SELECT * FROM copy2;
-+------+-------+
-| x    | y     |
-+------+-------+
-| 888  | stars |
-+------+-------+
++------+------+------+-------+
+| x    | y    | a    | b     |
++------+------+------+-------+
+| NULL | NULL |  888 | stars |
++------+------+------+-------+
 ```

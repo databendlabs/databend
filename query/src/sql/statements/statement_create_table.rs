@@ -67,11 +67,18 @@ impl AnalyzableStatement for DfCreateTable {
                 let statements = vec![DfStatement::Query(query_statement.clone())];
                 let select_plan = PlanParser::build_plan(statements, ctx).await?;
 
-                // If the current table schema is empty, for example 'CREATE TABLE t1 AS SELECT * FROM t2',
-                // we use the schema from 'AS SELECT' query.
-                if table_meta.schema.fields().is_empty() {
-                    table_meta.schema = select_plan.schema();
+                // The schema contains two parts: create table (if specified) and select.
+                let mut fields = table_meta.schema.fields().to_vec();
+                let fields_map = fields
+                    .iter()
+                    .map(|f| (f.name().clone(), f.clone()))
+                    .collect::<HashMap<_, _>>();
+                for field in select_plan.schema().fields() {
+                    if fields_map.get(field.name()).is_none() {
+                        fields.push(field.clone());
+                    }
                 }
+                table_meta.schema = DataSchemaRefExt::create(fields);
                 Some(Box::new(select_plan))
             }
             // Query doesn't contain 'As Select' statement

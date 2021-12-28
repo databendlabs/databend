@@ -68,7 +68,11 @@ impl<'a> InsertWithPlan<'a> {
         select_plan: &SelectPlan,
         table_info: &TableInfo,
     ) -> common_exception::Result<PlanNode> {
-        let cast_needed = self.check_schema_cast(select_plan)?;
+        let cast_schema = if self.check_schema_cast(select_plan)? {
+            Some(self.schema.clone())
+        } else {
+            None
+        };
 
         // optimize and rewrite the SelectPlan.input
         let optimized_plan = plan_schedulers::apply_plan_rewrite(
@@ -86,7 +90,7 @@ impl<'a> InsertWithPlan<'a> {
                 let sink = PlanNode::Sink(SinkPlan {
                     table_info: table_info.clone(),
                     input: prev_input,
-                    cast_needed,
+                    cast_schema,
                 });
                 PlanNode::Stage(StagePlan {
                     kind: r.kind,
@@ -100,7 +104,7 @@ impl<'a> InsertWithPlan<'a> {
             node => PlanNode::Sink(SinkPlan {
                 table_info: table_info.clone(),
                 input: Arc::new(node),
-                cast_needed,
+                cast_schema,
             }),
         };
         Ok(rewritten_plan)
