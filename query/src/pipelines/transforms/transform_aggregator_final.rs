@@ -21,7 +21,6 @@ use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_datavalues::series::Series;
 use common_datavalues::DataSchemaRef;
-use common_datavalues::DataType;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunctionRef;
@@ -34,7 +33,6 @@ use futures::stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
-use crate::with_match_primitive_type;
 
 pub struct AggregatorFinalTransform {
     funcs: Vec<AggregateFunctionRef>,
@@ -144,27 +142,7 @@ impl Processor for AggregatorFinalTransform {
 
         let mut columns: Vec<Series> = Vec::with_capacity(funcs_len);
         for mut array in aggr_values {
-            let datatype = array.data_type();
-            with_match_primitive_type!(datatype, |$T| {
-                let array =  DFPrimitiveArray::<$T>::from_arrow_array(array.as_arc().as_ref());
-                columns.push(array.into_series());
-            },
-            {
-                match datatype {
-                    DataType::Boolean => {
-                        let array = DFBooleanArray::from_arrow_array(array.as_arc().as_ref());
-                        columns.push(array.into_series());
-
-                    },
-                    DataType::String => {
-                        let array = DFStringArray::from_arrow_array(array.as_arc().as_ref());
-                        columns.push(array.into_series());
-                    }
-                    _ => {
-                        unimplemented!()
-                    }
-                }
-            });
+            columns.push(array.as_series());
         }
         let mut blocks = vec![];
         if !columns.is_empty() {

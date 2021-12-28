@@ -339,6 +339,17 @@ impl AggregateArgMinMaxState for StringState {
         },
         {
             match &self.data {
+                DataValue::Boolean(val) => {
+                    let mut array = array
+                    .as_mut_any()
+                    .downcast_mut::<MutableBooleanArrayBuilder>()
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                    array.push_option(*val);
+                }
                 DataValue::String(val) => {
                     let mut array = array
                     .as_mut_any()

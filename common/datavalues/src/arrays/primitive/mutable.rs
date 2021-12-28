@@ -11,9 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-use std::sync::Arc;
 
-use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::MutableArray;
 use common_arrow::arrow::array::MutablePrimitiveArray;
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -21,7 +19,10 @@ use common_arrow::arrow::buffer::MutableBuffer;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 
 use crate::arrays::mutable::MutableArrayBuilder;
-use crate::prelude::*;
+use crate::series::IntoSeries;
+use crate::series::Series;
+use crate::DFPrimitiveType;
+use crate::DataType;
 
 #[derive(Default)]
 pub struct MutablePrimitiveArrayBuilder<T>
@@ -46,8 +47,8 @@ where T: DFPrimitiveType
         self
     }
 
-    fn as_arc(&mut self) -> Arc<dyn Array> {
-        self.builder.as_arc()
+    fn as_series(&mut self) -> Series {
+        self.builder.as_arc().into_series()
     }
 
     fn push_null(&mut self) {
@@ -55,7 +56,6 @@ where T: DFPrimitiveType
     }
 }
 
-// TODO(veeupup) make arrow2 array builder originally use here
 impl<T> MutablePrimitiveArrayBuilder<T>
 where T: DFPrimitiveType
 {

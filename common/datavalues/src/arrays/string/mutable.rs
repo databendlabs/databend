@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::MutableArray;
 use common_arrow::arrow::array::MutableBinaryArray;
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -20,6 +19,8 @@ use common_arrow::arrow::buffer::MutableBuffer;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 
 use crate::arrays::mutable::MutableArrayBuilder;
+use crate::series::IntoSeries;
+use crate::series::Series;
 use crate::DataType;
 
 #[derive(Default)]
@@ -40,8 +41,8 @@ impl MutableArrayBuilder for MutableStringArrayBuilder {
         self
     }
 
-    fn as_arc(&mut self) -> std::sync::Arc<dyn Array> {
-        self.builder.as_arc()
+    fn as_series(&mut self) -> Series {
+        self.builder.as_arc().into_series()
     }
 
     fn push_null(&mut self) {

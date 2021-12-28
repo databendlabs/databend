@@ -166,31 +166,16 @@ where
     #[allow(unused_mut)]
     fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
         let state = place.get::<AggregateSumState<SumT>>();
-        if let Some(val) = &state.value {
-            let datatype: DataType = array.data_type();
-            with_match_primitive_type!(datatype, |$T| {
-                    let mut array = array
-                    .as_mut_any()
-                    .downcast_mut::<MutablePrimitiveArrayBuilder<$T>>()
-                    .ok_or_else(|| {
-                        ErrorCode::UnexpectedError(
-                            "error occured when downcast MutableArray".to_string(),
-                        )
-                    })?;
-                let val: DataValue = (*val).into();
-                if val.is_integer() {
-                    let x = val.as_i64()?;
-                    array.push(x as $T);
-                }else {
-                    let x = val.as_f64()?;
-                    array.push(x as $T);
-                }
-            },
-            {
-                return Err(ErrorCode::UnexpectedError(
-                    "aggregate sum unexpected datatype".to_string(),
-                ));
-            });
+        if let Some(val) = state.value {
+            let mut array = array
+                .as_mut_any()
+                .downcast_mut::<MutablePrimitiveArrayBuilder<SumT>>()
+                .ok_or_else(|| {
+                    ErrorCode::UnexpectedError(
+                        "error occured when downcast MutableArray".to_string(),
+                    )
+                })?;
+            array.push(val);
         } else {
             array.push_null();
         }

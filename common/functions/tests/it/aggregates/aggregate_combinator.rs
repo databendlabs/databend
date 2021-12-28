@@ -21,9 +21,8 @@ use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::with_match_primitive_type;
 use pretty_assertions::assert_eq;
-
-use crate::with_match_primitive_type;
 
 #[test]
 fn test_aggregate_combinator_function() -> Result<()> {
@@ -40,12 +39,12 @@ fn test_aggregate_combinator_function() -> Result<()> {
     }
 
     let arrays: Vec<Series> = vec![
-        Series::new(vec![4_u64, 3, 2, 1, 3, 4]),
+        Series::new(vec![4_i64, 3, 2, 1, 3, 4]),
         Series::new(vec![true, true, false, true, true, true]),
     ];
 
     let args = vec![
-        DataField::new("a", DataType::UInt64, false),
+        DataField::new("a", DataType::Int64, false),
         DataField::new("b", DataType::Boolean, false),
     ];
 
@@ -73,10 +72,10 @@ fn test_aggregate_combinator_function() -> Result<()> {
             func_name: "sumdistinct",
             arrays: vec![arrays[0].clone()],
             error: "",
-            input_array: Box::new(MutablePrimitiveArrayBuilder::<u64>::default()),
+            input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::UInt64,
-                MutableBuffer::from([10u64]),
+                ArrowDataType::Int64,
+                MutableBuffer::from([10i64]),
                 Some(MutableBitmap::from([true])),
             )),
         },
@@ -103,10 +102,10 @@ fn test_aggregate_combinator_function() -> Result<()> {
             func_name: "minif",
             arrays: arrays.clone(),
             error: "",
-            input_array: Box::new(MutablePrimitiveArrayBuilder::<u64>::default()),
+            input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::UInt64,
-                MutableBuffer::from([1u64]),
+                ArrowDataType::Int64,
+                MutableBuffer::from([1i64]),
                 Some(MutableBitmap::from([true])),
             )),
         },
@@ -118,10 +117,10 @@ fn test_aggregate_combinator_function() -> Result<()> {
             func_name: "maxif",
             arrays: arrays.clone(),
             error: "",
-            input_array: Box::new(MutablePrimitiveArrayBuilder::<u64>::default()),
+            input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::UInt64,
-                MutableBuffer::from([4u64]),
+                ArrowDataType::Int64,
+                MutableBuffer::from([4i64]),
                 Some(MutableBitmap::from([true])),
             )),
         },
@@ -133,10 +132,10 @@ fn test_aggregate_combinator_function() -> Result<()> {
             func_name: "sumif",
             arrays: arrays.clone(),
             error: "",
-            input_array: Box::new(MutablePrimitiveArrayBuilder::<u64>::default()),
+            input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::UInt64,
-                MutableBuffer::from([30u64]),
+                ArrowDataType::Int64,
+                MutableBuffer::from([30i64]),
                 Some(MutableBitmap::from([true])),
             )),
         },
@@ -191,8 +190,8 @@ fn test_aggregate_combinator_function() -> Result<()> {
                         .downcast_ref::<MutablePrimitiveArrayBuilder<$T>>()
                         .unwrap();
 
-                    assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
-                    assert_eq!(array.values(), expect.values(), "{}", t.name);
+                assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
+                assert_eq!(array.values(), expect.values(), "{}", t.name);
             },
             {
                 panic!("shoud never reach this way");
@@ -376,8 +375,8 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
                         .downcast_ref::<MutablePrimitiveArrayBuilder<$T>>()
                         .unwrap();
 
-                    assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
-                    assert_eq!(array.values(), expect.values(), "{}", t.name);
+                assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
+                assert_eq!(array.values(), expect.values(), "{}", t.name);
             },
             {
                 panic!("shoud never reach this way");

@@ -34,7 +34,6 @@ use futures::stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
-use crate::with_match_primitive_type;
 
 pub struct GroupByFinalTransform {
     max_block_size: usize,
@@ -204,32 +203,7 @@ impl Processor for GroupByFinalTransform {
                 // Build final state block.
                 let mut columns: Vec<Series> = Vec::with_capacity(aggr_funcs_len + group_expr_len);
                 for mut array in aggr_values {
-                    let datatype = array.data_type();
-                    with_match_primitive_type!(
-                        datatype,
-                        |$T| {
-                            let array =
-                                DFPrimitiveArray::<$T>::from_arrow_array(array.as_arc().as_ref());
-                            columns.push(array.into_series());
-                        },
-                        {
-                            match datatype {
-                                DataType::Boolean => {
-                                    let array =
-                                        DFBooleanArray::from_arrow_array(array.as_arc().as_ref());
-                                    columns.push(array.into_series());
-                                }
-                                DataType::String => {
-                                    let array =
-                                        DFStringArray::from_arrow_array(array.as_arc().as_ref());
-                                    columns.push(array.into_series());
-                                }
-                                _ => {
-                                    unimplemented!()
-                                }
-                            }
-                        }
-                    );
+                    columns.push(array.as_series());
                 }
 
                 {

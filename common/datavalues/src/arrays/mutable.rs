@@ -13,20 +13,18 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
-
-use common_arrow::arrow::array::Array;
 
 use super::MutableBooleanArrayBuilder;
 use super::MutablePrimitiveArrayBuilder;
 use super::MutableStringArrayBuilder;
+use crate::series::Series;
 use crate::DataType;
 
 pub trait MutableArrayBuilder {
     fn data_type(&self) -> DataType;
     fn as_any(&self) -> &dyn Any;
     fn as_mut_any(&mut self) -> &mut dyn Any;
-    fn as_arc(&mut self) -> Arc<dyn Array>;
+    fn as_series(&mut self) -> Series;
     fn push_null(&mut self);
 }
 

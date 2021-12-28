@@ -18,7 +18,6 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_arrow::arrow::array::MutableBinaryArray;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -138,30 +137,15 @@ where
     #[allow(unused_mut)]
     fn merge_result(&mut self, array: &mut dyn MutableArrayBuilder) -> Result<()> {
         if let Some(val) = self.value {
-            let datatype: DataType = array.data_type();
-            with_match_primitive_type!(datatype, |$T| {
-                    let mut array = array
-                    .as_mut_any()
-                    .downcast_mut::<MutablePrimitiveArrayBuilder<$T>>()
-                    .ok_or_else(|| {
-                        ErrorCode::UnexpectedError(
-                            "error occured when downcast MutableArray".to_string(),
-                        )
-                    })?;
-                 let val: DataValue = val.into();
-                if val.is_integer() {
-                    let x = val.as_i64()?;
-                    array.push(x as $T);
-                }else {
-                    let x = val.as_f64()?;
-                    array.push(x as $T);
-                }
-            },
-            {
-                return Err(ErrorCode::UnexpectedError(
-                    "aggregate min_max unexpected datatype".to_string(),
-                ));
-            });
+            let mut array = array
+                .as_mut_any()
+                .downcast_mut::<MutablePrimitiveArrayBuilder<T>>()
+                .ok_or_else(|| {
+                    ErrorCode::UnexpectedError(
+                        "error occured when downcast MutableArray".to_string(),
+                    )
+                })?;
+            array.push(val);
         } else {
             array.push_null();
         }
@@ -238,11 +222,11 @@ impl AggregateMinMaxState for StringState {
         let v = self.value.clone();
         let mut array = array
             .as_mut_any()
-            .downcast_mut::<MutableBinaryArray<i64>>()
+            .downcast_mut::<MutableStringArrayBuilder>()
             .ok_or_else(|| {
                 ErrorCode::UnexpectedError("error occured when downcast MutableArray".to_string())
             })?;
-        array.push(v);
+        array.push_option(v);
         Ok(())
     }
 }

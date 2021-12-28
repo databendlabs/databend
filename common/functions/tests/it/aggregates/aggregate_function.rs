@@ -21,10 +21,9 @@ use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::*;
+use common_functions::with_match_primitive_type;
 use float_cmp::approx_eq;
 use pretty_assertions::assert_eq;
-
-use crate::with_match_primitive_type;
 
 #[test]
 fn test_aggregate_function() -> Result<()> {
@@ -355,78 +354,12 @@ fn test_aggregate_function() -> Result<()> {
                         .downcast_ref::<MutablePrimitiveArrayBuilder<$T>>()
                         .unwrap();
 
-                    assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
-                    assert_eq!(array.values(), expect.values(), "{}", t.name);
+                assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
+                assert_eq!(array.values(), expect.values(), "{}", t.name);
             },
             {
                 panic!("shoud never reach this way");
             });
-
-            // match t.input_array.data_type() {
-            //     ArrowDataType::UInt8 => {
-            //         let array = t
-            //             .input_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<u8>>()
-            //             .unwrap();
-            //         let expect = t
-            //             .expect_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<u8>>()
-            //             .unwrap();
-
-            //         assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
-            //         assert_eq!(array.values(), expect.values(), "{}", t.name);
-            //     }
-            //     ArrowDataType::UInt64 => {
-            //         let array = t
-            //             .input_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<u64>>()
-            //             .unwrap();
-            //         let expect = t
-            //             .expect_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<u64>>()
-            //             .unwrap();
-
-            //         assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
-            //         assert_eq!(array.values(), expect.values(), "{}", t.name);
-            //     }
-            //     ArrowDataType::Int64 => {
-            //         let array = t
-            //             .input_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<i64>>()
-            //             .unwrap();
-            //         let expect = t
-            //             .expect_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<i64>>()
-            //             .unwrap();
-
-            //         assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
-            //         assert_eq!(array.values(), expect.values(), "{}", t.name);
-            //     }
-            //     ArrowDataType::Float64 => {
-            //         let array = t
-            //             .input_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<f64>>()
-            //             .unwrap();
-            //         let expect = t
-            //             .expect_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<f64>>()
-            //             .unwrap();
-
-            //         assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
-            //         assert_eq!(array.values(), expect.values(), "{}", t.name);
-            //     }
-            //     _ => {
-            //         panic!("this way should never reach")
-            //     }
-            // }
 
             assert_eq!(t.display, format!("{:}", func), "{}", t.name);
             Ok(())
@@ -775,78 +708,12 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
                         .downcast_ref::<MutablePrimitiveArrayBuilder<$T>>()
                         .unwrap();
 
-                    assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
-                    assert_eq!(array.values(), expect.values(), "{}", t.name);
+                assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
+                assert_eq!(array.values(), expect.values(), "{}", t.name);
             },
             {
                 panic!("shoud never reach this way");
             });
-
-            // match t.input_array.data_type() {
-            //     ArrowDataType::UInt8 => {
-            //         let array = t
-            //             .input_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<u8>>()
-            //             .unwrap();
-            //         let expect = t
-            //             .expect_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<u8>>()
-            //             .unwrap();
-
-            //         assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
-            //         assert_eq!(array.values(), expect.values(), "{}", t.name);
-            //     }
-            //     ArrowDataType::UInt64 => {
-            //         let array = t
-            //             .input_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<u64>>()
-            //             .unwrap();
-            //         let expect = t
-            //             .expect_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<u64>>()
-            //             .unwrap();
-
-            //         assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
-            //         assert_eq!(array.values(), expect.values(), "{}", t.name);
-            //     }
-            //     ArrowDataType::Int64 => {
-            //         let array = t
-            //             .input_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<i64>>()
-            //             .unwrap();
-            //         let expect = t
-            //             .expect_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<i64>>()
-            //             .unwrap();
-
-            //         assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
-            //         assert_eq!(array.values(), expect.values(), "{}", t.name);
-            //     }
-            //     ArrowDataType::Float64 => {
-            //         let array = t
-            //             .input_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<f64>>()
-            //             .unwrap();
-            //         let expect = t
-            //             .expect_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<f64>>()
-            //             .unwrap();
-
-            //         assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
-            //         assert_eq!(array.values(), expect.values(), "{}", t.name);
-            //     }
-            //     _ => {
-            //         panic!("this way should never reach")
-            //     }
-            // }
 
             assert_eq!(t.display, format!("{:}", func), "{}", t.name);
             Ok(())
@@ -1132,63 +999,12 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
                         .downcast_ref::<MutablePrimitiveArrayBuilder<$T>>()
                         .unwrap();
 
-                    assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
-                    assert_eq!(array.values(), expect.values(), "{}", t.name);
+                assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
+                assert_eq!(array.values(), expect.values(), "{}", t.name);
             },
             {
                 panic!("shoud never reach this way");
             });
-
-            // match t.input_array.data_type() {
-            //     ArrowDataType::UInt64 => {
-            //         let array = t
-            //             .input_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<u64>>()
-            //             .unwrap();
-            //         let expect = t
-            //             .expect_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<u64>>()
-            //             .unwrap();
-
-            //         assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
-            //         assert_eq!(array.values(), expect.values(), "{}", t.name);
-            //     }
-            //     ArrowDataType::Int64 => {
-            //         let array = t
-            //             .input_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<i64>>()
-            //             .unwrap();
-            //         let expect = t
-            //             .expect_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<i64>>()
-            //             .unwrap();
-
-            //         assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
-            //         assert_eq!(array.values(), expect.values(), "{}", t.name);
-            //     }
-            //     ArrowDataType::Float64 => {
-            //         let array = t
-            //             .input_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<f64>>()
-            //             .unwrap();
-            //         let expect = t
-            //             .expect_array
-            //             .as_mut_any()
-            //             .downcast_ref::<MutablePrimitiveArrayBuilder<f64>>()
-            //             .unwrap();
-
-            //         assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
-            //         assert_eq!(array.values(), expect.values(), "{}", t.name);
-            //     }
-            //     _ => {
-            //         panic!("this way should never reach")
-            //     }
-            // }
 
             // assert_eq!(&t.expect, &result, "{}", t.name);
             assert_eq!(t.display, format!("{:}", func), "{}", t.name);

@@ -14,6 +14,3 @@
 
 mod aggregate_combinator;
 mod aggregate_function;
-
-#[macro_use]
-mod macros;

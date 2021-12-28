@@ -31,8 +31,6 @@ mod transform_source;
 mod group_by;
 mod streams;
 mod transform_sink;
-#[macro_use]
-mod macros;
 
 pub use streams::AddOnStream;
 pub use transform_aggregator_final::AggregatorFinalTransform;
