@@ -55,11 +55,11 @@ async fn test_show_create_udf_interpreter() -> Result<()> {
         let stream = executor.execute(None).await?;
         let result = stream.try_collect::<Vec<_>>().await?;
         let expected = vec![
-            "+------------+----------------+-----------------------+",
-            "| name       | definition     | description           |",
-            "+------------+----------------+-----------------------+",
-            "| isnotempty | not(isnull(p)) | This is a description |",
-            "+------------+----------------+-----------------------+",
+            "+------------+------------+----------------+-----------------------+",
+            "| name       | parameters | definition     | description           |",
+            "+------------+------------+----------------+-----------------------+",
+            "| isnotempty | p          | not(isnull(p)) | This is a description |",
+            "+------------+------------+----------------+-----------------------+",
         ];
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
     } else {

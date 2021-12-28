@@ -57,6 +57,7 @@ impl Interpreter for ShowUDFInterpreter {
 
         let show_fields = vec![
             DataField::new("name", DataType::String, false),
+            DataField::new("parameters", DataType::String, false),
             DataField::new("definition", DataType::String, false),
             DataField::new("description", DataType::String, false),
         ];
@@ -64,6 +65,7 @@ impl Interpreter for ShowUDFInterpreter {
 
         let block = DataBlock::create_by_array(show_schema.clone(), vec![
             Series::new(vec![udf.name.as_bytes()]),
+            Series::new(vec![udf.parameters.join(", ").as_bytes()]),
             Series::new(vec![udf.definition.as_bytes()]),
             Series::new(vec![udf.description.as_bytes()]),
         ]);
