@@ -883,8 +883,9 @@ impl<'a> DfParser<'a> {
         let udf_name = self.parser.parse_literal_string()?;
         self.parser.expect_token(&Token::Eq)?;
         // TODO verify the definition as a legal expr
-        let definition = self.parser.parse_literal_string()?;
-        let description = if self.consume_token("DESC") {
+        let desc_token = "DESC";
+        let definition = self.consume_token_until_or_end(vec![desc_token]).join("");
+        let description = if self.consume_token(desc_token) {
             self.parser.expect_token(&Token::Eq)?;
             self.parser.parse_literal_string()?
         } else {

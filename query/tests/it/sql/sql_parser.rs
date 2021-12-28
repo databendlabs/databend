@@ -1408,7 +1408,7 @@ fn test_show_udf() -> Result<()> {
 #[test]
 fn test_alter_udf() -> Result<()> {
     expect_parse_ok(
-        "ALTER FUNCTION test_udf='not(isnotnull(@0))'",
+        "ALTER FUNCTION test_udf=not(isnotnull(@0))",
         DfStatement::AlterUDF(DfAlterUDF {
             udf_name: "test_udf".to_string(),
             definition: "not(isnotnull(@0))".to_string(),
@@ -1417,7 +1417,7 @@ fn test_alter_udf() -> Result<()> {
     )?;
 
     expect_parse_ok(
-        "ALTER FUNCTION test_udf='not(isnotnull(@0))' desc='This is a description'",
+        "ALTER FUNCTION test_udf=not(isnotnull(@0)) desc='This is a description'",
         DfStatement::AlterUDF(DfAlterUDF {
             udf_name: "test_udf".to_string(),
             definition: "not(isnotnull(@0))".to_string(),
