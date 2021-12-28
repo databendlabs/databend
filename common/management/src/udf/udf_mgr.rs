@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::scalars::FunctionFactory;
 use common_functions::udfs::UDFFactory;
+use common_functions::udfs::UDFParser;
 use common_meta_api::KVApi;
 use common_meta_types::IntoSeqV;
 use common_meta_types::MatchSeq;
@@ -64,6 +65,9 @@ impl UdfMgrApi for UdfMgr {
                 info.name.as_str()
             )));
         }
+
+        let mut udf_parser = UDFParser::default();
+        udf_parser.parse_definition(&info.definition)?;
 
         let seq = MatchSeq::Exact(0);
         let val = Operation::Update(serde_json::to_vec(&info)?);
