@@ -1350,7 +1350,7 @@ fn test_create_udf() -> Result<()> {
     )?;
 
     expect_parse_ok(
-        "CREATE FUNCTION test_udf AS not(isnotnull(@0)) desc='This is a description'",
+        "CREATE FUNCTION test_udf AS not(isnotnull(@0)) DESC AS 'This is a description'",
         DfStatement::CreateUDF(DfCreateUDF {
             if_not_exists: false,
             udf_name: "test_udf".to_string(),
@@ -1360,7 +1360,7 @@ fn test_create_udf() -> Result<()> {
     )?;
 
     expect_parse_ok(
-        "CREATE FUNCTION IF NOT EXISTS test_udf AS not(isnotnull(@0)) desc='This is a description'",
+        "CREATE FUNCTION IF NOT EXISTS test_udf AS not(isnotnull(@0)) DESC AS 'This is a description'",
         DfStatement::CreateUDF(DfCreateUDF {
             if_not_exists: true,
             udf_name: "test_udf".to_string(),
@@ -1417,7 +1417,7 @@ fn test_alter_udf() -> Result<()> {
     )?;
 
     expect_parse_ok(
-        "ALTER FUNCTION test_udf AS not(isnotnull(@0)) desc='This is a description'",
+        "ALTER FUNCTION test_udf AS not(isnotnull(@0)) DESC AS 'This is a description'",
         DfStatement::AlterUDF(DfAlterUDF {
             udf_name: "test_udf".to_string(),
             definition: "not(isnotnull(@0))".to_string(),

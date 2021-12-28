@@ -859,12 +859,13 @@ impl<'a> DfParser<'a> {
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let udf_name = self.parser.parse_literal_string()?;
-        self.parser.expect_token(&Token::make_keyword("AS"))?;
+        let as_token = Token::make_keyword("AS");
+        self.parser.expect_token(&as_token)?;
         // TODO verify the definition as a legal expr
         let desc_token = "DESC";
         let definition = self.consume_token_until_or_end(vec![desc_token]).join("");
         let description = if self.consume_token(desc_token) {
-            self.parser.expect_token(&Token::Eq)?;
+            self.parser.expect_token(&as_token)?;
             self.parser.parse_literal_string()?
         } else {
             String::from("")
@@ -881,12 +882,13 @@ impl<'a> DfParser<'a> {
 
     fn parse_alter_udf(&mut self) -> Result<DfStatement, ParserError> {
         let udf_name = self.parser.parse_literal_string()?;
-        self.parser.expect_token(&Token::make_keyword("AS"))?;
+        let as_token = Token::make_keyword("AS");
+        self.parser.expect_token(&as_token)?;
         // TODO verify the definition as a legal expr
         let desc_token = "DESC";
         let definition = self.consume_token_until_or_end(vec![desc_token]).join("");
         let description = if self.consume_token(desc_token) {
-            self.parser.expect_token(&Token::Eq)?;
+            self.parser.expect_token(&as_token)?;
             self.parser.parse_literal_string()?
         } else {
             String::from("")
