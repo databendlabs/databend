@@ -1,6 +1,6 @@
 DROP FUNCTION IF EXISTS isnotempty;
 
-CREATE FUNCTION isnotempty AS not(isnull(@0));
+CREATE FUNCTION isnotempty AS (p) -> not(isnull(p));
 DROP FUNCTION isnotempty;
 
 DROP FUNCTION IF EXISTS isnotempty;

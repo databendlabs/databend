@@ -25,7 +25,7 @@ use sqlparser::ast::UnaryOperator;
 #[test]
 fn test_udf_parser() -> Result<()> {
     let mut parser = UDFParser::default();
-    let result = parser.parse_definition("not(isnull(@0))");
+    let result = parser.parse_definition("test", &["p".to_string()], "not(isnull(p))");
 
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), Expr::UnaryOp {
@@ -37,7 +37,7 @@ fn test_udf_parser() -> Result<()> {
             }]),
             params: vec![],
             args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident {
-                value: "@0".to_string(),
+                value: "p".to_string(),
                 quote_style: None,
             }))],
             over: None,
@@ -45,8 +45,19 @@ fn test_udf_parser() -> Result<()> {
         }))))
     });
 
-    assert!(parser.parse_definition("not(isnull(@1))").is_err());
-    assert!(parser.parse_definition("not(isnull(@1, @0))").is_ok());
+    assert!(parser
+        .parse_definition("test", &["p".to_string()], "not(isnull(p, d))")
+        .is_err());
+    assert!(parser
+        .parse_definition("test", &["d".to_string()], "not(isnull(p))")
+        .is_err());
+    assert!(parser
+        .parse_definition(
+            "test",
+            &["d".to_string(), "p".to_string()],
+            "not(isnull(p, d))"
+        )
+        .is_ok());
 
     Ok(())
 }

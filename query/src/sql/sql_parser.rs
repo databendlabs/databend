@@ -854,16 +854,98 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::DropStage(drop))
     }
 
+    fn parse_udf_parameters(&mut self) -> Result<Vec<String>, ParserError> {
+        let mut params = vec![];
+        let mut found_right_paren = false;
+        let mut expect_next_param = false;
+
+        self.parser.expect_token(&Token::LParen)?;
+        loop {
+            let next_token = self.parser.next_token();
+            if next_token == Token::EOF || next_token == Token::SemiColon {
+                break;
+            }
+            if next_token == Token::RParen {
+                found_right_paren = true;
+                break;
+            }
+
+            match next_token {
+                Token::Word(Word {
+                    value,
+                    quote_style,
+                    keyword,
+                }) => {
+                    if keyword != Keyword::NoKeyword {
+                        return parser_err!(format!(
+                            "Keyword can not be parameter, got: {}",
+                            value
+                        ));
+                    }
+                    if let Some(quote) = quote_style {
+                        return parser_err!(format!(
+                            "Quote is not allowed in parameters, remove: {}",
+                            quote
+                        ));
+                    }
+                    if params.contains(&value) {
+                        return parser_err!(format!(
+                            "Duplicate parameter is not allowed, keep only one: {}",
+                            &value
+                        ));
+                    }
+
+                    expect_next_param = false;
+                    params.push(value);
+                }
+                Token::Comma => {
+                    expect_next_param = true;
+                }
+                other => {
+                    return parser_err!(format!("Expect words or comma, but got: {}", other));
+                }
+            }
+        }
+
+        if !found_right_paren {
+            return parser_err!("Can not find complete parameters, `)` is missing");
+        }
+        if expect_next_param {
+            return parser_err!("Found a redundant `,` in the parameters");
+        }
+
+        Ok(params)
+    }
+
+    fn parse_udf_definition_expr(&mut self, until_token: Vec<&str>) -> Result<String, ParserError> {
+        // Match ->
+        self.parser.expect_token(&Token::Minus)?;
+        let next_token = self.parser.next_token_no_skip();
+        if next_token != Some(&Token::Gt) {
+            return parser_err!(format!("Expected >, found: {:#?}", next_token));
+        }
+
+        let definition = self.consume_token_until_or_end(until_token).join("");
+        if definition.is_empty() {
+            return parser_err!("UDF definition can not be empty");
+        }
+
+        Ok(definition)
+    }
+
     fn parse_create_udf(&mut self) -> Result<DfStatement, ParserError> {
         let if_not_exists =
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+
         let udf_name = self.parser.parse_literal_string()?;
         let as_token = Token::make_keyword("AS");
         self.parser.expect_token(&as_token)?;
-        // TODO verify the definition as a legal expr
+
         let desc_token = "DESC";
-        let definition = self.consume_token_until_or_end(vec![desc_token]).join("");
+        let parameters = self.parse_udf_parameters()?;
+        let definition = self.parse_udf_definition_expr(vec![desc_token])?;
+
         let description = if self.consume_token(desc_token) {
             self.parser.expect_token(&as_token)?;
             self.parser.parse_literal_string()?
@@ -873,6 +955,7 @@ impl<'a> DfParser<'a> {
         let create_udf = DfCreateUDF {
             if_not_exists,
             udf_name,
+            parameters,
             definition,
             description,
         };

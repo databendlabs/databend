@@ -18,21 +18,26 @@ use std::sync::Mutex;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use once_cell::sync::Lazy;
-use sqlparser::ast::Expr;
 
+use super::UDFDefinition;
 use super::UDFParser;
 use crate::aggregates::AggregateFunctionFactory;
 use crate::scalars::FunctionFactory;
 
 #[derive(Default)]
 pub struct UDFFactory {
-    definitions: HashMap<String, Expr>,
+    definitions: HashMap<String, UDFDefinition>,
 }
 
 static UDF_FACTORY: Lazy<Mutex<UDFFactory>> = Lazy::new(|| Mutex::new(UDFFactory::default()));
 
 impl UDFFactory {
-    pub fn register(tenant: &str, name: &str, definition: &str) -> Result<()> {
+    pub fn register(
+        tenant: &str,
+        name: &str,
+        parameters: &[String],
+        definition: &str,
+    ) -> Result<()> {
         if UDFFactory::is_builtin_function(name) {
             return Err(ErrorCode::RegisterUDFError(format!(
                 "Can not register builtin functions: {} - {}",
@@ -43,10 +48,13 @@ impl UDFFactory {
         match UDF_FACTORY.lock() {
             Ok(mut factory) => {
                 let mut udf_parser = UDFParser::default();
-                let expr = udf_parser.parse_definition(definition)?;
+                let expr = udf_parser.parse_definition(name, parameters, definition)?;
 
                 let definitions = &mut factory.definitions;
-                definitions.insert(UDFFactory::get_udf_key(tenant, name), expr);
+                definitions.insert(
+                    UDFFactory::get_udf_key(tenant, name),
+                    UDFDefinition::new(parameters.to_owned(), expr),
+                );
 
                 Ok(())
             }
@@ -72,13 +80,13 @@ impl UDFFactory {
         }
     }
 
-    pub fn get_definition(tenant: &str, name: &str) -> Result<Option<Expr>> {
+    pub fn get_definition(tenant: &str, name: &str) -> Result<Option<UDFDefinition>> {
         match UDF_FACTORY.lock() {
             Ok(factory) => match factory
                 .definitions
                 .get(&UDFFactory::get_udf_key(tenant, name))
             {
-                Some(expr) => Ok(Some(expr.clone())),
+                Some(definition) => Ok(Some(definition.clone())),
                 None => Ok(None),
             },
             Err(lock_error) => Err(ErrorCode::UnknownUDF(format!(

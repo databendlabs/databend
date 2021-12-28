@@ -14,27 +14,41 @@
 
 use std::collections::HashMap;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Function;
 use sqlparser::ast::FunctionArg;
 use sqlparser::ast::Ident;
 
+use super::UDFDefinition;
 use super::UDFFactory;
 
 pub struct UDFTransformer;
 
 impl UDFTransformer {
-    pub fn transform_function(tenant: &str, function: &Function) -> Option<Expr> {
-        if let Ok(Some(expr)) = UDFFactory::get_definition(tenant, &function.name.to_string()) {
+    pub fn transform_function(tenant: &str, function: &Function) -> Result<Option<Expr>> {
+        if let Ok(Some(UDFDefinition { parameters, expr })) =
+            UDFFactory::get_definition(tenant, &function.name.to_string())
+        {
+            if parameters.len() != function.args.len() {
+                return Err(ErrorCode::SyntaxException(format!(
+                    "Requir {} parameters, but got: {}",
+                    parameters.len(),
+                    function.args.len()
+                )));
+            }
+
             let mut args_map = HashMap::new();
             function.args.iter().enumerate().for_each(|(index, f_arg)| {
-                args_map.insert(format!("@{}", index), match f_arg {
-                    FunctionArg::Named { arg, .. } => arg.clone(),
-                    FunctionArg::Unnamed(unnamed_arg) => unnamed_arg.clone(),
-                });
+                if let Some(param) = parameters.get(index) {
+                    args_map.insert(param, match f_arg {
+                        FunctionArg::Named { arg, .. } => arg.clone(),
+                        FunctionArg::Unnamed(unnamed_arg) => unnamed_arg.clone(),
+                    });
+                }
             });
-            Some(
+            Ok(Some(
                 Self::clone_expr_with_replacement(&expr, &|nest_expr| {
                     if let Expr::Identifier(Ident { value, .. }) = nest_expr {
                         if let Some(arg) = args_map.get(value) {
@@ -45,9 +59,9 @@ impl UDFTransformer {
                     Ok(None)
                 })
                 .unwrap(),
-            )
+            ))
         } else {
-            None
+            Ok(None)
         }
     }
 

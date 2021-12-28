@@ -27,7 +27,7 @@ async fn test_drop_udf_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
     static CREATE_UDF: &str =
-        "CREATE FUNCTION IF NOT EXISTS isnotempty AS not(isnull(@0)) DESC AS 'This is a description'";
+        "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(isnull(p)) DESC AS 'This is a description'";
 
     static DROP_UDF_IF_EXISTS: &str = "DROP FUNCTION IF EXISTS isnotempty";
     static DROP_UDF: &str = "DROP FUNCTION isnotempty";
@@ -44,7 +44,8 @@ async fn test_drop_udf_interpreter() -> Result<()> {
             .await?;
 
         assert_eq!(udf.name, "isnotempty");
-        assert_eq!(udf.definition, "not(isnull(@0))");
+        assert_eq!(udf.parameters, vec!["p".to_string()]);
+        assert_eq!(udf.definition, "not(isnull(p))");
         assert_eq!(udf.description, "This is a description")
     } else {
         panic!()
@@ -89,7 +90,8 @@ async fn test_drop_udf_interpreter() -> Result<()> {
             .await?;
 
         assert_eq!(udf.name, "isnotempty");
-        assert_eq!(udf.definition, "not(isnull(@0))");
+        assert_eq!(udf.parameters, vec!["p".to_string()]);
+        assert_eq!(udf.definition, "not(isnull(p))");
         assert_eq!(udf.description, "This is a description")
     } else {
         panic!()

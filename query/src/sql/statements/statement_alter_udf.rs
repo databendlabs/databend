@@ -39,6 +39,7 @@ impl AnalyzableStatement for DfAlterUDF {
             AlterUDFPlan {
                 udf: UserDefinedFunction::new(
                     self.udf_name.as_str(),
+                    vec![], // TODO
                     self.definition.as_str(),
                     self.description.as_str(),
                 ),

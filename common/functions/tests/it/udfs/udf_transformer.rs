@@ -25,7 +25,12 @@ use sqlparser::ast::UnaryOperator;
 #[test]
 fn test_udf_transformer() -> Result<()> {
     let tenant = "tenant_1";
-    UDFFactory::register(tenant, "test_transformer", "not(isnull(@0))")?;
+    UDFFactory::register(
+        tenant,
+        "test_transformer",
+        &["p".to_string()],
+        "not(isnull(p))",
+    )?;
     let result = UDFTransformer::transform_function(tenant, &Function {
         name: ObjectName(vec![Ident {
             value: "test_transformer".to_string(),
@@ -38,7 +43,7 @@ fn test_udf_transformer() -> Result<()> {
         }))],
         over: None,
         distinct: false,
-    });
+    })?;
 
     assert!(result.is_some());
     assert_eq!(result.unwrap(), Expr::UnaryOp {
@@ -70,7 +75,7 @@ fn test_udf_transformer() -> Result<()> {
         }))],
         over: None,
         distinct: false,
-    })
+    })?
     .is_none());
 
     Ok(())

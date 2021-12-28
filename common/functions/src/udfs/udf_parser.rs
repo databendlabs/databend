@@ -12,15 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::collections::HashSet;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_sql::expr::ExprTraverser;
 use common_sql::expr::ExprVisitor;
-use once_cell::sync::Lazy;
-use regex::Regex;
 use sqlparser::ast::Expr;
+use sqlparser::ast::Function;
 use sqlparser::ast::Ident;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
@@ -28,18 +27,24 @@ use sqlparser::tokenizer::Tokenizer;
 
 #[derive(Default)]
 pub struct UDFParser {
-    params: Vec<u8>,
+    name: String,
+    expr_params: HashSet<String>,
 }
 
 impl UDFParser {
-    pub fn parse_definition(&mut self, definition: &str) -> Result<Expr> {
+    pub fn parse_definition(
+        &mut self,
+        name: &str,
+        parameters: &[String],
+        definition: &str,
+    ) -> Result<Expr> {
         let dialect = &GenericDialect {};
         let mut tokenizer = Tokenizer::new(dialect, definition);
 
         match tokenizer.tokenize() {
             Ok(tokens) => match Parser::new(tokens, dialect).parse_expr() {
                 Ok(definition_expr) => {
-                    self.verify_definition_expr(&definition_expr)?;
+                    self.verify_definition_expr(name, parameters, &definition_expr)?;
                     Ok(definition_expr)
                 }
                 Err(parse_error) => Err(ErrorCode::from(parse_error)),
@@ -51,50 +56,62 @@ impl UDFParser {
         }
     }
 
-    fn verify_definition_expr(&mut self, definition_expr: &Expr) -> Result<()> {
-        let params = &mut self.params;
-        params.clear();
+    fn verify_definition_expr(
+        &mut self,
+        name: &str,
+        parameters: &[String],
+        definition_expr: &Expr,
+    ) -> Result<()> {
+        let expr_params = &mut self.expr_params;
+        expr_params.clear();
+        self.name = name.to_string();
 
         ExprTraverser::accept(definition_expr, self)?;
-        let params = &mut self.params;
+        let expr_params = &self.expr_params;
+        let parameters = parameters.to_owned().into_iter().collect::<HashSet<_>>();
+        let params_not_declared: HashSet<_> = parameters.difference(expr_params).collect();
+        let params_not_used: HashSet<_> = expr_params.difference(&parameters).collect();
 
-        if !params.is_empty() {
-            params.sort_unstable();
-
-            let mut previous_param = params[0];
-            if previous_param != 0 {
-                return Err(ErrorCode::IllegalUDFParams(format!(
-                    "UDF params must start with @0, but got: @{}",
-                    params[0]
-                )));
-            } else {
-                let rest_params = &params[1..];
-                for param in rest_params.iter() {
-                    if *param != previous_param && *param != previous_param + 1 {
-                        return Err(ErrorCode::IllegalUDFParams(
-                            "UDF params must start with @0 and increase by 1, such as @0, @1, @2...")
-                        );
-                    }
-
-                    previous_param = *param;
-                }
-            }
+        if params_not_declared.is_empty() && params_not_used.is_empty() {
+            return Ok(());
         }
 
-        Ok(())
+        return Err(ErrorCode::SyntaxException(format!(
+            "{}{}",
+            if params_not_declared.is_empty() {
+                "".to_string()
+            } else {
+                format!("Parameters are not declared: {:?}", params_not_declared)
+            },
+            if params_not_used.is_empty() {
+                "".to_string()
+            } else {
+                format!("Parameters are not used: {:?}", params_not_used)
+            },
+        )));
     }
 }
 
 impl ExprVisitor for UDFParser {
     fn post_visit(&mut self, expr: &Expr) -> Result<()> {
-        if let Expr::Identifier(Ident { value, .. }) = expr {
-            static RE: Lazy<Arc<Regex>> =
-                Lazy::new(|| Arc::new(Regex::new(r"@(?P<i>\d+)").unwrap()));
-            let index = RE.as_ref().replace_all(value, "$i").parse::<u8>().unwrap();
-            let params = &mut self.params;
-            params.push(index);
-        }
+        match expr {
+            Expr::Identifier(Ident { value, .. }) => {
+                let expr_params = &mut self.expr_params;
+                expr_params.insert(value.to_string());
 
-        Ok(())
+                Ok(())
+            }
+            Expr::Function(Function { name, .. }) => {
+                if self.name == name.to_string() {
+                    Err(ErrorCode::SyntaxException(format!(
+                        "UDF does not support recursion: {:?}",
+                        name
+                    )))
+                } else {
+                    Ok(())
+                }
+            }
+            _ => Ok(()),
+        }
     }
 }
