@@ -15,62 +15,82 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use clickhouse_rs::types::Complex;
-use clickhouse_rs::Block;
-use clickhouse_rs::ClientHandle;
-use clickhouse_rs::Pool;
+use clickhouse_driver::prelude::*;
 use common_base::tokio;
-use common_base::uuid::Uuid;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use databend_query::servers::ClickHouseHandler;
+use databend_query::servers::Server;
 use tempfile::TempDir;
+use uuid::Uuid;
 
 use crate::tests::SessionManagerBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_clickhouse_handler_query() -> Result<()> {
-    let mut handler =
-        ClickHouseHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
-
-    let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
-    let listening = handler.start(listening).await?;
-    let mut handler = create_conn(listening.port()).await?;
-
+    struct Sum {
+        sum: u64,
+    }
+    impl clickhouse_driver::prelude::Deserialize for Sum {
+        fn deserialize(row: Row) -> errors::Result<Self> {
+            let sum = row.value(0).unwrap().unwrap();
+            Ok(Sum { sum })
+        }
+    }
+    let (_, listening) = start_server(1).await?;
+    let mut conn = create_conn(listening.port()).await?;
     let query_str = "SELECT COUNT() AS c FROM numbers(1000)";
-    let block = query(&mut handler, query_str).await?;
-    assert_eq!(block.row_count(), 1);
-    assert_eq!(get_u64_data(block)?, 1000);
-
+    let block = query::<Sum>(&mut conn, query_str).await?;
+    assert_eq!(block.len(), 1);
+    assert_eq!(block[0].sum, 1000);
     Ok(())
+}
+
+#[derive(Debug)]
+struct Temp {
+    a: u64,
+    b: i64,
+    c: String,
+}
+
+impl clickhouse_driver::prelude::Deserialize for Temp {
+    fn deserialize(row: Row) -> errors::Result<Self> {
+        let a = row.value(0).unwrap().unwrap();
+        let b = row.value(1).unwrap().unwrap();
+        let c: &str = row.value(2).unwrap().unwrap();
+        Ok(Temp {
+            a,
+            b,
+            c: c.to_string(),
+        })
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_clickhouse_insert_data() -> Result<()> {
-    let mut handler =
-        ClickHouseHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
+    let (_, listening) = start_server(1).await?;
+    let mut conn = create_conn(listening.port()).await?;
 
-    let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
-    let listening = handler.start(listening).await?;
-    let mut handler = create_conn(listening.port()).await?;
+    let query_str = "CREATE TABLE test(a UInt64 not null, b UInt64 not null, c String not null) Engine = Memory";
+    execute(&mut conn, query_str).await?;
 
-    let query_str = "CREATE TABLE test(a UInt64 not null, b String not null) Engine = Memory";
-    execute(&mut handler, query_str).await?;
+    let block = Block::new("test")
+        .add("a", vec![3u64, 4, 5, 6])
+        .add("b", vec![33i64, 44, 55, 66])
+        .add("c", vec!["33", "44", "55", "66"]);
 
-    let block = Block::new();
-    let block = block.column("a", vec![3u64, 4, 5, 6]);
-    let block = block.column("b", vec!["33", "44", "55", "66"]);
-    insert(&mut handler, "test", block).await?;
+    insert(&mut conn, &block).await?;
 
-    let query_str = "SELECT * from test";
-    let block = query(&mut handler, query_str).await?;
-    assert_eq!(block.row_count(), 4);
+    let query_str = "SELECT * from test order by a";
+    let datas = query::<Temp>(&mut conn, query_str).await?;
+    assert_eq!(datas.len(), 4);
+    assert_eq!(datas[0].a, 3);
+    assert_eq!(datas[0].b, 33);
+    assert_eq!(datas[0].c, "33".to_string());
     Ok(())
 }
 
-// (todo winter)
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[ignore]
 async fn test_clickhouse_insert_to_fuse_table() -> Result<()> {
     let tmp_dir = TempDir::new()?;
     let data_path = tmp_dir.path().to_str().unwrap().to_string();
@@ -83,41 +103,50 @@ async fn test_clickhouse_insert_to_fuse_table() -> Result<()> {
 
     let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
     let listening = handler.start(listening).await?;
-    let mut handler = create_conn(listening.port()).await?;
+
+    let mut conn = create_conn(listening.port()).await?;
 
     let test_tbl_name = format!("tbl_{}", Uuid::new_v4().to_simple());
     let query_str = format!(
-        "CREATE TABLE {}(a UInt32, b UInt64, c String) Engine = fuse",
+        "CREATE TABLE {}(a UInt64 not null, b UInt64 not null, c String not null) Engine = fuse",
         test_tbl_name
     );
-    execute(&mut handler, &query_str).await?;
+    execute(&mut conn, &query_str).await?;
 
-    let block = Block::new();
-    let block = block.column("a", vec![1u32, 2]);
-    let block = block.column("b", vec![1u64, 2]);
-    let block = block.column("c", vec!["1", "'\"2\"-\"2\"'"]);
-    insert(&mut handler, &test_tbl_name, block.clone()).await?;
+    let block = Block::new(test_tbl_name.as_str())
+        .add("a", vec![3u64, 4, 5, 6])
+        .add("b", vec![33i64, 44, 55, 66])
+        .add("c", vec!["33", "44", "55", "66"]);
+
+    insert(&mut conn, &block).await?;
     // we give another insertion here, to test if everything still doing well
     // see issue #2460 https://github.com/datafuselabs/databend/issues/2460
-    insert(&mut handler, &test_tbl_name, block).await?;
+    insert(&mut conn, &block).await?;
 
     let query_str = format!("SELECT * from {}", test_tbl_name);
-    let block = query(&mut handler, &query_str).await?;
-    assert_eq!(block.row_count(), 4);
-    assert_eq!(block.column_count(), 3);
+    let data = query::<Temp>(&mut conn, &query_str).await?;
+    assert_eq!(data.len(), 4);
+
+    // insert and select
+    let insert_str = format!(
+        "insert into {} select * from {}",
+        test_tbl_name, test_tbl_name
+    );
+
+    // ignore the error here, because query needs a block to return but here can't
+    let _ = query::<Temp>(&mut conn, &insert_str).await;
+    let data = query::<Temp>(&mut conn, &query_str).await?;
+    assert_eq!(data.len(), 8);
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_reject_clickhouse_connection() -> Result<()> {
-    let mut handler =
-        ClickHouseHandler::create(SessionManagerBuilder::create().max_sessions(1).build()?);
+    let (_, listening) = start_server(1).await?;
 
-    let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
-    let listening = handler.start(listening).await?;
     {
         // Accepted connection
-        let _handler = create_conn(listening.port()).await?;
+        let _conn = create_conn(listening.port()).await?;
 
         // Rejected connection
         match create_conn(listening.port()).await {
@@ -130,7 +159,7 @@ async fn test_reject_clickhouse_connection() -> Result<()> {
     }
 
     // Wait for the connection to be destroyed
-    std::thread::sleep(Duration::from_secs(5));
+    std::thread::sleep(Duration::from_secs(1));
     // Accepted connection
     create_conn(listening.port()).await?;
 
@@ -139,12 +168,7 @@ async fn test_reject_clickhouse_connection() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_abort_clickhouse_server() -> Result<()> {
-    let mut handler =
-        ClickHouseHandler::create(SessionManagerBuilder::create().max_sessions(3).build()?);
-
-    let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
-    let listening = handler.start(listening).await?;
-
+    let (mut handler, listening) = start_server(1).await?;
     // Accepted connection
     let _handler = create_conn(listening.port()).await?;
 
@@ -162,30 +186,33 @@ async fn test_abort_clickhouse_server() -> Result<()> {
     Ok(())
 }
 
-fn get_u64_data(block: Block<Complex>) -> Result<u64> {
-    match block.get(0, "c") {
-        Ok(value) => Ok(value),
-        Err(error) => Err(ErrorCode::UnknownException(format!(
-            "Cannot get data {:?}",
-            error
-        ))),
-    }
+async fn start_server(max_sessions: u64) -> Result<(Box<dyn Server>, SocketAddr)> {
+    let mut handler = ClickHouseHandler::create(
+        SessionManagerBuilder::create()
+            .max_sessions(max_sessions)
+            .build()?,
+    );
+
+    let listening = "0.0.0.0:0".parse::<SocketAddr>()?;
+    let listening = handler.start(listening).await?;
+    Ok((handler, listening))
 }
 
-async fn query(handler: &mut ClientHandle, query: &str) -> Result<Block<Complex>> {
-    let query_result = handler.query(query);
-    match query_result.fetch_all().await {
-        Ok(block) => Ok(block),
-        Err(error) => Err(ErrorCode::UnknownException(format!(
-            "Error query: {:?}",
-            error
-        ))),
+async fn query<T>(client: &mut Connection, query: &str) -> Result<Vec<T>>
+where T: clickhouse_driver::prelude::Deserialize {
+    let mut result = client.query(query).await.unwrap();
+    let mut results = vec![];
+    while let Some(block) = result.next().await.unwrap() {
+        for item in block.iter::<T>() {
+            results.push(item);
+        }
     }
+    Ok(results)
 }
 
-async fn execute(handler: &mut ClientHandle, query: &str) -> Result<()> {
-    match handler.execute(query).await {
-        Ok(()) => Ok(()),
+async fn execute(client: &mut Connection, query: &str) -> Result<()> {
+    match client.execute(query).await {
+        Ok(_) => Ok(()),
         Err(error) => Err(ErrorCode::UnknownException(format!(
             "Error execute query: {:?}",
             error
@@ -193,23 +220,26 @@ async fn execute(handler: &mut ClientHandle, query: &str) -> Result<()> {
     }
 }
 
-async fn insert(handler: &mut ClientHandle, table: &str, block: Block) -> Result<()> {
-    match handler.insert(table, block).await {
-        Ok(()) => Ok(()),
+//block contains table name
+async fn insert<'a>(client: &mut Connection, block: &Block<'a>) -> Result<()> {
+    match client.insert(&block).await {
+        Ok(_) => Ok(()),
         Err(error) => Err(ErrorCode::UnknownException(format!(
-            "Error insert table: {:?}",
+            "Error insert query: {:?}",
             error
         ))),
     }
 }
 
-async fn create_conn(port: u16) -> Result<ClientHandle> {
+async fn create_conn(port: u16) -> Result<Connection> {
     let url = format!("tcp://default:@127.0.0.1:{}/default?compression=lz4&ping_timeout=10s&connection_timeout=20s", port);
-    let get_handle = Pool::new(url).get_handle();
-    match get_handle.await {
-        Ok(client_handle) => Ok(client_handle),
+    let pool = Pool::create(url).unwrap();
+    let c = pool.connection().await;
+
+    match c {
+        Ok(c) => Ok(c),
         Err(error) => Err(ErrorCode::UnknownException(format!(
-            "Reject connection, cause:{:?}",
+            "Error connect to clickhouse: {:?}",
             error
         ))),
     }

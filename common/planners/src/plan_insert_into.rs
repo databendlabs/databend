@@ -47,4 +47,11 @@ impl InsertPlan {
     pub fn schema(&self) -> DataSchemaRef {
         self.schema.clone()
     }
+
+    pub fn has_select_plan(&self) -> bool {
+        match &self.source {
+            InsertInputSource::SelectPlan(_) => true,
+            _ => false,
+        }
+    }
 }
