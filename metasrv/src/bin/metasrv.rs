@@ -22,6 +22,7 @@ use common_meta_sled_store::init_sled_db;
 use common_metrics::init_default_metrics_recorder;
 use common_tracing::init_global_tracing;
 use common_tracing::tracing;
+use databend_meta::api::GrpcServer;
 use databend_meta::api::HttpService;
 use databend_meta::configs::Config;
 use databend_meta::meta_service::MetaNode;
@@ -68,6 +69,17 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         tracing::info!("HTTP API server listening on {}", conf.admin_api_address);
         srv.start().await.expect("Failed to start http server");
         stop_handler.push(srv);
+    }
+
+    // gRPC API service.
+    {
+        let mut srv = GrpcServer::create(conf.clone(), meta_node.clone());
+        tracing::info!(
+            "Databend meta server listening on {}",
+            conf.grpc_api_address
+        );
+        srv.start().await.expect("Databend meta service error");
+        stop_handler.push(Box::new(srv));
     }
 
     stop_handler.wait_to_terminate(stop_tx).await;
