@@ -1213,23 +1213,13 @@ version = "0.1.0"
 dependencies = [
  "async-compat",
  "async-trait",
- "azure_core_mirror",
- "azure_storage_mirror",
  "bytes",
- "common-base",
- "common-datablocks",
  "common-exception",
- "common-infallible",
- "common-metrics",
  "futures",
- "metrics",
- "rand 0.8.4",
  "reqwest",
  "rusoto_core",
  "rusoto_credential",
  "rusoto_s3",
- "rusoto_sts",
- "tempfile",
  "tokio",
 ]
 

@@ -17,7 +17,13 @@ use std::sync::Arc;
 
 use common_exception::Result;
 
-use crate::ops::*;
+use crate::ops::Delete;
+use crate::ops::Object;
+use crate::ops::Read;
+use crate::ops::ReadBuilder;
+use crate::ops::Stat;
+use crate::ops::Write;
+use crate::ops::WriteBuilder;
 
 pub struct DataAccessor<'d, S> {
     s: Arc<S>,
