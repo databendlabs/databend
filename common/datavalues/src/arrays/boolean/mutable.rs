@@ -12,19 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::MutableBooleanArray;
-use common_arrow::arrow::array::MutableArray;
 use common_arrow::arrow::array::Array;
+use common_arrow::arrow::array::MutableArray;
+use common_arrow::arrow::array::MutableBooleanArray;
+use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 
 use crate::arrays::mutable::MutableArrayBuilder;
-use super::DFBooleanArray;
 use crate::DataType;
 
+#[derive(Default)]
 pub struct MutableBooleanArrayBuilder {
     builder: MutableBooleanArray,
 }
 
-// TODO(veeupup) make arrow2 array builder originally use here
 impl MutableArrayBuilder for MutableBooleanArrayBuilder {
     fn data_type(&self) -> DataType {
         DataType::Boolean
@@ -41,11 +42,20 @@ impl MutableArrayBuilder for MutableBooleanArrayBuilder {
     fn as_arc(&mut self) -> std::sync::Arc<dyn Array> {
         self.builder.as_arc()
     }
+
+    fn push_null(&mut self) {
+        self.builder.push_null();
+    }
 }
 
 impl MutableBooleanArrayBuilder {
-    pub fn new() -> Self {
-        MutableBooleanArrayBuilder { builder: MutableBooleanArray::new() }
+    pub fn from_data(
+        data_type: ArrowDataType,
+        values: MutableBitmap,
+        validity: Option<MutableBitmap>,
+    ) -> Self {
+        let builder = MutableBooleanArray::from_data(data_type, values, validity);
+        Self { builder }
     }
 
     pub fn push(&mut self, value: bool) {
@@ -59,11 +69,4 @@ impl MutableBooleanArrayBuilder {
     pub fn push_null(&mut self) {
         self.builder.push_null();
     }
-
-    fn build(&mut self) -> DFBooleanArray {
-        let array = self.builder.as_arc();
-        DFBooleanArray::from_arrow_array(array.as_ref())
-    }
 }
-
-

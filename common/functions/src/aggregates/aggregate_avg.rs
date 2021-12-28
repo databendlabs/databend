@@ -17,9 +17,6 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_arrow::arrow::array::MutableArray;
-use common_arrow::arrow::array::MutablePrimitiveArray;
-use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_datavalues::prelude::*;
 use common_datavalues::DFTryFrom;
 use common_exception::ErrorCode;
@@ -151,7 +148,7 @@ where
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArray) -> Result<()> {
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
         let state = place.get::<AggregateAvgState<SumT>>();
 
         if state.count == 0 {
@@ -162,24 +159,14 @@ where
         let v: f64 = NumCast::from(state.value).unwrap_or_default();
         let val = v / state.count as f64;
 
-        match array.data_type() {
-            ArrowDataType::Float64 => {
-                let mut array = array
-                    .as_mut_any()
-                    .downcast_mut::<MutablePrimitiveArray<f64>>()
-                    .ok_or_else(|| {
-                        ErrorCode::UnexpectedError(
-                            "error occured when downcast MutableArray".to_string(),
-                        )
-                    })?;
-                array.push(Some(val));
-            }
-            _ => {
-                return Err(ErrorCode::UnexpectedError(
-                    "aggregate avg unexpected datatype".to_string(),
-                ))
-            }
-        };
+        let mut array = array
+            .as_mut_any()
+            .downcast_mut::<MutablePrimitiveArrayBuilder<f64>>()
+            .ok_or_else(|| {
+                ErrorCode::UnexpectedError("error occured when downcast MutableArray".to_string())
+            })?;
+        array.push(val);
+
         Ok(())
     }
 }

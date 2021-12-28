@@ -20,8 +20,6 @@ use std::ops::Sub;
 use std::sync::Arc;
 
 use bytes::BytesMut;
-use common_arrow::arrow::array::MutableArray;
-use common_arrow::arrow::array::MutablePrimitiveArray;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -254,15 +252,15 @@ where
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArray) -> Result<()> {
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
         let result = self.get_event_level(place);
         let mut array = array
             .as_mut_any()
-            .downcast_mut::<MutablePrimitiveArray<u8>>()
+            .downcast_mut::<MutablePrimitiveArrayBuilder<u8>>()
             .ok_or_else(|| {
                 ErrorCode::UnexpectedError("error occured when downcast MutableArray".to_string())
             })?;
-        array.push(Some(result));
+        array.push(result);
         Ok(())
     }
 }

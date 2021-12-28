@@ -48,5 +48,8 @@ mod transform_sort_merge;
 mod transform_sort_partial;
 mod transform_source;
 
+#[macro_use]
+mod macros;
+
 mod group_by;
 mod transform_sink;

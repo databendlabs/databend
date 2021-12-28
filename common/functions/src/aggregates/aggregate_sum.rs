@@ -18,8 +18,6 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use bytes::BytesMut;
-use common_arrow::arrow::array::MutableArray;
-use common_arrow::arrow::array::MutablePrimitiveArray;
 use common_datavalues::prelude::*;
 use common_datavalues::DFTryFrom;
 use common_exception::ErrorCode;
@@ -167,15 +165,14 @@ where
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArray) -> Result<()> {
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
         let state = place.get::<AggregateSumState<SumT>>();
         if let Some(val) = &state.value {
-            let datatype: DataType = array.data_type().into();
+            let datatype: DataType = array.data_type();
             with_match_primitive_type!(datatype, |$T| {
-                println!("in type {}", std::any::type_name::<$T>());
                     let mut array = array
                     .as_mut_any()
-                    .downcast_mut::<MutablePrimitiveArray<$T>>()
+                    .downcast_mut::<MutablePrimitiveArrayBuilder<$T>>()
                     .ok_or_else(|| {
                         ErrorCode::UnexpectedError(
                             "error occured when downcast MutableArray".to_string(),
@@ -184,10 +181,10 @@ where
                 let val: DataValue = (*val).into();
                 if val.is_integer() {
                     let x = val.as_i64()?;
-                    array.push(Some(x as $T));
+                    array.push(x as $T);
                 }else {
                     let x = val.as_f64()?;
-                    array.push(Some(x as $T));
+                    array.push(x as $T);
                 }
             },
             {

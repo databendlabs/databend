@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{any::Any, sync::Arc};
+use std::any::Any;
+use std::sync::Arc;
+
+use common_arrow::arrow::array::Array;
 
 use super::MutableBooleanArrayBuilder;
 use super::MutablePrimitiveArrayBuilder;
 use super::MutableStringArrayBuilder;
-use common_arrow::arrow::array::Array;
 use crate::DataType;
 
 pub trait MutableArrayBuilder {
@@ -25,22 +27,23 @@ pub trait MutableArrayBuilder {
     fn as_any(&self) -> &dyn Any;
     fn as_mut_any(&mut self) -> &mut dyn Any;
     fn as_arc(&mut self) -> Arc<dyn Array>;
+    fn push_null(&mut self);
 }
 
 pub fn create_mutable_array(datatype: DataType) -> Box<dyn MutableArrayBuilder> {
     match datatype {
-        DataType::Boolean => Box::new(MutableBooleanArrayBuilder::new()),
-        DataType::UInt8 => Box::new(MutablePrimitiveArrayBuilder::<u8>::new()),
-        DataType::UInt16 => Box::new(MutablePrimitiveArrayBuilder::<u16>::new()),
-        DataType::UInt32 => Box::new(MutablePrimitiveArrayBuilder::<u32>::new()),
-        DataType::UInt64 => Box::new(MutablePrimitiveArrayBuilder::<u64>::new()),
-        DataType::Int8 => Box::new(MutablePrimitiveArrayBuilder::<i8>::new()),
-        DataType::Int16 => Box::new(MutablePrimitiveArrayBuilder::<i16>::new()),
-        DataType::Int32 => Box::new(MutablePrimitiveArrayBuilder::<i32>::new()),
-        DataType::Int64 => Box::new(MutablePrimitiveArrayBuilder::<i64>::new()),
-        DataType::Float32 => Box::new(MutablePrimitiveArrayBuilder::<f32>::new()),
-        DataType::Float64 => Box::new(MutablePrimitiveArrayBuilder::<f64>::new()),
-        DataType::String => Box::new(MutableStringArrayBuilder::new()),
+        DataType::Boolean => Box::new(MutableBooleanArrayBuilder::default()),
+        DataType::UInt8 => Box::new(MutablePrimitiveArrayBuilder::<u8>::default()),
+        DataType::UInt16 => Box::new(MutablePrimitiveArrayBuilder::<u16>::default()),
+        DataType::UInt32 => Box::new(MutablePrimitiveArrayBuilder::<u32>::default()),
+        DataType::UInt64 => Box::new(MutablePrimitiveArrayBuilder::<u64>::default()),
+        DataType::Int8 => Box::new(MutablePrimitiveArrayBuilder::<i8>::default()),
+        DataType::Int16 => Box::new(MutablePrimitiveArrayBuilder::<i16>::default()),
+        DataType::Int32 => Box::new(MutablePrimitiveArrayBuilder::<i32>::default()),
+        DataType::Int64 => Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
+        DataType::Float32 => Box::new(MutablePrimitiveArrayBuilder::<f32>::default()),
+        DataType::Float64 => Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
+        DataType::String => Box::new(MutableStringArrayBuilder::default()),
         _ => {
             todo!()
         }

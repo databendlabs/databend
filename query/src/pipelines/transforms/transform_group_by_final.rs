@@ -19,15 +19,9 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use bumpalo::Bump;
-use common_arrow::arrow::array::MutableArray;
-use common_arrow::arrow::array::MutableBinaryArray;
-use common_arrow::arrow::array::MutableBooleanArray;
-use common_arrow::arrow::array::MutablePrimitiveArray;
-use common_arrow::arrow::datatypes::PhysicalType;
 use common_datablocks::DataBlock;
 use common_datablocks::HashMethodKind;
 use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::StateAddr;
@@ -40,6 +34,7 @@ use futures::stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
+use crate::with_match_primitive_type;
 
 pub struct GroupByFinalTransform {
     max_block_size: usize,
@@ -68,26 +63,6 @@ impl GroupByFinalTransform {
         }
     }
 }
-
-macro_rules! with_match_primitive_type {(
-    $key_type:expr, | $_:tt $T:ident | $($body:tt)*
-) => ({
-    macro_rules! __with_ty__ {( $_ $T:ident ) => ( $($body)* )}
-    use common_arrow::arrow::datatypes::PrimitiveType::*;
-    match $key_type {
-        Int8 => __with_ty__! { i8 },
-        Int16 => __with_ty__! { i16 },
-        Int32 => __with_ty__! { i32 },
-        Int64 => __with_ty__! { i64 },
-        UInt8 => __with_ty__! { u8 },
-        UInt16 => __with_ty__! { u16 },
-        UInt32 => __with_ty__! { u32 },
-        UInt64 => __with_ty__! { u64 },
-        Float32 => __with_ty__! { f32 },
-        Float64 => __with_ty__! { f64 },
-        _ => {}
-    }
-})}
 
 #[async_trait::async_trait]
 impl Processor for GroupByFinalTransform {
@@ -204,54 +179,15 @@ impl Processor for GroupByFinalTransform {
                 // Collect the merge states.
                 let groups = groups_locker.read();
 
-                let mut aggr_values: Vec<Box<dyn MutableArray>> = {
+                let mut aggr_values: Vec<Box<dyn MutableArrayBuilder>> = {
                     let mut values = vec![];
                     for func in &funcs {
-                        let array: Box<dyn MutableArray> = match func.return_type()? {
-                            DataType::Int8 => Ok(Box::new(MutablePrimitiveArray::<i8>::new())
-                                as Box<dyn MutableArray>),
-                            DataType::Int16 => Ok(Box::new(MutablePrimitiveArray::<i16>::new())
-                                as Box<dyn MutableArray>),
-                            DataType::Int32 => Ok(Box::new(MutablePrimitiveArray::<i32>::new())
-                                as Box<dyn MutableArray>),
-                            DataType::Int64 => Ok(Box::new(MutablePrimitiveArray::<i64>::new())
-                                as Box<dyn MutableArray>),
-                            DataType::UInt8 => Ok(Box::new(MutablePrimitiveArray::<u8>::new())
-                                as Box<dyn MutableArray>),
-                            DataType::UInt16 => Ok(Box::new(MutablePrimitiveArray::<u16>::new())
-                                as Box<dyn MutableArray>),
-                            DataType::UInt32 => Ok(Box::new(MutablePrimitiveArray::<u32>::new())
-                                as Box<dyn MutableArray>),
-                            DataType::UInt64 => Ok(Box::new(MutablePrimitiveArray::<u64>::new())
-                                as Box<dyn MutableArray>),
-                            DataType::Float32 => Ok(Box::new(MutablePrimitiveArray::<f32>::new())
-                                as Box<dyn MutableArray>),
-                            DataType::Float64 => Ok(Box::new(MutablePrimitiveArray::<f64>::new())
-                                as Box<dyn MutableArray>),
-                            DataType::Boolean => {
-                                Ok(Box::new(MutableBooleanArray::new()) as Box<dyn MutableArray>)
-                            }
-                            DataType::String => {
-                                Ok(Box::new(MutableBinaryArray::<i64>::new())
-                                    as Box<dyn MutableArray>)
-                            }
-                            DataType::Date16 => Ok(Box::new(MutablePrimitiveArray::<u16>::new())
-                                as Box<dyn MutableArray>),
-                            DataType::Date32 => Ok(Box::new(MutablePrimitiveArray::<u32>::new())
-                                as Box<dyn MutableArray>),
-                            DataType::DateTime32(_) => {
-                                Ok(Box::new(MutablePrimitiveArray::<u32>::new())
-                                    as Box<dyn MutableArray>)
-                            }
-                            other => Err(ErrorCode::BadDataValueType(format!(
-                                "Unexpected type:{} for DataValue List",
-                                other
-                            ))),
-                        }?;
+                        let array = create_mutable_array(func.return_type()?);
                         values.push(array)
                     }
                     values
                 };
+
                 let mut keys = Vec::with_capacity(groups.len());
                 for (key, place) in groups.iter() {
                     keys.push(key.clone());
@@ -259,7 +195,7 @@ impl Processor for GroupByFinalTransform {
                     let place: StateAddr = (*place).into();
                     for (idx, func) in funcs.iter().enumerate() {
                         let arg_place = place.next(offsets_aggregate_states[idx]);
-                        let array: &mut dyn MutableArray = aggr_values[idx].borrow_mut();
+                        let array: &mut dyn MutableArrayBuilder = aggr_values[idx].borrow_mut();
                         func.merge_result(arg_place, array)?;
                     }
                 }
@@ -267,30 +203,32 @@ impl Processor for GroupByFinalTransform {
                 // Build final state block.
                 let mut columns: Vec<Series> = Vec::with_capacity(aggr_funcs_len + group_expr_len);
                 for mut array in aggr_values {
-                    match array.data_type().to_physical_type() {
-                        PhysicalType::Boolean => {
-                            let array = DFBooleanArray::from_arrow_array(array.as_arc().as_ref());
+                    let datatype = array.data_type();
+                    with_match_primitive_type!(
+                        datatype,
+                        |$T| {
+                            let array =
+                                DFPrimitiveArray::<$T>::from_arrow_array(array.as_arc().as_ref());
                             columns.push(array.into_series());
-                            Ok(())
+                        },
+                        {
+                            match datatype {
+                                DataType::Boolean => {
+                                    let array =
+                                        DFBooleanArray::from_arrow_array(array.as_arc().as_ref());
+                                    columns.push(array.into_series());
+                                }
+                                DataType::String => {
+                                    let array =
+                                        DFStringArray::from_arrow_array(array.as_arc().as_ref());
+                                    columns.push(array.into_series());
+                                }
+                                _ => {
+                                    unimplemented!()
+                                }
+                            }
                         }
-                        PhysicalType::Primitive(primitive) => {
-                            with_match_primitive_type!(primitive, |$T| {
-                                let array = DFPrimitiveArray::<$T>::from_arrow_array(
-                                    array.as_arc().as_ref(),
-                                );
-                                columns.push(array.into_series());
-                            });
-                            Ok(())
-                        }
-                        PhysicalType::Binary => {
-                            let array = DFStringArray::from_arrow_array(array.as_arc().as_ref());
-                            columns.push(array.into_series());
-                            Ok(())
-                        }
-                        _ => Err(ErrorCode::UnexpectedError(
-                            "unexpected datatype when transform group by final".to_string(),
-                        )),
-                    }?;
+                    );
                 }
 
                 {

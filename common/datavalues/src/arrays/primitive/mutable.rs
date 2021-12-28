@@ -11,14 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+use std::sync::Arc;
 
-use common_arrow::arrow::array::MutablePrimitiveArray;
-use common_arrow::arrow::array::MutableArray;
 use common_arrow::arrow::array::Array;
+use common_arrow::arrow::array::MutableArray;
+use common_arrow::arrow::array::MutablePrimitiveArray;
+use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::buffer::MutableBuffer;
+use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 
 use crate::arrays::mutable::MutableArrayBuilder;
 use crate::prelude::*;
 
+#[derive(Default)]
 pub struct MutablePrimitiveArrayBuilder<T>
 where T: DFPrimitiveType
 {
@@ -26,7 +31,8 @@ where T: DFPrimitiveType
 }
 
 impl<T> MutableArrayBuilder for MutablePrimitiveArrayBuilder<T>
-where T: DFPrimitiveType {
+where T: DFPrimitiveType
+{
     fn data_type(&self) -> DataType {
         let datatype: DataType = self.builder.data_type().into();
         datatype
@@ -40,25 +46,36 @@ where T: DFPrimitiveType {
         self
     }
 
-    fn as_arc(&mut self) -> std::sync::Arc<dyn Array> {
+    fn as_arc(&mut self) -> Arc<dyn Array> {
         self.builder.as_arc()
+    }
+
+    fn push_null(&mut self) {
+        self.builder.push_null();
     }
 }
 
 // TODO(veeupup) make arrow2 array builder originally use here
-impl<T> MutablePrimitiveArrayBuilder<T> 
+impl<T> MutablePrimitiveArrayBuilder<T>
 where T: DFPrimitiveType
 {
-    pub fn new() -> Self {
-        MutablePrimitiveArrayBuilder {
-            builder: MutablePrimitiveArray::<T>::new()
-        }
+    pub fn from_data(
+        data_type: ArrowDataType,
+        values: MutableBuffer<T>,
+        validity: Option<MutableBitmap>,
+    ) -> Self {
+        let builder = MutablePrimitiveArray::<T>::from_data(data_type, values, validity);
+        Self { builder }
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
         MutablePrimitiveArrayBuilder {
-            builder: MutablePrimitiveArray::<T>::with_capacity(capacity)
+            builder: MutablePrimitiveArray::<T>::with_capacity(capacity),
         }
+    }
+
+    pub fn values(&self) -> &MutableBuffer<T> {
+        self.builder.values()
     }
 
     pub fn push(&mut self, v: T) {
@@ -71,10 +88,5 @@ where T: DFPrimitiveType
 
     pub fn push_null(&mut self) {
         self.builder.push_null();
-    }
-
-    fn build(&mut self) -> DFPrimitiveArray<T> {
-        let array = self.builder.as_arc();
-        DFPrimitiveArray::<T>::from_arrow_array(array.as_ref())
     }
 }

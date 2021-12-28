@@ -18,9 +18,7 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_arrow::arrow::array::MutableArray;
 use common_arrow::arrow::array::MutableBinaryArray;
-use common_arrow::arrow::array::MutablePrimitiveArray;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -49,7 +47,7 @@ pub trait AggregateMinMaxState: Send + Sync + 'static {
     fn merge(&mut self, rhs: &Self, is_min: bool) -> Result<()>;
     fn serialize(&self, writer: &mut BytesMut) -> Result<()>;
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
-    fn merge_result(&mut self, array: &mut dyn MutableArray) -> Result<()>;
+    fn merge_result(&mut self, array: &mut dyn MutableArrayBuilder) -> Result<()>;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -139,13 +137,13 @@ where
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&mut self, array: &mut dyn MutableArray) -> Result<()> {
+    fn merge_result(&mut self, array: &mut dyn MutableArrayBuilder) -> Result<()> {
         if let Some(val) = self.value {
-            let datatype: DataType = array.data_type().into();
+            let datatype: DataType = array.data_type();
             with_match_primitive_type!(datatype, |$T| {
                     let mut array = array
                     .as_mut_any()
-                    .downcast_mut::<MutablePrimitiveArray<$T>>()
+                    .downcast_mut::<MutablePrimitiveArrayBuilder<$T>>()
                     .ok_or_else(|| {
                         ErrorCode::UnexpectedError(
                             "error occured when downcast MutableArray".to_string(),
@@ -154,10 +152,10 @@ where
                  let val: DataValue = val.into();
                 if val.is_integer() {
                     let x = val.as_i64()?;
-                    array.push(Some(x as $T));
+                    array.push(x as $T);
                 }else {
                     let x = val.as_f64()?;
-                    array.push(Some(x as $T));
+                    array.push(x as $T);
                 }
             },
             {
@@ -238,7 +236,7 @@ impl AggregateMinMaxState for StringState {
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&mut self, array: &mut dyn MutableArray) -> Result<()> {
+    fn merge_result(&mut self, array: &mut dyn MutableArrayBuilder) -> Result<()> {
         let v = self.value.clone();
         let mut array = array
             .as_mut_any()
@@ -313,7 +311,7 @@ where T: AggregateMinMaxState //  std::cmp::PartialOrd + DFTryFrom<DataValue> + 
         state.merge(rhs, self.is_min)
     }
 
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArray) -> Result<()> {
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
         let state = place.get::<T>();
         state.merge_result(array)?;
         Ok(())

@@ -14,11 +14,10 @@
 
 mod builder;
 mod iterator;
-mod transform;
 mod mutable;
+mod transform;
 
 pub use builder::*;
-pub use mutable::*;
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
@@ -27,6 +26,7 @@ use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 pub use iterator::*;
+pub use mutable::*;
 pub use transform::*;
 
 use crate::prelude::*;

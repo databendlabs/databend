@@ -12,14 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::MutableBinaryArray;
-use common_arrow::arrow::array::MutableArray;
 use common_arrow::arrow::array::Array;
+use common_arrow::arrow::array::MutableArray;
+use common_arrow::arrow::array::MutableBinaryArray;
+use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::buffer::MutableBuffer;
+use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 
 use crate::arrays::mutable::MutableArrayBuilder;
-use super::DFStringArray;
 use crate::DataType;
 
+#[derive(Default)]
 pub struct MutableStringArrayBuilder {
     builder: MutableBinaryArray<i64>,
 }
@@ -40,12 +43,21 @@ impl MutableArrayBuilder for MutableStringArrayBuilder {
     fn as_arc(&mut self) -> std::sync::Arc<dyn Array> {
         self.builder.as_arc()
     }
+
+    fn push_null(&mut self) {
+        self.builder.push_null();
+    }
 }
 
-// TODO(veeupup) make arrow2 array builder originally use here
 impl MutableStringArrayBuilder {
-    pub fn new() -> Self {
-        MutableStringArrayBuilder { builder: MutableBinaryArray::new() }
+    pub fn from_data(
+        data_type: ArrowDataType,
+        offsets: MutableBuffer<i64>,
+        values: MutableBuffer<u8>,
+        validity: Option<MutableBitmap>,
+    ) -> Self {
+        let builder = MutableBinaryArray::<i64>::from_data(data_type, offsets, values, validity);
+        Self { builder }
     }
 
     pub fn push(&mut self, value: impl AsRef<[u8]>) {
@@ -59,11 +71,4 @@ impl MutableStringArrayBuilder {
     pub fn push_null(&mut self) {
         self.builder.push_null();
     }
-    
-    fn build(&mut self) -> DFStringArray {
-        let array = self.builder.as_arc();
-        DFStringArray::from_arrow_array(array.as_ref())
-    }
 }
-
-

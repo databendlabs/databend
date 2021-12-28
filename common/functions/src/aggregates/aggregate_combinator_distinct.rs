@@ -19,8 +19,6 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::sync::Arc;
 
-use common_arrow::arrow::array::MutableArray;
-use common_arrow::arrow::array::MutablePrimitiveArray;
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -203,7 +201,7 @@ impl AggregateFunction for AggregateDistinctCombinator {
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArray) -> Result<()> {
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
         let state = place.get::<AggregateDistinctState>();
 
         let layout = Layout::new::<AggregateDistinctState>();
@@ -213,13 +211,13 @@ impl AggregateFunction for AggregateDistinctCombinator {
         if self.nested.name() == "AggregateFunctionCount" {
             let mut array = array
                 .as_mut_any()
-                .downcast_mut::<MutablePrimitiveArray<u64>>()
+                .downcast_mut::<MutablePrimitiveArrayBuilder<u64>>()
                 .ok_or_else(|| {
                     ErrorCode::UnexpectedError(
                         "error occured when downcast MutableArray".to_string(),
                     )
                 })?;
-            array.push(Some(state.set.len() as u64));
+            array.push(state.set.len() as u64);
             Ok(())
         } else {
             if state.set.is_empty() {
