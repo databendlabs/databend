@@ -13,9 +13,7 @@
 // limitations under the License.
 
 use crate::Change;
-use crate::Cmd;
 use crate::KVMeta;
-use crate::LogEntry;
 use crate::MatchSeq;
 use crate::Operation;
 use crate::SeqV;
@@ -60,20 +58,6 @@ impl UpsertKVAction {
             seq,
             value,
             value_meta,
-        }
-    }
-}
-
-impl Into<LogEntry> for UpsertKVAction {
-    fn into(self) -> LogEntry {
-        LogEntry {
-            txid: None,
-            cmd: Cmd::UpsertKV {
-                key: self.key,
-                seq: self.seq,
-                value: self.value,
-                value_meta: self.value_meta,
-            },
         }
     }
 }

@@ -45,11 +45,11 @@ impl GrpcServer {
     async fn do_start(&mut self) -> common_exception::Result<()> {
         let conf = self.conf.clone();
         let meta_node = self.meta_node.clone();
-
+        // For sending signal when server started.
         let (started_tx, started_rx) = oneshot::channel::<()>();
-
+        // For receive stop signal.
         let (stop_tx, stop_rx) = oneshot::channel::<()>();
-
+        // For sending the signal when server finished shutting down.
         let (fin_tx, fin_rx) = oneshot::channel::<()>();
 
         let builder = Server::builder();

@@ -110,7 +110,7 @@ impl Meta for MetaGrpcImpl {
         Ok(Response::new(body))
     }
 
-    async fn get_msg(&self, request: Request<GetReq>) -> Result<Response<GetReply>, Status> {
+    async fn get_msg(&self, _request: Request<GetReq>) -> Result<Response<GetReply>, Status> {
         todo!()
     }
 }
