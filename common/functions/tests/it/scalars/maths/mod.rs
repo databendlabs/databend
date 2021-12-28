@@ -21,7 +21,6 @@ mod floor;
 mod log;
 mod pi;
 mod pow;
-mod random;
 mod round;
 mod sign;
 mod sqrt;
