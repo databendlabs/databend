@@ -63,7 +63,51 @@ macro_rules! impl_try_create_datetime {
 }
 
 #[macro_export]
-macro_rules! impl_wrapping_arithmetic {
+macro_rules! impl_unary_arith {
+    ($name: ident, $method: tt) => {
+        #[derive(Clone)]
+        pub struct $name<T, R> {
+            t: PhantomData<T>,
+            r: PhantomData<R>,
+        }
+
+        impl<T, R> ArithmeticTrait for $name<T, R>
+        where
+            T: DFPrimitiveType + AsPrimitive<R>,
+            R: DFPrimitiveType + Neg<Output = R>,
+            DFPrimitiveArray<R>: IntoSeries,
+        {
+            fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
+                unary_arithmetic!(columns[0].column(), |v: R| $method v)
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_wrapping_unary_arith {
+    ($name: ident, $method: ident) => {
+        #[derive(Clone)]
+        pub struct $name<T, R> {
+            t: PhantomData<T>,
+            r: PhantomData<R>,
+        }
+
+        impl<T, R> ArithmeticTrait for $name<T, R>
+        where
+            T: DFPrimitiveType + AsPrimitive<R>,
+            R: DFIntegerType + WrappingNeg,
+            DFPrimitiveArray<R>: IntoSeries,
+        {
+            fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
+                unary_arithmetic!(columns[0].column(), |v: R| v.$method())
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_wrapping_binary_arith {
     ($name: ident, $method: ident) => {
         #[derive(Clone)]
         pub struct $name<T, D, R> {
@@ -91,7 +135,7 @@ macro_rules! impl_wrapping_arithmetic {
 }
 
 #[macro_export]
-macro_rules! impl_arithmetic {
+macro_rules! impl_binary_arith {
     ($name: ident, $method: tt) => {
         #[derive(Clone)]
         pub struct $name<T, D, R> {
@@ -222,5 +266,16 @@ macro_rules! arithmetic_helper {
             _ => unreachable!(),
         }
         .into()
+    }};
+}
+
+#[macro_export]
+macro_rules! unary_arithmetic {
+    ($self: expr, $op: expr) => {{
+        let series = $self.to_minimal_array()?;
+        let array: &DFPrimitiveArray<T> = series.static_cast();
+
+        let result: DataColumn = unary(array, |v| $op(v.as_())).into();
+        Ok(result.resize_constant($self.len()))
     }};
 }

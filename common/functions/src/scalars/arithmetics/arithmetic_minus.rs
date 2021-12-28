@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use std::marker::PhantomData;
 use std::ops::Add;
 use std::ops::Mul;
 use std::ops::Sub;
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataValueArithmeticOperator;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::cast::AsPrimitive;
@@ -29,23 +27,24 @@ use num_traits::WrappingSub;
 
 use super::arithmetic::ArithmeticTrait;
 use super::interval::*;
-use super::result_type::ResultTypeOfArithmetic;
+use super::result_type::ResultTypeOfBinaryArith;
 use crate::binary_arithmetic;
 use crate::binary_arithmetic_helper;
-use crate::impl_arithmetic;
+use crate::impl_binary_arith;
 use crate::impl_try_create_datetime;
-use crate::impl_wrapping_arithmetic;
+use crate::impl_wrapping_binary_arith;
 use crate::scalars::function_factory::ArithmeticDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::BinaryArithmeticFunction;
+use crate::scalars::BinaryArithmeticOperator;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
 use crate::with_match_date_type;
 use crate::with_match_primitive_type;
 
-impl_wrapping_arithmetic!(ArithmeticWrappingSub, wrapping_sub);
+impl_wrapping_binary_arith!(ArithmeticWrappingSub, wrapping_sub);
 
-impl_arithmetic!(ArithmeticSub, -);
+impl_binary_arith!(ArithmeticSub, -);
 
 pub struct ArithmeticMinusFunction;
 
@@ -53,7 +52,7 @@ impl ArithmeticMinusFunction {
     pub fn try_create_func(_display_name: &str, args: &[DataType]) -> Result<Box<dyn Function>> {
         let left_type = &args[0];
         let right_type = &args[1];
-        let op = DataValueArithmeticOperator::Minus;
+        let op = BinaryArithmeticOperator::Minus;
         if left_type.is_interval() || right_type.is_interval() {
             return Self::try_create_interval(left_type, right_type);
         }
@@ -74,13 +73,13 @@ impl ArithmeticMinusFunction {
 
         with_match_primitive_type!(left_type, |$T| {
             with_match_primitive_type!(right_type, |$D| {
-                let result_type = <($T, $D) as ResultTypeOfArithmetic>::Minus::data_type();
+                let result_type = <($T, $D) as ResultTypeOfBinaryArith>::Minus::data_type();
                 match result_type {
                     DataType::Int64 => BinaryArithmeticFunction::<ArithmeticWrappingSub<$T, $D, i64>>::try_create_func(
                         op,
                         result_type,
                     ),
-                    _ => BinaryArithmeticFunction::<ArithmeticSub<$T, $D, <($T, $D) as ResultTypeOfArithmetic>::Minus>>::try_create_func(
+                    _ => BinaryArithmeticFunction::<ArithmeticSub<$T, $D, <($T, $D) as ResultTypeOfBinaryArith>::Minus>>::try_create_func(
                         op,
                         result_type,
                     ),
@@ -94,7 +93,7 @@ impl ArithmeticMinusFunction {
     }
 
     fn try_create_interval(lhs_type: &DataType, rhs_type: &DataType) -> Result<Box<dyn Function>> {
-        let op = DataValueArithmeticOperator::Minus;
+        let op = BinaryArithmeticOperator::Minus;
         let (interval, result_type) = if rhs_type.is_date_or_date_time() && lhs_type.is_interval() {
             (lhs_type, rhs_type)
         } else if lhs_type.is_date_or_date_time() && rhs_type.is_interval() {
@@ -153,7 +152,7 @@ impl ArithmeticMinusFunction {
         }
     }
 
-    impl_try_create_datetime!(DataValueArithmeticOperator::Minus, ArithmeticSub, false);
+    impl_try_create_datetime!(BinaryArithmeticOperator::Minus, ArithmeticSub, false);
 
     pub fn desc() -> ArithmeticDescription {
         ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(

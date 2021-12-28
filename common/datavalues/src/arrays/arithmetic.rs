@@ -257,12 +257,10 @@ where
                     let v = negate(&*(arr as *const dyn Array as *const PrimitiveArray<i8>));
                     Ok(DFInt8Array::new(v).into_series())
                 }
-
                 DataType::Int16 => {
                     let v = negate(&*(arr as *const dyn Array as *const PrimitiveArray<i16>));
                     Ok(DFInt16Array::new(v).into_series())
                 }
-
                 DataType::Int32 => {
                     let v = negate(&*(arr as *const dyn Array as *const PrimitiveArray<i32>));
                     Ok(DFInt32Array::new(v).into_series())
@@ -279,7 +277,6 @@ where
                     let v = negate(&*(arr as *const dyn Array as *const PrimitiveArray<f64>));
                     Ok(DFFloat64Array::new(v).into_series())
                 }
-
                 _ => Err(ErrorCode::IllegalDataType(format!(
                     "DataType {:?} is Unsupported for neg op",
                     self.data_type()

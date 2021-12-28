@@ -27,6 +27,7 @@ use crate::scalars::ArithmeticIntDivFunction;
 use crate::scalars::ArithmeticMinusFunction;
 use crate::scalars::ArithmeticModuloFunction;
 use crate::scalars::ArithmeticMulFunction;
+use crate::scalars::ArithmeticNegateFunction;
 use crate::scalars::ArithmeticPlusFunction;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
@@ -46,6 +47,7 @@ impl ArithmeticFunction {
         factory.register_arithmetic("plus", ArithmeticPlusFunction::desc());
         factory.register_arithmetic("-", ArithmeticMinusFunction::desc());
         factory.register_arithmetic("minus", ArithmeticMinusFunction::desc());
+        factory.register_arithmetic("negate", ArithmeticNegateFunction::desc());
         factory.register_arithmetic("*", ArithmeticMulFunction::desc());
         factory.register_arithmetic("multiply", ArithmeticMulFunction::desc());
         factory.register_arithmetic("/", ArithmeticDivFunction::desc());

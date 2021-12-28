@@ -379,7 +379,7 @@ impl fmt::Debug for Expression {
             }
 
             Expression::UnaryExpression { op, expr } => {
-                write!(f, "({} {:?})", op, expr)
+                write!(f, "{} ({:?})", op, expr)
             }
 
             Expression::ScalarFunction { op, args } => {
