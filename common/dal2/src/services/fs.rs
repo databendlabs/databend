@@ -9,6 +9,8 @@ use tokio::io::AsyncSeekExt;
 use crate::ops::Read;
 use crate::ops::ReadBuilder;
 use crate::ops::Reader;
+use crate::ops::Write;
+use crate::ops::WriteBuilder;
 
 /// TODO: https://github.com/datafuselabs/databend/issues/3677
 #[derive(Default)]
@@ -47,5 +49,21 @@ impl<S: Send + Sync> Read<S> for Backend {
         }
 
         Ok(Box::new(f.compat()))
+    }
+}
+
+#[async_trait]
+impl<S: Send + Sync> Write<S> for Backend {
+    async fn write(&self, mut r: Reader, args: &WriteBuilder<S>) -> Result<usize> {
+        let mut f = tokio::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .open(&args.path)
+            .await
+            .unwrap();
+
+        let s = tokio::io::copy(&mut r.compat_mut(), &mut f).await.unwrap();
+
+        Ok(s as usize)
     }
 }
