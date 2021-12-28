@@ -42,13 +42,12 @@ pub struct AggregateDistinctState {
 
 impl AggregateDistinctState {
     pub fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        let writer = BufMut::writer(writer);
-        bincode::serialize_into(writer, &self.set)?;
-        Ok(())
+        serialize_into_buf(writer, &self.set)
     }
 
     pub fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.set = bincode::deserialize_from(reader)?;
+        self.set = deserialize_from_slice(reader)?;
+
         Ok(())
     }
 }
