@@ -222,7 +222,7 @@ async fn execute(client: &mut Connection, query: &str) -> Result<()> {
 
 //block contains table name
 async fn insert<'a>(client: &mut Connection, block: &Block<'a>) -> Result<()> {
-    match client.insert(&block).await {
+    match client.insert(block).await {
         Ok(_) => Ok(()),
         Err(error) => Err(ErrorCode::UnknownException(format!(
             "Error insert query: {:?}",
