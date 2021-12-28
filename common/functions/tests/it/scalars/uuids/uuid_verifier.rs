@@ -17,76 +17,34 @@ use common_datavalues::DataType;
 use common_exception::Result;
 use common_functions::scalars::*;
 use pretty_assertions::assert_eq;
+use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
 
 #[test]
-fn test_uuid_verifier_functions() -> Result<()> {
-    #[allow(dead_code)]
-    struct Test {
-        name: &'static str,
-        display: &'static str,
-        nullable: bool,
-        args: Vec<DataType>,
-        columns: Vec<DataColumn>,
-        expect: Series,
-        error: &'static str,
-        func: Box<dyn Function>,
-    }
-
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::String, true)]);
-
+fn test_uuid_is_empty_functions() -> Result<()> {
     let tests = vec![
-        Test {
+        ScalarFunctionTest {
             name: "is-empty-uuid-passed",
-            display: "()",
             nullable: false,
-            func: UUIDIsEmptyFunction::try_create("")?,
-            args: vec![schema.field_with_name("a")?.data_type().clone()],
-            columns: vec![
-                Series::new(vec![Some("00000000-0000-0000-0000-000000000000"), None]).into(),
-            ],
-            expect: Series::new(vec![true, true]),
+            columns: vec![Series::new(vec![Some("00000000-0000-0000-0000-000000000000"), None]).into()],
+            expect: Series::new(vec![true, true]).into(),
             error: "",
-        },
-        Test {
-            name: "is-not-empty-uuid-passed",
-            display: "()",
-            nullable: false,
-            func: UUIDIsNotEmptyFunction::try_create("")?,
-            args: vec![schema.field_with_name("a")?.data_type().clone()],
-            columns: vec![Series::new(vec![Some("59b69da3-81d0-4db2-96e8-3e20b505a7b2")]).into()],
-            expect: Series::new(vec![true]),
-            error: "",
-        },
+        }
     ];
 
-    for t in tests {
-        let func = t.func;
+    test_scalar_functions(UUIDIsEmptyFunction::try_create("")?, &tests)
+}
 
-        let columns: Vec<DataColumnWithField> = t
-            .columns
-            .iter()
-            .map(|c| DataColumnWithField::new(c.clone(), DataField::new("a", c.data_type(), false)))
-            .collect();
+#[test]
+fn test_uuid_is_not_empty_functions() -> Result<()> {
+    let tests = vec![
+        ScalarFunctionTest {
+            name: "is-not-empty-uuid-passed",
+            nullable: false,
+            columns: vec![Series::new(vec![Some("59b69da3-81d0-4db2-96e8-3e20b505a7b2")]).into()],
+            expect: Series::new(vec![true]).into(),
+            error: "",
+        }
+    ];
 
-        // Display check.
-        let expect_display = t.display.to_string();
-        let actual_display = format!("{}", func);
-        assert_eq!(expect_display, actual_display);
-
-        // Nullable check.
-        let expect_null = t.nullable;
-        let actual_null = func.nullable(schema.fields())?;
-        assert_eq!(expect_null, actual_null);
-
-        let v = &(func.eval(&columns, t.columns[0].len())?);
-        // Type check.
-        let expect_type = func.return_type(&t.args)?;
-        let actual_type = v.data_type();
-        assert_eq!(expect_type, actual_type);
-
-        let cmp = v.to_array()?.eq(&t.expect)?;
-        assert!(cmp.all_true());
-    }
-
-    Ok(())
+    test_scalar_functions(UUIDIsNotEmptyFunction::try_create("")?, &tests)
 }

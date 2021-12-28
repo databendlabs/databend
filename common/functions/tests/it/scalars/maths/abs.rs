@@ -16,69 +16,40 @@ use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::*;
+use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
 
 #[test]
 fn test_abs_function() -> Result<()> {
-    struct Test {
-        name: &'static str,
-        func: Box<dyn Function>,
-        arg: DataColumnWithField,
-        expect: Result<DataColumn>,
-    }
     let tests = vec![
-        Test {
+        ScalarFunctionTest {
             name: "abs(-1)",
-            func: AbsFunction::try_create("abs(-1)")?,
-            arg: DataColumnWithField::new(
-                Series::new([-1]).into(),
-                DataField::new("arg1", DataType::Int32, false),
-            ),
-            expect: Ok(Series::new(vec![1_u32]).into()),
+            nullable: false,
+            columns: vec![Series::new([-1]).into()],
+            expect: Series::new(vec![1_u32]).into(),
+            error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "abs(-10086)",
-            func: AbsFunction::try_create("abs(-10086)")?,
-            arg: DataColumnWithField::new(
-                Series::new([-10086]).into(),
-                DataField::new("arg1", DataType::Int32, false),
-            ),
-            expect: Ok(Series::new(vec![10086_u32]).into()),
+            nullable: false,
+            columns: vec![Series::new([-10086]).into()],
+            expect: Series::new(vec![10086_u32]).into(),
+            error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "abs('-2.0')",
-            func: AbsFunction::try_create("abs('-2.0')")?,
-            arg: DataColumnWithField::new(
-                Series::new(["-2.0"]).into(),
-                DataField::new("arg1", DataType::String, false),
-            ),
-            expect: Ok(Series::new(vec![2.0_f64]).into()),
+            nullable: false,
+            columns: vec![Series::new(["-2.0"]).into()],
+            expect: Series::new(vec![2.0_f64]).into(),
+            error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "abs(true)",
-            func: AbsFunction::try_create("abs(false)")?,
-            arg: DataColumnWithField::new(
-                Series::new([false]).into(),
-                DataField::new("arg1", DataType::Boolean, false),
-            ),
-            expect: Err(ErrorCode::IllegalDataType(
-                "Expected numeric types, but got Boolean",
-            )),
+            nullable: false,
+            columns: vec![Series::new([false]).into()],
+            expect: Series::new([0_u8]).into(),
+            error: "Expected numeric types, but got Boolean",
         },
     ];
 
-    for t in tests {
-        let func = t.func;
-        let got = func.return_type(&[t.arg.data_type().clone()]);
-        let got = got.and_then(|_| func.eval(&[t.arg], 1));
-
-        match t.expect {
-            Ok(expected) => {
-                assert_eq!(&got.unwrap(), &expected, "case: {}", t.name);
-            }
-            Err(expected_err) => {
-                assert_eq!(got.unwrap_err().to_string(), expected_err.to_string());
-            }
-        }
-    }
-    Ok(())
+    test_scalar_functions(AbsFunction::try_create("abs(false)")?, &tests)
 }

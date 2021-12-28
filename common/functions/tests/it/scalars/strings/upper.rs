@@ -14,45 +14,32 @@
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::UpperFunction;
-
-use super::run_tests;
-use super::Test;
+use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
 
 #[test]
 fn test_upper_function() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::String, false)]);
-
     let tests = vec![
-        Test {
+        ScalarFunctionTest {
             name: "upper-abc-passed",
-            display: "upper",
             nullable: false,
-            arg_names: vec!["a"],
             columns: vec![Series::new(vec!["Abc"]).into()],
-            func: UpperFunction::try_create("upper")?,
             expect: DataColumn::Constant(DataValue::String(Some("ABC".as_bytes().to_vec())), 1),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "upper-utf8-passed",
-            display: "upper",
             nullable: false,
-            arg_names: vec!["a"],
             columns: vec![Series::new(vec!["Dobrý den"]).into()],
-            func: UpperFunction::try_create("upper")?,
             expect: DataColumn::Constant(
                 DataValue::String(Some("DOBRÝ DEN".as_bytes().to_vec())),
                 1,
             ),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "ucase-utf8-passed",
-            display: "ucase",
             nullable: false,
-            arg_names: vec!["a"],
             columns: vec![Series::new(vec!["Dobrý den"]).into()],
-            func: UpperFunction::try_create("ucase")?,
             expect: DataColumn::Constant(
                 DataValue::String(Some("DOBRÝ DEN".as_bytes().to_vec())),
                 1,
@@ -60,22 +47,21 @@ fn test_upper_function() -> Result<()> {
             error: "",
         },
     ];
-    run_tests(tests, schema)
+
+    test_scalar_functions(UpperFunction::try_create("upper")?, &tests)
 }
 
 #[test]
 fn test_upper_nullable() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("nullable", DataType::String, true)]);
+    let tests = vec![
+        ScalarFunctionTest {
+            name: "ucase-null-passed",
+            nullable: true,
+            columns: vec![Series::new(vec![Option::<Vec<u8>>::None]).into()],
+            expect: DataColumn::Constant(DataValue::String(None), 1),
+            error: "",
+        }
+    ];
 
-    let tests = vec![Test {
-        name: "ucase-null-passed",
-        display: "ucase",
-        nullable: true,
-        arg_names: vec!["nullable"],
-        columns: vec![Series::new(vec![Option::<Vec<u8>>::None]).into()],
-        func: UpperFunction::try_create("ucase")?,
-        expect: DataColumn::Constant(DataValue::String(None), 1),
-        error: "",
-    }];
-    run_tests(tests, schema)
+    test_scalar_functions(UpperFunction::try_create("ucase")?, &tests)
 }

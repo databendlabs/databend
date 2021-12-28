@@ -17,74 +17,31 @@ use common_datavalues::DataType;
 use common_exception::Result;
 use common_functions::scalars::*;
 use pretty_assertions::assert_eq;
+use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
 
 #[test]
 fn test_uuid_creator_functions() -> Result<()> {
-    #[allow(dead_code)]
-    struct Test {
-        name: &'static str,
-        display: &'static str,
-        nullable: bool,
-        args: Vec<DataType>,
-        columns: Vec<DataColumn>,
-        expect: Option<Series>,
-        error: &'static str,
-        func: Box<dyn Function>,
-    }
-
-    let schema = DataSchemaRefExt::create(vec![]);
+    // TODO: move it to stateless test.
+    // Test {
+    //     name: "generateUUIDv4-passed",
+    //     display: "()",
+    //     nullable: false,
+    //     func: UUIDv4Function::try_create("")?,
+    //     args: vec![],
+    //     columns: vec![],
+    //     expect: None,
+    //     error: "",
+    // },
 
     let tests = vec![
-        Test {
-            name: "generateUUIDv4-passed",
-            display: "()",
-            nullable: false,
-            func: UUIDv4Function::try_create("")?,
-            args: vec![],
-            columns: vec![],
-            expect: None,
-            error: "",
-        },
-        Test {
+        ScalarFunctionTest {
             name: "zeroUUID-passed",
-            display: "()",
             nullable: false,
-            func: UUIDZeroFunction::try_create("")?,
-            args: vec![],
             columns: vec![],
-            expect: Some(Series::new(vec!["00000000-0000-0000-0000-000000000000"])),
+            expect: Series::new(vec!["00000000-0000-0000-0000-000000000000"]).into(),
             error: "",
         },
     ];
 
-    for t in tests {
-        let func = t.func;
-
-        let columns: Vec<DataColumnWithField> = vec![];
-
-        // Display check.
-        let expect_display = t.display.to_string();
-        let actual_display = format!("{}", func);
-        assert_eq!(expect_display, actual_display);
-
-        // Nullable check.
-        let expect_null = t.nullable;
-        let actual_null = func.nullable(schema.fields())?;
-        assert_eq!(expect_null, actual_null);
-
-        let v = &(func.eval(&columns, 0)?);
-        // Type check.
-        let expect_type = func.return_type(&t.args)?;
-        let actual_type = v.data_type();
-        assert_eq!(expect_type, actual_type);
-
-        let series = v.to_array()?;
-        assert!(series.data_type() == &DataType::String);
-
-        if let Some(expect) = t.expect {
-            assert!(series.eq(&expect)?.all_true());
-        }
-    }
-
-    Ok(())
+    test_scalar_functions(UUIDZeroFunction::try_create("")?, &tests)
 }

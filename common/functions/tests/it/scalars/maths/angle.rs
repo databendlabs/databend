@@ -17,65 +17,33 @@ use std::f64::consts::PI;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
+use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
 
-#[test]
-fn test_angle_function() -> Result<()> {
-    #[allow(dead_code)]
-    struct Test {
-        name: &'static str,
-        display: &'static str,
-        nullable: bool,
-        columns: DataColumn,
-        expect: DataColumn,
-        error: &'static str,
-        func: Box<dyn Function>,
-    }
-
+fn test_degress_function() -> Result<()> {
     let tests = vec![
-        Test {
+        ScalarFunctionTest {
             name: "degress-passed",
-            display: "degrees",
-            nullable: false,
-            columns: Series::new([Some(PI), Some(PI / 2.0), None]).into(),
-            func: DegressFunction::try_create("degrees")?,
+            nullable: true,
+            columns: vec![Series::new([Some(PI), Some(PI / 2.0), None]).into()],
             expect: Series::new([Some(180_f64), Some(90.0), None]).into(),
             error: "",
-        },
-        Test {
+        }
+    ];
+
+    test_scalar_functions(DegressFunction::try_create("degrees")?, &tests)
+}
+
+#[test]
+fn test_radians_function() -> Result<()> {
+    let tests = vec![
+        ScalarFunctionTest {
             name: "radians-passed",
-            display: "radians",
-            nullable: false,
-            columns: Series::new([Some(180), None]).into(),
-            func: RadiansFunction::try_create("radians")?,
+            nullable: true,
+            columns: vec![Series::new([Some(180), None]).into()],
             expect: Series::new([Some(PI), None]).into(),
             error: "",
         },
     ];
 
-    for t in tests {
-        let func = t.func;
-        let rows = t.columns.len();
-
-        let columns = vec![DataColumnWithField::new(
-            t.columns.clone(),
-            DataField::new("dummpy", t.columns.data_type(), false),
-        )];
-
-        if let Err(e) = func.eval(&columns, rows) {
-            assert_eq!(t.error, e.to_string(), "{}", t.name);
-        }
-
-        // Display check.
-        let expect_display = t.display.to_string();
-        let actual_display = format!("{}", func);
-        assert_eq!(expect_display, actual_display);
-
-        let v = &(func.eval(&columns, rows)?);
-        assert_eq!(v, &t.expect, "{}", t.name);
-
-        let return_type = v.data_type();
-        let expected_type = func.return_type(&[t.columns.data_type()])?;
-        assert_eq!(expected_type, return_type);
-    }
-    Ok(())
+    test_scalar_functions(RadiansFunction::try_create("radians")?, &tests)
 }

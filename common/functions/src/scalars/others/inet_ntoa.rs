@@ -26,7 +26,7 @@ use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::{Function, Monotonicity};
 
 #[derive(Clone)]
 #[doc(alias = "IPv4NumToStringFunction")]
@@ -61,6 +61,10 @@ impl Function for InetNtoaFunction {
                 args[0]
             )))
         }
+    }
+
+    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
+        Ok(true)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

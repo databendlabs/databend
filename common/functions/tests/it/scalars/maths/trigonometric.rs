@@ -19,265 +19,187 @@ use std::f64::consts::PI;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
+use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
 
 #[test]
-fn test_trigonometic_function() -> Result<()> {
-    #[allow(dead_code)]
-    struct Test {
-        name: &'static str,
-        display: &'static str,
-        nullable: bool,
-        args: Vec<DataColumnWithField>,
-        expect: DataColumn,
-        error: &'static str,
-        func: Box<dyn Function>,
-    }
-
+fn test_trigonometric_sin_function() -> Result<()> {
     let tests = vec![
-        Test {
+        ScalarFunctionTest {
             name: "sin-u8-passed",
-            display: "sin",
             nullable: false,
-            args: vec![DataColumnWithField::new(
-                Series::new(vec![0_u8, 1, 3]).into(),
-                DataField::new("dummy", DataType::UInt8, false),
-            )],
-            func: TrigonometricSinFunction::try_create_func("sin")?,
+            columns: vec![Series::new(vec![0_u8, 1, 3]).into()],
             expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "sin-u16-passed",
-            display: "sin",
             nullable: false,
-            args: vec![DataColumnWithField::new(
-                Series::new(vec![0_u16, 1, 3]).into(),
-                DataField::new("dummy", DataType::UInt16, false),
-            )],
-            func: TrigonometricSinFunction::try_create_func("sin")?,
+            columns: vec![Series::new(vec![0_u16, 1, 3]).into()],
             expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "sin-u32-passed",
-            display: "sin",
             nullable: false,
-            args: vec![DataColumnWithField::new(
-                Series::new(vec![0_u32, 1, 3]).into(),
-                DataField::new("dummy", DataType::UInt32, false),
-            )],
-            func: TrigonometricSinFunction::try_create_func("sin")?,
+            columns: vec![Series::new(vec![0_u32, 1, 3]).into()],
             expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "sin-u64-passed",
-            display: "sin",
             nullable: false,
-            args: vec![DataColumnWithField::new(
-                Series::new(vec![0_u64, 1, 3]).into(),
-                DataField::new("dummy", DataType::UInt64, false),
-            )],
-            func: TrigonometricSinFunction::try_create_func("sin")?,
+            columns: vec![Series::new(vec![0_u64, 1, 3]).into()],
             expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "sin-str-passed",
-            display: "sin",
             nullable: false,
-            args: vec![DataColumnWithField::new(
-                Series::new(vec!["0", "1", "3"]).into(),
-                DataField::new("dummy", DataType::String, false),
-            )],
-            func: TrigonometricSinFunction::try_create_func("sin")?,
+            columns: vec![Series::new(vec!["0", "1", "3"]).into()],
             expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "sin-f64-passed",
-            display: "sin",
             nullable: false,
-            args: vec![DataColumnWithField::new(
-                Series::new(vec![0_f64, 1.0, 3.0]).into(),
-                DataField::new("dummy", DataType::Float64, false),
-            )],
-            func: TrigonometricSinFunction::try_create_func("sin")?,
+            columns: vec![Series::new(vec![0_f64, 1.0, 3.0]).into()],
             expect: Series::new(vec![0f64, 0.8414709848078965, 0.1411200080598672]).into(),
             error: "",
         },
-        Test {
+    ];
+
+    test_scalar_functions(TrigonometricSinFunction::try_create_func("sin")?, &tests)
+}
+
+#[test]
+fn test_trigonometric_cos_function() -> Result<()> {
+    let tests = vec![
+        ScalarFunctionTest {
             name: "cos-f64-passed",
-            display: "cos",
             nullable: false,
-            args: vec![DataColumnWithField::new(
-                Series::new(vec![0_f64, 1.0, 3.0]).into(),
-                DataField::new("dummy", DataType::Float64, false),
-            )],
-            func: TrigonometricCosFunction::try_create_func("cos")?,
+            columns: vec![Series::new(vec![0_f64, 1.0, 3.0]).into()],
             expect: Series::new(vec![1f64, 0.5403023058681398, -0.9899924966004454]).into(),
             error: "",
-        },
-        Test {
+        }
+    ];
+
+    test_scalar_functions(TrigonometricCosFunction::try_create_func("cos")?, &tests)
+}
+
+#[test]
+fn test_trigonometric_tan_function() -> Result<()> {
+    let tests = vec![
+        ScalarFunctionTest {
             name: "tan-pi4-passed",
-            display: "tan",
             nullable: false,
-            args: vec![DataColumnWithField::new(
-                Series::new(vec![0_f64, PI / 4.0]).into(),
-                DataField::new("dummy", DataType::Float64, false),
-            )],
-            func: TrigonometricTanFunction::try_create_func("tan")?,
+            columns: vec![Series::new(vec![0_f64, PI / 4.0]).into()],
             expect: Series::new(vec![0f64, 0.9999999999999999]).into(),
             error: "",
-        },
-        Test {
+        }
+    ];
+
+    test_scalar_functions(TrigonometricTanFunction::try_create_func("tan")?, &tests)
+}
+
+#[test]
+fn test_trigonometric_cot_function() -> Result<()> {
+    let tests = vec![
+        ScalarFunctionTest {
             name: "cot-pi4-passed",
-            display: "cot",
             nullable: false,
-            args: vec![DataColumnWithField::new(
-                Series::new(vec![PI / 4.0]).into(),
-                DataField::new("dummy", DataType::Float64, false),
-            )],
-            func: TrigonometricCotFunction::try_create_func("cot")?,
+            columns: vec![Series::new(vec![PI / 4.0]).into()],
             expect: Series::new(vec![1.0000000000000002]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "cot-0-passed",
-            display: "cot",
             nullable: false,
-            args: vec![DataColumnWithField::new(
-                Series::new(vec![0_f64]).into(),
-                DataField::new("dummy", DataType::Float64, false),
-            )],
-            func: TrigonometricCotFunction::try_create_func("cot")?,
+            columns: vec![Series::new(vec![0_f64]).into()],
             expect: Series::new(vec![f64::INFINITY]).into(),
             error: "",
         },
-        Test {
+    ];
+
+    test_scalar_functions(TrigonometricCotFunction::try_create_func("cot")?, &tests)
+}
+
+#[test]
+fn test_trigonometric_asin_function() -> Result<()> {
+    let tests = vec![
+        ScalarFunctionTest {
             name: "asin-passed",
-            display: "asin",
             nullable: false,
-            args: vec![DataColumnWithField::new(
-                Series::new(vec![0.2_f64]).into(),
-                DataField::new("dummy", DataType::Float64, false),
-            )],
-            func: TrigonometricAsinFunction::try_create_func("asin")?,
+            columns: vec![Series::new(vec![0.2_f64]).into()],
             expect: DataColumn::Constant(0.2013579207903308_f64.into(), 1),
             error: "",
-        },
-        Test {
+        }
+    ];
+
+    test_scalar_functions(TrigonometricAsinFunction::try_create_func("asin")?, &tests)
+}
+
+#[test]
+fn test_trigonometric_acos_function() -> Result<()> {
+    let tests = vec![
+        ScalarFunctionTest {
             name: "acos-passed",
-            display: "acos",
             nullable: false,
-            args: vec![DataColumnWithField::new(
-                Series::new(vec![1]).into(),
-                DataField::new("dummy", DataType::Float64, false),
-            )],
-            func: TrigonometricAcosFunction::try_create_func("acos")?,
+            columns: vec![Series::new(vec![1]).into()],
             expect: DataColumn::Constant(0_f64.into(), 1),
             error: "",
-        },
-        Test {
+        }
+    ];
+
+    test_scalar_functions(TrigonometricAcosFunction::try_create_func("acos")?, &tests)
+}
+
+#[test]
+fn test_trigonometric_atan_function() -> Result<()> {
+    let tests = vec![
+        ScalarFunctionTest {
             name: "atan-passed",
-            display: "atan",
             nullable: false,
-            args: vec![DataColumnWithField::new(
-                Series::new(vec![1, -1]).into(),
-                DataField::new("dummy", DataType::Float64, false),
-            )],
-            func: TrigonometricAtanFunction::try_create_func("atan")?,
+            columns: vec![Series::new(vec![1, -1]).into()],
             expect: Series::new(vec![FRAC_PI_4, -FRAC_PI_4]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "atan-passed",
-            display: "atan",
             nullable: false,
-            args: vec![
-                DataColumnWithField::new(
-                    Series::new(vec![-2_f64, PI]).into(),
-                    DataField::new("y", DataType::Float64, false),
-                ),
-                DataColumnWithField::new(
-                    Series::new(vec![2, 0]).into(),
-                    DataField::new("x", DataType::Float64, false),
-                ),
-            ],
-            func: TrigonometricAtanFunction::try_create_func("atan")?,
+            columns: vec![Series::new(vec![-2_f64, PI]).into(), Series::new(vec![2, 0]).into()],
             expect: Series::new(vec![-FRAC_PI_4, FRAC_PI_2]).into(),
             error: "",
         },
-        Test {
+    ];
+
+    test_scalar_functions(TrigonometricAtanFunction::try_create_func("atan")?, &tests)
+}
+
+#[test]
+fn test_trigonometric_atan2_function() -> Result<()> {
+    let tests = vec![
+        ScalarFunctionTest {
             name: "atan2-passed",
-            display: "atan2",
             nullable: false,
-            args: vec![
-                DataColumnWithField::new(
-                    Series::new(vec![-2_f64, PI]).into(),
-                    DataField::new("y", DataType::Float64, false),
-                ),
-                DataColumnWithField::new(
-                    Series::new(vec![2, 0]).into(),
-                    DataField::new("x", DataType::Float64, false),
-                ),
-            ],
-            func: TrigonometricAtan2Function::try_create_func("atan2")?,
+            columns: vec![Series::new(vec![-2_f64, PI]).into(), Series::new(vec![2, 0]).into()],
             expect: Series::new(vec![-FRAC_PI_4, FRAC_PI_2]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "atan2-y-constant-passed",
-            display: "atan2",
             nullable: false,
-            args: vec![
-                DataColumnWithField::new(
-                    DataColumn::Constant(2.into(), 2),
-                    DataField::new("y", DataType::Float64, false),
-                ),
-                DataColumnWithField::new(
-                    Series::new(vec![0_f64, 2.0]).into(),
-                    DataField::new("x", DataType::Float64, false),
-                ),
-            ],
-            func: TrigonometricAtan2Function::try_create_func("atan2")?,
+            columns: vec![DataColumn::Constant(2.into(), 2), Series::new(vec![0_f64, 2.0]).into()],
             expect: Series::new(vec![FRAC_PI_2, FRAC_PI_4]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "atan2-x-constant-passed",
-            display: "atan2",
             nullable: false,
-            args: vec![
-                DataColumnWithField::new(
-                    Series::new(vec![-2_f64, 2.0]).into(),
-                    DataField::new("y", DataType::Float64, false),
-                ),
-                DataColumnWithField::new(
-                    DataColumn::Constant(2.into(), 2),
-                    DataField::new("x", DataType::Float64, false),
-                ),
-            ],
-            func: TrigonometricAtan2Function::try_create_func("atan2")?,
+            columns: vec![Series::new(vec![-2_f64, 2.0]).into(), DataColumn::Constant(2.into(), 2)],
             expect: Series::new(vec![-FRAC_PI_4, FRAC_PI_4]).into(),
             error: "",
         },
     ];
 
-    for t in tests {
-        let func = t.func;
-
-        if let Err(e) = func.eval(&t.args, t.args[0].column().len()) {
-            assert_eq!(t.error, e.to_string(), "{}", t.name);
-        }
-
-        // Display check.
-        let expect_display = t.display.to_string();
-        let actual_display = format!("{}", func);
-        assert_eq!(expect_display, actual_display);
-
-        let v = &(func.eval(&t.args, t.args[0].column().len())?);
-        assert_eq!(v, &t.expect, "{}", t.name);
-    }
-    Ok(())
+    test_scalar_functions(TrigonometricAtan2Function::try_create_func("atan2")?, &tests)
 }

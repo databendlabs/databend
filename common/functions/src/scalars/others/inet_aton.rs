@@ -26,7 +26,7 @@ use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::{Function, Monotonicity};
 
 #[derive(Clone)]
 #[doc(alias = "IPv4StringToNumFunction")]
@@ -50,6 +50,10 @@ impl InetAtonFunction {
 impl Function for InetAtonFunction {
     fn name(&self) -> &str {
         &*self.display_name
+    }
+
+    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
+        Ok(true)
     }
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {

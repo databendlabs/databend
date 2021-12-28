@@ -24,7 +24,7 @@ use sha2::Digest;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
+use crate::scalars::{Function, Monotonicity};
 
 #[derive(Clone)]
 pub struct Sha2HashFunction {
@@ -58,6 +58,10 @@ impl Function for Sha2HashFunction {
                 args[0]
             )))
         }
+    }
+
+    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
+        Ok(true)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

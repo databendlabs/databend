@@ -17,40 +17,19 @@ use std::f64::consts::PI;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
+use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
 
 #[test]
 fn test_pi_function() -> Result<()> {
-    #[allow(dead_code)]
-    struct Test {
-        name: &'static str,
-        display: &'static str,
-        error: &'static str,
-        func: Box<dyn Function>,
-        expect: DataColumn,
-    }
-    let tests = vec![Test {
-        name: "pi-function-passed",
-        display: "pi()",
-        func: PiFunction::try_create("pi()")?,
-        expect: Series::new(vec![PI]).into(),
-        error: "",
-    }];
-
-    for t in tests {
-        let func = t.func;
-        match func.eval(&[], 1) {
-            Ok(v) => {
-                // Display check.
-                let expect_display = t.display.to_string();
-                let actual_display = format!("{}", func);
-                assert_eq!(expect_display, actual_display);
-
-                assert_eq!(&v, &t.expect);
-            }
-            Err(e) => {
-                assert_eq!(t.error, e.to_string());
-            }
+    let tests = vec![
+        ScalarFunctionTest {
+            name: "pi-function-passed",
+            nullable: false,
+            columns: vec![],
+            expect: Series::new(vec![PI]).into(),
+            error: "",
         }
-    }
-    Ok(())
+    ];
+
+    test_scalar_functions(PiFunction::try_create("pi()")?, &tests)
 }
