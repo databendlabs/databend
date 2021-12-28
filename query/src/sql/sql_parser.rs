@@ -859,7 +859,7 @@ impl<'a> DfParser<'a> {
             self.parser
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
         let udf_name = self.parser.parse_literal_string()?;
-        self.parser.expect_token(&Token::Eq)?;
+        self.parser.expect_token(&Token::make_keyword("AS"))?;
         // TODO verify the definition as a legal expr
         let desc_token = "DESC";
         let definition = self.consume_token_until_or_end(vec![desc_token]).join("");
@@ -881,7 +881,7 @@ impl<'a> DfParser<'a> {
 
     fn parse_alter_udf(&mut self) -> Result<DfStatement, ParserError> {
         let udf_name = self.parser.parse_literal_string()?;
-        self.parser.expect_token(&Token::Eq)?;
+        self.parser.expect_token(&Token::make_keyword("AS"))?;
         // TODO verify the definition as a legal expr
         let desc_token = "DESC";
         let definition = self.consume_token_until_or_end(vec![desc_token]).join("");
