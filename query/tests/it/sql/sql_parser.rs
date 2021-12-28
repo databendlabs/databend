@@ -25,16 +25,19 @@ use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use common_planners::Optimization;
+use databend_query::sql::statements::DfAlterUDF;
 use databend_query::sql::statements::DfAlterUser;
 use databend_query::sql::statements::DfCopy;
 use databend_query::sql::statements::DfCreateDatabase;
 use databend_query::sql::statements::DfCreateStage;
 use databend_query::sql::statements::DfCreateTable;
+use databend_query::sql::statements::DfCreateUDF;
 use databend_query::sql::statements::DfCreateUser;
 use databend_query::sql::statements::DfDescribeTable;
 use databend_query::sql::statements::DfDropDatabase;
 use databend_query::sql::statements::DfDropStage;
 use databend_query::sql::statements::DfDropTable;
+use databend_query::sql::statements::DfDropUDF;
 use databend_query::sql::statements::DfDropUser;
 use databend_query::sql::statements::DfGrantObject;
 use databend_query::sql::statements::DfGrantStatement;
@@ -46,6 +49,7 @@ use databend_query::sql::statements::DfShowCreateTable;
 use databend_query::sql::statements::DfShowDatabases;
 use databend_query::sql::statements::DfShowGrants;
 use databend_query::sql::statements::DfShowTables;
+use databend_query::sql::statements::DfShowUDF;
 use databend_query::sql::statements::DfTruncateTable;
 use databend_query::sql::statements::DfUseDatabase;
 use databend_query::sql::*;
@@ -1327,6 +1331,97 @@ fn drop_stage_test() -> Result<()> {
         DfStatement::DropStage(DfDropStage {
             if_exists: true,
             stage_name: "test_stage".to_string(),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_create_udf() -> Result<()> {
+    expect_parse_ok(
+        "CREATE FUNCTION test_udf='not(isnotnull(@0))'",
+        DfStatement::CreateUDF(DfCreateUDF {
+            if_not_exists: false,
+            udf_name: "test_udf".to_string(),
+            definition: "not(isnotnull(@0))".to_string(),
+            description: "".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE FUNCTION test_udf='not(isnotnull(@0))' desc='This is a description'",
+        DfStatement::CreateUDF(DfCreateUDF {
+            if_not_exists: false,
+            udf_name: "test_udf".to_string(),
+            definition: "not(isnotnull(@0))".to_string(),
+            description: "This is a description".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE FUNCTION IF NOT EXISTS test_udf='not(isnotnull(@0))' desc='This is a description'",
+        DfStatement::CreateUDF(DfCreateUDF {
+            if_not_exists: true,
+            udf_name: "test_udf".to_string(),
+            definition: "not(isnotnull(@0))".to_string(),
+            description: "This is a description".to_string(),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_drop_udf() -> Result<()> {
+    expect_parse_ok(
+        "DROP FUNCTION test_udf",
+        DfStatement::DropUDF(DfDropUDF {
+            if_exists: false,
+            udf_name: "test_udf".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "DROP FUNCTION IF EXISTS test_udf",
+        DfStatement::DropUDF(DfDropUDF {
+            if_exists: true,
+            udf_name: "test_udf".to_string(),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_show_udf() -> Result<()> {
+    expect_parse_ok(
+        "SHOW FUNCTION test_udf",
+        DfStatement::ShowUDF(DfShowUDF {
+            udf_name: "test_udf".to_string(),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_alter_udf() -> Result<()> {
+    expect_parse_ok(
+        "ALTER FUNCTION test_udf='not(isnotnull(@0))'",
+        DfStatement::AlterUDF(DfAlterUDF {
+            udf_name: "test_udf".to_string(),
+            definition: "not(isnotnull(@0))".to_string(),
+            description: "".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "ALTER FUNCTION test_udf='not(isnotnull(@0))' desc='This is a description'",
+        DfStatement::AlterUDF(DfAlterUDF {
+            udf_name: "test_udf".to_string(),
+            definition: "not(isnotnull(@0))".to_string(),
+            description: "This is a description".to_string(),
         }),
     )?;
 

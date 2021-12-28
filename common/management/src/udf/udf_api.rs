@@ -22,6 +22,9 @@ pub trait UdfMgrApi: Sync + Send {
     // Add a UDF to /tenant/udf-name.
     async fn add_udf(&self, udf: UserDefinedFunction) -> Result<u64>;
 
+    // Update a UDF to /tenant/udf-name.
+    async fn update_udf(&self, udf: UserDefinedFunction, seq: Option<u64>) -> Result<u64>;
+
     // Get UDF by name.
     async fn get_udf(&self, udf_name: &str, seq: Option<u64>) -> Result<SeqV<UserDefinedFunction>>;
 

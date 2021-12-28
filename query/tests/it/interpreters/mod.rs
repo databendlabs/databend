@@ -31,6 +31,7 @@ mod interpreter_table_create;
 mod interpreter_table_drop;
 mod interpreter_table_optimize;
 mod interpreter_table_truncate;
+mod interpreter_udf_alter;
 mod interpreter_udf_create;
 mod interpreter_udf_drop;
 mod interpreter_udf_show;

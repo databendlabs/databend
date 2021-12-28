@@ -29,6 +29,16 @@ impl UserApiProvider {
         }
     }
 
+    // Update a UDF.
+    pub async fn update_udf(&self, info: UserDefinedFunction) -> Result<u64> {
+        let udf_api_client = self.get_udf_api_client();
+        let update_udf = udf_api_client.update_udf(info, None);
+        match update_udf.await {
+            Ok(res) => Ok(res),
+            Err(failure) => Err(failure.add_message_back("(while update UDF).")),
+        }
+    }
+
     // Get a UDF by name.
     pub async fn get_udf(&self, udf_name: &str) -> Result<UserDefinedFunction> {
         let udf_api_client = self.get_udf_api_client();
