@@ -27,6 +27,7 @@ use crate::sql::statements::AnalyzedResult;
 #[derive(Debug, Clone, PartialEq)]
 pub struct DfAlterUDF {
     pub udf_name: String,
+    pub parameters: Vec<String>,
     pub definition: String,
     pub description: String,
 }
@@ -39,7 +40,7 @@ impl AnalyzableStatement for DfAlterUDF {
             AlterUDFPlan {
                 udf: UserDefinedFunction::new(
                     self.udf_name.as_str(),
-                    vec![], // TODO
+                    self.parameters.clone(),
                     self.definition.as_str(),
                     self.description.as_str(),
                 ),

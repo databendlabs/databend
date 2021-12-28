@@ -967,9 +967,11 @@ impl<'a> DfParser<'a> {
         let udf_name = self.parser.parse_literal_string()?;
         let as_token = Token::make_keyword("AS");
         self.parser.expect_token(&as_token)?;
-        // TODO verify the definition as a legal expr
+
         let desc_token = "DESC";
-        let definition = self.consume_token_until_or_end(vec![desc_token]).join("");
+        let parameters = self.parse_udf_parameters()?;
+        let definition = self.parse_udf_definition_expr(vec![desc_token])?;
+
         let description = if self.consume_token(desc_token) {
             self.parser.expect_token(&as_token)?;
             self.parser.parse_literal_string()?
@@ -978,6 +980,7 @@ impl<'a> DfParser<'a> {
         };
         let update_udf = DfAlterUDF {
             udf_name,
+            parameters,
             definition,
             description,
         };

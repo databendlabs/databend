@@ -48,7 +48,7 @@ async fn test_alter_udf_interpreter() -> Result<()> {
     }
 
     static TEST_QUERY1: &str =
-        "ALTER FUNCTION isnotempty AS not(isnotnull(@0)) DESC AS 'This is a new description'";
+        "ALTER FUNCTION isnotempty AS (d) -> not(isnotnull(d)) DESC AS 'This is a new description'";
     if let PlanNode::AlterUDF(plan) = PlanParser::parse(TEST_QUERY1, ctx.clone()).await? {
         let executor = AlterUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "AlterUDFInterpreter");
@@ -63,7 +63,8 @@ async fn test_alter_udf_interpreter() -> Result<()> {
             .await?;
 
         assert_eq!(udf.name, "isnotempty");
-        assert_eq!(udf.definition, "not(isnotnull(@0))");
+        assert_eq!(udf.parameters, vec!["d".to_string()]);
+        assert_eq!(udf.definition, "not(isnotnull(d))");
         assert_eq!(udf.description, "This is a new description")
     } else {
         panic!()

@@ -1455,21 +1455,78 @@ fn test_show_udf() -> Result<()> {
 
 #[test]
 fn test_alter_udf() -> Result<()> {
+    expect_parse_err_contains(
+        "ALTER FUNCTION test_udf AS p -> not(isnotnull(p))",
+        "Expected (, found: p".to_string(),
+    )?;
+
+    expect_parse_err_contains(
+        "ALTER FUNCTION test_udf AS (as) -> not(isnotnull(as))",
+        "Keyword can not be parameter, got: as".to_string(),
+    )?;
+
+    expect_parse_err_contains(
+        "ALTER FUNCTION test_udf AS (\"p\") -> not(isnotnull(p))",
+        "Quote is not allowed in parameters, remove: \"".to_string(),
+    )?;
+
+    expect_parse_err_contains(
+        "ALTER FUNCTION test_udf AS (p, p) -> not(isnotnull(p))",
+        "Duplicate parameter is not allowed, keep only one: p".to_string(),
+    )?;
+
+    expect_parse_err_contains(
+        "ALTER FUNCTION test_udf AS (p:) -> not(isnotnull(p))",
+        "Expect words or comma, but got: :".to_string(),
+    )?;
+
+    expect_parse_err_contains(
+        "ALTER FUNCTION test_udf AS (p,) -> not(isnotnull(p))",
+        "Found a redundant `,` in the parameters".to_string(),
+    )?;
+
+    expect_parse_err_contains(
+        "ALTER FUNCTION test_udf AS (p;) -> not(isnotnull(p))",
+        "Can not find complete parameters, `)` is missing".to_string(),
+    )?;
+
     expect_parse_ok(
-        "ALTER FUNCTION test_udf AS not(isnotnull(@0))",
+        "ALTER FUNCTION test_udf AS (p) -> not(isnotnull(p))",
         DfStatement::AlterUDF(DfAlterUDF {
             udf_name: "test_udf".to_string(),
-            definition: "not(isnotnull(@0))".to_string(),
+            parameters: vec!["p".to_string()],
+            definition: "not(isnotnull(p))".to_string(),
             description: "".to_string(),
         }),
     )?;
 
     expect_parse_ok(
-        "ALTER FUNCTION test_udf AS not(isnotnull(@0)) DESC AS 'This is a description'",
+        "ALTER FUNCTION test_udf AS (p, d) -> not(isnotnull(p, d))",
         DfStatement::AlterUDF(DfAlterUDF {
             udf_name: "test_udf".to_string(),
-            definition: "not(isnotnull(@0))".to_string(),
-            description: "This is a description".to_string(),
+            parameters: vec!["p".to_string(), "d".to_string()],
+            definition: "not(isnotnull(p,d))".to_string(),
+            description: "".to_string(),
+        }),
+    )?;
+
+    expect_parse_err_contains(
+        "ALTER FUNCTION test_udf AS (p) -> not(isnotnull(p)) DESC",
+        "Expected AS, found: ".to_string(),
+    )?;
+
+    expect_parse_err_contains(
+        "ALTER FUNCTION test_udf AS (p) -> not(isnotnull(p)) DESC AS",
+        "Expected literal string, found: EOF".to_string(),
+    )?;
+
+    expect_parse_ok(
+        "ALTER FUNCTION test_udf AS (p, d) -> not(isnotnull(p, d)) DESC AS 'this is a description'",
+        DfStatement::AlterUDF(DfAlterUDF {
+            udf_name: "test_udf".to_string(),
+            parameters: vec!["p".to_string(), "d".to_string()],
+            definition: "not(isnotnull(p,d))".to_string(),
+            description: "this is a description".to_string(),
         }),
     )?;
 
