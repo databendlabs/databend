@@ -17,5 +17,8 @@ common-exception= {path = "../exception"}
 bytes = "1.1.0"
 serde = { version = "1.0.132", features = ["derive"] }
 
+# Github dependencies
+bincode = { git = "https://github.com/datafuse-extras/bincode", rev = "fd3f9ff" }
+
 [dev-dependencies]
 rand = "0.8.4"

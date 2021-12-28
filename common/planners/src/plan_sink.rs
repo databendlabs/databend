@@ -34,7 +34,7 @@ pub static SINK_SCHEMA: Lazy<DataSchemaRef> = Lazy::new(|| {
 pub struct SinkPlan {
     pub table_info: TableInfo,
     pub input: Arc<PlanNode>,
-    pub cast_needed: bool,
+    pub cast_schema: Option<DataSchemaRef>,
 }
 
 impl SinkPlan {

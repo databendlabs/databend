@@ -49,9 +49,6 @@ impl InsertPlan {
     }
 
     pub fn has_select_plan(&self) -> bool {
-        match &self.source {
-            InsertInputSource::SelectPlan(_) => true,
-            _ => false,
-        }
+        matches!(&self.source, InsertInputSource::SelectPlan(_))
     }
 }

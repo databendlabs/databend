@@ -62,7 +62,7 @@ async-compat = "0.2.1"
 async-trait = "0.1.52"
 async-recursion = "0.3.2"
 async-stream = "0.3.2"
-poem = { version = "1.2.8", features = ["rustls", "multipart"] }
+poem = { version = "1.2.14", features = ["rustls", "multipart"] }
 bumpalo = "3.8.0"
 byteorder = "1.4.3"
 bytes = "1.1.0"

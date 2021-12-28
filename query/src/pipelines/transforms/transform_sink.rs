@@ -33,7 +33,7 @@ pub struct SinkTransform {
     ctx: Arc<QueryContext>,
     table_info: TableInfo,
     input: Arc<dyn Processor>,
-    cast_needed: bool,
+    cast_schema: Option<DataSchemaRef>,
     input_schema: DataSchemaRef,
 }
 
@@ -41,14 +41,14 @@ impl SinkTransform {
     pub fn create(
         ctx: Arc<QueryContext>,
         table_info: TableInfo,
-        cast_needed: bool,
+        cast_schema: Option<DataSchemaRef>,
         input_schema: DataSchemaRef,
     ) -> Self {
         Self {
             ctx,
             table_info,
             input: Arc::new(EmptyProcessor::create()),
-            cast_needed,
+            cast_schema,
             input_schema,
         }
     }
@@ -85,22 +85,22 @@ impl Processor for SinkTransform {
             .get_table_by_info(self.table_info())?;
         let mut input_stream = self.input.execute().await?;
 
-        let input_schema = self.input_schema.clone();
-        let output_schema = self.table_info.schema();
-        if self.cast_needed {
-            let mut functions = Vec::with_capacity(output_schema.fields().len());
-            for field in output_schema.fields() {
+        if let Some(cast_schema) = &self.cast_schema {
+            let mut functions = Vec::with_capacity(cast_schema.fields().len());
+            for field in cast_schema.fields() {
                 let cast_function =
                     CastFunction::create("cast".to_string(), field.data_type().clone())?;
                 functions.push(cast_function);
             }
             input_stream = Box::pin(CastStream::try_create(
                 input_stream,
-                output_schema.clone(),
+                cast_schema.clone(),
                 functions,
             )?);
         };
 
+        let input_schema = self.input_schema.clone();
+        let output_schema = self.table_info.schema();
         if self.input_schema != output_schema {
             input_stream = Box::pin(AddOnStream::try_create(
                 input_stream,

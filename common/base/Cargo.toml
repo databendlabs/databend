@@ -25,4 +25,4 @@ pprof = { version = "0.6.2", features = ["flamegraph", "protobuf"] }
 tokio = { version = "1.15.0", features = ["macros", "rt", "rt-multi-thread", "sync", "fs", "signal"] }
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 serde = { version = "1.0.132", features = ["derive"] }
-poem = { version = "1.2.8", features = ["rustls"] }
+poem = { version = "1.2.14", features = ["rustls"] }
