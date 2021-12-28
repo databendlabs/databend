@@ -1,4 +1,4 @@
-use common_datavalues::{DataField, DataTypeAndNullable};
+use common_datavalues::{DataField, DataType, DataTypeAndNullable};
 use common_datavalues::prelude::{ArrayCompare, DataColumn, DataColumnsWithField, DataColumnWithField, ToValues};
 use common_datavalues::series::{Series, SeriesWrap};
 use common_functions::scalars::{Function, FunctionFactory};
@@ -84,13 +84,14 @@ pub fn test_scalar_functions_with_type(test_function: Box<dyn Function>, tests: 
 
         assert_eq!(test.nullable, test_function.nullable(&arguments_type)?, "{}", test.name);
         match eval(&test_function, rows_size, &test.columns, &arguments_type) {
-            Ok(v) => {
+            Ok(v) if !matches!(v.data_type(), DataType::Struct(_)) => {
                 println!("{:?} eq {:?}", v.to_values()?, test.expect.to_values()?);
                 let mut cmp = v.to_array()?.eq(&test.expect.to_array()?)?;
                 for s in cmp.inner() {
                     assert!(s.unwrap_or(true), "{}", test.name);
                 }
             }
+            Ok(v) => assert_eq!(format!("{:?}", v.to_array()), format!("{:?}", test.expect.to_array())),
             Err(cause) => {
                 assert_eq!(test.error, cause.message(), "{}", test.name);
             }
