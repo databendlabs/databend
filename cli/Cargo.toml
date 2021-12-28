@@ -67,7 +67,7 @@ http = "0.2.5"
 tempfile = "3.2.0"
 assert_cmd = "2.0.2"
 predicates = "2.1.0"
-httpmock = "0.6.4"
+httpmock = "0.6.5"
 
 [build-dependencies]
 common-building = { path = "../common/building" }
