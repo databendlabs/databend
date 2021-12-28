@@ -39,6 +39,11 @@ const config = {
                   trackingID: 'G-WBQPTTG4ZG',
                   anonymizeIP: true,
                 },
+                sitemap: {
+                    changefreq: 'daily',
+                    priority: 0.5,
+                    trailingSlash: false,
+                },
             }),
         ],
     ],
@@ -172,10 +177,10 @@ const config = {
                 darkTheme: darkCodeTheme,
             },
             algolia: {
-                apiKey: 'TBD',
-                indexName: 'TBD',
+                appId: 'RL7MS9PKE8',
+                apiKey: '78bb6be96bb0361a4be9dab6bd83936c',
+                indexName: 'databend-rs',
                 contextualSearch: true,
-                searchParameters: {},
             }
         }),
 };
