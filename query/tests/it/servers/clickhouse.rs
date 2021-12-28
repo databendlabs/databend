@@ -71,7 +71,8 @@ async fn test_clickhouse_insert_data() -> Result<()> {
     let (_, listening) = start_server(1).await?;
     let mut conn = create_conn(listening.port()).await?;
 
-    let query_str = "CREATE TABLE test(a UInt64 not null, b UInt64 not null, c String not null) Engine = Memory";
+    let query_str =
+        "CREATE TABLE test(a UInt64 not null, b Int64 not null, c String not null) Engine = Memory";
     execute(&mut conn, query_str).await?;
 
     let block = Block::new("test")
@@ -108,7 +109,7 @@ async fn test_clickhouse_insert_to_fuse_table() -> Result<()> {
 
     let test_tbl_name = format!("tbl_{}", Uuid::new_v4().to_simple());
     let query_str = format!(
-        "CREATE TABLE {}(a UInt64 not null, b UInt64 not null, c String not null) Engine = fuse",
+        "CREATE TABLE {}(a UInt64 not null, b Int64 not null, c String not null) Engine = fuse",
         test_tbl_name
     );
     execute(&mut conn, &query_str).await?;
@@ -125,7 +126,7 @@ async fn test_clickhouse_insert_to_fuse_table() -> Result<()> {
 
     let query_str = format!("SELECT * from {}", test_tbl_name);
     let data = query::<Temp>(&mut conn, &query_str).await?;
-    assert_eq!(data.len(), 4);
+    assert_eq!(data.len(), 8);
 
     // insert and select
     let insert_str = format!(
@@ -136,7 +137,7 @@ async fn test_clickhouse_insert_to_fuse_table() -> Result<()> {
     // ignore the error here, because query needs a block to return but here can't
     let _ = query::<Temp>(&mut conn, &insert_str).await;
     let data = query::<Temp>(&mut conn, &query_str).await?;
-    assert_eq!(data.len(), 8);
+    assert_eq!(data.len(), 16);
     Ok(())
 }
 
@@ -223,7 +224,10 @@ async fn execute(client: &mut Connection, query: &str) -> Result<()> {
 //block contains table name
 async fn insert<'a>(client: &mut Connection, block: &Block<'a>) -> Result<()> {
     match client.insert(block).await {
-        Ok(_) => Ok(()),
+        Ok(mut isrt) => isrt
+            .commit()
+            .await
+            .map_err(|err| ErrorCode::UnknownException(err.to_string())),
         Err(error) => Err(ErrorCode::UnknownException(format!(
             "Error insert query: {:?}",
             error
@@ -233,7 +237,7 @@ async fn insert<'a>(client: &mut Connection, block: &Block<'a>) -> Result<()> {
 
 async fn create_conn(port: u16) -> Result<Connection> {
     let url = format!("tcp://default:@127.0.0.1:{}/default?compression=lz4&ping_timeout=10s&connection_timeout=20s", port);
-    let pool = Pool::create(url).unwrap();
+    let pool = Pool::create(url).map_err(|err| ErrorCode::UnknownException(err.to_string()))?;
     let c = pool.connection().await;
 
     match c {

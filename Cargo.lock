@@ -1037,7 +1037,7 @@ dependencies = [
 [[package]]
 name = "clickhouse-driver"
 version = "0.1.0-alpha.3"
-source = "git+https://github.com/datafuse-extras/clickhouse_driver/?rev=0051561#0051561f176f0f1fd2c0eaba30da038122d772e6"
+source = "git+https://github.com/datafuse-extras/clickhouse_driver/?rev=6e0ecb2#6e0ecb2718cb5dd84ac76827e08586a48f2e719d"
 dependencies = [
  "byteorder",
  "bytes 0.5.6",
@@ -1063,7 +1063,7 @@ dependencies = [
 [[package]]
 name = "clickhouse-driver-cthrs"
 version = "0.1.1"
-source = "git+https://github.com/datafuse-extras/clickhouse_driver/?rev=0051561#0051561f176f0f1fd2c0eaba30da038122d772e6"
+source = "git+https://github.com/datafuse-extras/clickhouse_driver/?rev=6e0ecb2#6e0ecb2718cb5dd84ac76827e08586a48f2e719d"
 
 [[package]]
 name = "clipboard-win"
