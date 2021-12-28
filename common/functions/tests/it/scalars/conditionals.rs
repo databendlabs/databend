@@ -13,27 +13,25 @@
 // limitations under the License.
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataType;
 use common_exception::Result;
 use common_functions::scalars::*;
-use pretty_assertions::assert_eq;
-use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
+
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_if_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "if-passed",
-            nullable: false,
-            columns: vec![
-                Series::new([true, false, false, true]).into(),
-                Series::new([1i32, 2, 3, 4]).into(),
-                Series::new([2.5_f64, 2.5_f64, 2.5_f64, 2.5_f64]).into(),
-            ],
-            expect: Series::new(vec![1f64, 2.5, 2.5, 4f64]).into(),
-            error: "",
-        }
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "if-passed",
+        nullable: false,
+        columns: vec![
+            Series::new([true, false, false, true]).into(),
+            Series::new([1i32, 2, 3, 4]).into(),
+            Series::new([2.5_f64, 2.5_f64, 2.5_f64, 2.5_f64]).into(),
+        ],
+        expect: Series::new(vec![1f64, 2.5, 2.5, 4f64]).into(),
+        error: "",
+    }];
 
     test_scalar_functions(IfFunction::try_create_func("")?, &tests)
 }

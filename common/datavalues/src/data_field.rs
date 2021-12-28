@@ -24,7 +24,7 @@ use common_macros::MallocSizeOf;
 use crate::DataType;
 
 #[derive(
-serde::Serialize, serde::Deserialize, Clone, PartialEq, Hash, Eq, PartialOrd, Ord, MallocSizeOf,
+    serde::Serialize, serde::Deserialize, Clone, PartialEq, Hash, Eq, PartialOrd, Ord, MallocSizeOf,
 )]
 pub struct DataTypeAndNullable {
     data_type: DataType,
@@ -62,7 +62,7 @@ impl Display for DataTypeAndNullable {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self.nullable {
             true => write!(f, "Nullable({})", self.data_type),
-            false => write!(f, "{}", self.data_type)
+            false => write!(f, "{}", self.data_type),
         }
     }
 }
@@ -77,7 +77,7 @@ impl Debug for DataTypeAndNullable {
 }
 
 #[derive(
-serde::Serialize, serde::Deserialize, Clone, PartialEq, Hash, Eq, PartialOrd, Ord, MallocSizeOf,
+    serde::Serialize, serde::Deserialize, Clone, PartialEq, Hash, Eq, PartialOrd, Ord, MallocSizeOf,
 )]
 pub struct DataField {
     name: String,

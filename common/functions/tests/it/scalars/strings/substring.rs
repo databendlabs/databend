@@ -15,7 +15,9 @@
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::SubstringFunction;
-use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
+
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_substring_function() -> Result<()> {
@@ -70,19 +72,17 @@ fn test_substring_function() -> Result<()> {
 
 #[test]
 fn test_substring_nullable() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "substring-nullabe-passed",
-            nullable: false,
-            columns: vec![
-                Series::new(vec!["abcde"]).into(),
-                Series::new(vec![2_i64]).into(),
-                Series::new(vec![3_u64]).into(),
-            ],
-            expect: Series::new(vec!["bcd"]).into(),
-            error: "",
-        }
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "substring-nullabe-passed",
+        nullable: false,
+        columns: vec![
+            Series::new(vec!["abcde"]).into(),
+            Series::new(vec![2_i64]).into(),
+            Series::new(vec![3_u64]).into(),
+        ],
+        expect: Series::new(vec!["bcd"]).into(),
+        error: "",
+    }];
 
     test_scalar_functions(SubstringFunction::try_create("substring")?, &tests)
 }

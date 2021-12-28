@@ -15,20 +15,19 @@
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
-use pretty_assertions::assert_eq;
-use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
+
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_version_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "version-function-passed",
-            nullable: false,
-            columns: vec![Series::new(["DatabendQuery v-dummy_version"]).into()],
-            expect: Series::new(["DatabendQuery v-dummy_version"]).into(),
-            error: "",
-        }
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "version-function-passed",
+        nullable: false,
+        columns: vec![Series::new(["DatabendQuery v-dummy_version"]).into()],
+        expect: Series::new(["DatabendQuery v-dummy_version"]).into(),
+        error: "",
+    }];
 
     test_scalar_functions(VersionFunction::try_create("version")?, &tests)
 }

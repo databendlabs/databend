@@ -12,29 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
 use common_exception::Result;
 use common_functions::scalars::*;
-use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
+
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_udf_example_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "udf-example-passed",
-            nullable: false,
-            columns: vec![
-                Series::new(vec![true, true, true, false]).into(),
-                Series::new(vec![true, false, true, true]).into(),
-            ],
-            expect: Series::new(vec![true, true, true, true]).into(),
-            error: "",
-        }
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "udf-example-passed",
+        nullable: false,
+        columns: vec![
+            Series::new(vec![true, true, true, false]).into(),
+            Series::new(vec![true, false, true, true]).into(),
+        ],
+        expect: Series::new(vec![true, true, true, true]).into(),
+        error: "",
+    }];
 
     test_scalar_functions(UdfExampleFunction::try_create("example")?, &tests)
 }

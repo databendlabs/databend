@@ -19,7 +19,9 @@ use std::f64::consts::PI;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
-use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
+
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_trigonometric_sin_function() -> Result<()> {
@@ -73,30 +75,26 @@ fn test_trigonometric_sin_function() -> Result<()> {
 
 #[test]
 fn test_trigonometric_cos_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "cos-f64-passed",
-            nullable: false,
-            columns: vec![Series::new(vec![0_f64, 1.0, 3.0]).into()],
-            expect: Series::new(vec![1f64, 0.5403023058681398, -0.9899924966004454]).into(),
-            error: "",
-        }
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "cos-f64-passed",
+        nullable: false,
+        columns: vec![Series::new(vec![0_f64, 1.0, 3.0]).into()],
+        expect: Series::new(vec![1f64, 0.5403023058681398, -0.9899924966004454]).into(),
+        error: "",
+    }];
 
     test_scalar_functions(TrigonometricCosFunction::try_create_func("cos")?, &tests)
 }
 
 #[test]
 fn test_trigonometric_tan_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "tan-pi4-passed",
-            nullable: false,
-            columns: vec![Series::new(vec![0_f64, PI / 4.0]).into()],
-            expect: Series::new(vec![0f64, 0.9999999999999999]).into(),
-            error: "",
-        }
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "tan-pi4-passed",
+        nullable: false,
+        columns: vec![Series::new(vec![0_f64, PI / 4.0]).into()],
+        expect: Series::new(vec![0f64, 0.9999999999999999]).into(),
+        error: "",
+    }];
 
     test_scalar_functions(TrigonometricTanFunction::try_create_func("tan")?, &tests)
 }
@@ -125,30 +123,26 @@ fn test_trigonometric_cot_function() -> Result<()> {
 
 #[test]
 fn test_trigonometric_asin_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "asin-passed",
-            nullable: false,
-            columns: vec![Series::new(vec![0.2_f64]).into()],
-            expect: DataColumn::Constant(0.2013579207903308_f64.into(), 1),
-            error: "",
-        }
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "asin-passed",
+        nullable: false,
+        columns: vec![Series::new(vec![0.2_f64]).into()],
+        expect: DataColumn::Constant(0.2013579207903308_f64.into(), 1),
+        error: "",
+    }];
 
     test_scalar_functions(TrigonometricAsinFunction::try_create_func("asin")?, &tests)
 }
 
 #[test]
 fn test_trigonometric_acos_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "acos-passed",
-            nullable: false,
-            columns: vec![Series::new(vec![1]).into()],
-            expect: DataColumn::Constant(0_f64.into(), 1),
-            error: "",
-        }
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "acos-passed",
+        nullable: false,
+        columns: vec![Series::new(vec![1]).into()],
+        expect: DataColumn::Constant(0_f64.into(), 1),
+        error: "",
+    }];
 
     test_scalar_functions(TrigonometricAcosFunction::try_create_func("acos")?, &tests)
 }
@@ -166,7 +160,10 @@ fn test_trigonometric_atan_function() -> Result<()> {
         ScalarFunctionTest {
             name: "atan-passed",
             nullable: false,
-            columns: vec![Series::new(vec![-2_f64, PI]).into(), Series::new(vec![2, 0]).into()],
+            columns: vec![
+                Series::new(vec![-2_f64, PI]).into(),
+                Series::new(vec![2, 0]).into(),
+            ],
             expect: Series::new(vec![-FRAC_PI_4, FRAC_PI_2]).into(),
             error: "",
         },
@@ -181,25 +178,37 @@ fn test_trigonometric_atan2_function() -> Result<()> {
         ScalarFunctionTest {
             name: "atan2-passed",
             nullable: false,
-            columns: vec![Series::new(vec![-2_f64, PI]).into(), Series::new(vec![2, 0]).into()],
+            columns: vec![
+                Series::new(vec![-2_f64, PI]).into(),
+                Series::new(vec![2, 0]).into(),
+            ],
             expect: Series::new(vec![-FRAC_PI_4, FRAC_PI_2]).into(),
             error: "",
         },
         ScalarFunctionTest {
             name: "atan2-y-constant-passed",
             nullable: false,
-            columns: vec![DataColumn::Constant(2.into(), 2), Series::new(vec![0_f64, 2.0]).into()],
+            columns: vec![
+                DataColumn::Constant(2.into(), 2),
+                Series::new(vec![0_f64, 2.0]).into(),
+            ],
             expect: Series::new(vec![FRAC_PI_2, FRAC_PI_4]).into(),
             error: "",
         },
         ScalarFunctionTest {
             name: "atan2-x-constant-passed",
             nullable: false,
-            columns: vec![Series::new(vec![-2_f64, 2.0]).into(), DataColumn::Constant(2.into(), 2)],
+            columns: vec![
+                Series::new(vec![-2_f64, 2.0]).into(),
+                DataColumn::Constant(2.into(), 2),
+            ],
             expect: Series::new(vec![-FRAC_PI_4, FRAC_PI_4]).into(),
             error: "",
         },
     ];
 
-    test_scalar_functions(TrigonometricAtan2Function::try_create_func("atan2")?, &tests)
+    test_scalar_functions(
+        TrigonometricAtan2Function::try_create_func("atan2")?,
+        &tests,
+    )
 }

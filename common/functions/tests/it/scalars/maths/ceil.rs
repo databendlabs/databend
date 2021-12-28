@@ -13,10 +13,11 @@
 // limitations under the License.
 
 use common_datavalues::prelude::*;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::*;
-use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
+
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_ceil_function() -> Result<()> {
@@ -82,7 +83,7 @@ fn test_ceil_function() -> Result<()> {
             nullable: false,
             columns: vec![Series::new([true]).into()],
             expect: Series::new([0_u8]).into(),
-            error: "Expected numeric types, but got Boolean"
+            error: "Expected numeric types, but got Boolean",
         },
     ];
 

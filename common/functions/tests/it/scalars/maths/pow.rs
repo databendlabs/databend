@@ -15,7 +15,9 @@
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
-use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
+
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_pow_function() -> Result<()> {

@@ -15,7 +15,9 @@
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
-use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
+
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_round_number_function() -> Result<()> {
@@ -152,13 +154,15 @@ fn test_round_number_function() -> Result<()> {
                 Series::new([
                     0.123_456_789_012_345_68_f64,
                     8888888888888888888888888888888888888888.0_f64,
-                ]).into(),
+                ])
+                .into(),
                 Series::new([35, 35]).into(),
             ],
             expect: Series::new([
                 0.123_456_789_012_345_68_f64,
                 8888888888888888888888888888888888888888.0_f64,
-            ]).into(),
+            ])
+            .into(),
             error: "",
         },
         ScalarFunctionTest {
@@ -169,14 +173,14 @@ fn test_round_number_function() -> Result<()> {
                     0.123_456_789_012_345_68_f64,
                     8888888888888888888888888888888888888888.0_f64,
                 ])
-                    .into(),
+                .into(),
                 DataColumn::Constant(DataValue::Int64(Some(35)), 1),
             ],
             expect: Series::new([
                 0.123_456_789_012_345_68_f64,
                 8888888888888888888888888888888888888888.0_f64,
             ])
-                .into(),
+            .into(),
             error: "",
         },
         ScalarFunctionTest {
@@ -187,7 +191,7 @@ fn test_round_number_function() -> Result<()> {
                     0.123_456_789_012_345_68_f64,
                     8888888888888888888888888888888888888888.0_f64,
                 ])
-                    .into(),
+                .into(),
                 Series::new([-35, -35]).into(),
             ],
             expect: Series::new([0.0, 8888888889000000000000000000000000000000.0_f64]).into(),
@@ -201,7 +205,7 @@ fn test_round_number_function() -> Result<()> {
                     0.123_456_789_012_345_68_f64,
                     8888888888888888888888888888888888888888.0_f64,
                 ])
-                    .into(),
+                .into(),
                 DataColumn::Constant(DataValue::Int64(Some(-35)), 1),
             ],
             expect: Series::new([0.0, 8888888889000000000000000000000000000000.0_f64]).into(),
@@ -289,7 +293,15 @@ fn test_trunc_number_function() -> Result<()> {
             name: "both arg are series",
             nullable: true,
             columns: vec![
-                Series::new([None, None, Some(11.11), Some(22.22), Some(33.33), Some(44.44)]).into(),
+                Series::new([
+                    None,
+                    None,
+                    Some(11.11),
+                    Some(22.22),
+                    Some(33.33),
+                    Some(44.44),
+                ])
+                .into(),
                 Series::new([None, Some(1), None, Some(0), Some(-1), Some(1)]).into(),
             ],
             expect: Series::new([None, None, None, Some(22.0), Some(30.0), Some(44.4)]).into(),

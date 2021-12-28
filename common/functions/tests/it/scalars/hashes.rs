@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::Blake3HashFunction;
@@ -22,7 +21,9 @@ use common_functions::scalars::Sha2HashFunction;
 use common_functions::scalars::SipHashFunction;
 use common_functions::scalars::XxHash32Function;
 use common_functions::scalars::XxHash64Function;
-use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
+
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_siphash_function() -> Result<()> {
@@ -36,7 +37,7 @@ fn test_siphash_function() -> Result<()> {
                 7220060526038107403,
                 4952851536318644461,
             ])
-                .into(),
+            .into(),
             error: "",
         },
         ScalarFunctionTest {
@@ -48,7 +49,7 @@ fn test_siphash_function() -> Result<()> {
                 4091451155859037844,
                 10500823559348167161,
             ])
-                .into(),
+            .into(),
             error: "",
         },
         ScalarFunctionTest {
@@ -60,7 +61,7 @@ fn test_siphash_function() -> Result<()> {
                 16336925911988107921,
                 1742378985846435984,
             ])
-                .into(),
+            .into(),
             error: "",
         },
         ScalarFunctionTest {
@@ -71,7 +72,8 @@ fn test_siphash_function() -> Result<()> {
                 2206609067086327257u64,
                 11876854719037224982,
                 2206609067086327257,
-            ]).into(),
+            ])
+            .into(),
             error: "",
         },
         ScalarFunctionTest {
@@ -83,7 +85,7 @@ fn test_siphash_function() -> Result<()> {
                 7220060526038107403,
                 4952851536318644461,
             ])
-                .into(),
+            .into(),
             error: "",
         },
         ScalarFunctionTest {
@@ -95,7 +97,7 @@ fn test_siphash_function() -> Result<()> {
                 4091451155859037844,
                 10500823559348167161,
             ])
-                .into(),
+            .into(),
             error: "",
         },
         ScalarFunctionTest {
@@ -107,7 +109,7 @@ fn test_siphash_function() -> Result<()> {
                 16336925911988107921,
                 1742378985846435984,
             ])
-                .into(),
+            .into(),
             error: "",
         },
         ScalarFunctionTest {
@@ -119,7 +121,7 @@ fn test_siphash_function() -> Result<()> {
                 11876854719037224982,
                 2206609067086327257,
             ])
-                .into(),
+            .into(),
             error: "",
         },
         ScalarFunctionTest {
@@ -131,7 +133,7 @@ fn test_siphash_function() -> Result<()> {
                 9872512741335963328,
                 729488449357906283,
             ])
-                .into(),
+            .into(),
             error: "",
         },
         ScalarFunctionTest {
@@ -143,7 +145,7 @@ fn test_siphash_function() -> Result<()> {
                 12773237290464453619,
                 13833534234735907638,
             ])
-                .into(),
+            .into(),
             error: "",
         },
     ];
@@ -272,14 +274,21 @@ fn test_blake3hash_function() -> Result<()> {
             name: "valid input",
             nullable: false,
             columns: vec![Series::new([Some("testing")]).into()],
-            expect: Series::new(["61cc98e42ded96807806bf1620e13c4e6a1b85068cad93382a2e3107c269aefe"]).into(),
+            expect: Series::new([
+                "61cc98e42ded96807806bf1620e13c4e6a1b85068cad93382a2e3107c269aefe",
+            ])
+            .into(),
             error: "",
         },
         ScalarFunctionTest {
             name: "valid input with null",
             nullable: true,
             columns: vec![Series::new([Some("testing"), None]).into()],
-            expect: Series::new([Some("61cc98e42ded96807806bf1620e13c4e6a1b85068cad93382a2e3107c269aefe"), None]).into(),
+            expect: Series::new([
+                Some("61cc98e42ded96807806bf1620e13c4e6a1b85068cad93382a2e3107c269aefe"),
+                None,
+            ])
+            .into(),
             error: "",
         },
     ];
@@ -311,11 +320,6 @@ fn test_xxhash32_function() -> Result<()> {
 
 #[test]
 fn test_xxhash64_function() -> Result<()> {
-    struct Test {
-        name: &'static str,
-        arg: DataColumnWithField,
-        expect: Result<DataColumn>,
-    }
     let tests = vec![
         ScalarFunctionTest {
             name: "valid input",

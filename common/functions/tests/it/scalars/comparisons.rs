@@ -15,149 +15,134 @@
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
-use pretty_assertions::assert_eq;
-use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
+
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_eq_comparison_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "eq-passed",
-            nullable: false,
-            columns: vec![
-                Series::new(vec![4i64, 3, 2, 4]).into(),
-                Series::new(vec![1i64, 2, 3, 4]).into(),
-            ],
-            expect: Series::new(vec![false, false, false, true]).into(),
-            error: "",
-        }
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "eq-passed",
+        nullable: false,
+        columns: vec![
+            Series::new(vec![4i64, 3, 2, 4]).into(),
+            Series::new(vec![1i64, 2, 3, 4]).into(),
+        ],
+        expect: Series::new(vec![false, false, false, true]).into(),
+        error: "",
+    }];
 
     test_scalar_functions(ComparisonEqFunction::try_create_func("")?, &tests)
 }
 
 #[test]
 fn test_gt_comparison_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "gt-passed",
-            nullable: false,
-            columns: vec![
-                Series::new(vec![4i64, 3, 2, 4]).into(),
-                Series::new(vec![1i64, 2, 3, 4]).into(),
-            ],
-            expect: Series::new(vec![true, true, false, false]).into(),
-            error: "",
-        }
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "gt-passed",
+        nullable: false,
+        columns: vec![
+            Series::new(vec![4i64, 3, 2, 4]).into(),
+            Series::new(vec![1i64, 2, 3, 4]).into(),
+        ],
+        expect: Series::new(vec![true, true, false, false]).into(),
+        error: "",
+    }];
 
     test_scalar_functions(ComparisonGtFunction::try_create_func("")?, &tests)
 }
 
-
 #[test]
 fn test_gt_eq_comparison_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "gt-eq-passed",
-            nullable: false,
-            columns: vec![
-                Series::new(vec![4i64, 3, 2, 4]).into(),
-                Series::new(vec![1i64, 2, 3, 4]).into(),
-            ],
-            expect: Series::new(vec![true, true, false, true]).into(),
-            error: "",
-        }
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "gt-eq-passed",
+        nullable: false,
+        columns: vec![
+            Series::new(vec![4i64, 3, 2, 4]).into(),
+            Series::new(vec![1i64, 2, 3, 4]).into(),
+        ],
+        expect: Series::new(vec![true, true, false, true]).into(),
+        error: "",
+    }];
 
     test_scalar_functions(ComparisonGtEqFunction::try_create_func("")?, &tests)
 }
 
 #[test]
 fn test_lt_comparison_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "lt-passed",
-            nullable: false,
-            columns: vec![
-                Series::new(vec![4i64, 3, 2, 4]).into(),
-                Series::new(vec![1i64, 2, 3, 4]).into(),
-            ],
-            expect: Series::new(vec![false, false, true, false]).into(),
-            error: "",
-        }];
+    let tests = vec![ScalarFunctionTest {
+        name: "lt-passed",
+        nullable: false,
+        columns: vec![
+            Series::new(vec![4i64, 3, 2, 4]).into(),
+            Series::new(vec![1i64, 2, 3, 4]).into(),
+        ],
+        expect: Series::new(vec![false, false, true, false]).into(),
+        error: "",
+    }];
 
     test_scalar_functions(ComparisonLtFunction::try_create_func("")?, &tests)
 }
 
 #[test]
 fn test_lt_eq_comparison_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "lt-eq-passed",
-            nullable: false,
-            columns: vec![
-                Series::new(vec![4i64, 3, 2, 4]).into(),
-                Series::new(vec![1i64, 2, 3, 4]).into(),
-            ],
-            expect: Series::new(vec![false, false, true, true]).into(),
-            error: "",
-        }
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "lt-eq-passed",
+        nullable: false,
+        columns: vec![
+            Series::new(vec![4i64, 3, 2, 4]).into(),
+            Series::new(vec![1i64, 2, 3, 4]).into(),
+        ],
+        expect: Series::new(vec![false, false, true, true]).into(),
+        error: "",
+    }];
 
     test_scalar_functions(ComparisonLtEqFunction::try_create_func("")?, &tests)
 }
 
 #[test]
 fn test_not_eq_comparison_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "not-eq-passed",
-            nullable: false,
-            columns: vec![
-                Series::new(vec![4i64, 3, 2, 4]).into(),
-                Series::new(vec![1i64, 2, 3, 4]).into(),
-            ],
-            expect: Series::new(vec![true, true, true, false]).into(),
-            error: "",
-        }
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "not-eq-passed",
+        nullable: false,
+        columns: vec![
+            Series::new(vec![4i64, 3, 2, 4]).into(),
+            Series::new(vec![1i64, 2, 3, 4]).into(),
+        ],
+        expect: Series::new(vec![true, true, true, false]).into(),
+        error: "",
+    }];
 
     test_scalar_functions(ComparisonNotEqFunction::try_create_func("")?, &tests)
 }
 
 #[test]
 fn test_like_comparison_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "like-passed",
-            nullable: false,
-            columns: vec![
-                Series::new(vec!["abc", "abd", "abe", "abf"]).into(),
-                Series::new(vec!["a%", "_b_", "abe", "a"]).into(),
-            ],
-            expect: Series::new(vec![true, true, true, false]).into(),
-            error: "",
-        }
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "like-passed",
+        nullable: false,
+        columns: vec![
+            Series::new(vec!["abc", "abd", "abe", "abf"]).into(),
+            Series::new(vec!["a%", "_b_", "abe", "a"]).into(),
+        ],
+        expect: Series::new(vec![true, true, true, false]).into(),
+        error: "",
+    }];
 
     test_scalar_functions(ComparisonLikeFunction::try_create_func("")?, &tests)
 }
 
 #[test]
 fn test_not_like_comparison_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "not-like-passed",
-            nullable: false,
-            columns: vec![
-                Series::new(vec!["abc", "abd", "abe", "abf"]).into(),
-                Series::new(vec!["a%", "_b_", "abe", "a"]).into(),
-            ],
-            expect: Series::new(vec![false, false, false, true]).into(),
-            error: "",
-        }
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "not-like-passed",
+        nullable: false,
+        columns: vec![
+            Series::new(vec!["abc", "abd", "abe", "abf"]).into(),
+            Series::new(vec!["a%", "_b_", "abe", "a"]).into(),
+        ],
+        expect: Series::new(vec![false, false, false, true]).into(),
+        error: "",
+    }];
 
     test_scalar_functions(ComparisonNotLikeFunction::try_create_func("")?, &tests)
 }

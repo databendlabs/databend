@@ -24,7 +24,7 @@ use sha2::Digest;
 
 use crate::scalars::function_factory::FunctionDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::{Function, Monotonicity};
+use crate::scalars::Function;
 
 #[derive(Clone)]
 pub struct Sha2HashFunction {

@@ -15,20 +15,19 @@
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
-use pretty_assertions::assert_eq;
-use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
+
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_database_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "database-function-passed",
-            nullable: false,
-            columns: vec![Series::new(["default"]).into(), Series::new([4]).into()],
-            expect: Series::new(["default"]).into(),
-            error: "",
-        }
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "database-function-passed",
+        nullable: false,
+        columns: vec![Series::new(["default"]).into(), Series::new([4]).into()],
+        expect: Series::new(["default"]).into(),
+        error: "",
+    }];
 
     test_scalar_functions(DatabaseFunction::try_create("database")?, &tests)
 }

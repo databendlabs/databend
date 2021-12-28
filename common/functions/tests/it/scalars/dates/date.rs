@@ -15,8 +15,9 @@
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
-use pretty_assertions::assert_eq;
-use crate::scalars::scalar_function_test::{ScalarFunctionTest, ScalarFunctionTestWithType, test_scalar_functions, test_scalar_functions_with_type};
+
+use crate::scalars::scalar_function_test::test_scalar_functions_with_type;
+use crate::scalars::scalar_function_test::ScalarFunctionTestWithType;
 
 #[test]
 fn test_round_function() -> Result<()> {
@@ -34,7 +35,7 @@ fn test_round_function() -> Result<()> {
                 )],
                 expect: Series::new(vec![1630812366u32 / r * r, 1630839682u32 / r * r]).into(),
                 error: "",
-            }
+            },
         ));
     }
 
@@ -47,20 +48,19 @@ fn test_round_function() -> Result<()> {
 
 #[test]
 fn test_to_start_of_function() -> Result<()> {
-    let test = vec![
-        ScalarFunctionTestWithType {
-            name: "test-timeSlot-now",
-            nullable: false,
-            columns: vec![
-                DataColumnWithField::new(
-                    Series::new(vec![1631705259u32]).into(),
-                    DataField::new("dummy_1", DataType::DateTime32(None), false),
-                )
-            ],
-            expect: Series::new(vec![18809u16]).into(),
-            error: "",
-        }
-    ];
+    let test = vec![ScalarFunctionTestWithType {
+        name: "test-timeSlot-now",
+        nullable: false,
+        columns: vec![DataColumnWithField::new(
+            Series::new(vec![1631705259u32]).into(),
+            DataField::new("dummy_1", DataType::DateTime32(None), false),
+        )],
+        expect: Series::new(vec![18809u16]).into(),
+        error: "",
+    }];
 
-    test_scalar_functions_with_type(ToStartOfQuarterFunction::try_create("toStartOfWeek")?, &test)
+    test_scalar_functions_with_type(
+        ToStartOfQuarterFunction::try_create("toStartOfWeek")?,
+        &test,
+    )
 }

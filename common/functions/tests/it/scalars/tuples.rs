@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataType;
 use common_exception::Result;
 use common_functions::scalars::*;
-use pretty_assertions::assert_eq;
-use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
+
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_tuple_function() -> Result<()> {
@@ -33,7 +33,10 @@ fn test_tuple_function() -> Result<()> {
             name: "more element to tuple",
             nullable: false,
             columns: vec![Series::new([0_u8]).into(), Series::new([0_u8]).into()],
-            expect: DataColumn::Constant(DataValue::Struct(vec![DataValue::UInt8(Some(0)), DataValue::UInt8(Some(0))]), 1),
+            expect: DataColumn::Constant(
+                DataValue::Struct(vec![DataValue::UInt8(Some(0)), DataValue::UInt8(Some(0))]),
+                1,
+            ),
             error: "",
         },
     ];

@@ -17,19 +17,19 @@ use std::f64::consts::PI;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
-use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
+
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_pi_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "pi-function-passed",
-            nullable: false,
-            columns: vec![],
-            expect: Series::new(vec![PI]).into(),
-            error: "",
-        }
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "pi-function-passed",
+        nullable: false,
+        columns: vec![],
+        expect: Series::new(vec![PI]).into(),
+        error: "",
+    }];
 
     test_scalar_functions(PiFunction::try_create("pi()")?, &tests)
 }

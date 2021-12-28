@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataType;
 use common_exception::Result;
 use common_functions::scalars::*;
-use pretty_assertions::assert_eq;
-use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
+
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_uuid_creator_functions() -> Result<()> {
@@ -33,15 +33,13 @@ fn test_uuid_creator_functions() -> Result<()> {
     //     error: "",
     // },
 
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "zeroUUID-passed",
-            nullable: false,
-            columns: vec![],
-            expect: Series::new(vec!["00000000-0000-0000-0000-000000000000"]).into(),
-            error: "",
-        },
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "zeroUUID-passed",
+        nullable: false,
+        columns: vec![],
+        expect: Series::new(vec!["00000000-0000-0000-0000-000000000000"]).into(),
+        error: "",
+    }];
 
     test_scalar_functions(UUIDZeroFunction::try_create("")?, &tests)
 }

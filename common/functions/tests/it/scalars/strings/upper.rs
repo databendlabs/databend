@@ -14,7 +14,9 @@
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::UpperFunction;
-use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
+
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_upper_function() -> Result<()> {
@@ -53,15 +55,13 @@ fn test_upper_function() -> Result<()> {
 
 #[test]
 fn test_upper_nullable() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "ucase-null-passed",
-            nullable: true,
-            columns: vec![Series::new(vec![Option::<Vec<u8>>::None]).into()],
-            expect: DataColumn::Constant(DataValue::String(None), 1),
-            error: "",
-        }
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "ucase-null-passed",
+        nullable: true,
+        columns: vec![Series::new(vec![Option::<Vec<u8>>::None]).into()],
+        expect: DataColumn::Constant(DataValue::String(None), 1),
+        error: "",
+    }];
 
     test_scalar_functions(UpperFunction::try_create("ucase")?, &tests)
 }

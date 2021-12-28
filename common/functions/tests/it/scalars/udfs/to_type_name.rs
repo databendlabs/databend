@@ -15,20 +15,19 @@
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
-use pretty_assertions::assert_eq;
-use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
+
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_to_type_name_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "to_type_name-example-passed",
-            nullable: false,
-            columns: vec![Series::new([true, true, true, false]).into()],
-            expect: Series::new(["Boolean", "Boolean", "Boolean", "Boolean"]).into(),
-            error: "",
-        }
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "to_type_name-example-passed",
+        nullable: false,
+        columns: vec![Series::new([true, true, true, false]).into()],
+        expect: Series::new(["Boolean", "Boolean", "Boolean", "Boolean"]).into(),
+        error: "",
+    }];
 
     test_scalar_functions(ToTypeNameFunction::try_create("toTypeName")?, &tests)
 }

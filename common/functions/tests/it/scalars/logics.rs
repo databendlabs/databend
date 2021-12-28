@@ -15,55 +15,50 @@
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
-use pretty_assertions::assert_eq;
-use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
+
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 // TODO: need test null and logic functions
 
 #[test]
 fn test_logic_and_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "and-passed",
-            nullable: false,
-            columns: vec![
-                Series::new(vec![true, true, true, false]).into(),
-                Series::new(vec![true, false, true, true]).into(),
-            ],
-            expect: Series::new(vec![true, false, true, false]).into(),
-            error: "",
-        },
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "and-passed",
+        nullable: false,
+        columns: vec![
+            Series::new(vec![true, true, true, false]).into(),
+            Series::new(vec![true, false, true, true]).into(),
+        ],
+        expect: Series::new(vec![true, false, true, false]).into(),
+        error: "",
+    }];
     test_scalar_functions(LogicAndFunction::try_create_func("")?, &tests)
 }
 
 #[test]
 fn test_logic_or_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "or-passed",
-            nullable: false,
-            columns: vec![
-                Series::new(vec![true, true, true, false]).into(),
-                Series::new(vec![true, false, true, true]).into(),
-            ],
-            expect: Series::new(vec![true, true, true, true]).into(),
-            error: "",
-        },
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "or-passed",
+        nullable: false,
+        columns: vec![
+            Series::new(vec![true, true, true, false]).into(),
+            Series::new(vec![true, false, true, true]).into(),
+        ],
+        expect: Series::new(vec![true, true, true, true]).into(),
+        error: "",
+    }];
     test_scalar_functions(LogicOrFunction::try_create_func("")?, &tests)
 }
 
 #[test]
 fn test_logic_not_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "not-passed",
-            nullable: false,
-            columns: vec![Series::new(vec![true, false]).into()],
-            expect: Series::new(vec![false, true]).into(),
-            error: "",
-        },
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "not-passed",
+        nullable: false,
+        columns: vec![Series::new(vec![true, false]).into()],
+        expect: Series::new(vec![false, true]).into(),
+        error: "",
+    }];
     test_scalar_functions(LogicNotFunction::try_create_func("")?, &tests)
 }

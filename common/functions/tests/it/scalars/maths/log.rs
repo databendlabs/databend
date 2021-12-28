@@ -18,8 +18,8 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
-use crate::scalars::helpers as test_helpers;
-use crate::scalars::scalar_function_test::{ScalarFunctionTest, test_scalar_functions};
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_log_function() -> Result<()> {
@@ -34,7 +34,10 @@ fn test_log_function() -> Result<()> {
         ScalarFunctionTest {
             name: "log-with-series",
             nullable: false,
-            columns: vec![Series::new([10, 10, 10]).into(), Series::new(["100", "1000", "10000"]).into()],
+            columns: vec![
+                Series::new([10, 10, 10]).into(),
+                Series::new(["100", "1000", "10000"]).into(),
+            ],
             expect: Series::new([2_f64, 2.9999999999999996, 4_f64]).into(),
             error: "",
         },
@@ -114,32 +117,26 @@ fn test_ln_function() -> Result<()> {
 
 #[test]
 fn test_log2_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "log2 on literal",
-            nullable: false,
-            columns: vec![Series::new([2_f64]).into()],
-            expect: DataColumn::Constant(1_f64.into(), 1),
-            error: "",
-        }
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "log2 on literal",
+        nullable: false,
+        columns: vec![Series::new([2_f64]).into()],
+        expect: DataColumn::Constant(1_f64.into(), 1),
+        error: "",
+    }];
 
     test_scalar_functions(Log2Function::try_create("log2")?, &tests)
 }
 
 #[test]
 fn test_log10_function() -> Result<()> {
-    let tests = vec![
-        ScalarFunctionTest {
-            name: "log10 on literal",
-            nullable: false,
-            columns: vec![Series::new([10_f64]).into()],
-            expect: DataColumn::Constant(1_f64.into(), 1),
-            error: "",
-        }
-    ];
+    let tests = vec![ScalarFunctionTest {
+        name: "log10 on literal",
+        nullable: false,
+        columns: vec![Series::new([10_f64]).into()],
+        expect: DataColumn::Constant(1_f64.into(), 1),
+        error: "",
+    }];
 
     test_scalar_functions(Log10Function::try_create("log10")?, &tests)
 }
-
-

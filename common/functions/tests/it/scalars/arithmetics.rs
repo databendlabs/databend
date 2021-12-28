@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::{chrono, DataTypeAndNullable};
+use common_datavalues::chrono;
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::Result;
 use common_functions::scalars::*;
-use pretty_assertions::assert_eq;
-use crate::scalars::scalar_function_test::{ScalarFunctionTest, ScalarFunctionTestWithType, test_scalar_functions, test_scalar_functions_with_type};
+
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::test_scalar_functions_with_type;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
+use crate::scalars::scalar_function_test::ScalarFunctionTestWithType;
 
 #[test]
 fn test_arithmetic_function() -> Result<()> {
@@ -36,7 +40,7 @@ fn test_arithmetic_function() -> Result<()> {
                 ],
                 expect: Series::new(vec![5i64, 5, 5, 5]).into(),
                 error: "",
-            }
+            },
         ),
         (
             ArithmeticPlusFunction::try_create_func("", &[
@@ -52,7 +56,7 @@ fn test_arithmetic_function() -> Result<()> {
                 ],
                 expect: Series::new(vec![2i64, 4, 6, 8]).into(),
                 error: "",
-            }
+            },
         ),
         (
             ArithmeticMinusFunction::try_create_func("")?,
@@ -65,7 +69,7 @@ fn test_arithmetic_function() -> Result<()> {
                 ],
                 expect: Series::new(vec![3i64, 1, -1]).into(),
                 error: "",
-            }
+            },
         ),
         (
             ArithmeticMulFunction::try_create_func("")?,
@@ -78,7 +82,7 @@ fn test_arithmetic_function() -> Result<()> {
                 ],
                 expect: Series::new(vec![4i64, 6, 6]).into(),
                 error: "",
-            }
+            },
         ),
         (
             ArithmeticDivFunction::try_create_func("")?,
@@ -91,7 +95,7 @@ fn test_arithmetic_function() -> Result<()> {
                 ],
                 expect: Series::new(vec![4.0, 1.5, 0.6666666666666666]).into(),
                 error: "",
-            }
+            },
         ),
         (
             ArithmeticModuloFunction::try_create_func("")?,
@@ -104,7 +108,7 @@ fn test_arithmetic_function() -> Result<()> {
                 ],
                 expect: Series::new(vec![0i64, 1, 2]).into(),
                 error: "",
-            }
+            },
         ),
     ];
 
@@ -143,25 +147,29 @@ fn test_arithmetic_date_interval() -> Result<()> {
                             to_seconds(2020, 2, 29, 10, 30, 00), /* 2020-2-29-10:30:00 */
                             to_seconds(2000, 1, 31, 15, 00, 00),
                         ])
-                            .into(),
+                        .into(),
                         DataField::new("dummy_1", DataType::DateTime32(None), false),
                     ),
                     DataColumnWithField::new(
                         Series::new(vec![
-                            12i64, /* 1 year */
+                            12i64,       /* 1 year */
                             20 * 12 + 1, /* 20 years and 1 month */
                         ])
-                            .into(),
-                        DataField::new("dummy_1", DataType::Interval(IntervalUnit::YearMonth), false),
+                        .into(),
+                        DataField::new(
+                            "dummy_1",
+                            DataType::Interval(IntervalUnit::YearMonth),
+                            false,
+                        ),
                     ),
                 ],
                 expect: Series::new(vec![
                     to_seconds(2021, 2, 28, 10, 30, 00), /* 2021-2-28-10:30:00 */
                     to_seconds(2020, 2, 29, 15, 00, 00),
                 ])
-                    .into(),
+                .into(),
                 error: "",
-            }
+            },
         ),
         (
             ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus)?,
@@ -174,21 +182,25 @@ fn test_arithmetic_date_interval() -> Result<()> {
                             to_seconds(2021, 2, 28, 10, 30, 00),
                             to_seconds(2020, 2, 29, 15, 00, 00),
                         ])
-                            .into(),
+                        .into(),
                         DataField::new("dummy_1", DataType::DateTime32(None), false),
                     ),
                     DataColumnWithField::new(
                         Series::new(vec![-12i64 /* -1 year */, -1 /* -1 month */]).into(),
-                        DataField::new("dummy_1", DataType::Interval(IntervalUnit::YearMonth), false),
+                        DataField::new(
+                            "dummy_1",
+                            DataType::Interval(IntervalUnit::YearMonth),
+                            false,
+                        ),
                     ),
                 ],
                 expect: Series::new(vec![
                     to_seconds(2020, 2, 28, 10, 30, 00),
                     to_seconds(2020, 1, 29, 15, 00, 00),
                 ])
-                    .into(),
+                .into(),
                 error: "",
-            }
+            },
         ),
         (
             ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus)?,
@@ -201,7 +213,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                             to_seconds(2020, 3, 1, 10, 30, 00),
                             to_seconds(2020, 3, 1, 10, 30, 00),
                         ])
-                            .into(),
+                        .into(),
                         DataField::new("dummy_1", DataType::DateTime32(None), false),
                     ),
                     DataColumnWithField::new(
@@ -209,7 +221,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                             daytime_to_ms(-1, 0, 0, 0),
                             daytime_to_ms(-1, -1, 0, 0),
                         ])
-                            .into(),
+                        .into(),
                         DataField::new("dummy_1", DataType::Interval(IntervalUnit::DayTime), false),
                     ),
                 ],
@@ -217,9 +229,9 @@ fn test_arithmetic_date_interval() -> Result<()> {
                     to_seconds(2020, 2, 29, 10, 30, 00),
                     to_seconds(2020, 2, 29, 9, 30, 00),
                 ])
-                    .into(),
+                .into(),
                 error: "",
-            }
+            },
         ),
         (
             ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Minus)?,
@@ -232,7 +244,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                             to_seconds(2020, 2, 29, 10, 30, 00),
                             to_seconds(2020, 2, 29, 9, 30, 00),
                         ])
-                            .into(),
+                        .into(),
                         DataField::new("dummy_1", DataType::DateTime32(None), false),
                     ),
                     DataColumnWithField::new(
@@ -240,7 +252,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                             daytime_to_ms(-1, 0, 0, 0),
                             daytime_to_ms(-1, -1, 0, 0),
                         ])
-                            .into(),
+                        .into(),
                         DataField::new("dummy_1", DataType::Interval(IntervalUnit::DayTime), false),
                     ),
                 ],
@@ -248,9 +260,9 @@ fn test_arithmetic_date_interval() -> Result<()> {
                     to_seconds(2020, 3, 1, 10, 30, 00),
                     to_seconds(2020, 3, 1, 10, 30, 00),
                 ])
-                    .into(),
+                .into(),
                 error: "",
-            }
+            },
         ),
         (
             ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus)?,
@@ -264,16 +276,20 @@ fn test_arithmetic_date_interval() -> Result<()> {
                     ),
                     DataColumnWithField::new(
                         Series::new(vec![
-                            12i64, /* 1 year */
+                            12i64,       /* 1 year */
                             20 * 12 + 1, /* 20 years and 1 month */
                         ])
-                            .into(),
-                        DataField::new("dummy_1", DataType::Interval(IntervalUnit::YearMonth), false),
+                        .into(),
+                        DataField::new(
+                            "dummy_1",
+                            DataType::Interval(IntervalUnit::YearMonth),
+                            false,
+                        ),
                     ),
                 ],
                 expect: Series::new(vec![to_days(2021, 2, 28), to_days(2020, 2, 29)]).into(),
                 error: "",
-            }
+            },
         ),
         (
             ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Minus)?,
@@ -287,16 +303,20 @@ fn test_arithmetic_date_interval() -> Result<()> {
                     ),
                     DataColumnWithField::new(
                         Series::new(vec![
-                            -12i64, /* - 1 year */
+                            -12i64,         /* - 1 year */
                             -(20 * 12 + 1), /* - 20 years and 1 month */
                         ])
-                            .into(),
-                        DataField::new("dummy_1", DataType::Interval(IntervalUnit::YearMonth), false),
+                        .into(),
+                        DataField::new(
+                            "dummy_1",
+                            DataType::Interval(IntervalUnit::YearMonth),
+                            false,
+                        ),
                     ),
                 ],
                 expect: Series::new(vec![to_days(2021, 2, 28), to_days(2020, 2, 29)]).into(),
                 error: "",
-            }
+            },
         ),
         (
             ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus)?,
@@ -313,13 +333,13 @@ fn test_arithmetic_date_interval() -> Result<()> {
                             daytime_to_ms(-1, 0, 0, 0),
                             daytime_to_ms(-1, -1, 0, 0),
                         ])
-                            .into(),
+                        .into(),
                         DataField::new("dummy_1", DataType::Interval(IntervalUnit::DayTime), false),
                     ),
                 ],
                 expect: Series::new(vec![to_days(2020, 2, 29), to_days(2021, 2, 28)]).into(),
                 error: "",
-            }
+            },
         ),
         (
             ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Minus)?,
@@ -332,13 +352,14 @@ fn test_arithmetic_date_interval() -> Result<()> {
                         DataField::new("dummy_1", DataType::Date32, false),
                     ),
                     DataColumnWithField::new(
-                        Series::new(vec![daytime_to_ms(1, 0, 0, 0), daytime_to_ms(1, 1, 0, 0)]).into(),
+                        Series::new(vec![daytime_to_ms(1, 0, 0, 0), daytime_to_ms(1, 1, 0, 0)])
+                            .into(),
                         DataField::new("dummy_1", DataType::Interval(IntervalUnit::DayTime), false),
                     ),
                 ],
                 expect: Series::new(vec![to_days(2020, 2, 29), to_days(2021, 2, 28)]).into(),
                 error: "",
-            }
+            },
         ),
         (
             ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus)?,
@@ -351,25 +372,29 @@ fn test_arithmetic_date_interval() -> Result<()> {
                             to_days(2020, 2, 29) as u16,
                             to_days(2000, 1, 31) as u16,
                         ])
-                            .into(),
+                        .into(),
                         DataField::new("dummy_1", DataType::Date16, false),
                     ),
                     DataColumnWithField::new(
                         Series::new(vec![
-                            12i64, /* 1 year */
+                            12i64,       /* 1 year */
                             20 * 12 + 1, /* 20 years and 1 month */
                         ])
-                            .into(),
-                        DataField::new("dummy_1", DataType::Interval(IntervalUnit::YearMonth), false),
+                        .into(),
+                        DataField::new(
+                            "dummy_1",
+                            DataType::Interval(IntervalUnit::YearMonth),
+                            false,
+                        ),
                     ),
                 ],
                 expect: Series::new(vec![
                     to_days(2021, 2, 28) as u16,
                     to_days(2020, 2, 29) as u16,
                 ])
-                    .into(),
+                .into(),
                 error: "",
-            }
+            },
         ),
         (
             ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus)?,
@@ -382,18 +407,19 @@ fn test_arithmetic_date_interval() -> Result<()> {
                             to_days(2020, 2, 29) as u16,
                             to_days(2021, 2, 28) as u16,
                         ])
-                            .into(),
+                        .into(),
                         DataField::new("dummy_1", DataType::Date16, false),
                     ),
                     DataColumnWithField::new(
-                        Series::new(vec![daytime_to_ms(1, 0, 0, 0), daytime_to_ms(1, 1, 0, 0)]).into(),
+                        Series::new(vec![daytime_to_ms(1, 0, 0, 0), daytime_to_ms(1, 1, 0, 0)])
+                            .into(),
                         DataField::new("dummy_1", DataType::Interval(IntervalUnit::DayTime), false),
                     ),
                 ],
                 expect: Series::new(vec![to_days(2020, 3, 1) as u16, to_days(2021, 3, 1) as u16])
                     .into(),
                 error: "",
-            }
+            },
         ),
     ];
 
