@@ -106,7 +106,6 @@ pub fn test_scalar_functions_with_type(
         );
         match eval(&test_function, rows_size, &test.columns, &arguments_type) {
             Ok(v) if !matches!(v.data_type(), DataType::Struct(_)) => {
-                println!("{:?} eq {:?}", v.to_values()?, test.expect.to_values()?);
                 let cmp = v.to_array()?.eq(&test.expect.to_array()?)?;
                 for s in cmp.inner() {
                     assert!(s.unwrap_or(true), "{}", test.name);
