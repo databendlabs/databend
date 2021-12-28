@@ -4447,9 +4447,9 @@ dependencies = [
 
 [[package]]
 name = "octocrab"
-version = "0.15.2"
+version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a75018d8860ac46fd66dec7005bb1dd5ef24ff12ce49d0b03ad8a5c5f3aa990"
+checksum = "ffcd640df5bcc834888f696001ab880ec1a75a5cb0d5ca46b3f1c91613ef4297"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -7123,9 +7123,9 @@ dependencies = [
 
 [[package]]
 name = "twox-hash"
-version = "1.6.1"
+version = "1.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f559b464de2e2bdabcac6a210d12e9b5a5973c251e102c44c585c71d51bd78e"
+checksum = "4ee73e6e4924fe940354b8d4d98cad5231175d615cd855b758adc658c0aac6a0"
 dependencies = [
  "cfg-if 1.0.0",
  "rand 0.8.4",
