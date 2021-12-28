@@ -4447,9 +4447,9 @@ dependencies = [
 
 [[package]]
 name = "octocrab"
-version = "0.15.2"
+version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a75018d8860ac46fd66dec7005bb1dd5ef24ff12ce49d0b03ad8a5c5f3aa990"
+checksum = "ffcd640df5bcc834888f696001ab880ec1a75a5cb0d5ca46b3f1c91613ef4297"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -5015,9 +5015,9 @@ dependencies = [
 
 [[package]]
 name = "pprof"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d47237f290398d4cfcd293fcc9dcc53cdb1f9bde65b78fcbfaafa7f8190d9e9"
+checksum = "55f35f865aa964be21fcde114cbd1cfbd9bf8a471460ed965b0f84f96c711401"
 dependencies = [
  "backtrace",
  "cfg-if 1.0.0",
@@ -5031,6 +5031,7 @@ dependencies = [
  "prost",
  "prost-build",
  "prost-derive",
+ "smallvec",
  "symbolic-demangle",
  "tempfile",
  "thiserror",
