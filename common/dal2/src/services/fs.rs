@@ -20,9 +20,12 @@ use common_exception::Result;
 use tokio;
 use tokio::io::AsyncSeekExt;
 
+use crate::ops::Delete;
+use crate::ops::Object;
 use crate::ops::Read;
 use crate::ops::ReadBuilder;
 use crate::ops::Reader;
+use crate::ops::Stat;
 use crate::ops::Write;
 use crate::ops::WriteBuilder;
 
@@ -59,7 +62,7 @@ impl<S: Send + Sync> Read<S> for Backend {
         }
 
         if args.size.is_some() {
-            f.set_len(args.size.unwrap() as u64).await?;
+            f.set_len(args.size.unwrap()).await?;
         }
 
         Ok(Box::new(f.compat()))
@@ -79,5 +82,25 @@ impl<S: Send + Sync> Write<S> for Backend {
         let s = tokio::io::copy(&mut r.compat_mut(), &mut f).await.unwrap();
 
         Ok(s as usize)
+    }
+}
+
+#[async_trait]
+impl<S: Send + Sync> Stat<S> for Backend {
+    async fn stat(&self, path: &str) -> Result<Object> {
+        let meta = tokio::fs::metadata(path).await.unwrap();
+        let o = Object {
+            path: path.to_string(),
+            size: meta.len(),
+        };
+        Ok(o)
+    }
+}
+
+#[async_trait]
+impl<S: Send + Sync> Delete<S> for Backend {
+    async fn delete(&self, path: &str) -> Result<()> {
+        tokio::fs::remove_file(path).await.unwrap();
+        Ok(())
     }
 }

@@ -15,10 +15,9 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use crate::ops::Read;
-use crate::ops::ReadBuilder;
-use crate::ops::Write;
-use crate::ops::WriteBuilder;
+use common_exception::Result;
+
+use crate::ops::*;
 
 pub struct DataAccessor<'d, S> {
     s: Arc<S>,
@@ -45,7 +44,23 @@ where S: Read<S>
 impl<'d, S> DataAccessor<'d, S>
 where S: Write<S>
 {
-    pub fn write(&self, path: &'d str, size: usize) -> WriteBuilder<S> {
+    pub fn write(&self, path: &'d str, size: u64) -> WriteBuilder<S> {
         WriteBuilder::new(self.s.clone(), path, size)
+    }
+}
+
+impl<'d, S> DataAccessor<'d, S>
+where S: Stat<S>
+{
+    pub async fn stat(&self, path: &'d str) -> Result<Object> {
+        self.s.stat(path).await
+    }
+}
+
+impl<'d, S> DataAccessor<'d, S>
+where S: Delete<S>
+{
+    pub async fn delete(&self, path: &'d str) -> Result<()> {
+        self.s.delete(path).await
     }
 }

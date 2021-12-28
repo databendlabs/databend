@@ -31,8 +31,8 @@ pub struct ReadBuilder<'p, S> {
     s: Arc<S>,
 
     pub path: &'p str,
-    pub offset: Option<usize>,
-    pub size: Option<usize>,
+    pub offset: Option<u64>,
+    pub size: Option<u64>,
 }
 
 impl<'p, S> ReadBuilder<'p, S> {
@@ -45,13 +45,13 @@ impl<'p, S> ReadBuilder<'p, S> {
         }
     }
 
-    pub fn offset(&mut self, offset: usize) -> &mut Self {
+    pub fn offset(&mut self, offset: u64) -> &mut Self {
         self.offset = Some(offset);
 
         self
     }
 
-    pub fn size(&mut self, size: usize) -> &mut Self {
+    pub fn size(&mut self, size: u64) -> &mut Self {
         self.size = Some(size);
 
         self

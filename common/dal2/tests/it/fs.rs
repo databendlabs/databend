@@ -22,4 +22,11 @@ async fn normal() {
     let mut x = f.read("/tmp/x").run().await.unwrap();
     x.read_to_end(&mut buf).await.unwrap();
     assert_eq!("Hello, world!", str::from_utf8(&buf).unwrap());
+
+    // Test stat
+    let o = f.stat("/tmp/x").await.unwrap();
+    assert_eq!(13, o.size);
+
+    // Test delete
+    f.delete("/tmp/x").await.unwrap();
 }

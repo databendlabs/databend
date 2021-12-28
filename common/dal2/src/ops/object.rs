@@ -12,18 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod delete;
-mod io;
-mod object;
-mod read;
-mod stat;
-mod write;
-
-pub use delete::Delete;
-pub use io::Reader;
-pub use object::Object;
-pub use read::Read;
-pub use read::ReadBuilder;
-pub use stat::Stat;
-pub use write::Write;
-pub use write::WriteBuilder;
+pub struct Object {
+    pub path: String,
+    pub size: u64,
+}
