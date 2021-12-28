@@ -115,10 +115,6 @@ where T: NoArgDateFunction + Clone + Sync + Send + 'static
         Ok(DataType::Date16)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
-    }
-
     fn eval(&self, _columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let value = T::execute();
         Ok(DataColumn::Constant(

@@ -18,6 +18,8 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
+use crate::scalars::helpers as test_helpers;
+
 #[test]
 fn test_log_function() -> Result<()> {
     struct Test {
@@ -199,8 +201,8 @@ fn test_log_function() -> Result<()> {
         let actual_display = format!("{}", func);
         assert_eq!(expect_display, actual_display);
 
-        let v = &(func.eval(&t.args, t.args[0].column().len())?);
-        assert_eq!(v, &t.expect, "case: {}", t.name);
+        let v = test_helpers::eval_function(&t.args, t.args[0].column().len(), func)?;
+        assert_eq!(&v, &t.expect, "case: {}", t.name);
     }
     Ok(())
 }

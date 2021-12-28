@@ -25,16 +25,19 @@ use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
+use crate::AlterUDFPlan;
 use crate::AlterUserPlan;
 use crate::CopyPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
+use crate::CreateUDFPlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
 use crate::DescribeStagePlan;
 use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
+use crate::DropUDFPlan;
 use crate::DropUserPlan;
 use crate::DropUserStagePlan;
 use crate::EmptyPlan;
@@ -49,6 +52,7 @@ use crate::InsertPlan;
 use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
+use crate::OptimizeTablePlan;
 use crate::PlanBuilder;
 use crate::PlanNode;
 use crate::ProjectionPlan;
@@ -57,8 +61,10 @@ use crate::RemotePlan;
 use crate::RevokePrivilegePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
+use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
 use crate::ShowGrantsPlan;
+use crate::ShowUDFPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -99,6 +105,7 @@ pub trait PlanRewriter {
             PlanNode::Select(plan) => self.rewrite_select(plan),
             PlanNode::Explain(plan) => self.rewrite_explain(plan),
             PlanNode::CreateTable(plan) => self.rewrite_create_table(plan),
+            PlanNode::OptimizeTable(plan) => self.rewrite_optimize_table(plan),
             PlanNode::CreateDatabase(plan) => self.rewrite_create_database(plan),
             PlanNode::UseDatabase(plan) => self.rewrite_use_database(plan),
             PlanNode::SetVariable(plan) => self.rewrite_set_variable(plan),
@@ -126,6 +133,11 @@ pub trait PlanRewriter {
             PlanNode::Sink(plan) => self.rewrite_sink(plan),
             PlanNode::ShowGrants(plan) => self.rewrite_show_grants(plan),
             PlanNode::DropUserStage(plan) => self.rewrite_drop_stage(plan),
+            PlanNode::ShowCreateDatabase(plan) => self.rewrite_show_create_database(plan),
+            PlanNode::CreateUDF(plan) => self.rewrite_create_udf(plan),
+            PlanNode::DropUDF(plan) => self.rewrite_drop_udf(plan),
+            PlanNode::ShowUDF(plan) => self.rewrite_show_udf(plan),
+            PlanNode::AlterUDF(plan) => self.rewrite_alter_udf(plan),
         }
     }
 
@@ -320,6 +332,10 @@ pub trait PlanRewriter {
         Ok(PlanNode::CreateTable(plan.clone()))
     }
 
+    fn rewrite_optimize_table(&mut self, plan: &OptimizeTablePlan) -> Result<PlanNode> {
+        Ok(PlanNode::OptimizeTable(plan.clone()))
+    }
+
     fn rewrite_create_database(&mut self, plan: &CreateDatabasePlan) -> Result<PlanNode> {
         Ok(PlanNode::CreateDatabase(plan.clone()))
     }
@@ -402,6 +418,26 @@ pub trait PlanRewriter {
 
     fn rewrite_sink(&mut self, plan: &SinkPlan) -> Result<PlanNode> {
         Ok(PlanNode::Sink(plan.clone()))
+    }
+
+    fn rewrite_show_create_database(&mut self, plan: &ShowCreateDatabasePlan) -> Result<PlanNode> {
+        Ok(PlanNode::ShowCreateDatabase(plan.clone()))
+    }
+
+    fn rewrite_create_udf(&mut self, plan: &CreateUDFPlan) -> Result<PlanNode> {
+        Ok(PlanNode::CreateUDF(plan.clone()))
+    }
+
+    fn rewrite_drop_udf(&mut self, plan: &DropUDFPlan) -> Result<PlanNode> {
+        Ok(PlanNode::DropUDF(plan.clone()))
+    }
+
+    fn rewrite_show_udf(&mut self, plan: &ShowUDFPlan) -> Result<PlanNode> {
+        Ok(PlanNode::ShowUDF(plan.clone()))
+    }
+
+    fn rewrite_alter_udf(&mut self, plan: &AlterUDFPlan) -> Result<PlanNode> {
+        Ok(PlanNode::AlterUDF(plan.clone()))
     }
 }
 

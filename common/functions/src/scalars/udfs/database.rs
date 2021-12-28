@@ -16,7 +16,7 @@ use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataSchema;
+use common_datavalues::DataField;
 use common_datavalues::DataType;
 use common_exception::Result;
 
@@ -34,8 +34,11 @@ impl DatabaseFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().context_function())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .context_function()
+                .num_arguments(1),
+        )
     }
 }
 
@@ -48,16 +51,12 @@ impl Function for DatabaseFunction {
         Ok(DataType::String)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
+    fn nullable(&self, _arg_fields: &[DataField]) -> Result<bool> {
         Ok(false)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         Ok(columns[0].column().clone())
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
     }
 }
 

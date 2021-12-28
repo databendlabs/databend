@@ -22,6 +22,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use common_tracing::tracing::Instrument;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
@@ -41,6 +42,7 @@ impl MergeProcessor {
         }
     }
 
+    #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     pub fn merge(&self) -> Result<SendableDataBlockStream> {
         let len = self.inputs.len();
         if len == 0 {
@@ -53,36 +55,39 @@ impl MergeProcessor {
         for i in 0..len {
             let processor = self.inputs[i].clone();
             let sender = sender.clone();
-            self.ctx.try_spawn(async move {
-                let mut stream = match processor.execute().await {
-                    Err(e) => {
-                        if let Err(error) = sender.send(Result::Err(e)).await {
-                            tracing::error!("Merge processor cannot push data: {}", error);
-                        }
-                        return;
-                    }
-                    Ok(stream) => stream,
-                };
-
-                while let Some(item) = stream.next().await {
-                    match item {
-                        Ok(item) => {
-                            if let Err(error) = sender.send(Ok(item)).await {
-                                // Stop pulling data
-                                tracing::error!("Merge processor cannot push data: {}", error);
-                                return;
-                            }
-                        }
-                        Err(error) => {
-                            // Stop pulling data
-                            if let Err(error) = sender.send(Err(error)).await {
+            self.ctx.try_spawn(
+                async move {
+                    let mut stream = match processor.execute().await {
+                        Err(e) => {
+                            if let Err(error) = sender.send(Result::Err(e)).await {
                                 tracing::error!("Merge processor cannot push data: {}", error);
                             }
                             return;
                         }
+                        Ok(stream) => stream,
+                    };
+
+                    while let Some(item) = stream.next().await {
+                        match item {
+                            Ok(item) => {
+                                if let Err(error) = sender.send(Ok(item)).await {
+                                    // Stop pulling data
+                                    tracing::error!("Merge processor cannot push data: {}", error);
+                                    return;
+                                }
+                            }
+                            Err(error) => {
+                                // Stop pulling data
+                                if let Err(error) = sender.send(Err(error)).await {
+                                    tracing::error!("Merge processor cannot push data: {}", error);
+                                }
+                                return;
+                            }
+                        }
                     }
                 }
-            })?;
+                .instrument(tracing::debug_span!("merge_input").or_current()),
+            )?;
         }
         Ok(Box::pin(ReceiverStream::new(receiver)))
     }
@@ -107,6 +112,7 @@ impl Processor for MergeProcessor {
         self
     }
 
+    #[tracing::instrument(level = "debug", name="merge_processor_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         match self.inputs.len() {
             1 => self.inputs[0].execute().await,

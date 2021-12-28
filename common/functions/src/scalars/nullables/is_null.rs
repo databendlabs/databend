@@ -16,7 +16,7 @@ use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataSchema;
+use common_datavalues::DataField;
 use common_datavalues::DataType;
 use common_exception::Result;
 
@@ -41,7 +41,8 @@ impl IsNullFunction {
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function("isnotnull")
-                .bool_function(),
+                .bool_function()
+                .num_arguments(1),
         )
     }
 }
@@ -51,15 +52,11 @@ impl Function for IsNullFunction {
         "IsNullFunction"
     }
 
-    fn num_arguments(&self) -> usize {
-        1
-    }
-
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(DataType::Boolean)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
+    fn nullable(&self, _arg_fields: &[DataField]) -> Result<bool> {
         Ok(false)
     }
 

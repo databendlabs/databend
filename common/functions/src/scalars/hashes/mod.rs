@@ -18,6 +18,7 @@ mod md5hash;
 mod sha1hash;
 mod sha2hash;
 mod siphash;
+mod xxhash;
 
 pub use blake3hash::Blake3HashFunction;
 pub use hash::HashesFunction;
@@ -25,3 +26,5 @@ pub use md5hash::Md5HashFunction;
 pub use sha1hash::Sha1HashFunction;
 pub use sha2hash::Sha2HashFunction;
 pub use siphash::SipHashFunction;
+pub use xxhash::XxHash32Function;
+pub use xxhash::XxHash64Function;

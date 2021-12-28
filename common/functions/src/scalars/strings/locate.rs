@@ -43,26 +43,20 @@ impl<const T: u8> LocatingFunction<T> {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+        let mut feature = FunctionFeatures::default().deterministic();
+        feature = if T == FUNC_LOCATE {
+            feature.variadic_arguments(2, 3)
+        } else {
+            feature.num_arguments(2)
+        };
+
+        FunctionDescription::creator(Box::new(Self::try_create)).features(feature)
     }
 }
 
 impl<const T: u8> Function for LocatingFunction<T> {
     fn name(&self) -> &str {
         &*self.display_name
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        if T == FUNC_LOCATE {
-            Some((2, 3))
-        } else {
-            Some((2, 2))
-        }
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
     }
 
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {

@@ -33,14 +33,6 @@ impl DropTableInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: DropTablePlan) -> Result<InterpreterPtr> {
         Ok(Arc::new(DropTableInterpreter { ctx, plan }))
     }
-
-    async fn truncate_history(&self) -> Result<()> {
-        let db_name = self.plan.db.as_str();
-        let tbl_name = self.plan.table.as_str();
-        let tbl = self.ctx.get_table(db_name, tbl_name).await?;
-        let keep_last_snapshot = false;
-        tbl.optimize(self.ctx.clone(), keep_last_snapshot).await
-    }
 }
 
 #[async_trait::async_trait]
@@ -53,10 +45,20 @@ impl Interpreter for DropTableInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        // potential errs of truncate_history are ignored
-        let _ = self.truncate_history().await;
+        let db_name = self.plan.db.as_str();
+        let tbl_name = self.plan.table.as_str();
+        let tbl = self.ctx.get_table(db_name, tbl_name).await.ok();
+
         let catalog = self.ctx.get_catalog();
         catalog.drop_table(self.plan.clone().into()).await?;
+
+        // `drop_table` throws several types of exceptions
+        // thus `optimize` operation is executed after it.
+        if let Some(tbl) = tbl {
+            let keep_last_snapshot = false;
+            tbl.optimize(self.ctx.clone(), keep_last_snapshot).await?;
+        }
+
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),
             None,

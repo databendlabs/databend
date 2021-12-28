@@ -24,24 +24,32 @@ use common_meta_types::StageParams;
 use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
+use common_planners::Optimization;
+use databend_query::sql::statements::DfAlterUDF;
 use databend_query::sql::statements::DfAlterUser;
 use databend_query::sql::statements::DfCopy;
 use databend_query::sql::statements::DfCreateDatabase;
 use databend_query::sql::statements::DfCreateStage;
 use databend_query::sql::statements::DfCreateTable;
+use databend_query::sql::statements::DfCreateUDF;
 use databend_query::sql::statements::DfCreateUser;
 use databend_query::sql::statements::DfDescribeTable;
 use databend_query::sql::statements::DfDropDatabase;
 use databend_query::sql::statements::DfDropStage;
 use databend_query::sql::statements::DfDropTable;
+use databend_query::sql::statements::DfDropUDF;
 use databend_query::sql::statements::DfDropUser;
 use databend_query::sql::statements::DfGrantObject;
 use databend_query::sql::statements::DfGrantStatement;
+use databend_query::sql::statements::DfOptimizeTable;
 use databend_query::sql::statements::DfQueryStatement;
 use databend_query::sql::statements::DfRevokeStatement;
+use databend_query::sql::statements::DfShowCreateDatabase;
+use databend_query::sql::statements::DfShowCreateTable;
 use databend_query::sql::statements::DfShowDatabases;
 use databend_query::sql::statements::DfShowGrants;
 use databend_query::sql::statements::DfShowTables;
+use databend_query::sql::statements::DfShowUDF;
 use databend_query::sql::statements::DfTruncateTable;
 use databend_query::sql::statements::DfUseDatabase;
 use databend_query::sql::*;
@@ -169,12 +177,12 @@ fn drop_database() -> Result<()> {
 #[test]
 fn create_table() -> Result<()> {
     // positive case
-    let sql = "CREATE TABLE t(c1 int) ENGINE = CSV location = '/data/33.csv' ";
+    let sql = "CREATE TABLE t(c1 int) ENGINE = Fuse location = '/data/33.csv' ";
     let expected = DfStatement::CreateTable(DfCreateTable {
         if_not_exists: false,
         name: ObjectName(vec![Ident::new("t")]),
         columns: vec![make_column_def("c1", DataType::Int(None))],
-        engine: "CSV".to_string(),
+        engine: "Fuse".to_string(),
         options: maplit::hashmap! {"location".into() => "/data/33.csv".into()},
         like: None,
         query: None,
@@ -182,7 +190,7 @@ fn create_table() -> Result<()> {
     expect_parse_ok(sql, expected)?;
 
     // positive case: it is ok for parquet files not to have columns specified
-    let sql = "CREATE TABLE t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Parquet location = 'foo.parquet' comment = 'foo'";
+    let sql = "CREATE TABLE t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Fuse location = 'foo.parquet' comment = 'foo'";
     let expected = DfStatement::CreateTable(DfCreateTable {
         if_not_exists: false,
         name: ObjectName(vec![Ident::new("t")]),
@@ -191,7 +199,7 @@ fn create_table() -> Result<()> {
             make_column_def("c2", DataType::BigInt(None)),
             make_column_def("c3", DataType::Varchar(Some(255))),
         ],
-        engine: "Parquet".to_string(),
+        engine: "Fuse".to_string(),
 
         options: maplit::hashmap! {
             "location".into() => "foo.parquet".into(),
@@ -263,6 +271,7 @@ fn drop_table() -> Result<()> {
         });
         expect_parse_ok(sql, expected)?;
     }
+
     {
         let sql = "DROP TABLE IF EXISTS t1";
         let expected = DfStatement::DropTable(DfDropTable {
@@ -453,6 +462,16 @@ fn truncate_table() -> Result<()> {
         let sql = "TRUNCATE TABLE t1";
         let expected = DfStatement::TruncateTable(DfTruncateTable {
             name: ObjectName(vec![Ident::new("t1")]),
+            purge: false,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        let sql = "TRUNCATE TABLE t1 purge";
+        let expected = DfStatement::TruncateTable(DfTruncateTable {
+            name: ObjectName(vec![Ident::new("t1")]),
+            purge: true,
         });
         expect_parse_ok(sql, expected)?;
     }
@@ -603,6 +622,25 @@ fn show_databases_test() -> Result<()> {
                     ))),
                 }),
             }),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn show_create_test() -> Result<()> {
+    expect_parse_ok(
+        "SHOW CREATE TABLE test",
+        DfStatement::ShowCreateTable(DfShowCreateTable {
+            name: ObjectName(vec![Ident::new("test")]),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "SHOW CREATE DATABASE test",
+        DfStatement::ShowCreateDatabase(DfShowCreateDatabase {
+            name: ObjectName(vec![Ident::new("test")]),
         }),
     )?;
 
@@ -992,6 +1030,23 @@ fn grant_privilege_test() -> Result<()> {
         }),
     )?;
 
+    expect_parse_ok(
+        "GRANT CREATE USER, CREATE ROLE, CREATE, SELECT ON * TO 'test'@'localhost'",
+        DfStatement::GrantPrivilege(DfGrantStatement {
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            on: DfGrantObject::Database(None),
+            priv_types: {
+                let mut privileges = UserPrivilegeSet::empty();
+                privileges.set_privilege(UserPrivilegeType::Create);
+                privileges.set_privilege(UserPrivilegeType::CreateUser);
+                privileges.set_privilege(UserPrivilegeType::CreateRole);
+                privileges.set_privilege(UserPrivilegeType::Select);
+                privileges
+            },
+        }),
+    )?;
+
     expect_parse_err(
         "GRANT TEST, ON * TO 'test'@'localhost'",
         String::from("sql parser error: Expected privilege type, found: TEST"),
@@ -1194,6 +1249,74 @@ fn create_table_select() -> Result<()> {
 }
 
 #[test]
+fn optimize_table() -> Result<()> {
+    {
+        let sql = "optimize TABLE t1";
+        let expected = DfStatement::OptimizeTable(DfOptimizeTable {
+            name: ObjectName(vec![Ident::new("t1")]),
+            operation: Optimization::PURGE,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        let sql = "OPTIMIZE tABLE t1";
+        let expected = DfStatement::OptimizeTable(DfOptimizeTable {
+            name: ObjectName(vec![Ident::new("t1")]),
+            operation: Optimization::PURGE,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        let sql = "optimize TABLE t1 purge";
+        let expected = DfStatement::OptimizeTable(DfOptimizeTable {
+            name: ObjectName(vec![Ident::new("t1")]),
+            operation: Optimization::PURGE,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        let sql = "optimize TABLE t1 compact";
+        let expected = DfStatement::OptimizeTable(DfOptimizeTable {
+            name: ObjectName(vec![Ident::new("t1")]),
+            operation: Optimization::COMPACT,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        let sql = "optimize TABLE t1 all";
+        let expected = DfStatement::OptimizeTable(DfOptimizeTable {
+            name: ObjectName(vec![Ident::new("t1")]),
+            operation: Optimization::ALL,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        let sql = "optimize TABLE t1 unacceptable";
+        expect_parse_err(
+            sql,
+            "sql parser error: Expected one of PURGE, COMPACT, ALL, found: unacceptable"
+                .to_string(),
+        )?;
+    }
+
+    {
+        let sql = "optimize TABLE t1 (";
+        expect_parse_err(
+            sql,
+            "sql parser error: Expected Nothing, or one of PURGE, COMPACT, ALL, found: ("
+                .to_string(),
+        )?;
+    }
+
+    Ok(())
+}
+
+#[test]
 fn drop_stage_test() -> Result<()> {
     expect_parse_ok(
         "DROP STAGE test_stage",
@@ -1208,6 +1331,97 @@ fn drop_stage_test() -> Result<()> {
         DfStatement::DropStage(DfDropStage {
             if_exists: true,
             stage_name: "test_stage".to_string(),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_create_udf() -> Result<()> {
+    expect_parse_ok(
+        "CREATE FUNCTION test_udf='not(isnotnull(@0))'",
+        DfStatement::CreateUDF(DfCreateUDF {
+            if_not_exists: false,
+            udf_name: "test_udf".to_string(),
+            definition: "not(isnotnull(@0))".to_string(),
+            description: "".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE FUNCTION test_udf='not(isnotnull(@0))' desc='This is a description'",
+        DfStatement::CreateUDF(DfCreateUDF {
+            if_not_exists: false,
+            udf_name: "test_udf".to_string(),
+            definition: "not(isnotnull(@0))".to_string(),
+            description: "This is a description".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE FUNCTION IF NOT EXISTS test_udf='not(isnotnull(@0))' desc='This is a description'",
+        DfStatement::CreateUDF(DfCreateUDF {
+            if_not_exists: true,
+            udf_name: "test_udf".to_string(),
+            definition: "not(isnotnull(@0))".to_string(),
+            description: "This is a description".to_string(),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_drop_udf() -> Result<()> {
+    expect_parse_ok(
+        "DROP FUNCTION test_udf",
+        DfStatement::DropUDF(DfDropUDF {
+            if_exists: false,
+            udf_name: "test_udf".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "DROP FUNCTION IF EXISTS test_udf",
+        DfStatement::DropUDF(DfDropUDF {
+            if_exists: true,
+            udf_name: "test_udf".to_string(),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_show_udf() -> Result<()> {
+    expect_parse_ok(
+        "SHOW FUNCTION test_udf",
+        DfStatement::ShowUDF(DfShowUDF {
+            udf_name: "test_udf".to_string(),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_alter_udf() -> Result<()> {
+    expect_parse_ok(
+        "ALTER FUNCTION test_udf='not(isnotnull(@0))'",
+        DfStatement::AlterUDF(DfAlterUDF {
+            udf_name: "test_udf".to_string(),
+            definition: "not(isnotnull(@0))".to_string(),
+            description: "".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "ALTER FUNCTION test_udf='not(isnotnull(@0))' desc='This is a description'",
+        DfStatement::AlterUDF(DfAlterUDF {
+            udf_name: "test_udf".to_string(),
+            definition: "not(isnotnull(@0))".to_string(),
+            description: "This is a description".to_string(),
         }),
     )?;
 

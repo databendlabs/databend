@@ -230,14 +230,13 @@ where
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
-        let writer = BufMut::writer(writer);
-        bincode::serialize_into(writer, state)?;
-        Ok(())
+        serialize_into_buf(writer, state)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
-        *state = bincode::deserialize_from(reader)?;
+        *state = deserialize_from_slice(reader)?;
+
         Ok(())
     }
 

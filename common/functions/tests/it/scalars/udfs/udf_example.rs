@@ -65,7 +65,7 @@ fn test_udf_example_function() -> Result<()> {
 
         // Nullable check.
         let expect_null = t.nullable;
-        let actual_null = func.nullable(&schema)?;
+        let actual_null = func.nullable(schema.fields())?;
         assert_eq!(expect_null, actual_null);
 
         let columns = vec![];

@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataSchema;
+use common_datavalues::DataField;
 use common_datavalues::DataType;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
@@ -41,17 +41,13 @@ impl SleepFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default())
+            .features(FunctionFeatures::default().num_arguments(1))
     }
 }
 
 impl Function for SleepFunction {
     fn name(&self) -> &str {
         "SleepFunction"
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
@@ -65,7 +61,7 @@ impl Function for SleepFunction {
         Ok(DataType::UInt8)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
+    fn nullable(&self, _arg_fields: &[DataField]) -> Result<bool> {
         Ok(false)
     }
 

@@ -79,6 +79,7 @@ impl Processor for AggregatorFinalTransform {
         self
     }
 
+    #[tracing::instrument(level = "debug", name = "aggregator_final_execute", skip(self))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!("execute...");
 

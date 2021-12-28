@@ -9,5 +9,8 @@ SELECT number%3 as c1 FROM numbers_mt(10) where number > 2 group by number%3 ord
 SELECT count(*), name FROM system.credits WHERE name='ahash' GROUP BY name;
 SELECT count(1), name FROM system.credits WHERE name='ahash' GROUP BY name;
 
-SELECT 'NOT in GROUP BY function check';
+-- SELECT 'NOT in GROUP BY function check';
 -- SELECT number%3 as c1, number as c2 FROM numbers_mt(10) where number > 2 group by c1 order by c1;
+
+SELECT 'GROUP BY Strings';
+SELECT a,b,count() from (SELECT cast((number%4) AS bigint) as a, cast((number%20) AS bigint) as b from numbers(100)) group by a,b order by a,b limit 3 ;

@@ -18,7 +18,6 @@ use common_arrow::arrow::array::Array;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::prelude::*;
-use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -41,7 +40,7 @@ impl RunningDifferenceFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default())
+            .features(FunctionFeatures::default().num_arguments(1))
     }
 }
 
@@ -67,10 +66,6 @@ impl Function for RunningDifferenceFunction {
         }
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
-    }
-
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         match columns[0].data_type() {
             DataType::Int8 => compute_i8(columns[0].column(), input_rows),
@@ -91,10 +86,6 @@ impl Function for RunningDifferenceFunction {
                     columns[0].field().name(),
                 ))),
         }
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
     }
 }
 

@@ -50,6 +50,13 @@ pub enum DataType {
     /// Option<String> indicates the timezone, if it's None, it's UTC
     DateTime32(Option<String>),
 
+    /// A 64-bit datetime representing the elapsed time since UNIX epoch (1970-01-01)
+    /// in nanoseconds, it's physical type is UInt64
+    /// The time resolution is determined by the precision parameter, range from 0 to 9
+    /// Typically are used - 3 (milliseconds), 6 (microseconds), 9 (nanoseconds)
+    /// Option<String> indicates the timezone, if it's None, it's UTC
+    DateTime64(u32, Option<String>),
+
     Interval(IntervalUnit),
 
     List(Box<DataField>),
@@ -134,7 +141,10 @@ impl DataType {
     pub fn is_date_or_date_time(&self) -> bool {
         matches!(
             self,
-            DataType::Date16 | DataType::Date32 | DataType::DateTime32(_)
+            DataType::Date16
+                | DataType::Date32
+                | DataType::DateTime32(_)
+                | DataType::DateTime64(_, _),
         )
     }
 
@@ -200,6 +210,7 @@ impl DataType {
             Date32 => ArrowDataType::Int32,
             // we don't use DataType::Extension because extension types are not supported in parquet
             DateTime32(_) => ArrowDataType::UInt32,
+            DateTime64(_, _) => ArrowDataType::UInt64,
             List(dt) => ArrowDataType::LargeList(Box::new(dt.to_arrow())),
             Struct(fs) => {
                 let arrows_fields = fs.iter().map(|f| f.to_arrow()).collect();
@@ -248,6 +259,7 @@ impl From<&ArrowDataType> for DataType {
                 "Date16" => DataType::Date16,
                 "Date32" => DataType::Date32,
                 "DateTime32" => DataType::DateTime32(extra.clone()),
+                "DateTime64" => DataType::DateTime64(3, extra.clone()),
                 _ => unimplemented!("data_type: {}", dt),
             },
 
@@ -294,6 +306,13 @@ impl fmt::Debug for DataType {
                     write!(f, "DateTime32({:?})", tz)
                 } else {
                     write!(f, "DateTime32")
+                }
+            }
+            Self::DateTime64(arg0, arg1) => {
+                if let Some(tz) = arg1 {
+                    write!(f, "DateTime64({:?}, {:?})", arg0, tz)
+                } else {
+                    write!(f, "DateTime64({:?})", arg0)
                 }
             }
             Self::List(arg0) => f.debug_tuple("List").field(arg0).finish(),

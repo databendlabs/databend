@@ -56,17 +56,13 @@ impl<T: StringOperator> String2StringFunction<T> {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
 impl<T: StringOperator> Function for String2StringFunction<T> {
     fn name(&self) -> &str {
         &self.display_name
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
@@ -80,8 +76,14 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
         Ok(DataType::String)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
+    fn nullable(&self, arg_fields: &[DataField]) -> Result<bool> {
+        let op = T::default();
+        if op.may_turn_to_null() {
+            // decode base64 may return Null
+            return Ok(true);
+        }
+        let nullable = arg_fields.iter().any(|field| field.is_nullable());
+        Ok(nullable)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

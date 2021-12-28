@@ -35,8 +35,11 @@ impl ConcatWsFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(2, 1024),
+        )
     }
 
     fn concat_column_with_seperator(
@@ -179,12 +182,10 @@ impl Function for ConcatWsFunction {
         Ok(DataType::String)
     }
 
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((2, 1024))
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
+    // concat_ws(NULL, "a", "b") -> NULL
+    // concat_ws(",", NULL, NULL) -> ""
+    fn nullable(&self, arg_fields: &[DataField]) -> Result<bool> {
+        Ok(arg_fields[0].is_nullable())
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
@@ -196,6 +197,10 @@ impl Function for ConcatWsFunction {
         let acc = DataColumn::Constant(DataValue::String(Some(Vec::new())), input_rows);
         let result = Self::concat_column_with_seperator(seperator.column(), acc, &columns[1..])?;
         Ok(result)
+    }
+
+    fn passthrough_null(&self) -> bool {
+        false
     }
 }
 

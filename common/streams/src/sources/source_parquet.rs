@@ -28,6 +28,9 @@ use common_datavalues::series::IntoSeries;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_tracing::tracing;
+use common_tracing::tracing::debug_span;
+use common_tracing::tracing::Instrument;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
@@ -68,6 +71,7 @@ impl ParquetSource {
 
 #[async_trait]
 impl Source for ParquetSource {
+    #[tracing::instrument(level = "debug", skip_all)]
     async fn read(&mut self) -> Result<Option<DataBlock>> {
         let metadata = match self.metadata.clone() {
             Some(m) => m,
@@ -76,6 +80,7 @@ impl Source for ParquetSource {
                     .data_accessor
                     .get_input_stream(self.path.as_str(), None)?;
                 let m = read_metadata_async(&mut reader)
+                    .instrument(debug_span!("parquet_source_read_meta"))
                     .await
                     .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
                 self.metadata = Some(m.clone());
@@ -107,15 +112,20 @@ impl Source for ParquetSource {
                 // TODO cache block column
                 let col_pages =
                     get_page_stream(&col_meta, &mut reader, vec![], Arc::new(|_, _| true))
+                        .instrument(debug_span!("parquet_source_get_column_page"))
                         .await
                         .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-                let pages =
-                    col_pages.map(|compressed_page| decompress(compressed_page?, &mut vec![]));
-                let array =
-                    page_stream_to_array(pages, &col_meta, fields[idx].data_type.clone()).await?;
+                let pages = col_pages.map(|compressed_page| {
+                    debug_span!("parquet_source_decompress_page")
+                        .in_scope(|| decompress(compressed_page?, &mut vec![]))
+                });
+                let array = page_stream_to_array(pages, &col_meta, fields[idx].data_type.clone())
+                    .instrument(debug_span!("parquet_source_page_stream_to_array"))
+                    .await?;
                 let array: Arc<dyn common_arrow::arrow::array::Array> = array.into();
                 Ok::<_, ErrorCode>(DataColumn::Array(array.into_series()))
             }
+            .instrument(debug_span!("parquet_source_read_column").or_current())
         });
 
         // TODO configuration of the buffer size

@@ -20,7 +20,8 @@ Once the code been merged, your name will be stoned in the `system.contributors`
 ## Contributing
 
 To contribute to Databend, ensure that you have the latest version of the codebase, run the following:
-```
+
+```shell
 $ git clone https://github.com/datafuselabs/databend
 $ cd databend
 $ make setup

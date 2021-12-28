@@ -16,7 +16,7 @@ use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataSchema;
+use common_datavalues::DataField;
 use common_datavalues::DataType;
 use common_exception::Result;
 use dyn_clone::DynClone;
@@ -24,17 +24,8 @@ use dyn_clone::DynClone;
 use crate::scalars::Monotonicity;
 
 pub trait Function: fmt::Display + Sync + Send + DynClone {
+    /// Returns the name of the function, should be unique.
     fn name(&self) -> &str;
-
-    fn num_arguments(&self) -> usize {
-        0
-    }
-
-    // (1, 2) means we only accept [1, 2] arguments
-    // None means it's not variadic function
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        None
-    }
 
     /// Calculate the monotonicity from arguments' monotonicity information.
     /// The input should be argument's monotonicity. For binary function it should be an
@@ -46,9 +37,30 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
         Ok(Monotonicity::default())
     }
 
+    /// The method returns the return_type of this function.
     fn return_type(&self, args: &[DataType]) -> Result<DataType>;
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool>;
-    fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn>;
+
+    /// Whether the function may return null.
+    /// The default implementation checks if any nullable input exists and returns true if exist; otherwise false.
+    fn nullable(&self, arg_fields: &[DataField]) -> Result<bool> {
+        let any_input_nullable = arg_fields.iter().any(|field| field.is_nullable());
+        Ok(any_input_nullable)
+    }
+
+    /// Evaluate the function, e.g. run/execute the function.
+    fn eval(&self, _columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn>;
+
+    /// Whether the function passes through null input.
+    /// Return true is the function just return null with any given null input.
+    /// Return false if the function may return non-null with null input.
+    ///
+    /// For example, arithmetic plus('+') will output null for any null input, like '12 + null = null'.
+    /// It has no idea of how to handle null, but just pass through.
+    ///
+    /// While ISNULL function  treats null input as a valid one. For example ISNULL(NULL, 'test') will return 'test'.
+    fn passthrough_null(&self) -> bool {
+        true
+    }
 }
 
 dyn_clone::clone_trait_object!(Function);

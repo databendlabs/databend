@@ -76,6 +76,7 @@ async fn test_null_table() -> Result<()> {
         let truncate_plan = TruncateTablePlan {
             db: "default".to_string(),
             table: "a".to_string(),
+            purge: false,
         };
         table.truncate(ctx, truncate_plan).await?;
     }

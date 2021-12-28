@@ -29,6 +29,7 @@ use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use common_planners::ExplainType;
+use common_planners::Optimization;
 use metrics::histogram;
 use serde::Deserialize;
 use sqlparser::ast::BinaryOperator;
@@ -52,25 +53,29 @@ use sqlparser::tokenizer::Word;
 
 use super::statements::DfCopy;
 use super::statements::DfDescribeStage;
+use crate::sql::statements::DfAlterUDF;
 use crate::sql::statements::DfAlterUser;
-use crate::sql::statements::DfCompactTable;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfCreateStage;
 use crate::sql::statements::DfCreateTable;
+use crate::sql::statements::DfCreateUDF;
 use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropDatabase;
 use crate::sql::statements::DfDropStage;
 use crate::sql::statements::DfDropTable;
+use crate::sql::statements::DfDropUDF;
 use crate::sql::statements::DfDropUser;
 use crate::sql::statements::DfExplain;
 use crate::sql::statements::DfGrantObject;
 use crate::sql::statements::DfGrantStatement;
 use crate::sql::statements::DfInsertStatement;
 use crate::sql::statements::DfKillStatement;
+use crate::sql::statements::DfOptimizeTable;
 use crate::sql::statements::DfQueryStatement;
 use crate::sql::statements::DfRevokeStatement;
 use crate::sql::statements::DfSetVariable;
+use crate::sql::statements::DfShowCreateDatabase;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfShowDatabases;
 use crate::sql::statements::DfShowFunctions;
@@ -79,6 +84,7 @@ use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
 use crate::sql::statements::DfShowSettings;
 use crate::sql::statements::DfShowTables;
+use crate::sql::statements::DfShowUDF;
 use crate::sql::statements::DfShowUsers;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
@@ -220,6 +226,8 @@ impl<'a> DfParser<'a> {
                             self.parse_show_grants()
                         } else if self.consume_token("FUNCTIONS") {
                             self.parse_show_functions()
+                        } else if self.consume_token("FUNCTION") {
+                            self.parse_show_udf()
                         } else {
                             self.expected("tables or settings", self.parser.peek_token())
                         }
@@ -244,7 +252,7 @@ impl<'a> DfParser<'a> {
                         // Use database
                         "USE" => self.parse_use_database(),
                         "KILL" => self.parse_kill_query(),
-                        "COMPACT" => self.parse_compact(),
+                        "OPTIMIZE" => self.parse_optimize(),
                         _ => self.expected("Keyword", self.parser.peek_token()),
                     },
                     _ => self.expected("an SQL statement", Token::Word(w)),
@@ -532,6 +540,7 @@ impl<'a> DfParser<'a> {
                         Keyword::TABLE => self.parse_create_table(),
                         Keyword::DATABASE => self.parse_create_database(),
                         Keyword::USER => self.parse_create_user(),
+                        Keyword::FUNCTION => self.parse_create_udf(),
                         _ => self.expected("create statement", Token::Word(w)),
                     }
                 }
@@ -544,7 +553,8 @@ impl<'a> DfParser<'a> {
         match self.parser.next_token() {
             Token::Word(w) => match w.keyword {
                 Keyword::USER => self.parse_alter_user(),
-                _ => self.expected("alter statement", Token::Word(w)),
+                Keyword::FUNCTION => self.parse_alter_udf(),
+                _ => self.expected("keyword USER or FUNCTION", Token::Word(w)),
             },
             unexpected => self.expected("alter statement", unexpected),
         }
@@ -592,6 +602,7 @@ impl<'a> DfParser<'a> {
                         Keyword::DATABASE => self.parse_drop_database(),
                         Keyword::TABLE => self.parse_drop_table(),
                         Keyword::USER => self.parse_drop_user(),
+                        Keyword::FUNCTION => self.parse_drop_udf(),
                         _ => self.expected("drop statement", Token::Word(w)),
                     }
                 }
@@ -843,6 +854,68 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::DropStage(drop))
     }
 
+    fn parse_create_udf(&mut self) -> Result<DfStatement, ParserError> {
+        let if_not_exists =
+            self.parser
+                .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
+        let udf_name = self.parser.parse_literal_string()?;
+        self.parser.expect_token(&Token::Eq)?;
+        // TODO verify the definition as a legal expr
+        let definition = self.parser.parse_literal_string()?;
+        let description = if self.consume_token("DESC") {
+            self.parser.expect_token(&Token::Eq)?;
+            self.parser.parse_literal_string()?
+        } else {
+            String::from("")
+        };
+        let create_udf = DfCreateUDF {
+            if_not_exists,
+            udf_name,
+            definition,
+            description,
+        };
+
+        Ok(DfStatement::CreateUDF(create_udf))
+    }
+
+    fn parse_alter_udf(&mut self) -> Result<DfStatement, ParserError> {
+        let udf_name = self.parser.parse_literal_string()?;
+        self.parser.expect_token(&Token::Eq)?;
+        // TODO verify the definition as a legal expr
+        let definition = self.parser.parse_literal_string()?;
+        let description = if self.consume_token("DESC") {
+            self.parser.expect_token(&Token::Eq)?;
+            self.parser.parse_literal_string()?
+        } else {
+            String::from("")
+        };
+        let update_udf = DfAlterUDF {
+            udf_name,
+            definition,
+            description,
+        };
+
+        Ok(DfStatement::AlterUDF(update_udf))
+    }
+
+    fn parse_drop_udf(&mut self) -> Result<DfStatement, ParserError> {
+        let if_exists = self.parser.parse_keywords(&[Keyword::IF, Keyword::EXISTS]);
+        let udf_name = self.parser.parse_literal_string()?;
+
+        let drop_udf = DfDropUDF {
+            if_exists,
+            udf_name,
+        };
+        Ok(DfStatement::DropUDF(drop_udf))
+    }
+
+    fn parse_show_udf(&mut self) -> Result<DfStatement, ParserError> {
+        let udf_name = self.parser.parse_literal_string()?;
+        let show_udf = DfShowUDF { udf_name };
+
+        Ok(DfStatement::ShowUDF(show_udf))
+    }
+
     fn parse_create_table(&mut self) -> Result<DfStatement, ParserError> {
         let if_not_exists =
             self.parser
@@ -930,6 +1003,12 @@ impl<'a> DfParser<'a> {
                     let show_create_table = DfShowCreateTable { name: table_name };
                     Ok(DfStatement::ShowCreateTable(show_create_table))
                 }
+                Keyword::DATABASE => {
+                    let db_name = self.parser.parse_object_name()?;
+
+                    let show_create_database = DfShowCreateDatabase { name: db_name };
+                    Ok(DfStatement::ShowCreateDatabase(show_create_database))
+                }
                 _ => self.expected("show create statement", Token::Word(w)),
             },
             unexpected => self.expected("show create statement", unexpected),
@@ -957,8 +1036,12 @@ impl<'a> DfParser<'a> {
             Token::Word(w) => match w.keyword {
                 Keyword::TABLE => {
                     let table_name = self.parser.parse_object_name()?;
-                    let trunc = DfTruncateTable { name: table_name };
-                    Ok(DfStatement::TruncateTable(trunc))
+                    let purge = self.parser.parse_keyword(Keyword::PURGE);
+                    let statement = DfTruncateTable {
+                        name: table_name,
+                        purge,
+                    };
+                    Ok(DfStatement::TruncateTable(statement))
                 }
                 _ => self.expected("truncate statement", Token::Word(w)),
             },
@@ -972,10 +1055,24 @@ impl<'a> DfParser<'a> {
             match self.parser.next_token() {
                 Token::Word(w) => match w.keyword {
                     // Keyword::USAGE => privileges.set_privilege(UserPrivilegeType::Usage),
-                    Keyword::CREATE => privileges.set_privilege(UserPrivilegeType::Create),
+                    Keyword::CREATE => {
+                        if self.consume_token("USER") {
+                            privileges.set_privilege(UserPrivilegeType::CreateUser)
+                        } else if self.consume_token("ROLE") {
+                            privileges.set_privilege(UserPrivilegeType::CreateRole)
+                        } else {
+                            privileges.set_privilege(UserPrivilegeType::Create)
+                        }
+                    }
+                    Keyword::DROP => privileges.set_privilege(UserPrivilegeType::Drop),
+                    Keyword::ALTER => privileges.set_privilege(UserPrivilegeType::Alter),
                     Keyword::SELECT => privileges.set_privilege(UserPrivilegeType::Select),
                     Keyword::INSERT => privileges.set_privilege(UserPrivilegeType::Insert),
-                    Keyword::SET => privileges.set_privilege(UserPrivilegeType::Set),
+                    Keyword::UPDATE => privileges.set_privilege(UserPrivilegeType::Update),
+                    Keyword::DELETE => privileges.set_privilege(UserPrivilegeType::Delete),
+                    // TODO: uncomment this after sqlparser-rs accepts the SUPER keyword
+                    // Keyword::SUPER => privileges.set_privilege(UserPrivilegeType::Super)
+                    Keyword::GRANT => privileges.set_privilege(UserPrivilegeType::Grant),
                     Keyword::ALL => {
                         privileges.set_all_privileges();
                         // GRANT ALL [PRIVILEGES]
@@ -1127,19 +1224,28 @@ impl<'a> DfParser<'a> {
         Ok(options)
     }
 
-    fn parse_compact(&mut self) -> Result<DfStatement, ParserError> {
-        self.parser.next_token();
-        match self.parser.next_token() {
+    fn parse_optimize(&mut self) -> Result<DfStatement, ParserError> {
+        // syntax: "optimize TABLE t [purge | compact | all]",  default action is "purge"
+        self.expect_token("OPTIMIZE")?;
+        self.parser.expect_keyword(Keyword::TABLE)?;
+        let object_name = self.parser.parse_object_name()?;
+        let operation = match self.parser.next_token() {
+            Token::EOF => Ok(Optimization::PURGE),
             Token::Word(w) => match w.keyword {
-                Keyword::TABLE => {
-                    let table_name = self.parser.parse_object_name()?;
-                    let compact = DfCompactTable { name: table_name };
-                    Ok(DfStatement::CompactTable(compact))
+                Keyword::ALL => Ok(Optimization::ALL),
+                Keyword::PURGE => Ok(Optimization::PURGE),
+                Keyword::NoKeyword if w.value.to_uppercase().as_str() == "COMPACT" => {
+                    Ok(Optimization::COMPACT)
                 }
-                _ => self.expected("TABLE", Token::Word(w)),
+                _ => self.expected("one of PURGE, COMPACT, ALL", Token::Word(w)),
             },
-            unexpected => self.expected("compact statement", unexpected),
-        }
+            t => self.expected("Nothing, or one of PURGE, COMPACT, ALL", t),
+        }?;
+
+        Ok(DfStatement::OptimizeTable(DfOptimizeTable {
+            name: object_name,
+            operation,
+        }))
     }
 
     fn consume_token(&mut self, expected: &str) -> bool {
@@ -1148,6 +1254,14 @@ impl<'a> DfParser<'a> {
             true
         } else {
             false
+        }
+    }
+
+    fn expect_token(&mut self, expected: &str) -> Result<(), ParserError> {
+        if self.consume_token(expected) {
+            Ok(())
+        } else {
+            self.expected(&expected.to_string(), self.parser.peek_token())
         }
     }
 

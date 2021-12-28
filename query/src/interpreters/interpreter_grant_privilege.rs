@@ -43,13 +43,14 @@ impl Interpreter for GrantPrivilegeInterpreter {
         "GrantPrivilegeInterpreter"
     }
 
-    #[tracing::instrument(level = "info", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
 
+        plan.on.validate_privileges(plan.priv_types)?;
         grant_object_exists_or_err(&self.ctx, &plan.on).await?;
 
         // TODO: check user existence

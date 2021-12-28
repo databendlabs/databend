@@ -15,6 +15,7 @@
 
 use std::sync::Arc;
 
+use common_datablocks::assert_blocks_sorted_eq_with_name;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
@@ -22,19 +23,32 @@ use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
+use common_datavalues::DataValue;
 use common_exception::Result;
 use common_meta_types::DatabaseMeta;
 use common_meta_types::TableMeta;
 use common_planners::CreateDatabasePlan;
 use common_planners::CreateTablePlan;
+use common_planners::Expression;
+use common_planners::Extras;
 use common_streams::SendableDataBlockStream;
 use databend_query::catalogs::Catalog;
 use databend_query::configs::Config;
+use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
+use databend_query::sql::PlanParser;
+use databend_query::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
+use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
+use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_query::storages::fuse::TBL_OPT_KEY_CHUNK_BLOCK_NUM;
+use databend_query::storages::FuseHistoryTable;
 use databend_query::storages::Table;
+use databend_query::storages::ToReadDataSourcePlan;
+use databend_query::table_functions::TableArgs;
+use futures::TryStreamExt;
 use tempfile::TempDir;
 use uuid::Uuid;
+use walkdir::WalkDir;
 
 pub struct TestFixture {
     _tmp_dir: TempDir,
@@ -147,4 +161,179 @@ impl TestFixture {
 
 fn gen_db_name(prefix: &str) -> String {
     format!("db_{}", prefix)
+}
+
+pub async fn test_drive(
+    test_db: Option<&str>,
+    test_tbl: Option<&str>,
+) -> Result<SendableDataBlockStream> {
+    let arg_db =
+        Expression::create_literal(DataValue::String(test_db.map(|v| v.as_bytes().to_vec())));
+    let arg_tbl =
+        Expression::create_literal(DataValue::String(test_tbl.map(|v| v.as_bytes().to_vec())));
+    let tbl_args = Some(vec![arg_db, arg_tbl]);
+    test_drive_with_args(tbl_args).await
+}
+
+pub async fn test_drive_with_args(tbl_args: TableArgs) -> Result<SendableDataBlockStream> {
+    let ctx = crate::tests::create_query_context()?;
+    test_drive_with_args_and_ctx(tbl_args, ctx).await
+}
+
+pub async fn test_drive_with_args_and_ctx(
+    tbl_args: TableArgs,
+    ctx: std::sync::Arc<QueryContext>,
+) -> Result<SendableDataBlockStream> {
+    let func = FuseHistoryTable::create("system", "fuse_history", 1, tbl_args)?;
+    let source_plan = func
+        .clone()
+        .as_table()
+        .read_plan(ctx.clone(), Some(Extras::default()))
+        .await?;
+    ctx.try_set_partitions(source_plan.parts.clone())?;
+    func.read(ctx, &source_plan).await
+}
+
+pub fn expects_err<T>(case_name: &str, err_code: u16, res: Result<T>) {
+    if let Err(err) = res {
+        assert_eq!(
+            err.code(),
+            err_code,
+            "case name {}, unexpected error: {}",
+            case_name,
+            err
+        );
+    } else {
+        panic!(
+            "case name {}, expecting err code {}, but got ok",
+            case_name, err_code,
+        );
+    }
+}
+
+pub async fn expects_ok(
+    case_name: impl AsRef<str>,
+    res: Result<SendableDataBlockStream>,
+    expected: Vec<&str>,
+) -> Result<()> {
+    match res {
+        Ok(stream) => {
+            let blocks: Vec<DataBlock> = stream.try_collect().await.unwrap();
+            assert_blocks_sorted_eq_with_name(case_name.as_ref(), expected, &blocks)
+        }
+        Err(err) => {
+            panic!(
+                "case name {}, expecting  Ok, but got err {}",
+                case_name.as_ref(),
+                err,
+            )
+        }
+    };
+    Ok(())
+}
+
+pub async fn execute_query(query: &str, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
+    let plan = PlanParser::parse(query, ctx.clone()).await?;
+    InterpreterFactory::get(ctx.clone(), plan)?
+        .execute(None)
+        .await
+}
+
+pub async fn execute_command(query: &str, ctx: Arc<QueryContext>) -> Result<()> {
+    let res = execute_query(query, ctx).await?;
+    res.try_collect::<Vec<DataBlock>>().await?;
+    Ok(())
+}
+
+pub async fn append_sample_data(num_blocks: u32, fixture: &TestFixture) -> Result<()> {
+    append_sample_data_overwrite(num_blocks, false, fixture).await
+}
+
+pub async fn append_sample_data_overwrite(
+    num_blocks: u32,
+    overwrite: bool,
+    fixture: &TestFixture,
+) -> Result<()> {
+    let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
+    let table = fixture.latest_default_table().await?;
+    let ctx = fixture.ctx();
+    let stream = table.append_data(ctx.clone(), stream).await?;
+    table
+        .commit(ctx, stream.try_collect().await?, overwrite)
+        .await
+}
+
+pub async fn check_data_dir(
+    fixture: &TestFixture,
+    case_name: &str,
+    snapshot_count: u32,
+    segment_count: u32,
+    block_count: u32,
+) {
+    let data_path = fixture.ctx().get_config().storage.disk.data_path;
+    let root = data_path.as_str();
+    let mut ss_count = 0;
+    let mut sg_count = 0;
+    let mut b_count = 0;
+    // avoid ugly line wrapping
+    let prefix_snapshot = FUSE_TBL_SNAPSHOT_PREFIX;
+    let prefix_segment = FUSE_TBL_SEGMENT_PREFIX;
+    let prefix_block = FUSE_TBL_BLOCK_PREFIX;
+    for entry in WalkDir::new(root) {
+        let entry = entry.unwrap();
+        if entry.file_type().is_file() {
+            // here, by checking if "contains" the prefix is enough
+            if entry.path().to_str().unwrap().contains(prefix_snapshot) {
+                ss_count += 1;
+            } else if entry.path().to_str().unwrap().contains(prefix_segment) {
+                sg_count += 1;
+            } else if entry.path().to_str().unwrap().contains(prefix_block) {
+                b_count += 1;
+            }
+        }
+    }
+
+    assert_eq!(
+        ss_count, snapshot_count,
+        "case [{}], check snapshot count",
+        case_name
+    );
+    assert_eq!(
+        sg_count, segment_count,
+        "case [{}], check segment count",
+        case_name
+    );
+
+    assert_eq!(
+        b_count, block_count,
+        "case [{}], check block count",
+        case_name
+    );
+}
+
+pub async fn history_should_have_only_one_item(
+    fixture: &TestFixture,
+    case_name: &str,
+) -> Result<()> {
+    // check history
+    let db = fixture.default_db_name();
+    let tbl = fixture.default_table_name();
+    let expected = vec![
+        "+-------+",
+        "| count |",
+        "+-------+",
+        "| 1     |",
+        "+-------+",
+    ];
+    let qry = format!(
+        "select count(*) as count from fuse_history('{}', '{}')",
+        db, tbl
+    );
+
+    expects_ok(
+        format!("{}: count_of_history_item_should_be_1", case_name),
+        execute_query(qry.as_str(), fixture.ctx()).await,
+        expected,
+    )
+    .await
 }

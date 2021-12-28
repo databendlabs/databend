@@ -18,6 +18,7 @@ use crate::scalars::Base64DecodeFunction;
 use crate::scalars::Base64EncodeFunction;
 use crate::scalars::BinFunction;
 use crate::scalars::BitLengthFunction;
+use crate::scalars::CharFunction;
 use crate::scalars::CharLengthFunction;
 use crate::scalars::ConcatFunction;
 use crate::scalars::ConcatWsFunction;
@@ -106,5 +107,6 @@ impl StringFunction {
         factory.register("lcase", LowerFunction::desc());
         factory.register("upper", UpperFunction::desc());
         factory.register("ucase", UpperFunction::desc());
+        factory.register("char", CharFunction::desc());
     }
 }

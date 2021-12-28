@@ -61,10 +61,6 @@ impl Function for RoundFunction {
         }
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
-    }
-
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         match columns[0].column() {
             DataColumn::Array(array) => {
@@ -83,10 +79,6 @@ impl Function for RoundFunction {
                 ))
             }
         }
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
     }
 
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {

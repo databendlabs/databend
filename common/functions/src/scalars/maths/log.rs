@@ -16,7 +16,6 @@ use std::f64::consts::E;
 use std::fmt;
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::Result;
 
@@ -28,19 +27,13 @@ use crate::scalars::Function;
 pub struct GenericLogFunction {
     display_name: String,
     default_base: f64,
-    unary: bool,
 }
 
 impl GenericLogFunction {
-    pub fn try_create(
-        display_name: &str,
-        default_base: f64,
-        unary: bool,
-    ) -> Result<Box<dyn Function>> {
+    pub fn try_create(display_name: &str, default_base: f64) -> Result<Box<dyn Function>> {
         Ok(Box::new(Self {
             display_name: display_name.to_string(),
             default_base,
-            unary,
         }))
     }
 }
@@ -50,28 +43,8 @@ impl Function for GenericLogFunction {
         &*self.display_name
     }
 
-    fn num_arguments(&self) -> usize {
-        if self.unary {
-            1
-        } else {
-            0
-        }
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        if self.unary {
-            None
-        } else {
-            Some((1, 2))
-        }
-    }
-
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(DataType::Float64)
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
@@ -112,9 +85,14 @@ impl Function for GenericLogFunction {
                     let base_series = base_column.to_minimal_array()?;
                     let num_series = num_column.to_minimal_array()?;
 
-                    binary(num_series.f64()?, base_series.f64()?, |num, base| {
-                        num.log(base)
-                    })
+                    // The log function has default null behavior for null input, that is, LOG(null) = null.
+                    // So the passthrough_null method has default behavior to be true, we don't need to zip validity.
+                    binary_with_validity(
+                        num_series.f64()?,
+                        base_series.f64()?,
+                        |num, base| num.log(base),
+                        None,
+                    )
                 }
             }
         };
@@ -134,12 +112,15 @@ pub struct LogFunction {}
 
 impl LogFunction {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        GenericLogFunction::try_create(display_name, E, false)
+        GenericLogFunction::try_create(display_name, E)
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(1, 2),
+        )
     }
 }
 
@@ -147,12 +128,12 @@ pub struct LnFunction {}
 
 impl LnFunction {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        GenericLogFunction::try_create(display_name, E, true)
+        GenericLogFunction::try_create(display_name, E)
     }
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
@@ -160,12 +141,12 @@ pub struct Log10Function {}
 
 impl Log10Function {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        GenericLogFunction::try_create(display_name, 10_f64, true)
+        GenericLogFunction::try_create(display_name, 10_f64)
     }
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
@@ -173,11 +154,11 @@ pub struct Log2Function {}
 
 impl Log2Function {
     pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        GenericLogFunction::try_create(display_name, 2_f64, true)
+        GenericLogFunction::try_create(display_name, 2_f64)
     }
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }

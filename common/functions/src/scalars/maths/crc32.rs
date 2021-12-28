@@ -15,7 +15,6 @@
 use std::fmt;
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::Result;
 use crc32fast::Hasher;
@@ -38,7 +37,7 @@ impl CRC32Function {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
@@ -47,16 +46,8 @@ impl Function for CRC32Function {
         &*self._display_name
     }
 
-    fn num_arguments(&self) -> usize {
-        1
-    }
-
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(DataType::UInt32)
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

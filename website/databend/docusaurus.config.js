@@ -35,6 +35,14 @@ const config = {
                 theme: {
                     customCss: require.resolve('./src/css/custom.scss'),
                 },
+                gtag: {
+                  trackingID: 'G-WBQPTTG4ZG',
+                  anonymizeIP: true,
+                },
+                sitemap: {
+                    changefreq: 'daily',
+                    priority: 0.5,
+                },
             }),
         ],
     ],
@@ -63,6 +71,18 @@ const config = {
                 sidebarPath: require.resolve('./docs/dev/sidebars.js'),
                 editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
             },
+        ],
+        [
+          '@docusaurus/plugin-client-redirects',
+          {
+            // this will be removed later, make a mark~.
+            redirects: [
+              {
+                to: '/', // string
+                from: '/overview/building-and-running', // string | string[]
+              },
+            ],
+          },
         ]
     ],
     themeConfig:
@@ -82,25 +102,23 @@ const config = {
                         ]
                     },
                     {
-                        to: '/user/index', label: 'User Guide', position: 'left', items: [
-                            {label: 'Get Started', to: '/user/index'},
-                            {label: 'API', to: '/user/api/index'},
-                            {label: 'CLI', to: '/user/cli/index'},
-                            {label: 'SQL Statement', to: '/user/sqlstatement/index'},
-                            {label: 'System', to: '/user/system/index'}
+                        to: '/user', label: 'User Guide', position: 'left', items: [
+                            {label: 'Get Started', to: '/user'},
+                            {label: 'SQL', to: '/user/category/sql'},
+                            {label: 'CLI', to: '/user/category/cli'},
+                            {label: 'APIs', to: '/user/category/apis'},
+                            {label: 'Data Loading', to: '/user/category/data-loading'}
                         ]
                     },
                     {
-                        to: '/dev/index', label: 'Dev Guide', position: 'left', items: [
-                            {label: 'Get Started', to: '/dev/index'},
+                        label: 'Dev Guide', position: 'left', items: [
+                            {label: 'Contributing', to: '/dev/category/contributing'},
+                            {label: 'Development', to: '/dev/category/development'},
                             {label: 'Roadmap', to: '/dev/roadmap'},
-                            {label: 'Building', to: '/dev/building/index'},
-                            {label: 'Contributing', to: '/dev/contributing/index'},
-                            {label: 'RFCs', to: '/dev/rfcs/index'},
-                            {label: 'Policies', to: '/dev/policies/index'}
+                            {label: 'Policies', to: '/dev/category/policies'},
+                            {label: 'RFCs', to: '/dev/category/rfcs'}
                         ]
                     },
-                    {to: '/blog', label: 'Blog', position: 'left'},
                     {
                         href: 'https://github.com/datafuselabs/databend',
                         label: 'GitHub',
@@ -115,13 +133,13 @@ const config = {
                         title: 'Resources',
                         items: [
                             {
+                                label: 'CLI Reference',
+                                to: '/user/category/cli'
+                            },
+                            {
                                 label: 'Performance',
                                 to: '/overview/performance'
                             },
-                            {
-                                label: 'Whitepapers',
-                                to: '/overview/architecture'
-                            }
                         ]
                     },
                     {
@@ -141,10 +159,6 @@ const config = {
                         title: 'More',
                         items: [
                             {
-                                label: 'Blog',
-                                to: '/blog',
-                            },
-                            {
                                 label: 'Weekly',
                                 href: 'https://weekly.databend.rs/'
                             },
@@ -162,14 +176,11 @@ const config = {
                 darkTheme: darkCodeTheme,
             },
             algolia: {
-                apiKey: 'TBD',
-                indexName: 'TBD',
+                appId: 'RL7MS9PKE8',
+                apiKey: '78bb6be96bb0361a4be9dab6bd83936c',
+                indexName: 'databend-rs',
                 contextualSearch: true,
-                searchParameters: {},
-            },
-            gtag: {
-                trackingID: 'TBD',
-            },
+            }
         }),
 };
 

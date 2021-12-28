@@ -75,7 +75,7 @@ fn test_to_type_name_function() -> Result<()> {
 
         // Nullable check.
         let expect_null = t.nullable;
-        let actual_null = func.nullable(&schema)?;
+        let actual_null = func.nullable(schema.fields())?;
         assert_eq!(expect_null, actual_null);
 
         let v = &(func.eval(&columns, rows)?);

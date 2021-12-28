@@ -149,6 +149,7 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::Query(v) => v.analyze(ctx).await,
             DfStatement::Explain(v) => v.analyze(ctx).await,
             DfStatement::ShowDatabases(v) => v.analyze(ctx).await,
+            DfStatement::ShowCreateDatabase(v) => v.analyze(ctx).await,
             DfStatement::CreateDatabase(v) => v.analyze(ctx).await,
             DfStatement::DropDatabase(v) => v.analyze(ctx).await,
             DfStatement::CreateTable(v) => v.analyze(ctx).await,
@@ -156,7 +157,7 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::DescribeStage(v) => v.analyze(ctx).await,
             DfStatement::DropTable(v) => v.analyze(ctx).await,
             DfStatement::TruncateTable(v) => v.analyze(ctx).await,
-            DfStatement::CompactTable(v) => v.analyze(ctx).await,
+            DfStatement::OptimizeTable(v) => v.analyze(ctx).await,
             DfStatement::UseDatabase(v) => v.analyze(ctx).await,
             DfStatement::ShowCreateTable(v) => v.analyze(ctx).await,
             DfStatement::ShowTables(v) => v.analyze(ctx).await,
@@ -177,6 +178,10 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::CreateStage(v) => v.analyze(ctx).await,
             DfStatement::ShowFunctions(v) => v.analyze(ctx).await,
             DfStatement::DropStage(v) => v.analyze(ctx).await,
+            DfStatement::CreateUDF(v) => v.analyze(ctx).await,
+            DfStatement::DropUDF(v) => v.analyze(ctx).await,
+            DfStatement::ShowUDF(v) => v.analyze(ctx).await,
+            DfStatement::AlterUDF(v) => v.analyze(ctx).await,
         }
     }
 }

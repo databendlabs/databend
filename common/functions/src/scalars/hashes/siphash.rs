@@ -17,7 +17,6 @@ use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
-use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -40,17 +39,13 @@ impl SipHashFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
 impl Function for SipHashFunction {
     fn name(&self) -> &str {
         &*self.display_name
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
@@ -74,10 +69,6 @@ impl Function for SipHashFunction {
                 self.display_name, args[0]
             ))),
         }
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

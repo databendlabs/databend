@@ -21,24 +21,28 @@ use nom::IResult;
 
 use super::statements::DfCopy;
 use super::statements::DfDescribeStage;
+use crate::sql::statements::DfAlterUDF;
 use crate::sql::statements::DfAlterUser;
-use crate::sql::statements::DfCompactTable;
 use crate::sql::statements::DfCreateDatabase;
 use crate::sql::statements::DfCreateStage;
 use crate::sql::statements::DfCreateTable;
+use crate::sql::statements::DfCreateUDF;
 use crate::sql::statements::DfCreateUser;
 use crate::sql::statements::DfDescribeTable;
 use crate::sql::statements::DfDropDatabase;
 use crate::sql::statements::DfDropStage;
 use crate::sql::statements::DfDropTable;
+use crate::sql::statements::DfDropUDF;
 use crate::sql::statements::DfDropUser;
 use crate::sql::statements::DfExplain;
 use crate::sql::statements::DfGrantStatement;
 use crate::sql::statements::DfInsertStatement;
 use crate::sql::statements::DfKillStatement;
+use crate::sql::statements::DfOptimizeTable;
 use crate::sql::statements::DfQueryStatement;
 use crate::sql::statements::DfRevokeStatement;
 use crate::sql::statements::DfSetVariable;
+use crate::sql::statements::DfShowCreateDatabase;
 use crate::sql::statements::DfShowCreateTable;
 use crate::sql::statements::DfShowDatabases;
 use crate::sql::statements::DfShowFunctions;
@@ -47,6 +51,7 @@ use crate::sql::statements::DfShowMetrics;
 use crate::sql::statements::DfShowProcessList;
 use crate::sql::statements::DfShowSettings;
 use crate::sql::statements::DfShowTables;
+use crate::sql::statements::DfShowUDF;
 use crate::sql::statements::DfShowUsers;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
@@ -60,6 +65,7 @@ pub enum DfStatement {
 
     // Databases.
     ShowDatabases(DfShowDatabases),
+    ShowCreateDatabase(DfShowCreateDatabase),
     CreateDatabase(DfCreateDatabase),
     DropDatabase(DfDropDatabase),
     UseDatabase(DfUseDatabase),
@@ -72,7 +78,7 @@ pub enum DfStatement {
     DescribeStage(DfDescribeStage),
     DropTable(DfDropTable),
     TruncateTable(DfTruncateTable),
-    CompactTable(DfCompactTable),
+    OptimizeTable(DfOptimizeTable),
 
     // Settings.
     ShowSettings(DfShowSettings),
@@ -112,6 +118,12 @@ pub enum DfStatement {
     // Stage
     CreateStage(DfCreateStage),
     DropStage(DfDropStage),
+
+    // UDF
+    CreateUDF(DfCreateUDF),
+    DropUDF(DfDropUDF),
+    ShowUDF(DfShowUDF),
+    AlterUDF(DfAlterUDF),
 }
 
 /// Comment hints from SQL.

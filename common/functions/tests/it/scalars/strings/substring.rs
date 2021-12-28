@@ -31,7 +31,7 @@ fn test_substring_function() -> Result<()> {
         Test {
             name: "substring-abcde-passed",
             display: "substring",
-            nullable: true,
+            nullable: false,
             arg_names: vec!["a", "b", "c"],
             columns: vec![
                 Series::new(vec!["abcde"]).into(),
@@ -45,7 +45,7 @@ fn test_substring_function() -> Result<()> {
         Test {
             name: "substring-abcde-passed",
             display: "substring",
-            nullable: true,
+            nullable: false,
             arg_names: vec!["a", "b", "c"],
             columns: vec![
                 Series::new(vec!["abcde"]).into(),
@@ -59,7 +59,7 @@ fn test_substring_function() -> Result<()> {
         Test {
             name: "substring-abcde-passed",
             display: "substring",
-            nullable: true,
+            nullable: false,
             arg_names: vec!["a", "b"],
             columns: vec![
                 Series::new(vec!["abcde"]).into(),
@@ -73,7 +73,7 @@ fn test_substring_function() -> Result<()> {
         Test {
             name: "substring-1234567890-passed",
             display: "substring",
-            nullable: true,
+            nullable: false,
             arg_names: vec!["a", "b", "c"],
             columns: vec![
                 Series::new(vec!["1234567890"]).into(),
@@ -86,5 +86,30 @@ fn test_substring_function() -> Result<()> {
             error: "",
         },
     ];
+    run_tests(tests, schema)
+}
+
+#[test]
+fn test_substring_nullable() -> Result<()> {
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new("a", DataType::String, false),
+        DataField::new("b", DataType::Int64, true),
+        DataField::new("c", DataType::UInt64, false),
+    ]);
+
+    let tests = vec![Test {
+        name: "substring-nullabe-passed",
+        display: "substring",
+        nullable: true,
+        arg_names: vec!["a", "b", "c"],
+        columns: vec![
+            Series::new(vec!["abcde"]).into(),
+            Series::new(vec![2_i64]).into(),
+            Series::new(vec![3_u64]).into(),
+        ],
+        func: SubstringFunction::try_create("substring")?,
+        expect: Series::new(vec!["bcd"]).into(),
+        error: "",
+    }];
     run_tests(tests, schema)
 }

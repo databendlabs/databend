@@ -15,11 +15,14 @@
 
 mod cluster;
 mod stage;
+mod udf;
 mod user;
 
 pub use cluster::ClusterApi;
 pub use cluster::ClusterMgr;
 pub use stage::StageMgr;
 pub use stage::StageMgrApi;
+pub use udf::UdfMgr;
+pub use udf::UdfMgrApi;
 pub use user::user_api::UserMgrApi;
 pub use user::user_mgr::UserMgr;

@@ -80,6 +80,7 @@ impl Processor for RemoteTransform {
         self
     }
 
+    #[tracing::instrument(level = "debug", name = "remote_execute", skip(self))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!(
             "execute, flight_ticket {:?}, node name:{:#}...",
@@ -92,9 +93,9 @@ impl Processor for RemoteTransform {
 
         let fetch_ticket = self.ticket.clone();
         let mut flight_client = self.flight_client().await?;
-        let fetch_stream = flight_client.fetch_stream(fetch_ticket, data_schema, timeout);
-        Ok(Box::pin(
-            self.ctx.try_create_abortable(fetch_stream.await?)?,
-        ))
+        let fetch_stream = flight_client
+            .fetch_stream(fetch_ticket, data_schema, timeout)
+            .await?;
+        Ok(Box::pin(self.ctx.try_create_abortable(fetch_stream)?))
     }
 }

@@ -13,6 +13,10 @@ inputs:
 runs:
   using: "composite"
   steps:
+    # Workaround for Not Space Left: https://github.com/datafuselabs/databend/issues/3562
+    - shell: bash
+      run: rm -rf /usr/share/dotnet
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1
 

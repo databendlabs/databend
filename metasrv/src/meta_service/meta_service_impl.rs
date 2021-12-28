@@ -18,18 +18,18 @@
 use std::convert::TryInto;
 use std::sync::Arc;
 
+use common_meta_raft_store::message::ForwardRequest;
+use common_meta_raft_store::protobuf::meta_service_server::MetaService;
+use common_meta_raft_store::protobuf::GetReply;
+use common_meta_raft_store::protobuf::GetReq;
+use common_meta_raft_store::protobuf::RaftReply;
+use common_meta_raft_store::protobuf::RaftRequest;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::LogEntry;
 use common_tracing::tracing;
 
-use crate::meta_service::message::ForwardRequest;
 use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::MetaNode;
-use crate::proto::meta_service_server::MetaService;
-use crate::proto::GetReply;
-use crate::proto::GetReq;
-use crate::proto::RaftReply;
-use crate::proto::RaftRequest;
 
 pub struct MetaServiceImpl {
     pub meta_node: Arc<MetaNode>,

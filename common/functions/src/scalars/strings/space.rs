@@ -64,21 +64,13 @@ impl<T: SpaceGenOperator> SpaceGenFunction<T> {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
 impl<T: SpaceGenOperator> Function for SpaceGenFunction<T> {
     fn name(&self) -> &str {
         &*self.display_name
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {

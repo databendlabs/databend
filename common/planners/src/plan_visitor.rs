@@ -18,16 +18,19 @@ use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
+use crate::AlterUDFPlan;
 use crate::AlterUserPlan;
 use crate::CopyPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
+use crate::CreateUDFPlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
 use crate::DescribeStagePlan;
 use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
+use crate::DropUDFPlan;
 use crate::DropUserPlan;
 use crate::DropUserStagePlan;
 use crate::EmptyPlan;
@@ -41,6 +44,7 @@ use crate::InsertPlan;
 use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
+use crate::OptimizeTablePlan;
 use crate::PlanNode;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
@@ -48,8 +52,10 @@ use crate::RemotePlan;
 use crate::RevokePrivilegePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
+use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
 use crate::ShowGrantsPlan;
+use crate::ShowUDFPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -116,6 +122,7 @@ pub trait PlanVisitor {
             PlanNode::CreateTable(plan) => self.visit_create_table(plan),
             PlanNode::DropTable(plan) => self.visit_drop_table(plan),
             PlanNode::DescribeTable(plan) => self.visit_describe_table(plan),
+            PlanNode::OptimizeTable(plan) => self.visit_optimize_table(plan),
             PlanNode::DescribeStage(plan) => self.visit_describe_stage(plan),
             PlanNode::TruncateTable(plan) => self.visit_truncate_table(plan),
             PlanNode::UseDatabase(plan) => self.visit_use_database(plan),
@@ -139,6 +146,11 @@ pub trait PlanVisitor {
             PlanNode::CreateUserStage(plan) => self.visit_create_stage(plan),
             PlanNode::ShowGrants(plan) => self.visit_show_grants(plan),
             PlanNode::DropUserStage(plan) => self.visit_drop_stage(plan),
+            PlanNode::ShowCreateDatabase(plan) => self.visit_show_create_database(plan),
+            PlanNode::CreateUDF(plan) => self.visit_create_udf(plan),
+            PlanNode::DropUDF(plan) => self.visit_drop_udf(plan),
+            PlanNode::ShowUDF(plan) => self.visit_show_udf(plan),
+            PlanNode::AlterUDF(plan) => self.visit_alter_udf(plan),
         }
     }
 
@@ -282,6 +294,10 @@ pub trait PlanVisitor {
         Ok(())
     }
 
+    fn visit_optimize_table(&mut self, _: &OptimizeTablePlan) -> Result<()> {
+        Ok(())
+    }
+
     fn visit_describe_stage(&mut self, _: &DescribeStagePlan) -> Result<()> {
         Ok(())
     }
@@ -330,6 +346,26 @@ pub trait PlanVisitor {
     }
 
     fn visit_show_grants(&mut self, _: &ShowGrantsPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_show_create_database(&mut self, _: &ShowCreateDatabasePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_create_udf(&mut self, _: &CreateUDFPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_drop_udf(&mut self, _: &DropUDFPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_show_udf(&mut self, _: &ShowUDFPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_alter_udf(&mut self, _: &AlterUDFPlan) -> Result<()> {
         Ok(())
     }
 }

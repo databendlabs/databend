@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_meta_types::DatabaseMeta;
+use common_meta_types::DatabaseInfo;
 use common_tracing::tracing;
 use octocrab::params;
 
@@ -30,38 +30,35 @@ use crate::storages::StorageContext;
 #[derive(Clone)]
 pub struct GithubDatabase {
     ctx: DatabaseContext,
-    db_name: String,
-    token: String,
+    db_info: DatabaseInfo,
 }
 
 impl GithubDatabase {
-    pub fn try_create(
-        ctx: DatabaseContext,
-        db_name: &str,
-        db_meta: DatabaseMeta,
-    ) -> Result<Box<dyn Database>> {
-        let token = db_meta
-            .engine_options
-            .get("token")
-            .unwrap_or(&"".to_string())
-            .clone();
-        Ok(Box::new(Self {
-            ctx,
-            db_name: db_name.to_string(),
-            token,
-        }))
+    pub fn try_create(ctx: DatabaseContext, db_info: DatabaseInfo) -> Result<Box<dyn Database>> {
+        Ok(Box::new(Self { ctx, db_info }))
     }
 }
 
 #[async_trait::async_trait]
 impl Database for GithubDatabase {
     fn name(&self) -> &str {
-        &self.db_name
+        &self.db_info.db
+    }
+
+    fn get_db_info(&self) -> &DatabaseInfo {
+        &self.db_info
     }
 
     async fn init_database(&self) -> Result<()> {
+        let token = self
+            .get_db_info()
+            .meta
+            .engine_options
+            .get("token")
+            .unwrap_or(&"".to_string())
+            .clone();
         // 1. get all repos in this organization
-        let instance = create_github_client(&self.token)?;
+        let instance = create_github_client(&token)?;
         let repos = instance
             .orgs(self.name())
             .list_repos()
@@ -82,7 +79,7 @@ impl Database for GithubDatabase {
             let options = RepoTableOptions {
                 owner: self.name().to_string(),
                 repo: repo.name.clone(),
-                token: self.token.clone(),
+                token: token.clone(),
                 table_type: "".to_string(),
             };
 

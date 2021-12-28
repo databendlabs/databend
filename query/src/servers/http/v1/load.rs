@@ -82,6 +82,26 @@ pub async fn streaming_load(
         .unwrap_or("0")
         .eq_ignore_ascii_case("1");
 
+    let field_delimitor = req
+        .headers()
+        .get("field_delimitor")
+        .and_then(|v| v.to_str().ok())
+        .map(|v| match v.len() {
+            n if n >= 1 => v.as_bytes()[0],
+            _ => b',',
+        })
+        .unwrap_or(b',');
+
+    let record_delimitor = req
+        .headers()
+        .get("record_delimitor")
+        .and_then(|v| v.to_str().ok())
+        .map(|v| match v.len() {
+            n if n >= 1 => v.as_bytes()[0],
+            _ => b'\n',
+        })
+        .unwrap_or(b'\n');
+
     let plan = PlanParser::parse(insert_sql, context.clone())
         .await
         .map_err(InternalServerError)?;
@@ -132,7 +152,7 @@ pub async fn streaming_load(
     let stream = stream! {
         while let Ok(Some(field)) = multipart.next_field().await {
             let reader = field.into_async_read();
-            let mut source = CsvSource::try_create(reader.compat(), plan.schema(), csv_header, max_block_size)?;
+            let mut source = CsvSource::try_create(reader.compat(), plan.schema(), csv_header, field_delimitor, record_delimitor, max_block_size)?;
 
             loop {
                 let block = source.read().await;

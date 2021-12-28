@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use common_datavalues::prelude::DataColumn;
 use common_datavalues::prelude::DataColumnWithField;
 use common_datavalues::DataField;
+use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::scalars::Function;
@@ -80,6 +81,8 @@ impl ExpressionVisitor for RequireColumnsVisitor {
 // Notice!! the mechanism doesn't solve multiple variables case.
 #[derive(Clone)]
 pub struct MonotonicityCheckVisitor {
+    pub schema: DataSchemaRef,
+
     // the variable range left, we assume only one variable.
     pub variable_left: Option<DataColumnWithField>,
 
@@ -91,11 +94,13 @@ pub struct MonotonicityCheckVisitor {
 
 impl MonotonicityCheckVisitor {
     fn create(
+        schema: DataSchemaRef,
         variable_left: Option<DataColumnWithField>,
         variable_right: Option<DataColumnWithField>,
         column_name: String,
     ) -> Self {
         Self {
+            schema,
             variable_left,
             variable_right,
             column_name,
@@ -183,6 +188,7 @@ impl MonotonicityCheckVisitor {
         let mut monotonicity_vec = vec![];
         let mut left_vec = vec![];
         let mut right_vec = vec![];
+        let mut args_type = vec![];
 
         for child_expr in children.iter() {
             let monotonicity = self.visit(child_expr)?;
@@ -192,10 +198,11 @@ impl MonotonicityCheckVisitor {
 
             left_vec.push(monotonicity.left.clone());
             right_vec.push(monotonicity.right.clone());
+            args_type.push(child_expr.to_data_type(&self.schema)?);
             monotonicity_vec.push(monotonicity);
         }
 
-        let func = FunctionFactory::instance().get(op)?;
+        let func = FunctionFactory::instance().get(op, &args_type)?;
         let mut root_mono = func.get_monotonicity(monotonicity_vec.as_ref())?;
 
         // neither a monotonic expression nor constant, no need to calculating boundary
@@ -212,12 +219,13 @@ impl MonotonicityCheckVisitor {
     /// Check whether the expression is monotonic or not. The left should be <= right.
     /// Return the monotonicity information, together with column name if any.
     pub fn check_expression(
+        schema: DataSchemaRef,
         expr: &Expression,
         left: Option<DataColumnWithField>,
         right: Option<DataColumnWithField>,
         column_name: &str,
     ) -> Result<Monotonicity> {
-        let mut visitor = Self::create(left, right, column_name.to_string());
+        let mut visitor = Self::create(schema, left, right, column_name.to_string());
         visitor.visit(expr)
     }
 
@@ -225,6 +233,7 @@ impl MonotonicityCheckVisitor {
     /// of the sort expression (like f(x) = x+2 is a monotonic function), and extract the
     /// column information, returns as Expression::Column.
     pub fn extract_sort_column(
+        schema: DataSchemaRef,
         sort_expr: &Expression,
         left: Option<DataColumnWithField>,
         right: Option<DataColumnWithField>,
@@ -237,7 +246,7 @@ impl MonotonicityCheckVisitor {
             origin_expr,
         } = sort_expr
         {
-            let mono = Self::check_expression(origin_expr, left, right, column_name)
+            let mono = Self::check_expression(schema, origin_expr, left, right, column_name)
                 .unwrap_or_else(|_| Monotonicity::default());
             if !mono.is_monotonic {
                 return Ok(sort_expr.clone());

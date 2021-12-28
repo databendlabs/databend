@@ -16,7 +16,6 @@ use std::f64::consts::PI;
 use std::fmt;
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::Result;
 
@@ -47,16 +46,8 @@ impl Function for PiFunction {
         &*self.display_name
     }
 
-    fn num_arguments(&self) -> usize {
-        0
-    }
-
     fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
         Ok(DataType::Float64)
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
     }
 
     fn eval(&self, _columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

@@ -83,21 +83,13 @@ impl<T: InsertOperator> InsFunction<T> {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(4))
     }
 }
 
 impl<T: InsertOperator> Function for InsFunction<T> {
     fn name(&self) -> &str {
         &*self.display_name
-    }
-
-    fn num_arguments(&self) -> usize {
-        4
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {

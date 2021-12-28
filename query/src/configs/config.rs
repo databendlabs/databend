@@ -20,7 +20,7 @@ use common_dal::StorageScheme;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_flight_rpc::FlightClientTlsConfig;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -29,25 +29,23 @@ use crate::configs::MetaConfig;
 use crate::configs::QueryConfig;
 use crate::configs::StorageConfig;
 
-lazy_static! {
-    pub static ref DATABEND_COMMIT_VERSION: String = {
-        let build_semver = option_env!("VERGEN_BUILD_SEMVER");
-        let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
-        let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
-        let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
+pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
+    let build_semver = option_env!("VERGEN_BUILD_SEMVER");
+    let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
+    let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
+    let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
 
-        let ver = match (build_semver, git_sha, rustc_semver, timestamp) {
-            #[cfg(not(feature = "simd"))]
-            (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}({}-{})", v1, v2, v3, v4),
-            #[cfg(feature = "simd")]
-            (Some(v1), Some(v2), Some(v3), Some(v4)) => {
-                format!("{}-{}-simd({}-{})", v1, v2, v3, v4)
-            }
-            _ => String::new(),
-        };
-        ver
+    let ver = match (build_semver, git_sha, rustc_semver, timestamp) {
+        #[cfg(not(feature = "simd"))]
+        (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}({}-{})", v1, v2, v3, v4),
+        #[cfg(feature = "simd")]
+        (Some(v1), Some(v2), Some(v3), Some(v4)) => {
+            format!("{}-{}-simd({}-{})", v1, v2, v3, v4)
+        }
+        _ => String::new(),
     };
-}
+    ver
+});
 
 // Config file.
 const CONFIG_FILE: &str = "CONFIG_FILE";

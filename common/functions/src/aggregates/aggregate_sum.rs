@@ -52,13 +52,12 @@ where
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        let writer = BufMut::writer(writer);
-        bincode::serialize_into(writer, &self.value)?;
-        Ok(())
+        serialize_into_buf(writer, &self.value)
     }
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.value = bincode::deserialize_from(reader)?;
+        self.value = deserialize_from_slice(reader)?;
+
         Ok(())
     }
 }

@@ -33,7 +33,7 @@ fn test_trim_function() -> Result<()> {
         Test {
             name: "ltrim-abc-passed",
             display: "ltrim",
-            nullable: true,
+            nullable: false,
             arg_names: vec!["a"],
             columns: vec![Series::new(vec!["  abc"]).into()],
             func: LTrimFunction::try_create("ltrim")?,
@@ -43,7 +43,7 @@ fn test_trim_function() -> Result<()> {
         Test {
             name: "rtrim-abc-passed",
             display: "rtrim",
-            nullable: true,
+            nullable: false,
             arg_names: vec!["a"],
             columns: vec![Series::new(vec!["abc  "]).into()],
             func: RTrimFunction::try_create("rtrim")?,
@@ -53,7 +53,7 @@ fn test_trim_function() -> Result<()> {
         Test {
             name: "trim-abc-passed",
             display: "trim",
-            nullable: true,
+            nullable: false,
             arg_names: vec!["a"],
             columns: vec![Series::new(vec!["   abc  "]).into()],
             func: TrimFunction::try_create("trim")?,
@@ -63,7 +63,7 @@ fn test_trim_function() -> Result<()> {
         Test {
             name: "trim-blank-passed",
             display: "trim",
-            nullable: true,
+            nullable: false,
             arg_names: vec!["a"],
             columns: vec![Series::new(vec!["     "]).into()],
             func: TrimFunction::try_create("trim")?,
@@ -71,5 +71,26 @@ fn test_trim_function() -> Result<()> {
             error: "",
         },
     ];
+    run_tests(tests, schema)
+}
+
+#[test]
+fn test_trim_nullable() -> Result<()> {
+    let schema = DataSchemaRefExt::create(vec![DataField::new(
+        "nullable_string",
+        DataType::String,
+        true,
+    )]);
+
+    let tests = vec![Test {
+        name: "trim-nullable-passed",
+        display: "trim",
+        nullable: true,
+        arg_names: vec!["nullable_string"],
+        columns: vec![Series::new(vec![Option::<Vec<u8>>::None]).into()],
+        func: TrimFunction::try_create("trim")?,
+        expect: DataColumn::Constant(DataValue::String(None), 1),
+        error: "",
+    }];
     run_tests(tests, schema)
 }

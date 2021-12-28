@@ -32,7 +32,8 @@ impl LogicOrFunction {
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function("and")
-                .bool_function(),
+                .bool_function()
+                .num_arguments(2),
         )
     }
 }

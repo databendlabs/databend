@@ -36,8 +36,12 @@ impl AbsFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic().monotonicity())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .monotonicity()
+                .num_arguments(1),
+        )
     }
 }
 
@@ -64,10 +68,6 @@ impl Function for AbsFunction {
         "abs"
     }
 
-    fn num_arguments(&self) -> usize {
-        1
-    }
-
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
         if args[0].is_numeric() || args[0] == DataType::String || args[0] == DataType::Null {
             Ok(match &args[0] {
@@ -84,10 +84,6 @@ impl Function for AbsFunction {
                 args[0]
             )))
         }
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

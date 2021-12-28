@@ -25,16 +25,16 @@ use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::scalars::FunctionFactory;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 use crate::PlanNode;
 
-lazy_static! {
-    static ref OP_SET: HashSet<&'static str> = ["database", "version", "current_user"]
+static OP_SET: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    ["database", "version", "current_user"]
         .iter()
         .copied()
-        .collect();
-}
+        .collect()
+});
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct ExpressionPlan {
@@ -240,9 +240,13 @@ impl Expression {
     }
 
     #[inline(always)]
-    pub fn function_nullable(op: &str, input_schema: &DataSchemaRef) -> Result<bool> {
-        let f = FunctionFactory::instance().get(op)?;
-        f.nullable(input_schema)
+    pub fn function_nullable(op: &str, arg_fields: Vec<DataField>) -> Result<bool> {
+        let arg_types = arg_fields
+            .iter()
+            .map(|field| field.data_type().clone())
+            .collect::<Vec<_>>();
+        let f = FunctionFactory::instance().get(op, &arg_types)?;
+        f.nullable(&arg_fields)
     }
 
     pub fn nullable(&self, input_schema: &DataSchemaRef) -> Result<bool> {
@@ -252,15 +256,27 @@ impl Expression {
             Expression::QualifiedColumn(_) => Err(ErrorCode::LogicalError(
                 "QualifiedColumn should be resolve in analyze.",
             )),
-            Expression::Literal { .. } => {
-                // For literal value, which represents a constant value, we say it is nullable.
-                Ok(true)
-            }
+            Expression::Literal { value, .. } => Ok(value.is_null()),
             Expression::Subquery { query_plan, .. } => Self::subquery_nullable(query_plan),
             Expression::ScalarSubquery { query_plan, .. } => Self::subquery_nullable(query_plan),
-            Expression::BinaryExpression { op, .. } => Self::function_nullable(op, input_schema),
-            Expression::UnaryExpression { op, .. } => Self::function_nullable(op, input_schema),
-            Expression::ScalarFunction { op, .. } => Self::function_nullable(op, input_schema),
+            Expression::BinaryExpression { left, op, right } => {
+                let arg_fields = vec![
+                    left.to_data_field(input_schema)?,
+                    right.to_data_field(input_schema)?,
+                ];
+                Self::function_nullable(op, arg_fields)
+            }
+            Expression::UnaryExpression { op, expr } => {
+                let arg_fields = vec![expr.to_data_field(input_schema)?];
+                Self::function_nullable(op, arg_fields)
+            }
+            Expression::ScalarFunction { op, args } => {
+                let arg_fields = args
+                    .iter()
+                    .map(|expr| expr.to_data_field(input_schema))
+                    .collect::<Result<Vec<_>>>()?;
+                Self::function_nullable(op, arg_fields)
+            }
             Expression::AggregateFunction { .. } => {
                 let f = self.to_aggregate_function(input_schema)?;
                 f.nullable(input_schema)
@@ -321,23 +337,24 @@ impl Expression {
                     left.to_data_type(input_schema)?,
                     right.to_data_type(input_schema)?,
                 ];
-                let func = FunctionFactory::instance().get(op)?;
+                let func = FunctionFactory::instance().get(op, &arg_types)?;
                 func.return_type(&arg_types)
             }
 
             Expression::UnaryExpression { op, expr } => {
                 let arg_types = vec![expr.to_data_type(input_schema)?];
-                let func = FunctionFactory::instance().get(op)?;
+                let func = FunctionFactory::instance().get(op, &arg_types)?;
                 func.return_type(&arg_types)
             }
 
             Expression::ScalarFunction { op, args } => {
-                let mut arg_types = Vec::with_capacity(args.len());
+                let mut args_type = Vec::with_capacity(args.len());
                 for arg in args {
-                    arg_types.push(arg.to_data_type(input_schema)?);
+                    args_type.push(arg.to_data_type(input_schema)?);
                 }
-                let func = FunctionFactory::instance().get(op)?;
-                func.return_type(&arg_types)
+
+                let func = FunctionFactory::instance().get(op, &args_type)?;
+                func.return_type(&args_type)
             }
             Expression::AggregateFunction { .. } => {
                 let func = self.to_aggregate_function(input_schema)?;

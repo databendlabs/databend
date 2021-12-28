@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use common_datavalues::DataField;
+use common_datavalues::DataSchemaRefExt;
 use common_exception::Result;
 use common_planners::CreateTablePlan;
 use common_planners::InsertInputSource;
@@ -80,11 +82,20 @@ impl CreateTableInterpreter {
         //
         // For the situation above, we implicitly cast the data type when inserting data.
         // The casting and schema checking is in interpreter_insert.rs, function check_schema_cast.
+        let table_schema = table.schema();
+        let select_fields: Vec<DataField> = select_plan_node
+            .schema()
+            .fields()
+            .iter()
+            .filter_map(|f| table_schema.field_with_name(f.name()).ok())
+            .cloned()
+            .collect();
+        let schema = DataSchemaRefExt::create(select_fields);
         let insert_plan = InsertPlan {
             database_name: self.plan.db.clone(),
             table_name: self.plan.table.clone(),
             table_id: table.get_id(),
-            schema: self.plan.schema(),
+            schema,
             overwrite: false,
             source: InsertInputSource::SelectPlan(select_plan_node),
         };

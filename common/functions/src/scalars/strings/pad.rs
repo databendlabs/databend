@@ -104,21 +104,13 @@ impl<T: PadOperator> PadFunction<T> {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(3))
     }
 }
 
 impl<T: PadOperator> Function for PadFunction<T> {
     fn name(&self) -> &str {
         &*self.display_name
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
-    }
-
-    fn num_arguments(&self) -> usize {
-        3
     }
 
     fn return_type(&self, args: &[DataType]) -> Result<DataType> {
