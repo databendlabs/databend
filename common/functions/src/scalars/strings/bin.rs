@@ -15,6 +15,7 @@
 use std::fmt;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -45,8 +46,8 @@ impl Function for BinFunction {
         "bin"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if !args[0].is_numeric() && args[0] != DataType::Null {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        if !args[0].is_numeric() && !args[0].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected number or null, but got {}",
                 args[0]

@@ -16,6 +16,7 @@ use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_datavalues::DataValueComparisonOperator;
 use common_exception::Result;
 
@@ -59,7 +60,7 @@ impl Function for ComparisonFunction {
         "ComparisonFunction"
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
         Ok(DataType::Boolean)
     }
 

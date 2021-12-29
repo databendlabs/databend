@@ -16,8 +16,8 @@ use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataField;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
@@ -52,11 +52,11 @@ impl Function for IsNullFunction {
         "IsNullFunction"
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
         Ok(DataType::Boolean)
     }
 
-    fn nullable(&self, _arg_fields: &[DataField]) -> Result<bool> {
+    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
         Ok(false)
     }
 

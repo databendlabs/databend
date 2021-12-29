@@ -15,6 +15,7 @@
 use std::fmt;
 
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_datavalues::DataValue;
 use common_functions::scalars::Function;
 
@@ -58,7 +59,7 @@ pub struct ActionFunction {
 
     // for functions
     pub arg_names: Vec<String>,
-    pub arg_types: Vec<DataType>,
+    pub arg_types: Vec<DataTypeAndNullable>,
 }
 
 impl ExpressionAction {

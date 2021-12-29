@@ -20,6 +20,7 @@ use common_datavalues::prelude::DataColumn;
 use common_datavalues::prelude::DataColumnWithField;
 use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -55,9 +56,9 @@ impl Function for SignFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
         if matches!(
-            args[0],
+            args[0].data_type(),
             DataType::UInt8
                 | DataType::UInt16
                 | DataType::UInt32

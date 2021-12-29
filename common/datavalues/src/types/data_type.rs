@@ -102,6 +102,11 @@ impl DataType {
     }
 
     #[inline]
+    pub fn is_string(&self) -> bool {
+        matches!(self, DataType::String)
+    }
+
+    #[inline]
     pub fn is_integer(&self) -> bool {
         matches!(
             self,

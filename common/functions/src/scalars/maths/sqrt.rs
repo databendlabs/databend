@@ -16,6 +16,7 @@ use std::fmt;
 
 use common_datavalues::prelude::*;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -46,8 +47,8 @@ impl Function for SqrtFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if args[0].is_numeric() || args[0] == DataType::String || args[0] == DataType::Null {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
             Ok(DataType::Float64)
         } else {
             Err(ErrorCode::IllegalDataType(format!(
@@ -55,6 +56,10 @@ impl Function for SqrtFunction {
                 args[0]
             )))
         }
+    }
+
+    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
+        Ok(true)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

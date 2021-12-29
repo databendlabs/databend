@@ -15,6 +15,7 @@
 use std::fmt;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -47,18 +48,15 @@ impl Function for RepeatFunction {
         "repeat"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if !matches!(args[0], DataType::String | DataType::Null) {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        if !args[0].is_string() && !args[0].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected parameter 1 is string, but got {}",
                 args[0]
             )));
         }
 
-        if !args[1].is_unsigned_integer()
-            && args[1] != DataType::String
-            && args[1] != DataType::Null
-        {
+        if !args[1].is_unsigned_integer() && !args[1].is_string() && !args[1].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected parameter 2 is unsigned integer or string or null, but got {}",
                 args[1]
