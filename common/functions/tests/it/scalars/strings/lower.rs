@@ -15,44 +15,33 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::LowerFunction;
 
-use super::run_tests;
-use super::Test;
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
 
 #[test]
 fn test_lower_function() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::String, false)]);
-
     let tests = vec![
-        Test {
+        ScalarFunctionTest {
             name: "lower-abc-passed",
-            display: "lower",
             nullable: false,
-            arg_names: vec!["a"],
             columns: vec![Series::new(vec!["Abc"]).into()],
-            func: LowerFunction::try_create("lower")?,
             expect: DataColumn::Constant(DataValue::String(Some("abc".as_bytes().to_vec())), 1),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "lower-utf8-passed",
-            display: "lower",
             nullable: false,
-            arg_names: vec!["a"],
             columns: vec![Series::new(vec!["Dobrý den"]).into()],
-            func: LowerFunction::try_create("lower")?,
             expect: DataColumn::Constant(
                 DataValue::String(Some("dobrý den".as_bytes().to_vec())),
                 1,
             ),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "lcase-utf8-passed",
-            display: "lcase",
             nullable: false,
-            arg_names: vec!["a"],
             columns: vec![Series::new(vec!["Dobrý den"]).into()],
-            func: LowerFunction::try_create("lcase")?,
             expect: DataColumn::Constant(
                 DataValue::String(Some("dobrý den".as_bytes().to_vec())),
                 1,
@@ -60,22 +49,19 @@ fn test_lower_function() -> Result<()> {
             error: "",
         },
     ];
-    run_tests(tests, schema)
+
+    test_scalar_functions(LowerFunction::try_create("lower")?, &tests)
 }
 
 #[test]
 fn test_lower_nullable() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("nullable", DataType::String, true)]);
-
-    let tests = vec![Test {
+    let tests = vec![ScalarFunctionTest {
         name: "lcase-null-passed",
-        display: "lcase",
         nullable: true,
-        arg_names: vec!["nullable"],
         columns: vec![Series::new(vec![Option::<Vec<u8>>::None]).into()],
-        func: LowerFunction::try_create("lcase")?,
         expect: DataColumn::Constant(DataValue::String(None), 1),
         error: "",
     }];
-    run_tests(tests, schema)
+
+    test_scalar_functions(LowerFunction::try_create("lcase")?, &tests)
 }

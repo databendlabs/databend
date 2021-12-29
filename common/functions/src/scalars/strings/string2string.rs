@@ -15,6 +15,7 @@ use std::fmt;
 use std::marker::PhantomData;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -65,8 +66,8 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
         &self.display_name
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if !args[0].is_numeric() && args[0] != DataType::String && args[0] != DataType::Null {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        if !args[0].is_numeric() && !args[0].is_string() && !args[0].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null, but got {}",
                 args[0]
@@ -76,14 +77,11 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
         Ok(DataType::String)
     }
 
-    fn nullable(&self, arg_fields: &[DataField]) -> Result<bool> {
-        let op = T::default();
-        if op.may_turn_to_null() {
-            // decode base64 may return Null
-            return Ok(true);
+    fn nullable(&self, args: &[DataTypeAndNullable]) -> Result<bool> {
+        match T::default().may_turn_to_null() {
+            true => Ok(true),
+            false => Ok(args.iter().any(|arg| arg.is_nullable())),
         }
-        let nullable = arg_fields.iter().any(|field| field.is_nullable());
-        Ok(nullable)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

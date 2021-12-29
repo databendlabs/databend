@@ -17,8 +17,8 @@ use std::time::Duration;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataField;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -50,7 +50,7 @@ impl Function for SleepFunction {
         "SleepFunction"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
         if !args[0].is_numeric() {
             return Err(ErrorCode::BadArguments(format!(
                 "Illegal type {} of argument of function {}, expected numeric",
@@ -61,7 +61,7 @@ impl Function for SleepFunction {
         Ok(DataType::UInt8)
     }
 
-    fn nullable(&self, _arg_fields: &[DataField]) -> Result<bool> {
+    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
         Ok(false)
     }
 

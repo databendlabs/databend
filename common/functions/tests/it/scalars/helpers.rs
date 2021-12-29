@@ -17,6 +17,7 @@ use common_exception::Result;
 use common_functions::scalars::Function;
 
 /// A helper function to evaluate function, not testing only.
+#[allow(dead_code)]
 pub fn eval_function(
     columns: &DataColumnsWithField,
     rows: usize,

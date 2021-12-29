@@ -17,6 +17,7 @@ use std::fmt;
 
 use common_datavalues::prelude::*;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
@@ -43,7 +44,7 @@ impl Function for GenericLogFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
         Ok(DataType::Float64)
     }
 
