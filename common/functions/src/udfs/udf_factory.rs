@@ -48,7 +48,7 @@ impl UDFFactory {
         match UDF_FACTORY.lock() {
             Ok(mut factory) => {
                 let mut udf_parser = UDFParser::default();
-                let expr = udf_parser.parse_definition(name, parameters, definition)?;
+                let expr = udf_parser.parse_definition(tenant, name, parameters, definition)?;
 
                 let definitions = &mut factory.definitions;
                 definitions.insert(

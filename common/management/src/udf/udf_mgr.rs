@@ -67,7 +67,7 @@ impl UdfMgrApi for UdfMgr {
         }
 
         let mut udf_parser = UDFParser::default();
-        udf_parser.parse_definition(&info.name, &info.parameters, &info.definition)?;
+        udf_parser.parse_definition(&self.tenant, &info.name, &info.parameters, &info.definition)?;
 
         let seq = MatchSeq::Exact(0);
         let val = Operation::Update(serde_json::to_vec(&info)?);

@@ -24,9 +24,13 @@ use sqlparser::ast::Ident;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 use sqlparser::tokenizer::Tokenizer;
+use crate::scalars::FunctionFactory;
+use crate::aggregates::AggregateFunctionFactory;
+use crate::udfs::UDFFactory;
 
 #[derive(Default)]
 pub struct UDFParser {
+    tenant_id: String,
     name: String,
     expr_params: HashSet<String>,
 }
@@ -34,6 +38,7 @@ pub struct UDFParser {
 impl UDFParser {
     pub fn parse_definition(
         &mut self,
+        tenant_id: &str,
         name: &str,
         parameters: &[String],
         definition: &str,
@@ -44,7 +49,7 @@ impl UDFParser {
         match tokenizer.tokenize() {
             Ok(tokens) => match Parser::new(tokens, dialect).parse_expr() {
                 Ok(definition_expr) => {
-                    self.verify_definition_expr(name, parameters, &definition_expr)?;
+                    self.verify_definition_expr(tenant_id, name, parameters, &definition_expr)?;
                     Ok(definition_expr)
                 }
                 Err(parse_error) => Err(ErrorCode::from(parse_error)),
@@ -58,12 +63,14 @@ impl UDFParser {
 
     fn verify_definition_expr(
         &mut self,
+        tenant_id: &str,
         name: &str,
         parameters: &[String],
         definition_expr: &Expr,
     ) -> Result<()> {
         let expr_params = &mut self.expr_params;
         expr_params.clear();
+        self.tenant_id = tenant_id.to_string();
         self.name = name.to_string();
 
         ExprTraverser::accept(definition_expr, self)?;
@@ -102,9 +109,16 @@ impl ExprVisitor for UDFParser {
                 Ok(())
             }
             Expr::Function(Function { name, .. }) => {
-                if self.name == name.to_string() {
+                let name = &name.to_string();
+                if !FunctionFactory::instance().check(name)
+                    && !AggregateFunctionFactory::instance().check(name)
+                    && match UDFFactory::get_definition(&self.tenant_id, name) {
+                        Ok(Some(_)) => false,
+                        _ => true,
+                    }
+                {
                     Err(ErrorCode::SyntaxException(format!(
-                        "UDF does not support recursion: {:?}",
+                        "Function is not builtin or defined: {}",
                         name
                     )))
                 } else {

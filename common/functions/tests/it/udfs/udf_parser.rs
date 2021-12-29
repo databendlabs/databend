@@ -25,7 +25,7 @@ use sqlparser::ast::UnaryOperator;
 #[test]
 fn test_udf_parser() -> Result<()> {
     let mut parser = UDFParser::default();
-    let result = parser.parse_definition("test", &["p".to_string()], "not(isnull(p))");
+    let result = parser.parse_definition("tenant", "test", &["p".to_string()], "not(isnull(p))");
 
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), Expr::UnaryOp {
@@ -46,13 +46,20 @@ fn test_udf_parser() -> Result<()> {
     });
 
     assert!(parser
-        .parse_definition("test", &["p".to_string()], "not(isnull(p, d))")
+        .parse_definition("tenant", "test", &["p".to_string()], "not(isnull(p, d))")
         .is_err());
     assert!(parser
-        .parse_definition("test", &["d".to_string()], "not(isnull(p))")
+        .parse_definition("tenant", "test", &["d".to_string()], "not(isnull(p))")
+        .is_err());
+    assert!(parser
+        .parse_definition("tenant", "test", &["d".to_string()], "not(unknown_udf(p))")
+        .is_err());
+    assert!(parser
+        .parse_definition("recursive", "test", &["d".to_string()], "not(recursive(p))")
         .is_err());
     assert!(parser
         .parse_definition(
+            "tenant",
             "test",
             &["d".to_string(), "p".to_string()],
             "not(isnull(p, d))"
