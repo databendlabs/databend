@@ -95,7 +95,7 @@ where T: ArithmeticTrait + Clone + Sync + Send + 'static
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         let result = T::arithmetic(columns)?;
-        if self.result_type.is_date_or_date_time() {
+        if result.data_type() != self.result_type {
             result.cast_with_type(&self.result_type)
         } else {
             Ok(result)

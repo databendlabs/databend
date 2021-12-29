@@ -239,31 +239,6 @@ macro_rules! interval_arithmetic {
 }
 
 #[macro_export]
-macro_rules! arithmetic_helper {
-    ($lhs: ident, $rhs: ident, $R: ty, $scalar: expr, $op: expr) => {{
-        match ($lhs.len(), $rhs.len()) {
-            (a, b) if a == b => binary($lhs, $rhs, |l, r| $op(l, r)),
-            (_, 1) => {
-                let opt_rhs = $rhs.get(0);
-                match opt_rhs {
-                    None => DFPrimitiveArray::<$R>::full_null($lhs.len()),
-                    Some(rhs) => $scalar($lhs, &rhs),
-                }
-            }
-            (1, _) => {
-                let opt_lhs = $lhs.get(0);
-                match opt_lhs {
-                    None => DFPrimitiveArray::<$R>::full_null($rhs.len()),
-                    Some(lhs) => unary($rhs, |r| $op(lhs, r)),
-                }
-            }
-            _ => unreachable!(),
-        }
-        .into()
-    }};
-}
-
-#[macro_export]
 macro_rules! unary_arithmetic {
     ($self: expr, $op: expr) => {{
         let series = $self.to_minimal_array()?;
