@@ -22,6 +22,7 @@ use crate::binary_arithmetic_helper;
 use crate::interval_arithmetic;
 use crate::scalars::dates::IntervalFunctionFactory;
 
+// Interval(DayTime) + Date16
 #[derive(Clone)]
 pub struct IntervalDaytimeAddDate16 {}
 
@@ -32,6 +33,7 @@ impl ArithmeticTrait for IntervalDaytimeAddDate16 {
     }
 }
 
+// Interval(DayTime) + Date32
 #[derive(Clone)]
 pub struct IntervalDaytimeAddDate32 {}
 
@@ -42,6 +44,7 @@ impl ArithmeticTrait for IntervalDaytimeAddDate32 {
     }
 }
 
+// Interval(DayTime) + DateTime32
 #[derive(Clone)]
 pub struct IntervalDaytimeAddDatetime32 {}
 
@@ -52,6 +55,7 @@ impl ArithmeticTrait for IntervalDaytimeAddDatetime32 {
     }
 }
 
+// Interval(YearMonth) + Date16
 #[derive(Clone)]
 pub struct IntervalMonthAddDate16 {}
 
@@ -65,6 +69,7 @@ impl ArithmeticTrait for IntervalMonthAddDate16 {
     }
 }
 
+// Interval(YearMonth) + Date32
 #[derive(Clone)]
 pub struct IntervalMonthAddDate32 {}
 
@@ -78,6 +83,7 @@ impl ArithmeticTrait for IntervalMonthAddDate32 {
     }
 }
 
+// Interval(YearMonth) + DateTime32
 #[derive(Clone)]
 pub struct IntervalMonthAddDatetime32 {}
 
@@ -91,6 +97,7 @@ impl ArithmeticTrait for IntervalMonthAddDatetime32 {
     }
 }
 
+// Interval(DayTime) - Date16
 #[derive(Clone)]
 pub struct IntervalDaytimeSubDate16 {}
 
@@ -101,6 +108,7 @@ impl ArithmeticTrait for IntervalDaytimeSubDate16 {
     }
 }
 
+// Interval(DayTime) - Date32
 #[derive(Clone)]
 pub struct IntervalDaytimeSubDate32 {}
 
@@ -111,6 +119,7 @@ impl ArithmeticTrait for IntervalDaytimeSubDate32 {
     }
 }
 
+// Interval(DayTime) - DateTime32
 #[derive(Clone)]
 pub struct IntervalDaytimeSubDatetime32 {}
 
@@ -121,6 +130,7 @@ impl ArithmeticTrait for IntervalDaytimeSubDatetime32 {
     }
 }
 
+// Interval(YearMonth) - Date16
 #[derive(Clone)]
 pub struct IntervalMonthSubDate16 {}
 
@@ -134,6 +144,7 @@ impl ArithmeticTrait for IntervalMonthSubDate16 {
     }
 }
 
+// Interval(YearMonth) - Date32
 #[derive(Clone)]
 pub struct IntervalMonthSubDate32 {}
 
@@ -147,6 +158,7 @@ impl ArithmeticTrait for IntervalMonthSubDate32 {
     }
 }
 
+// Interval(YearMonth) - DateTime32
 #[derive(Clone)]
 pub struct IntervalMonthSubDatetime32 {}
 

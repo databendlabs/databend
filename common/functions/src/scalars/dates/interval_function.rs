@@ -172,32 +172,6 @@ pub type IntegerSecondsArithmeticFunction = fn(
 pub struct IntervalFunctionFactory;
 
 impl IntervalFunctionFactory {
-    pub fn try_get_arithmetic_func(
-        columns: &DataColumnsWithField,
-    ) -> Option<IntervalArithmeticFunction> {
-        if columns.len() != 2 {
-            return None;
-        }
-
-        let mut interval_opt = None;
-        let mut date_datetime_opt = None;
-        columns.iter().for_each(|column| match column.data_type() {
-            DataType::Interval(_) => interval_opt = Some(column),
-            DataType::Date16 | DataType::Date32 | DataType::DateTime32(_) => {
-                date_datetime_opt = Some(column)
-            }
-            _ => {}
-        });
-
-        if interval_opt.is_none() || date_datetime_opt.is_none() {
-            return None;
-        }
-        Some(Self::get_interval_arithmetic_func(
-            interval_opt.unwrap().data_type(),
-            date_datetime_opt.unwrap().data_type(),
-        ))
-    }
-
     #[inline]
     fn interval_operation<T, D, R>(
         lhs: &DFPrimitiveArray<T>,
@@ -222,106 +196,9 @@ impl IntervalFunctionFactory {
 
     //////////////////////////////////////////////////////////////////////////////////////////////
     //  Starting from here is interval typed arithmetic functions, including:
-    //   1. interval_daytime_plus_minus_date16 ------- Interval(DayTime)   +/-  Date16
-    //   2. interval_daytime_plus_minus_date32 ------- Interval(DayTime)   +/-  Date32
-    //   3. interval_daytime_plus_minus_datetime32 --- Interval(DayTime)   +/-  DateTime32
-    //   4. interval_month_plus_minus_date16 --------- Interval(YearMonth) +/-  Date16
-    //   5. interval_month_plus_minus_date32 --------- Interval(YearMonth) +/-  Date32
-    //   6. interval_month_plus_minus_datetime32 ----- Interval(YearMonth) +/-  DateTime32
-
-    fn get_interval_arithmetic_func(
-        interval: &DataType,
-        date_datetime: &DataType,
-    ) -> IntervalArithmeticFunction {
-        match interval {
-            DataType::Interval(IntervalUnit::YearMonth) => match date_datetime {
-                DataType::Date16 => Self::interval_month_plus_minus_date16,
-                DataType::Date32 => Self::interval_month_plus_minus_date32,
-                DataType::DateTime32(_) => Self::interval_month_plus_minus_datetime32,
-                _ => unreachable!(),
-            },
-            DataType::Interval(IntervalUnit::DayTime) => match date_datetime {
-                DataType::Date16 => Self::interval_daytime_plus_minus_date16,
-                DataType::Date32 => Self::interval_daytime_plus_minus_date32,
-                DataType::DateTime32(_) => Self::interval_daytime_plus_minus_datetime32,
-                _ => unreachable!(),
-            },
-            _ => unreachable!(),
-        }
-    }
-
-    fn interval_daytime_plus_minus_date16(
-        op: &DataValueBinaryOperator,
-        a: &DataColumnWithField,
-        b: &DataColumnWithField,
-    ) -> Result<DataColumn> {
-        let (interval, date16) = Self::validate_input(op, a, b)?;
-        let milliseconds_per_day = 24 * 3600 * 1000;
-        let res = Self::interval_operation(
-            interval.column().to_array()?.i64()?,
-            date16.column().to_array()?.u16()?,
-            |ms: &i64, days: &u16| {
-                let r = match op {
-                    DataValueBinaryOperator::Plus => {
-                        (*days as i64 + *ms / milliseconds_per_day) as u16
-                    }
-                    DataValueBinaryOperator::Minus => {
-                        (*days as i64 - *ms / milliseconds_per_day) as u16
-                    }
-                    _ => unreachable!(),
-                };
-                Ok(r)
-            },
-        )?;
-        Ok(res.into())
-    }
-
-    fn interval_daytime_plus_minus_date32(
-        op: &DataValueBinaryOperator,
-        a: &DataColumnWithField,
-        b: &DataColumnWithField,
-    ) -> Result<DataColumn> {
-        let (interval, date32) = Self::validate_input(op, a, b)?;
-        let milliseconds_per_day = 24 * 3600 * 1000;
-        let res = Self::interval_operation(
-            interval.column().to_array()?.i64()?,
-            date32.column().to_array()?.i32()?,
-            |ms: &i64, days: &i32| {
-                let r = match op {
-                    DataValueBinaryOperator::Plus => {
-                        (*days as i64 + *ms / milliseconds_per_day) as i32
-                    }
-                    DataValueBinaryOperator::Minus => {
-                        (*days as i64 - *ms / milliseconds_per_day) as i32
-                    }
-                    _ => unreachable!(),
-                };
-                Ok(r)
-            },
-        )?;
-        Ok(res.into())
-    }
-
-    fn interval_daytime_plus_minus_datetime32(
-        op: &DataValueBinaryOperator,
-        a: &DataColumnWithField,
-        b: &DataColumnWithField,
-    ) -> Result<DataColumn> {
-        let (interval, datetime) = Self::validate_input(op, a, b)?;
-        let res = Self::interval_operation(
-            interval.column().to_array()?.i64()?,
-            datetime.column().to_array()?.u32()?,
-            |ms: &i64, secs: &u32| {
-                let r = match op {
-                    DataValueBinaryOperator::Plus => (*secs as i64 + *ms / 1000) as u32,
-                    DataValueBinaryOperator::Minus => (*secs as i64 - *ms / 1000) as u32,
-                    _ => unreachable!(),
-                };
-                Ok(r)
-            },
-        )?;
-        Ok(res.into())
-    }
+    //   1. interval_month_plus_minus_date16 --------- Interval(YearMonth) +/-  Date16
+    //   2. interval_month_plus_minus_date32 --------- Interval(YearMonth) +/-  Date32
+    //   3. interval_month_plus_minus_datetime32 ----- Interval(YearMonth) +/-  DateTime32
 
     pub fn interval_month_plus_minus_date16(
         op: &DataValueBinaryOperator,
