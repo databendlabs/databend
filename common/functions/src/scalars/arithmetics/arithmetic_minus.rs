@@ -18,6 +18,7 @@ use std::ops::Mul;
 use std::ops::Sub;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::cast::AsPrimitive;
@@ -49,9 +50,12 @@ impl_binary_arith!(ArithmeticSub, -);
 pub struct ArithmeticMinusFunction;
 
 impl ArithmeticMinusFunction {
-    pub fn try_create_func(_display_name: &str, args: &[DataType]) -> Result<Box<dyn Function>> {
-        let left_type = &args[0];
-        let right_type = &args[1];
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[DataTypeAndNullable],
+    ) -> Result<Box<dyn Function>> {
+        let left_type = &args[0].data_type();
+        let right_type = &args[1].data_type();
         let op = BinaryArithmeticOperator::Minus;
         if left_type.is_interval() || right_type.is_interval() {
             return Self::try_create_interval(left_type, right_type);

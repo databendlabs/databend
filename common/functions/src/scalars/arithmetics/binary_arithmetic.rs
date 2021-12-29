@@ -16,14 +16,8 @@ use std::fmt;
 use std::marker::PhantomData;
 
 use common_datavalues::columns::DataColumn;
-<<<<<<< HEAD
 use common_datavalues::prelude::*;
 use common_datavalues::DataTypeAndNullable;
-use common_datavalues::DataValueArithmeticOperator;
-=======
-use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataType;
->>>>>>> 09b313bbb (Refactor arithmetics negate function)
 use common_exception::Result;
 
 use super::arithmetic::ArithmeticTrait;

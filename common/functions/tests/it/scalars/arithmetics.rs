@@ -121,7 +121,7 @@ fn test_arithmetic_function() -> Result<()> {
                 expect: Series::new(vec![4i64, 1, 0]).into(),
                 error: "",
             },
-        )
+        ),
         (
             ArithmeticModuloFunction::try_create_func("", &[
                 DataTypeAndNullable::create(&DataType::Int64, false),

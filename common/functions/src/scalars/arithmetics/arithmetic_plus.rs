@@ -18,11 +18,7 @@ use std::ops::Mul;
 use std::ops::Sub;
 
 use common_datavalues::prelude::*;
-<<<<<<< HEAD
 use common_datavalues::DataTypeAndNullable;
-use common_datavalues::DataValueArithmeticOperator;
-=======
->>>>>>> 09b313bbb (Refactor arithmetics negate function)
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::cast::AsPrimitive;
@@ -54,20 +50,13 @@ impl_binary_arith!(ArithmeticAdd, +);
 pub struct ArithmeticPlusFunction;
 
 impl ArithmeticPlusFunction {
-<<<<<<< HEAD
     pub fn try_create_func(
         _display_name: &str,
         args: &[DataTypeAndNullable],
     ) -> Result<Box<dyn Function>> {
         let left_type = &args[0].data_type();
         let right_type = &args[1].data_type();
-        let op = DataValueArithmeticOperator::Plus;
-=======
-    pub fn try_create_func(_display_name: &str, args: &[DataType]) -> Result<Box<dyn Function>> {
-        let left_type = &args[0];
-        let right_type = &args[1];
         let op = BinaryArithmeticOperator::Plus;
->>>>>>> 09b313bbb (Refactor arithmetics negate function)
         if left_type.is_interval() || right_type.is_interval() {
             return Self::try_create_interval(left_type, right_type);
         }

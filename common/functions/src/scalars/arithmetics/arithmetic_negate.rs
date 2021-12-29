@@ -16,6 +16,7 @@ use std::marker::PhantomData;
 use std::ops::Neg;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::cast::AsPrimitive;
@@ -41,8 +42,11 @@ impl_wrapping_unary_arith!(ArithmeticWrappingNeg, wrapping_neg);
 pub struct ArithmeticNegateFunction;
 
 impl ArithmeticNegateFunction {
-    pub fn try_create_func(_display_name: &str, args: &[DataType]) -> Result<Box<dyn Function>> {
-        let arg_type = &args[0];
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[DataTypeAndNullable],
+    ) -> Result<Box<dyn Function>> {
+        let arg_type = &args[0].data_type();
         let op = UnaryArithmeticOperator::Negate;
         let error_fn = || -> Result<Box<dyn Function>> {
             Err(ErrorCode::BadDataValueType(format!(
