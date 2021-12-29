@@ -1528,6 +1528,7 @@ dependencies = [
  "common-meta-types",
  "common-tracing",
  "derive_more",
+ "futures",
  "maplit",
  "once_cell",
  "pretty_assertions",
