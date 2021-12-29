@@ -17,8 +17,8 @@ use std::str;
 
 use common_datavalues::prelude::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_datavalues::DataValue;
 use common_exception::Result;
 
@@ -42,8 +42,11 @@ impl IgnoreFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(0, usize::MAX),
+        )
     }
 }
 
@@ -52,15 +55,11 @@ impl Function for IgnoreFunction {
         &*self.display_name
     }
 
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((0, usize::MAX))
-    }
-
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
         Ok(DataType::UInt8)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
+    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
         Ok(false)
     }
 

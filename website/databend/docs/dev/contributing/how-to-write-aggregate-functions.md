@@ -61,7 +61,7 @@ It indicates the temporary results of an aggregate function. Because an aggregat
 
 For example, in the `avg` aggregate function, we can represent the state like:
 
-```
+```rust
 struct AggregateAvgState<T: BinarySer + BinaryDe> {
     pub value: T,
     pub count: u64,
@@ -92,7 +92,8 @@ It's declared as `AggregateSumFunction<T, SumT>`, we can accept varying integer 
 Also, we can dispatch it using macros by matching the types of the arguments. Take a look at the `with_match_primitive_type` to understand the dispatch macros.
 
 The `AggregateSumState` will be
-```
+
+```rust
 struct AggregateSumState<T> {
     pub value: Option<T>,
 }

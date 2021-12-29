@@ -101,7 +101,7 @@ impl PlanScheduler {
     }
 
     /// Schedule the plan to Local or Remote mode.
-    #[tracing::instrument(level = "info", skip(self, plan))]
+    #[tracing::instrument(level = "debug", skip(self, plan))]
     pub fn reschedule(mut self, plan: &PlanNode) -> Result<Tasks> {
         let context = self.query_context.clone();
         let cluster = context.get_cluster();
@@ -822,7 +822,7 @@ impl PlanScheduler {
         self.nodes_plan[self.local_pos] = PlanNode::Sink(SinkPlan {
             table_info: plan.table_info.clone(),
             input: Arc::new(self.nodes_plan[self.local_pos].clone()),
-            cast_needed: plan.cast_needed,
+            cast_schema: plan.cast_schema.clone(),
         })
     }
 
@@ -831,7 +831,7 @@ impl PlanScheduler {
             self.nodes_plan[index] = PlanNode::Sink(SinkPlan {
                 table_info: plan.table_info.clone(),
                 input: Arc::new(self.nodes_plan[index].clone()),
-                cast_needed: plan.cast_needed,
+                cast_schema: plan.cast_schema.clone(),
             })
         }
     }

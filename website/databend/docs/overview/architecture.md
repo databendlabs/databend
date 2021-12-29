@@ -1,5 +1,5 @@
 ---
-title: Whitepapers
+title: Architecture
 ---
 
 ## Design Overview

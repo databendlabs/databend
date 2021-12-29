@@ -14,11 +14,11 @@
 
 use std::collections::HashMap;
 
-use common_datavalues::DataSchemaRef;
+use common_datavalues::{DataSchemaRef, DataTypeAndNullable};
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::FunctionFactory;
+use common_functions::scalars::{Function, FunctionFactory};
 
 use crate::Expression;
 use crate::ExpressionVisitor;
@@ -87,7 +87,7 @@ pub fn find_column_exprs(exprs: &[Expression]) -> Vec<Expression> {
 /// pass the provided test. The returned `Expression`'s are deduplicated and returned
 /// in order of appearance (depth first).
 fn find_exprs_in_exprs<F>(exprs: &[Expression], test_fn: &F) -> Vec<Expression>
-where F: Fn(&Expression) -> bool {
+    where F: Fn(&Expression) -> bool {
     exprs
         .iter()
         .flat_map(|expr| find_exprs_in_expr(expr, test_fn))
@@ -99,16 +99,16 @@ where F: Fn(&Expression) -> bool {
         })
 }
 
-// Visitor that find Expressionessions that match a particular predicate
+// Visitor that find Expressions that match a particular predicate
 struct Finder<'a, F>
-where F: Fn(&Expression) -> bool
+    where F: Fn(&Expression) -> bool
 {
     test_fn: &'a F,
     exprs: Vec<Expression>,
 }
 
 impl<'a, F> Finder<'a, F>
-where F: Fn(&Expression) -> bool
+    where F: Fn(&Expression) -> bool
 {
     /// Create a new finder with the `test_fn`
     fn new(test_fn: &'a F) -> Self {
@@ -120,7 +120,7 @@ where F: Fn(&Expression) -> bool
 }
 
 impl<'a, F> ExpressionVisitor for Finder<'a, F>
-where F: Fn(&Expression) -> bool
+    where F: Fn(&Expression) -> bool
 {
     fn pre_visit(mut self, expr: &Expression) -> Result<Recursion<Self>> {
         if (self.test_fn)(expr) {
@@ -139,7 +139,7 @@ where F: Fn(&Expression) -> bool
 /// provided test. The returned `Expression`'s are deduplicated and returned in order
 /// of appearance (depth first).
 fn find_exprs_in_expr<F>(expr: &Expression, test_fn: &F) -> Vec<Expression>
-where F: Fn(&Expression) -> bool {
+    where F: Fn(&Expression) -> bool {
     let Finder { exprs, .. } = expr
         .accept(Finder::new(test_fn))
         // pre_visit always returns OK, so this will always too
@@ -252,7 +252,7 @@ pub fn find_columns_not_satisfy_exprs(
 /// * `Err(err)`: Any error returned by the function is returned as-is by
 ///       `clone_with_replacement()`.
 fn clone_with_replacement<F>(expr: &Expression, replacement_fn: &F) -> Result<Expression>
-where F: Fn(&Expression) -> Result<Option<Expression>> {
+    where F: Fn(&Expression) -> Result<Option<Expression>> {
     let replacement_opt = replacement_fn(expr)?;
 
     match replacement_opt {
@@ -375,7 +375,7 @@ pub fn unwrap_alias_exprs(expr: &Expression) -> Result<Expression> {
 }
 
 pub struct ExpressionDataTypeVisitor {
-    stack: Vec<DataType>,
+    stack: Vec<DataTypeAndNullable>,
     input_schema: DataSchemaRef,
 }
 
@@ -387,84 +387,74 @@ impl ExpressionDataTypeVisitor {
         }
     }
 
-    fn push_to_stack(mut self, data_type: DataType) -> Result<Self> {
+    fn push_to_stack(mut self, data_type: DataTypeAndNullable) -> Result<Self> {
         self.stack.push(data_type);
         Ok(self)
     }
 
-    pub fn finalize(mut self) -> Result<DataType> {
+    pub fn finalize(mut self) -> Result<DataTypeAndNullable> {
         match self.stack.len() {
             1 => Ok(self.stack.remove(0)),
             _ => Err(ErrorCode::LogicalError("")),
         }
     }
+
+    fn visit_function(mut self, op: &str, args_size: usize) -> Result<ExpressionDataTypeVisitor> {
+        let mut arguments = Vec::with_capacity(args_size);
+        for _index in 0..args_size {
+            arguments.push(match self.stack.pop() {
+                None => Err(ErrorCode::LogicalError("")),
+                Some(element) => Ok(element)
+            }?);
+        }
+
+        let function = FunctionFactory::instance().get(op, &arguments)?;
+        let nullable = function.nullable(&arguments)?;
+        let return_type = function.return_type(&arguments)?;
+        self.stack.push(DataTypeAndNullable::create(&return_type, nullable));
+        Ok(self)
+    }
 }
 
 impl ExpressionVisitor for ExpressionDataTypeVisitor {
-    fn pre_visit(self, expr: &Expression) -> Result<Recursion<Self>> {
-        match expr {
-            Expression::Cast { .. } => Ok(Recursion::Stop(self)),
-            _ => Ok(Recursion::Continue(self)),
-        }
+    fn pre_visit(self, _expr: &Expression) -> Result<Recursion<Self>> {
+        Ok(Recursion::Continue(self))
     }
 
     fn post_visit(mut self, expr: &Expression) -> Result<Self> {
         match expr {
             Expression::Column(s) => {
-                let column_type = self.input_schema.field_with_name(s)?.data_type().clone();
-                self.push_to_stack(column_type)
+                let field = self.input_schema.field_with_name(s)?;
+                self.push_to_stack(DataTypeAndNullable::create(
+                    field.data_type(),
+                    field.is_nullable(),
+                ))
             }
+            Expression::Wildcard => Result::Err(ErrorCode::IllegalDataType(
+                "Wildcard expressions are not valid to get return type",
+            )),
             Expression::QualifiedColumn(_) => Err(ErrorCode::LogicalError(
                 "QualifiedColumn should be resolve in analyze.",
             )),
-            Expression::Literal { data_type, .. } => self.push_to_stack(data_type.clone()),
+            Expression::Literal { data_type, .. } => {
+                self.push_to_stack(DataTypeAndNullable::create(data_type, true))
+            }
             Expression::Subquery { query_plan, .. } => {
                 self.push_to_stack(Expression::to_subquery_type(query_plan))
             }
             Expression::ScalarSubquery { query_plan, .. } => {
                 self.push_to_stack(Expression::to_subquery_type(query_plan))
             }
-            Expression::BinaryExpression { op, .. } => {
-                let func = FunctionFactory::instance().get(op)?;
-                match (self.stack.pop(), self.stack.pop()) {
-                    (Some(left), Some(right)) => {
-                        self.push_to_stack(func.return_type(&[left, right])?)
-                    }
-                    (_, _) => Err(ErrorCode::LogicalError("")),
-                }
-            }
-            Expression::UnaryExpression { op, .. } => {
-                let func = FunctionFactory::instance().get(op)?;
-                match self.stack.pop() {
-                    None => Err(ErrorCode::LogicalError("")),
-                    Some(arg_type) => self.push_to_stack(func.return_type(&[arg_type])?),
-                }
-            }
-            Expression::ScalarFunction { op, args } => {
-                let mut arg_types = Vec::with_capacity(args.len());
-                for _index in 0..args.len() {
-                    match self.stack.pop() {
-                        None => {
-                            return Err(ErrorCode::LogicalError(""));
-                        }
-                        Some(arg_type) => arg_types.push(arg_type),
-                    };
-                }
-
-                let func = FunctionFactory::instance().get(op)?;
-                self.push_to_stack(func.return_type(&arg_types)?)
-            }
+            Expression::BinaryExpression { op, .. } => self.visit_function(op, 2),
+            Expression::UnaryExpression { op, .. } => self.visit_function(op, 1),
+            Expression::ScalarFunction { op, args } => self.visit_function(op, args.len()),
             expr @ Expression::AggregateFunction { .. } => {
-                let agg_type = expr
-                    .to_aggregate_function(&self.input_schema)?
-                    .return_type()?;
-                self.push_to_stack(agg_type)
+                let aggregate_function = expr.to_aggregate_function(&self.input_schema)?;
+                let return_type = aggregate_function.return_type()?;
+                let nullable = aggregate_function.nullable(&self.input_schema)?;
+                self.push_to_stack(DataTypeAndNullable::create(&return_type, nullable))
             }
-            Expression::Wildcard => Result::Err(ErrorCode::IllegalDataType(
-                "Wildcard expressions are not valid to get return type",
-            )),
-            Expression::Cast { data_type, .. } => self.push_to_stack(data_type.clone()),
-            Expression::Alias(_, _) | Expression::Sort { .. } => Ok(self),
+            Expression::Cast { .. } | Expression::Alias(_, _) | Expression::Sort { .. } => Ok(self),
         }
     }
 }

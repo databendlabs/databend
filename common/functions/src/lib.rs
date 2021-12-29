@@ -14,3 +14,4 @@
 
 pub mod aggregates;
 pub mod scalars;
+pub mod udfs;

@@ -73,6 +73,7 @@ impl Processor for ProjectionTransform {
         self
     }
 
+    #[tracing::instrument(level = "debug", name = "projection_execute", skip(self))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!("execute...");
 

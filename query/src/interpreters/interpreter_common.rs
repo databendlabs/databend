@@ -16,15 +16,9 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_types::GrantObject;
-use common_planners::PlanNode;
 
 use crate::catalogs::Catalog;
-use crate::optimizers::Optimizers;
 use crate::sessions::QueryContext;
-
-pub fn apply_plan_rewrite(mut optimizer: Optimizers, plan: &PlanNode) -> Result<PlanNode> {
-    optimizer.optimize(plan)
-}
 
 pub async fn grant_object_exists_or_err(
     ctx: &Arc<QueryContext>,

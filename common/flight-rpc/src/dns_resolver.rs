@@ -30,7 +30,7 @@ use hyper::client::connect::dns::Name;
 use hyper::client::HttpConnector;
 use hyper::service::Service;
 use hyper::Uri;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use tonic::transport::Certificate;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
@@ -42,17 +42,14 @@ pub struct DNSResolver {
     inner: TokioAsyncResolver,
 }
 
-lazy_static! {
-    static ref INSTANCE: Result<Arc<DNSResolver>> = {
-        match TokioAsyncResolver::tokio_from_system_conf() {
-            Err(error) => Result::Err(ErrorCode::DnsParseError(format!(
-                "DNS resolver create error: {}",
-                error
-            ))),
-            Ok(resolver) => Ok(Arc::new(DNSResolver { inner: resolver })),
-        }
-    };
-}
+static INSTANCE: Lazy<Result<Arc<DNSResolver>>> =
+    Lazy::new(|| match TokioAsyncResolver::tokio_from_system_conf() {
+        Err(error) => Result::Err(ErrorCode::DnsParseError(format!(
+            "DNS resolver create error: {}",
+            error
+        ))),
+        Ok(resolver) => Ok(Arc::new(DNSResolver { inner: resolver })),
+    });
 
 impl DNSResolver {
     pub fn instance() -> Result<Arc<DNSResolver>> {

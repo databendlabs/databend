@@ -53,8 +53,12 @@ impl DateFunction {
             RoundFunction::try_create(display_name, round)
         });
 
-        FunctionDescription::creator(creator)
-            .features(FunctionFeatures::default().deterministic().monotonicity())
+        FunctionDescription::creator(creator).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .monotonicity()
+                .num_arguments(1),
+        )
     }
 
     fn month_arithmetic_function_creator(factor: i64) -> FunctionDescription {
@@ -77,7 +81,7 @@ impl DateFunction {
         };
 
         FunctionDescription::creator(function_creator)
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 
     fn seconds_arithmetic_function_creator(factor: i64) -> FunctionDescription {
@@ -100,7 +104,7 @@ impl DateFunction {
         };
 
         FunctionDescription::creator(function_creator)
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(2))
     }
 
     pub fn register(factory: &mut FunctionFactory) {

@@ -19,7 +19,7 @@ use common_datavalues::DataField;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::Aggregators;
@@ -38,14 +38,12 @@ pub type AggregateFunctionCombinatorCreator = Box<
         + Send,
 >;
 
-lazy_static! {
-    static ref FACTORY: Arc<AggregateFunctionFactory> = {
-        let mut factory = AggregateFunctionFactory::create();
-        Aggregators::register(&mut factory);
-        Aggregators::register_combinator(&mut factory);
-        Arc::new(factory)
-    };
-}
+static FACTORY: Lazy<Arc<AggregateFunctionFactory>> = Lazy::new(|| {
+    let mut factory = AggregateFunctionFactory::create();
+    Aggregators::register(&mut factory);
+    Aggregators::register_combinator(&mut factory);
+    Arc::new(factory)
+});
 
 pub struct AggregateFunctionDescription {
     aggregate_function_creator: AggregateFunctionCreator,

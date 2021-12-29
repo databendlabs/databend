@@ -20,15 +20,19 @@ use common_planners::PlanNode;
 
 use super::DescribeStageInterpreter;
 use crate::interpreters::interpreter_stage_drop::DropStageInterpreter;
+use crate::interpreters::interpreter_table_optimize::OptimizeTableInterpreter;
+use crate::interpreters::AlterUDFInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CopyInterpreter;
 use crate::interpreters::CreatStageInterpreter;
+use crate::interpreters::CreatUDFInterpreter;
 use crate::interpreters::CreateDatabaseInterpreter;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::CreateUserInterpreter;
 use crate::interpreters::DescribeTableInterpreter;
 use crate::interpreters::DropDatabaseInterpreter;
 use crate::interpreters::DropTableInterpreter;
+use crate::interpreters::DropUDFInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::ExplainInterpreter;
 use crate::interpreters::GrantPrivilegeInterpreter;
@@ -39,8 +43,10 @@ use crate::interpreters::KillInterpreter;
 use crate::interpreters::RevokePrivilegeInterpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::interpreters::SettingInterpreter;
+use crate::interpreters::ShowCreateDatabaseInterpreter;
 use crate::interpreters::ShowCreateTableInterpreter;
 use crate::interpreters::ShowGrantsInterpreter;
+use crate::interpreters::ShowUDFInterpreter;
 use crate::interpreters::TruncateTableInterpreter;
 use crate::interpreters::UseDatabaseInterpreter;
 use crate::sessions::QueryContext;
@@ -59,6 +65,7 @@ impl InterpreterFactory {
             PlanNode::DropTable(v) => DropTableInterpreter::try_create(ctx_clone, v),
             PlanNode::DescribeTable(v) => DescribeTableInterpreter::try_create(ctx_clone, v),
             PlanNode::TruncateTable(v) => TruncateTableInterpreter::try_create(ctx_clone, v),
+            PlanNode::OptimizeTable(v) => OptimizeTableInterpreter::try_create(ctx_clone, v),
             PlanNode::UseDatabase(v) => UseDatabaseInterpreter::try_create(ctx_clone, v),
             PlanNode::SetVariable(v) => SettingInterpreter::try_create(ctx_clone, v),
             PlanNode::Insert(v) => InsertInterpreter::try_create(ctx_clone, v),
@@ -74,6 +81,13 @@ impl InterpreterFactory {
             PlanNode::DropUserStage(v) => DropStageInterpreter::try_create(ctx_clone, v),
             PlanNode::ShowGrants(v) => ShowGrantsInterpreter::try_create(ctx_clone, v),
             PlanNode::DescribeStage(v) => DescribeStageInterpreter::try_create(ctx_clone, v),
+            PlanNode::ShowCreateDatabase(v) => {
+                ShowCreateDatabaseInterpreter::try_create(ctx_clone, v)
+            }
+            PlanNode::CreateUDF(v) => CreatUDFInterpreter::try_create(ctx_clone, v),
+            PlanNode::DropUDF(v) => DropUDFInterpreter::try_create(ctx_clone, v),
+            PlanNode::ShowUDF(v) => ShowUDFInterpreter::try_create(ctx_clone, v),
+            PlanNode::AlterUDF(v) => AlterUDFInterpreter::try_create(ctx_clone, v),
             _ => Result::Err(ErrorCode::UnknownTypeOfQuery(format!(
                 "Can't get the interpreter by plan:{}",
                 plan.name()

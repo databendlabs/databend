@@ -1,12 +1,9 @@
 [advisories]
 ignore = [
-    # https://github.com/datafuselabs/databend/issues/3159
-    "RUSTSEC-2021-0119",
     # https://github.com/datafuselabs/databend/issues/2565
     # need to fix upstream rusoto dependencies on credential and sts for this issue as well
     "RUSTSEC-2020-0159",
     "RUSTSEC-2020-0071",
     # https://github.com/datafuselabs/databend/issues/2690
-    "RUSTSEC-2021-0122"
-
+    "RUSTSEC-2021-0122",
 ]

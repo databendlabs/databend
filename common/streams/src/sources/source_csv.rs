@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_exception::ToErrorCode;
 use csv_async::AsyncReader;
 use csv_async::AsyncReaderBuilder;
+use csv_async::Terminator;
 use futures::stream::StreamExt;
 use futures::AsyncRead;
 
@@ -39,10 +40,20 @@ where R: AsyncRead + Unpin + Send
         reader: R,
         schema: DataSchemaRef,
         header: bool,
+        field_delimitor: u8,
+        record_delimitor: u8,
         block_size: usize,
     ) -> Result<Self> {
+        let record_delimitor = if record_delimitor == b'\n' || record_delimitor == b'\r' {
+            Terminator::CRLF
+        } else {
+            Terminator::Any(record_delimitor)
+        };
+
         let reader = AsyncReaderBuilder::new()
             .has_headers(header)
+            .delimiter(field_delimitor)
+            .terminator(record_delimitor)
             .create_reader(reader);
 
         Ok(Self {

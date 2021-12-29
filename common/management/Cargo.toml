@@ -18,9 +18,9 @@ common-exception= {path = "../exception"}
 common-meta-api= {path = "../meta/api" }
 common-meta-types= {path = "../meta/types"}
 common-tracing= {path = "../tracing"}
+common-functions= {path = "../functions"}
 
 async-trait = "0.1.52"
-lazy_static = "1.4.0"
 serde = { version = "1.0.132", features = ["derive"] }
 serde_json = "1.0.73"
 tempfile = "3.2.0"

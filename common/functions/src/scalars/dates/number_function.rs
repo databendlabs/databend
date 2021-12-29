@@ -21,6 +21,7 @@ use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::Timelike;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -395,7 +396,7 @@ where
     }
 
     pub fn desc() -> FunctionDescription {
-        let mut features = FunctionFeatures::default().monotonicity();
+        let mut features = FunctionFeatures::default().monotonicity().num_arguments(1);
 
         if T::IS_DETERMINISTIC {
             features = features.deterministic();
@@ -415,16 +416,8 @@ where
         self.display_name.as_str()
     }
 
-    fn num_arguments(&self) -> usize {
-        1
-    }
-
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
         T::return_type()
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

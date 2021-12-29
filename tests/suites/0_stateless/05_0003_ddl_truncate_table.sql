@@ -13,7 +13,3 @@ TRUNCATE TABLE t2;
 SELECT * FROM t2;
 DROP TABLE IF EXISTS t2;
 
-DROP TABLE IF EXISTS default.t3;
-create table default.t3 (id int,name varchar(255),rank int) Engine = CSV location = 'tests/data/sample.csv';
-TRUNCATE TABLE t3; -- {ErrorCode 2}
-DROP TABLE IF EXISTS default.t3;

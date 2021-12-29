@@ -19,6 +19,10 @@ use common_datavalues::DataSchemaRef;
 use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::plan_user_stage_create::CreateUserStagePlan;
+use crate::plan_user_udf_alter::AlterUDFPlan;
+use crate::plan_user_udf_create::CreateUDFPlan;
+use crate::plan_user_udf_drop::DropUDFPlan;
+use crate::plan_user_udf_show::ShowUDFPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
 use crate::AlterUserPlan;
@@ -42,12 +46,14 @@ use crate::InsertPlan;
 use crate::KillPlan;
 use crate::LimitByPlan;
 use crate::LimitPlan;
+use crate::OptimizeTablePlan;
 use crate::ProjectionPlan;
 use crate::ReadDataSourcePlan;
 use crate::RemotePlan;
 use crate::RevokePrivilegePlan;
 use crate::SelectPlan;
 use crate::SettingPlan;
+use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
 use crate::ShowGrantsPlan;
 use crate::SinkPlan;
@@ -82,6 +88,7 @@ pub enum PlanNode {
     DescribeTable(DescribeTablePlan),
     DescribeStage(DescribeStagePlan),
     DropTable(DropTablePlan),
+    OptimizeTable(OptimizeTablePlan),
     TruncateTable(TruncateTablePlan),
     UseDatabase(UseDatabasePlan),
     SetVariable(SettingPlan),
@@ -98,6 +105,11 @@ pub enum PlanNode {
     CreateUserStage(CreateUserStagePlan),
     DropUserStage(DropUserStagePlan),
     ShowGrants(ShowGrantsPlan),
+    ShowCreateDatabase(ShowCreateDatabasePlan),
+    CreateUDF(CreateUDFPlan),
+    DropUDF(DropUDFPlan),
+    ShowUDF(ShowUDFPlan),
+    AlterUDF(AlterUDFPlan),
 }
 
 impl PlanNode {
@@ -124,6 +136,7 @@ impl PlanNode {
             PlanNode::CreateTable(v) => v.schema(),
             PlanNode::DropTable(v) => v.schema(),
             PlanNode::DescribeTable(v) => v.schema(),
+            PlanNode::OptimizeTable(v) => v.schema(),
             PlanNode::DescribeStage(v) => v.schema(),
             PlanNode::TruncateTable(v) => v.schema(),
             PlanNode::SetVariable(v) => v.schema(),
@@ -143,6 +156,11 @@ impl PlanNode {
             PlanNode::CreateUserStage(v) => v.schema(),
             PlanNode::DropUserStage(v) => v.schema(),
             PlanNode::ShowGrants(v) => v.schema(),
+            PlanNode::ShowCreateDatabase(v) => v.schema(),
+            PlanNode::CreateUDF(v) => v.schema(),
+            PlanNode::DropUDF(v) => v.schema(),
+            PlanNode::ShowUDF(v) => v.schema(),
+            PlanNode::AlterUDF(v) => v.schema(),
         }
     }
 
@@ -167,6 +185,7 @@ impl PlanNode {
             PlanNode::DropDatabase(_) => "DropDatabasePlan",
             PlanNode::CreateTable(_) => "CreateTablePlan",
             PlanNode::DescribeTable(_) => "DescribeTablePlan",
+            PlanNode::OptimizeTable(_) => "OptimizeTablePlan",
             PlanNode::DescribeStage(_) => "DescribeStagePlan",
             PlanNode::DropTable(_) => "DropTablePlan",
             PlanNode::TruncateTable(_) => "TruncateTablePlan",
@@ -187,6 +206,11 @@ impl PlanNode {
             PlanNode::CreateUserStage(_) => "CreateUserStagePlan",
             PlanNode::DropUserStage(_) => "DropUserStagePlan",
             PlanNode::ShowGrants(_) => "ShowGrantsPlan",
+            PlanNode::ShowCreateDatabase(_) => "ShowCreateDatabasePlan",
+            PlanNode::CreateUDF(_) => "CreateUDFPlan",
+            PlanNode::DropUDF(_) => "DropUDFPlan",
+            PlanNode::ShowUDF(_) => "ShowUDF",
+            PlanNode::AlterUDF(_) => "AlterUDF",
         }
     }
 

@@ -2,7 +2,7 @@ module.exports = function (context, options) {
   return {
     configurePostCss(postcssOptions) {
       postcssOptions.plugins.push(
-        require('postcss-px-to-viewport')({
+        require('postcss-px-to-viewport-8-plugin')({
           exclude: [/node_modules/],
           minPixelValue: 1,
           unitPrecision: 7, 

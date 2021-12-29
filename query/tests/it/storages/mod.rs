@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod csv;
 mod fuse;
 mod index;
 mod memory;
 mod null;
-mod parquet;
 mod system;

@@ -27,7 +27,7 @@ use common_planners::col;
 use common_planners::lit;
 use common_planners::Extras;
 use databend_query::catalogs::Catalog;
-use databend_query::storages::fuse::io;
+use databend_query::storages::fuse::io::SnapshotReader;
 use databend_query::storages::fuse::pruning::apply_block_pruning;
 use databend_query::storages::fuse::TBL_OPT_KEY_CHUNK_BLOCK_NUM;
 use databend_query::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
@@ -97,7 +97,8 @@ async fn test_block_pruner() -> Result<()> {
         .options()
         .get(TBL_OPT_KEY_SNAPSHOT_LOC)
         .unwrap();
-    let snapshot = io::read_obj(da.as_ref(), snapshot_loc.clone(), ctx.get_table_cache()).await?;
+    let snapshot =
+        SnapshotReader::read(da.as_ref(), snapshot_loc.clone(), ctx.get_table_cache()).await?;
 
     // no pruning
     let push_downs = None;

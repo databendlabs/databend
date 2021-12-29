@@ -58,6 +58,8 @@ impl SQLCommon {
                     "DATE32" => Ok(DataType::Date32),
                     "DATETIME" => Ok(DataType::DateTime32(None)),
                     "DATETIME32" => Ok(DataType::DateTime32(None)),
+                    // TODO parse precision
+                    "DATETIME64" => Ok(DataType::DateTime64(3, None)),
                     "SIGNED" => Ok(DataType::Int64),
                     "UNSIGNED" => Ok(DataType::UInt64),
 

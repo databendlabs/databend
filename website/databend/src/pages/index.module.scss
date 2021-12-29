@@ -11,6 +11,7 @@
   background-attachment: fixed;
   background-size: cover;
   height: 100vh;
+  background-color: #161d20;
   .container{
     .heroTitle, .heroSubTitle{
       color: $colorWhite;
@@ -29,6 +30,7 @@
       }
       @include media{
         margin-top: mpx(10);
+        margin-right: 0;
       }
     }
     .arrow{

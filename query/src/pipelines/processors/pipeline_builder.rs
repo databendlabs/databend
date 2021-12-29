@@ -71,7 +71,7 @@ impl PipelineBuilder {
         }
     }
 
-    #[tracing::instrument(level = "info", skip(self))]
+    #[tracing::instrument(level = "debug", skip(self))]
     pub fn build(mut self, node: &PlanNode) -> Result<Pipeline> {
         tracing::debug!("Received plan:\n{:?}", node);
         let pipeline = self.visit(node)?;
@@ -330,7 +330,7 @@ impl PipelineBuilder {
             Ok(Box::new(SinkTransform::create(
                 self.ctx.clone(),
                 plan.table_info.clone(),
-                plan.cast_needed,
+                plan.cast_schema.clone(),
                 plan.input.schema(),
             )))
         })?;

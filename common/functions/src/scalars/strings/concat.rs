@@ -15,6 +15,7 @@
 use std::fmt;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
@@ -34,8 +35,11 @@ impl ConcatFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(1, 1024),
+        )
     }
 
     fn concat_column(lhs: DataColumn, columns: &DataColumnsWithField) -> Result<DataColumn> {
@@ -119,21 +123,13 @@ impl Function for ConcatFunction {
         "concat"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
         for arg in args {
             if arg.is_null() {
                 return Ok(DataType::Null);
             }
         }
         Ok(DataType::String)
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((1, 1024))
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

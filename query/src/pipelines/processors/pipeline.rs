@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 
 use super::MixedProcessor;
 use crate::pipelines::processors::MergeProcessor;
@@ -150,6 +151,7 @@ impl Pipeline {
         Ok(())
     }
 
+    #[tracing::instrument(level = "debug", name="pipeline_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     pub async fn execute(&mut self) -> Result<SendableDataBlockStream> {
         if self.last_pipe()?.nums() > 1 {
             self.merge_processor()?;

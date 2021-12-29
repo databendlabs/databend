@@ -33,7 +33,8 @@ impl LogicNotFunction {
             FunctionFeatures::default()
                 .deterministic()
                 .negative_function("")
-                .bool_function(),
+                .bool_function()
+                .num_arguments(1),
         )
     }
 }
