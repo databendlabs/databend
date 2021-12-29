@@ -32,4 +32,5 @@ csv-async = { git = "https://github.com/datafuse-extras/csv-async", rev = "cb521
 futures = "0.3.18"
 pin-project-lite = "0.2.7"
 tempfile = "3.2.0"
+tokio-rayon = "2.1.0"
 tokio-stream = { version = "0.1.8", features = ["net"] }

@@ -72,6 +72,8 @@ impl FuseTable {
         // 1. when using `stream!`, the trace always contains a unclosed call-span (of ParquetSource::read)
         // 2. later, when `bit_size` is larger than one, the async reads could be buffered
 
+        let dedicated_decompression_thread_pool =
+            ctx.get_settings().get_decompress_in_thread_pool()? == 1;
         let stream = part_stream
             .map(move |part| {
                 let da = da.clone();
@@ -80,6 +82,9 @@ impl FuseTable {
                 async move {
                     let mut source =
                         ParquetSource::new(da, part.name.clone(), table_schema, projection);
+                    if dedicated_decompression_thread_pool {
+                        source.enable_decompress_in_pool()
+                    }
                     source.read().await?.ok_or_else(|| {
                         ErrorCode::ParquetError(format!("fail to read block {}", part.name))
                     })

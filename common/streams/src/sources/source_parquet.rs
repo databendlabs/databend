@@ -46,6 +46,7 @@ pub struct ParquetSource {
     row_group: usize,
     row_groups: usize,
     metadata: Option<FileMetaData>,
+    decompress_in_thread_pool: bool,
 }
 
 impl ParquetSource {
@@ -65,7 +66,12 @@ impl ParquetSource {
             row_group: 0,
             row_groups: 0,
             metadata: None,
+            decompress_in_thread_pool: false,
         }
+    }
+
+    pub fn enable_decompress_in_pool(&mut self) {
+        self.decompress_in_thread_pool = true
     }
 }
 
@@ -102,6 +108,7 @@ impl Source for ParquetSource {
             .map(|idx| (metadata.row_groups[row_group].column(idx).clone(), idx));
 
         let fields = self.arrow_table_schema.fields();
+        let dedicated_decompression_thread_pool = self.decompress_in_thread_pool;
 
         let stream = futures::stream::iter(cols).map(|(col_meta, idx)| {
             let data_accessor = self.data_accessor.clone();
@@ -115,13 +122,22 @@ impl Source for ParquetSource {
                         .instrument(debug_span!("parquet_source_get_column_page"))
                         .await
                         .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-                let pages = col_pages.map(|compressed_page| {
-                    debug_span!("parquet_source_decompress_page")
-                        .in_scope(|| decompress(compressed_page?, &mut vec![]))
-                });
-                let array = page_stream_to_array(pages, &col_meta, fields[idx].data_type.clone())
-                    .instrument(debug_span!("parquet_source_page_stream_to_array"))
-                    .await?;
+                let array = if dedicated_decompression_thread_pool {
+                    let pages = col_pages.then(|compressed_page| async {
+                        tokio_rayon::spawn(|| decompress(compressed_page?, &mut vec![])).await
+                    });
+                    page_stream_to_array(pages, &col_meta, fields[idx].data_type.clone())
+                        .instrument(debug_span!("parquet_source_page_stream_to_array_rayon"))
+                        .await?
+                } else {
+                    let pages = col_pages.map(|compressed_page| {
+                        debug_span!("parquet_source_decompress_page")
+                            .in_scope(|| decompress(compressed_page?, &mut vec![]))
+                    });
+                    page_stream_to_array(pages, &col_meta, fields[idx].data_type.clone())
+                        .instrument(debug_span!("parquet_source_page_stream_to_array"))
+                        .await?
+                };
                 let array: Arc<dyn common_arrow::arrow::array::Array> = array.into();
                 Ok::<_, ErrorCode>(DataColumn::Array(array.into_series()))
             }
