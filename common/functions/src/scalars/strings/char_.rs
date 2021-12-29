@@ -16,6 +16,7 @@ use std::fmt;
 
 use common_arrow::arrow::buffer::MutableBuffer;
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -49,7 +50,7 @@ impl Function for CharFunction {
         "char"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
         for arg in args {
             if !arg.is_numeric() && !arg.is_null() {
                 return Err(ErrorCode::IllegalDataType(format!(

@@ -18,6 +18,7 @@ use std::fmt;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -48,8 +49,8 @@ impl Function for SipHashFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        match args[0] {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        match args[0].data_type() {
             DataType::Int8
             | DataType::Int16
             | DataType::Int32

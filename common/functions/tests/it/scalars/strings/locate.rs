@@ -16,235 +16,122 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
+
 #[test]
 fn test_locate_function() -> Result<()> {
-    struct Test {
-        name: &'static str,
-        display: &'static str,
-        args: Vec<DataColumnWithField>,
-        input_rows: usize,
-        expect: DataColumn,
-        error: &'static str,
-    }
     let tests = vec![
-        Test {
+        ScalarFunctionTest {
             name: "none, none, none",
-            display: "locate",
-            args: vec![
-                DataColumnWithField::new(
-                    DataColumn::Constant(DataValue::String(None), 1),
-                    DataField::new("ss", DataType::String, false),
-                ),
-                DataColumnWithField::new(
-                    DataColumn::Constant(DataValue::String(None), 1),
-                    DataField::new("s", DataType::String, false),
-                ),
-                DataColumnWithField::new(
-                    DataColumn::Constant(DataValue::UInt64(None), 1),
-                    DataField::new("p", DataType::UInt64, false),
-                ),
+            nullable: true,
+            columns: vec![
+                Series::new([Option::<&str>::None]).into(),
+                Series::new([Option::<&str>::None]).into(),
+                Series::new([Option::<&str>::None]).into(),
             ],
-            input_rows: 1,
-            expect: DataColumn::Constant(DataValue::Null, 1),
+            expect: Series::new([Option::<u64>::None]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "const, const, const",
-            display: "locate",
-            args: vec![
-                DataColumnWithField::new(
-                    DataColumn::Constant(DataValue::String(Some(b"ab".to_vec())), 1),
-                    DataField::new("ss", DataType::String, false),
-                ),
-                DataColumnWithField::new(
-                    DataColumn::Constant(DataValue::String(Some(b"abcdabcd".to_vec())), 1),
-                    DataField::new("s", DataType::String, false),
-                ),
-                DataColumnWithField::new(
-                    DataColumn::Constant(DataValue::UInt64(Some(2)), 1),
-                    DataField::new("p", DataType::UInt64, false),
-                ),
+            nullable: false,
+            columns: vec![
+                DataColumn::Constant(DataValue::String(Some(b"ab".to_vec())), 1),
+                DataColumn::Constant(DataValue::String(Some(b"abcdabcd".to_vec())), 1),
+                DataColumn::Constant(DataValue::UInt64(Some(2)), 1),
             ],
-            input_rows: 1,
             expect: DataColumn::Constant(DataValue::UInt64(Some(5)), 1),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "const, const, none",
-            display: "locate",
-            args: vec![
-                DataColumnWithField::new(
-                    DataColumn::Constant(DataValue::String(Some(b"ab".to_vec())), 1),
-                    DataField::new("ss", DataType::String, false),
-                ),
-                DataColumnWithField::new(
-                    DataColumn::Constant(DataValue::String(Some(b"abcdabcd".to_vec())), 1),
-                    DataField::new("s", DataType::String, false),
-                ),
+            nullable: false,
+            columns: vec![
+                DataColumn::Constant(DataValue::String(Some(b"ab".to_vec())), 1),
+                DataColumn::Constant(DataValue::String(Some(b"abcdabcd".to_vec())), 1),
             ],
-            input_rows: 1,
             expect: DataColumn::Constant(DataValue::UInt64(Some(1)), 1),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "series, series, const",
-            display: "locate",
-            args: vec![
-                DataColumnWithField::new(
-                    DataColumn::Array(Series::new(["abcd", "efgh"])),
-                    DataField::new("ss", DataType::String, false),
-                ),
-                DataColumnWithField::new(
-                    DataColumn::Array(Series::new(["_abcd_", "__efgh__"])),
-                    DataField::new("s", DataType::String, false),
-                ),
-                DataColumnWithField::new(
-                    DataColumn::Constant(DataValue::UInt64(Some(1)), 1),
-                    DataField::new("p", DataType::UInt64, false),
-                ),
+            nullable: false,
+            columns: vec![
+                Series::new(["abcd", "efgh"]).into(),
+                Series::new(["_abcd_", "__efgh__"]).into(),
+                DataColumn::Constant(DataValue::UInt64(Some(1)), 1),
             ],
-            input_rows: 1,
             expect: Series::new([2_u64, 3_u64]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "const, series, const",
-            display: "locate",
-            args: vec![
-                DataColumnWithField::new(
-                    DataColumn::Constant(DataValue::String(Some(b"11".to_vec())), 1),
-                    DataField::new("ss", DataType::String, false),
-                ),
-                DataColumnWithField::new(
-                    DataColumn::Array(Series::new(["_11_", "__11__"])),
-                    DataField::new("s", DataType::String, false),
-                ),
-                DataColumnWithField::new(
-                    DataColumn::Constant(DataValue::UInt64(Some(1)), 1),
-                    DataField::new("p", DataType::UInt64, false),
-                ),
+            nullable: false,
+            columns: vec![
+                DataColumn::Constant(DataValue::String(Some(b"11".to_vec())), 1),
+                DataColumn::Array(Series::new(["_11_", "__11__"])),
+                DataColumn::Constant(DataValue::UInt64(Some(1)), 1),
             ],
-            input_rows: 1,
             expect: Series::new([2_u64, 3_u64]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "series, const, const",
-            display: "locate",
-            args: vec![
-                DataColumnWithField::new(
-                    DataColumn::Array(Series::new(["11", "22"])),
-                    DataField::new("s", DataType::String, false),
-                ),
-                DataColumnWithField::new(
-                    DataColumn::Constant(DataValue::String(Some(b"_11_22_".to_vec())), 1),
-                    DataField::new("ss", DataType::String, false),
-                ),
-                DataColumnWithField::new(
-                    DataColumn::Constant(DataValue::UInt64(Some(1)), 1),
-                    DataField::new("p", DataType::UInt64, false),
-                ),
+            nullable: false,
+            columns: vec![
+                DataColumn::Array(Series::new(["11", "22"])),
+                DataColumn::Constant(DataValue::String(Some(b"_11_22_".to_vec())), 1),
+                DataColumn::Constant(DataValue::UInt64(Some(1)), 1),
             ],
-            input_rows: 1,
             expect: Series::new([2_u64, 5_u64]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "const, const, series",
-            display: "locate",
-            args: vec![
-                DataColumnWithField::new(
-                    DataColumn::Constant(DataValue::String(Some(b"11".to_vec())), 1),
-                    DataField::new("ss", DataType::String, false),
-                ),
-                DataColumnWithField::new(
-                    DataColumn::Constant(DataValue::String(Some(b"_11_11_".to_vec())), 1),
-                    DataField::new("s", DataType::UInt64, false),
-                ),
-                DataColumnWithField::new(
-                    DataColumn::Array(Series::new([1_u64, 3_u64])),
-                    DataField::new("p", DataType::String, false),
-                ),
+            nullable: false,
+            columns: vec![
+                DataColumn::Constant(DataValue::String(Some(b"11".to_vec())), 1),
+                DataColumn::Constant(DataValue::String(Some(b"_11_11_".to_vec())), 1),
+                DataColumn::Array(Series::new([1_u64, 3_u64])),
             ],
-            input_rows: 1,
             expect: Series::new([2_u64, 5_u64]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "series, const, series",
-            display: "locate",
-            args: vec![
-                DataColumnWithField::new(
-                    DataColumn::Array(Series::new(["11", "22"])),
-                    DataField::new("ss", DataType::String, false),
-                ),
-                DataColumnWithField::new(
-                    DataColumn::Constant(DataValue::String(Some(b"_11_22_".to_vec())), 1),
-                    DataField::new("s", DataType::UInt64, false),
-                ),
-                DataColumnWithField::new(
-                    DataColumn::Array(Series::new([1_u64, 3_u64])),
-                    DataField::new("p", DataType::String, false),
-                ),
+            nullable: false,
+            columns: vec![
+                DataColumn::Array(Series::new(["11", "22"])),
+                DataColumn::Constant(DataValue::String(Some(b"_11_22_".to_vec())), 1),
+                DataColumn::Array(Series::new([1_u64, 3_u64])),
             ],
-            input_rows: 1,
             expect: Series::new([2_u64, 5_u64]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "const, series, series",
-            display: "locate",
-            args: vec![
-                DataColumnWithField::new(
-                    DataColumn::Constant(DataValue::String(Some(b"11".to_vec())), 1),
-                    DataField::new("ss", DataType::UInt64, false),
-                ),
-                DataColumnWithField::new(
-                    DataColumn::Array(Series::new(["_11_", "__11__"])),
-                    DataField::new("ss", DataType::String, false),
-                ),
-                DataColumnWithField::new(
-                    DataColumn::Array(Series::new([1_u64, 2_u64])),
-                    DataField::new("p", DataType::String, false),
-                ),
+            nullable: false,
+            columns: vec![
+                DataColumn::Constant(DataValue::String(Some(b"11".to_vec())), 1),
+                DataColumn::Array(Series::new(["_11_", "__11__"])),
+                DataColumn::Array(Series::new([1_u64, 2_u64])),
             ],
-            input_rows: 1,
             expect: Series::new([2_u64, 3_u64]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "series, series, series",
-            display: "locate",
-            args: vec![
-                DataColumnWithField::new(
-                    DataColumn::Array(Series::new(["11", "22"])),
-                    DataField::new("ss", DataType::String, false),
-                ),
-                DataColumnWithField::new(
-                    DataColumn::Array(Series::new(["_11_", "__22__"])),
-                    DataField::new("ss", DataType::String, false),
-                ),
-                DataColumnWithField::new(
-                    DataColumn::Array(Series::new([1_u64, 2_u64])),
-                    DataField::new("p", DataType::String, false),
-                ),
+            nullable: false,
+            columns: vec![
+                DataColumn::Array(Series::new(["11", "22"])),
+                DataColumn::Array(Series::new(["_11_", "__22__"])),
+                DataColumn::Array(Series::new([1_u64, 2_u64])),
             ],
-            input_rows: 1,
             expect: Series::new([2_u64, 3_u64]).into(),
             error: "",
         },
     ];
 
-    for t in tests {
-        let func = LocateFunction::try_create("locate")?;
-        let actual_display = format!("{}", func);
-        assert_eq!(t.display.to_string(), actual_display);
-
-        if let Err(e) = func.eval(&t.args, t.input_rows) {
-            assert_eq!(t.error, e.to_string(), "{}", t.name);
-        }
-        let v = &(func.eval(&t.args, t.input_rows)?);
-        assert_eq!(v.to_values()?, t.expect.to_values()?, "case: {}", t.name);
-    }
-    Ok(())
+    test_scalar_functions(LocateFunction::try_create("locate")?, &tests)
 }

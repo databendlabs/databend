@@ -15,6 +15,7 @@
 use std::fmt;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::Result;
 use itertools::izip;
 
@@ -59,7 +60,7 @@ impl<const T: u8> Function for LocatingFunction<T> {
         &*self.display_name
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
         Ok(DataType::UInt64)
     }
 

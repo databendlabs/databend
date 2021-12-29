@@ -18,6 +18,3 @@ mod substring;
 mod trim;
 
 mod upper;
-mod utils;
-
-pub use utils::*;

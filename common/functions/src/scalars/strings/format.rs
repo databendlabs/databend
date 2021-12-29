@@ -16,6 +16,7 @@ use std::fmt;
 use std::ops::AddAssign;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num_format::Locale;
@@ -76,9 +77,9 @@ impl Function for FormatFunction {
         "format"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if (args[0].is_numeric() || args[0] == DataType::String || args[0] == DataType::Null)
-            && (args[1].is_numeric() || args[1] == DataType::String || args[1] == DataType::Null)
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        if (args[0].is_numeric() || args[0].is_string() || args[0].is_null())
+            && (args[1].is_numeric() || args[1].is_string() || args[1].is_null())
         {
             Ok(DataType::String)
         } else {
@@ -91,9 +92,8 @@ impl Function for FormatFunction {
 
     // Format(value, format, culture), the 'culture' is optional.
     // if 'value' or 'format' is nullable, the result should be nullable.
-    fn nullable(&self, arg_fields: &[DataField]) -> Result<bool> {
-        let nullable = arg_fields[0].is_nullable() || arg_fields[1].is_nullable();
-        Ok(nullable)
+    fn nullable(&self, args: &[DataTypeAndNullable]) -> Result<bool> {
+        Ok(args[0].is_nullable() || args[1].is_nullable())
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

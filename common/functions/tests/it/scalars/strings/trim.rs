@@ -18,79 +18,66 @@ use common_functions::scalars::LTrimFunction;
 use common_functions::scalars::RTrimFunction;
 use common_functions::scalars::TrimFunction;
 
-use super::run_tests;
-use super::Test;
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
+
+#[test]
+fn test_ltrim_function() -> Result<()> {
+    let tests = vec![ScalarFunctionTest {
+        name: "ltrim-abc-passed",
+        nullable: false,
+        columns: vec![Series::new(vec!["  abc"]).into()],
+        expect: DataColumn::Constant(DataValue::String(Some("abc".as_bytes().to_vec())), 1),
+        error: "",
+    }];
+
+    test_scalar_functions(LTrimFunction::try_create("ltrim")?, &tests)
+}
+
+#[test]
+fn test_rtrim_function() -> Result<()> {
+    let tests = vec![ScalarFunctionTest {
+        name: "rtrim-abc-passed",
+        nullable: false,
+        columns: vec![Series::new(vec!["abc  "]).into()],
+        expect: DataColumn::Constant(DataValue::String(Some("abc".as_bytes().to_vec())), 1),
+        error: "",
+    }];
+
+    test_scalar_functions(RTrimFunction::try_create("rtrim")?, &tests)
+}
 
 #[test]
 fn test_trim_function() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::String, false),
-        DataField::new("b", DataType::Int64, false),
-        DataField::new("c", DataType::UInt64, false),
-    ]);
-
     let tests = vec![
-        Test {
-            name: "ltrim-abc-passed",
-            display: "ltrim",
-            nullable: false,
-            arg_names: vec!["a"],
-            columns: vec![Series::new(vec!["  abc"]).into()],
-            func: LTrimFunction::try_create("ltrim")?,
-            expect: DataColumn::Constant(DataValue::String(Some("abc".as_bytes().to_vec())), 1),
-            error: "",
-        },
-        Test {
-            name: "rtrim-abc-passed",
-            display: "rtrim",
-            nullable: false,
-            arg_names: vec!["a"],
-            columns: vec![Series::new(vec!["abc  "]).into()],
-            func: RTrimFunction::try_create("rtrim")?,
-            expect: DataColumn::Constant(DataValue::String(Some("abc".as_bytes().to_vec())), 1),
-            error: "",
-        },
-        Test {
+        ScalarFunctionTest {
             name: "trim-abc-passed",
-            display: "trim",
             nullable: false,
-            arg_names: vec!["a"],
             columns: vec![Series::new(vec!["   abc  "]).into()],
-            func: TrimFunction::try_create("trim")?,
             expect: DataColumn::Constant(DataValue::String(Some("abc".as_bytes().to_vec())), 1),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "trim-blank-passed",
-            display: "trim",
             nullable: false,
-            arg_names: vec!["a"],
             columns: vec![Series::new(vec!["     "]).into()],
-            func: TrimFunction::try_create("trim")?,
             expect: DataColumn::Constant(DataValue::String(Some("".as_bytes().to_vec())), 1),
             error: "",
         },
     ];
-    run_tests(tests, schema)
+
+    test_scalar_functions(TrimFunction::try_create("trim")?, &tests)
 }
 
 #[test]
 fn test_trim_nullable() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new(
-        "nullable_string",
-        DataType::String,
-        true,
-    )]);
-
-    let tests = vec![Test {
+    let tests = vec![ScalarFunctionTest {
         name: "trim-nullable-passed",
-        display: "trim",
         nullable: true,
-        arg_names: vec!["nullable_string"],
         columns: vec![Series::new(vec![Option::<Vec<u8>>::None]).into()],
-        func: TrimFunction::try_create("trim")?,
         expect: DataColumn::Constant(DataValue::String(None), 1),
         error: "",
     }];
-    run_tests(tests, schema)
+
+    test_scalar_functions(TrimFunction::try_create("trim")?, &tests)
 }

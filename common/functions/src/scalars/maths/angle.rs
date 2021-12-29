@@ -17,6 +17,7 @@ use std::marker::PhantomData;
 
 use common_datavalues::prelude::*;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -57,8 +58,8 @@ where T: AngleConvertFunction + Clone + Sync + Send + 'static
         "AngleFunction"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if args[0].is_numeric() || args[0] == DataType::String || args[0] == DataType::Null {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
             Ok(DataType::Float64)
         } else {
             Err(ErrorCode::IllegalDataType(format!(
