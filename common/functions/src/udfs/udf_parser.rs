@@ -27,7 +27,6 @@ use sqlparser::tokenizer::Tokenizer;
 
 use crate::aggregates::AggregateFunctionFactory;
 use crate::scalars::FunctionFactory;
-use crate::udfs::UDFFactory;
 
 #[derive(Default)]
 pub struct UDFParser {
@@ -110,13 +109,10 @@ impl ExprVisitor for UDFParser {
                 Ok(())
             }
             Expr::Function(Function { name, .. }) => {
-                let name = &name.to_string();
-                if !FunctionFactory::instance().check(name)
-                    && !AggregateFunctionFactory::instance().check(name)
-                    && !matches!(
-                        UDFFactory::get_definition(&self.tenant_id, name),
-                        Ok(Some(_))
-                    )
+                let name = name.to_string();
+                if !FunctionFactory::instance().check(&name)
+                    && !AggregateFunctionFactory::instance().check(&name)
+                    && self.name == name
                 {
                     Err(ErrorCode::SyntaxException(format!(
                         "Function is not builtin or defined: {}",
