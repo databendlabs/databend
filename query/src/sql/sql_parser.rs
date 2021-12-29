@@ -933,6 +933,15 @@ impl<'a> DfParser<'a> {
         Ok(definition)
     }
 
+    fn parse_udf_desc(&mut self, desc_token: &str) -> Result<String, ParserError> {
+        if self.consume_token(desc_token) {
+            self.parser.expect_token(&Token::Eq)?;
+            Ok(self.parser.parse_literal_string()?)
+        } else {
+            Ok(String::from(""))
+        }
+    }
+
     fn parse_create_udf(&mut self) -> Result<DfStatement, ParserError> {
         let if_not_exists =
             self.parser
@@ -946,12 +955,7 @@ impl<'a> DfParser<'a> {
         let parameters = self.parse_udf_parameters()?;
         let definition = self.parse_udf_definition_expr(vec![desc_token])?;
 
-        let description = if self.consume_token(desc_token) {
-            self.parser.expect_token(&as_token)?;
-            self.parser.parse_literal_string()?
-        } else {
-            String::from("")
-        };
+        let description = self.parse_udf_desc(desc_token)?;
         let create_udf = DfCreateUDF {
             if_not_exists,
             udf_name,
@@ -972,12 +976,7 @@ impl<'a> DfParser<'a> {
         let parameters = self.parse_udf_parameters()?;
         let definition = self.parse_udf_definition_expr(vec![desc_token])?;
 
-        let description = if self.consume_token(desc_token) {
-            self.parser.expect_token(&as_token)?;
-            self.parser.parse_literal_string()?
-        } else {
-            String::from("")
-        };
+        let description = self.parse_udf_desc(desc_token)?;
         let update_udf = DfAlterUDF {
             udf_name,
             parameters,

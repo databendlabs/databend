@@ -1398,16 +1398,16 @@ fn test_create_udf() -> Result<()> {
 
     expect_parse_err_contains(
         "CREATE FUNCTION test_udf AS (p) -> not(isnotnull(p)) DESC",
-        "Expected AS, found: ".to_string(),
+        "Expected =, found: ".to_string(),
     )?;
 
     expect_parse_err_contains(
-        "CREATE FUNCTION test_udf AS (p) -> not(isnotnull(p)) DESC AS",
+        "CREATE FUNCTION test_udf AS (p) -> not(isnotnull(p)) DESC =",
         "Expected literal string, found: EOF".to_string(),
     )?;
 
     expect_parse_ok(
-        "CREATE FUNCTION test_udf AS (p, d) -> not(isnotnull(p, d)) DESC AS 'this is a description'",
+        "CREATE FUNCTION test_udf AS (p, d) -> not(isnotnull(p, d)) DESC = 'this is a description'",
         DfStatement::CreateUDF(DfCreateUDF {
             if_not_exists: false,
             udf_name: "test_udf".to_string(),
@@ -1512,16 +1512,16 @@ fn test_alter_udf() -> Result<()> {
 
     expect_parse_err_contains(
         "ALTER FUNCTION test_udf AS (p) -> not(isnotnull(p)) DESC",
-        "Expected AS, found: ".to_string(),
+        "Expected =, found: ".to_string(),
     )?;
 
     expect_parse_err_contains(
-        "ALTER FUNCTION test_udf AS (p) -> not(isnotnull(p)) DESC AS",
+        "ALTER FUNCTION test_udf AS (p) -> not(isnotnull(p)) DESC =",
         "Expected literal string, found: EOF".to_string(),
     )?;
 
     expect_parse_ok(
-        "ALTER FUNCTION test_udf AS (p, d) -> not(isnotnull(p, d)) DESC AS 'this is a description'",
+        "ALTER FUNCTION test_udf AS (p, d) -> not(isnotnull(p, d)) DESC = 'this is a description'",
         DfStatement::AlterUDF(DfAlterUDF {
             udf_name: "test_udf".to_string(),
             parameters: vec!["p".to_string(), "d".to_string()],
