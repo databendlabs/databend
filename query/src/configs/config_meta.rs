@@ -15,8 +15,8 @@
 use std::fmt;
 
 use clap::Args;
-use common_flight_rpc::GrpcClientConf;
-use common_flight_rpc::GrpcClientTlsConfig;
+use common_grpc::RpcClientConf;
+use common_grpc::RpcClientTlsConfig;
 use common_meta_raft_store::MetaGrpcClientConf;
 use serde::Deserialize;
 use serde::Serialize;
@@ -111,19 +111,19 @@ impl MetaConfig {
             && !self.rpc_tls_meta_service_domain_name.is_empty()
     }
 
-    pub fn to_grpc_tls_config(&self) -> Option<GrpcClientTlsConfig> {
+    pub fn to_grpc_tls_config(&self) -> Option<RpcClientTlsConfig> {
         if !self.is_tls_enabled() {
             return None;
         }
 
-        Some(GrpcClientTlsConfig {
+        Some(RpcClientTlsConfig {
             rpc_tls_server_root_ca_cert: self.rpc_tls_meta_server_root_ca_cert.clone(),
             domain_name: self.rpc_tls_meta_service_domain_name.clone(),
         })
     }
 
     pub fn to_grpc_client_config(&self) -> MetaGrpcClientConf {
-        let meta_config = GrpcClientConf {
+        let meta_config = RpcClientConf {
             address: self.meta_address.clone(),
             username: self.meta_username.clone(),
             password: self.meta_password.clone(),

@@ -33,7 +33,7 @@ common-dal = { path = "../common/dal" }
 common-datablocks = { path = "../common/datablocks" }
 common-datavalues = { path = "../common/datavalues" }
 common-exception = { path = "../common/exception" }
-common-flight-rpc = { path = "../common/flight-rpc" }
+common-grpc = { path = "../common/grpc" }
 common-functions = { path = "../common/functions" }
 common-infallible = { path = "../common/infallible" }
 common-io = { path = "../common/io" }

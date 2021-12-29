@@ -19,8 +19,8 @@ use common_arrow::arrow_format::flight::data::BasicAuth;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::SerializedError;
-use common_flight_rpc::ConnectionFactory;
-use common_flight_rpc::GrpcClientTlsConfig;
+use common_grpc::ConnectionFactory;
+use common_grpc::RpcClientTlsConfig;
 use common_meta_types::protobuf::meta_client::MetaClient;
 use common_meta_types::protobuf::GetReply;
 use common_meta_types::protobuf::GetReq;
@@ -73,9 +73,9 @@ impl MetaGrpcClient {
         username: &str,
         password: &str,
         timeout: Option<Duration>,
-        conf: Option<GrpcClientTlsConfig>,
+        conf: Option<RpcClientTlsConfig>,
     ) -> Result<Self> {
-        let res = ConnectionFactory::create_grpc_channel(addr, timeout, conf);
+        let res = ConnectionFactory::create_rpc_channel(addr, timeout, conf);
 
         tracing::debug!("connecting to {}, res: {:?}", addr, res);
 

@@ -13,10 +13,10 @@
 //  limitations under the License.
 //
 
-use common_flight_rpc::FlightClientConf;
+use common_grpc::RpcClientConf;
 
 #[derive(Clone, Debug, Default)]
 pub struct MetaFlightClientConf {
-    pub kv_service_config: FlightClientConf,
+    pub kv_service_config: RpcClientConf,
     pub client_timeout_in_second: u64,
 }

@@ -14,7 +14,7 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_flight_rpc::DNSResolver;
+use common_grpc::DNSResolver;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_resolver_github() -> Result<()> {

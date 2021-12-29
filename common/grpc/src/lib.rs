@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use client_conf::FlightClientConf;
-pub use client_conf::FlightClientTlsConfig;
-pub use client_conf::GrpcClientConf;
-pub use client_conf::GrpcClientTlsConfig;
+pub use client_conf::RpcClientConf;
+pub use client_conf::RpcClientTlsConfig;
 pub use dns_resolver::ConnectionFactory;
 pub use dns_resolver::DNSResolver;
-pub use flight_token::FlightClaim;
-pub use flight_token::FlightToken;
+pub use grpc_token::GrpcClaim;
+pub use grpc_token::GrpcToken;
 
 mod client_conf;
 mod dns_resolver;
-mod flight_token;
+mod grpc_token;

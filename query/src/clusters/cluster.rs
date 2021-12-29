@@ -30,7 +30,7 @@ use common_base::SignalStream;
 use common_base::SignalType;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_flight_rpc::ConnectionFactory;
+use common_grpc::ConnectionFactory;
 use common_management::ClusterApi;
 use common_management::ClusterMgr;
 use common_meta_api::KVApi;
@@ -209,14 +209,14 @@ impl Cluster {
             if node.id == name {
                 return match config.tls_query_cli_enabled() {
                     true => Ok(FlightClient::new(FlightServiceClient::new(
-                        ConnectionFactory::create_flight_channel(
+                        ConnectionFactory::create_rpc_channel(
                             node.flight_address.clone(),
                             None,
                             Some(config.tls_query_client_conf()),
                         )?,
                     ))),
                     false => Ok(FlightClient::new(FlightServiceClient::new(
-                        ConnectionFactory::create_flight_channel(
+                        ConnectionFactory::create_rpc_channel(
                             node.flight_address.clone(),
                             None,
                             None,

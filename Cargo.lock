@@ -1329,27 +1329,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-flight-rpc"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "common-arrow",
- "common-base",
- "common-exception",
- "common-tracing",
- "futures",
- "hyper",
- "jwt-simple",
- "once_cell",
- "prost",
- "serde",
- "serde_json",
- "tokio-stream",
- "tonic",
- "trust-dns-resolver",
-]
-
-[[package]]
 name = "common-functions"
 version = "0.1.0"
 dependencies = [
@@ -1386,6 +1365,27 @@ dependencies = [
  "strength_reduce",
  "twox-hash",
  "uuid",
+]
+
+[[package]]
+name = "common-grpc"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-arrow",
+ "common-base",
+ "common-exception",
+ "common-tracing",
+ "futures",
+ "hyper",
+ "jwt-simple",
+ "once_cell",
+ "prost",
+ "serde",
+ "serde_json",
+ "tokio-stream",
+ "tonic",
+ "trust-dns-resolver",
 ]
 
 [[package]]
@@ -1491,7 +1491,7 @@ dependencies = [
  "common-base",
  "common-datavalues",
  "common-exception",
- "common-flight-rpc",
+ "common-grpc",
  "common-infallible",
  "common-meta-api",
  "common-meta-types",
@@ -1521,7 +1521,7 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-exception",
- "common-flight-rpc",
+ "common-grpc",
  "common-io",
  "common-meta-api",
  "common-meta-sled-store",
@@ -2118,7 +2118,7 @@ dependencies = [
  "common-containers",
  "common-datavalues",
  "common-exception",
- "common-flight-rpc",
+ "common-grpc",
  "common-infallible",
  "common-macros",
  "common-meta-api",
@@ -2182,8 +2182,8 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-flight-rpc",
  "common-functions",
+ "common-grpc",
  "common-infallible",
  "common-io",
  "common-macros",

@@ -14,15 +14,15 @@
 //
 
 use common_exception::Result;
-use common_flight_rpc::FlightClaim;
-use common_flight_rpc::FlightToken;
+use common_grpc::GrpcClaim;
+use common_grpc::GrpcToken;
 
 #[test]
 fn test_flight_token() -> Result<()> {
-    let token = FlightToken::create();
+    let token = GrpcToken::create();
     let user = "batman";
 
-    let claim = FlightClaim {
+    let claim = GrpcClaim {
         username: String::from(user),
     };
 

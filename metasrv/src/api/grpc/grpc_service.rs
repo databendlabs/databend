@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use common_arrow::arrow_format::flight::data::BasicAuth;
-use common_flight_rpc::FlightClaim;
-use common_flight_rpc::FlightToken;
+use common_grpc::GrpcClaim;
+use common_grpc::GrpcToken;
 use common_meta_raft_store::MetaGrpcReadReq;
 use common_meta_raft_store::MetaGrpcWriteReq;
 use common_meta_types::protobuf::meta_server::Meta;
@@ -40,19 +40,19 @@ use crate::meta_service::meta_service_impl::GrpcStream;
 use crate::meta_service::MetaNode;
 
 pub struct MetaGrpcImpl {
-    token: FlightToken,
+    token: GrpcToken,
     action_handler: ActionHandler,
 }
 
 impl MetaGrpcImpl {
     pub fn create(meta_node: Arc<MetaNode>) -> Self {
         Self {
-            token: FlightToken::create(),
+            token: GrpcToken::create(),
             action_handler: ActionHandler::create(meta_node),
         }
     }
 
-    fn check_token(&self, metadata: &MetadataMap) -> Result<FlightClaim, Status> {
+    fn check_token(&self, metadata: &MetadataMap) -> Result<GrpcClaim, Status> {
         let token = metadata
             .get_bin("auth-token-bin")
             .and_then(|v| v.to_bytes().ok())
@@ -89,7 +89,7 @@ impl Meta for MetaGrpcImpl {
 
         let user = "root";
         if auth.username == user {
-            let claim = FlightClaim {
+            let claim = GrpcClaim {
                 username: user.to_string(),
             };
             let token = self
