@@ -198,7 +198,7 @@ impl MonotonicityCheckVisitor {
 
             left_vec.push(monotonicity.left.clone());
             right_vec.push(monotonicity.right.clone());
-            args_type.push(child_expr.to_data_type(&self.schema)?);
+            args_type.push(child_expr.to_data_type_and_nullable(&self.schema)?);
             monotonicity_vec.push(monotonicity);
         }
 

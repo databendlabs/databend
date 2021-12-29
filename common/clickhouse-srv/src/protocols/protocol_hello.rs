@@ -24,11 +24,11 @@ use crate::protocols::*;
 
 #[derive(Default, Debug, Clone)]
 pub struct HelloRequest {
-    pub client_name: String,
+    pub client_name: Vec<u8>,
     pub client_version_major: u64,
     pub client_version_minor: u64,
     pub client_revision: u64,
-    pub default_database: String,
+    pub default_database: Vec<u8>,
 
     pub user: String,
     pub password: Vec<u8>,
@@ -40,11 +40,11 @@ pub struct HelloRequest {
 impl HelloRequest {
     pub fn read_from<R: Read>(reader: &mut R) -> Result<HelloRequest> {
         let request = HelloRequest {
-            client_name: reader.read_string()?,
+            client_name: reader.read_len_encode_bytes()?,
             client_version_major: reader.read_uvarint()?,
             client_version_minor: reader.read_uvarint()?,
             client_revision: reader.read_uvarint()?,
-            default_database: reader.read_string()?,
+            default_database: reader.read_len_encode_bytes()?,
             user: reader.read_string()?,
             password: reader.read_len_encode_bytes()?,
 
@@ -60,10 +60,6 @@ impl HelloRequest {
             }));
         }
 
-        // TODO
-        // if request.user != " INTERSERVER SECRET " {
-        // } else {
-        // }
         Ok(request)
     }
 }

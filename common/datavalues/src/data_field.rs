@@ -13,8 +13,12 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::fmt::Debug;
+use std::fmt::Display;
+use std::ops::Deref;
 
 use common_arrow::arrow::datatypes::Field as ArrowField;
+use common_arrow::arrow_format::ipc::flatbuffers::bitflags::_core::fmt::Formatter;
 use common_macros::MallocSizeOf;
 
 use crate::DataType;
@@ -22,21 +26,75 @@ use crate::DataType;
 #[derive(
     serde::Serialize, serde::Deserialize, Clone, PartialEq, Hash, Eq, PartialOrd, Ord, MallocSizeOf,
 )]
-pub struct DataField {
-    name: String,
+pub struct DataTypeAndNullable {
     data_type: DataType,
     nullable: bool,
+}
+
+impl DataTypeAndNullable {
+    pub fn create(data_type: &DataType, nullable: bool) -> DataTypeAndNullable {
+        DataTypeAndNullable {
+            nullable,
+            data_type: data_type.clone(),
+        }
+    }
+
+    #[inline]
+    pub fn is_nullable(&self) -> bool {
+        self.nullable
+    }
+
+    #[inline]
+    pub fn data_type(&self) -> &DataType {
+        &self.data_type
+    }
+}
+
+impl Deref for DataTypeAndNullable {
+    type Target = DataType;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data_type
+    }
+}
+
+impl Display for DataTypeAndNullable {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        match self.nullable {
+            true => write!(f, "Nullable({})", self.data_type),
+            false => write!(f, "{}", self.data_type),
+        }
+    }
+}
+
+impl Debug for DataTypeAndNullable {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("DataTypeAndNullable")
+            .field("data_type", &self.data_type)
+            .field("nullable", &self.nullable)
+            .finish()
+    }
+}
+
+#[derive(
+    serde::Serialize, serde::Deserialize, Clone, PartialEq, Hash, Eq, PartialOrd, Ord, MallocSizeOf,
+)]
+pub struct DataField {
+    name: String,
     /// default_expr is serialized representation from PlanExpression
     default_expr: Option<Vec<u8>>,
+    data_type_and_nullable: DataTypeAndNullable,
 }
 
 impl DataField {
     pub fn new(name: &str, data_type: DataType, nullable: bool) -> Self {
         DataField {
             name: name.to_string(),
-            data_type,
-            nullable,
             default_expr: None,
+            data_type_and_nullable: DataTypeAndNullable {
+                data_type,
+                nullable,
+            },
         }
     }
 
@@ -53,12 +111,19 @@ impl DataField {
         &self.default_expr
     }
 
+    #[inline]
     pub fn data_type(&self) -> &DataType {
-        &self.data_type
+        &self.data_type_and_nullable.data_type
     }
 
+    #[inline]
     pub fn is_nullable(&self) -> bool {
-        self.nullable
+        self.data_type_and_nullable.nullable
+    }
+
+    #[inline]
+    pub fn data_type_and_nullable(&self) -> &DataTypeAndNullable {
+        &self.data_type_and_nullable
     }
 
     /// Check to see if `self` is a superset of `other` field. Superset is defined as:
@@ -67,13 +132,14 @@ impl DataField {
     /// * self.metadata is a superset of other.metadata
     /// * all other fields are equal
     pub fn contains(&self, other: &DataField) -> bool {
-        if self.name != other.name || self.data_type != other.data_type {
+        if self.name != other.name || self.data_type() != other.data_type() {
             return false;
         }
 
-        if self.nullable != other.nullable && !self.nullable {
+        if self.is_nullable() != other.is_nullable() && !self.is_nullable() {
             return false;
         }
+
         true
     }
 
@@ -90,7 +156,9 @@ impl DataField {
             _ => None,
         };
 
-        let mut f = ArrowField::new(&self.name, self.data_type.to_arrow(), self.nullable);
+        let nullable = self.data_type_and_nullable.nullable;
+        let arrow_type = self.data_type_and_nullable.data_type.to_arrow();
+        let mut f = ArrowField::new(&self.name, arrow_type, nullable);
         if let Some(custom_name) = custom_name {
             let mut mp = BTreeMap::new();
             mp.insert(
@@ -131,8 +199,8 @@ impl std::fmt::Debug for DataField {
         let mut debug_struct = f.debug_struct("DataField");
         debug_struct
             .field("name", &self.name)
-            .field("data_type", &self.data_type)
-            .field("nullable", &self.nullable);
+            .field("data_type", self.data_type())
+            .field("nullable", &self.is_nullable());
         if let Some(ref default_expr) = self.default_expr {
             debug_struct.field(
                 "default_expr",

@@ -17,6 +17,7 @@ use std::fmt;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use sha2::Digest;
@@ -48,13 +49,8 @@ impl Function for Sha2HashFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if args[0] == DataType::String
-            && matches!(
-                args[1],
-                DataType::UInt8 | DataType::UInt16 | DataType::UInt32
-            )
-        {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        if args[0].is_string() && args[1].is_unsigned_integer() {
             Ok(DataType::String)
         } else {
             Err(ErrorCode::IllegalDataType(format!(
@@ -62,6 +58,10 @@ impl Function for Sha2HashFunction {
                 args[0]
             )))
         }
+    }
+
+    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
+        Ok(true)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

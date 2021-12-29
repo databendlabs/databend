@@ -16,6 +16,7 @@ use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
@@ -68,7 +69,7 @@ impl Function for ArithmeticFunction {
         "ArithmeticFunction"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
         if args.len() == 1 {
             return numerical_unary_arithmetic_coercion(&self.op, &args[0]);
         }
@@ -102,7 +103,7 @@ impl Function for ArithmeticFunction {
         if has_date_or_date_time {
             let args = columns
                 .iter()
-                .map(|f| f.data_type().clone())
+                .map(|f| f.field().data_type_and_nullable().clone())
                 .collect::<Vec<_>>();
             let data_type = self.return_type(&args)?;
             result.cast_with_type(&data_type)

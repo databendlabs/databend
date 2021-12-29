@@ -23,6 +23,7 @@ use common_datavalues::chrono::NaiveDateTime;
 use common_datavalues::chrono::Timelike;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -72,11 +73,11 @@ where T: IntegerTypedArithmetic + Clone + Sync + Send + 'static
         self.display_name.as_str()
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
         if args[0].is_date_or_date_time() {
-            Ok(args[0].clone())
+            Ok(args[0].data_type().clone())
         } else {
-            Ok(args[1].clone())
+            Ok(args[1].data_type().clone())
         }
     }
 

@@ -42,6 +42,7 @@ pub use chrono_tz::Tz;
 /// Own
 pub use data_array_filter::*;
 pub use data_field::DataField;
+pub use data_field::DataTypeAndNullable;
 pub use data_group_value::DataGroupValue;
 pub use data_hasher::*;
 pub use data_schema::DataSchema;

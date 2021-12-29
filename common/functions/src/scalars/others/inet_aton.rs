@@ -20,6 +20,7 @@ use common_datavalues::prelude::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::prelude::NewDataArray;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -51,8 +52,12 @@ impl Function for InetAtonFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if args[0] == DataType::String || args[0] == DataType::Null {
+    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
+        Ok(true)
+    }
+
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        if args[0].is_string() || args[0].is_null() {
             Ok(DataType::UInt32)
         } else {
             Err(ErrorCode::IllegalDataType(format!(
