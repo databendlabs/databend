@@ -14,4 +14,5 @@
 
 mod cluster;
 mod stage;
+mod udf;
 mod user;

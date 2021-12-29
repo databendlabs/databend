@@ -66,9 +66,9 @@ impl DataType {
                         tz: tz.parse::<Tz>().unwrap(),
                     }))
                 }
-                DataType::String => Ok(Box::new(StringDeserializer {
-                    builder: StringArrayBuilder::with_capacity(capacity),
-                })),
+                DataType::String => Ok(Box::new(
+                    StringDeserializer::with_capacity(capacity),
+                )),
                 DataType::Interval(_) => Ok(Box::new(DateDeserializer::<i64> {
                     builder: PrimitiveArrayBuilder::<i64>::with_capacity(capacity),
                 })),

@@ -14,6 +14,7 @@
 
 use std::fmt;
 
+use common_exception::Result;
 use enumflags2::BitFlags;
 
 use crate::UserPrivilegeSet;
@@ -26,8 +27,36 @@ pub enum GrantObject {
     Table(String, String),
 }
 
+impl GrantObject {
+    /// Some global privileges can not be granted to a database or table, for example, a KILL
+    /// statement is meaningless for a table.
+    pub fn allow_privilege(&self, privilege: UserPrivilegeType) -> bool {
+        self.available_privileges().has_privilege(privilege)
+    }
+
+    /// Global, database and table has different available privileges
+    pub fn available_privileges(&self) -> UserPrivilegeSet {
+        match self {
+            GrantObject::Global => UserPrivilegeSet::available_privileges_on_global(),
+            GrantObject::Database(_) => UserPrivilegeSet::available_privileges_on_database(),
+            GrantObject::Table(_, _) => UserPrivilegeSet::available_privileges_on_table(),
+        }
+    }
+
+    /// Check if there's any privilege which can not be granted to this GrantObject
+    pub fn validate_privileges(&self, privileges: UserPrivilegeSet) -> Result<()> {
+        let ok = BitFlags::from(privileges)
+            .iter()
+            .all(|p| self.allow_privilege(p));
+        if !ok {
+            return Err(common_exception::ErrorCode::IllegalGrant("Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used"));
+        }
+        Ok(())
+    }
+}
+
 impl fmt::Display for GrantObject {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
         match self {
             GrantObject::Global => write!(f, "*.*"),
             GrantObject::Database(ref db) => write!(f, "'{}'.*", db),
@@ -138,15 +167,26 @@ impl GrantEntry {
         }
         host_pattern == host
     }
+
+    fn has_all_available_privileges(&self) -> bool {
+        let all_available_privileges = self.object.available_privileges();
+        self.privileges
+            .contains(BitFlags::from(all_available_privileges))
+    }
 }
 
 impl fmt::Display for GrantEntry {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
         let privileges: UserPrivilegeSet = self.privileges.into();
+        let privileges_str = if self.has_all_available_privileges() {
+            "ALL".to_string()
+        } else {
+            privileges.to_string()
+        };
         write!(
             f,
             "GRANT {} ON {} TO '{}'@'{}'",
-            privileges, self.object, self.user, self.host_pattern
+            &privileges_str, self.object, self.user, self.host_pattern
         )
     }
 }

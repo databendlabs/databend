@@ -27,15 +27,15 @@ const HTTP: u8 = 2;
 pub struct QueryClientInfo {
     pub query_kind: u8,
     pub initial_user: String,
-    pub initial_query_id: String,
+    pub initial_query_id: Vec<u8>,
 
-    pub initial_address: String,
+    pub initial_address: Vec<u8>,
     pub interface: u8,
 
     // TCP
-    pub os_user: String,
-    pub client_hostname: String,
-    pub client_name: String,
+    pub os_user: Vec<u8>,
+    pub client_hostname: Vec<u8>,
+    pub client_name: Vec<u8>,
 
     pub client_version_major: u64,
     pub client_version_minor: u64,
@@ -44,9 +44,9 @@ pub struct QueryClientInfo {
 
     // HTTP
     pub http_method: u8,
-    pub http_user_agent: String,
+    pub http_user_agent: Vec<u8>,
 
-    pub quota_key: String,
+    pub quota_key: Vec<u8>,
 }
 
 impl QueryClientInfo {
@@ -61,15 +61,16 @@ impl QueryClientInfo {
         }
 
         client_info.initial_user = reader.read_string()?;
-        client_info.initial_query_id = reader.read_string()?;
-        client_info.initial_address = reader.read_string()?;
+        client_info.initial_query_id = reader.read_len_encode_bytes()?;
+        client_info.initial_address = reader.read_len_encode_bytes()?;
+
         client_info.interface = reader.read_scalar()?;
 
         match client_info.interface {
             TCP => {
-                client_info.os_user = reader.read_string()?;
-                client_info.client_hostname = reader.read_string()?;
-                client_info.client_name = reader.read_string()?;
+                client_info.os_user = reader.read_len_encode_bytes()?;
+                client_info.client_hostname = reader.read_len_encode_bytes()?;
+                client_info.client_name = reader.read_len_encode_bytes()?;
 
                 client_info.client_version_major = reader.read_uvarint()?;
                 client_info.client_version_minor = reader.read_uvarint()?;
@@ -80,13 +81,13 @@ impl QueryClientInfo {
             }
             HTTP => {
                 client_info.http_method = reader.read_scalar()?;
-                client_info.http_user_agent = reader.read_string()?;
+                client_info.http_user_agent = reader.read_len_encode_bytes()?;
             }
             _ => {}
         }
 
         if client_info.client_revision >= DBMS_MIN_REVISION_WITH_QUOTA_KEY_IN_CLIENT_INFO {
-            client_info.quota_key = reader.read_string()?;
+            client_info.quota_key = reader.read_len_encode_bytes()?;
         }
 
         if client_info.interface == TCP
@@ -147,7 +148,7 @@ impl QueryRequest {
             }
 
             match name.as_str() {
-                "max_block_size" | "max_threads" => {
+                "max_block_size" | "max_threads" | "readonly" => {
                     let _ = reader.read_uvarint()?;
                 }
                 _ => {

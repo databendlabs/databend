@@ -18,6 +18,7 @@ use crate::scalars::Base64DecodeFunction;
 use crate::scalars::Base64EncodeFunction;
 use crate::scalars::BinFunction;
 use crate::scalars::BitLengthFunction;
+use crate::scalars::CharFunction;
 use crate::scalars::CharLengthFunction;
 use crate::scalars::ConcatFunction;
 use crate::scalars::ConcatWsFunction;
@@ -53,6 +54,7 @@ use crate::scalars::SubstringFunction;
 use crate::scalars::SubstringIndexFunction;
 use crate::scalars::TrimFunction;
 use crate::scalars::UnhexFunction;
+use crate::scalars::UpperFunction;
 
 #[derive(Clone)]
 pub struct StringFunction;
@@ -103,5 +105,8 @@ impl StringFunction {
         factory.register("format", FormatFunction::desc());
         factory.register("lower", LowerFunction::desc());
         factory.register("lcase", LowerFunction::desc());
+        factory.register("upper", UpperFunction::desc());
+        factory.register("ucase", UpperFunction::desc());
+        factory.register("char", CharFunction::desc());
     }
 }

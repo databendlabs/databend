@@ -18,12 +18,11 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::udfs::UDFTransformer;
 use common_planners::Expression;
-use sqlparser::ast::BinaryOperator;
-use sqlparser::ast::DataType;
+use common_sql::expr::ExprTraverser;
+use common_sql::expr::ExprVisitor;
 use sqlparser::ast::Expr;
-use sqlparser::ast::Function;
-use sqlparser::ast::FunctionArg;
 use sqlparser::ast::Ident;
 use sqlparser::ast::Query;
 use sqlparser::ast::UnaryOperator;
@@ -51,7 +50,7 @@ impl ExpressionAnalyzer {
         let mut stack = Vec::new();
 
         // Build RPN for expr. because async function unsupported recursion
-        for rpn_item in &ExprRPNBuilder::build(expr)? {
+        for rpn_item in &ExprRPNBuilder::build(self.context.clone(), expr)? {
             match rpn_item {
                 ExprRPNItem::Value(v) => Self::analyze_value(v, &mut stack)?,
                 ExprRPNItem::Identifier(v) => self.analyze_identifier(v, &mut stack)?,
@@ -374,206 +373,132 @@ impl ExprRPNItem {
 
 struct ExprRPNBuilder {
     rpn: Vec<ExprRPNItem>,
+    context: Arc<QueryContext>,
 }
 
 impl ExprRPNBuilder {
-    pub fn build(expr: &Expr) -> Result<Vec<ExprRPNItem>> {
-        let mut builder = ExprRPNBuilder { rpn: Vec::new() };
-        builder.visit(expr)?;
+    pub fn build(context: Arc<QueryContext>, expr: &Expr) -> Result<Vec<ExprRPNItem>> {
+        let mut builder = ExprRPNBuilder {
+            context,
+            rpn: Vec::new(),
+        };
+        ExprTraverser::accept(expr, &mut builder)?;
         Ok(builder.rpn)
     }
 
-    fn visit(&mut self, expr: &Expr) -> Result<()> {
+    fn process_expr(&mut self, expr: &Expr) -> Result<()> {
         match expr {
-            Expr::Nested(expr) => self.visit(expr),
-            Expr::Value(value) => self.visit_value(value),
-            Expr::Identifier(ident) => self.visit_identifier(ident),
-            Expr::CompoundIdentifier(idents) => self.visit_identifiers(idents),
-            Expr::IsNull(expr) => self.visit_simple_function(expr, "isnull"),
-            Expr::IsNotNull(expr) => self.visit_simple_function(expr, "isnotnull"),
-            Expr::UnaryOp { op, expr } => self.visit_unary_expr(op, expr),
-            Expr::BinaryOp { left, op, right } => self.visit_binary_expr(left, op, right),
-            Expr::Wildcard => self.visit_wildcard(),
-            Expr::Exists(subquery) => self.visit_exists(subquery),
-            Expr::Subquery(subquery) => self.visit_subquery(subquery),
-            Expr::Function(function) => self.visit_function(function),
-            Expr::Cast { expr, data_type } => self.visit_cast(expr, data_type),
-            Expr::TypedString { data_type, value } => self.visit_typed_string(data_type, value),
-            Expr::Position {
-                substr_expr,
-                str_expr,
-            } => self.visit_position(substr_expr, str_expr),
+            Expr::Value(value) => {
+                self.rpn.push(ExprRPNItem::Value(value.clone()));
+            }
+            Expr::Identifier(ident) => {
+                self.rpn.push(ExprRPNItem::Identifier(ident.clone()));
+            }
+            Expr::CompoundIdentifier(idents) => {
+                self.rpn
+                    .push(ExprRPNItem::QualifiedIdentifier(idents.to_vec()));
+            }
+            Expr::IsNull(_) => {
+                self.rpn
+                    .push(ExprRPNItem::function(String::from("isnull"), 1));
+            }
+            Expr::IsNotNull(_) => {
+                self.rpn
+                    .push(ExprRPNItem::function(String::from("isnotnull"), 1));
+            }
+            Expr::UnaryOp { op, .. } => {
+                if !matches!(op, UnaryOperator::Plus) {
+                    self.rpn.push(ExprRPNItem::unary_operator(op.to_string()));
+                }
+            }
+            Expr::BinaryOp { op, .. } => {
+                self.rpn.push(ExprRPNItem::binary_operator(op.to_string()));
+            }
+            Expr::Wildcard => {
+                self.rpn.push(ExprRPNItem::Wildcard);
+            }
+            Expr::Exists(subquery) => {
+                self.rpn.push(ExprRPNItem::Exists(subquery.clone()));
+            }
+            Expr::Subquery(subquery) => {
+                self.rpn.push(ExprRPNItem::Subquery(subquery.clone()));
+            }
+            Expr::Function(function) => {
+                self.rpn.push(ExprRPNItem::Function(FunctionExprInfo {
+                    name: function.name.to_string(),
+                    distinct: function.distinct,
+                    args_count: function.args.len(),
+                    unary_operator: false,
+                    binary_operator: false,
+                    parameters: function.params.to_owned(),
+                }));
+            }
+            Expr::Cast { data_type, .. } => {
+                self.rpn
+                    .push(ExprRPNItem::Cast(SQLCommon::make_data_type(data_type)?));
+            }
+            Expr::TypedString { data_type, value } => {
+                self.rpn.push(ExprRPNItem::Value(Value::SingleQuotedString(
+                    value.to_string(),
+                )));
+                self.rpn
+                    .push(ExprRPNItem::Cast(SQLCommon::make_data_type(data_type)?));
+            }
+            Expr::Position { .. } => {
+                let name = String::from("position");
+                self.rpn.push(ExprRPNItem::function(name, 2));
+            }
             Expr::Substring {
-                expr,
                 substring_from,
                 substring_for,
-            } => self.visit_substring(expr, substring_from, substring_for),
-            Expr::Between {
-                expr,
-                negated,
-                low,
-                high,
-            } => self.visit_between(expr, negated, low, high),
-            Expr::Tuple(exprs) => self.visit_tuple(exprs),
-            other => Result::Err(ErrorCode::SyntaxException(format!(
-                "Unsupported expression: {}, type: {:?}",
-                expr, other
-            ))),
-        }
-    }
-
-    fn visit_tuple(&mut self, exprs: &[Expr]) -> Result<()> {
-        match exprs.len() {
-            0 => Err(ErrorCode::SyntaxException(
-                "Tuple must have at least one element.",
-            )),
-            1 => self.visit(&exprs[0]),
-            len => {
-                for expr in exprs {
-                    self.visit(expr)?;
+                ..
+            } => {
+                if substring_from.is_none() {
+                    self.rpn
+                        .push(ExprRPNItem::Value(Value::Number(String::from("1"), false)));
                 }
 
-                self.rpn
-                    .push(ExprRPNItem::function(String::from("tuple"), len));
-                Ok(())
+                let name = String::from("substring");
+                match substring_for {
+                    None => self.rpn.push(ExprRPNItem::function(name, 2)),
+                    Some(_) => {
+                        self.rpn.push(ExprRPNItem::function(name, 3));
+                    }
+                }
             }
-        }
-    }
+            Expr::Between { negated, .. } => {
+                self.rpn.push(ExprRPNItem::Between(*negated));
+            }
+            Expr::Tuple(exprs) => {
+                let len = exprs.len();
 
-    fn visit_wildcard(&mut self) -> Result<()> {
-        self.rpn.push(ExprRPNItem::Wildcard);
-        Ok(())
-    }
-
-    fn visit_value(&mut self, value: &Value) -> Result<()> {
-        self.rpn.push(ExprRPNItem::Value(value.clone()));
-        Ok(())
-    }
-
-    fn visit_identifier(&mut self, ident: &Ident) -> Result<()> {
-        self.rpn.push(ExprRPNItem::Identifier(ident.clone()));
-        Ok(())
-    }
-
-    fn visit_identifiers(&mut self, idents: &[Ident]) -> Result<()> {
-        self.rpn
-            .push(ExprRPNItem::QualifiedIdentifier(idents.to_vec()));
-        Ok(())
-    }
-
-    fn visit_exists(&mut self, subquery: &Query) -> Result<()> {
-        self.rpn
-            .push(ExprRPNItem::Exists(Box::new(subquery.clone())));
-        Ok(())
-    }
-
-    fn visit_subquery(&mut self, subquery: &Query) -> Result<()> {
-        self.rpn
-            .push(ExprRPNItem::Subquery(Box::new(subquery.clone())));
-        Ok(())
-    }
-
-    fn visit_function(&mut self, function: &Function) -> Result<()> {
-        // TODO: context function.
-        for function_arg in &function.args {
-            match function_arg {
-                FunctionArg::Named { arg, .. } => self.visit(arg)?,
-                FunctionArg::Unnamed(expr) => self.visit(expr)?,
-            };
+                if len > 1 {
+                    self.rpn
+                        .push(ExprRPNItem::function(String::from("tuple"), len));
+                }
+            }
+            _ => (),
         }
 
-        self.rpn.push(ExprRPNItem::Function(FunctionExprInfo {
-            name: function.name.to_string(),
-            distinct: function.distinct,
-            args_count: function.args.len(),
-            unary_operator: false,
-            binary_operator: false,
-            parameters: function.params.to_owned(),
-        }));
         Ok(())
     }
+}
 
-    fn visit_cast(&mut self, expr: &Expr, data_type: &DataType) -> Result<()> {
-        self.visit(expr)?;
-        self.rpn
-            .push(ExprRPNItem::Cast(SQLCommon::make_data_type(data_type)?));
-        Ok(())
-    }
-
-    fn visit_typed_string(&mut self, data_type: &DataType, value: &str) -> Result<()> {
-        self.rpn.push(ExprRPNItem::Value(Value::SingleQuotedString(
-            value.to_string(),
-        )));
-        self.rpn
-            .push(ExprRPNItem::Cast(SQLCommon::make_data_type(data_type)?));
-        Ok(())
-    }
-
-    fn visit_simple_function(&mut self, expr: &Expr, name: impl ToString) -> Result<()> {
-        self.visit(expr)?;
-        self.rpn.push(ExprRPNItem::function(name.to_string(), 1));
-        Ok(())
-    }
-
-    fn visit_unary_expr(&mut self, op: &UnaryOperator, expr: &Expr) -> Result<()> {
-        self.visit(expr)?;
-        self.rpn.push(ExprRPNItem::unary_operator(op.to_string()));
-        Ok(())
-    }
-
-    fn visit_binary_expr(&mut self, left: &Expr, op: &BinaryOperator, right: &Expr) -> Result<()> {
-        self.visit(left)?;
-        self.visit(right)?;
-        self.rpn.push(ExprRPNItem::binary_operator(op.to_string()));
-        Ok(())
-    }
-
-    fn visit_between(
-        &mut self,
-        expr: &Expr,
-        negated: &bool,
-        low: &Expr,
-        high: &Expr,
-    ) -> Result<()> {
-        self.visit(expr)?;
-        self.visit(low)?;
-        self.visit(high)?;
-        self.rpn.push(ExprRPNItem::Between(*negated));
-        Ok(())
-    }
-
-    fn visit_position(&mut self, substr_expr: &Expr, str_expr: &Expr) -> Result<()> {
-        self.visit(substr_expr)?;
-        self.visit(str_expr)?;
-        let name = String::from("position");
-        self.rpn.push(ExprRPNItem::function(name, 2));
-        Ok(())
-    }
-
-    fn visit_substring(
-        &mut self,
-        expr: &Expr,
-        from: &Option<Box<Expr>>,
-        length: &Option<Box<Expr>>,
-    ) -> Result<()> {
-        self.visit(expr)?;
-
-        match from {
-            None => self
-                .rpn
-                .push(ExprRPNItem::Value(Value::Number(String::from("1"), false))),
-            Some(from) => self.visit(from)?,
-        };
-
-        let name = String::from("substring");
-        match length {
-            None => self.rpn.push(ExprRPNItem::function(name, 2)),
-            Some(length) => {
-                self.visit(length)?;
-                self.rpn.push(ExprRPNItem::function(name, 3));
+impl ExprVisitor for ExprRPNBuilder {
+    fn pre_visit(&mut self, expr: &Expr) -> Result<Expr> {
+        if let Expr::Function(function) = expr {
+            if let Some(transformed_expr) = UDFTransformer::transform_function(
+                self.context.get_config().query.tenant_id.as_str(),
+                function,
+            ) {
+                return Ok(transformed_expr);
             }
         }
 
-        Ok(())
+        Ok(expr.clone())
+    }
+
+    fn post_visit(&mut self, expr: &Expr) -> Result<()> {
+        self.process_expr(expr)
     }
 }

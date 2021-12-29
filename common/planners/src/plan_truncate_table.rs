@@ -22,6 +22,7 @@ pub struct TruncateTablePlan {
     pub db: String,
     /// The table name
     pub table: String,
+    pub purge: bool,
 }
 
 impl TruncateTablePlan {

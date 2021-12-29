@@ -16,8 +16,8 @@ use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_datavalues::DataValue;
 use common_exception::Result;
 
@@ -39,7 +39,7 @@ impl ToTypeNameFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(1))
     }
 }
 
@@ -48,11 +48,11 @@ impl Function for ToTypeNameFunction {
         "ToTypeNameFunction"
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
         Ok(DataType::String)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
+    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
         Ok(false)
     }
 
@@ -62,10 +62,6 @@ impl Function for ToTypeNameFunction {
             DataValue::String(Some(type_name.into_bytes())),
             input_rows,
         ))
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
     }
 }
 

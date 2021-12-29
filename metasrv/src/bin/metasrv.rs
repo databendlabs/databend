@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use clap::Parser;
 use common_base::RuntimeTracker;
 use common_base::StopHandle;
 use common_base::Stoppable;
@@ -31,7 +30,7 @@ use databend_meta::metrics::MetricService;
 
 #[databend_main]
 async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<()> {
-    let conf = Config::parse();
+    let conf = Config::load()?;
 
     let _guards = init_global_tracing(
         "databend-meta",
@@ -40,10 +39,6 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
     );
 
     tracing::info!("{:?}", conf.clone());
-    tracing::info!(
-        "Databend-meta v-{}",
-        *databend_meta::configs::config::DATABEND_COMMIT_VERSION
-    );
 
     init_sled_db(conf.raft_config.raft_dir.clone());
     init_default_metrics_recorder();

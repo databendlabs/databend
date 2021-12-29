@@ -17,6 +17,4 @@ mod lower;
 mod substring;
 mod trim;
 
-mod utils;
-
-pub use utils::*;
+mod upper;

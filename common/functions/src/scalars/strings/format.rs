@@ -16,6 +16,7 @@ use std::fmt;
 use std::ops::AddAssign;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num_format::Locale;
@@ -40,8 +41,11 @@ impl FormatFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(2, 3),
+        )
     }
 
     fn format_en_us(number: Option<f64>, precision: Option<i64>) -> Option<Vec<u8>> {
@@ -73,17 +77,9 @@ impl Function for FormatFunction {
         "format"
     }
 
-    fn num_arguments(&self) -> usize {
-        0
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((2, 3))
-    }
-
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if (args[0].is_numeric() || args[0] == DataType::String || args[0] == DataType::Null)
-            && (args[1].is_numeric() || args[1] == DataType::String || args[1] == DataType::Null)
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        if (args[0].is_numeric() || args[0].is_string() || args[0].is_null())
+            && (args[1].is_numeric() || args[1].is_string() || args[1].is_null())
         {
             Ok(DataType::String)
         } else {
@@ -94,8 +90,10 @@ impl Function for FormatFunction {
         }
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
+    // Format(value, format, culture), the 'culture' is optional.
+    // if 'value' or 'format' is nullable, the result should be nullable.
+    fn nullable(&self, args: &[DataTypeAndNullable]) -> Result<bool> {
+        Ok(args[0].is_nullable() || args[1].is_nullable())
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
@@ -135,6 +133,10 @@ impl Function for FormatFunction {
             }
             _ => Ok(DataColumn::Constant(DataValue::String(None), input_rows)),
         }
+    }
+
+    fn passthrough_null(&self) -> bool {
+        false
     }
 }
 

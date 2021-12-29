@@ -14,8 +14,8 @@
 
 use std::fmt;
 
-use common_datavalues::DataField;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_datavalues::DataValue;
 use common_functions::scalars::Function;
 
@@ -59,9 +59,7 @@ pub struct ActionFunction {
 
     // for functions
     pub arg_names: Vec<String>,
-    pub arg_types: Vec<DataType>,
-
-    pub arg_fields: Vec<DataField>,
+    pub arg_types: Vec<DataTypeAndNullable>,
 }
 
 impl ExpressionAction {
@@ -84,7 +82,6 @@ impl fmt::Debug for ActionFunction {
             .field("is_nullable", &self.is_nullable)
             .field("arg_names", &self.arg_names)
             .field("arg_types", &self.arg_types)
-            .field("arg_fields", &self.arg_fields)
             .finish()
     }
 }

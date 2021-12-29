@@ -21,8 +21,8 @@ use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::series::IntoSeries;
 use common_datavalues::DataField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
@@ -42,8 +42,11 @@ impl TupleFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func))
-            .features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(1, usize::MAX),
+        )
     }
 }
 
@@ -52,24 +55,18 @@ impl Function for TupleFunction {
         "TupleFunction"
     }
 
-    fn num_arguments(&self) -> usize {
-        0
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((1, usize::MAX))
-    }
-
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
         let fields = args
             .iter()
             .enumerate()
-            .map(|(i, x)| DataField::new(format!("item_{}", i).as_str(), x.clone(), false))
+            .map(|(i, x)| {
+                DataField::new(format!("item_{}", i).as_str(), x.data_type().clone(), false)
+            })
             .collect::<Vec<_>>();
         Ok(DataType::Struct(fields))
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
+    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
         Ok(false)
     }
 

@@ -22,6 +22,7 @@ use common_datavalues::chrono::Duration;
 use common_datavalues::chrono::TimeZone;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -91,7 +92,9 @@ where
     }
 
     pub fn desc() -> FunctionDescription {
-        let mut features = FunctionFeatures::default().monotonicity();
+        let mut features = FunctionFeatures::default()
+            .monotonicity()
+            .variadic_arguments(1, 2);
 
         if T::IS_DETERMINISTIC {
             features = features.deterministic();
@@ -111,16 +114,8 @@ where
         self.display_name.as_str()
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
         T::return_type()
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((1, 2))
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

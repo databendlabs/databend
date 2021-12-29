@@ -12,80 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
+use bytes::BufMut;
 
-use common_datavalues::prelude::*;
-use common_exception::Result;
+use super::String2StringFunction;
+use super::StringOperator;
 
-use crate::scalars::function_factory::FunctionDescription;
-use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::Function;
-
-#[derive(Clone)]
-pub struct SoundexFunction {
-    _display_name: String,
+#[derive(Clone, Default)]
+pub struct Soundex {
+    buf: String,
 }
 
-impl SoundexFunction {
-    pub fn try_create(display_name: &str) -> Result<Box<dyn Function>> {
-        Ok(Box::new(SoundexFunction {
-            _display_name: display_name.to_string(),
-        }))
-    }
-
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
-    }
-
-    fn soundex(data: &[u8]) -> Vec<u8> {
-        let mut result = String::with_capacity(4);
-        let mut last = None;
-        let mut count = 0;
-
-        for ch in String::from_utf8_lossy(data).chars() {
-            let score = Self::number_map(ch);
-            if last.is_none() {
-                if !Self::is_uni_alphabetic(ch) {
-                    continue;
-                }
-
-                last = score;
-                result.push(ch.to_ascii_uppercase());
-            } else {
-                if !ch.is_ascii_alphabetic()
-                    || Self::is_drop(ch)
-                    || score.is_none()
-                    || score == last
-                {
-                    continue;
-                }
-
-                last = score;
-                result.push(score.unwrap());
-            }
-
-            count += 1;
-        }
-
-        // add '0'
-        if !result.is_empty() && count < 4 {
-            result.extend(vec!['0'; 4 - count])
-        }
-
-        result.into_bytes()
-    }
-
+impl Soundex {
     #[inline(always)]
-    fn number_map(i: char) -> Option<char> {
+    fn number_map(i: char) -> Option<u8> {
         match i.to_ascii_lowercase() {
-            'b' | 'f' | 'p' | 'v' => Some('1'),
-            'c' | 'g' | 'j' | 'k' | 'q' | 's' | 'x' | 'z' => Some('2'),
-            'd' | 't' => Some('3'),
-            'l' => Some('4'),
-            'm' | 'n' => Some('5'),
-            'r' => Some('6'),
-            _ => Some('0'),
+            'b' | 'f' | 'p' | 'v' => Some(b'1'),
+            'c' | 'g' | 'j' | 'k' | 'q' | 's' | 'x' | 'z' => Some(b'2'),
+            'd' | 't' => Some(b'3'),
+            'l' => Some(b'4'),
+            'm' | 'n' => Some(b'5'),
+            'r' => Some(b'6'),
+            _ => Some(b'0'),
         }
     }
 
@@ -104,49 +51,51 @@ impl SoundexFunction {
     }
 }
 
-impl fmt::Display for SoundexFunction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SOUNDEX")
+impl StringOperator for Soundex {
+    #[inline]
+    fn apply_with_no_null<'a>(&'a mut self, data: &'a [u8], mut buffer: &mut [u8]) -> usize {
+        let mut last = None;
+        let mut count = 0;
+
+        self.buf.clear();
+
+        for ch in String::from_utf8_lossy(data).chars() {
+            let score = Self::number_map(ch);
+            if last.is_none() {
+                if !Self::is_uni_alphabetic(ch) {
+                    continue;
+                }
+
+                last = score;
+                self.buf.push(ch.to_ascii_uppercase());
+            } else {
+                if !ch.is_ascii_alphabetic()
+                    || Self::is_drop(ch)
+                    || score.is_none()
+                    || score == last
+                {
+                    continue;
+                }
+
+                last = score;
+                self.buf.push(score.unwrap() as char);
+            }
+
+            count += 1;
+        }
+
+        // add '0'
+        if !self.buf.is_empty() && count < 4 {
+            self.buf.extend(vec!['0'; 4 - count])
+        }
+        let bytes = self.buf.as_bytes();
+        buffer.put_slice(bytes);
+        bytes.len()
+    }
+
+    fn estimate_bytes(&self, array: &common_datavalues::prelude::DFStringArray) -> usize {
+        usize::max(array.inner().values().len(), 4 * array.len())
     }
 }
 
-impl Function for SoundexFunction {
-    fn name(&self) -> &str {
-        &*self._display_name
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
-    }
-
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        match args[0] {
-            DataType::Null => Ok(DataType::Null),
-            _ => Ok(DataType::String),
-        }
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
-    }
-
-    fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        match columns[0].data_type() {
-            DataType::String => {
-                return match columns[0].column() {
-                    DataColumn::Constant(DataValue::String(Some(ref data)), _) => {
-                        let r = Self::soundex(data);
-                        Ok(DataColumn::Constant(DataValue::String(Some(r)), input_rows))
-                    }
-                    _ => Ok(DataColumn::Constant(DataValue::Null, input_rows)),
-                };
-            }
-            DataType::Null => Ok(DataColumn::Constant(DataValue::Null, input_rows)),
-            _ => {
-                let mut s = StringArrayBuilder::with_capacity(0);
-                s.append_value("");
-                Ok(s.finish().into())
-            }
-        }
-    }
-}
+pub type SoundexFunction = String2StringFunction<Soundex>;

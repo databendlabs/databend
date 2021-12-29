@@ -59,6 +59,7 @@ impl Processor for LimitByTransform {
         self
     }
 
+    #[tracing::instrument(level = "debug", name="limit_by_execute" skip(self))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!("execute...");
 

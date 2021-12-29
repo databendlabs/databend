@@ -18,6 +18,8 @@ use crate::scalars::Md5HashFunction;
 use crate::scalars::Sha1HashFunction;
 use crate::scalars::Sha2HashFunction;
 use crate::scalars::SipHashFunction;
+use crate::scalars::XxHash32Function;
+use crate::scalars::XxHash64Function;
 
 #[derive(Clone)]
 pub struct HashesFunction;
@@ -31,5 +33,7 @@ impl HashesFunction {
         factory.register("sha1", Sha1HashFunction::desc());
         factory.register("sha2", Sha2HashFunction::desc());
         factory.register("blake3", Blake3HashFunction::desc());
+        factory.register("xxhash32", XxHash32Function::desc());
+        factory.register("xxhash64", XxHash64Function::desc());
     }
 }

@@ -17,15 +17,13 @@ use std::sync::Once;
 
 use common_infallible::RwLock;
 use common_tracing::tracing;
-use lazy_static::lazy_static;
 use metrics::counter;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use metrics_exporter_prometheus::PrometheusHandle;
+use once_cell::sync::Lazy;
 
-lazy_static! {
-    static ref PROMETHEUS_HANDLE: Arc<RwLock<Option<PrometheusHandle>>> =
-        Arc::new(RwLock::new(None));
-}
+static PROMETHEUS_HANDLE: Lazy<Arc<RwLock<Option<PrometheusHandle>>>> =
+    Lazy::new(|| Arc::new(RwLock::new(None)));
 
 pub const LABEL_KEY_TENANT: &str = "tenant";
 pub const LABEL_KEY_CLUSTER: &str = "cluster_name";

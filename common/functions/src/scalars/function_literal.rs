@@ -16,8 +16,8 @@ use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_datavalues::DataValue;
 use common_exception::Result;
 
@@ -39,20 +39,16 @@ impl Function for LiteralFunction {
         "LiteralFunction"
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
         Ok(self.value.data_type())
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
+    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
         Ok(self.value.is_null())
     }
 
     fn eval(&self, _columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         Ok(DataColumn::Constant(self.value.clone(), input_rows))
-    }
-
-    fn num_arguments(&self) -> usize {
-        0
     }
 }
 

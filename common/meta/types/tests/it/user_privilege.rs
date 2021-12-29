@@ -19,11 +19,11 @@ use common_meta_types::UserPrivilegeType;
 #[test]
 fn test_user_privilege() -> Result<()> {
     let mut privileges = UserPrivilegeSet::empty();
-    let r = privileges.has_privilege(UserPrivilegeType::Set);
+    let r = privileges.has_privilege(UserPrivilegeType::Insert);
     assert!(!r);
 
-    privileges.set_privilege(UserPrivilegeType::Set);
-    let r = privileges.has_privilege(UserPrivilegeType::Set);
+    privileges.set_privilege(UserPrivilegeType::Insert);
+    let r = privileges.has_privilege(UserPrivilegeType::Insert);
     assert!(r);
 
     privileges.set_all_privileges();

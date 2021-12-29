@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_planners::PlanNode;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 
 use crate::interpreters::plan_schedulers;
 use crate::interpreters::plan_schedulers::Scheduled;
@@ -26,6 +27,7 @@ use crate::interpreters::PlanScheduler;
 use crate::pipelines::processors::PipelineBuilder;
 use crate::sessions::QueryContext;
 
+#[tracing::instrument(level = "debug", skip(ctx), fields(ctx.id = ctx.get_id().as_str()))]
 pub async fn schedule_query(
     ctx: &Arc<QueryContext>,
     plan: &PlanNode,

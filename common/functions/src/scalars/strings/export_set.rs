@@ -17,6 +17,7 @@ use std::fmt;
 use common_arrow::arrow::array::*;
 use common_arrow::arrow::buffer::MutableBuffer;
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::izip;
@@ -38,8 +39,11 @@ impl ExportSetFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(3, 5),
+        )
     }
 }
 
@@ -48,48 +52,32 @@ impl Function for ExportSetFunction {
         &*self.display_name
     }
 
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((3, 5))
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
-    }
-
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if !args[0].is_integer() && args[0] != DataType::String && args[0] != DataType::Null {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        if !args[0].is_integer() && !args[0].is_string() && !args[0].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[0]
             )));
         }
-        if !args[1].is_integer() && args[1] != DataType::String && args[1] != DataType::Null {
+        if !args[1].is_integer() && !args[1].is_string() && !args[1].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[1]
             )));
         }
-        if !args[2].is_integer() && args[2] != DataType::String && args[2] != DataType::Null {
+        if !args[2].is_integer() && !args[2].is_string() && !args[2].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[2]
             )));
         }
-        if args.len() > 3
-            && !args[3].is_integer()
-            && args[3] != DataType::String
-            && args[3] != DataType::Null
-        {
+        if args.len() > 3 && !args[3].is_integer() && !args[3].is_string() && !args[3].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[3]
             )));
         }
-        if args.len() > 4
-            && !args[4].is_integer()
-            && args[4] != DataType::String
-            && args[4] != DataType::Null
-        {
+        if args.len() > 4 && !args[4].is_integer() && !args[4].is_string() && !args[4].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[4]

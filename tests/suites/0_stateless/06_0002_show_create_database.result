@@ -1,0 +1,3 @@
+system	CREATE DATABASE `system` ENGINE=SYSTEM
+test	CREATE DATABASE `test`
+datafuselabs	CREATE DATABASE `datafuselabs` ENGINE=GITHUB(token='xxx')

@@ -141,13 +141,12 @@ where T: Ord
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        let writer = BufMut::writer(writer);
-        bincode::serialize_into(writer, self)?;
-        Ok(())
+        serialize_into_buf(writer, self)
     }
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        *self = bincode::deserialize_from(reader)?;
+        *self = deserialize_from_slice(reader)?;
+
         Ok(())
     }
 }

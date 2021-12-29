@@ -16,6 +16,7 @@ use std::fmt;
 use std::marker::PhantomData;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::izip;
@@ -75,7 +76,7 @@ impl<T: ReplaceOperator> ReplaceImplFunction<T> {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(3))
     }
 }
 
@@ -84,28 +85,20 @@ impl<T: ReplaceOperator> Function for ReplaceImplFunction<T> {
         &*self.display_name
     }
 
-    fn num_arguments(&self) -> usize {
-        3
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
-    }
-
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if !args[0].is_integer() && args[0] != DataType::String && args[0] != DataType::Null {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        if !args[0].is_integer() && !args[0].is_string() && !args[0].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[0]
             )));
         }
-        if !args[1].is_integer() && args[1] != DataType::String && args[1] != DataType::Null {
+        if !args[1].is_integer() && !args[1].is_string() && !args[1].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[1]
             )));
         }
-        if !args[2].is_integer() && args[2] != DataType::String && args[2] != DataType::Null {
+        if !args[2].is_integer() && !args[2].is_string() && !args[2].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[2]

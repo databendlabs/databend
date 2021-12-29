@@ -13,30 +13,28 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_meta_types::DatabaseMeta;
+use common_meta_types::DatabaseInfo;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 
 #[derive(Clone)]
 pub struct DefaultDatabase {
-    db_name: String,
+    db_info: DatabaseInfo,
 }
 
 impl DefaultDatabase {
-    pub fn try_create(
-        _ctx: DatabaseContext,
-        db_name: &str,
-        _db_meta: DatabaseMeta,
-    ) -> Result<Box<dyn Database>> {
-        Ok(Box::new(Self {
-            db_name: db_name.to_string(),
-        }))
+    pub fn try_create(_ctx: DatabaseContext, db_info: DatabaseInfo) -> Result<Box<dyn Database>> {
+        Ok(Box::new(Self { db_info }))
     }
 }
 
 impl Database for DefaultDatabase {
     fn name(&self) -> &str {
-        &self.db_name
+        &self.db_info.db
+    }
+
+    fn get_db_info(&self) -> &DatabaseInfo {
+        &self.db_info
     }
 }

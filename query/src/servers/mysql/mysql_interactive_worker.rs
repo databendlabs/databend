@@ -281,6 +281,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
     fn do_close(&mut self, _: u32) {}
 
+    #[tracing::instrument(level = "debug", skip(self))]
     async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String)> {
         tracing::debug!("{}", query);
 

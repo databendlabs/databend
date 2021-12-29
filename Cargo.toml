@@ -27,6 +27,7 @@ members = [
     "common/meta/flight",
     "common/meta/types",
     "common/streams",
+    "common/codegen",
     "common/tracing",
     "common/metrics",
 

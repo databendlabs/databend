@@ -5,8 +5,7 @@ on:
     branches:
       - main
     paths-ignore:
-      - 'website/'
-      - '*.md'
+      - 'website/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}

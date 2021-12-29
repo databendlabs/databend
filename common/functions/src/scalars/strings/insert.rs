@@ -16,6 +16,7 @@ use std::fmt;
 use std::marker::PhantomData;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::izip;
@@ -83,7 +84,7 @@ impl<T: InsertOperator> InsFunction<T> {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(4))
     }
 }
 
@@ -92,22 +93,14 @@ impl<T: InsertOperator> Function for InsFunction<T> {
         &*self.display_name
     }
 
-    fn num_arguments(&self) -> usize {
-        4
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
-    }
-
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if !args[1].is_integer() && args[1] != DataType::String && args[1] != DataType::Null {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        if !args[1].is_integer() && !args[1].is_string() && !args[1].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[1]
             )));
         }
-        if !args[2].is_integer() && args[2] != DataType::String && args[2] != DataType::Null {
+        if !args[2].is_integer() && !args[2].is_string() && !args[2].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[2]
