@@ -23,7 +23,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Maximize build space
-        uses: easimon/maximize-build-space@master
+        uses: easimon/maximize-build-space@v4
+        with:
+          remove-dotnet: 'true'
 
       - uses: actions/checkout@v2
       - uses: ./.github/actions/check
