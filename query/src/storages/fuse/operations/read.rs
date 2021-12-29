@@ -13,31 +13,30 @@
 //  limitations under the License.
 //
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_arrow::arrow::io::parquet::read::read_metadata_async;
+use common_arrow::parquet::metadata::FileMetaData;
 use common_dal::DataAccessor;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_infallible::RwLock;
 use common_planners::Extras;
 use common_streams::ParquetSource;
 use common_streams::SendableDataBlockStream;
 use common_streams::Source;
 use common_tracing::tracing_futures::Instrument;
 use futures::StreamExt;
+use once_cell::sync::OnceCell;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::FuseTable;
 
+static META_CACHE: OnceCell<RwLock<HashMap<String, FileMetaData>>> = OnceCell::new();
+
 impl FuseTable {
-    // #[inline]
-    // pub async fn read_meta(da: &Arc<dyn DataAccessor>, loc: &str) -> Result<FileMetaData> {
-    //     let mut reader = da.get_input_stream(name, Some(size))?;
-    //     read_metadata_async(&mut reader)
-    //         .await
-    //         .map_err(|e| ErrorCode::ParquetError(e.to_string()))
-    // }
     #[inline]
     pub async fn do_read(
         &self,
@@ -95,10 +94,23 @@ impl FuseTable {
                     }
                     let name = parts[0];
                     let size = parts[1].parse::<u64>()?;
-                    let mut reader = da.get_input_stream(name, Some(size))?;
-                    let parquet_meta = read_metadata_async(&mut reader)
-                        .await
-                        .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
+                    let cache = META_CACHE.get_or_init(|| {
+                        common_infallible::RwLock::new(std::collections::HashMap::new())
+                    });
+
+                    let meta = { cache.read().get(name).cloned() };
+
+                    let parquet_meta = match meta {
+                        Some(m) => m,
+                        _ => {
+                            let mut reader = da.get_input_stream(name, Some(size))?;
+                            let parquet_meta = read_metadata_async(&mut reader)
+                                .await
+                                .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
+                            cache.write().insert(name.to_owned(), parquet_meta.clone());
+                            parquet_meta
+                        }
+                    };
 
                     let mut source = ParquetSource::with_meta(
                         da,
