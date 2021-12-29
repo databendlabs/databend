@@ -19,8 +19,8 @@ mod kv_api_impl;
 mod meta_api_impl;
 
 pub use grpc_action::GetTableExtReq;
-pub use grpc_action::MetaGrpcGetAction;
-pub use grpc_action::MetaGrpcWriteAction;
+pub use grpc_action::MetaGrpcReadReq;
+pub use grpc_action::MetaGrpcWriteReq;
 pub use grpc_action::RequestFor;
 pub use grpc_client::*;
 pub use grpc_client_conf::*;

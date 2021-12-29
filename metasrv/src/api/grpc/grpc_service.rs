@@ -17,8 +17,8 @@ use std::sync::Arc;
 use common_arrow::arrow_format::flight::data::BasicAuth;
 use common_flight_rpc::FlightClaim;
 use common_flight_rpc::FlightToken;
-use common_meta_raft_store::MetaGrpcGetAction;
-use common_meta_raft_store::MetaGrpcWriteAction;
+use common_meta_raft_store::MetaGrpcReadReq;
+use common_meta_raft_store::MetaGrpcWriteReq;
 use common_meta_types::protobuf::meta_server::Meta;
 use common_meta_types::protobuf::GetReply;
 use common_meta_types::protobuf::GetReq;
@@ -118,7 +118,7 @@ impl Meta for MetaGrpcImpl {
         self.check_token(request.metadata())?;
         common_tracing::extract_remote_span_as_parent(&request);
 
-        let action: MetaGrpcWriteAction = request.try_into()?;
+        let action: MetaGrpcWriteReq = request.try_into()?;
         tracing::info!("Receive write_action: {:?}", action);
 
         let body = self.action_handler.execute_write(action).await;
@@ -129,7 +129,7 @@ impl Meta for MetaGrpcImpl {
         self.check_token(request.metadata())?;
         common_tracing::extract_remote_span_as_parent(&request);
 
-        let action: MetaGrpcGetAction = request.try_into()?;
+        let action: MetaGrpcReadReq = request.try_into()?;
         tracing::info!("Receive read_action: {:?}", action);
 
         let body = self.action_handler.execute_read(action).await?;

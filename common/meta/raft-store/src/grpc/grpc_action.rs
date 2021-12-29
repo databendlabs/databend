@@ -49,7 +49,7 @@ pub trait RequestFor {
 
 // Action wrapper for do_action.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
-pub enum MetaGrpcWriteAction {
+pub enum MetaGrpcWriteReq {
     CreateDatabase(CreateDatabaseReq),
     DropDatabase(DropDatabaseReq),
 
@@ -60,7 +60,7 @@ pub enum MetaGrpcWriteAction {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
-pub enum MetaGrpcGetAction {
+pub enum MetaGrpcReadReq {
     GetDatabase(GetDatabaseReq),
     ListDatabases(ListDatabaseReq),
     GetTable(GetTableReq),
@@ -72,22 +72,22 @@ pub enum MetaGrpcGetAction {
 }
 
 /// Try convert tonic::Request<RaftRequest> to DoActionAction.
-impl TryInto<MetaGrpcWriteAction> for Request<RaftRequest> {
+impl TryInto<MetaGrpcWriteReq> for Request<RaftRequest> {
     type Error = tonic::Status;
 
-    fn try_into(self) -> Result<MetaGrpcWriteAction, Self::Error> {
+    fn try_into(self) -> Result<MetaGrpcWriteReq, Self::Error> {
         let raft_request = self.into_inner();
 
         // Decode DoActionAction from flight request body.
         let json_str = raft_request.data.as_str();
-        let action = serde_json::from_str::<MetaGrpcWriteAction>(json_str)
+        let action = serde_json::from_str::<MetaGrpcWriteReq>(json_str)
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
         Ok(action)
     }
 }
 
 /// Try convert DoActionAction to tonic::Request<RaftRequest>.
-impl TryInto<Request<RaftRequest>> for &MetaGrpcWriteAction {
+impl TryInto<Request<RaftRequest>> for &MetaGrpcWriteReq {
     type Error = ErrorCode;
 
     fn try_into(self) -> common_exception::Result<Request<RaftRequest>> {
@@ -100,20 +100,20 @@ impl TryInto<Request<RaftRequest>> for &MetaGrpcWriteAction {
     }
 }
 
-impl TryInto<MetaGrpcGetAction> for Request<GetReq> {
+impl TryInto<MetaGrpcReadReq> for Request<GetReq> {
     type Error = tonic::Status;
 
-    fn try_into(self) -> Result<MetaGrpcGetAction, Self::Error> {
+    fn try_into(self) -> Result<MetaGrpcReadReq, Self::Error> {
         let get_req = self.into_inner();
 
         let json_str = get_req.key.as_str();
-        let action = serde_json::from_str::<MetaGrpcGetAction>(json_str)
+        let action = serde_json::from_str::<MetaGrpcReadReq>(json_str)
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
         Ok(action)
     }
 }
 
-impl TryInto<Request<GetReq>> for &MetaGrpcGetAction {
+impl TryInto<Request<GetReq>> for &MetaGrpcReadReq {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<Request<GetReq>, Self::Error> {

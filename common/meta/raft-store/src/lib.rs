@@ -22,6 +22,6 @@ pub mod state_machine;
 pub use grpc::GetTableExtReq;
 pub use grpc::MetaGrpcClient;
 pub use grpc::MetaGrpcClientConf;
-pub use grpc::MetaGrpcGetAction;
-pub use grpc::MetaGrpcWriteAction;
+pub use grpc::MetaGrpcReadReq;
+pub use grpc::MetaGrpcWriteReq;
 pub use grpc::RequestFor;

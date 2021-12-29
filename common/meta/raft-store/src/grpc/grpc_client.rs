@@ -36,8 +36,8 @@ use tonic::service::Interceptor;
 use tonic::transport::Channel;
 use tonic::Request;
 
-use crate::grpc::grpc_action::MetaGrpcGetAction;
-use crate::grpc::grpc_action::MetaGrpcWriteAction;
+use crate::grpc::grpc_action::MetaGrpcReadReq;
+use crate::grpc::grpc_action::MetaGrpcWriteReq;
 use crate::grpc::grpc_action::RequestFor;
 use crate::MetaGrpcClientConf;
 
@@ -125,10 +125,10 @@ impl MetaGrpcClient {
     #[tracing::instrument(level = "debug", skip(self, v))]
     pub(crate) async fn do_write<T, R>(&self, v: T) -> Result<R>
     where
-        T: RequestFor<Reply = R> + Into<MetaGrpcWriteAction>,
+        T: RequestFor<Reply = R> + Into<MetaGrpcWriteReq>,
         R: DeserializeOwned,
     {
-        let act: MetaGrpcWriteAction = v.into();
+        let act: MetaGrpcWriteReq = v.into();
         let req: Request<RaftRequest> = (&act).try_into()?;
         let req = common_tracing::inject_span_to_tonic_request(req);
 
@@ -147,10 +147,10 @@ impl MetaGrpcClient {
     pub(crate) async fn do_get<T, R>(&self, v: T) -> Result<R>
     where
         T: RequestFor<Reply = R>,
-        T: Into<MetaGrpcGetAction>,
+        T: Into<MetaGrpcReadReq>,
         R: DeserializeOwned,
     {
-        let act: MetaGrpcGetAction = v.into();
+        let act: MetaGrpcReadReq = v.into();
         let req: Request<GetReq> = (&act).try_into()?;
         let req = common_tracing::inject_span_to_tonic_request(req);
 
