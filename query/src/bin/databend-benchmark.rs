@@ -26,7 +26,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use clap::Parser;
-use clickhouse_rs::Pool;
+use clickhouse_driver::prelude::*;
 use common_base::tokio;
 use common_base::RuntimeTracker;
 use common_exception::ErrorCode;
@@ -37,7 +37,6 @@ use common_macros::databend_main;
 use common_tracing::tracing;
 use crossbeam_queue::ArrayQueue;
 use futures::future::try_join_all;
-use futures::StreamExt;
 use quantiles::ckms::CKMS;
 use rand::Rng;
 use serde::Deserialize;
@@ -212,7 +211,8 @@ fn read_queries(query: &str) -> Result<Vec<String>> {
 }
 
 async fn execute(bench: BenchmarkRef) -> Result<()> {
-    let pool = Pool::new(bench.database_url.clone());
+    let pool =
+        Pool::create(bench.database_url.clone()).map_err_to_code(ErrorCode::LogicalError, || "")?;
 
     loop {
         if bench.shutdown.load(Ordering::Relaxed)
@@ -226,18 +226,19 @@ async fn execute(bench: BenchmarkRef) -> Result<()> {
             if let Some(query) = query {
                 let start = Instant::now();
                 let mut client = pool
-                    .get_handle()
+                    .connection()
                     .await
                     .map_err_to_code(ErrorCode::LogicalError, || "")?;
 
                 {
-                    let result = client.query(&query);
-                    let mut stream = result.stream();
-                    while stream.next().await.is_some() {}
-                }
+                    let mut result = client
+                        .query(query.as_str())
+                        .await
+                        .map_err_to_code(ErrorCode::LogicalError, || "")?;
 
-                {
-                    let progress = client.progress();
+                    while result.next().await.is_ok() {}
+
+                    let progress = &result.progress;
                     let mut stats = bench.stats.write();
                     stats.update(
                         start.elapsed().as_millis() as f64 / 1000f64,
