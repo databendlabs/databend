@@ -1261,13 +1261,14 @@ version = "0.1.0"
 dependencies = [
  "async-compat",
  "async-trait",
- "bytes",
+ "bytes 1.1.0",
  "common-exception",
  "futures",
  "reqwest",
  "rusoto_core",
  "rusoto_credential",
  "rusoto_s3",
+ "thiserror",
  "tokio",
 ]
 
