@@ -15,10 +15,8 @@
 use std::fmt;
 use std::marker::PhantomData;
 
-use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
 use common_datavalues::DataTypeAndNullable;
-use common_datavalues::DataValueBinaryOperator;
 use common_exception::Result;
 
 use super::arithmetic::ArithmeticTrait;

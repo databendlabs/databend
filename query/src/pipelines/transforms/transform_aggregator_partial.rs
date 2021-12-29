@@ -18,7 +18,6 @@ use std::time::Instant;
 
 use bumpalo::Bump;
 use common_datablocks::DataBlock;
-use common_datavalues::arrays::StringArrayBuilder;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;

@@ -165,7 +165,10 @@ fn test_arithmetic_date_interval() -> Result<()> {
 
     let tests = vec![
         (
-            ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus)?,
+            ArithmeticPlusFunction::try_create_func("", &[
+                DataTypeAndNullable::create(&DataType::DateTime32(None), false),
+                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::YearMonth), false),
+            ])?,
             ScalarFunctionTestWithType {
                 name: "datetime-add-year-month-passed",
                 nullable: false,
@@ -200,7 +203,10 @@ fn test_arithmetic_date_interval() -> Result<()> {
             },
         ),
         (
-            ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus)?,
+            ArithmeticPlusFunction::try_create_func("", &[
+                DataTypeAndNullable::create(&DataType::DateTime32(None), false),
+                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::YearMonth), false),
+            ])?,
             ScalarFunctionTestWithType {
                 name: "datetime-add-year-month-passed",
                 nullable: false,
@@ -231,7 +237,10 @@ fn test_arithmetic_date_interval() -> Result<()> {
             },
         ),
         (
-            ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus)?,
+            ArithmeticPlusFunction::try_create_func("", &[
+                DataTypeAndNullable::create(&DataType::DateTime32(None), false),
+                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::DayTime), false),
+            ])?,
             ScalarFunctionTestWithType {
                 name: "datetime-add-day-time-passed",
                 nullable: false,
@@ -262,7 +271,10 @@ fn test_arithmetic_date_interval() -> Result<()> {
             },
         ),
         (
-            ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Minus)?,
+            ArithmeticMinusFunction::try_create_func("", &[
+                DataTypeAndNullable::create(&DataType::DateTime32(None), false),
+                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::DayTime), false),
+            ])?,
             ScalarFunctionTestWithType {
                 name: "datetime-minus-day-time-passed",
                 nullable: false,
@@ -293,7 +305,10 @@ fn test_arithmetic_date_interval() -> Result<()> {
             },
         ),
         (
-            ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus)?,
+            ArithmeticPlusFunction::try_create_func("", &[
+                DataTypeAndNullable::create(&DataType::Date32, false),
+                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::YearMonth), false),
+            ])?,
             ScalarFunctionTestWithType {
                 name: "date32-plus-year-month",
                 nullable: false,
@@ -320,7 +335,10 @@ fn test_arithmetic_date_interval() -> Result<()> {
             },
         ),
         (
-            ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Minus)?,
+            ArithmeticMinusFunction::try_create_func("", &[
+                DataTypeAndNullable::create(&DataType::Date32, false),
+                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::YearMonth), false),
+            ])?,
             ScalarFunctionTestWithType {
                 name: "date32-minus-year-month",
                 nullable: false,
@@ -347,7 +365,10 @@ fn test_arithmetic_date_interval() -> Result<()> {
             },
         ),
         (
-            ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus)?,
+            ArithmeticPlusFunction::try_create_func("", &[
+                DataTypeAndNullable::create(&DataType::Date32, false),
+                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::DayTime), false),
+            ])?,
             ScalarFunctionTestWithType {
                 name: "date32-plus-day-time",
                 nullable: false,
@@ -370,7 +391,10 @@ fn test_arithmetic_date_interval() -> Result<()> {
             },
         ),
         (
-            ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Minus)?,
+            ArithmeticMinusFunction::try_create_func("", &[
+                DataTypeAndNullable::create(&DataType::Date32, false),
+                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::DayTime), false),
+            ])?,
             ScalarFunctionTestWithType {
                 name: "date32-minus-day-time",
                 nullable: false,
@@ -390,7 +414,10 @@ fn test_arithmetic_date_interval() -> Result<()> {
             },
         ),
         (
-            ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus)?,
+            ArithmeticPlusFunction::try_create_func("", &[
+                DataTypeAndNullable::create(&DataType::Date16, false),
+                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::YearMonth), false),
+            ])?,
             ScalarFunctionTestWithType {
                 name: "date16-plus-year-month",
                 nullable: false,
@@ -425,7 +452,10 @@ fn test_arithmetic_date_interval() -> Result<()> {
             },
         ),
         (
-            ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Plus)?,
+            ArithmeticPlusFunction::try_create_func("", &[
+                DataTypeAndNullable::create(&DataType::Date16, false),
+                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::DayTime), false),
+            ])?,
             ScalarFunctionTestWithType {
                 name: "date16-plus-day-time",
                 nullable: false,

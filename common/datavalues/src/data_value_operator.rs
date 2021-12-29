@@ -100,30 +100,6 @@ impl std::fmt::Display for DataValueUnaryOperator {
     }
 }
 
-#[derive(Clone, Debug)]
-pub enum DataValueArithmeticOperator {
-    Plus,
-    Minus,
-    Mul,
-    Div,
-    IntDiv,
-    Modulo,
-}
-
-impl std::fmt::Display for DataValueArithmeticOperator {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let display = match &self {
-            DataValueArithmeticOperator::Plus => "plus",
-            DataValueArithmeticOperator::Minus => "minus",
-            DataValueArithmeticOperator::Mul => "multiply",
-            DataValueArithmeticOperator::Div => "divide",
-            DataValueArithmeticOperator::IntDiv => "div",
-            DataValueArithmeticOperator::Modulo => "modulo",
-        };
-        write!(f, "{}", display)
-    }
-}
-
 #[derive(Clone)]
 pub enum DataValueLogicOperator {
     And,

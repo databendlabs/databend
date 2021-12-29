@@ -19,7 +19,8 @@ use common_exception::Result;
 
 use crate::prelude::DataType;
 use crate::DataField;
-use crate::DataValueArithmeticOperator;
+use crate::DataValueBinaryOperator;
+use crate::DataValueUnaryOperator;
 
 fn next_size(size: usize) -> usize {
     if size < 8_usize {
@@ -153,7 +154,7 @@ pub fn numerical_coercion(
 
 #[inline]
 pub fn numerical_arithmetic_coercion(
-    op: &DataValueArithmeticOperator,
+    op: &DataValueBinaryOperator,
     lhs_type: &DataType,
     rhs_type: &DataType,
 ) -> Result<DataType> {
@@ -170,11 +171,11 @@ pub fn numerical_arithmetic_coercion(
     let max_size = cmp::max(lhs_type.numeric_byte_size()?, rhs_type.numeric_byte_size()?);
 
     match op {
-        DataValueArithmeticOperator::Plus | DataValueArithmeticOperator::Mul => {
+        DataValueBinaryOperator::Plus | DataValueBinaryOperator::Mul => {
             construct_numeric_type(has_signed, has_float, next_size(max_size))
         }
 
-        DataValueArithmeticOperator::Modulo => {
+        DataValueBinaryOperator::Modulo => {
             if has_float {
                 return Ok(DataType::Float64);
             }
@@ -190,17 +191,17 @@ pub fn numerical_arithmetic_coercion(
             };
             construct_numeric_type(result_is_signed, false, size_of_result)
         }
-        DataValueArithmeticOperator::Minus => {
+        DataValueBinaryOperator::Minus => {
             construct_numeric_type(true, has_float, next_size(max_size))
         }
-        DataValueArithmeticOperator::Div => Ok(DataType::Float64),
-        DataValueArithmeticOperator::IntDiv => construct_numeric_type(has_signed, false, max_size),
+        DataValueBinaryOperator::Div => Ok(DataType::Float64),
+        DataValueBinaryOperator::IntDiv => construct_numeric_type(has_signed, false, max_size),
     }
 }
 
 #[inline]
 pub fn datetime_arithmetic_coercion(
-    op: &DataValueArithmeticOperator,
+    op: &DataValueBinaryOperator,
     lhs_type: &DataType,
     rhs_type: &DataType,
 ) -> Result<DataType> {
@@ -221,9 +222,9 @@ pub fn datetime_arithmetic_coercion(
     }
 
     match op {
-        DataValueArithmeticOperator::Plus => Ok(a),
+        DataValueBinaryOperator::Plus => Ok(a),
 
-        DataValueArithmeticOperator::Minus => {
+        DataValueBinaryOperator::Minus => {
             if b.is_numeric() || b.is_interval() {
                 Ok(a)
             } else {
@@ -237,7 +238,7 @@ pub fn datetime_arithmetic_coercion(
 
 #[inline]
 pub fn interval_arithmetic_coercion(
-    op: &DataValueArithmeticOperator,
+    op: &DataValueBinaryOperator,
     lhs_type: &DataType,
     rhs_type: &DataType,
 ) -> Result<DataType> {
@@ -254,7 +255,7 @@ pub fn interval_arithmetic_coercion(
     }
 
     match op {
-        DataValueArithmeticOperator::Plus | DataValueArithmeticOperator::Minus => {
+        DataValueBinaryOperator::Plus | DataValueBinaryOperator::Minus => {
             if lhs_type.is_date_or_date_time() {
                 Ok(lhs_type.clone())
             } else {
@@ -267,7 +268,7 @@ pub fn interval_arithmetic_coercion(
 
 #[inline]
 pub fn numerical_unary_arithmetic_coercion(
-    op: &DataValueArithmeticOperator,
+    op: &DataValueUnaryOperator,
     val_type: &DataType,
 ) -> Result<DataType> {
     // error on any non-numeric type
@@ -279,8 +280,7 @@ pub fn numerical_unary_arithmetic_coercion(
     };
 
     match op {
-        DataValueArithmeticOperator::Plus => Ok(val_type.clone()),
-        DataValueArithmeticOperator::Minus => {
+        DataValueUnaryOperator::Negate => {
             let has_float = val_type.is_floating();
             let has_signed = val_type.is_signed_numeric();
             let numeric_size = val_type.numeric_byte_size()?;
@@ -291,10 +291,6 @@ pub fn numerical_unary_arithmetic_coercion(
             };
             construct_numeric_type(true, has_float, max_size)
         }
-        other => Result::Err(ErrorCode::UnknownFunction(format!(
-            "Unexpected operator:{:?} to unary function",
-            other
-        ))),
     }
 }
 

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 use num::cast::AsPrimitive;
 
@@ -59,7 +58,7 @@ pub struct IntervalMonthAddDate16 {}
 impl ArithmeticTrait for IntervalMonthAddDate16 {
     fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
         IntervalFunctionFactory::interval_month_plus_minus_date16(
-            &DataValueArithmeticOperator::Plus,
+            &DataValueBinaryOperator::Plus,
             &columns[0],
             &columns[1],
         )
@@ -72,7 +71,7 @@ pub struct IntervalMonthAddDate32 {}
 impl ArithmeticTrait for IntervalMonthAddDate32 {
     fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
         IntervalFunctionFactory::interval_month_plus_minus_date32(
-            &DataValueArithmeticOperator::Plus,
+            &DataValueBinaryOperator::Plus,
             &columns[0],
             &columns[1],
         )
@@ -85,7 +84,7 @@ pub struct IntervalMonthAddDatetime32 {}
 impl ArithmeticTrait for IntervalMonthAddDatetime32 {
     fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
         IntervalFunctionFactory::interval_month_plus_minus_datetime32(
-            &DataValueArithmeticOperator::Plus,
+            &DataValueBinaryOperator::Plus,
             &columns[0],
             &columns[1],
         )
@@ -128,7 +127,7 @@ pub struct IntervalMonthSubDate16 {}
 impl ArithmeticTrait for IntervalMonthSubDate16 {
     fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
         IntervalFunctionFactory::interval_month_plus_minus_date16(
-            &DataValueArithmeticOperator::Minus,
+            &DataValueBinaryOperator::Minus,
             &columns[0],
             &columns[1],
         )
@@ -141,7 +140,7 @@ pub struct IntervalMonthSubDate32 {}
 impl ArithmeticTrait for IntervalMonthSubDate32 {
     fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
         IntervalFunctionFactory::interval_month_plus_minus_date32(
-            &DataValueArithmeticOperator::Minus,
+            &DataValueBinaryOperator::Minus,
             &columns[0],
             &columns[1],
         )
@@ -154,7 +153,7 @@ pub struct IntervalMonthSubDatetime32 {}
 impl ArithmeticTrait for IntervalMonthSubDatetime32 {
     fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
         IntervalFunctionFactory::interval_month_plus_minus_datetime32(
-            &DataValueArithmeticOperator::Minus,
+            &DataValueBinaryOperator::Minus,
             &columns[0],
             &columns[1],
         )

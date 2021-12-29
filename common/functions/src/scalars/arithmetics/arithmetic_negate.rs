@@ -17,7 +17,6 @@ use std::ops::Neg;
 
 use common_datavalues::prelude::*;
 use common_datavalues::DataTypeAndNullable;
-use common_datavalues::DataValueUnaryOperator;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::cast::AsPrimitive;

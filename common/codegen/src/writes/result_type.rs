@@ -20,7 +20,8 @@ use common_datavalues::prelude::*;
 
 pub fn write_arithmetic_result_type() {
     use DataType::*;
-    use DataValueArithmeticOperator::*;
+    use DataValueBinaryOperator::*;
+    use DataValueUnaryOperator::*;
 
     let dest = Path::new("common/datavalues/src/types");
     let path = dest.join("arithmetics_type.rs");
@@ -94,7 +95,7 @@ impl ResultTypeOfBinary for ({}, {}) {{
     }
 
     for arg in &lhs {
-        let negate = numerical_unary_arithmetic_coercion(&Minus, arg).unwrap();
+        let negate = numerical_unary_arithmetic_coercion(&Negate, arg).unwrap();
         writeln!(
             file,
             "

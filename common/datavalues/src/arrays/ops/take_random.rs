@@ -16,8 +16,6 @@ use std::sync::Arc;
 use common_arrow::arrow::array::*;
 
 use crate::prelude::*;
-use crate::series::IntoSeries;
-use crate::series::Series;
 use crate::series::SeriesWrap;
 
 /// Random access
