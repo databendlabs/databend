@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod udf_definition;
-mod udf_factory;
-mod udf_parser;
-mod udf_transformer;
+use sqlparser::ast::Expr;
 
-pub use udf_definition::UDFDefinition;
-pub use udf_factory::UDFFactory;
-pub use udf_parser::UDFParser;
-pub use udf_transformer::UDFTransformer;
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UDFDefinition {
+    pub parameters: Vec<String>,
+    pub expr: Expr,
+}
+
+impl UDFDefinition {
+    pub fn new(parameters: Vec<String>, expr: Expr) -> Self {
+        Self { parameters, expr }
+    }
+}

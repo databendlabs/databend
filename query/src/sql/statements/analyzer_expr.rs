@@ -487,7 +487,7 @@ impl ExprRPNBuilder {
 impl ExprVisitor for ExprRPNBuilder {
     fn pre_visit(&mut self, expr: &Expr) -> Result<Expr> {
         if let Expr::Function(function) = expr {
-            if let Some(transformed_expr) = UDFTransformer::transform_function(
+            if let Ok(Some(transformed_expr)) = UDFTransformer::transform_function(
                 self.context.get_config().query.tenant_id.as_str(),
                 function,
             ) {

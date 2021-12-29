@@ -74,6 +74,7 @@ impl UserApiProvider {
             UDFFactory::register(
                 &cfg.query.tenant_id,
                 udf.name.as_str(),
+                &udf.parameters,
                 udf.definition.as_str(),
             )?;
         }
