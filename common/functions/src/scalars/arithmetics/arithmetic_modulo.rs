@@ -114,9 +114,8 @@ where
         let rhs: &DFPrimitiveArray<D> = rhs.static_cast();
         let result_type = R::data_type();
         let least_super = M::data_type();
-        if result_type.is_integer() && rhs.into_iter().any(|v| v == Some(&D::zero())) {
-            return Err(ErrorCode::BadArguments("Division by zero"));
-        }
+
+        let need_check = result_type.is_integer();
 
         let series = match (rhs.len(), result_type.clone()) {
             // TODO(sundy): add more specific cases
@@ -125,40 +124,48 @@ where
                 let opt_rhs = rhs.get(0);
                 match opt_rhs {
                     None => DFUInt8Array::full_null(lhs.len()).into_series(),
-                    Some(rhs) => match least_super {
-                        DataType::UInt64 => {
-                            let rhs = rhs.to_u8().unwrap();
-                            let rhs = rhs as u64;
+                    Some(rhs) => {
+                        if rhs == D::zero() {
+                            return Err(ErrorCode::BadArguments("Division by zero"));
+                        }
+                        match least_super {
+                            DataType::UInt64 => {
+                                let rhs = rhs.to_u8().unwrap();
+                                let rhs = rhs as u64;
 
-                            if rhs & (rhs - 1) > 0 {
-                                let reduced_modulo = StrengthReducedU64::new(rhs);
-                                let array =
-                                    unary(lhs, |a| (a.to_u64().unwrap() % reduced_modulo) as u8);
-                                array.into_series()
-                            } else {
-                                let mask = rhs - 1;
-                                let array = unary(lhs, |a| (a.to_u64().unwrap() & mask) as u8);
+                                if rhs & (rhs - 1) > 0 {
+                                    let reduced_modulo = StrengthReducedU64::new(rhs);
+                                    let array = unary(lhs, |a| {
+                                        (a.to_u64().unwrap() % reduced_modulo) as u8
+                                    });
+                                    array.into_series()
+                                } else {
+                                    let mask = rhs - 1;
+                                    let array = unary(lhs, |a| (a.to_u64().unwrap() & mask) as u8);
+                                    array.into_series()
+                                }
+                            }
+                            _ => {
+                                let r: M = rhs.as_();
+                                let array = unary(lhs, |v| {
+                                    let l: M = v.as_();
+                                    AsPrimitive::<u8>::as_(l - (l / r) * r)
+                                });
                                 array.into_series()
                             }
                         }
-
-                        _ => {
-                            let r: M = rhs.as_();
-                            let array = unary(lhs, |v| {
-                                let l: M = v.as_();
-                                AsPrimitive::<u8>::as_(l - (l / r) * r)
-                            });
-                            array.into_series()
-                        }
-                    },
+                    }
                 }
             }
 
             _ => match (lhs.len(), rhs.len()) {
                 (a, b) if a == b => {
-                    let array = binary(lhs, rhs, |l, r| {
-                        AsPrimitive::<M>::as_(l) % AsPrimitive::<M>::as_(r)
-                    });
+                    let array = try_binary(lhs, rhs, |l, r| {
+                        if need_check && r == D::zero() {
+                            return Err(ErrorCode::BadArguments("Division by zero"));
+                        }
+                        Ok(AsPrimitive::<M>::as_(l) % AsPrimitive::<M>::as_(r))
+                    })?;
                     array.into_series()
                 }
                 (_, 1) => {
@@ -166,6 +173,9 @@ where
                     match opt_rhs {
                         None => DFPrimitiveArray::<M>::full_null(lhs.len()).into_series(),
                         Some(rhs) => {
+                            if need_check && rhs == D::zero() {
+                                return Err(ErrorCode::BadArguments("Division by zero"));
+                            }
                             let r: M = rhs.as_();
                             rem_scalar(lhs, &r)
                         }
@@ -177,7 +187,12 @@ where
                         None => DFPrimitiveArray::<M>::full_null(rhs.len()).into_series(),
                         Some(lhs) => {
                             let l: M = lhs.as_();
-                            let array = unary(rhs, |r| l % AsPrimitive::<M>::as_(r));
+                            let array = try_unary(rhs, |r| {
+                                if need_check && r == D::zero() {
+                                    return Err(ErrorCode::BadArguments("Division by zero"));
+                                }
+                                Ok(l % AsPrimitive::<M>::as_(r))
+                            })?;
                             array.into_series()
                         }
                     }
