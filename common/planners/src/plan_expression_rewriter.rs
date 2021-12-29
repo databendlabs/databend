@@ -208,7 +208,9 @@ impl<T: ExpressionRewriter> ExpressionRewriteVisitor<T> {
     pub fn finalize(mut self) -> Result<Expression> {
         match self.stack.len() {
             1 => Ok(self.stack.remove(0)),
-            _ => Err(ErrorCode::LogicalError("")),
+            _ => Err(ErrorCode::LogicalError(
+                "Stack has too many elements in ExpressionDataTypeVisitor::finalize",
+            )),
         }
     }
 }
@@ -229,10 +231,10 @@ impl<T: ExpressionRewriter> ExpressionVisitor for ExpressionRewriteVisitor<T> {
                         .push(self.inner.mutate_binary(op, left, right, expr)?);
                     Ok(self)
                 }
-                (_, _) => Err(ErrorCode::LogicalError("")),
+                (_, _) => Err(ErrorCode::LogicalError("Binary expr expected 2 arguments.")),
             },
             Expression::UnaryExpression { op, .. } => match self.stack.pop() {
-                None => Err(ErrorCode::LogicalError("")),
+                None => Err(ErrorCode::LogicalError("Unary expr expected 1 arguments.")),
                 Some(new_expr) => {
                     self.stack
                         .push(self.inner.mutate_unary_expression(op, new_expr, expr)?);
@@ -241,10 +243,14 @@ impl<T: ExpressionRewriter> ExpressionVisitor for ExpressionRewriteVisitor<T> {
             },
             Expression::ScalarFunction { op, args } => {
                 let mut args_expr = Vec::with_capacity(args.len());
-                for _index in 0..args.len() {
+                for index in 0..args.len() {
                     match self.stack.pop() {
                         None => {
-                            return Err(ErrorCode::LogicalError(""));
+                            return Err(ErrorCode::LogicalError(format!(
+                                "Expected {} arguments, actual {}.",
+                                args.len(),
+                                index
+                            )));
                         }
                         Some(arg_type) => args_expr.push(arg_type),
                     };
@@ -262,10 +268,14 @@ impl<T: ExpressionRewriter> ExpressionVisitor for ExpressionRewriteVisitor<T> {
             } => {
                 let mut args_expr = Vec::with_capacity(args.len());
 
-                for _index in 0..args.len() {
+                for index in 0..args.len() {
                     match self.stack.pop() {
                         None => {
-                            return Err(ErrorCode::LogicalError(""));
+                            return Err(ErrorCode::LogicalError(format!(
+                                "Expected {} arguments, actual {}.",
+                                args.len(),
+                                index
+                            )));
                         }
                         Some(arg_type) => args_expr.push(arg_type),
                     };
@@ -278,7 +288,9 @@ impl<T: ExpressionRewriter> ExpressionVisitor for ExpressionRewriteVisitor<T> {
                 Ok(self)
             }
             Expression::Cast { data_type, .. } => match self.stack.pop() {
-                None => Err(ErrorCode::LogicalError("")),
+                None => Err(ErrorCode::LogicalError(
+                    "Cast expr expected 1 parameters, actual 0.",
+                )),
                 Some(new_expr) => {
                     self.stack
                         .push(self.inner.mutate_cast(data_type, new_expr, expr)?);
@@ -310,7 +322,9 @@ impl<T: ExpressionRewriter> ExpressionVisitor for ExpressionRewriteVisitor<T> {
                 origin_expr,
                 ..
             } => match self.stack.pop() {
-                None => Err(ErrorCode::LogicalError("")),
+                None => Err(ErrorCode::LogicalError(
+                    "Sort expr expected 1 parameters, actual 0.",
+                )),
                 Some(expr) => {
                     let new_expr = self
                         .inner
@@ -320,7 +334,9 @@ impl<T: ExpressionRewriter> ExpressionVisitor for ExpressionRewriteVisitor<T> {
                 }
             },
             Expression::Alias(alias, _) => match self.stack.pop() {
-                None => Err(ErrorCode::LogicalError("")),
+                None => Err(ErrorCode::LogicalError(
+                    "Alias expr expected 1 parameters, actual 0.",
+                )),
                 Some(new_expr) => {
                     let new_expr = self.inner.mutate_alias(alias, new_expr, expr);
                     self.stack.push(new_expr?);

@@ -390,15 +390,20 @@ impl ExpressionDataTypeVisitor {
     pub fn finalize(mut self) -> Result<DataTypeAndNullable> {
         match self.stack.len() {
             1 => Ok(self.stack.remove(0)),
-            _ => Err(ErrorCode::LogicalError("")),
+            _ => Err(ErrorCode::LogicalError(
+                "Stack has too many elements in ExpressionDataTypeVisitor::finalize",
+            )),
         }
     }
 
     fn visit_function(mut self, op: &str, args_size: usize) -> Result<ExpressionDataTypeVisitor> {
         let mut arguments = Vec::with_capacity(args_size);
-        for _index in 0..args_size {
+        for index in 0..args_size {
             arguments.push(match self.stack.pop() {
-                None => Err(ErrorCode::LogicalError("")),
+                None => Err(ErrorCode::LogicalError(format!(
+                    "Expected {} arguments, actual {}.",
+                    args_size, index
+                ))),
                 Some(element) => Ok(element),
             }?);
         }
@@ -451,7 +456,18 @@ impl ExpressionVisitor for ExpressionDataTypeVisitor {
             Expression::BinaryExpression { op, .. } => self.visit_function(op, 2),
             Expression::UnaryExpression { op, .. } => self.visit_function(op, 1),
             Expression::ScalarFunction { op, args } => self.visit_function(op, args.len()),
-            expr @ Expression::AggregateFunction { .. } => {
+            expr @ Expression::AggregateFunction { args, .. } => {
+                // Pop arguments.
+                for index in 0..args.len() {
+                    if self.stack.pop().is_none() {
+                        return Err(ErrorCode::LogicalError(format!(
+                            "Expected {} arguments, actual {}.",
+                            args.len(),
+                            index
+                        )));
+                    }
+                }
+
                 let aggregate_function = expr.to_aggregate_function(&self.input_schema)?;
                 let return_type = aggregate_function.return_type()?;
                 let nullable = aggregate_function.nullable(&self.input_schema)?;
@@ -459,7 +475,18 @@ impl ExpressionVisitor for ExpressionDataTypeVisitor {
                 self.stack.push(data_type);
                 Ok(self)
             }
-            Expression::Cast { .. } | Expression::Alias(_, _) | Expression::Sort { .. } => Ok(self),
+            Expression::Cast { data_type, .. } => {
+                let inner_type = match self.stack.pop() {
+                    None => Err(ErrorCode::LogicalError(
+                        "Cast expr expected 1 arguments, actual 0.",
+                    )),
+                    Some(typ) => Ok(DataTypeAndNullable::create(data_type, typ.is_nullable())),
+                }?;
+
+                self.stack.push(inner_type);
+                Ok(self)
+            }
+            Expression::Alias(_, _) | Expression::Sort { .. } => Ok(self),
         }
     }
 }
