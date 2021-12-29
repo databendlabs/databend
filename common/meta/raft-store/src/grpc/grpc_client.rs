@@ -155,7 +155,7 @@ impl MetaGrpcClient {
         let req: Request<GetReq> = (&act).try_into()?;
         let req = common_tracing::inject_span_to_tonic_request(req);
 
-        let result = self.client.clone().get_msg(req).await?.into_inner();
+        let result = self.client.clone().read_msg(req).await?.into_inner();
         if result.ok {
             let v = serde_json::from_str::<R>(&result.value)?;
             Ok(v)
@@ -169,7 +169,7 @@ impl MetaGrpcClient {
 
     #[tracing::instrument(level = "debug", skip(self, req))]
     pub async fn check_connection(&self, req: Request<GetReq>) -> Result<GetReply> {
-        let result = self.client.clone().get_msg(req).await?.into_inner();
+        let result = self.client.clone().read_msg(req).await?.into_inner();
         if result.ok {
             Ok(result)
         } else {

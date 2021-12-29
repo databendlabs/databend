@@ -64,5 +64,5 @@ service Meta {
 
   // message
   rpc WriteMsg(RaftRequest) returns (RaftReply);
-  rpc GetMsg(GetReq) returns (GetReply);
+  rpc ReadMsg(GetReq) returns (GetReply);
 }

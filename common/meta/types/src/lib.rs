@@ -18,6 +18,7 @@ mod applied_state;
 mod change;
 mod cluster;
 mod cmd;
+pub mod config;
 mod database;
 mod errors;
 mod kv_message;

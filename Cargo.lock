@@ -1562,12 +1562,14 @@ dependencies = [
 name = "common-meta-types"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-raft",
  "common-building",
  "common-datavalues",
  "common-exception",
  "derive_more",
  "enumflags2",
+ "lazy_static",
  "maplit",
  "prost",
  "serde",

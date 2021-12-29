@@ -81,31 +81,50 @@ impl ActionHandler {
         }
     }
 
-    pub async fn execute_read<S, R>(
+    pub async fn execute_read(
         &self,
         action: MetaGrpcGetAction,
-        s: S,
-    ) -> common_exception::Result<R>
-    where
-        S: ReplySerializer<Output = R>,
-    {
+    ) -> common_exception::Result<String> {
         // To keep the code IDE-friendly, we manually expand the enum variants and dispatch them one by one
 
-        match action {
-            MetaGrpcGetAction::GetKV(a) => s.serialize(self.meta_node.get_kv(&a.key).await?),
-            MetaGrpcGetAction::MGetKV(a) => s.serialize(self.meta_node.mget_kv(&a.keys).await?),
+        let r = match action {
+            MetaGrpcGetAction::GetKV(a) => {
+                let r = self.meta_node.get_kv(&a.key).await?;
+                serde_json::to_string(&r)?
+            }
+            MetaGrpcGetAction::MGetKV(a) => {
+                let r = self.meta_node.mget_kv(&a.keys).await?;
+                serde_json::to_string(&r)?
+            }
             MetaGrpcGetAction::PrefixListKV(a) => {
-                s.serialize(self.meta_node.prefix_list_kv(&a.0).await?)
+                let r = self.meta_node.prefix_list_kv(&a.0).await?;
+                serde_json::to_string(&r)?
             }
 
             // database
-            MetaGrpcGetAction::GetDatabase(a) => s.serialize(self.handle(a).await?),
-            MetaGrpcGetAction::ListDatabases(a) => s.serialize(self.handle(a).await?),
+            MetaGrpcGetAction::GetDatabase(a) => {
+                let r = self.handle(a).await?;
+                serde_json::to_string(&r)?
+            }
+            MetaGrpcGetAction::ListDatabases(a) => {
+                let r = self.handle(a).await?;
+                serde_json::to_string(&r)?
+            }
 
             // table
-            MetaGrpcGetAction::GetTable(a) => s.serialize(self.handle(a).await?),
-            MetaGrpcGetAction::ListTables(a) => s.serialize(self.handle(a).await?),
-            MetaGrpcGetAction::GetTableExt(a) => s.serialize(self.handle(a).await?),
-        }
+            MetaGrpcGetAction::GetTable(a) => {
+                let r = self.handle(a).await?;
+                serde_json::to_string(&r)?
+            }
+            MetaGrpcGetAction::ListTables(a) => {
+                let r = self.handle(a).await?;
+                serde_json::to_string(&r)?
+            }
+            MetaGrpcGetAction::GetTableExt(a) => {
+                let r = self.handle(a).await?;
+                serde_json::to_string(&r)?
+            }
+        };
+        Ok(r)
     }
 }

@@ -1,8 +1,23 @@
+// Copyright 2021 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::sync::Arc;
 
 use common_arrow::arrow_format::flight::data::BasicAuth;
 use common_flight_rpc::FlightClaim;
 use common_flight_rpc::FlightToken;
+use common_meta_raft_store::MetaGrpcGetAction;
 use common_meta_raft_store::MetaGrpcWriteAction;
 use common_meta_types::protobuf::meta_server::Meta;
 use common_meta_types::protobuf::GetReply;
@@ -110,7 +125,19 @@ impl Meta for MetaGrpcImpl {
         Ok(Response::new(body))
     }
 
-    async fn get_msg(&self, _request: Request<GetReq>) -> Result<Response<GetReply>, Status> {
-        todo!()
+    async fn read_msg(&self, request: Request<GetReq>) -> Result<Response<GetReply>, Status> {
+        self.check_token(request.metadata())?;
+        common_tracing::extract_remote_span_as_parent(&request);
+
+        let action: MetaGrpcGetAction = request.try_into()?;
+        tracing::info!("Receive read_action: {:?}", action);
+
+        let body = self.action_handler.execute_read(action).await?;
+        let r = GetReply {
+            ok: true,
+            key: "".to_string(),
+            value: body,
+        };
+        Ok(Response::new(r))
     }
 }
