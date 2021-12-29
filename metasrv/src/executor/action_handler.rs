@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
+use common_exception::SerializedError;
 use common_meta_api::KVApi;
 use common_meta_raft_store::MetaGrpcGetAction;
 use common_meta_raft_store::MetaGrpcWriteAction;
@@ -52,30 +53,34 @@ impl ActionHandler {
 
         match action {
             MetaGrpcWriteAction::UpsertKV(a) => {
-                let r = self.meta_node.upsert_kv(a).await.map_err(|e| e.message());
+                let r = self
+                    .meta_node
+                    .upsert_kv(a)
+                    .await
+                    .map_err(SerializedError::from);
                 RaftReply::from(r)
             }
             // database
             MetaGrpcWriteAction::CreateDatabase(a) => {
-                let r = self.handle(a).await.map_err(|e| e.message());
+                let r = self.handle(a).await.map_err(SerializedError::from);
                 RaftReply::from(r)
             }
             MetaGrpcWriteAction::DropDatabase(a) => {
-                let r = self.handle(a).await.map_err(|e| e.message());
+                let r = self.handle(a).await.map_err(SerializedError::from);
                 RaftReply::from(r)
             }
 
             // table
             MetaGrpcWriteAction::CreateTable(a) => {
-                let r = self.handle(a).await.map_err(|e| e.message());
+                let r = self.handle(a).await.map_err(SerializedError::from);
                 RaftReply::from(r)
             }
             MetaGrpcWriteAction::DropTable(a) => {
-                let r = self.handle(a).await.map_err(|e| e.message());
+                let r = self.handle(a).await.map_err(SerializedError::from);
                 RaftReply::from(r)
             }
             MetaGrpcWriteAction::CommitTable(a) => {
-                let r = self.handle(a).await.map_err(|e| e.message());
+                let r = self.handle(a).await.map_err(SerializedError::from);
                 RaftReply::from(r)
             }
         }

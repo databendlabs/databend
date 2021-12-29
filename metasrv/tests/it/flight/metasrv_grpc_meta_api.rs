@@ -16,7 +16,7 @@
 
 use common_base::tokio;
 use common_meta_api::MetaApiTestSuite;
-use common_meta_flight::MetaFlightClient;
+use common_meta_raft_store::MetaGrpcClient;
 
 use crate::init_meta_ut;
 use crate::tests::start_metasrv;
@@ -28,7 +28,7 @@ async fn test_meta_api_database_create_get_drop() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     MetaApiTestSuite {}.database_create_get_drop(&client).await
 }
@@ -40,7 +40,7 @@ async fn test_meta_api_database_list() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     MetaApiTestSuite {}.database_list(&client).await
 }
@@ -52,7 +52,7 @@ async fn test_meta_api_table_create_get_drop() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     MetaApiTestSuite {}.table_create_get_drop(&client).await
 }
@@ -64,7 +64,7 @@ async fn test_meta_api_table_list() -> anyhow::Result<()> {
 
     let (_tc, addr) = start_metasrv().await?;
 
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     MetaApiTestSuite {}.table_list(&client).await
 }
@@ -78,7 +78,7 @@ async fn test_meta_api_flight_get_database_meta_ddl_table() -> anyhow::Result<()
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
     let (_tc, addr) = crate::tests::start_metasrv().await?;
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     let test_db = "db1";
     let plan = CreateDatabasePlan {
@@ -156,7 +156,7 @@ async fn test_meta_api_flight_get_database_meta_empty_db() -> anyhow::Result<()>
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
     let (_tc, addr) = crate::tests::start_metasrv().await?;
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     // Empty Database
     let res = client.get_database_meta(None).await?;
@@ -170,7 +170,7 @@ async fn test_meta_api_flight_get_database_meta_ddl_db() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
     let (_tc, addr) = crate::tests::start_metasrv().await?;
-    let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
+    let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
 
     // create-db operation will increases meta_version
     let plan = CreateDatabasePlan {

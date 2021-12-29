@@ -18,6 +18,7 @@ use std::time::Duration;
 use common_arrow::arrow_format::flight::data::BasicAuth;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::SerializedError;
 use common_flight_rpc::ConnectionFactory;
 use common_flight_rpc::GrpcClientTlsConfig;
 use common_meta_types::protobuf::meta_client::MetaClient;
@@ -137,10 +138,8 @@ impl MetaGrpcClient {
             let v = serde_json::from_str::<R>(&result.data)?;
             Ok(v)
         } else {
-            Err(ErrorCode::EmptyData(format!(
-                "Can not receive data from grpc server, action: {:?}, err: {}",
-                act, result.error
-            )))
+            let e: SerializedError = serde_json::from_str(&result.error)?;
+            Err(e.into())
         }
     }
 

@@ -18,10 +18,12 @@ use anyhow::Result;
 use async_raft::NodeId;
 use common_base::tokio;
 use common_base::GlobalSequence;
+use common_base::Stoppable;
 use common_meta_raft_store::MetaGrpcClient;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::GetReq;
 use common_tracing::tracing;
+use databend_meta::api::GrpcServer;
 use databend_meta::configs;
 use databend_meta::meta_service::MetaNode;
 
@@ -38,7 +40,10 @@ pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
 }
 
 pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<()> {
-    MetaNode::start(&tc.config.raft_config).await?;
+    let mn = MetaNode::start(&tc.config.raft_config).await?;
+    let mut srv = GrpcServer::create(tc.config.clone(), mn);
+    srv.start().await?;
+    tc.grpc_srv = Some(Box::new(srv));
 
     Ok(())
 }
@@ -79,6 +84,8 @@ pub struct MetaSrvTestContext {
     pub config: configs::Config,
 
     pub meta_nodes: Vec<Arc<MetaNode>>,
+
+    pub grpc_srv: Option<Box<GrpcServer>>,
 }
 
 impl MetaSrvTestContext {
@@ -109,8 +116,8 @@ impl MetaSrvTestContext {
         config.raft_config.sled_tree_prefix = format!("test-{}-", config_id);
 
         {
-            let flight_port = next_port();
-            config.grpc_api_address = format!("{}:{}", host, flight_port);
+            let grpc_port = next_port();
+            config.grpc_api_address = format!("{}:{}", host, grpc_port);
         }
 
         {
@@ -128,6 +135,7 @@ impl MetaSrvTestContext {
         MetaSrvTestContext {
             config,
             meta_nodes: vec![],
+            grpc_srv: None,
         }
     }
 

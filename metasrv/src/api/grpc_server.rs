@@ -170,9 +170,9 @@ impl GrpcServer {
 impl Stoppable for GrpcServer {
     async fn start(&mut self) -> common_exception::Result<()> {
         tracing::info!("GrpcServer::start");
-        let res = self.do_start().await;
+        self.do_start().await?;
         tracing::info!("Done GrpcServer::start");
-        res
+        Ok(())
     }
 
     async fn stop(
@@ -180,8 +180,8 @@ impl Stoppable for GrpcServer {
         force: Option<tokio::sync::broadcast::Receiver<()>>,
     ) -> common_exception::Result<()> {
         tracing::info!("GrpcServer::stop");
-        let res = self.do_stop(force).await;
+        self.do_stop(force).await?;
         tracing::info!("Done GrpcServer::stop");
-        res
+        Ok(())
     }
 }

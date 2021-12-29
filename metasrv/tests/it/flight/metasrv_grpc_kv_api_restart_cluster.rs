@@ -18,6 +18,7 @@
 use std::time::Duration;
 
 use common_base::tokio;
+use common_base::Stoppable;
 use common_meta_api::KVApi;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
@@ -81,10 +82,13 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
     tracing::info!("--- shutdown the cluster");
     let stopped_tcs = {
         let mut stopped_tcs = vec![];
-        for tc in tcs {
+        for mut tc in tcs {
             // TODO(xp): remove this field, or split MetaSrvTestContext into two struct:
             //           one for metasrv and one for meta_node
             assert!(tc.meta_nodes.is_empty());
+
+            let mut srv = tc.grpc_srv.take().unwrap();
+            srv.stop(None).await?;
 
             stopped_tcs.push(tc);
         }

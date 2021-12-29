@@ -51,9 +51,9 @@ metric_api_address = "0.0.0.0:8000"
 admin_api_address = "0.0.0.0:9000"
 admin_tls_server_cert = "admin tls cert"
 admin_tls_server_key = "admin tls key"
-flight_api_address = "0.0.0.0:10000"
-flight_tls_server_cert = "flight server cert"
-flight_tls_server_key = "flight server key"
+grpc_api_address = "0.0.0.0:10000"
+grpc_tls_server_cert = "flight server cert"
+grpc_tls_server_key = "flight server key"
 
 [raft_config]
 config_id = "raft config id"

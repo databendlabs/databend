@@ -14,9 +14,9 @@
 
 use common_base::tokio;
 use common_exception::ErrorCode;
-use common_flight_rpc::FlightClientTlsConfig;
+use common_flight_rpc::GrpcClientTlsConfig;
 use common_meta_api::MetaApi;
-use common_meta_flight::MetaFlightClient;
+use common_meta_raft_store::MetaGrpcClient;
 use pretty_assertions::assert_eq;
 
 use crate::init_meta_ut;
@@ -42,13 +42,13 @@ async fn test_tls_server() -> anyhow::Result<()> {
 
     let addr = tc.config.grpc_api_address.clone();
 
-    let tls_conf = FlightClientTlsConfig {
+    let tls_conf = GrpcClientTlsConfig {
         rpc_tls_server_root_ca_cert: TEST_CA_CERT.to_string(),
         domain_name: TEST_CN_NAME.to_string(),
     };
 
     let client =
-        MetaFlightClient::with_tls_conf(addr.as_str(), "root", "xxx", None, Some(tls_conf)).await?;
+        MetaGrpcClient::with_tls_conf(addr.as_str(), "root", "xxx", None, Some(tls_conf)).await?;
 
     let r = client
         .get_table(("do not care", "do not care").into())
@@ -78,12 +78,12 @@ async fn test_tls_client_config_failure() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
 
-    let tls_conf = FlightClientTlsConfig {
+    let tls_conf = GrpcClientTlsConfig {
         rpc_tls_server_root_ca_cert: "../tests/data/certs/not_exist.pem".to_string(),
         domain_name: TEST_CN_NAME.to_string(),
     };
 
-    let r = MetaFlightClient::with_tls_conf("addr", "root", "xxx", None, Some(tls_conf)).await;
+    let r = MetaGrpcClient::with_tls_conf("addr", "root", "xxx", None, Some(tls_conf)).await;
 
     assert!(r.is_err());
     if let Err(e) = r {

@@ -15,6 +15,7 @@
 //! Test arrow-flight API of metasrv
 
 use common_base::tokio;
+use common_base::Stoppable;
 use common_meta_api::KVApi;
 use common_meta_raft_store::MetaGrpcClient;
 use common_meta_types::MatchSeq;
@@ -90,6 +91,9 @@ async fn test_restart() -> anyhow::Result<()> {
 
     tracing::info!("--- stop metasrv");
     {
+        let mut srv = tc.grpc_srv.take().unwrap();
+        srv.stop(None).await?;
+
         drop(client);
 
         tokio::time::sleep(Duration::from_millis(1000)).await;
