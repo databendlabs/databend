@@ -15,6 +15,7 @@
 
 use std::sync::Arc;
 
+use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -80,14 +81,44 @@ impl FuseTable {
                 let table_schema = table_schema.clone();
                 let projection = projection.clone();
                 async move {
-                    let mut source =
-                        ParquetSource::new(da, part.name.clone(), table_schema, projection);
+                    let parts = part.name.split("-").collect::<Vec<_>>();
+                    if parts.len() != 2 {
+                        return Err(ErrorCode::LogicalError("invalid part format"));
+                    }
+                    let name = parts[0];
+                    let size = parts[1].parse::<u64>()?;
+                    let mut reader = da.get_input_stream(name, Some(size))?;
+                    let parquet_meta = read_metadata_async(&mut reader)
+                        .await
+                        .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
+
+                    let mut source = ParquetSource::with_meta(
+                        da,
+                        name.to_owned(),
+                        table_schema,
+                        projection,
+                        parquet_meta,
+                        size,
+                    );
                     if dedicated_decompression_thread_pool {
                         source.enable_decompress_in_pool()
                     }
-                    source.read().await?.ok_or_else(|| {
-                        ErrorCode::ParquetError(format!("fail to read block {}", part.name))
-                    })
+                    source
+                        .read()
+                        .await
+                        .map_err(|e| {
+                            ErrorCode::ParquetError(format!(
+                                "fail to read block {}, {}",
+                                name,
+                                e.to_string()
+                            ))
+                        })?
+                        .ok_or_else(|| {
+                            ErrorCode::ParquetError(format!(
+                                "reader returns None for block {}",
+                                name,
+                            ))
+                        })
                 }
             })
             .buffered(bite_size as usize) // buffer_unordered?

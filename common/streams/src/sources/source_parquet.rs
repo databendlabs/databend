@@ -47,6 +47,7 @@ pub struct ParquetSource {
     row_groups: usize,
     metadata: Option<FileMetaData>,
     decompress_in_thread_pool: bool,
+    stream_len: Option<u64>,
 }
 
 impl ParquetSource {
@@ -67,6 +68,30 @@ impl ParquetSource {
             row_groups: 0,
             metadata: None,
             decompress_in_thread_pool: false,
+            stream_len: None,
+        }
+    }
+
+    pub fn with_meta(
+        data_accessor: Arc<dyn DataAccessor>,
+        path: String,
+        table_schema: DataSchemaRef,
+        projection: Vec<usize>,
+        metadata: FileMetaData,
+        file_len: u64,
+    ) -> Self {
+        let block_schema = Arc::new(table_schema.project(projection.clone()));
+        Self {
+            data_accessor,
+            path,
+            block_schema,
+            arrow_table_schema: table_schema.to_arrow(),
+            projection,
+            row_group: 0,
+            row_groups: 0,
+            metadata: Some(metadata),
+            decompress_in_thread_pool: false,
+            stream_len: Some(file_len),
         }
     }
 
@@ -79,22 +104,23 @@ impl ParquetSource {
 impl Source for ParquetSource {
     #[tracing::instrument(level = "debug", skip_all)]
     async fn read(&mut self) -> Result<Option<DataBlock>> {
-        let metadata = match self.metadata.clone() {
+        let extern_meta;
+        let metadata = match &self.metadata {
             Some(m) => m,
             None => {
                 let mut reader = self
                     .data_accessor
                     .get_input_stream(self.path.as_str(), None)?;
-                let m = read_metadata_async(&mut reader)
+                extern_meta = read_metadata_async(&mut reader)
                     .instrument(debug_span!("parquet_source_read_meta"))
                     .await
                     .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-                self.metadata = Some(m.clone());
-                self.row_groups = m.row_groups.len();
-                self.row_group = 0;
-                m
+                &extern_meta
             }
         };
+
+        self.row_groups = metadata.row_groups.len();
+        self.row_group = 0;
 
         if self.row_group >= self.row_groups {
             return Ok(None);
@@ -109,13 +135,14 @@ impl Source for ParquetSource {
 
         let fields = self.arrow_table_schema.fields();
         let dedicated_decompression_thread_pool = self.decompress_in_thread_pool;
+        let stream_len = self.stream_len;
 
         let stream = futures::stream::iter(cols).map(|(col_meta, idx)| {
             let data_accessor = self.data_accessor.clone();
             let path = self.path.clone();
 
             async move {
-                let mut reader = data_accessor.get_input_stream(path.as_str(), None)?;
+                let mut reader = data_accessor.get_input_stream(path.as_str(), stream_len)?;
                 // TODO cache block column
                 let col_pages =
                     get_page_stream(&col_meta, &mut reader, vec![], Arc::new(|_, _| true))

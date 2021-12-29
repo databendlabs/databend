@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use common_arrow::arrow::io::parquet::read::read_metadata_async;
+use common_arrow::arrow::io::parquet::read::schema::FileMetaData;
 use common_cache::storage::StorageCache;
 use common_dal::DataAccessor;
 use common_exception::ErrorCode;
@@ -87,5 +89,20 @@ impl SegmentReader {
     ) -> Result<SegmentInfo> {
         let segment_info: SegmentInfo = read_obj(da, loc, cache).await?;
         Ok(segment_info)
+    }
+}
+
+pub struct ParquetMetaReader {}
+
+impl ParquetMetaReader {
+    pub async fn read(
+        da: &dyn DataAccessor,
+        loc: impl AsRef<str>,
+        _cache: Arc<Option<Box<dyn StorageCache>>>,
+    ) -> Result<FileMetaData> {
+        let mut reader = da.get_input_stream(loc.as_ref(), None)?;
+        read_metadata_async(&mut reader)
+            .await
+            .map_err(|e| ErrorCode::ParquetError(e.to_string()))
     }
 }

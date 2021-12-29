@@ -24,6 +24,7 @@ pub struct BlockMeta {
     /// Pointer of the data Block
     pub row_count: u64,
     pub block_size: u64,
+    pub file_size: u64,
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     pub location: BlockLocation,
 }
