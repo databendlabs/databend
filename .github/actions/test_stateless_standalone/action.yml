@@ -16,8 +16,7 @@ runs:
     # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1
       with:
-        key: ${{ matrix.config.os }}-${{ hashFiles('Cargo.lock') }}-${{ matrix.config.toolchain }}-v1
-        sharedKey: stateless
+        sharedKey: stateless-v1
 
     - uses: actions/download-artifact@v2
       with:
