@@ -21,7 +21,10 @@ runs:
         target: ${{ matrix.config.target }}
         components: rustfmt, clippy
 
+    # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1
+      with:
+        sharedKey: release-v1
 
     - name: Build Databend
       uses: actions-rs/cargo@v1
