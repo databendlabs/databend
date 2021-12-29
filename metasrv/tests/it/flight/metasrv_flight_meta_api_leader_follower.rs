@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Test metasrv MetaApi by writing to leader and then reading from a follower.
 use common_base::tokio;
 use common_meta_api::MetaApiTestSuite;
 
 use crate::init_meta_ut;
 use crate::tests::service::start_metasrv_cluster;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_api_database_create_get_drop() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
@@ -29,11 +30,11 @@ async fn test_meta_api_database_create_get_drop() -> anyhow::Result<()> {
     let client1 = tcs[1].flight_client().await?;
 
     MetaApiTestSuite {}
-        .database_get_leader_follower(&client0, &client1)
+        .database_get_diff_nodes(&client0, &client1)
         .await
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_api_list_database() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
@@ -44,11 +45,11 @@ async fn test_meta_api_list_database() -> anyhow::Result<()> {
     let client1 = tcs[1].flight_client().await?;
 
     MetaApiTestSuite {}
-        .list_database_leader_follower(&client0, &client1)
+        .list_database_diff_nodes(&client0, &client1)
         .await
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_api_table_create_get_drop() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
@@ -58,11 +59,11 @@ async fn test_meta_api_table_create_get_drop() -> anyhow::Result<()> {
     let client0 = tcs[0].flight_client().await?;
     let client1 = tcs[1].flight_client().await?;
     MetaApiTestSuite {}
-        .table_get_leader_follower(&client0, &client1)
+        .table_get_diff_nodes(&client0, &client1)
         .await
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_meta_api_list_table() -> anyhow::Result<()> {
     let (_log_guards, ut_span) = init_meta_ut!();
     let _ent = ut_span.enter();
@@ -73,6 +74,6 @@ async fn test_meta_api_list_table() -> anyhow::Result<()> {
     let client1 = tcs[1].flight_client().await?;
 
     MetaApiTestSuite {}
-        .list_table_leader_follower(&client0, &client1)
+        .list_table_diff_nodes(&client0, &client1)
         .await
 }

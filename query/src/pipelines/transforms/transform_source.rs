@@ -42,7 +42,7 @@ impl SourceTransform {
 
         let table_stream = table.read(self.ctx.clone(), &self.source_plan);
         let progress_stream =
-            ProgressStream::try_create(table_stream.await?, self.ctx.progress_callback()?)?;
+            ProgressStream::try_create(table_stream.await?, self.ctx.get_scan_progress())?;
 
         Ok(Box::pin(
             self.ctx.try_create_abortable(Box::pin(progress_stream))?,
@@ -70,6 +70,7 @@ impl Processor for SourceTransform {
         self
     }
 
+    #[tracing::instrument(level = "debug", name="source_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let desc = self.source_plan.table_info.desc.clone();
         tracing::debug!("execute, table:{:#} ...", desc);

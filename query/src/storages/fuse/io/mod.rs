@@ -15,10 +15,11 @@
 mod block_stream_writer;
 mod block_writer;
 mod locations;
-mod readers;
+mod meta_reader;
 
 pub use block_stream_writer::BlockStreamWriter;
 pub use block_stream_writer::SegmentInfoStream;
 pub use locations::gen_segment_info_location;
 pub use locations::snapshot_location;
-pub use readers::read_obj;
+pub use meta_reader::SegmentReader;
+pub use meta_reader::SnapshotReader;

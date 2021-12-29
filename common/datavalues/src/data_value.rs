@@ -24,7 +24,6 @@ use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_io::prelude::*;
 use common_macros::MallocSizeOf;
 
 use crate::arrays::ListBooleanArrayBuilder;
@@ -63,6 +62,10 @@ pub type DataValueRef = Arc<DataValue>;
 
 impl DataValue {
     pub fn is_null(&self) -> bool {
+        if let DataValue::Struct(v) = self {
+            return v.iter().all(|v| v.is_null());
+        }
+
         matches!(
             self,
             DataValue::Boolean(None)
@@ -343,6 +346,7 @@ impl DataValue {
             DataType::Date16 => DataValue::UInt16(Some(0)),
             DataType::Date32 => DataValue::Int32(Some(0)),
             DataType::DateTime32(_) => DataValue::UInt32(Some(0)),
+            DataType::DateTime64(_, _) => DataValue::UInt64(Some(0)),
             DataType::Interval(_) => DataValue::Int64(Some(0)),
             DataType::List(f) => DataValue::List(Some(vec![]), f.data_type().clone()),
             DataType::Struct(_) => DataValue::Struct(vec![]),
@@ -456,6 +460,7 @@ impl From<&DataType> for DataValue {
             DataType::Date16 => DataValue::UInt16(None),
             DataType::Date32 => DataValue::Int32(None),
             DataType::DateTime32(_) => DataValue::UInt32(None),
+            DataType::DateTime64(_, _) => DataValue::UInt64(None),
             DataType::List(f) => DataValue::List(None, f.data_type().clone()),
             DataType::Struct(_) => DataValue::Struct(vec![]),
             DataType::String => DataValue::String(None),
@@ -537,25 +542,5 @@ impl fmt::Debug for DataValue {
             DataValue::List(_, _) => write!(f, "[{}]", self),
             DataValue::Struct(v) => write!(f, "{:?}", v),
         }
-    }
-}
-
-impl BinarySer for DataValue {
-    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> Result<()> {
-        let bs = serde_json::to_string(self)?;
-        writer.write_string(bs)
-    }
-
-    fn serialize_to_buf<W: BufMut>(&self, writer: &mut W) -> Result<()> {
-        let bs = serde_json::to_string(self)?;
-        writer.write_string(bs)
-    }
-}
-
-impl BinaryDe for DataValue {
-    fn deserialize<R: std::io::Read>(reader: &mut R) -> Result<Self> {
-        let str = reader.read_string()?;
-        let value: DataValue = serde_json::from_str(&str)?;
-        Ok(value)
     }
 }

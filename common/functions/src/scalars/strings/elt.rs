@@ -15,6 +15,7 @@
 use std::fmt;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -35,8 +36,11 @@ impl EltFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(2, usize::MAX - 1),
+        )
     }
 }
 
@@ -45,27 +49,15 @@ impl Function for EltFunction {
         &*self.display_name
     }
 
-    fn num_arguments(&self) -> usize {
-        0
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((2, usize::MAX - 1))
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
-    }
-
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if !args[0].is_numeric() && args[0] != DataType::String && args[0] != DataType::Null {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        if !args[0].is_numeric() && !args[0].is_string() && !args[0].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null, but got {}",
                 args[0]
             )));
         }
         for arg in &args[1..] {
-            if !arg.is_numeric() && *arg != DataType::String && *arg != DataType::Null {
+            if !arg.is_numeric() && !arg.is_string() && !arg.is_null() {
                 return Err(ErrorCode::IllegalDataType(format!(
                     "Expected string or null, but got {}",
                     arg

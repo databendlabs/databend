@@ -281,6 +281,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
     fn do_close(&mut self, _: u32) {}
 
+    #[tracing::instrument(level = "debug", skip(self))]
     async fn do_query(&mut self, query: &str) -> Result<(Vec<DataBlock>, String)> {
         tracing::debug!("{}", query);
 
@@ -345,7 +346,7 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     }
 
     fn extra_info(context: &Arc<QueryContext>, instant: Instant) -> String {
-        let progress = context.get_progress_value();
+        let progress = context.get_scan_progress_value();
         let seconds = instant.elapsed().as_nanos() as f64 / 1e9f64;
         format!(
             "Read {} rows, {} in {:.3} sec., {} rows/sec., {}/sec.",

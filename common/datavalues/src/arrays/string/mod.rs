@@ -14,6 +14,7 @@
 
 mod builder;
 mod iterator;
+mod mutable;
 mod transform;
 
 pub use builder::*;
@@ -25,6 +26,7 @@ use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 pub use iterator::*;
+pub use mutable::*;
 pub use transform::*;
 
 use crate::prelude::*;
@@ -150,9 +152,8 @@ impl DFStringArray {
     }
 
     #[inline]
-    /// Get the null count and the buffer of bits representing null values
-    pub fn null_bits(&self) -> (usize, Option<&Bitmap>) {
-        (self.array.null_count(), self.array.validity())
+    pub fn validity(&self) -> Option<&Bitmap> {
+        self.array.validity()
     }
 
     /// Take a view of top n elements

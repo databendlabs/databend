@@ -7,7 +7,7 @@ const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 /** @type {import('@docusaurus/types').Config} */
 const config = {
     title: 'Databend',
-    tagline: 'Built to make the Data Cloud easy.',
+    tagline: 'The Open Source Serverless Data Warehouse for Everyone.',
     url: 'https://databend.rs',
     baseUrl: '/',
     onBrokenLinks: 'throw',
@@ -33,12 +33,23 @@ const config = {
                         'https://github.com/datafuselabs/databend/edit/main/website/databend/blog',
                 },
                 theme: {
-                    customCss: require.resolve('./src/css/custom.css'),
+                    customCss: require.resolve('./src/css/custom.scss'),
+                },
+                gtag: {
+                  trackingID: 'G-WBQPTTG4ZG',
+                  anonymizeIP: true,
+                },
+                sitemap: {
+                    changefreq: 'daily',
+                    priority: 0.5,
                 },
             }),
         ],
     ],
     plugins: [
+        'docusaurus-plugin-sass',
+        './src/plugins/pxToVw',
+        './src/plugins/globalSassVarInject',
         [
             '@docusaurus/plugin-content-docs',
             /** @type {import('@docusaurus/plugin-content-docs').Options} */
@@ -60,6 +71,18 @@ const config = {
                 sidebarPath: require.resolve('./docs/dev/sidebars.js'),
                 editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
             },
+        ],
+        [
+          '@docusaurus/plugin-client-redirects',
+          {
+            // this will be removed later, make a mark~.
+            redirects: [
+              {
+                to: '/', // string
+                from: '/overview/building-and-running', // string | string[]
+              },
+            ],
+          },
         ]
     ],
     themeConfig:
@@ -79,25 +102,23 @@ const config = {
                         ]
                     },
                     {
-                        to: '/user/index', label: 'User Guide', position: 'left', items: [
-                            {label: 'Get Started', to: '/user/index'},
-                            {label: 'API', to: '/user/api/index'},
-                            {label: 'CLI', to: '/user/cli/index'},
-                            {label: 'SQL Statement', to: '/user/sqlstatement/index'},
-                            {label: 'System', to: '/user/system/index'}
+                        to: '/user', label: 'User Guide', position: 'left', items: [
+                            {label: 'Get Started', to: '/user'},
+                            {label: 'SQL', to: '/user/category/sql'},
+                            {label: 'CLI', to: '/user/category/cli'},
+                            {label: 'APIs', to: '/user/category/apis'},
+                            {label: 'Data Loading', to: '/user/category/data-loading'}
                         ]
                     },
                     {
-                        to: '/dev/index', label: 'Dev Guide', position: 'left', items: [
-                            {label: 'Get Started', to: '/dev/index'},
+                        label: 'Dev Guide', position: 'left', items: [
+                            {label: 'Contributing', to: '/dev/category/contributing'},
+                            {label: 'Development', to: '/dev/category/development'},
                             {label: 'Roadmap', to: '/dev/roadmap'},
-                            {label: 'Building', to: '/dev/building/index'},
-                            {label: 'Contributing', to: '/dev/contributing/index'},
-                            {label: 'RFCs', to: '/dev/rfcs/index'},
-                            {label: 'Policies', to: '/dev/policies/index'}
+                            {label: 'Policies', to: '/dev/category/policies'},
+                            {label: 'RFCs', to: '/dev/category/rfcs'}
                         ]
                     },
-                    {to: '/blog', label: 'Blog', position: 'left'},
                     {
                         href: 'https://github.com/datafuselabs/databend',
                         label: 'GitHub',
@@ -112,13 +133,13 @@ const config = {
                         title: 'Resources',
                         items: [
                             {
+                                label: 'CLI Reference',
+                                to: '/user/category/cli'
+                            },
+                            {
                                 label: 'Performance',
                                 to: '/overview/performance'
                             },
-                            {
-                                label: 'Whitepapers',
-                                to: '/overview/architecture'
-                            }
                         ]
                     },
                     {
@@ -138,35 +159,28 @@ const config = {
                         title: 'More',
                         items: [
                             {
-                                label: 'Blog',
-                                to: '/blog',
-                            },
-                            {
                                 label: 'Weekly',
                                 href: 'https://weekly.databend.rs/'
                             },
                             {
                                 label: 'GitHub',
-                                href: 'https://github.com/facebook/docusaurus',
+                                href: 'https://github.com/datafuselabs/databend',
                             },
                         ],
                     },
                 ],
-                copyright: `Copyright © ${new Date().getFullYear()} Datafuselabs, Inc. Built with Docusaurus. <br> <a href="https://vercel.com/?utm_source=databend&utm_campaign=oss"><img src="https://www.datocms-assets.com/31049/1618983297-powered-by-vercel.svg"></a>`,
+                copyright: `Copyright © ${new Date().getFullYear()} Datafuselabs, Inc. Built with Docusaurus. <br> <a style="display:block;margin-top: 10px" href="https://vercel.com/?utm_source=databend&utm_campaign=oss"><img src="https://www.datocms-assets.com/31049/1618983297-powered-by-vercel.svg"></a>`,
             },
             prism: {
                 theme: lightCodeTheme,
                 darkTheme: darkCodeTheme,
             },
             algolia: {
-                apiKey: 'TBD',
-                indexName: 'TBD',
+                appId: 'RL7MS9PKE8',
+                apiKey: '78bb6be96bb0361a4be9dab6bd83936c',
+                indexName: 'databend-rs',
                 contextualSearch: true,
-                searchParameters: {},
-            },
-            gtag: {
-                trackingID: 'TBD',
-            },
+            }
         }),
 };
 

@@ -108,15 +108,15 @@ stateless-test: build-debug
 	rm -rf ./_meta*/
 	ulimit -n 10000; bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
 
-stateful-test:
+stateful-ctl-test:
 	rm -rf ./_meta*/
 	rm -rf ./.databend/
-	ulimit -n 10000; bash ./scripts/ci/ci-run-stateful-tests-standalone.sh
+	ulimit -n 10000; bash ./scripts/ci/ci-run-stateful-tests-standalone-ctl.sh
 
-stateful-cluster-test:
+stateful-ctl-cluster-test:
 	rm -rf ./_meta*/
 	rm -rf ./.databend/
-	bash ./scripts/ci/ci-run-stateful-tests-cluster.sh
+	bash ./scripts/ci/ci-run-stateful-tests-cluster-ctl.sh
 
 stateless-cluster-test: build-debug
 	rm -rf ./_meta*/
@@ -148,6 +148,10 @@ build-perf-tool:
 	cargo build --target x86_64-unknown-linux-gnu --bin databend-benchmark
 	mkdir -p ./distro
 	mv ./target/x86_64-unknown-linux-gnu/debug/databend-benchmark  ./distro
+
+# generate common/functions/src/scalars/arithmetics/result_type.rs
+run-codegen:
+	cargo run --manifest-path=common/codegen/Cargo.toml
 
 perf-tool: build-perf-tool
 	docker buildx build . -f ./docker/perf-tool/Dockerfile  --platform linux/amd64 --allow network.host --builder host -t ${HUB}/perf-tool:${TAG} --push

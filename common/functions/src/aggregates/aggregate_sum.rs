@@ -24,6 +24,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 use num::traits::AsPrimitive;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 use super::AggregateFunctionRef;
 use super::StateAddr;
@@ -39,7 +41,7 @@ struct AggregateSumState<T> {
 impl<T> AggregateSumState<T>
 where
     T: std::ops::Add<Output = T> + Copy + Clone,
-    Option<T>: BinarySer + BinaryDe,
+    Option<T>: Serialize + DeserializeOwned,
 {
     #[inline(always)]
     fn add(&mut self, other: T) {
@@ -50,11 +52,12 @@ where
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        self.value.serialize_to_buf(writer)
+        serialize_into_buf(writer, &self.value)
     }
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.value = Option::<T>::deserialize(reader)?;
+        self.value = deserialize_from_slice(reader)?;
+
         Ok(())
     }
 }
@@ -78,9 +81,7 @@ where
     }
 
     fn return_type(&self) -> Result<DataType> {
-        let value: DataValue = Some(SumT::default()).into();
-
-        Ok(value.data_type())
+        Ok(SumT::data_type())
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
@@ -162,9 +163,23 @@ where
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+    #[allow(unused_mut)]
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
         let state = place.get::<AggregateSumState<SumT>>();
-        Ok(state.value.into())
+        if let Some(val) = state.value {
+            let mut array = array
+                .as_mut_any()
+                .downcast_mut::<MutablePrimitiveArrayBuilder<SumT>>()
+                .ok_or_else(|| {
+                    ErrorCode::UnexpectedError(
+                        "error occured when downcast MutableArray".to_string(),
+                    )
+                })?;
+            array.push(val);
+        } else {
+            array.push_null();
+        }
+        Ok(())
     }
 }
 

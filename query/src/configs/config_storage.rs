@@ -15,8 +15,9 @@
 use std::fmt;
 use std::str::FromStr;
 
-use structopt::StructOpt;
-use structopt_toml::StructOptToml;
+use clap::Args;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::configs::Config;
 
@@ -40,7 +41,7 @@ const AZURE_STORAGE_ACCOUNT: &str = "AZURE_STORAGE_ACCOUNT";
 const AZURE_BLOB_MASTER_KEY: &str = "AZURE_BLOB_MASTER_KEY";
 const AZURE_BLOB_CONTAINER: &str = "AZURE_BLOB_CONTAINER";
 
-#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub enum StorageType {
     Disk,
     S3,
@@ -61,57 +62,58 @@ impl FromStr for StorageType {
     }
 }
 
-#[derive(
-    Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
-)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
+#[serde(default)]
 pub struct DiskStorageConfig {
-    #[structopt(long, env = DISK_STORAGE_DATA_PATH, default_value = "_data", help = "Disk storage backend data path")]
-    #[serde(default)]
+    /// Disk storage backend data path
+    #[clap(long, env = DISK_STORAGE_DATA_PATH, default_value = "_data")]
     pub data_path: String,
-    #[structopt(long, env = DISK_STORAGE_TEMP_DATA_PATH, default_value = "", help = "Disk storage temporary data path for external data")]
-    #[serde(default)]
+
+    /// Disk storage temporary data path for external data
+    #[clap(long, env = DISK_STORAGE_TEMP_DATA_PATH, default_value = "")]
     pub temp_data_path: String,
 }
 
-impl DiskStorageConfig {
-    pub fn default() -> Self {
-        DiskStorageConfig {
+impl Default for DiskStorageConfig {
+    fn default() -> Self {
+        Self {
             data_path: "_data".to_string(),
             temp_data_path: "".to_string(),
         }
     }
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[derive(Clone, PartialEq, Serialize, Deserialize, Args)]
+#[serde(default)]
 pub struct S3StorageConfig {
-    #[structopt(long, env = S3_STORAGE_REGION, default_value = "", help = "Region for S3 storage")]
-    #[serde(default)]
+    /// Region for S3 storage
+    #[clap(long, env = S3_STORAGE_REGION, default_value = "")]
     pub region: String,
 
-    #[structopt(long, env = S3_STORAGE_ENDPOINT_URL, default_value = "", help = "Endpoint URL for S3 storage")]
-    #[serde(default)]
+    /// Endpoint URL for S3 storage
+    #[clap(long, env = S3_STORAGE_ENDPOINT_URL, default_value = "")]
     pub endpoint_url: String,
 
-    #[structopt(long, env = S3_STORAGE_ACCESS_KEY_ID, default_value = "", help = "Access key for S3 storage")]
-    #[serde(default)]
+    // Access key for S3 storage
+    #[clap(long, env = S3_STORAGE_ACCESS_KEY_ID, default_value = "")]
     pub access_key_id: String,
 
-    #[structopt(long, env = S3_STORAGE_SECRET_ACCESS_KEY, default_value = "", help = "Secret key for S3 storage")]
-    #[serde(default)]
+    /// Secret key for S3 storage
+    #[clap(long, env = S3_STORAGE_SECRET_ACCESS_KEY, default_value = "")]
     pub secret_access_key: String,
 
-    #[structopt(long, env = S3_STORAGE_ENABLE_POD_IAM_POLICY, help = "Use iam role service account token to access S3 resource")]
-    #[serde(default)]
+    /// Use iam role service account token to access S3 resource
+    #[clap(long, env = S3_STORAGE_ENABLE_POD_IAM_POLICY)]
     pub enable_pod_iam_policy: bool,
 
-    #[structopt(long, env = S3_STORAGE_BUCKET, default_value = "", help = "S3 Bucket to use for storage")]
-    #[serde(default)]
+    /// S3 Bucket to use for storage
+    #[clap(long, env = S3_STORAGE_BUCKET, default_value = "")]
     pub bucket: String,
 }
 
-impl S3StorageConfig {
-    pub fn default() -> Self {
-        S3StorageConfig {
+impl Default for S3StorageConfig {
+    fn default() -> Self {
+        Self {
             region: "".to_string(),
             endpoint_url: "".to_string(),
             access_key_id: "".to_string(),
@@ -132,24 +134,25 @@ impl fmt::Debug for S3StorageConfig {
     }
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml)]
+#[derive(Clone, PartialEq, Serialize, Deserialize, Args)]
+#[serde(default)]
 pub struct AzureStorageBlobConfig {
-    #[structopt(long, env = AZURE_STORAGE_ACCOUNT, default_value = "", help = "Account for Azure storage")]
-    #[serde(default)]
+    /// Account for Azure storage
+    #[clap(long, env = AZURE_STORAGE_ACCOUNT, default_value = "")]
     pub account: String,
 
-    #[structopt(long, env = AZURE_BLOB_MASTER_KEY, default_value = "", help = "Master key for Azure storage")]
-    #[serde(default)]
+    /// Master key for Azure storage
+    #[clap(long, env = AZURE_BLOB_MASTER_KEY, default_value = "")]
     pub master_key: String,
 
-    #[structopt(long, env = AZURE_BLOB_CONTAINER, default_value = "", help = "Container for Azure storage")]
-    #[serde(default)]
+    /// Container for Azure storage
+    #[clap(long, env = AZURE_BLOB_CONTAINER, default_value = "")]
     pub container: String,
 }
 
-impl AzureStorageBlobConfig {
-    pub fn default() -> Self {
-        AzureStorageBlobConfig {
+impl Default for AzureStorageBlobConfig {
+    fn default() -> Self {
+        Self {
             account: "".to_string(),
             master_key: "".to_string(),
             container: "".to_string(),
@@ -166,38 +169,39 @@ impl fmt::Debug for AzureStorageBlobConfig {
 }
 
 /// Storage config group.
-/// serde(default) make the toml de to default working.
-#[derive(
-    Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
-)]
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
+#[serde(default)]
 pub struct StorageConfig {
-    #[structopt(long, env = STORAGE_TYPE, default_value = "disk", help = "Current storage type: disk|s3")]
-    #[serde(default)]
+    /// Current storage type: disk|s3
+    #[clap(long, env = STORAGE_TYPE, default_value = "disk")]
     pub storage_type: String,
 
     // Disk storage backend config.
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub disk: DiskStorageConfig,
 
     // S3 storage backend config.
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub s3: S3StorageConfig,
 
     // azure storage blob config.
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub azure_storage_blob: AzureStorageBlobConfig,
 }
 
-impl StorageConfig {
-    pub fn default() -> Self {
-        StorageConfig {
+impl Default for StorageConfig {
+    fn default() -> Self {
+        Self {
             storage_type: "disk".to_string(),
             disk: DiskStorageConfig::default(),
             s3: S3StorageConfig::default(),
             azure_storage_blob: AzureStorageBlobConfig::default(),
         }
     }
+}
 
+impl StorageConfig {
     pub fn load_from_env(mut_config: &mut Config) {
         env_helper!(mut_config, storage, storage_type, String, STORAGE_TYPE);
 

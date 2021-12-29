@@ -1,6 +1,6 @@
 #!/bin/bash
 
-/databend-meta --single true &> /tmp/databend-meta.log  &
+/databend-meta --single &> /tmp/databend-meta.log  &
 P1=$!
 # add health check to remove the race condition issue during databend-query bootstrap
 sleep 1

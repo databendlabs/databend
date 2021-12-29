@@ -87,7 +87,7 @@ fn test_cast_by_str() -> Result<()> {
 
     for test in tests {
         let literal = test.literal;
-        let result = DataValue::try_from_literal(literal)?;
+        let result = DataValue::try_from_literal(literal, None)?;
         assert_eq!(result.data_type(), test.value.data_type());
         assert_eq!(&result, &test.value, "test with {}", test.name);
     }

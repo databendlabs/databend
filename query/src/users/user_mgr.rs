@@ -14,10 +14,10 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_types::AuthType;
 use common_meta_types::GrantObject;
+use common_meta_types::PasswordType;
 use common_meta_types::UserInfo;
-use common_meta_types::UserPrivilege;
+use common_meta_types::UserPrivilegeSet;
 use sha2::Digest;
 
 use crate::users::CertifiedInfo;
@@ -26,16 +26,25 @@ use crate::users::UserApiProvider;
 
 impl UserApiProvider {
     // Get one user from by tenant.
-    pub async fn get_user(&self, user: &str, hostname: &str) -> Result<UserInfo> {
-        match user {
+    pub async fn get_user(&self, username: &str, hostname: &str) -> Result<UserInfo> {
+        match username {
             // TODO(BohuTANG): Mock, need removed.
             "default" | "" | "root" => {
-                let user = User::new(user, "%", "", AuthType::None);
-                Ok(user.into())
+                let mut user_info: UserInfo =
+                    User::new(username, hostname, "", PasswordType::None).into();
+                if hostname == "127.0.0.1" || &hostname.to_lowercase() == "localhost" {
+                    user_info.grants.grant_privileges(
+                        username,
+                        hostname,
+                        &GrantObject::Global,
+                        UserPrivilegeSet::available_privileges_on_global(),
+                    );
+                }
+                Ok(user_info)
             }
             _ => {
                 let client = self.get_user_api_client();
-                let get_user = client.get_user(user.to_string(), hostname.to_string(), None);
+                let get_user = client.get_user(username.to_string(), hostname.to_string(), None);
                 Ok(get_user.await?.data)
             }
         }
@@ -43,12 +52,12 @@ impl UserApiProvider {
 
     // Auth the user and password for different Auth type.
     pub async fn auth_user(&self, user: UserInfo, info: CertifiedInfo) -> Result<bool> {
-        match user.auth_type {
-            AuthType::None => Ok(true),
-            AuthType::PlainText => Ok(user.password == info.user_password),
+        match user.password_type {
+            PasswordType::None => Ok(true),
+            PasswordType::PlainText => Ok(user.password == info.user_password),
             // MySQL already did x = sha1(x)
             // so we just check double sha1(x)
-            AuthType::DoubleSha1 => {
+            PasswordType::DoubleSha1 => {
                 let mut m = sha1::Sha1::new();
                 m.update(&info.user_password);
 
@@ -58,7 +67,7 @@ impl UserApiProvider {
 
                 Ok(user.password == m.digest().bytes().to_vec())
             }
-            AuthType::Sha256 => {
+            PasswordType::Sha256 => {
                 let result = sha2::Sha256::digest(&info.user_password);
                 Ok(user.password == result.to_vec())
             }
@@ -98,7 +107,7 @@ impl UserApiProvider {
         username: &str,
         hostname: &str,
         object: GrantObject,
-        privileges: UserPrivilege,
+        privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client();
         client
@@ -118,7 +127,7 @@ impl UserApiProvider {
         username: &str,
         hostname: &str,
         object: GrantObject,
-        privileges: UserPrivilege,
+        privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client();
         client
@@ -154,7 +163,7 @@ impl UserApiProvider {
         &self,
         username: &str,
         hostname: &str,
-        new_auth_type: Option<AuthType>,
+        new_password_type: Option<PasswordType>,
         new_password: Option<Vec<u8>>,
     ) -> Result<Option<u64>> {
         let client = self.get_user_api_client();
@@ -162,7 +171,7 @@ impl UserApiProvider {
             username.to_string(),
             hostname.to_string(),
             new_password,
-            new_auth_type,
+            new_password_type,
             None,
         );
         match update_user.await {

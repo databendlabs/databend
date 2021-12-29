@@ -20,6 +20,7 @@ use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnWithField;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Expression;
@@ -123,15 +124,40 @@ impl ExpressionExecutor {
                         arg_columns.push(column);
                     }
 
-                    let func = f.to_function()?;
-                    let column = func.eval(&arg_columns, rows)?;
+                    // 1. With nullable input, if the function is not nullable, e.g. it doesn't output null. We do NOT apply the input masking.
+                    // 2. With nullable input, if the function does NOT pass through null. That is, it doesn't simply pass the null input to output.
+                    // We do NOT apply the masking.
+                    let column = if f.is_nullable && f.func.passthrough_null() {
+                        let arg_column_validities = arg_columns
+                            .iter()
+                            .map(|column_with_field| {
+                                let col = column_with_field.column();
+                                col.get_validity()
+                            })
+                            .collect::<Vec<_>>();
 
-                    let column = DataColumnWithField::new(
+                        // If one of the columns is ALL null, then we just need to output a column with all null
+                        // values instead of really evaluate/execute the function.
+                        if arg_column_validities
+                            .iter()
+                            .any(|validity| validity.all_null())
+                        {
+                            // returns a column with constant value, all of them are null
+                            let null_value = DataValue::new_from_data_type(&f.return_type, true);
+                            DataColumn::Constant(null_value, rows)
+                        } else {
+                            let column = f.func.eval(&arg_columns, rows)?;
+                            column.apply_validities(arg_column_validities.as_ref())?
+                        }
+                    } else {
+                        f.func.eval(&arg_columns, rows)?
+                    };
+
+                    let column_with_field = DataColumnWithField::new(
                         column,
                         DataField::new(&f.name, f.return_type.clone(), f.is_nullable),
                     );
-
-                    column_map.insert(f.name.as_str(), column);
+                    column_map.insert(f.name.as_str(), column_with_field);
                 }
                 ExpressionAction::Constant(constant) => {
                     let column = DataColumn::Constant(constant.value.clone(), rows);

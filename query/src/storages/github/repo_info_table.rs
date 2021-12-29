@@ -12,28 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_meta_types::CreateTableReq;
-use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
-use common_planners::ReadDataSourcePlan;
-use common_streams::DataBlockStream;
-use common_streams::SendableDataBlockStream;
 
-use crate::sessions::QueryContext;
 use crate::storages::github::github_client::create_github_client;
-use crate::storages::github::github_client::get_own_repo_from_table_info;
-use crate::storages::github::GITHUB_REPO_INFO_TABLE_ENGINE;
-use crate::storages::github::OWNER;
-use crate::storages::github::REPO;
+use crate::storages::github::GithubDataGetter;
+use crate::storages::github::GithubTableType;
+use crate::storages::github::RepoTableOptions;
 use crate::storages::StorageContext;
-use crate::storages::Table;
 
 const REPOSITORY: &str = "reposiroty";
 const LANGUAGE: &str = "language";
@@ -45,27 +35,26 @@ const OPEN_ISSUES_COUNT: &str = "open_issues_count";
 const SUBSCRIBERS_COUNT: &str = "subscribers_count";
 
 pub struct RepoInfoTable {
-    table_info: TableInfo,
+    options: RepoTableOptions,
 }
 
 impl RepoInfoTable {
-    pub fn try_create(_ctx: StorageContext, table_info: TableInfo) -> Result<Box<dyn Table>> {
-        Ok(Box::new(RepoInfoTable { table_info }))
+    pub fn create(options: RepoTableOptions) -> Box<dyn GithubDataGetter> {
+        Box::new(RepoInfoTable { options })
     }
 
-    pub async fn create(ctx: StorageContext, owner: String, repo: String) -> Result<()> {
-        let mut options = HashMap::new();
-        options.insert(OWNER.to_string(), owner.clone());
-        options.insert(REPO.to_string(), repo.clone());
-
+    pub async fn create_table(ctx: StorageContext, options: RepoTableOptions) -> Result<()> {
+        let mut options = options;
+        options.table_type = GithubTableType::Info.to_string();
         let req = CreateTableReq {
             if_not_exists: false,
-            db: owner.clone(),
-            table: repo.clone(),
+            db: options.owner.clone(),
+            table: options.repo.clone(),
             table_meta: TableMeta {
                 schema: RepoInfoTable::schema(),
-                engine: GITHUB_REPO_INFO_TABLE_ENGINE.into(),
-                options,
+                engine: "GITHUB".into(),
+                engine_options: options.into(),
+                ..Default::default()
             },
         };
         ctx.meta.create_table(req).await?;
@@ -86,10 +75,18 @@ impl RepoInfoTable {
 
         Arc::new(DataSchema::new(fields))
     }
+}
 
+#[async_trait::async_trait]
+impl GithubDataGetter for RepoInfoTable {
     async fn get_data_from_github(&self) -> Result<Vec<Series>> {
-        let (owner, repo) = get_own_repo_from_table_info(&self.table_info)?;
-        let instance = create_github_client()?;
+        let RepoTableOptions {
+            ref repo,
+            ref owner,
+            ref token,
+            ..
+        } = self.options;
+        let instance = create_github_client(token)?;
 
         let repo = instance.repos(owner, repo).get().await?;
 
@@ -124,31 +121,5 @@ impl RepoInfoTable {
             Series::new(open_issues_count_array),
             Series::new(subscribers_count_array),
         ])
-    }
-}
-
-#[async_trait::async_trait]
-impl Table for RepoInfoTable {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn get_table_info(&self) -> &TableInfo {
-        &self.table_info
-    }
-
-    async fn read(
-        &self,
-        _ctx: Arc<QueryContext>,
-        _plan: &ReadDataSourcePlan,
-    ) -> Result<SendableDataBlockStream> {
-        let arrays = self.get_data_from_github().await?;
-        let block = DataBlock::create_by_array(self.table_info.schema(), arrays);
-
-        Ok(Box::pin(DataBlockStream::create(
-            self.table_info.schema(),
-            None,
-            vec![block],
-        )))
     }
 }

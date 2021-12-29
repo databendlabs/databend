@@ -14,7 +14,7 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_meta_types::AuthType;
+use common_meta_types::PasswordType;
 use common_meta_types::UserInfo;
 use common_planners::*;
 use databend_query::interpreters::*;
@@ -59,7 +59,7 @@ async fn test_drop_user_interpreter() -> Result<()> {
             name.to_string(),
             hostname.to_string(),
             Vec::from(password),
-            AuthType::PlainText,
+            PasswordType::PlainText,
         );
         let user_mgr = ctx.get_sessions_manager().get_user_manager();
         user_mgr.add_user(user_info).await?;

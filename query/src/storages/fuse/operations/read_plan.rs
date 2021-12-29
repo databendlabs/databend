@@ -34,12 +34,13 @@ impl FuseTable {
         ctx: Arc<QueryContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        let snapshot = self.table_snapshot(ctx.as_ref()).await?;
+        let snapshot = self.read_table_snapshot(ctx.as_ref()).await?;
         match snapshot {
             Some(snapshot) => {
                 let da = ctx.get_data_accessor()?;
                 let schema = self.table_info.schema();
-                let block_metas = apply_block_pruning(&snapshot, schema, &push_downs, da).await?;
+                let block_metas =
+                    apply_block_pruning(&snapshot, schema, &push_downs, da, ctx.clone()).await?;
                 let (statistics, parts) = Self::to_partitions(&block_metas, push_downs);
                 Ok((statistics, parts))
             }
@@ -57,7 +58,7 @@ impl FuseTable {
             (Statistics::default(), Partitions::default()),
             |(mut stats, mut parts), block_meta| {
                 parts.push(Part {
-                    name: block_meta.location.location.clone(),
+                    name: block_meta.location.path.clone(),
                     version: 0,
                 });
 

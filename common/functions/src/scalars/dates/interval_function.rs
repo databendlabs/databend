@@ -23,6 +23,7 @@ use common_datavalues::chrono::NaiveDateTime;
 use common_datavalues::chrono::Timelike;
 use common_datavalues::chrono::Utc;
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -72,20 +73,12 @@ where T: IntegerTypedArithmetic + Clone + Sync + Send + 'static
         self.display_name.as_str()
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
         if args[0].is_date_or_date_time() {
-            Ok(args[0].clone())
+            Ok(args[0].data_type().clone())
         } else {
-            Ok(args[1].clone())
+            Ok(args[1].data_type().clone())
         }
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
-    }
-
-    fn num_arguments(&self) -> usize {
-        2
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
@@ -333,7 +326,7 @@ impl IntervalFunctionFactory {
         Ok(res.into())
     }
 
-    fn interval_month_plus_minus_date16(
+    pub fn interval_month_plus_minus_date16(
         op: &DataValueArithmeticOperator,
         a: &DataColumnWithField,
         b: &DataColumnWithField,
@@ -342,7 +335,7 @@ impl IntervalFunctionFactory {
         Self::month_i64_plus_minus_date16(op, interval, date16, 1)
     }
 
-    fn interval_month_plus_minus_date32(
+    pub fn interval_month_plus_minus_date32(
         op: &DataValueArithmeticOperator,
         a: &DataColumnWithField,
         b: &DataColumnWithField,
@@ -351,7 +344,7 @@ impl IntervalFunctionFactory {
         Self::month_i64_plus_minus_date32(op, interval, date32, 1)
     }
 
-    fn interval_month_plus_minus_datetime32(
+    pub fn interval_month_plus_minus_datetime32(
         op: &DataValueArithmeticOperator,
         a: &DataColumnWithField,
         b: &DataColumnWithField,

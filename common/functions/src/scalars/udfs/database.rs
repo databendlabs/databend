@@ -16,8 +16,8 @@ use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
@@ -34,8 +34,11 @@ impl DatabaseFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().context_function())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .context_function()
+                .num_arguments(1),
+        )
     }
 }
 
@@ -44,20 +47,16 @@ impl Function for DatabaseFunction {
         "DatabaseFunction"
     }
 
-    fn return_type(&self, _args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
         Ok(DataType::String)
     }
 
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
+    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
         Ok(false)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         Ok(columns[0].column().clone())
-    }
-
-    fn num_arguments(&self) -> usize {
-        1
     }
 }
 

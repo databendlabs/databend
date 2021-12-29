@@ -22,6 +22,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 use num::cast::AsPrimitive;
+use serde::Deserialize;
+use serde::Serialize;
 
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
@@ -30,6 +32,7 @@ use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 use crate::with_match_primitive_type;
 
+#[derive(Serialize, Deserialize)]
 struct AggregateStddevPopState {
     pub sum: f64,
     pub count: u64,
@@ -158,16 +161,13 @@ where T: DFPrimitiveType + AsPrimitive<f64>
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
         let state = place.get::<AggregateStddevPopState>();
-        state.sum.serialize_to_buf(writer)?;
-        state.count.serialize_to_buf(writer)?;
-        state.variance.serialize_to_buf(writer)
+        serialize_into_buf(writer, state)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateStddevPopState>();
-        state.sum = f64::deserialize(reader)?;
-        state.count = u64::deserialize(reader)?;
-        state.variance = f64::deserialize(reader)?;
+        *state = deserialize_from_slice(reader)?;
+
         Ok(())
     }
 
@@ -178,13 +178,22 @@ where T: DFPrimitiveType + AsPrimitive<f64>
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+    #[allow(unused_mut)]
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
         let state = place.get::<AggregateStddevPopState>();
         if state.count == 0 {
-            return Ok(DataValue::Float64(None));
+            array.push_null();
+            return Ok(());
         }
+        let mut array = array
+            .as_mut_any()
+            .downcast_mut::<MutablePrimitiveArrayBuilder<f64>>()
+            .ok_or_else(|| {
+                ErrorCode::UnexpectedError("error occured when downcast MutableArray".to_string())
+            })?;
         let variance = state.variance / state.count as f64;
-        Ok(DataValue::Float64(Some(variance.sqrt())))
+        array.push(variance.sqrt());
+        Ok(())
     }
 }
 

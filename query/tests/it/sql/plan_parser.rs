@@ -34,6 +34,18 @@ fn test_plan_parser() -> Result<()> {
             error: "",
         },
         Test {
+            name: "create-database-default-engine-passed",
+            sql: "CREATE DATABASE db1 ENGINE=default",
+            expect: "Create database db1, if_not_exists:false, engine: default={}, option: {}",
+            error: "",
+        },
+        Test {
+            name: "create-database-github-engine-passed",
+            sql: "CREATE DATABASE db1 ENGINE=github(token='abc')",
+            expect: "Create database db1, if_not_exists:false, engine: github={\"token\": \"abc\"}, option: {}",
+            error: "",
+        },
+        Test {
             name: "create-database-if-not-exists-passed",
             sql: "CREATE DATABASE IF NOT EXISTS db1",
             expect: "Create database db1, if_not_exists:true, option: {}",
@@ -54,13 +66,13 @@ fn test_plan_parser() -> Result<()> {
         Test {
             name: "create-table-passed",
             sql: "CREATE TABLE t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Parquet location = 'foo.parquet' ",
-            expect: "Create table default.t DataField { name: \"c1\", data_type: Int32, nullable: true }, DataField { name: \"c2\", data_type: Int64, nullable: true }, DataField { name: \"c3\", data_type: String, nullable: true }, engine: Parquet, if_not_exists:false, option: {\"location\": \"foo.parquet\"}",
+            expect: "Create table default.t DataField { name: \"c1\", data_type: Int32, nullable: true }, DataField { name: \"c2\", data_type: Int64, nullable: true }, DataField { name: \"c3\", data_type: String, nullable: true }, engine: Parquet, if_not_exists:false, option: {\"location\": \"foo.parquet\"}, as_select: None",
             error: "",
         },
         Test {
             name: "create-table-if-not-exists-passed",
             sql: "CREATE TABLE IF NOT EXISTS t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Parquet location = 'foo.parquet' ",
-            expect: "Create table default.t DataField { name: \"c1\", data_type: Int32, nullable: true }, DataField { name: \"c2\", data_type: Int64, nullable: true }, DataField { name: \"c3\", data_type: String, nullable: true }, engine: Parquet, if_not_exists:true, option: {\"location\": \"foo.parquet\"}",
+            expect: "Create table default.t DataField { name: \"c1\", data_type: Int32, nullable: true }, DataField { name: \"c2\", data_type: Int64, nullable: true }, DataField { name: \"c3\", data_type: String, nullable: true }, engine: Parquet, if_not_exists:true, option: {\"location\": \"foo.parquet\"}, as_select: None",
             error: "",
         },
         Test {
@@ -180,7 +192,7 @@ fn test_plan_parser() -> Result<()> {
             \n            AggregatorPartial: groupBy=[[(number % 3)]], aggr=[[sum((number + 1))]]\
             \n              Expression: (number % 3):UInt8, (number + 1):UInt64 (Before GroupBy)\
             \n                Filter: (number > 1)\
-            \n                  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+            \n                  ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [(number > 1)]]",
             error: "",
         },
         Test {
@@ -195,7 +207,7 @@ fn test_plan_parser() -> Result<()> {
             expect: "\
             Projection: number:UInt64\
             \n  Filter: NULL\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [NULL]]",
             error: "",
         },
         Test {
@@ -204,7 +216,7 @@ fn test_plan_parser() -> Result<()> {
             expect: "\
             Projection: number:UInt64\
             \n  Filter: (NULL AND true)\
-            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0]]",
+            \n    ReadDataSource: scan partitions: [8], scan schema: [number:UInt64], statistics: [read_rows: 10, read_bytes: 80], push_downs: [projections: [0], filters: [(NULL AND true)]]",
             error: "",
         },
         Test {

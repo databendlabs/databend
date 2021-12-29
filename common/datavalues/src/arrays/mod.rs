@@ -16,6 +16,7 @@
 mod arithmetic;
 mod builder;
 mod comparison;
+mod mutable;
 mod ops;
 mod trusted_len;
 mod upstream_traits;
@@ -32,6 +33,7 @@ pub use boolean::*;
 pub use builder::*;
 pub use comparison::*;
 pub use list::*;
+pub use mutable::*;
 pub use null::*;
 pub use ops::*;
 pub use primitive::*;

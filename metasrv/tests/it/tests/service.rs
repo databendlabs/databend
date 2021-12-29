@@ -20,12 +20,12 @@ use common_base::tokio;
 use common_base::GlobalSequence;
 use common_base::Stoppable;
 use common_meta_flight::MetaFlightClient;
+use common_meta_raft_store::protobuf::meta_service_client::MetaServiceClient;
+use common_meta_raft_store::protobuf::GetReq;
 use common_tracing::tracing;
 use databend_meta::api::FlightServer;
 use databend_meta::configs;
 use databend_meta::meta_service::MetaNode;
-use databend_meta::proto::meta_service_client::MetaServiceClient;
-use databend_meta::proto::GetReq;
 
 // Start one random service and get the session manager.
 #[tracing::instrument(level = "info")]
@@ -44,15 +44,11 @@ pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<(
     let mut srv = FlightServer::create(tc.config.clone(), mn);
     srv.start().await?;
 
-    // TODO(xp): some times the MetaNode takes more than 200 ms to startup, with disk-backed store.
-    //           Find out why and using some kind of waiting routine to ensure service is on.
-    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-
     tc.flight_srv = Some(Box::new(srv));
     Ok(())
 }
 
-/// Bring upa cluster of metasrv, the first one is the leader.
+/// Bring up a cluster of metasrv, the first one is the leader.
 ///
 /// It returns a vec of test-context.
 pub async fn start_metasrv_cluster(node_ids: &[NodeId]) -> anyhow::Result<Vec<MetaSrvTestContext>> {
@@ -148,6 +144,37 @@ impl MetaSrvTestContext {
 
         let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
         Ok(client)
+    }
+
+    pub async fn raft_client(
+        &self,
+    ) -> anyhow::Result<MetaServiceClient<tonic::transport::Channel>> {
+        let addr = self.config.raft_config.raft_api_addr();
+
+        // retry 3 times until server starts listening.
+        for _ in 0..4 {
+            let client = MetaServiceClient::connect(format!("http://{}", addr)).await;
+            match client {
+                Ok(x) => return Ok(x),
+                Err(err) => {
+                    tracing::info!("can not yet connect to {}, {}, sleep a while", addr, err);
+                    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                }
+            }
+        }
+
+        panic!("can not connect to raft server: {:?}", self.config);
+    }
+
+    pub async fn assert_meta_connection(&self) -> anyhow::Result<()> {
+        let mut client = self.raft_client().await?;
+
+        let req = tonic::Request::new(GetReq {
+            key: "ensure-connection".into(),
+        });
+        let rst = client.get(req).await?.into_inner();
+        assert_eq!("", rst.value, "connected");
+        Ok(())
     }
 }
 

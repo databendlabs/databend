@@ -14,6 +14,7 @@
 
 mod builder;
 mod iterator;
+mod mutable;
 
 pub use builder::*;
 use common_arrow::arrow::array::Array;
@@ -28,6 +29,7 @@ use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
 pub use iterator::*;
+pub use mutable::*;
 
 use crate::prelude::*;
 
@@ -203,9 +205,9 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
         self.null_count() == self.len()
     }
 
-    /// Get the null count and the buffer of bits representing null values
-    pub fn null_bits(&self) -> (usize, Option<&Bitmap>) {
-        (self.array.null_count(), self.array.validity())
+    #[inline]
+    pub fn validity(&self) -> Option<&Bitmap> {
+        self.array.validity()
     }
 
     /// Take a view of top n elements

@@ -22,6 +22,7 @@ use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::CreateTableReq;
 use common_meta_types::DatabaseInfo;
+use common_meta_types::DatabaseMeta;
 use common_meta_types::DropDatabaseReq;
 use common_meta_types::DropTableReply;
 use common_meta_types::DropTableReq;
@@ -95,8 +96,10 @@ impl MutableCatalog {
         let req = CreateDatabaseReq {
             if_not_exists: true,
             db: "default".to_string(),
-            engine: "".to_string(),
-            options: Default::default(),
+            meta: DatabaseMeta {
+                engine: "".to_string(),
+                ..Default::default()
+            },
         };
         meta.create_database(req).await?;
 
@@ -120,9 +123,7 @@ impl MutableCatalog {
             meta: self.ctx.meta.clone(),
             in_memory_data: self.ctx.in_memory_data.clone(),
         };
-        self.ctx
-            .database_factory
-            .get_database(ctx, &db_info.db, &db_info.meta.engine)
+        self.ctx.database_factory.get_database(ctx, db_info)
     }
 }
 
@@ -150,17 +151,15 @@ impl Catalog for MutableCatalog {
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
         // Create database.
         let res = self.ctx.meta.create_database(req.clone()).await?;
-        tracing::error!("db name: {}, engine: {}", &req.db, &req.engine);
+        tracing::error!("db name: {}, engine: {}", &req.db, &req.meta.engine);
 
         // Initial the database after creating.
-        let db_ctx = DatabaseContext {
-            meta: self.ctx.meta.clone(),
-            in_memory_data: self.ctx.in_memory_data.clone(),
-        };
-        let database = self
-            .ctx
-            .database_factory
-            .get_database(db_ctx, &req.db, &req.engine)?;
+        let db_info = Arc::new(DatabaseInfo {
+            database_id: res.database_id,
+            db: req.db.clone(),
+            meta: req.meta.clone(),
+        });
+        let database = self.build_db_instance(&db_info)?;
         database.init_database().await?;
         Ok(CreateDatabaseReply {
             database_id: res.database_id,

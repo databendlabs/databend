@@ -32,7 +32,12 @@ cluster_id = "test_cluster"
 table_engine_memory_enabled = true
 table_engine_csv_enabled = true
 table_engine_parquet_enabled = true
-table_engine_github_enabled = true
+database_engine_github_enabled = true
+
+table_cache_enabled = true
+table_memory_cache_mb_size = 1024
+table_disk_cache_root = "_cache"
+table_disk_cache_mb_size = 10240
 
 [log]
 log_level = "ERROR"

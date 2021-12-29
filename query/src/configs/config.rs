@@ -15,70 +15,68 @@
 use std::fs;
 use std::str::FromStr;
 
+use clap::Parser;
 use common_dal::StorageScheme;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_flight_rpc::FlightClientTlsConfig;
-use lazy_static::lazy_static;
-use structopt::StructOpt;
-use structopt_toml::StructOptToml;
+use once_cell::sync::Lazy;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::configs::LogConfig;
 use crate::configs::MetaConfig;
 use crate::configs::QueryConfig;
 use crate::configs::StorageConfig;
 
-lazy_static! {
-    pub static ref DATABEND_COMMIT_VERSION: String = {
-        let build_semver = option_env!("VERGEN_BUILD_SEMVER");
-        let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
-        let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
-        let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
+pub static DATABEND_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
+    let build_semver = option_env!("VERGEN_BUILD_SEMVER");
+    let git_sha = option_env!("VERGEN_GIT_SHA_SHORT");
+    let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
+    let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP");
 
-        let ver = match (build_semver, git_sha, rustc_semver, timestamp) {
-            #[cfg(not(feature = "simd"))]
-            (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}({}-{})", v1, v2, v3, v4),
-            #[cfg(feature = "simd")]
-            (Some(v1), Some(v2), Some(v3), Some(v4)) => {
-                format!("{}-{}-simd({}-{})", v1, v2, v3, v4)
-            }
-            _ => String::new(),
-        };
-        ver
+    let ver = match (build_semver, git_sha, rustc_semver, timestamp) {
+        #[cfg(not(feature = "simd"))]
+        (Some(v1), Some(v2), Some(v3), Some(v4)) => format!("{}-{}({}-{})", v1, v2, v3, v4),
+        #[cfg(feature = "simd")]
+        (Some(v1), Some(v2), Some(v3), Some(v4)) => {
+            format!("{}-{}-simd({}-{})", v1, v2, v3, v4)
+        }
+        _ => String::new(),
     };
-}
+    ver
+});
 
 // Config file.
 const CONFIG_FILE: &str = "CONFIG_FILE";
 
-#[derive(
-    Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, StructOpt, StructOptToml,
-)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Parser)]
+#[clap(about, version, author)]
 #[serde(default)]
 pub struct Config {
-    #[structopt(long, short = "c", env = CONFIG_FILE, default_value = "")]
+    #[clap(long, short = 'c', env = CONFIG_FILE, default_value = "")]
     pub config_file: String,
 
     // Query engine config.
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub query: QueryConfig,
 
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub log: LogConfig,
 
     // Meta Service config.
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub meta: MetaConfig,
 
     // Storage backend config.
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub storage: StorageConfig,
 }
 
-impl Config {
+impl Default for Config {
     /// Default configs.
-    pub fn default() -> Self {
-        Config {
+    fn default() -> Self {
+        Self {
             config_file: "".to_string(),
             query: QueryConfig::default(),
             log: LogConfig::default(),
@@ -86,10 +84,12 @@ impl Config {
             storage: StorageConfig::default(),
         }
     }
+}
 
+impl Config {
     /// Load configs from args.
     pub fn load_from_args() -> Self {
-        let mut cfg = Config::from_args();
+        let mut cfg = Config::parse();
         if cfg.query.num_cpus == 0 {
             cfg.query.num_cpus = num_cpus::get() as u64;
         }
@@ -105,7 +105,7 @@ impl Config {
 
     /// Load configs from toml str.
     pub fn load_from_toml_str(toml_str: &str) -> Result<Self> {
-        let mut cfg = Config::from_args_with_toml(toml_str)
+        let mut cfg = toml::from_str::<Config>(toml_str)
             .map_err(|e| ErrorCode::BadArguments(format!("{:?}", e)))?;
         if cfg.query.num_cpus == 0 {
             cfg.query.num_cpus = num_cpus::get() as u64;

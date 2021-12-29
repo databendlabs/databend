@@ -28,24 +28,24 @@ use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]
-pub struct CreatUserInterpreter {
+pub struct CreateUserInterpreter {
     ctx: Arc<QueryContext>,
     plan: CreateUserPlan,
 }
 
-impl CreatUserInterpreter {
+impl CreateUserInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CreateUserPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(CreatUserInterpreter { ctx, plan }))
+        Ok(Arc::new(CreateUserInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for CreatUserInterpreter {
+impl Interpreter for CreateUserInterpreter {
     fn name(&self) -> &str {
         "CreateUserInterpreter"
     }
 
-    #[tracing::instrument(level = "info", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
@@ -56,7 +56,7 @@ impl Interpreter for CreatUserInterpreter {
             name: plan.name,
             hostname: plan.hostname,
             password: plan.password,
-            auth_type: plan.auth_type,
+            password_type: plan.password_type,
             grants: UserGrantSet::empty(),
             quota: UserQuota::no_limit(),
         };

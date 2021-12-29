@@ -173,8 +173,9 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     let table = fixture.latest_default_table().await?;
     let truncate_plan = TruncateTablePlan {
-        db: "".to_string(),
-        table: "".to_string(),
+        db: fixture.default_db_name(),
+        table: fixture.default_table_name(),
+        purge: false,
     };
 
     // 1. truncate empty table
@@ -226,7 +227,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_fuse_table_compact() -> Result<()> {
+async fn test_fuse_table_optimize() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
 
@@ -261,7 +262,8 @@ async fn test_fuse_table_compact() -> Result<()> {
     assert_eq!(parts.len(), n);
 
     // do compact
-    let query = format!("compact table {}.{}", db_name, tbl_name);
+    let query = format!("optimize table {}.{} compact", db_name, tbl_name);
+
     let plan = PlanParser::parse(&query, ctx.clone()).await?;
     let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
 

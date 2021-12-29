@@ -33,7 +33,7 @@ pub struct DfDropDatabase {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfDropDatabase {
-    #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let db = self.database_name()?;
         let if_exists = self.if_exists;

@@ -15,6 +15,7 @@
 mod append;
 mod commit;
 mod operation_log;
+mod optimize;
 mod read;
 mod read_plan;
 mod truncate;

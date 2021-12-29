@@ -31,7 +31,7 @@ use crate::init_meta_ut;
 use crate::tests::service::MetaSrvTestContext;
 use crate::tests::start_metasrv_with_context;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_restart() -> anyhow::Result<()> {
     // Fix: Issue 1134  https://github.com/datafuselabs/databend/issues/1134
     // - Start a metasrv server.
@@ -127,7 +127,7 @@ async fn test_restart() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_join() -> anyhow::Result<()> {
     // - Start 2 metasrv.
     // - Join node-1 to node-0

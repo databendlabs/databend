@@ -16,67 +16,34 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
+
 #[test]
 fn test_crc32_function() -> Result<()> {
-    #[allow(dead_code)]
-    struct Test {
-        name: &'static str,
-        display: &'static str,
-        nullable: bool,
-        columns: DataColumn,
-        expect: DataColumn,
-        error: &'static str,
-        func: Box<dyn Function>,
-    }
     let tests = vec![
-        Test {
+        ScalarFunctionTest {
             name: "crc-MySQL-passed",
-            display: "CRC",
             nullable: false,
-            columns: Series::new(vec!["MySQL"]).into(),
-            func: CRC32Function::try_create("crc")?,
+            columns: vec![Series::new(vec!["MySQL"]).into()],
             expect: Series::new(vec![3259397556u32]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "crc-mysql-passed",
-            display: "CRC",
             nullable: false,
-            columns: Series::new(vec!["mysql"]).into(),
-            func: CRC32Function::try_create("crc")?,
+            columns: vec![Series::new(vec!["mysql"]).into()],
             expect: Series::new(vec![2501908538u32]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "crc-1-passed",
-            display: "CRC",
-            nullable: true,
-            columns: Series::new(vec![1]).into(),
-            func: CRC32Function::try_create("crc")?,
+            nullable: false,
+            columns: vec![Series::new(vec![1]).into()],
             expect: Series::new(vec![2212294583u32]).into(),
             error: "",
         },
     ];
-    for t in tests {
-        let func = t.func;
-        let rows = t.columns.len();
 
-        let columns = vec![DataColumnWithField::new(
-            t.columns.clone(),
-            DataField::new("dummpy", t.columns.data_type(), false),
-        )];
-
-        if let Err(e) = func.eval(&columns, rows) {
-            assert_eq!(t.error, e.to_string(), "{}", t.name);
-        }
-
-        // Display check.
-        let expect_display = t.display.to_string();
-        let actual_display = format!("{}", func);
-        assert_eq!(expect_display, actual_display);
-
-        let v = &(func.eval(&columns, rows)?);
-        assert_eq!(v, &t.expect);
-    }
-    Ok(())
+    test_scalar_functions(CRC32Function::try_create("crc")?, &tests)
 }

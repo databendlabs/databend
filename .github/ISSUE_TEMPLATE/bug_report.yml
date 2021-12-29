@@ -1,0 +1,79 @@
+name: Bug report
+title: "bug: "
+description: Problems and issues with code of Databend
+labels: [ "C-bug" ]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you very much for submitting feedback to Databend to help Databend develop better.
+
+        If it is an idea or help wanted, please go to: [Discussion](https://github.com/datafuselabs/databend/discussions)
+
+  - type: checkboxes
+    attributes:
+      label: Search before asking
+      description: >
+        Please make sure to search in the [issues](https://github.com/datafuselabs/databend/issues) first to see
+        whether the same issue was reported already.
+      options:
+        - label: >
+            I had searched in the [issues](https://github.com/datafuselabs/databend/issues) and found no similar
+            issues.
+          required: true
+
+  - type: textarea
+    attributes:
+      label: Version
+      description: What is the current version
+      placeholder: >
+        Please provide the version you are using.
+        If it is the git version, please input commit id.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: What's Wrong?
+      description: Describe the bug.
+      placeholder: >
+        Describe the specific problem, the more detailed the better.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: What You Expected?
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: How to Reproduce?
+      placeholder: >
+        Please try to give reproducing steps to facilitate quick location of the problem.
+
+        - What actions were performed
+        - Table building statement
+        - Import statement
+        - Cluster information: number of nodes, configuration, etc.
+
+        If it is hard to reproduce, please also explain the general scene.
+
+  - type: textarea
+    attributes:
+      label: Anything Else?
+
+
+  - type: checkboxes
+    attributes:
+      label: Are you willing to submit PR?
+      description: >
+        We very much look forward to developers or users to help solve the Databend problem together.
+        If you are willing to submit a PR to fix this problem, please tick it.
+      options:
+        - label: Yes I am willing to submit a PR!
+
+  - type: markdown
+    attributes:
+      value: "Thanks for completing our form!"

@@ -6,7 +6,9 @@ members = [
     "common/building",
     "common/cache",
     "common/clickhouse-srv",
+    "common/containers",
     "common/dal",
+    "common/dal2",
     "common/datablocks",
     "common/datavalues",
     "common/exception",
@@ -25,6 +27,7 @@ members = [
     "common/meta/flight",
     "common/meta/types",
     "common/streams",
+    "common/codegen",
     "common/tracing",
     "common/metrics",
 

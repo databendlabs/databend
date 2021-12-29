@@ -16,6 +16,6 @@ mod any_error;
 mod api;
 mod configs;
 mod flight;
-mod meta_service;
+mod meta_node;
 mod store;
 mod tests;

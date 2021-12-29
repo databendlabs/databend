@@ -46,7 +46,8 @@ async fn test_cluster() -> Result<()> {
                     .method(Method::GET)
                     .finish(),
             )
-            .await;
+            .await
+            .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = response.into_body().into_vec().await.unwrap();

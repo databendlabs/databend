@@ -175,7 +175,7 @@ impl<'a> ArrayApply<'a, &'a [u8], Cow<'a, [u8]>> for DFStringArray {
         let values_iter = arr.values_iter().map(f);
         let av = AlignedVec::<_>::from_trusted_len_iter(values_iter);
 
-        let (_, validity) = self.null_bits();
+        let validity = self.validity();
         to_primitive::<S>(av, validity.cloned())
     }
 
@@ -185,7 +185,7 @@ impl<'a> ArrayApply<'a, &'a [u8], Cow<'a, [u8]>> for DFStringArray {
         S: DFPrimitiveType,
     {
         let av: AlignedVec<_> = AlignedVec::<_>::from_trusted_len_iter(self.inner().iter().map(f));
-        let (_, validity) = self.null_bits();
+        let validity = self.validity();
         to_primitive::<S>(av, validity.cloned())
     }
 

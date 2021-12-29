@@ -34,7 +34,7 @@ pub struct DfExplain {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfExplain {
-    #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         match self.statement.as_ref() {
             DfStatement::Query(v) => {

@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::types::NativeType;
-use common_io::prelude::*;
+use common_arrow::arrow::compute::arithmetics::basic::NativeArithmetics;
 use num::NumCast;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 use super::data_type::*;
 use crate::DFTryFrom;
@@ -78,13 +79,13 @@ impl DFDataType for Struct {
 
 pub trait DFPrimitiveType:
     DFDataType
-    + NativeType
+    + NativeArithmetics
     + NumCast
     + PartialOrd
     + Into<DataValue>
     + Default
-    + BinarySer
-    + BinaryDe
+    + Serialize
+    + DeserializeOwned
     + DFTryFrom<DataValue>
 {
     type LargestType: DFPrimitiveType;

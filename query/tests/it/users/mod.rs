@@ -14,3 +14,4 @@
 
 mod user_mgr;
 mod user_stage;
+mod user_udf;

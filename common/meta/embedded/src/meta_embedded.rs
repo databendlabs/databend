@@ -21,7 +21,7 @@ use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::state_machine::StateMachine;
 pub use common_meta_sled_store::init_temp_sled_db;
 use common_tracing::tracing;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 /// Local storage that provides the API defined by `KVApi+MetaApi`.
 ///
@@ -37,10 +37,8 @@ pub struct MetaEmbedded {
     pub(crate) inner: Arc<Mutex<StateMachine>>,
 }
 
-lazy_static! {
-    static ref GLOBAL_META_EMBEDDED: Arc<std::sync::Mutex<Option<Arc<MetaEmbedded>>>> =
-        Arc::new(std::sync::Mutex::new(None));
-}
+static GLOBAL_META_EMBEDDED: Lazy<Arc<std::sync::Mutex<Option<Arc<MetaEmbedded>>>>> =
+    Lazy::new(|| Arc::new(std::sync::Mutex::new(None)));
 
 impl MetaEmbedded {
     /// Creates a KVApi impl backed with a `StateMachine`.

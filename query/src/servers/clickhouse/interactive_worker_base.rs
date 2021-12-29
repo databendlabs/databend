@@ -27,6 +27,7 @@ use common_clickhouse_srv::types::Block as ClickHouseBlock;
 use common_clickhouse_srv::CHContext;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::InsertPlan;
 use common_planners::PlanNode;
@@ -66,57 +67,17 @@ impl InteractiveWorkerBase {
         ctx.attach_query_str(query);
 
         let plan = PlanParser::parse(query, ctx.clone()).await?;
-
         match plan {
-            PlanNode::Insert(insert) => Self::process_insert_query(insert, ch_ctx, ctx).await,
-            _ => {
-                let start = Instant::now();
-                let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
-                // Write start query log.
-                let _ = interpreter
-                    .start()
-                    .await
-                    .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+            PlanNode::Insert(ref insert) => {
+                // It has select plan, so we do not need to consume data from client
+                // data is from server and insert into server, just behave like select query
+                if insert.has_select_plan() {
+                    return Self::process_select_query(plan, ctx).await;
+                }
 
-                let name = interpreter.name().to_string();
-                let async_data_stream = interpreter.execute(None);
-                let mut data_stream = async_data_stream.await?;
-                histogram!(
-                    super::clickhouse_metrics::METRIC_INTERPRETER_USEDTIME,
-                    start.elapsed(),
-                    "interpreter" => name
-                );
-                let mut interval_stream = IntervalStream::new(interval(Duration::from_millis(30)));
-                let cancel = Arc::new(AtomicBool::new(false));
-
-                let (mut tx, rx) = mpsc::channel(20);
-                let mut tx2 = tx.clone();
-                let cancel_clone = cancel.clone();
-
-                let progress_ctx = ctx.clone();
-                tokio::spawn(async move {
-                    while !cancel.load(Ordering::Relaxed) {
-                        let _ = interval_stream.next().await;
-                        let values = progress_ctx.get_and_reset_progress_value();
-                        tx.send(BlockItem::ProgressTicker(values)).await.ok();
-                    }
-                });
-
-                ctx.try_spawn(async move {
-                    while let Some(block) = data_stream.next().await {
-                        tx2.send(BlockItem::Block(block)).await.ok();
-                    }
-
-                    cancel_clone.store(true, Ordering::Relaxed);
-                })?;
-                // Write final query log.
-                let _ = interpreter
-                    .finish()
-                    .await
-                    .map_err(|e| tracing::error!("interpreter.finish.error: {:?}", e));
-
-                Ok(rx)
+                Self::process_insert_query(insert.clone(), ch_ctx, ctx).await
             }
+            _ => Self::process_select_query(plan, ctx).await,
         }
     }
 
@@ -154,6 +115,65 @@ impl InteractiveWorkerBase {
             start.elapsed(),
             "interpreter" => name
         );
+        Ok(rx)
+    }
+
+    pub async fn process_select_query(
+        plan: PlanNode,
+        ctx: Arc<QueryContext>,
+    ) -> Result<Receiver<BlockItem>> {
+        let start = Instant::now();
+        let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
+        let name = interpreter.name().to_string();
+        histogram!(
+            super::clickhouse_metrics::METRIC_INTERPRETER_USEDTIME,
+            start.elapsed(),
+            "interpreter" => name
+        );
+
+        let cancel = Arc::new(AtomicBool::new(false));
+        let cancel_clone = cancel.clone();
+
+        let (tx, rx) = mpsc::channel(20);
+        let mut data_tx = tx.clone();
+        let mut progress_tx = tx;
+
+        let progress_ctx = ctx.clone();
+        let mut interval_stream = IntervalStream::new(interval(Duration::from_millis(30)));
+        tokio::spawn(async move {
+            while !cancel.load(Ordering::Relaxed) {
+                let _ = interval_stream.next().await;
+                let values = progress_ctx.get_and_reset_scan_progress_value();
+                progress_tx
+                    .send(BlockItem::ProgressTicker(values))
+                    .await
+                    .ok();
+            }
+        });
+
+        ctx.try_spawn(async move {
+            // Query log start.
+            let _ = interpreter
+                .start()
+                .await
+                .map_err(|e| tracing::error!("interpreter.start.error: {:?}", e));
+
+            // Execute and read stream data.
+            let async_data_stream = interpreter.execute(None);
+            let mut data_stream = async_data_stream.await?;
+            while let Some(block) = data_stream.next().await {
+                data_tx.send(BlockItem::Block(block)).await.ok();
+            }
+            cancel_clone.store(true, Ordering::Relaxed);
+
+            // Query log finish.
+            let _ = interpreter
+                .finish()
+                .await
+                .map_err(|e| tracing::error!("interpreter.finish.error: {:?}", e));
+            Ok::<(), ErrorCode>(())
+        })?;
+
         Ok(rx)
     }
 }

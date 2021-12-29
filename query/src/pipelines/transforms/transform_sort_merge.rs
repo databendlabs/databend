@@ -71,6 +71,7 @@ impl Processor for SortMergeTransform {
         self
     }
 
+    #[tracing::instrument(level = "debug", name = "sort_merge_execute", skip(self))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!("execute...");
 

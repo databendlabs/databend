@@ -222,6 +222,14 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
                     comma = true;
                 }
 
+                if !p.filters.is_empty() {
+                    if comma {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "filters: {:?}", p.filters)?;
+                    comma = true;
+                }
+
                 if p.limit.is_some() {
                     if comma {
                         write!(f, ", ")?;
@@ -240,7 +248,14 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
     fn format_create_database(f: &mut Formatter, plan: &CreateDatabasePlan) -> fmt::Result {
         write!(f, "Create database {:},", plan.db)?;
         write!(f, " if_not_exists:{:},", plan.if_not_exists)?;
-        write!(f, " option: {:?}", plan.options)
+        if !plan.meta.engine.is_empty() {
+            write!(
+                f,
+                " engine: {}={:?},",
+                plan.meta.engine, plan.meta.engine_options
+            )?;
+        }
+        write!(f, " option: {:?}", plan.meta.options)
     }
 
     fn format_drop_database(f: &mut Formatter, plan: &DropDatabasePlan) -> fmt::Result {
@@ -254,7 +269,8 @@ impl<'a> PlanNodeIndentFormatDisplay<'a> {
         // need engine to impl Display
         write!(f, " engine: {},", plan.engine())?;
         write!(f, " if_not_exists:{:},", plan.if_not_exists)?;
-        write!(f, " option: {:?}", plan.options())
+        write!(f, " option: {:?},", plan.options())?;
+        write!(f, " as_select: {:?}", plan.as_select())
     }
 
     fn format_drop_table(f: &mut Formatter, plan: &DropTablePlan) -> fmt::Result {

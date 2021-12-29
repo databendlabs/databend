@@ -23,8 +23,9 @@ use common_streams::CsvSource;
 use common_streams::Source;
 use common_tracing::tracing;
 use futures::StreamExt;
-use poem::error::BadRequest;
+use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
+use poem::http::StatusCode;
 use poem::web::Data;
 use poem::web::Json;
 use poem::web::Multipart;
@@ -51,15 +52,23 @@ pub async fn streaming_load(
     sessions_extension: Data<&Arc<SessionManager>>,
 ) -> PoemResult<Json<LoadResponse>> {
     let session_manager = sessions_extension.0;
-    let session = session_manager.create_session("Streaming load")?;
+    let session = session_manager
+        .create_session("Streaming load")
+        .map_err(InternalServerError)?;
     // Auth.
     let user_name = "root";
     let user_manager = session.get_user_manager();
     // TODO: list user's grant list and check client address
-    let user_info = user_manager.get_user(user_name, "%").await?;
+    let user_info = user_manager
+        .get_user(user_name, "%")
+        .await
+        .map_err(InternalServerError)?;
     session.set_current_user(user_info);
 
-    let context = session.create_context().await?;
+    let context = session
+        .create_context()
+        .await
+        .map_err(InternalServerError)?;
     let insert_sql = req
         .headers()
         .get("insert_sql")
@@ -73,7 +82,29 @@ pub async fn streaming_load(
         .unwrap_or("0")
         .eq_ignore_ascii_case("1");
 
-    let plan = PlanParser::parse(insert_sql, context.clone()).await?;
+    let field_delimitor = req
+        .headers()
+        .get("field_delimitor")
+        .and_then(|v| v.to_str().ok())
+        .map(|v| match v.len() {
+            n if n >= 1 => v.as_bytes()[0],
+            _ => b',',
+        })
+        .unwrap_or(b',');
+
+    let record_delimitor = req
+        .headers()
+        .get("record_delimitor")
+        .and_then(|v| v.to_str().ok())
+        .map(|v| match v.len() {
+            n if n >= 1 => v.as_bytes()[0],
+            _ => b'\n',
+        })
+        .unwrap_or(b'\n');
+
+    let plan = PlanParser::parse(insert_sql, context.clone())
+        .await
+        .map_err(InternalServerError)?;
     context.attach_query_str(insert_sql);
 
     // validate plan
@@ -83,24 +114,35 @@ pub async fn streaming_load(
                 if format.to_lowercase().as_str() == "csv" {
                     Ok(())
                 } else {
-                    Err(BadRequest(format!(
-                        "Streaming load only supports csv format, but got {}",
-                        format
-                    )))
+                    Err(poem::Error::from_string(
+                        format!(
+                            "Streaming load only supports csv format, but got {}",
+                            format
+                        ),
+                        StatusCode::BAD_REQUEST,
+                    ))
                 }
             }
-            _non_supported_source => Err(BadRequest(
+            _non_supported_source => Err(poem::Error::from_string(
                 "Only supports streaming upload. e.g. INSERT INTO $table FORMAT CSV",
+                StatusCode::BAD_REQUEST,
             )),
         },
-        non_insert_plan => Err(BadRequest(format!(
-            "Only supports INSERT statement in streaming load, but got {}",
-            non_insert_plan.name()
-        ))),
+        non_insert_plan => Err(poem::Error::from_string(
+            format!(
+                "Only supports INSERT statement in streaming load, but got {}",
+                non_insert_plan.name()
+            ),
+            StatusCode::BAD_REQUEST,
+        )),
     }?;
 
-    let max_block_size = context.get_settings().get_max_block_size()? as usize;
-    let interpreter = InterpreterFactory::get(context.clone(), plan.clone())?;
+    let max_block_size = context
+        .get_settings()
+        .get_max_block_size()
+        .map_err(InternalServerError)? as usize;
+    let interpreter =
+        InterpreterFactory::get(context.clone(), plan.clone()).map_err(InternalServerError)?;
     // Write Start to query log table.
     let _ = interpreter
         .start()
@@ -110,7 +152,7 @@ pub async fn streaming_load(
     let stream = stream! {
         while let Ok(Some(field)) = multipart.next_field().await {
             let reader = field.into_async_read();
-            let mut source = CsvSource::try_create(reader.compat(), plan.schema(), csv_header, max_block_size)?;
+            let mut source = CsvSource::try_create(reader.compat(), plan.schema(), csv_header, field_delimitor, record_delimitor, max_block_size)?;
 
             loop {
                 let block = source.read().await;
@@ -124,7 +166,10 @@ pub async fn streaming_load(
     };
 
     // this runs inside the runtime of poem, load is not cpu densive so it's ok
-    let mut data_stream = interpreter.execute(Some(Box::pin(stream))).await?;
+    let mut data_stream = interpreter
+        .execute(Some(Box::pin(stream)))
+        .await
+        .map_err(InternalServerError)?;
     while let Some(_block) = data_stream.next().await {}
 
     // Write Finish to query log table.
@@ -139,7 +184,7 @@ pub async fn streaming_load(
     Ok(Json(LoadResponse {
         id,
         state: "SUCCESS".to_string(),
-        stats: context.get_progress_value(),
+        stats: context.get_scan_progress_value(),
         error: None,
     }))
 }

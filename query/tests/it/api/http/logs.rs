@@ -42,7 +42,8 @@ async fn test_logs() -> Result<()> {
                     .method(Method::GET)
                     .finish(),
             )
-            .await;
+            .await
+            .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
     }

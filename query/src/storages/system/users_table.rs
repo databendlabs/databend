@@ -38,7 +38,7 @@ impl UsersTable {
             DataField::new("name", DataType::String, false),
             DataField::new("hostname", DataType::String, false),
             DataField::new("password", DataType::String, true),
-            DataField::new("auth_type", DataType::UInt8, false),
+            DataField::new("password_type", DataType::UInt8, false),
         ]);
 
         let table_info = TableInfo {
@@ -79,12 +79,15 @@ impl Table for UsersTable {
         let names: Vec<&str> = users.iter().map(|x| x.name.as_str()).collect();
         let hostnames: Vec<&str> = users.iter().map(|x| x.hostname.as_str()).collect();
         let passwords: Vec<&[u8]> = users.iter().map(|x| x.password.as_slice()).collect();
-        let auth_types: Vec<u8> = users.iter().map(|x| x.auth_type.clone() as u8).collect();
+        let password_types: Vec<u8> = users
+            .iter()
+            .map(|x| x.password_type.clone() as u8)
+            .collect();
         let block = DataBlock::create_by_array(self.table_info.schema(), vec![
             Series::new(names),
             Series::new(hostnames),
             Series::new(passwords),
-            Series::new(auth_types),
+            Series::new(password_types),
         ]);
         Ok(Box::pin(DataBlockStream::create(
             self.table_info.schema(),

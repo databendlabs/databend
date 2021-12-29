@@ -22,9 +22,10 @@ common-meta-types = {path= "../meta/types" }
 # Github dependencies
 
 # Crates.io dependencies
-serde = { version = "1.0.131", features = ["derive"] }
+bitflags = "1.3"
+serde = { version = "1.0.132", features = ["derive"] }
 futures = "0.3.18"
-lazy_static = "1.4.0"
+once_cell = "1.9.0"
 
 [dev-dependencies]
 pretty_assertions = "1.0.0"

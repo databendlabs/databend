@@ -14,11 +14,11 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_meta_types::AuthType;
 use common_meta_types::GrantObject;
+use common_meta_types::PasswordType;
 use common_meta_types::UserGrantSet;
 use common_meta_types::UserInfo;
-use common_meta_types::UserPrivilege;
+use common_meta_types::UserPrivilegeType;
 use common_planners::*;
 use databend_query::interpreters::*;
 use databend_query::sql::PlanParser;
@@ -37,31 +37,91 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
         name.to_string(),
         hostname.to_string(),
         Vec::from(password),
-        AuthType::PlainText,
+        PasswordType::PlainText,
     );
     assert_eq!(user_info.grants, UserGrantSet::empty());
     let user_mgr = ctx.get_sessions_manager().get_user_manager();
     user_mgr.add_user(user_info).await?;
 
-    let test_query = format!("GRANT ALL ON *.* TO '{}'@'{}'", name, hostname);
-    if let PlanNode::GrantPrivilege(plan) = PlanParser::parse(&test_query, ctx.clone()).await? {
-        let executor = GrantPrivilegeInterpreter::try_create(ctx, plan.clone())?;
-        assert_eq!(executor.name(), "GrantPrivilegeInterpreter");
-        let mut stream = executor.execute(None).await?;
-        while let Some(_block) = stream.next().await {}
-        let new_user = user_mgr.get_user(name, hostname).await?;
-        assert_eq!(new_user.grants, {
-            let mut grants = UserGrantSet::empty();
-            grants.grant_privileges(
-                name,
-                hostname,
-                &GrantObject::Global,
-                UserPrivilege::all_privileges(),
-            );
-            grants
-        })
-    } else {
-        panic!()
+    #[allow(dead_code)]
+    struct Test {
+        name: &'static str,
+        query: String,
+        user_identity: Option<(&'static str, &'static str)>,
+        expected_grants: Option<UserGrantSet>,
+        expected_err: Option<&'static str>,
+    }
+
+    let tests: Vec<Test> = vec![
+        Test {
+            name: "grant create user to global",
+            query: format!("GRANT CREATE USER ON *.* TO '{}'@'{}'", name, hostname),
+            user_identity: Some((name, hostname)),
+            expected_grants: Some({
+                let mut grants = UserGrantSet::empty();
+                grants.grant_privileges(
+                    name,
+                    hostname,
+                    &GrantObject::Global,
+                    vec![UserPrivilegeType::CreateUser].into(),
+                );
+                grants
+            }),
+            expected_err: None,
+        },
+        Test {
+            name: "grant create user to current database and expect err",
+            query: format!("GRANT CREATE USER ON * TO '{}'@'{}'", name, hostname),
+            user_identity: None,
+            expected_grants: None,
+            expected_err: Some("Code: 61, displayText = Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used."),
+        },
+        Test {
+            name: "grant all on global",
+            query: format!("GRANT ALL ON *.* TO '{}'@'{}'", name, hostname),
+            user_identity: Some((name, hostname)),
+            expected_grants: Some({
+                let mut grants = UserGrantSet::empty();
+                grants.grant_privileges(
+                    name,
+                    hostname,
+                    &GrantObject::Global,
+                    GrantObject::Global.available_privileges(),
+                );
+                grants
+            }),
+            expected_err: None,
+        },
+    ];
+
+    for tt in tests {
+        if let PlanNode::GrantPrivilege(plan) = PlanParser::parse(&tt.query, ctx.clone()).await? {
+            let executor = GrantPrivilegeInterpreter::try_create(ctx.clone(), plan.clone())?;
+            assert_eq!(executor.name(), "GrantPrivilegeInterpreter");
+            let r = match executor.execute(None).await {
+                Err(err) => Err(err),
+                Ok(mut stream) => {
+                    while let Some(_block) = stream.next().await {}
+                    Ok(())
+                }
+            };
+            if tt.expected_err.is_some() {
+                assert_eq!(
+                    tt.expected_err.unwrap(),
+                    r.unwrap_err().to_string(),
+                    "expected_err eq failed on query: {}",
+                    tt.query
+                );
+            } else {
+                assert!(r.is_ok(), "got err on query {}: {:?}", tt.query, r);
+            }
+            if let Some((name, hostname)) = tt.user_identity {
+                let new_user = user_mgr.get_user(name, hostname).await?;
+                assert_eq!(new_user.grants, tt.expected_grants.unwrap())
+            }
+        } else {
+            panic!()
+        }
     }
 
     Ok(())

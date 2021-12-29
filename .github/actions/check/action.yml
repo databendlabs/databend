@@ -1,0 +1,64 @@
+name: 'Check'
+description: 'Check will do all essential checks'
+inputs:
+  github_token:
+    description: "Github Token"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    # Workaround for Not Space Left: https://github.com/datafuselabs/databend/issues/3562
+    - shell: bash
+      run: rm -rf /usr/share/dotnet
+
+    - uses: arduino/setup-protoc@v1
+      with:
+        version: '3.x'
+        repo-token: ${{ inputs.github_token }}
+
+    - uses: actions-rs/toolchain@v1
+      with:
+        components: rustfmt, clippy
+
+    # If you need to reset the cache version, increment the number after `v`
+    - uses: Swatinem/rust-cache@v1
+      with:
+        sharedKey: base-v1
+
+    - name: Format
+      uses: actions-rs/cargo@v1
+      with:
+        command: fmt
+        args: --all -- --check
+
+    - name: Clippy
+      uses: actions-rs/cargo@v1
+      with:
+        command: clippy
+        args: --tests -- -D warnings
+
+    - name: Check License Header
+      uses: apache/skywalking-eyes@main
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      with:
+        log: info
+
+    - name: YAML Lint
+      uses: ibiqlik/action-yamllint@v3
+      with:
+        file_or_dir: ./
+        config_file: .yamllint.yml
+
+    - name: Install cargo-audit
+      uses: actions-rs/cargo@v1
+      if: "!contains(github.event.head_commit.message, 'skip audit')"
+      with:
+        command: install
+        args: cargo-audit
+
+    - name: Audit dependencies
+      uses: actions-rs/cargo@v1
+      if: "!contains(github.event.head_commit.message, 'skip audit')"
+      with:
+        command: audit

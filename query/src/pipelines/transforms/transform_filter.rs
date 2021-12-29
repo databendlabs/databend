@@ -66,8 +66,7 @@ impl<const HAVING: bool> FilterTransform<HAVING> {
 
     fn filter(executor: Arc<ExpressionExecutor>, data: DataBlock) -> Result<DataBlock> {
         let filter_block = executor.execute(&data)?;
-        let filter_array = filter_block.column(0).to_array()?;
-        DataBlock::filter_block(&data, filter_array)
+        DataBlock::filter_block(&data, filter_block.column(0))
     }
 
     fn filter_map(executor: ExpressionExecutorRef, data: DataBlock) -> Option<Result<DataBlock>> {
@@ -101,6 +100,7 @@ impl<const HAVING: bool> Processor for FilterTransform<HAVING> {
         self
     }
 
+    #[tracing::instrument(level = "debug", name = "filter_execute", skip(self))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let input_stream = self.input.execute().await?;
         let executor = self.executor.clone();

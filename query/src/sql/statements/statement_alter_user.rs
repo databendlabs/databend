@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::AuthType;
+use common_meta_types::PasswordType;
 use common_planners::AlterUserPlan;
 use common_planners::PlanNode;
 use common_tracing::tracing;
@@ -30,13 +30,13 @@ pub struct DfAlterUser {
     /// User name
     pub name: String,
     pub hostname: String,
-    pub new_auth_type: AuthType,
+    pub new_password_type: PasswordType,
     pub new_password: String,
 }
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfAlterUser {
-    #[tracing::instrument(level = "info", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(self, _ctx), fields(ctx.id = _ctx.get_id().as_str()))]
     async fn analyze(&self, _ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         Ok(AnalyzedResult::SimpleQuery(Box::new(PlanNode::AlterUser(
             AlterUserPlan {
@@ -44,7 +44,7 @@ impl AnalyzableStatement for DfAlterUser {
                 name: self.name.clone(),
                 new_password: Vec::from(self.new_password.clone()),
                 hostname: self.hostname.clone(),
-                new_auth_type: self.new_auth_type.clone(),
+                new_password_type: self.new_password_type.clone(),
             },
         ))))
     }

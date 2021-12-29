@@ -35,7 +35,7 @@ pub enum DfShowTables {
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfShowTables {
-    #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let rewritten_query = self.rewritten_query(ctx.clone());
         let rewritten_query_plan = PlanParser::parse(rewritten_query.as_str(), ctx);
@@ -48,21 +48,21 @@ impl AnalyzableStatement for DfShowTables {
 impl DfShowTables {
     fn show_all_tables(&self, ctx: Arc<QueryContext>) -> String {
         format!(
-            "SELECT name FROM system.tables where database = '{}' ORDER BY database, name",
+            "SELECT created_on, name FROM system.tables where database = '{}' ORDER BY database, name",
             ctx.get_current_database()
         )
     }
 
     fn show_tables_with_like(&self, i: &Ident, ctx: Arc<QueryContext>) -> String {
         format!(
-            "SELECT name FROM system.tables where database = '{}' AND name LIKE {} ORDER BY database, name",
+            "SELECT created_on, name FROM system.tables where database = '{}' AND name LIKE {} ORDER BY database, name",
             ctx.get_current_database(), i,
         )
     }
 
     fn show_tables_with_predicate(&self, e: &Expr, ctx: Arc<QueryContext>) -> String {
         format!(
-            "SELECT name FROM system.tables where database = '{}' AND ({}) ORDER BY database, name",
+            "SELECT created_on, name FROM system.tables where database = '{}' AND ({}) ORDER BY database, name",
             ctx.get_current_database(),
             e,
         )

@@ -114,7 +114,7 @@ impl Session {
 
                 let session = self.clone();
                 let cluster = discovery.discover().await?;
-                let shared = QueryContextShared::try_create(config, session, cluster);
+                let shared = QueryContextShared::try_create(config, session, cluster)?;
 
                 let ctx_shared = self.mutable_state.get_context_shared();
                 match ctx_shared.as_ref() {

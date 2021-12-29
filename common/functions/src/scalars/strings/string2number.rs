@@ -15,6 +15,7 @@ use std::fmt;
 use std::marker::PhantomData;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -53,7 +54,7 @@ where
     }
 
     pub fn desc() -> FunctionDescription {
-        let mut features = FunctionFeatures::default();
+        let mut features = FunctionFeatures::default().num_arguments(1);
 
         if T::IS_DETERMINISTIC {
             features = features.deterministic();
@@ -79,22 +80,14 @@ where
         self.display_name.as_str()
     }
 
-    fn num_arguments(&self) -> usize {
-        1
-    }
-
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if !args[0].is_numeric() && args[0] != DataType::String && args[0] != DataType::Null {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        if !args[0].is_numeric() && !args[0].is_string() && !args[0].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null, but got {}",
                 args[0]
             )));
         }
         T::return_type()
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

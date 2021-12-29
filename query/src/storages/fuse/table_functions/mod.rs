@@ -14,5 +14,7 @@
 //
 
 mod fuse_history_table;
+mod table_arg_util;
+
 pub use fuse_history_table::FuseHistoryTable;
 pub use fuse_history_table::FUSE_FUNC_HIST;

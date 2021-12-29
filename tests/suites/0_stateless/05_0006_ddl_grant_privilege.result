@@ -1,0 +1,6 @@
+GRANT ALL ON 'default'.* TO 'test-grant'@'localhost'
+GRANT SELECT ON 'db01'.* TO 'test-grant'@'localhost'
+GRANT SELECT ON 'db01'.'tb1' TO 'test-grant'@'localhost'
+GRANT ALL ON 'default'.* TO 'test-grant'@'localhost'
+GRANT SELECT ON 'db01'.'tb1' TO 'test-grant'@'localhost'
+GRANT SELECT ON 'db01'.'tb1' TO 'test-grant'@'localhost'

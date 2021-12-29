@@ -53,6 +53,10 @@ impl FlightServer {
         }
     }
 
+    pub fn get_meta_node(&self) -> Arc<MetaNode> {
+        self.meta_node.clone()
+    }
+
     /// Start metasrv and returns two channel to send shutdown signal and receive signal when shutdown finished.
     pub async fn do_start(&mut self) -> Result<(), ErrorCode> {
         let conf = self.conf.clone();
@@ -181,7 +185,10 @@ impl FlightServer {
 #[async_trait::async_trait]
 impl Stoppable for FlightServer {
     async fn start(&mut self) -> Result<(), ErrorCode> {
-        self.do_start().await
+        tracing::info!("FlightServer::start");
+        let res = self.do_start().await;
+        tracing::info!("Done FlightServer::start");
+        res
     }
 
     async fn stop(

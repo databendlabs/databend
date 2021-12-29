@@ -50,25 +50,20 @@ pub trait RequestFor {
     type Reply;
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct FlightReq<T> {
-    pub req: T,
-}
-
 // Action wrapper for do_action.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, derive_more::From)]
 pub enum MetaFlightAction {
-    CreateDatabase(FlightReq<CreateDatabaseReq>),
-    DropDatabase(FlightReq<DropDatabaseReq>),
-    GetDatabase(FlightReq<GetDatabaseReq>),
-    ListDatabases(FlightReq<ListDatabaseReq>),
+    CreateDatabase(CreateDatabaseReq),
+    DropDatabase(DropDatabaseReq),
+    GetDatabase(GetDatabaseReq),
+    ListDatabases(ListDatabaseReq),
 
-    CreateTable(FlightReq<CreateTableReq>),
-    DropTable(FlightReq<DropTableReq>),
-    GetTable(FlightReq<GetTableReq>),
+    CreateTable(CreateTableReq),
+    DropTable(DropTableReq),
+    GetTable(GetTableReq),
     GetTableExt(GetTableExtReq),
-    ListTables(FlightReq<ListTableReq>),
-    CommitTable(FlightReq<UpsertTableOptionReq>),
+    ListTables(ListTableReq),
+    CommitTable(UpsertTableOptionReq),
 
     UpsertKV(UpsertKVAction),
     GetKV(GetKVAction),
@@ -151,27 +146,27 @@ impl RequestFor for UpsertKVAction {
 
 // == database actions ==
 
-impl RequestFor for FlightReq<CreateDatabaseReq> {
+impl RequestFor for CreateDatabaseReq {
     type Reply = CreateDatabaseReply;
 }
 
-impl RequestFor for FlightReq<GetDatabaseReq> {
+impl RequestFor for GetDatabaseReq {
     type Reply = Arc<DatabaseInfo>;
 }
 
-impl RequestFor for FlightReq<DropDatabaseReq> {
+impl RequestFor for DropDatabaseReq {
     type Reply = DropDatabaseReply;
 }
 
-impl RequestFor for FlightReq<CreateTableReq> {
+impl RequestFor for CreateTableReq {
     type Reply = CreateTableReply;
 }
 
-impl RequestFor for FlightReq<DropTableReq> {
+impl RequestFor for DropTableReq {
     type Reply = DropTableReply;
 }
 
-impl RequestFor for FlightReq<GetTableReq> {
+impl RequestFor for GetTableReq {
     type Reply = Arc<TableInfo>;
 }
 
@@ -183,14 +178,14 @@ impl RequestFor for GetTableExtReq {
     type Reply = TableInfo;
 }
 
-impl RequestFor for FlightReq<UpsertTableOptionReq> {
+impl RequestFor for UpsertTableOptionReq {
     type Reply = UpsertTableOptionReply;
 }
 
-impl RequestFor for FlightReq<ListTableReq> {
+impl RequestFor for ListTableReq {
     type Reply = Vec<Arc<TableInfo>>;
 }
 
-impl RequestFor for FlightReq<ListDatabaseReq> {
+impl RequestFor for ListDatabaseReq {
     type Reply = Vec<Arc<DatabaseInfo>>;
 }

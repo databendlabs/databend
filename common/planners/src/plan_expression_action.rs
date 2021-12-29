@@ -12,16 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataField;
+use std::fmt;
+
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_datavalues::DataValue;
-use common_exception::ErrorCode;
-use common_exception::Result;
-use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::aggregates::AggregateFunctionRef;
-use common_functions::scalars::CastFunction;
 use common_functions::scalars::Function;
-use common_functions::scalars::FunctionFactory;
 
 #[derive(Debug, Clone)]
 pub enum ExpressionAction {
@@ -53,21 +49,17 @@ pub struct ActionAlias {
     pub arg_type: DataType,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ActionFunction {
     pub name: String,
     pub func_name: String,
     pub return_type: DataType,
     pub is_nullable: bool,
-    pub is_aggregated: bool,
+    pub func: Box<dyn Function>,
 
     // for functions
-    pub params: Vec<DataValue>,
     pub arg_names: Vec<String>,
-    pub arg_types: Vec<DataType>,
-
-    // only for aggregate functions
-    pub arg_fields: Vec<DataField>,
+    pub arg_types: Vec<DataTypeAndNullable>,
 }
 
 impl ExpressionAction {
@@ -81,31 +73,15 @@ impl ExpressionAction {
     }
 }
 
-impl ActionFunction {
-    pub fn to_function(&self) -> Result<Box<dyn Function>> {
-        if self.is_aggregated {
-            return Err(ErrorCode::LogicalError(
-                "Action must be non-aggregated function",
-            ));
-        }
-
-        match self.func_name.as_str() {
-            "cast" => CastFunction::create(self.func_name.clone(), self.return_type.clone()),
-            _ => FunctionFactory::instance().get(&self.func_name),
-        }
-    }
-
-    pub fn to_aggregate_function(&self) -> Result<AggregateFunctionRef> {
-        if !self.is_aggregated {
-            return Err(ErrorCode::LogicalError(
-                "Action must be aggregated function",
-            ));
-        }
-
-        AggregateFunctionFactory::instance().get(
-            &self.func_name,
-            self.params.clone(),
-            self.arg_fields.clone(),
-        )
+impl fmt::Debug for ActionFunction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("ActionFunction")
+            .field("name", &self.name)
+            .field("func_name", &self.func_name)
+            .field("return_type", &self.return_type)
+            .field("is_nullable", &self.is_nullable)
+            .field("arg_names", &self.arg_names)
+            .field("arg_types", &self.arg_types)
+            .finish()
     }
 }

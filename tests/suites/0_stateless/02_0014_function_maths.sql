@@ -15,6 +15,8 @@ SELECT abs(value) FROM math_sample_numbers;
 SELECT abs(value) + abs(-1) FROM math_sample_numbers;
 
 SELECT '===log===';
+CREATE TABLE math_log_numbers (a Float, b Float) engine=Memory;
+INSERT INTO math_log_numbers VALUES (2.0, 1024.0), (NULL, 12), (12, NULL);
 
 SELECT log(NULL);
 SELECT log(NULL, NULL);
@@ -26,6 +28,9 @@ SELECT ln(1, 2); -- {ErrorCode 28}
 SELECT log10(NULL);
 SELECT log10(100);
 SELECT log2(2);
+SELECT log(a, b) FROM math_log_numbers;
+
+DROP TABLE math_log_numbers;
 
 SELECT '===mod===';
 

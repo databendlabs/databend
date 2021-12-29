@@ -189,14 +189,22 @@ build_exceptions! {
     UnknownColumn(58),
     InvalidSourceFormat(59),
     StrParseError(60),
-    PipelineAreadlyStarted(61),
-    PipelineNotStarted(62),
+    IllegalGrant(61),
+    PipelineAreadlyStarted(62),
+    PipelineNotStarted(63),
+
+    SemanticError(100),
 
     // uncategorized
     UnexpectedResponseType(600),
 
     UnknownException(1000),
     TokioError(1001),
+
+    // cache
+    DiskCacheIOError(2000),
+    DiskCacheFileTooLarge(2001),
+    DiskCacheFileNotInCache(2002),
 }
 
 // Store errors
@@ -277,6 +285,13 @@ build_exceptions! {
     StageAlreadyExists(4061),
     IllegalStageInfoFormat(4062),
 
+    // user defined function error.
+    IllegalUDFFormat(4070),
+    UnknownUDF(4071),
+    UDFAlreadyExists(4072),
+    IllegalUDFParams(4073),
+    RegisterUDFError(4074),
+
     // storage-api error codes
     ReadFileError(5001),
     BrokenChannel(5002),
@@ -286,9 +301,10 @@ build_exceptions! {
 
 
     // DAL error
-    DALTransportError(7000),
-    UnknownStorageSchemeName(7001),
-    SecretKeyNotSet(7002),
+    UnknownStorageSchemeName(7000),
+    SecretKeyNotSet(7001),
+    DalTransportError(7002),
+    DalPathNotFound(7003),
 
     // datasource error
     DuplicatedTableEngineProvider(8000),
@@ -396,6 +412,12 @@ impl From<std::num::ParseFloatError> for ErrorCode {
 
 impl From<common_arrow::arrow::error::ArrowError> for ErrorCode {
     fn from(error: common_arrow::arrow::error::ArrowError) -> Self {
+        ErrorCode::from_std_error(error)
+    }
+}
+
+impl From<Box<bincode::ErrorKind>> for ErrorCode {
+    fn from(error: Box<bincode::ErrorKind>) -> Self {
         ErrorCode::from_std_error(error)
     }
 }

@@ -97,7 +97,7 @@ where F: Fn(&Expression) -> bool {
         })
 }
 
-// Visitor that find Expressionessions that match a particular predicate
+// Visitor that find Expressions that match a particular predicate
 struct Finder<'a, F>
 where F: Fn(&Expression) -> bool
 {

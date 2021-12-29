@@ -1,0 +1,119 @@
+name: Production
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'website/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  PROTOC: protoc
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ./.github/actions/check
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  build:
+    runs-on: ${{ matrix.config.os }}
+    needs: check
+    strategy:
+      matrix:
+        config:
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu, cross: false }
+          - { os: ubuntu-latest, target: aarch64-unknown-linux-gnu, cross: true }
+          - { os: macos-11, target: x86_64-apple-darwin, cross: false }
+          - { os: macos-11, target: aarch64-apple-darwin, cross: false }
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ./.github/actions/build_release
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  test_unit:
+    runs-on: ${{ matrix.config.os }}
+    needs: build
+    strategy:
+      matrix:
+        config:
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+          - { os: macos-11, target: x86_64-apple-darwin }
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ./.github/actions/test_unit
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          codecov_token: ${{ secrets.CODECOV_TOKEN }}
+
+  test_stateless_standalone:
+    runs-on: ${{ matrix.config.os }}
+    needs: build
+    strategy:
+      matrix:
+        config:
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+          - { os: macos-11, target: x86_64-apple-darwin }
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ./.github/actions/test_stateless_standalone
+        with:
+          profile: release
+
+  test_stateless_cluster:
+    runs-on: ${{ matrix.config.os }}
+    needs: build
+    strategy:
+      matrix:
+        config:
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+          - { os: macos-11, target: x86_64-apple-darwin }
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ./.github/actions/test_stateless_cluster
+        with:
+          profile: release
+
+  test_stateful_standalone:
+    runs-on: ${{ matrix.config.os }}
+    needs: build
+    strategy:
+      matrix:
+        config:
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ./.github/actions/test_stateful_standalone
+        with:
+          profile: release
+
+  publish_image:
+    runs-on: ${{ matrix.config.os }}
+    # Release after all tests have been passed.
+    needs: [
+      test_unit,
+      test_stateless_standalone,
+      test_stateless_cluster,
+      test_stateful_standalone
+    ]
+    strategy:
+      matrix:
+        config:
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu, platform: linux/amd64 }
+          - { os: ubuntu-latest, target: aarch64-unknown-linux-gnu, platform: linux/arm64 }
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ./.github/actions/publish_image
+        with:
+          dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+          dockerhub_namespace: ${{ secrets.DOCKERHUB_NAMESPACE }}

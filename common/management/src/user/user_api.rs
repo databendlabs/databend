@@ -14,11 +14,11 @@
 //
 
 use common_exception::Result;
-use common_meta_types::AuthType;
 use common_meta_types::GrantObject;
+use common_meta_types::PasswordType;
 use common_meta_types::SeqV;
 use common_meta_types::UserInfo;
-use common_meta_types::UserPrivilege;
+use common_meta_types::UserPrivilegeSet;
 
 #[async_trait::async_trait]
 pub trait UserMgrApi: Sync + Send {
@@ -38,7 +38,7 @@ pub trait UserMgrApi: Sync + Send {
         username: String,
         hostname: String,
         new_password: Option<Vec<u8>>,
-        new_auth: Option<AuthType>,
+        new_password_type: Option<PasswordType>,
         seq: Option<u64>,
     ) -> Result<Option<u64>>;
 
@@ -47,7 +47,7 @@ pub trait UserMgrApi: Sync + Send {
         username: String,
         hostname: String,
         object: GrantObject,
-        privileges: UserPrivilege,
+        privileges: UserPrivilegeSet,
         seq: Option<u64>,
     ) -> Result<Option<u64>>;
 
@@ -56,7 +56,7 @@ pub trait UserMgrApi: Sync + Send {
         username: String,
         hostname: String,
         object: GrantObject,
-        privileges: UserPrivilege,
+        privileges: UserPrivilegeSet,
         seq: Option<u64>,
     ) -> Result<Option<u64>>;
 

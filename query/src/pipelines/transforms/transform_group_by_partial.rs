@@ -125,6 +125,7 @@ impl Processor for GroupByPartialTransform {
     ///  3, 1 -> state1
     ///  4, 2 -> state2
     /// 1.2)  serialize the state to the output block
+    #[tracing::instrument(level = "debug", name = "group_by_partial_execute", skip(self))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!("execute...");
         let group_cols = self.extract_group_columns();

@@ -40,6 +40,7 @@ async fn test_memorytable() -> Result<()> {
             schema: schema.clone(),
             engine: "Memory".to_string(),
             options: TableOptions::default(),
+            ..Default::default()
         },
     })?;
 
@@ -187,6 +188,7 @@ async fn test_memorytable() -> Result<()> {
         let truncate_plan = TruncateTablePlan {
             db: "default".to_string(),
             table: "a".to_string(),
+            purge: false,
         };
         table.truncate(ctx.clone(), truncate_plan).await?;
 

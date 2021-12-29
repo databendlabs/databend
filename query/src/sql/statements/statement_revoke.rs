@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_meta_types::UserPrivilege;
+use common_meta_types::UserPrivilegeSet;
 use common_planners::PlanNode;
 use common_planners::RevokePrivilegePlan;
 use common_tracing::tracing;
@@ -29,20 +29,28 @@ use crate::sql::statements::DfGrantObject;
 pub struct DfRevokeStatement {
     pub username: String,
     pub hostname: String,
-    pub priv_types: UserPrivilege,
+    pub priv_types: UserPrivilegeSet,
     pub on: DfGrantObject,
 }
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfRevokeStatement {
-    #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
+        let grant_object = self.on.convert_to_grant_object(ctx);
+
+        // ALL PRIVILEGES have different available privileges set on different grant objects
+        let mut priv_types = self.priv_types;
+        if priv_types.is_all_privileges() {
+            priv_types = grant_object.available_privileges()
+        }
+
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::RevokePrivilege(RevokePrivilegePlan {
                 username: self.username.clone(),
                 hostname: self.hostname.clone(),
-                on: self.on.convert_to_grant_object(ctx),
-                priv_types: self.priv_types,
+                on: grant_object,
+                priv_types,
             }),
         )))
     }

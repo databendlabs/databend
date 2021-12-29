@@ -59,6 +59,7 @@ impl Processor for LimitTransform {
         self
     }
 
+    #[tracing::instrument(level = "debug", name = "limit_execute", skip(self))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!("execute...");
         let input_stream = self.input.execute().await?;

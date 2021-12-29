@@ -17,8 +17,6 @@ use std::convert::TryInto;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
-use common_exception::ToErrorCode;
-use common_meta_flight::FlightReq;
 use common_meta_flight::GetTableExtReq;
 use common_meta_types::AddResult;
 use common_meta_types::Change;
@@ -52,26 +50,22 @@ use common_tracing::tracing;
 
 use crate::executor::action_handler::RequestHandler;
 use crate::executor::ActionHandler;
-use crate::meta_service::AdminRequest;
-use crate::meta_service::AdminRequestInner;
 
-// Db
 #[async_trait::async_trait]
-impl RequestHandler<FlightReq<CreateDatabaseReq>> for ActionHandler {
+impl RequestHandler<CreateDatabaseReq> for ActionHandler {
     async fn handle(
         &self,
-        act: FlightReq<CreateDatabaseReq>,
+        req: CreateDatabaseReq,
     ) -> common_exception::Result<CreateDatabaseReply> {
-        let req = act.req;
         let db_name = &req.db;
-        let engine = &req.engine;
+        let db_meta = &req.meta;
         let if_not_exists = req.if_not_exists;
 
         let cr = LogEntry {
             txid: None,
             cmd: CreateDatabase {
                 name: db_name.clone(),
-                engine: engine.clone(),
+                meta: db_meta.clone(),
             },
         };
 
@@ -100,37 +94,18 @@ impl RequestHandler<FlightReq<CreateDatabaseReq>> for ActionHandler {
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<FlightReq<GetDatabaseReq>> for ActionHandler {
-    async fn handle(
-        &self,
-        act: FlightReq<GetDatabaseReq>,
-    ) -> common_exception::Result<Arc<DatabaseInfo>> {
-        let res = self
-            .meta_node
-            .handle_admin_req(AdminRequest {
-                forward_to_leader: true,
-                req: AdminRequestInner::GetDatabase(act.req),
-            })
-            .await?;
-
-        let res: Arc<DatabaseInfo> = res
-            .try_into()
-            .map_err_to_code(ErrorCode::UnknownException, || {
-                "handling FlightReq GetDatabaseReq".to_string()
-            })?;
-
+impl RequestHandler<GetDatabaseReq> for ActionHandler {
+    async fn handle(&self, req: GetDatabaseReq) -> common_exception::Result<Arc<DatabaseInfo>> {
+        let res = self.meta_node.consistent_read(req).await?;
         Ok(res)
     }
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<FlightReq<DropDatabaseReq>> for ActionHandler {
-    async fn handle(
-        &self,
-        act: FlightReq<DropDatabaseReq>,
-    ) -> common_exception::Result<DropDatabaseReply> {
-        let db_name = &act.req.db;
-        let if_exists = act.req.if_exists;
+impl RequestHandler<DropDatabaseReq> for ActionHandler {
+    async fn handle(&self, req: DropDatabaseReq) -> common_exception::Result<DropDatabaseReply> {
+        let db_name = &req.db;
+        let if_exists = req.if_exists;
         let cr = LogEntry {
             txid: None,
             cmd: DropDatabase {
@@ -158,14 +133,9 @@ impl RequestHandler<FlightReq<DropDatabaseReq>> for ActionHandler {
     }
 }
 
-// table
 #[async_trait::async_trait]
-impl RequestHandler<FlightReq<CreateTableReq>> for ActionHandler {
-    async fn handle(
-        &self,
-        act: FlightReq<CreateTableReq>,
-    ) -> common_exception::Result<CreateTableReply> {
-        let req = act.req;
+impl RequestHandler<CreateTableReq> for ActionHandler {
+    async fn handle(&self, req: CreateTableReq) -> common_exception::Result<CreateTableReply> {
         let db_name = &req.db;
         let table_name = &req.table;
         let if_not_exists = req.if_not_exists;
@@ -207,14 +177,11 @@ impl RequestHandler<FlightReq<CreateTableReq>> for ActionHandler {
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<FlightReq<DropTableReq>> for ActionHandler {
-    async fn handle(
-        &self,
-        act: FlightReq<DropTableReq>,
-    ) -> common_exception::Result<DropTableReply> {
-        let db_name = &act.req.db;
-        let table_name = &act.req.table;
-        let if_exists = act.req.if_exists;
+impl RequestHandler<DropTableReq> for ActionHandler {
+    async fn handle(&self, req: DropTableReq) -> common_exception::Result<DropTableReply> {
+        let db_name = &req.db;
+        let table_name = &req.table;
+        let if_exists = req.if_exists;
 
         let cr = LogEntry {
             txid: None,
@@ -245,24 +212,9 @@ impl RequestHandler<FlightReq<DropTableReq>> for ActionHandler {
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<FlightReq<GetTableReq>> for ActionHandler {
-    async fn handle(
-        &self,
-        act: FlightReq<GetTableReq>,
-    ) -> common_exception::Result<Arc<TableInfo>> {
-        let res = self
-            .meta_node
-            .handle_admin_req(AdminRequest {
-                forward_to_leader: true,
-                req: AdminRequestInner::GetTable(act.req),
-            })
-            .await?;
-        let res: Arc<TableInfo> = res
-            .try_into()
-            .map_err_to_code(ErrorCode::UnknownException, || {
-                "handling FlightReq GetTableReq".to_string()
-            })?;
-
+impl RequestHandler<GetTableReq> for ActionHandler {
+    async fn handle(&self, req: GetTableReq) -> common_exception::Result<Arc<TableInfo>> {
+        let res = self.meta_node.consistent_read(req).await?;
         Ok(res)
     }
 }
@@ -289,59 +241,30 @@ impl RequestHandler<GetTableExtReq> for ActionHandler {
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<FlightReq<ListDatabaseReq>> for ActionHandler {
+impl RequestHandler<ListDatabaseReq> for ActionHandler {
     async fn handle(
         &self,
-        req: FlightReq<ListDatabaseReq>,
+        req: ListDatabaseReq,
     ) -> common_exception::Result<Vec<Arc<DatabaseInfo>>> {
-        let res = self
-            .meta_node
-            .handle_admin_req(AdminRequest {
-                forward_to_leader: true,
-                req: AdminRequestInner::ListDatabase(req.req),
-            })
-            .await?;
-
-        let res: Vec<Arc<DatabaseInfo>> = res
-            .try_into()
-            .map_err_to_code(ErrorCode::UnknownException, || {
-                "handling FlightReq ListDatabaseReq".to_string()
-            })?;
-
+        let res = self.meta_node.consistent_read(req).await?;
         Ok(res)
     }
 }
 
 #[async_trait::async_trait]
-impl RequestHandler<FlightReq<ListTableReq>> for ActionHandler {
-    async fn handle(
-        &self,
-        req: FlightReq<ListTableReq>,
-    ) -> common_exception::Result<Vec<Arc<TableInfo>>> {
-        let res = self
-            .meta_node
-            .handle_admin_req(AdminRequest {
-                forward_to_leader: true,
-                req: AdminRequestInner::ListTable(req.req),
-            })
-            .await?;
-
-        let res: Vec<Arc<TableInfo>> = res
-            .try_into()
-            .map_err_to_code(ErrorCode::UnknownException, || {
-                "handling FlightReq ListTableReq".to_string()
-            })?;
-
+impl RequestHandler<ListTableReq> for ActionHandler {
+    async fn handle(&self, req: ListTableReq) -> common_exception::Result<Vec<Arc<TableInfo>>> {
+        let res = self.meta_node.consistent_read(req).await?;
         Ok(res)
     }
 }
+
 #[async_trait::async_trait]
-impl RequestHandler<FlightReq<UpsertTableOptionReq>> for ActionHandler {
+impl RequestHandler<UpsertTableOptionReq> for ActionHandler {
     async fn handle(
         &self,
-        req: FlightReq<UpsertTableOptionReq>,
+        req: UpsertTableOptionReq,
     ) -> common_exception::Result<UpsertTableOptionReply> {
-        let req = req.req;
         let cr = LogEntry {
             txid: None,
             cmd: UpsertTableOptions(req.clone()),

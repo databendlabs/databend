@@ -22,7 +22,7 @@ use std::sync::Mutex;
 use chrono::prelude::*;
 use chrono_tz::Tz;
 use hostname::get;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 pub use self::block::decompress_buffer;
 pub use self::block::Block;
@@ -226,9 +226,8 @@ pub enum SqlType {
     Tuple(Vec<&'static SqlType>),
 }
 
-lazy_static! {
-    static ref TYPES_CACHE: Mutex<HashMap<SqlType, Pin<Box<SqlType>>>> = Mutex::new(HashMap::new());
-}
+static TYPES_CACHE: Lazy<Mutex<HashMap<SqlType, Pin<Box<SqlType>>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
 
 impl From<SqlType> for &'static SqlType {
     fn from(value: SqlType) -> Self {

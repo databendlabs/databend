@@ -22,6 +22,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 use num::cast::AsPrimitive;
+use serde::Deserialize;
+use serde::Serialize;
 
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
@@ -30,6 +32,7 @@ use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 use crate::with_match_primitive_types;
 
+#[derive(Serialize, Deserialize)]
 pub struct AggregateCovarianceState {
     pub count: u64,
     pub co_moments: f64,
@@ -227,19 +230,13 @@ where
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
-        state.count.serialize_to_buf(writer)?;
-        state.co_moments.serialize_to_buf(writer)?;
-        state.left_mean.serialize_to_buf(writer)?;
-        state.right_mean.serialize_to_buf(writer)?;
-        Ok(())
+        serialize_into_buf(writer, state)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
-        state.count = u64::deserialize(reader)?;
-        state.co_moments = f64::deserialize(reader)?;
-        state.left_mean = f64::deserialize(reader)?;
-        state.right_mean = f64::deserialize(reader)?;
+        *state = deserialize_from_slice(reader)?;
+
         Ok(())
     }
 
@@ -250,11 +247,17 @@ where
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+    #[allow(unused_mut)]
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
+        let mut array = array
+            .as_mut_any()
+            .downcast_mut::<MutablePrimitiveArrayBuilder<f64>>()
+            .ok_or_else(|| {
+                ErrorCode::UnexpectedError("error occured when downcast MutableArray".to_string())
+            })?;
         let state = place.get::<AggregateCovarianceState>();
-        Ok(R::apply(state).map_or(DataValue::Float64(None), |val| {
-            DataValue::Float64(Some(val))
-        }))
+        array.push_option(R::apply(state));
+        Ok(())
     }
 }
 

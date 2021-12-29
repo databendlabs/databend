@@ -84,7 +84,7 @@ impl Interpreter for CopyInterpreter {
         let input_stream = source_stream.execute().await?;
         let progress_stream = Box::pin(ProgressStream::try_create(
             input_stream,
-            self.ctx.progress_callback()?,
+            self.ctx.get_scan_progress(),
         )?);
 
         let r = table

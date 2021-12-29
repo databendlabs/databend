@@ -34,7 +34,7 @@ if [ "$mode" == "boot" ]; then
 	echo 'Start Meta service HA cluster(3 nodes)...'
 
 	nohup ./target/debug/databend-meta \
-		--single true \
+		--single \
 		--id 1 \
 		--raft-dir "./_meta1" \
 		--metric-api-address 0.0.0.0:28100 \

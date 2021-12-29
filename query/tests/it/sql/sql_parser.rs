@@ -15,33 +15,49 @@
 use std::collections::HashMap;
 
 use common_exception::Result;
-use common_meta_types::AuthType;
 use common_meta_types::Compression;
 use common_meta_types::Credentials;
 use common_meta_types::FileFormat;
 use common_meta_types::Format;
+use common_meta_types::PasswordType;
 use common_meta_types::StageParams;
-use common_meta_types::UserPrivilege;
+use common_meta_types::UserIdentity;
+use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
+use common_planners::Optimization;
+use databend_query::sql::statements::DfAlterUDF;
 use databend_query::sql::statements::DfAlterUser;
 use databend_query::sql::statements::DfCopy;
 use databend_query::sql::statements::DfCreateDatabase;
 use databend_query::sql::statements::DfCreateStage;
 use databend_query::sql::statements::DfCreateTable;
+use databend_query::sql::statements::DfCreateUDF;
 use databend_query::sql::statements::DfCreateUser;
 use databend_query::sql::statements::DfDescribeTable;
 use databend_query::sql::statements::DfDropDatabase;
+use databend_query::sql::statements::DfDropStage;
 use databend_query::sql::statements::DfDropTable;
+use databend_query::sql::statements::DfDropUDF;
 use databend_query::sql::statements::DfDropUser;
 use databend_query::sql::statements::DfGrantObject;
 use databend_query::sql::statements::DfGrantStatement;
+use databend_query::sql::statements::DfOptimizeTable;
+use databend_query::sql::statements::DfQueryStatement;
 use databend_query::sql::statements::DfRevokeStatement;
+use databend_query::sql::statements::DfShowCreateDatabase;
+use databend_query::sql::statements::DfShowCreateTable;
 use databend_query::sql::statements::DfShowDatabases;
+use databend_query::sql::statements::DfShowGrants;
 use databend_query::sql::statements::DfShowTables;
+use databend_query::sql::statements::DfShowUDF;
 use databend_query::sql::statements::DfTruncateTable;
 use databend_query::sql::statements::DfUseDatabase;
 use databend_query::sql::*;
 use sqlparser::ast::*;
+use sqlparser::dialect::GenericDialect;
+use sqlparser::parser::Parser;
+use sqlparser::parser::ParserError;
+use sqlparser::tokenizer::Tokenizer;
 
 fn expect_parse_ok(sql: &str, expected: DfStatement) -> Result<()> {
     let (statements, _) = DfParser::parse_sql(sql)?;
@@ -66,6 +82,15 @@ fn expect_parse_err_contains(sql: &str, expected: String) -> Result<()> {
     Ok(())
 }
 
+fn verified_query(sql: &str) -> Result<Box<DfQueryStatement>> {
+    let mut parser = DfParser::new_with_dialect(sql, &GenericDialect {})?;
+    let stmt = parser.parse_statement()?;
+    if let DfStatement::Query(query) = stmt {
+        return Ok(query);
+    }
+    Err(ParserError::ParserError("Expect query statement".to_string()).into())
+}
+
 fn make_column_def(name: impl Into<String>, data_type: DataType) -> ColumnDef {
     ColumnDef {
         name: Ident {
@@ -78,6 +103,14 @@ fn make_column_def(name: impl Into<String>, data_type: DataType) -> ColumnDef {
     }
 }
 
+fn parse_sql_to_expr(query_expr: &str) -> Expr {
+    let dialect = GenericDialect {};
+    let mut tokenizer = Tokenizer::new(&dialect, query_expr);
+    let tokens = tokenizer.tokenize().unwrap();
+    let mut parser = Parser::new(tokens, &dialect);
+    parser.parse_expr().unwrap()
+}
+
 #[test]
 fn create_database() -> Result<()> {
     {
@@ -86,6 +119,7 @@ fn create_database() -> Result<()> {
             if_not_exists: false,
             name: ObjectName(vec![Ident::new("db1")]),
             engine: "".to_string(),
+            engine_options: HashMap::new(),
             options: HashMap::new(),
         });
         expect_parse_ok(sql, expected)?;
@@ -97,6 +131,7 @@ fn create_database() -> Result<()> {
             if_not_exists: false,
             name: ObjectName(vec![Ident::new("db1")]),
             engine: "github".to_string(),
+            engine_options: HashMap::new(),
             options: HashMap::new(),
         });
         expect_parse_ok(sql, expected)?;
@@ -108,6 +143,7 @@ fn create_database() -> Result<()> {
             if_not_exists: true,
             name: ObjectName(vec![Ident::new("db1")]),
             engine: "".to_string(),
+            engine_options: HashMap::new(),
             options: HashMap::new(),
         });
         expect_parse_ok(sql, expected)?;
@@ -141,19 +177,20 @@ fn drop_database() -> Result<()> {
 #[test]
 fn create_table() -> Result<()> {
     // positive case
-    let sql = "CREATE TABLE t(c1 int) ENGINE = CSV location = '/data/33.csv' ";
+    let sql = "CREATE TABLE t(c1 int) ENGINE = Fuse location = '/data/33.csv' ";
     let expected = DfStatement::CreateTable(DfCreateTable {
         if_not_exists: false,
         name: ObjectName(vec![Ident::new("t")]),
         columns: vec![make_column_def("c1", DataType::Int(None))],
-        engine: "CSV".to_string(),
+        engine: "Fuse".to_string(),
         options: maplit::hashmap! {"location".into() => "/data/33.csv".into()},
         like: None,
+        query: None,
     });
     expect_parse_ok(sql, expected)?;
 
     // positive case: it is ok for parquet files not to have columns specified
-    let sql = "CREATE TABLE t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Parquet location = 'foo.parquet' comment = 'foo'";
+    let sql = "CREATE TABLE t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Fuse location = 'foo.parquet' comment = 'foo'";
     let expected = DfStatement::CreateTable(DfCreateTable {
         if_not_exists: false,
         name: ObjectName(vec![Ident::new("t")]),
@@ -162,13 +199,14 @@ fn create_table() -> Result<()> {
             make_column_def("c2", DataType::BigInt(None)),
             make_column_def("c3", DataType::Varchar(Some(255))),
         ],
-        engine: "Parquet".to_string(),
+        engine: "Fuse".to_string(),
 
         options: maplit::hashmap! {
             "location".into() => "foo.parquet".into(),
             "comment".into() => "foo".into(),
         },
         like: None,
+        query: None,
     });
     expect_parse_ok(sql, expected)?;
 
@@ -182,6 +220,41 @@ fn create_table() -> Result<()> {
 
         options: maplit::hashmap! {"location".into() => "batcave".into()},
         like: Some(ObjectName(vec![Ident::new("db2"), Ident::new("test2")])),
+        query: None,
+    });
+    expect_parse_ok(sql, expected)?;
+
+    // create table as select statement
+    let sql = "CREATE TABLE db1.test1(c1 int, c2 varchar(255)) ENGINE = Parquet location = 'batcave' AS SELECT * FROM t2";
+    let expected = DfStatement::CreateTable(DfCreateTable {
+        if_not_exists: false,
+        name: ObjectName(vec![Ident::new("db1"), Ident::new("test1")]),
+        columns: vec![
+            make_column_def("c1", DataType::Int(None)),
+            make_column_def("c2", DataType::Varchar(Some(255))),
+        ],
+        engine: "Parquet".to_string(),
+
+        options: maplit::hashmap! {"location".into() => "batcave".into()},
+        like: None,
+        query: Some(Box::new(DfQueryStatement {
+            from: vec![TableWithJoins {
+                relation: TableFactor::Table {
+                    name: ObjectName(vec![Ident::new("t2")]),
+                    alias: None,
+                    args: vec![],
+                    with_hints: vec![],
+                },
+                joins: vec![],
+            }],
+            projection: vec![SelectItem::Wildcard],
+            selection: None,
+            group_by: vec![],
+            having: None,
+            order_by: vec![],
+            limit: None,
+            offset: None,
+        })),
     });
     expect_parse_ok(sql, expected)?;
 
@@ -198,6 +271,7 @@ fn drop_table() -> Result<()> {
         });
         expect_parse_ok(sql, expected)?;
     }
+
     {
         let sql = "DROP TABLE IF EXISTS t1";
         let expected = DfStatement::DropTable(DfDropTable {
@@ -234,9 +308,6 @@ fn describe_table() -> Result<()> {
 fn show_queries() -> Result<()> {
     use databend_query::sql::statements::DfShowSettings;
     use databend_query::sql::statements::DfShowTables;
-    use sqlparser::dialect::GenericDialect;
-    use sqlparser::parser::Parser;
-    use sqlparser::tokenizer::Tokenizer;
 
     // positive case
     expect_parse_ok("SHOW TABLES", DfStatement::ShowTables(DfShowTables::All))?;
@@ -256,14 +327,6 @@ fn show_queries() -> Result<()> {
         "SHOW TABLES LIKE 'aaa' --comments should not in sql case2",
         DfStatement::ShowTables(DfShowTables::Like(Ident::with_quote('\'', "aaa"))),
     )?;
-
-    let parse_sql_to_expr = |query_expr: &str| -> Expr {
-        let dialect = GenericDialect {};
-        let mut tokenizer = Tokenizer::new(&dialect, query_expr);
-        let tokens = tokenizer.tokenize().unwrap();
-        let mut parser = Parser::new(tokens, &dialect);
-        parser.parse_expr().unwrap()
-    };
 
     expect_parse_ok(
         "SHOW TABLES WHERE t LIKE 'aaa'",
@@ -305,6 +368,77 @@ fn show_tables_test() -> Result<()> {
 }
 
 #[test]
+fn show_grants_test() -> Result<()> {
+    expect_parse_ok(
+        "SHOW GRANTS",
+        DfStatement::ShowGrants(DfShowGrants {
+            user_identity: None,
+        }),
+    )?;
+
+    expect_parse_ok(
+        "SHOW GRANTS FOR 'u1'@'%'",
+        DfStatement::ShowGrants(DfShowGrants {
+            user_identity: Some(UserIdentity {
+                username: "u1".into(),
+                hostname: "%".into(),
+            }),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn show_functions_tests() -> Result<()> {
+    use databend_query::sql::statements::DfShowFunctions;
+
+    // positive case
+    expect_parse_ok(
+        "SHOW FUNCTIONS",
+        DfStatement::ShowFunctions(DfShowFunctions::All),
+    )?;
+    expect_parse_ok(
+        "SHOW FUNCTIONS;",
+        DfStatement::ShowFunctions(DfShowFunctions::All),
+    )?;
+    expect_parse_ok(
+        "SHOW FUNCTIONS --comments should not in sql case1",
+        DfStatement::ShowFunctions(DfShowFunctions::All),
+    )?;
+
+    expect_parse_ok(
+        "SHOW FUNCTIONS LIKE 'aaa'",
+        DfStatement::ShowFunctions(DfShowFunctions::Like(Ident::with_quote('\'', "aaa"))),
+    )?;
+    expect_parse_ok(
+        "SHOW FUNCTIONS LIKE 'aaa';",
+        DfStatement::ShowFunctions(DfShowFunctions::Like(Ident::with_quote('\'', "aaa"))),
+    )?;
+    expect_parse_ok(
+        "SHOW FUNCTIONS LIKE 'aaa' --comments should not in sql case2",
+        DfStatement::ShowFunctions(DfShowFunctions::Like(Ident::with_quote('\'', "aaa"))),
+    )?;
+
+    expect_parse_ok(
+        "SHOW FUNCTIONS WHERE t LIKE 'aaa'",
+        DfStatement::ShowFunctions(DfShowFunctions::Where(parse_sql_to_expr("t LIKE 'aaa'"))),
+    )?;
+    expect_parse_ok(
+        "SHOW FUNCTIONS LIKE 'aaa' --comments should not in sql case2",
+        DfStatement::ShowFunctions(DfShowFunctions::Like(Ident::with_quote('\'', "aaa"))),
+    )?;
+    expect_parse_ok(
+        "SHOW FUNCTIONS WHERE t LIKE 'aaa' AND t LIKE 'a%'",
+        DfStatement::ShowFunctions(DfShowFunctions::Where(parse_sql_to_expr(
+            "t LIKE 'aaa' AND t LIKE 'a%'",
+        ))),
+    )?;
+
+    Ok(())
+}
+
+#[test]
 fn use_database_test() -> Result<()> {
     expect_parse_ok(
         "USe db1",
@@ -328,6 +462,16 @@ fn truncate_table() -> Result<()> {
         let sql = "TRUNCATE TABLE t1";
         let expected = DfStatement::TruncateTable(DfTruncateTable {
             name: ObjectName(vec![Ident::new("t1")]),
+            purge: false,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        let sql = "TRUNCATE TABLE t1 purge";
+        let expected = DfStatement::TruncateTable(DfTruncateTable {
+            name: ObjectName(vec![Ident::new("t1")]),
+            purge: true,
         });
         expect_parse_ok(sql, expected)?;
     }
@@ -383,11 +527,11 @@ fn copy_test() -> Result<()> {
             columns: vec![],
             location: "@my_ext_stage/tutorials/sample.csv".to_string(),
             format: "csv".to_string(),
-        options: maplit::hashmap! {
-            "csv_header".into() => "1".into(),
-            "field_delimitor".into() => ",".into(),
-     }
-    }
+            options: maplit::hashmap! {
+                "csv_header".into() => "1".into(),
+                "field_delimitor".into() => ",".into(),
+         }
+        }
         ),
 
 
@@ -485,6 +629,25 @@ fn show_databases_test() -> Result<()> {
 }
 
 #[test]
+fn show_create_test() -> Result<()> {
+    expect_parse_ok(
+        "SHOW CREATE TABLE test",
+        DfStatement::ShowCreateTable(DfShowCreateTable {
+            name: ObjectName(vec![Ident::new("test")]),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "SHOW CREATE DATABASE test",
+        DfStatement::ShowCreateDatabase(DfShowCreateDatabase {
+            name: ObjectName(vec![Ident::new("test")]),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
 fn create_user_test() -> Result<()> {
     expect_parse_ok(
         "CREATE USER 'test'@'localhost' IDENTIFIED BY 'password'",
@@ -492,7 +655,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::Sha256,
+            password_type: PasswordType::Sha256,
             password: String::from("password"),
         }),
     )?;
@@ -503,7 +666,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::PlainText,
+            password_type: PasswordType::PlainText,
             password: String::from("password"),
         }),
     )?;
@@ -514,7 +677,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::Sha256,
+            password_type: PasswordType::Sha256,
             password: String::from("password"),
         }),
     )?;
@@ -525,7 +688,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::DoubleSha1,
+            password_type: PasswordType::DoubleSha1,
             password: String::from("password"),
         }),
     )?;
@@ -536,7 +699,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::None,
+            password_type: PasswordType::None,
             password: String::from(""),
         }),
     )?;
@@ -547,7 +710,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: true,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::Sha256,
+            password_type: PasswordType::Sha256,
             password: String::from("password"),
         }),
     )?;
@@ -558,7 +721,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test@localhost"),
             hostname: String::from("%"),
-            auth_type: AuthType::Sha256,
+            password_type: PasswordType::Sha256,
             password: String::from("password"),
         }),
     )?;
@@ -569,7 +732,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::None,
+            password_type: PasswordType::None,
             password: String::from(""),
         }),
     )?;
@@ -580,7 +743,7 @@ fn create_user_test() -> Result<()> {
             if_not_exists: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            auth_type: AuthType::None,
+            password_type: PasswordType::None,
             password: String::from(""),
         }),
     )?;
@@ -615,7 +778,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_auth_type: AuthType::Sha256,
+            new_password_type: PasswordType::Sha256,
             new_password: String::from("password"),
         }),
     )?;
@@ -626,7 +789,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: true,
             name: String::from(""),
             hostname: String::from(""),
-            new_auth_type: AuthType::Sha256,
+            new_password_type: PasswordType::Sha256,
             new_password: String::from("password"),
         }),
     )?;
@@ -637,7 +800,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_auth_type: AuthType::PlainText,
+            new_password_type: PasswordType::PlainText,
             new_password: String::from("password"),
         }),
     )?;
@@ -648,7 +811,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_auth_type: AuthType::Sha256,
+            new_password_type: PasswordType::Sha256,
             new_password: String::from("password"),
         }),
     )?;
@@ -659,7 +822,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_auth_type: AuthType::DoubleSha1,
+            new_password_type: PasswordType::DoubleSha1,
             new_password: String::from("password"),
         }),
     )?;
@@ -670,7 +833,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_auth_type: AuthType::None,
+            new_password_type: PasswordType::None,
             new_password: String::from(""),
         }),
     )?;
@@ -681,7 +844,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test@localhost"),
             hostname: String::from("%"),
-            new_auth_type: AuthType::Sha256,
+            new_password_type: PasswordType::Sha256,
             new_password: String::from("password"),
         }),
     )?;
@@ -692,7 +855,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_auth_type: AuthType::None,
+            new_password_type: PasswordType::None,
             new_password: String::from(""),
         }),
     )?;
@@ -703,7 +866,7 @@ fn alter_user_test() -> Result<()> {
             if_current_user: false,
             name: String::from("test"),
             hostname: String::from("localhost"),
-            new_auth_type: AuthType::None,
+            new_password_type: PasswordType::None,
             new_password: String::from(""),
         }),
     )?;
@@ -796,7 +959,7 @@ fn grant_privilege_test() -> Result<()> {
             name: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
-            priv_types: UserPrivilege::all_privileges(),
+            priv_types: UserPrivilegeSet::all_privileges(),
         }),
     )?;
 
@@ -806,7 +969,7 @@ fn grant_privilege_test() -> Result<()> {
             name: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
-            priv_types: UserPrivilege::all_privileges(),
+            priv_types: UserPrivilegeSet::all_privileges(),
         }),
     )?;
 
@@ -817,7 +980,7 @@ fn grant_privilege_test() -> Result<()> {
             hostname: String::from("localhost"),
             on: DfGrantObject::Table(Some("db1".into()), "tb1".into()),
             priv_types: {
-                let mut privileges = UserPrivilege::empty();
+                let mut privileges = UserPrivilegeSet::empty();
                 privileges.set_privilege(UserPrivilegeType::Insert);
                 privileges
             },
@@ -831,7 +994,7 @@ fn grant_privilege_test() -> Result<()> {
             hostname: String::from("localhost"),
             on: DfGrantObject::Table(None, "tb1".into()),
             priv_types: {
-                let mut privileges = UserPrivilege::empty();
+                let mut privileges = UserPrivilegeSet::empty();
                 privileges.set_privilege(UserPrivilegeType::Insert);
                 privileges
             },
@@ -845,7 +1008,7 @@ fn grant_privilege_test() -> Result<()> {
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(Some("db1".into())),
             priv_types: {
-                let mut privileges = UserPrivilege::empty();
+                let mut privileges = UserPrivilegeSet::empty();
                 privileges.set_privilege(UserPrivilegeType::Insert);
                 privileges
             },
@@ -859,9 +1022,26 @@ fn grant_privilege_test() -> Result<()> {
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
             priv_types: {
-                let mut privileges = UserPrivilege::empty();
+                let mut privileges = UserPrivilegeSet::empty();
                 privileges.set_privilege(UserPrivilegeType::Select);
                 privileges.set_privilege(UserPrivilegeType::Create);
+                privileges
+            },
+        }),
+    )?;
+
+    expect_parse_ok(
+        "GRANT CREATE USER, CREATE ROLE, CREATE, SELECT ON * TO 'test'@'localhost'",
+        DfStatement::GrantPrivilege(DfGrantStatement {
+            name: String::from("test"),
+            hostname: String::from("localhost"),
+            on: DfGrantObject::Database(None),
+            priv_types: {
+                let mut privileges = UserPrivilegeSet::empty();
+                privileges.set_privilege(UserPrivilegeType::Create);
+                privileges.set_privilege(UserPrivilegeType::CreateUser);
+                privileges.set_privilege(UserPrivilegeType::CreateRole);
+                privileges.set_privilege(UserPrivilegeType::Select);
                 privileges
             },
         }),
@@ -903,7 +1083,7 @@ fn revoke_privilege_test() -> Result<()> {
             username: String::from("test"),
             hostname: String::from("localhost"),
             on: DfGrantObject::Database(None),
-            priv_types: UserPrivilege::all_privileges(),
+            priv_types: UserPrivilegeSet::all_privileges(),
         }),
     )?;
 
@@ -1032,6 +1212,217 @@ fn create_stage_test() -> Result<()> {
     expect_parse_err_contains(
         "CREATE STAGE test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(format=csv1 compression=AUTO record_delimiter=NONE) comments='test'",
         String::from("unknown variant `csv1`"),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn create_table_select() -> Result<()> {
+    expect_parse_ok(
+        "CREATE TABLE foo AS SELECT a, b FROM bar",
+        DfStatement::CreateTable(DfCreateTable {
+            if_not_exists: false,
+            name: ObjectName(vec![Ident::new("foo")]),
+            columns: vec![],
+            engine: "FUSE".to_string(),
+            options: maplit::hashmap! {},
+            like: None,
+            query: Some(verified_query("SELECT a, b FROM bar")?),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE TABLE foo (a INT) SELECT a, b FROM bar",
+        DfStatement::CreateTable(DfCreateTable {
+            if_not_exists: false,
+            name: ObjectName(vec![Ident::new("foo")]),
+            columns: vec![make_column_def("a", DataType::Int(None))],
+            engine: "FUSE".to_string(),
+            options: maplit::hashmap! {},
+            like: None,
+            query: Some(verified_query("SELECT a, b FROM bar")?),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn optimize_table() -> Result<()> {
+    {
+        let sql = "optimize TABLE t1";
+        let expected = DfStatement::OptimizeTable(DfOptimizeTable {
+            name: ObjectName(vec![Ident::new("t1")]),
+            operation: Optimization::PURGE,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        let sql = "OPTIMIZE tABLE t1";
+        let expected = DfStatement::OptimizeTable(DfOptimizeTable {
+            name: ObjectName(vec![Ident::new("t1")]),
+            operation: Optimization::PURGE,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        let sql = "optimize TABLE t1 purge";
+        let expected = DfStatement::OptimizeTable(DfOptimizeTable {
+            name: ObjectName(vec![Ident::new("t1")]),
+            operation: Optimization::PURGE,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        let sql = "optimize TABLE t1 compact";
+        let expected = DfStatement::OptimizeTable(DfOptimizeTable {
+            name: ObjectName(vec![Ident::new("t1")]),
+            operation: Optimization::COMPACT,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        let sql = "optimize TABLE t1 all";
+        let expected = DfStatement::OptimizeTable(DfOptimizeTable {
+            name: ObjectName(vec![Ident::new("t1")]),
+            operation: Optimization::ALL,
+        });
+        expect_parse_ok(sql, expected)?;
+    }
+
+    {
+        let sql = "optimize TABLE t1 unacceptable";
+        expect_parse_err(
+            sql,
+            "sql parser error: Expected one of PURGE, COMPACT, ALL, found: unacceptable"
+                .to_string(),
+        )?;
+    }
+
+    {
+        let sql = "optimize TABLE t1 (";
+        expect_parse_err(
+            sql,
+            "sql parser error: Expected Nothing, or one of PURGE, COMPACT, ALL, found: ("
+                .to_string(),
+        )?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn drop_stage_test() -> Result<()> {
+    expect_parse_ok(
+        "DROP STAGE test_stage",
+        DfStatement::DropStage(DfDropStage {
+            if_exists: false,
+            stage_name: "test_stage".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "DROP STAGE IF EXISTS test_stage",
+        DfStatement::DropStage(DfDropStage {
+            if_exists: true,
+            stage_name: "test_stage".to_string(),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_create_udf() -> Result<()> {
+    expect_parse_ok(
+        "CREATE FUNCTION test_udf='not(isnotnull(@0))'",
+        DfStatement::CreateUDF(DfCreateUDF {
+            if_not_exists: false,
+            udf_name: "test_udf".to_string(),
+            definition: "not(isnotnull(@0))".to_string(),
+            description: "".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE FUNCTION test_udf='not(isnotnull(@0))' desc='This is a description'",
+        DfStatement::CreateUDF(DfCreateUDF {
+            if_not_exists: false,
+            udf_name: "test_udf".to_string(),
+            definition: "not(isnotnull(@0))".to_string(),
+            description: "This is a description".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE FUNCTION IF NOT EXISTS test_udf='not(isnotnull(@0))' desc='This is a description'",
+        DfStatement::CreateUDF(DfCreateUDF {
+            if_not_exists: true,
+            udf_name: "test_udf".to_string(),
+            definition: "not(isnotnull(@0))".to_string(),
+            description: "This is a description".to_string(),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_drop_udf() -> Result<()> {
+    expect_parse_ok(
+        "DROP FUNCTION test_udf",
+        DfStatement::DropUDF(DfDropUDF {
+            if_exists: false,
+            udf_name: "test_udf".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "DROP FUNCTION IF EXISTS test_udf",
+        DfStatement::DropUDF(DfDropUDF {
+            if_exists: true,
+            udf_name: "test_udf".to_string(),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_show_udf() -> Result<()> {
+    expect_parse_ok(
+        "SHOW FUNCTION test_udf",
+        DfStatement::ShowUDF(DfShowUDF {
+            udf_name: "test_udf".to_string(),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_alter_udf() -> Result<()> {
+    expect_parse_ok(
+        "ALTER FUNCTION test_udf='not(isnotnull(@0))'",
+        DfStatement::AlterUDF(DfAlterUDF {
+            udf_name: "test_udf".to_string(),
+            definition: "not(isnotnull(@0))".to_string(),
+            description: "".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "ALTER FUNCTION test_udf='not(isnotnull(@0))' desc='This is a description'",
+        DfStatement::AlterUDF(DfAlterUDF {
+            udf_name: "test_udf".to_string(),
+            definition: "not(isnotnull(@0))".to_string(),
+            description: "This is a description".to_string(),
+        }),
     )?;
 
     Ok(())

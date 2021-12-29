@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::ErrorKind;
 use std::io::Read;
 use std::io::Seek;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::stream::Stream;
 use futures::AsyncRead;
@@ -54,7 +56,16 @@ pub trait DataAccessor: Send + Sync {
     async fn read(&self, location: &str) -> Result<Vec<u8>> {
         let mut input_stream = self.get_input_stream(location, None)?;
         let mut buffer = vec![];
-        input_stream.read_to_end(&mut buffer).await?;
+        input_stream.read_to_end(&mut buffer).await.map_err(|e| {
+            let msg = e.to_string();
+            if e.kind() == ErrorKind::NotFound {
+                ErrorCode::DalPathNotFound(msg)
+            } else {
+                ErrorCode::DalTransportError(msg)
+            }
+        })?;
         Ok(buffer)
     }
+
+    async fn remove(&self, _path: &str) -> Result<()>;
 }

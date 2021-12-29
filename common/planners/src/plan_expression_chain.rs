@@ -15,6 +15,7 @@
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::CastFunction;
 use common_functions::scalars::FunctionFactory;
 
 use crate::ActionAlias;
@@ -87,14 +88,14 @@ impl ExpressionChain {
                 // Subquery results are ready in the expression input
                 self.actions.push(ExpressionAction::Input(ActionInput {
                     name: name.clone(),
-                    return_type: Expression::to_subquery_type(query_plan),
+                    return_type: Expression::to_subquery_type(query_plan).data_type().clone(),
                 }));
             }
             Expression::ScalarSubquery { name, query_plan } => {
                 // Scalar subquery results are ready in the expression input
                 self.actions.push(ExpressionAction::Input(ActionInput {
                     name: name.to_string(),
-                    return_type: Expression::to_subquery_type(query_plan),
+                    return_type: Expression::to_subquery_type(query_plan).data_type().clone(),
                 }));
             }
             Expression::UnaryExpression {
@@ -103,19 +104,19 @@ impl ExpressionChain {
             } => {
                 self.add_expr(nested_expr)?;
 
-                let func = FunctionFactory::instance().get(op)?;
-                let arg_types = vec![nested_expr.to_data_type(&self.schema)?];
+                let arg_types = vec![nested_expr.to_data_type_and_nullable(&self.schema)?];
+                let func = FunctionFactory::instance().get(op, &arg_types)?;
+                let return_type = func.return_type(&arg_types)?;
+                let is_nullable = func.nullable(&arg_types)?;
 
                 let function = ActionFunction {
                     name: expr.column_name(),
                     func_name: op.clone(),
-                    is_aggregated: false,
-                    params: vec![],
+                    func,
                     arg_names: vec![nested_expr.column_name()],
-                    arg_types: arg_types.clone(),
-                    arg_fields: vec![],
-                    is_nullable: func.nullable(self.schema.as_ref())?,
-                    return_type: func.return_type(&arg_types)?,
+                    arg_types,
+                    is_nullable,
+                    return_type,
                 };
 
                 self.actions.push(ExpressionAction::Function(function));
@@ -125,22 +126,23 @@ impl ExpressionChain {
                 self.add_expr(left)?;
                 self.add_expr(right)?;
 
-                let func = FunctionFactory::instance().get(op)?;
                 let arg_types = vec![
-                    left.to_data_type(&self.schema)?,
-                    right.to_data_type(&self.schema)?,
+                    left.to_data_type_and_nullable(&self.schema)?,
+                    right.to_data_type_and_nullable(&self.schema)?,
                 ];
+
+                let func = FunctionFactory::instance().get(op, &arg_types)?;
+                let is_nullable = func.nullable(&arg_types)?;
+                let return_type = func.return_type(&arg_types)?;
 
                 let function = ActionFunction {
                     name: expr.column_name(),
                     func_name: op.clone(),
-                    is_aggregated: false,
-                    params: vec![],
+                    func,
                     arg_names: vec![left.column_name(), right.column_name()],
-                    arg_types: arg_types.clone(),
-                    arg_fields: vec![],
-                    is_nullable: func.nullable(self.schema.as_ref())?,
-                    return_type: func.return_type(&arg_types)?,
+                    arg_types,
+                    is_nullable,
+                    return_type,
                 };
 
                 self.actions.push(ExpressionAction::Function(function));
@@ -151,49 +153,32 @@ impl ExpressionChain {
                     self.add_expr(expr)?;
                 }
 
-                let func = FunctionFactory::instance().get(op)?;
                 let arg_types = args
                     .iter()
-                    .map(|action| action.to_data_type(&self.schema))
+                    .map(|action| action.to_data_type_and_nullable(&self.schema))
                     .collect::<Result<Vec<_>>>()?;
+
+                let func = FunctionFactory::instance().get(op, &arg_types)?;
+                let is_nullable = func.nullable(&arg_types)?;
+                let return_type = func.return_type(&arg_types)?;
 
                 let function = ActionFunction {
                     name: expr.column_name(),
                     func_name: op.clone(),
-                    is_aggregated: false,
-                    params: vec![],
+                    func,
                     arg_names: args.iter().map(|action| action.column_name()).collect(),
-                    arg_types: arg_types.clone(),
-                    arg_fields: vec![],
-                    is_nullable: func.nullable(self.schema.as_ref())?,
-                    return_type: func.return_type(&arg_types)?,
+                    arg_types,
+                    is_nullable,
+                    return_type,
                 };
 
                 self.actions.push(ExpressionAction::Function(function));
             }
 
-            Expression::AggregateFunction {
-                op, params, args, ..
-            } => {
-                let mut arg_fields = Vec::with_capacity(args.len());
-                for arg in args.iter() {
-                    arg_fields.push(arg.to_data_field(&self.schema)?);
-                }
-
-                let func = expr.to_aggregate_function(&self.schema)?;
-                let function = ActionFunction {
-                    name: expr.column_name(),
-                    func_name: op.clone(),
-                    is_aggregated: true,
-                    arg_types: vec![],
-                    arg_names: vec![],
-                    params: params.clone(),
-                    arg_fields,
-                    is_nullable: func.nullable(self.schema.as_ref())?,
-                    return_type: func.return_type()?,
-                };
-
-                self.actions.push(ExpressionAction::Function(function));
+            Expression::AggregateFunction { .. } => {
+                return Err(ErrorCode::LogicalError(
+                    "Action must be a non-aggregated function.",
+                ));
             }
             Expression::Sort { expr, .. } => {
                 self.add_expr(expr)?;
@@ -205,16 +190,17 @@ impl ExpressionChain {
                 data_type,
             } => {
                 self.add_expr(sub_expr)?;
+                let func_name = "cast".to_string();
+                let return_type = data_type.clone();
+                let func = CastFunction::create(func_name.clone(), return_type.clone())?;
                 let function = ActionFunction {
                     name: expr.column_name(),
-                    func_name: "cast".to_string(),
-                    is_aggregated: false,
+                    func_name,
+                    func,
                     arg_names: vec![sub_expr.column_name()],
-                    arg_types: vec![sub_expr.to_data_type(&self.schema)?],
-                    params: vec![],
-                    arg_fields: vec![],
+                    arg_types: vec![sub_expr.to_data_type_and_nullable(&self.schema)?],
                     is_nullable: false,
-                    return_type: data_type.clone(),
+                    return_type,
                 };
 
                 self.actions.push(ExpressionAction::Function(function));

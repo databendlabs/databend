@@ -18,17 +18,18 @@
 use std::convert::TryInto;
 use std::sync::Arc;
 
+use common_meta_raft_store::message::ForwardRequest;
+use common_meta_raft_store::protobuf::meta_service_server::MetaService;
+use common_meta_raft_store::protobuf::GetReply;
+use common_meta_raft_store::protobuf::GetReq;
+use common_meta_raft_store::protobuf::RaftReply;
+use common_meta_raft_store::protobuf::RaftRequest;
+use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::LogEntry;
 use common_tracing::tracing;
 
-use crate::errors::MetaError;
-use crate::meta_service::message::AdminRequest;
+use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::MetaNode;
-use crate::proto::meta_service_server::MetaService;
-use crate::proto::GetReply;
-use crate::proto::GetReq;
-use crate::proto::RaftReply;
-use crate::proto::RaftRequest;
 
 pub struct MetaServiceImpl {
     pub meta_node: Arc<MetaNode>,
@@ -52,23 +53,24 @@ impl MetaService for MetaServiceImpl {
         common_tracing::extract_remote_span_as_parent(&request);
 
         let mes = request.into_inner();
-        let req: LogEntry = mes.try_into()?;
+        let ent: LogEntry = mes.try_into()?;
 
-        let leader = self.meta_node.as_leader().await;
+        // TODO(xp): call meta_node.write()
+        let res = self
+            .meta_node
+            .handle_forwardable_request(ForwardRequest {
+                forward_to_leader: 1,
+                body: ForwardRequestBody::Write(ent),
+            })
+            .await;
 
-        let leader = match leader {
-            Ok(x) => x,
-            Err(err) => {
-                let err: MetaError = err.into();
-                let raft_reply = Err::<(), _>(err).into();
-                return Ok(tonic::Response::new(raft_reply));
-            }
-        };
+        let res = res.map(|x| {
+            let a: AppliedState = x.try_into().unwrap();
+            a
+        });
 
-        let rst = leader.write(req).await;
-
-        let raft_reply = rst.into();
-        Ok(tonic::Response::new(raft_reply))
+        let raft_reply = RaftReply::from(res);
+        return Ok(tonic::Response::new(raft_reply));
     }
 
     #[tracing::instrument(level = "info", skip(self))]
@@ -99,10 +101,10 @@ impl MetaService for MetaServiceImpl {
 
         let req = request.into_inner();
 
-        let admin_req: AdminRequest = serde_json::from_str(&req.data)
+        let admin_req: ForwardRequest = serde_json::from_str(&req.data)
             .map_err(|x| tonic::Status::invalid_argument(x.to_string()))?;
 
-        let res = self.meta_node.handle_admin_req(admin_req).await;
+        let res = self.meta_node.handle_forwardable_request(admin_req).await;
 
         let raft_mes: RaftReply = res.into();
 

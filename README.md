@@ -5,7 +5,7 @@
 <h4 align="center">
   <a href="https://databend.rs">Website</a> |
   <a href="https://github.com/datafuselabs/databend/issues/746">Roadmap</a> |
-  <a href="https://databend.rs/overview/building-and-running/">Documentation</a>
+  <a href="https://databend.rs/user">Documentation</a>
 </h4>
 
 <div>
@@ -14,10 +14,10 @@
 </a>
 
 <a href="https://github.com/datafuselabs/databend/actions">
-<img src="https://github.com/datafuselabs/databend/actions/workflows/unit-tests.yml/badge.svg" alt="CI Status" />
+<img src="https://github.com/datafuselabs/databend/actions/workflows/production.yml/badge.svg" alt="CI Status" />
 </a>
 
-<img src="https://img.shields.io/badge/Platform-Linux,%20ARM,%20OS%20X,%20Windows-green.svg?style=flat" alt="patform" />
+<img src="https://img.shields.io/badge/Platform-Linux%2C%20macOS%2C%20ARM-green.svg?style=flat" alt="patform" />
 
 <a href="https://opensource.org/licenses/Apache-2.0">
 <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="license" />
@@ -78,9 +78,9 @@ For efficient pruning, Databend also creates indexes for each Parquet file to sp
 
 ## Getting Started
 
-* [Databend Docs](https://databend.rs/overview/building-and-running/)
-* [Databend CLI Docs](https://databend.rs/cli/cli/)
-* [Databend Contributing](https://databend.rs/development/contributing/)
+* [Databend Docs](https://databend.rs/user/)
+* [Databend CLI Docs](https://databend.rs/user/cli/)
+* [Databend Contributing](https://databend.rs/dev/contributing/)
 * [Databend Architecture](https://databend.rs/overview/architecture/)
 * [Databend Performance](https://databend.rs/overview/performance/)
 * [Databend Weekly](https://weekly.databend.rs/)

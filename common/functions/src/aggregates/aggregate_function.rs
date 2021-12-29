@@ -17,10 +17,10 @@ use std::fmt;
 use std::sync::Arc;
 
 use bytes::BytesMut;
+use common_datavalues::arrays::MutableArrayBuilder;
 use common_datavalues::series::Series;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
-use common_datavalues::DataValue;
 use common_exception::Result;
 
 use super::StateAddr;
@@ -58,5 +58,5 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn merge(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()>;
 
     // TODO append the value into the column builder
-    fn merge_result(&self, _place: StateAddr) -> Result<DataValue>;
+    fn merge_result(&self, _place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()>;
 }

@@ -23,6 +23,15 @@ use futures::TryStreamExt;
 async fn test_insert_into_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
+    // Create default value table.
+    {
+        static TEST_QUERY: &str = "create table default.default_value_table(a String, b String DEFAULT 'b') Engine = Memory";
+        if let PlanNode::CreateTable(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
+            let executor = CreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
+            let _ = executor.execute(None).await?;
+        }
+    }
+
     // Create input table.
     {
         static TEST_QUERY: &str = "create table default.input_table(a String, b String, c String, d String, e String) Engine = Memory";
@@ -38,6 +47,48 @@ async fn test_insert_into_interpreter() -> Result<()> {
         if let PlanNode::CreateTable(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
             let executor = CreateTableInterpreter::try_create(ctx.clone(), plan.clone())?;
             let _ = executor.execute(None).await?;
+        }
+    }
+
+    // Insert into default value table.
+    {
+        // insert into.
+        {
+            static TEST_QUERY: &str = "insert into default.default_value_table(a) values('a')";
+            if let PlanNode::Insert(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
+                let executor = InsertInterpreter::try_create(ctx.clone(), plan.clone())?;
+                let _ = executor.execute(None).await?;
+            }
+        }
+
+        // insert into select.
+        {
+            static TEST_QUERY: &str = "insert into default.default_value_table(a) select a from default.default_value_table";
+            if let PlanNode::Insert(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
+                let executor = InsertInterpreter::try_create(ctx.clone(), plan.clone())?;
+                let _ = executor.execute(None).await?;
+            }
+        }
+
+        // select.
+        {
+            static TEST_QUERY: &str = "select * from default.default_value_table";
+            if let PlanNode::Select(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
+                let executor = SelectInterpreter::try_create(ctx.clone(), plan.clone())?;
+                let stream = executor.execute(None).await?;
+                let result = stream.try_collect::<Vec<_>>().await?;
+                let expected = vec![
+                    "+---+---+",
+                    "| a | b |",
+                    "+---+---+",
+                    "| a | b |",
+                    "| a | b |",
+                    "+---+---+",
+                ];
+                common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
+            } else {
+                panic!()
+            }
         }
     }
 

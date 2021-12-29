@@ -18,8 +18,11 @@ use common_meta_api::KVApi;
 use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::GetKVActionReply;
+use common_meta_types::GetKVReq;
+use common_meta_types::ListKVReq;
 use common_meta_types::LogEntry;
 use common_meta_types::MGetKVActionReply;
+use common_meta_types::MGetKVReq;
 use common_meta_types::PrefixListReply;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
@@ -60,25 +63,34 @@ impl KVApi for MetaNode {
 
     #[tracing::instrument(level = "debug", skip(self))]
     async fn get_kv(&self, key: &str) -> common_exception::Result<GetKVActionReply> {
-        // inconsistent get: from local state machine
+        let res = self
+            .consistent_read(GetKVReq {
+                key: key.to_string(),
+            })
+            .await?;
 
-        let sm = self.sto.state_machine.read().await;
-        sm.get_kv(key).await
+        Ok(res)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
     async fn mget_kv(&self, keys: &[String]) -> common_exception::Result<MGetKVActionReply> {
-        // inconsistent get: from local state machine
+        let res = self
+            .consistent_read(MGetKVReq {
+                keys: keys.to_vec(),
+            })
+            .await?;
 
-        let sm = self.sto.state_machine.read().await;
-        sm.mget_kv(keys).await
+        Ok(res)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
     async fn prefix_list_kv(&self, prefix: &str) -> common_exception::Result<PrefixListReply> {
-        // inconsistent get: from local state machine
+        let res = self
+            .consistent_read(ListKVReq {
+                prefix: prefix.to_string(),
+            })
+            .await?;
 
-        let sm = self.sto.state_machine.read().await;
-        sm.prefix_list_kv(prefix).await
+        Ok(res)
     }
 }

@@ -58,38 +58,58 @@ async fn test_parse_values() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_parse_csvs() {
-    let dir = tempfile::tempdir().unwrap();
-    let name = "my-temporary-note.txt";
-    let file_path = dir.path().join(name);
-    let mut file = File::create(file_path).unwrap();
-    writeln!(file, "1,\"1\",1.11\n2,\"2\",2\n3,\"3-'3'-3\",3\"").unwrap();
+    for field_delimitor in [b',', b'\t', b'#'] {
+        for record_delimitor in [b'\n', b'\r', b'~'] {
+            let dir = tempfile::tempdir().unwrap();
+            let name = "my-temporary-note.txt";
+            let file_path = dir.path().join(name);
+            let mut file = File::create(file_path).unwrap();
 
-    let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int8, false),
-        DataField::new("b", DataType::String, false),
-        DataField::new("c", DataType::Float64, false),
-    ]);
+            write!(
+                file,
+                "1{}\"1\"{}1.11{}2{}\"2\"{}2{}3{}\"3-'3'-3\"{}3\"{}",
+                field_delimitor as char,
+                field_delimitor as char,
+                record_delimitor as char,
+                field_delimitor as char,
+                field_delimitor as char,
+                record_delimitor as char,
+                field_delimitor as char,
+                field_delimitor as char,
+                record_delimitor as char,
+            )
+            .unwrap();
 
-    let local = Local::with_path(dir.path().to_path_buf());
-    let stream = local.get_input_stream(name, None).unwrap();
-    let mut csv_source = CsvSource::try_create(stream, schema, false, 10).unwrap();
-    let block = csv_source.read().await.unwrap().unwrap();
-    assert_blocks_eq(
-        vec![
-            "+---+---------+------+",
-            "| a | b       | c    |",
-            "+---+---------+------+",
-            "| 1 | 1       | 1.11 |",
-            "| 2 | 2       | 2    |",
-            "| 3 | 3-'3'-3 | 3    |",
-            "+---+---------+------+",
-        ],
-        &[block],
-    );
+            let schema = DataSchemaRefExt::create(vec![
+                DataField::new("a", DataType::Int8, false),
+                DataField::new("b", DataType::String, false),
+                DataField::new("c", DataType::Float64, false),
+            ]);
 
-    let block = csv_source.read().await.unwrap();
-    assert!(block.is_none());
+            let local = Local::with_path(dir.path().to_path_buf());
+            let stream = local.get_input_stream(name, None).unwrap();
+            let mut csv_source =
+                CsvSource::try_create(stream, schema, false, field_delimitor, record_delimitor, 10)
+                    .unwrap();
+            let block = csv_source.read().await.unwrap().unwrap();
+            assert_blocks_eq(
+                vec![
+                    "+---+---------+------+",
+                    "| a | b       | c    |",
+                    "+---+---------+------+",
+                    "| 1 | 1       | 1.11 |",
+                    "| 2 | 2       | 2    |",
+                    "| 3 | 3-'3'-3 | 3    |",
+                    "+---+---------+------+",
+                ],
+                &[block],
+            );
 
-    drop(file);
-    dir.close().unwrap();
+            let block = csv_source.read().await.unwrap();
+            assert!(block.is_none());
+
+            drop(file);
+            dir.close().unwrap();
+        }
+    }
 }

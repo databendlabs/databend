@@ -20,8 +20,11 @@ use std::fmt;
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
+use serde::Deserialize;
+use serde::Serialize;
 
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionCreator;
@@ -31,7 +34,7 @@ use crate::aggregates::aggregator_common::assert_variadic_arguments;
 use crate::aggregates::AggregateCountFunction;
 use crate::aggregates::AggregateFunction;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 struct DataGroupValues(Vec<DataGroupValue>);
 
 pub struct AggregateDistinctState {
@@ -40,34 +43,11 @@ pub struct AggregateDistinctState {
 
 impl AggregateDistinctState {
     pub fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        writer.write_uvarint(self.set.len() as u64)?;
-
-        for entry in self.set.iter() {
-            writer.write_uvarint(entry.0.len() as u64)?;
-            for group_value in entry.0.iter() {
-                let datavalue = DataValue::from(group_value);
-                datavalue.serialize_to_buf(writer)?;
-            }
-        }
-        Ok(())
+        serialize_into_buf(writer, &self.set)
     }
 
     pub fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.set.clear();
-
-        let size = reader.read_uvarint()?;
-        self.set.reserve(size as usize);
-
-        for _i in 0..size {
-            let vsize = reader.read_uvarint()?;
-            let mut values = Vec::with_capacity(vsize as usize);
-            for _j in 0..vsize {
-                let value = DataValue::deserialize(reader)?;
-                let value = DataGroupValue::try_from(&value)?;
-                values.push(value);
-            }
-            self.set.insert(DataGroupValues(values));
-        }
+        self.set = deserialize_from_slice(reader)?;
 
         Ok(())
     }
@@ -219,7 +199,8 @@ impl AggregateFunction for AggregateDistinctCombinator {
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+    #[allow(unused_mut)]
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
         let state = place.get::<AggregateDistinctState>();
 
         let layout = Layout::new::<AggregateDistinctState>();
@@ -227,10 +208,19 @@ impl AggregateFunction for AggregateDistinctCombinator {
 
         // faster path for count
         if self.nested.name() == "AggregateFunctionCount" {
-            Ok(DataValue::UInt64(Some(state.set.len() as u64)))
+            let mut array = array
+                .as_mut_any()
+                .downcast_mut::<MutablePrimitiveArrayBuilder<u64>>()
+                .ok_or_else(|| {
+                    ErrorCode::UnexpectedError(
+                        "error occured when downcast MutableArray".to_string(),
+                    )
+                })?;
+            array.push(state.set.len() as u64);
+            Ok(())
         } else {
             if state.set.is_empty() {
-                return self.nested.merge_result(netest_place);
+                return self.nested.merge_result(netest_place, array);
             }
             let mut results = Vec::with_capacity(state.set.len());
 
@@ -261,7 +251,7 @@ impl AggregateFunction for AggregateDistinctCombinator {
             self.nested
                 .accumulate(netest_place, &arrays, state.set.len())?;
             // merge_result
-            self.nested.merge_result(netest_place)
+            self.nested.merge_result(netest_place, array)
         }
     }
 }

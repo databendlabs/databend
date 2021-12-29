@@ -42,7 +42,7 @@ impl Interpreter for AlterUserInterpreter {
         "AlterUserInterpreter"
     }
 
-    #[tracing::instrument(level = "info", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
@@ -54,7 +54,7 @@ impl Interpreter for AlterUserInterpreter {
             .update_user(
                 plan.name.as_str(),
                 plan.hostname.as_str(),
-                Some(plan.new_auth_type),
+                Some(plan.new_password_type),
                 Some(plan.new_password),
             )
             .await?;

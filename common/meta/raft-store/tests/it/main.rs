@@ -18,3 +18,10 @@ mod testing;
 mod state;
 mod state_machine;
 mod types;
+
+#[test]
+fn test_bin_commit_version() -> anyhow::Result<()> {
+    let v = &common_meta_raft_store::config::DATABEND_COMMIT_VERSION;
+    assert!(v.len() > 0);
+    Ok(())
+}

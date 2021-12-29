@@ -14,19 +14,19 @@
 //
 
 mod github_client;
+mod github_table;
+mod repo;
 mod repo_comments_table;
 mod repo_info_table;
 mod repo_issues_table;
 mod repo_prs_table;
 
+pub use github_client::create_github_client;
+pub use github_table::GithubDataGetter;
+pub use github_table::GithubTable;
+pub use github_table::GithubTableType;
+pub use repo::RepoTableOptions;
 pub use repo_comments_table::RepoCommentsTable;
 pub use repo_info_table::RepoInfoTable;
 pub use repo_issues_table::RepoIssuesTable;
-pub use repo_prs_table::RepoPrsTable;
-
-pub const GITHUB_REPO_INFO_TABLE_ENGINE: &str = "GITHUB_REPO_INFO_TABLE_ENGINE";
-pub const GITHUB_REPO_ISSUES_TABLE_ENGINE: &str = "GITHUB_REPO_ISSUES_TABLE_ENGINE";
-pub const GITHUB_REPO_PRS_TABLE_ENGINE: &str = "GITHUB_REPO_PRS_TABLE_ENGINE";
-pub const GITHUB_REPO_COMMENTS_TABLE_ENGINE: &str = "GITHUB_REPO_COMMENTS_TABLE_ENGINE";
-pub const OWNER: &str = "owner";
-pub const REPO: &str = "repo";
+pub use repo_prs_table::RepoPRsTable;

@@ -40,6 +40,7 @@ async fn test_null_table() -> Result<()> {
             schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::UInt64, false)]),
             engine: "Null".to_string(),
             options: TableOptions::default(),
+            ..Default::default()
         },
     })?;
 
@@ -75,6 +76,7 @@ async fn test_null_table() -> Result<()> {
         let truncate_plan = TruncateTablePlan {
             db: "default".to_string(),
             table: "a".to_string(),
+            purge: false,
         };
         table.truncate(ctx, truncate_plan).await?;
     }
