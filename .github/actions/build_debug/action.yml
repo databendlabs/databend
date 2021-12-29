@@ -22,6 +22,8 @@ runs:
         components: rustfmt, clippy
 
     - uses: Swatinem/rust-cache@v1
+      with:
+        sharedKey: debug-${{ secrets.CACHE_RESET_KEY }}
 
     - uses: actions-rs/cargo@v1
       with:

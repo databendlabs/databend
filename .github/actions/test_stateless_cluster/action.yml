@@ -13,6 +13,8 @@ runs:
         target: ${{ matrix.config.target }}
 
     - uses: Swatinem/rust-cache@v1
+      with:
+        sharedKey: stateless-${{ secrets.CACHE_RESET_KEY }}
 
     - uses: actions/download-artifact@v2
       with:

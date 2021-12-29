@@ -22,6 +22,8 @@ runs:
         components: rustfmt, clippy
 
     - uses: Swatinem/rust-cache@v1
+      with:
+        sharedKey: release-${{ secrets.CACHE_RESET_KEY }}
 
     - name: Build Databend
       uses: actions-rs/cargo@v1

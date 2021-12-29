@@ -21,6 +21,8 @@ runs:
         components: rustfmt, clippy
 
     - uses: Swatinem/rust-cache@v1
+      with:
+        sharedKey: base-${{ secrets.CACHE_RESET_KEY }}
 
     - name: Format
       uses: actions-rs/cargo@v1
