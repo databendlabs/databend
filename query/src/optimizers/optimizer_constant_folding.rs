@@ -22,6 +22,7 @@ use common_functions::scalars::FunctionFactory;
 use common_planners::AggregatorFinalPlan;
 use common_planners::AggregatorPartialPlan;
 use common_planners::Expression;
+use common_planners::ExpressionRewriter;
 use common_planners::Expressions;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
@@ -38,10 +39,6 @@ struct ConstantFoldingImpl {
 }
 
 impl ConstantFoldingImpl {
-    fn rewrite_alias(alias: &str, expr: Expression) -> Result<Expression> {
-        Ok(Expression::Alias(alias.to_string(), Box::new(expr)))
-    }
-
     fn constants_arguments(args: &[Expression]) -> bool {
         !args
             .iter()
@@ -216,105 +213,99 @@ impl PlanRewriter for ConstantFoldingImpl {
          *   before optimize: SELECT (SELECT 1 + 2)
          *   after optimize: SELECT 3
          */
-        match origin {
-            Expression::Alias(alias, expr) => {
-                Self::rewrite_alias(alias, self.rewrite_expr(schema, expr)?)
-            }
-            Expression::ScalarFunction { op, args } => {
-                let new_args = args
-                    .iter()
-                    .map(|expr| Self::rewrite_expr(self, schema, expr))
-                    .collect::<Result<Vec<_>>>()?;
+        struct ConstantExpressionRewriter(*mut ConstantFoldingImpl, DataSchemaRef);
 
-                let origin_name = origin.column_name();
-                Self::rewrite_function(
-                    op,
-                    new_args,
+        impl ExpressionRewriter for ConstantExpressionRewriter {
+            fn mutate_scalar_function(
+                &mut self,
+                name: &str,
+                args: Vec<Expression>,
+                origin_expr: &Expression,
+            ) -> Result<Expression> {
+                let origin_name = origin_expr.column_name();
+                ConstantFoldingImpl::rewrite_function(
+                    name,
+                    args,
                     origin_name,
                     Expression::create_scalar_function,
                 )
             }
-            Expression::UnaryExpression { op, expr } => {
-                let origin_name = origin.column_name();
-                let new_expr = vec![self.rewrite_expr(schema, expr)?];
-                Self::rewrite_function(
+
+            fn mutate_unary_expression(
+                &mut self,
+                op: &str,
+                expr: Expression,
+                origin_expr: &Expression,
+            ) -> Result<Expression> {
+                let origin_name = origin_expr.column_name();
+                ConstantFoldingImpl::rewrite_function(
                     op,
-                    new_expr,
+                    vec![expr],
                     origin_name,
                     Expression::create_unary_expression,
                 )
             }
-            Expression::BinaryExpression { op, left, right } => match op.to_lowercase().as_str() {
-                "and" => self.remove_const_cond(schema, origin.column_name(), left, right, true),
-                "or" => self.remove_const_cond(schema, origin.column_name(), left, right, false),
-                _ => {
-                    let new_left = self.rewrite_expr(schema, left)?;
-                    let new_right = self.rewrite_expr(schema, right)?;
 
-                    let origin_name = origin.column_name();
-                    let new_exprs = vec![new_left, new_right];
-                    Self::rewrite_function(
-                        op,
-                        new_exprs,
-                        origin_name,
-                        Expression::create_binary_expression,
-                    )
+            fn mutate_binary(
+                &mut self,
+                op: &str,
+                left: Expression,
+                right: Expression,
+                origin_expr: &Expression,
+            ) -> Result<Expression> {
+                unsafe {
+                    let origin_name = origin_expr.column_name();
+                    match op.to_lowercase().as_str() {
+                        "and" => (&mut *self.0).remove_const_cond(
+                            &self.1,
+                            origin_name,
+                            &left,
+                            &right,
+                            true,
+                        ),
+                        "or" => (&mut *self.0).remove_const_cond(
+                            &self.1,
+                            origin_name,
+                            &left,
+                            &right,
+                            false,
+                        ),
+                        _ => ConstantFoldingImpl::rewrite_function(
+                            op,
+                            vec![left, right],
+                            origin_name,
+                            Expression::create_binary_expression,
+                        ),
+                    }
                 }
-            },
-            Expression::Cast { expr, data_type } => {
-                let new_expr = self.rewrite_expr(schema, expr)?;
+            }
 
-                if matches!(&new_expr, Expression::Literal { .. }) {
+            fn mutate_cast(
+                &mut self,
+                typ: &DataType,
+                expr: Expression,
+                origin_expr: &Expression,
+            ) -> Result<Expression> {
+                if matches!(&expr, Expression::Literal { .. }) {
                     let optimize_expr = Expression::Cast {
-                        expr: Box::new(new_expr),
-                        data_type: data_type.clone(),
+                        expr: Box::new(expr),
+                        data_type: typ.clone(),
                     };
 
-                    return Self::execute_expression(optimize_expr, origin.column_name());
+                    return ConstantFoldingImpl::execute_expression(
+                        optimize_expr,
+                        origin_expr.column_name(),
+                    );
                 }
 
                 Ok(Expression::Cast {
-                    expr: Box::new(new_expr),
-                    data_type: data_type.clone(),
+                    expr: Box::new(expr),
+                    data_type: typ.clone(),
                 })
             }
-            Expression::Sort {
-                expr,
-                asc,
-                nulls_first,
-                origin_expr,
-            } => {
-                let new_expr = self.rewrite_expr(schema, expr)?;
-                Ok(ConstantFoldingImpl::create_sort(
-                    asc,
-                    nulls_first,
-                    new_expr,
-                    origin_expr.clone(),
-                ))
-            }
-            Expression::AggregateFunction {
-                op,
-                distinct,
-                params,
-                args,
-            } => {
-                let args = args
-                    .iter()
-                    .map(|expr| Self::rewrite_expr(self, schema, expr))
-                    .collect::<Result<Vec<_>>>()?;
-
-                let op = op.clone();
-                let distinct = *distinct;
-                let params = params.clone();
-                Ok(Expression::AggregateFunction {
-                    op,
-                    distinct,
-                    params,
-                    args,
-                })
-            }
-            _ => Ok(origin.clone()),
         }
+
+        ConstantExpressionRewriter(self, schema.clone()).mutate(origin)
     }
 
     fn rewrite_aggregate_partial(&mut self, plan: &AggregatorPartialPlan) -> Result<PlanNode> {
@@ -374,21 +365,5 @@ impl Optimizer for ConstantFoldingOptimizer {
 impl ConstantFoldingOptimizer {
     pub fn create(_ctx: Arc<QueryContext>) -> Self {
         ConstantFoldingOptimizer {}
-    }
-}
-
-impl ConstantFoldingImpl {
-    fn create_sort(
-        asc: &bool,
-        nulls_first: &bool,
-        new_expr: Expression,
-        origin_expr: Box<Expression>,
-    ) -> Expression {
-        Expression::Sort {
-            expr: Box::new(new_expr),
-            asc: *asc,
-            nulls_first: *nulls_first,
-            origin_expr,
-        }
     }
 }
