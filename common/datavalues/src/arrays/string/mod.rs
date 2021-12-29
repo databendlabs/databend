@@ -14,6 +14,7 @@
 
 mod builder;
 mod iterator;
+mod mutable;
 mod transform;
 
 pub use builder::*;
@@ -25,6 +26,7 @@ use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 pub use iterator::*;
+pub use mutable::*;
 pub use transform::*;
 
 use crate::prelude::*;

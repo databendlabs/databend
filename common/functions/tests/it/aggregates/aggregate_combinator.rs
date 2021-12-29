@@ -12,10 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::BorrowMut;
+
 use bumpalo::Bump;
+use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::buffer::MutableBuffer;
+use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::with_match_primitive_type;
 use pretty_assertions::assert_eq;
 
 #[test]
@@ -26,9 +32,10 @@ fn test_aggregate_combinator_function() -> Result<()> {
         args: Vec<DataField>,
         display: &'static str,
         arrays: Vec<Series>,
-        expect: DataValue,
         error: &'static str,
         func_name: &'static str,
+        input_array: Box<dyn MutableArrayBuilder>,
+        expect_array: Box<dyn MutableArrayBuilder>,
     }
 
     let arrays: Vec<Series> = vec![
@@ -49,8 +56,13 @@ fn test_aggregate_combinator_function() -> Result<()> {
             display: "count",
             func_name: "countdistinct",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::UInt64(Some(4)),
             error: "",
+            input_array: Box::new(MutablePrimitiveArrayBuilder::<u64>::default()),
+            expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
+                ArrowDataType::UInt64,
+                MutableBuffer::from([4u64]),
+                Some(MutableBitmap::from([true])),
+            )),
         },
         Test {
             name: "sum-distinct-passed",
@@ -59,8 +71,13 @@ fn test_aggregate_combinator_function() -> Result<()> {
             display: "sum",
             func_name: "sumdistinct",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::UInt64(Some(10)),
             error: "",
+            input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
+            expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
+                ArrowDataType::Int64,
+                MutableBuffer::from([10i64]),
+                Some(MutableBitmap::from([true])),
+            )),
         },
         Test {
             name: "count-if-passed",
@@ -69,8 +86,13 @@ fn test_aggregate_combinator_function() -> Result<()> {
             display: "count",
             func_name: "countif",
             arrays: arrays.clone(),
-            expect: DataValue::UInt64(Some(10)),
             error: "",
+            input_array: Box::new(MutablePrimitiveArrayBuilder::<u64>::default()),
+            expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
+                ArrowDataType::UInt64,
+                MutableBuffer::from([10u64]),
+                Some(MutableBitmap::from([true])),
+            )),
         },
         Test {
             name: "min-if-passed",
@@ -79,8 +101,13 @@ fn test_aggregate_combinator_function() -> Result<()> {
             display: "min",
             func_name: "minif",
             arrays: arrays.clone(),
-            expect: DataValue::UInt64(Some(1)),
             error: "",
+            input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
+            expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
+                ArrowDataType::Int64,
+                MutableBuffer::from([1i64]),
+                Some(MutableBitmap::from([true])),
+            )),
         },
         Test {
             name: "max-if-passed",
@@ -89,8 +116,13 @@ fn test_aggregate_combinator_function() -> Result<()> {
             display: "max",
             func_name: "maxif",
             arrays: arrays.clone(),
-            expect: DataValue::UInt64(Some(4)),
             error: "",
+            input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
+            expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
+                ArrowDataType::Int64,
+                MutableBuffer::from([4i64]),
+                Some(MutableBitmap::from([true])),
+            )),
         },
         Test {
             name: "sum-if-passed",
@@ -99,8 +131,13 @@ fn test_aggregate_combinator_function() -> Result<()> {
             display: "sum",
             func_name: "sumif",
             arrays: arrays.clone(),
-            expect: DataValue::UInt64(Some(30)),
             error: "",
+            input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
+            expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
+                ArrowDataType::Int64,
+                MutableBuffer::from([30i64]),
+                Some(MutableBitmap::from([true])),
+            )),
         },
         Test {
             name: "avg-if-passed",
@@ -109,16 +146,21 @@ fn test_aggregate_combinator_function() -> Result<()> {
             display: "avg",
             func_name: "avgif",
             arrays: arrays.clone(),
-            expect: DataValue::UInt64(Some(3)),
             error: "",
+            input_array: Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
+            expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
+                ArrowDataType::Float64,
+                MutableBuffer::from([3f64]),
+                Some(MutableBitmap::from([true])),
+            )),
         },
     ];
 
-    for t in tests {
+    for mut t in tests {
         let rows = t.arrays[0].len();
 
         let arena = Bump::new();
-        let func = || -> Result<()> {
+        let mut func = || -> Result<()> {
             // First.
             let factory = AggregateFunctionFactory::instance();
             let func = factory.get(t.func_name, t.params.clone(), t.args.clone())?;
@@ -132,13 +174,29 @@ fn test_aggregate_combinator_function() -> Result<()> {
             func.accumulate(addr2.into(), &t.arrays, rows)?;
 
             func.merge(addr.into(), addr2.into())?;
-            let result = func.merge_result(addr.into())?;
-            assert_eq!(
-                format!("{:?}", t.expect),
-                format!("{:?}", result),
-                "{}",
-                t.name
-            );
+            let array: &mut dyn MutableArrayBuilder = t.input_array.borrow_mut();
+            let _ = func.merge_result(addr.into(), array)?;
+
+            let datatype = t.input_array.data_type();
+            with_match_primitive_type!(datatype, |$T| {
+                let array = t
+                        .input_array
+                        .as_mut_any()
+                        .downcast_ref::<MutablePrimitiveArrayBuilder<$T>>()
+                        .unwrap();
+                let expect = t
+                        .expect_array
+                        .as_mut_any()
+                        .downcast_ref::<MutablePrimitiveArrayBuilder<$T>>()
+                        .unwrap();
+
+                assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
+                assert_eq!(array.values(), expect.values(), "{}", t.name);
+            },
+            {
+                panic!("shoud never reach this way");
+            });
+
             assert_eq!(t.display, format!("{:}", func), "{}", t.name);
             Ok(())
         };
@@ -158,9 +216,10 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
         args: Vec<DataField>,
         display: &'static str,
         arrays: Vec<Series>,
-        expect: DataValue,
         error: &'static str,
         func_name: &'static str,
+        input_array: Box<dyn MutableArrayBuilder>,
+        expect_array: Box<dyn MutableArrayBuilder>,
     }
 
     let arrays: Vec<Series> = vec![
@@ -181,8 +240,13 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             display: "count",
             func_name: "countdistinct",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::UInt64(Some(0)),
             error: "",
+            input_array: Box::new(MutablePrimitiveArrayBuilder::<u64>::default()),
+            expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
+                ArrowDataType::UInt64,
+                MutableBuffer::from([0u64]),
+                Some(MutableBitmap::from([true])),
+            )),
         },
         Test {
             name: "sum-distinct-passed",
@@ -191,8 +255,13 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             display: "sum",
             func_name: "sumdistinct",
             arrays: vec![arrays[0].clone()],
-            expect: DataValue::Int64(None),
             error: "",
+            input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
+            expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
+                ArrowDataType::Int64,
+                MutableBuffer::from([0i64]),
+                Some(MutableBitmap::from([false])),
+            )),
         },
         Test {
             name: "count-if-passed",
@@ -201,8 +270,13 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             display: "count",
             func_name: "countif",
             arrays: arrays.clone(),
-            expect: DataValue::UInt64(Some(0)),
             error: "",
+            input_array: Box::new(MutablePrimitiveArrayBuilder::<u64>::default()),
+            expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
+                ArrowDataType::UInt64,
+                MutableBuffer::from([0u64]),
+                Some(MutableBitmap::from([true])),
+            )),
         },
         Test {
             name: "min-if-passed",
@@ -211,8 +285,13 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             display: "min",
             func_name: "minif",
             arrays: arrays.clone(),
-            expect: DataValue::Int64(None),
             error: "",
+            input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
+            expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
+                ArrowDataType::Int64,
+                MutableBuffer::from([0i64]),
+                Some(MutableBitmap::from([false])),
+            )),
         },
         Test {
             name: "max-if-passed",
@@ -221,8 +300,13 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             display: "max",
             func_name: "maxif",
             arrays: arrays.clone(),
-            expect: DataValue::Int64(None),
             error: "",
+            input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
+            expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
+                ArrowDataType::Int64,
+                MutableBuffer::from([0i64]),
+                Some(MutableBitmap::from([false])),
+            )),
         },
         Test {
             name: "sum-if-passed",
@@ -231,8 +315,13 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             display: "sum",
             func_name: "sumif",
             arrays: arrays.clone(),
-            expect: DataValue::Int64(None),
             error: "",
+            input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
+            expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
+                ArrowDataType::Int64,
+                MutableBuffer::from([0i64]),
+                Some(MutableBitmap::from([false])),
+            )),
         },
         Test {
             name: "avg-if-passed",
@@ -241,16 +330,21 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             display: "avg",
             func_name: "avgif",
             arrays: arrays.clone(),
-            expect: DataValue::Float64(None),
             error: "",
+            input_array: Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
+            expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
+                ArrowDataType::Float64,
+                MutableBuffer::from([0f64]),
+                Some(MutableBitmap::from([false])),
+            )),
         },
     ];
 
-    for t in tests {
+    for mut t in tests {
         let rows = t.arrays[0].len();
 
         let arena = Bump::new();
-        let func = || -> Result<()> {
+        let mut func = || -> Result<()> {
             // First.
             let factory = AggregateFunctionFactory::instance();
             let func = factory.get(t.func_name, t.params.clone(), t.args.clone())?;
@@ -265,13 +359,29 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
             func.accumulate(addr2.into(), &t.arrays, rows)?;
             func.merge(addr1.into(), addr2.into())?;
 
-            let result = func.merge_result(addr1.into())?;
-            assert_eq!(
-                format!("{:?}", t.expect),
-                format!("{:?}", result),
-                "{}",
-                t.name
-            );
+            let array: &mut dyn MutableArrayBuilder = t.input_array.borrow_mut();
+            let _ = func.merge_result(addr1.into(), array)?;
+
+            let datatype = t.input_array.data_type();
+            with_match_primitive_type!(datatype, |$T| {
+                let array = t
+                        .input_array
+                        .as_mut_any()
+                        .downcast_ref::<MutablePrimitiveArrayBuilder<$T>>()
+                        .unwrap();
+                let expect = t
+                        .expect_array
+                        .as_mut_any()
+                        .downcast_ref::<MutablePrimitiveArrayBuilder<$T>>()
+                        .unwrap();
+
+                assert_eq!(array.data_type(), expect.data_type(), "{}", t.name);
+                assert_eq!(array.values(), expect.values(), "{}", t.name);
+            },
+            {
+                panic!("shoud never reach this way");
+            });
+
             assert_eq!(t.display, format!("{:}", func), "{}", t.name);
             Ok(())
         };
