@@ -17,13 +17,13 @@ use std::ops::Neg;
 
 use common_datavalues::prelude::*;
 use common_datavalues::DataTypeAndNullable;
+use common_datavalues::DataValueUnaryOperator;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::cast::AsPrimitive;
 use num_traits::WrappingNeg;
 
 use super::arithmetic::ArithmeticTrait;
-use super::result_type::ResultTypeOfUnaryArith;
 use crate::impl_unary_arith;
 use crate::impl_wrapping_unary_arith;
 use crate::scalars::function_factory::ArithmeticDescription;
@@ -31,7 +31,6 @@ use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
 use crate::scalars::UnaryArithmeticFunction;
-use crate::scalars::UnaryArithmeticOperator;
 use crate::unary_arithmetic;
 use crate::with_match_primitive_type;
 
@@ -47,7 +46,7 @@ impl ArithmeticNegateFunction {
         args: &[DataTypeAndNullable],
     ) -> Result<Box<dyn Function>> {
         let arg_type = &args[0].data_type();
-        let op = UnaryArithmeticOperator::Negate;
+        let op = DataValueUnaryOperator::Negate;
         let error_fn = || -> Result<Box<dyn Function>> {
             Err(ErrorCode::BadDataValueType(format!(
                 "DataValue Error: Unsupported arithmetic {} ({:?})",
@@ -60,7 +59,7 @@ impl ArithmeticNegateFunction {
         };
 
         with_match_primitive_type!(arg_type, |$T| {
-            let result_type = <$T as ResultTypeOfUnaryArith>::Negate::data_type();
+            let result_type = <$T as ResultTypeOfUnary>::Negate::data_type();
             match result_type {
                 DataType::Int64 => UnaryArithmeticFunction::<ArithmeticWrappingNeg<$T, i64>>::try_create_func(
                     op,
@@ -78,7 +77,7 @@ impl ArithmeticNegateFunction {
                     op,
                     result_type,
                 ),
-                _ => UnaryArithmeticFunction::<ArithmeticNeg<$T, <$T as ResultTypeOfUnaryArith>::Negate>>::try_create_func(
+                _ => UnaryArithmeticFunction::<ArithmeticNeg<$T, <$T as ResultTypeOfUnary>::Negate>>::try_create_func(
                     op,
                     result_type,
                 ),

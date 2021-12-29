@@ -19,6 +19,7 @@ use std::ops::Sub;
 
 use common_datavalues::prelude::*;
 use common_datavalues::DataTypeAndNullable;
+use common_datavalues::DataValueBinaryOperator;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::cast::AsPrimitive;
@@ -28,7 +29,6 @@ use num_traits::WrappingSub;
 
 use super::arithmetic::ArithmeticTrait;
 use super::interval::*;
-use super::result_type::ResultTypeOfBinaryArith;
 use crate::binary_arithmetic;
 use crate::binary_arithmetic_helper;
 use crate::impl_binary_arith;
@@ -37,7 +37,6 @@ use crate::impl_wrapping_binary_arith;
 use crate::scalars::function_factory::ArithmeticDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::BinaryArithmeticFunction;
-use crate::scalars::BinaryArithmeticOperator;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
 use crate::with_match_date_type;
@@ -56,7 +55,7 @@ impl ArithmeticPlusFunction {
     ) -> Result<Box<dyn Function>> {
         let left_type = &args[0].data_type();
         let right_type = &args[1].data_type();
-        let op = BinaryArithmeticOperator::Plus;
+        let op = DataValueBinaryOperator::Plus;
         if left_type.is_interval() || right_type.is_interval() {
             return Self::try_create_interval(left_type, right_type);
         }
@@ -77,7 +76,7 @@ impl ArithmeticPlusFunction {
 
         with_match_primitive_type!(left_type, |$T| {
             with_match_primitive_type!(right_type, |$D| {
-                let result_type = <($T, $D) as ResultTypeOfBinaryArith>::AddMul::data_type();
+                let result_type = <($T, $D) as ResultTypeOfBinary>::AddMul::data_type();
                 match result_type {
                     DataType::UInt64 => BinaryArithmeticFunction::<ArithmeticWrappingAdd<$T, $D, u64>>::try_create_func(
                         op,
@@ -87,7 +86,7 @@ impl ArithmeticPlusFunction {
                         op,
                         result_type,
                     ),
-                    _ => BinaryArithmeticFunction::<ArithmeticAdd<$T, $D, <($T, $D) as ResultTypeOfBinaryArith>::AddMul>>::try_create_func(
+                    _ => BinaryArithmeticFunction::<ArithmeticAdd<$T, $D, <($T, $D) as ResultTypeOfBinary>::AddMul>>::try_create_func(
                         op,
                         result_type,
                     ),
@@ -101,7 +100,7 @@ impl ArithmeticPlusFunction {
     }
 
     fn try_create_interval(lhs_type: &DataType, rhs_type: &DataType) -> Result<Box<dyn Function>> {
-        let op = BinaryArithmeticOperator::Plus;
+        let op = DataValueBinaryOperator::Plus;
         let (interval, result_type) = if rhs_type.is_date_or_date_time() && lhs_type.is_interval() {
             (lhs_type, rhs_type)
         } else if lhs_type.is_date_or_date_time() && rhs_type.is_interval() {
@@ -160,7 +159,7 @@ impl ArithmeticPlusFunction {
         }
     }
 
-    impl_try_create_datetime!(BinaryArithmeticOperator::Plus, ArithmeticAdd, true);
+    impl_try_create_datetime!(DataValueBinaryOperator::Plus, ArithmeticAdd, true);
 
     pub fn desc() -> ArithmeticDescription {
         ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(

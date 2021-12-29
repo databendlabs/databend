@@ -107,6 +107,17 @@ macro_rules! impl_wrapping_unary_arith {
 }
 
 #[macro_export]
+macro_rules! unary_arithmetic {
+    ($self: expr, $op: expr) => {{
+        let series = $self.to_minimal_array()?;
+        let array: &DFPrimitiveArray<T> = series.static_cast();
+
+        let result: DataColumn = unary(array, |v| $op(v.as_())).into();
+        Ok(result.resize_constant($self.len()))
+    }};
+}
+
+#[macro_export]
 macro_rules! impl_wrapping_binary_arith {
     ($name: ident, $method: ident) => {
         #[derive(Clone)]
@@ -235,17 +246,6 @@ macro_rules! interval_arithmetic {
 
         let result: DataColumn = binary_arithmetic_helper!(lhs, rhs, i64, $R, $op);
         Ok(result.resize_constant($self.column().len()))
-    }};
-}
-
-#[macro_export]
-macro_rules! unary_arithmetic {
-    ($self: expr, $op: expr) => {{
-        let series = $self.to_minimal_array()?;
-        let array: &DFPrimitiveArray<T> = series.static_cast();
-
-        let result: DataColumn = unary(array, |v| $op(v.as_())).into();
-        Ok(result.resize_constant($self.len()))
     }};
 }
 

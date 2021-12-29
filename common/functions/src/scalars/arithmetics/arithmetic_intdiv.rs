@@ -16,16 +16,15 @@ use std::marker::PhantomData;
 
 use common_datavalues::prelude::*;
 use common_datavalues::DataTypeAndNullable;
+use common_datavalues::DataValueBinaryOperator;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::cast::AsPrimitive;
 
 use super::arithmetic::ArithmeticTrait;
-use super::result_type::ResultTypeOfBinaryArith;
 use crate::scalars::function_factory::ArithmeticDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::BinaryArithmeticFunction;
-use crate::scalars::BinaryArithmeticOperator;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
 use crate::try_binary_arithmetic_helper;
@@ -84,7 +83,7 @@ impl ArithmeticIntDivFunction {
     ) -> Result<Box<dyn Function>> {
         let left_type = &args[0].data_type();
         let right_type = &args[1].data_type();
-        let op = BinaryArithmeticOperator::IntDiv;
+        let op = DataValueBinaryOperator::IntDiv;
         let error_fn = || -> Result<Box<dyn Function>> {
             Err(ErrorCode::BadDataValueType(format!(
                 "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
@@ -99,8 +98,8 @@ impl ArithmeticIntDivFunction {
 
         with_match_primitive_type!(left_type, |$T| {
             with_match_primitive_type!(right_type, |$D| {
-                let result_type = <($T, $D) as ResultTypeOfBinaryArith>::IntDiv::data_type();
-                BinaryArithmeticFunction::<ArithmeticIntDiv::<$T,$D, <($T, $D) as ResultTypeOfBinaryArith>::IntDiv>>::try_create_func(
+                let result_type = <($T, $D) as ResultTypeOfBinary>::IntDiv::data_type();
+                BinaryArithmeticFunction::<ArithmeticIntDiv::<$T,$D, <($T, $D) as ResultTypeOfBinary>::IntDiv>>::try_create_func(
                     op,
                     result_type,
                 )

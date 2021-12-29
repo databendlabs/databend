@@ -63,6 +63,44 @@ impl std::fmt::Display for DataValueComparisonOperator {
 }
 
 #[derive(Clone, Debug)]
+pub enum DataValueBinaryOperator {
+    Plus,
+    Minus,
+    Mul,
+    Div,
+    IntDiv,
+    Modulo,
+}
+
+impl std::fmt::Display for DataValueBinaryOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let display = match &self {
+            DataValueBinaryOperator::Plus => "plus",
+            DataValueBinaryOperator::Minus => "minus",
+            DataValueBinaryOperator::Mul => "multiply",
+            DataValueBinaryOperator::Div => "divide",
+            DataValueBinaryOperator::IntDiv => "div",
+            DataValueBinaryOperator::Modulo => "modulo",
+        };
+        write!(f, "{}", display)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum DataValueUnaryOperator {
+    Negate,
+}
+
+impl std::fmt::Display for DataValueUnaryOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let display = match &self {
+            DataValueUnaryOperator::Negate => "negate",
+        };
+        write!(f, "{}", display)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub enum DataValueArithmeticOperator {
     Plus,
     Minus,

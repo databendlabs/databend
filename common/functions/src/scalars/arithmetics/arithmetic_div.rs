@@ -16,6 +16,7 @@ use std::marker::PhantomData;
 
 use common_datavalues::prelude::*;
 use common_datavalues::DataTypeAndNullable;
+use common_datavalues::DataValueBinaryOperator;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::cast::AsPrimitive;
@@ -27,7 +28,6 @@ use crate::binary_arithmetic_helper;
 use crate::scalars::function_factory::ArithmeticDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::BinaryArithmeticFunction;
-use crate::scalars::BinaryArithmeticOperator;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
 use crate::with_match_primitive_type;
@@ -62,7 +62,7 @@ impl ArithmeticDivFunction {
     ) -> Result<Box<dyn Function>> {
         let left_type = &args[0].data_type();
         let right_type = &args[1].data_type();
-        let op = BinaryArithmeticOperator::Div;
+        let op = DataValueBinaryOperator::Div;
         let error_fn = || -> Result<Box<dyn Function>> {
             Err(ErrorCode::BadDataValueType(format!(
                 "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
@@ -99,6 +99,6 @@ impl ArithmeticDivFunction {
     }
 
     pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
-        arithmetic_mul_div_monotonicity(args, BinaryArithmeticOperator::Div)
+        arithmetic_mul_div_monotonicity(args, DataValueBinaryOperator::Div)
     }
 }

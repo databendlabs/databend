@@ -20,6 +20,7 @@ use std::ops::Sub;
 
 use common_datavalues::prelude::*;
 use common_datavalues::DataTypeAndNullable;
+use common_datavalues::DataValueBinaryOperator;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num::cast::AsPrimitive;
@@ -29,67 +30,13 @@ use strength_reduce::StrengthReducedU64;
 use strength_reduce::StrengthReducedU8;
 
 use super::arithmetic::ArithmeticTrait;
-use super::result_type::ResultTypeOfBinaryArith;
 use crate::scalars::function_factory::ArithmeticDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::BinaryArithmeticFunction;
-use crate::scalars::BinaryArithmeticOperator;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
 use crate::try_binary_arithmetic_helper;
 use crate::with_match_primitive_type;
-
-pub struct ArithmeticModuloFunction;
-
-impl ArithmeticModuloFunction {
-    pub fn try_create_func(
-        _display_name: &str,
-        args: &[DataTypeAndNullable],
-    ) -> Result<Box<dyn Function>> {
-        let left_type = &args[0].data_type();
-        let right_type = &args[1].data_type();
-        let op = BinaryArithmeticOperator::Modulo;
-
-        let error_fn = || -> Result<Box<dyn Function>> {
-            Err(ErrorCode::BadDataValueType(format!(
-                "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
-                left_type, op, right_type
-            )))
-        };
-
-        if !left_type.is_numeric() || !right_type.is_numeric() {
-            return error_fn();
-        };
-
-        with_match_primitive_type!(left_type, |$T| {
-            with_match_primitive_type!(right_type, |$D| {
-                let result_type = <($T, $D) as ResultTypeOfBinaryArith>::Modulo::data_type();
-                BinaryArithmeticFunction::<ArithmeticModule<$T, $D, <($T, $D) as ResultTypeOfBinaryArith>::LeastSuper, <($T, $D) as ResultTypeOfBinaryArith>::Modulo>>::try_create_func(
-                    op,
-                    result_type,
-                )
-            }, {
-                error_fn()
-            })
-        }, {
-            error_fn()
-        })
-    }
-
-    pub fn desc() -> ArithmeticDescription {
-        ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(
-            FunctionFeatures::default()
-                .deterministic()
-                .monotonicity()
-                .num_arguments(2),
-        )
-    }
-
-    pub fn get_monotonicity(_args: &[Monotonicity]) -> Result<Monotonicity> {
-        //TODO
-        Ok(Monotonicity::default())
-    }
-}
 
 #[derive(Clone)]
 pub struct ArithmeticModule<T, D, M, R> {
@@ -236,5 +183,57 @@ where
             let a: D = a.as_();
             AsPrimitive::<R>::as_(a % rhs)
         }),
+    }
+}
+
+pub struct ArithmeticModuloFunction;
+
+impl ArithmeticModuloFunction {
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[DataTypeAndNullable],
+    ) -> Result<Box<dyn Function>> {
+        let left_type = &args[0].data_type();
+        let right_type = &args[1].data_type();
+        let op = DataValueBinaryOperator::Modulo;
+
+        let error_fn = || -> Result<Box<dyn Function>> {
+            Err(ErrorCode::BadDataValueType(format!(
+                "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
+                left_type, op, right_type
+            )))
+        };
+
+        if !left_type.is_numeric() || !right_type.is_numeric() {
+            return error_fn();
+        };
+
+        with_match_primitive_type!(left_type, |$T| {
+            with_match_primitive_type!(right_type, |$D| {
+                let result_type = <($T, $D) as ResultTypeOfBinary>::Modulo::data_type();
+                BinaryArithmeticFunction::<ArithmeticModule<$T, $D, <($T, $D) as ResultTypeOfBinary>::LeastSuper, <($T, $D) as ResultTypeOfBinary>::Modulo>>::try_create_func(
+                    op,
+                    result_type,
+                )
+            }, {
+                error_fn()
+            })
+        }, {
+            error_fn()
+        })
+    }
+
+    pub fn desc() -> ArithmeticDescription {
+        ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .monotonicity()
+                .num_arguments(2),
+        )
+    }
+
+    pub fn get_monotonicity(_args: &[Monotonicity]) -> Result<Monotonicity> {
+        //TODO
+        Ok(Monotonicity::default())
     }
 }

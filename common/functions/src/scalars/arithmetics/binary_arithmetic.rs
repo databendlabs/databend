@@ -18,6 +18,7 @@ use std::marker::PhantomData;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
 use common_datavalues::DataTypeAndNullable;
+use common_datavalues::DataValueBinaryOperator;
 use common_exception::Result;
 
 use super::arithmetic::ArithmeticTrait;
@@ -30,33 +31,9 @@ use crate::scalars::ArithmeticPlusFunction;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
 
-#[derive(Clone, Debug)]
-pub enum BinaryArithmeticOperator {
-    Plus,
-    Minus,
-    Mul,
-    Div,
-    IntDiv,
-    Modulo,
-}
-
-impl std::fmt::Display for BinaryArithmeticOperator {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let display = match &self {
-            BinaryArithmeticOperator::Plus => "plus",
-            BinaryArithmeticOperator::Minus => "minus",
-            BinaryArithmeticOperator::Mul => "multiply",
-            BinaryArithmeticOperator::Div => "divide",
-            BinaryArithmeticOperator::IntDiv => "div",
-            BinaryArithmeticOperator::Modulo => "modulo",
-        };
-        write!(f, "{}", display)
-    }
-}
-
 #[derive(Clone)]
 pub struct BinaryArithmeticFunction<T> {
-    op: BinaryArithmeticOperator,
+    op: DataValueBinaryOperator,
     result_type: DataType,
     t: PhantomData<T>,
 }
@@ -65,7 +42,7 @@ impl<T> BinaryArithmeticFunction<T>
 where T: ArithmeticTrait + Clone + Sync + Send + 'static
 {
     pub fn try_create_func(
-        op: BinaryArithmeticOperator,
+        op: DataValueBinaryOperator,
         result_type: DataType,
     ) -> Result<Box<dyn Function>> {
         Ok(Box::new(Self {
@@ -98,12 +75,12 @@ where T: ArithmeticTrait + Clone + Sync + Send + 'static
 
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
         match self.op {
-            BinaryArithmeticOperator::Plus => ArithmeticPlusFunction::get_monotonicity(args),
-            BinaryArithmeticOperator::Minus => ArithmeticMinusFunction::get_monotonicity(args),
-            BinaryArithmeticOperator::Mul => ArithmeticMulFunction::get_monotonicity(args),
-            BinaryArithmeticOperator::Div => ArithmeticDivFunction::get_monotonicity(args),
-            BinaryArithmeticOperator::IntDiv => ArithmeticIntDivFunction::get_monotonicity(args),
-            BinaryArithmeticOperator::Modulo => ArithmeticModuloFunction::get_monotonicity(args),
+            DataValueBinaryOperator::Plus => ArithmeticPlusFunction::get_monotonicity(args),
+            DataValueBinaryOperator::Minus => ArithmeticMinusFunction::get_monotonicity(args),
+            DataValueBinaryOperator::Mul => ArithmeticMulFunction::get_monotonicity(args),
+            DataValueBinaryOperator::Div => ArithmeticDivFunction::get_monotonicity(args),
+            DataValueBinaryOperator::IntDiv => ArithmeticIntDivFunction::get_monotonicity(args),
+            DataValueBinaryOperator::Modulo => ArithmeticModuloFunction::get_monotonicity(args),
         }
     }
 }
