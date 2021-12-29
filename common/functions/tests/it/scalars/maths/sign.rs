@@ -16,149 +16,125 @@ use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::scalars::*;
 
+use crate::scalars::scalar_function_test::test_scalar_functions;
+use crate::scalars::scalar_function_test::ScalarFunctionTest;
+
 #[test]
 fn test_sign_function() -> Result<()> {
-    struct Test {
-        name: &'static str,
-        display: &'static str,
-        columns: DataColumn,
-        expect: DataColumn,
-        error: &'static str,
-    }
     let tests = vec![
-        Test {
+        ScalarFunctionTest {
             name: "positive int",
-            display: "SIGN",
-            columns: Series::new([11_i8]).into(),
+            nullable: false,
+            columns: vec![Series::new([11_i8]).into()],
             expect: Series::new([1_i8]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "negative int",
-            display: "SIGN",
-            columns: Series::new([-11_i8]).into(),
+            nullable: false,
+            columns: vec![Series::new([-11_i8]).into()],
             expect: Series::new([-1_i8]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "zero int",
-            display: "SIGN",
-            columns: Series::new([0_i8]).into(),
+            nullable: false,
+            columns: vec![Series::new([0_i8]).into()],
             expect: Series::new([0_i8]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "with null",
-            display: "SIGN",
-            columns: Series::new([Some(0_i8), None]).into(),
+            nullable: true,
+            columns: vec![Series::new([Some(0_i8), None]).into()],
             expect: Series::new([Some(0_i8), None]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "int as string",
-            display: "SIGN",
-            columns: Series::new(["22"]).into(),
+            nullable: false,
+            columns: vec![Series::new(["22"]).into()],
             expect: Series::new([1_i8]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "number with string postfix",
-            display: "SIGN",
-            columns: Series::new(["22abc"]).into(),
+            nullable: false,
+            columns: vec![Series::new(["22abc"]).into()],
             expect: Series::new([1_i8]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "number with string prefix",
-            display: "SIGN",
-            columns: Series::new(["abc22def"]).into(),
+            nullable: false,
+            columns: vec![Series::new(["abc22def"]).into()],
             expect: Series::new([0_i8]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "i16",
-            display: "SIGN",
-            columns: Series::new([11_i16]).into(),
+            nullable: false,
+            columns: vec![Series::new([11_i16]).into()],
             expect: Series::new([1_i8]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "i32",
-            display: "SIGN",
-            columns: Series::new([11_i32]).into(),
+            nullable: false,
+            columns: vec![Series::new([11_i32]).into()],
             expect: Series::new([1_i8]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "i64",
-            display: "SIGN",
-            columns: Series::new([11_i64]).into(),
+            nullable: false,
+            columns: vec![Series::new([11_i64]).into()],
             expect: Series::new([1_i8]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "u8",
-            display: "SIGN",
-            columns: Series::new([11_u8]).into(),
+            nullable: false,
+            columns: vec![Series::new([11_u8]).into()],
             expect: Series::new([1_i8]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "u16",
-            display: "SIGN",
-            columns: Series::new([11_u16]).into(),
+            nullable: false,
+            columns: vec![Series::new([11_u16]).into()],
             expect: Series::new([1_i8]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "u32",
-            display: "SIGN",
-            columns: Series::new([11_u32]).into(),
+            nullable: false,
+            columns: vec![Series::new([11_u32]).into()],
             expect: Series::new([1_i8]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "u64",
-            display: "SIGN",
-            columns: Series::new([11_u64]).into(),
+            nullable: false,
+            columns: vec![Series::new([11_u64]).into()],
             expect: Series::new([1_i8]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "f32",
-            display: "SIGN",
-            columns: Series::new([11.11_f32]).into(),
+            nullable: false,
+            columns: vec![Series::new([11.11_f32]).into()],
             expect: Series::new([1_i8]).into(),
             error: "",
         },
-        Test {
+        ScalarFunctionTest {
             name: "f64",
-            display: "SIGN",
-            columns: Series::new([11.11_f64]).into(),
+            nullable: false,
+            columns: vec![Series::new([11.11_f64]).into()],
             expect: Series::new([1_i8]).into(),
             error: "",
         },
     ];
 
-    for t in tests {
-        let func = SignFunction::try_create("sign")?;
-        let rows = t.columns.len();
-
-        let columns = vec![DataColumnWithField::new(
-            t.columns.clone(),
-            DataField::new("dummpy", t.columns.data_type(), false),
-        )];
-
-        let expect_display = t.display.to_string();
-        let actual_display = format!("{}", func);
-        assert_eq!(expect_display, actual_display);
-
-        if let Err(e) = func.eval(&columns, rows) {
-            assert_eq!(t.error, e.to_string(), "{}", t.name);
-        }
-
-        let v = &(func.eval(&columns, rows)?);
-        assert_eq!(v, &t.expect);
-    }
-    Ok(())
+    test_scalar_functions(SignFunction::try_create("sign")?, &tests)
 }

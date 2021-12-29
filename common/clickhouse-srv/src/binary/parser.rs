@@ -49,6 +49,7 @@ impl<'a, T: Read> Parser<T> {
         compress: bool,
     ) -> Result<Packet> {
         let packet = self.reader.read_uvarint()?;
+
         match packet {
             protocols::CLIENT_PING => Ok(Packet::Ping),
             protocols::CLIENT_CANCEL => Ok(Packet::Cancel),

@@ -18,8 +18,8 @@ use std::str;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataField;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -99,8 +99,8 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
         self.display_name.as_str()
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if args[0] != DataType::String && args[0] != DataType::Null {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        if !args[0].data_type().is_string() && !args[0].data_type().is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null, but got {}",
                 args[0]
@@ -110,7 +110,7 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
         Ok(DataType::Boolean)
     }
 
-    fn nullable(&self, _arg_fields: &[DataField]) -> Result<bool> {
+    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
         Ok(false)
     }
 

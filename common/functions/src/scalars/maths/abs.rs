@@ -15,6 +15,7 @@
 use std::fmt;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -68,9 +69,9 @@ impl Function for AbsFunction {
         "abs"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if args[0].is_numeric() || args[0] == DataType::String || args[0] == DataType::Null {
-            Ok(match &args[0] {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
+            Ok(match args[0].data_type() {
                 DataType::Int8 => DataType::UInt8,
                 DataType::Int16 => DataType::UInt16,
                 DataType::Int32 => DataType::UInt32,

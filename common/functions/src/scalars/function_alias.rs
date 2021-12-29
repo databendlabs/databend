@@ -17,6 +17,7 @@ use std::fmt;
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::Result;
 
 use crate::scalars::Function;
@@ -37,8 +38,8 @@ impl Function for AliasFunction {
         "AliasFunction"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        Ok(args[0].clone())
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        Ok(args[0].data_type().clone())
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
