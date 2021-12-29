@@ -12,9 +12,10 @@ runs:
       with:
         target: ${{ matrix.config.target }}
 
+    # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1
       with:
-        key: ${{ matrix.config.os }}-${{ hashFiles('Cargo.lock') }}-${{ matrix.config.toolchain }}-${{ secrets.CACHE_RESET_KEY }}
+        key: ${{ matrix.config.os }}-${{ hashFiles('Cargo.lock') }}-${{ matrix.config.toolchain }}-v1
         sharedKey: stateful
 
     - uses: actions/download-artifact@v2
