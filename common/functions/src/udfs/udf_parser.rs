@@ -24,8 +24,9 @@ use sqlparser::ast::Ident;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 use sqlparser::tokenizer::Tokenizer;
-use crate::scalars::FunctionFactory;
+
 use crate::aggregates::AggregateFunctionFactory;
+use crate::scalars::FunctionFactory;
 use crate::udfs::UDFFactory;
 
 #[derive(Default)]
@@ -112,10 +113,10 @@ impl ExprVisitor for UDFParser {
                 let name = &name.to_string();
                 if !FunctionFactory::instance().check(name)
                     && !AggregateFunctionFactory::instance().check(name)
-                    && match UDFFactory::get_definition(&self.tenant_id, name) {
-                        Ok(Some(_)) => false,
-                        _ => true,
-                    }
+                    && !matches!(
+                        UDFFactory::get_definition(&self.tenant_id, name),
+                        Ok(Some(_))
+                    )
                 {
                     Err(ErrorCode::SyntaxException(format!(
                         "Function is not builtin or defined: {}",
