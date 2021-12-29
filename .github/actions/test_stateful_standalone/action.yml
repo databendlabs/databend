@@ -14,7 +14,8 @@ runs:
 
     - uses: Swatinem/rust-cache@v1
       with:
-        sharedKey: stateful-${{ secrets.CACHE_RESET_KEY }}
+        key: ${{ matrix.config.os }}-${{ hashFiles('Cargo.lock') }}-${{ matrix.config.toolchain }}-${{ secrets.CACHE_RESET_KEY }}
+        sharedKey: stateful
 
     - uses: actions/download-artifact@v2
       with:
