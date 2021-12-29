@@ -121,7 +121,7 @@ impl FuseTable {
                         })
                 }
             })
-            .buffered(bite_size as usize) // buffer_unordered?
+            .buffer_unordered(bite_size as usize) // buffer_unordered?
             .instrument(common_tracing::tracing::Span::current());
         Ok(Box::pin(stream))
     }
