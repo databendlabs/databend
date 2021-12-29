@@ -1256,6 +1256,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-dal2"
+version = "0.1.0"
+dependencies = [
+ "async-compat",
+ "async-trait",
+ "bytes 1.1.0",
+ "common-exception",
+ "futures",
+ "reqwest",
+ "rusoto_core",
+ "rusoto_credential",
+ "rusoto_s3",
+ "tokio",
+]
+
+[[package]]
 name = "common-datablocks"
 version = "0.1.0"
 dependencies = [
@@ -5057,9 +5073,9 @@ dependencies = [
 
 [[package]]
 name = "poem"
-version = "1.2.14"
+version = "1.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb0581eb36ceb10416158ec2063c3b3a3ddd07aa101d47943ed73c6f1e347419"
+checksum = "c7e81913aa164826274971659a658498c5f4794175353b0e096e2e06bd9ff7a8"
 dependencies = [
  "async-trait",
  "bytes 1.1.0",
@@ -5089,9 +5105,9 @@ dependencies = [
 
 [[package]]
 name = "poem-derive"
-version = "1.2.14"
+version = "1.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cbef1d14bae249e06f97e824a37ccabe864c38801f3cfde7b0f96598ddc813e"
+checksum = "f69f4684aa2b284a0baf52df5abc779b69d49b7f8d57fec0e4414f8f69044bcf"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
