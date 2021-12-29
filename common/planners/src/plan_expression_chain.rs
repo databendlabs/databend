@@ -123,8 +123,6 @@ impl ExpressionChain {
                 op,
                 expr: nested_expr,
             } => {
-                self.add_expr(nested_expr)?;
-
                 let arg_types = vec![nested_expr.to_data_type_and_nullable(&self.schema)?];
                 let func = FunctionFactory::instance().get(op, &arg_types)?;
                 let return_type = func.return_type(&arg_types)?;
@@ -144,9 +142,6 @@ impl ExpressionChain {
             }
 
             Expression::BinaryExpression { op, left, right } => {
-                self.add_expr(left)?;
-                self.add_expr(right)?;
-
                 let arg_types = vec![
                     left.to_data_type_and_nullable(&self.schema)?,
                     right.to_data_type_and_nullable(&self.schema)?,
@@ -170,10 +165,6 @@ impl ExpressionChain {
             }
 
             Expression::ScalarFunction { op, args } => {
-                for expr in args.iter() {
-                    self.add_expr(expr)?;
-                }
-
                 let arg_types = args
                     .iter()
                     .map(|action| action.to_data_type_and_nullable(&self.schema))
