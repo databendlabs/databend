@@ -47,7 +47,7 @@ pub trait AggregateArgMinMaxState: Send + Sync + 'static {
     fn merge(&mut self, rhs: &Self, is_min: bool) -> Result<()>;
     fn serialize(&self, writer: &mut BytesMut) -> Result<()>;
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
-    fn merge_result(&mut self) -> Result<DataValue>;
+    fn merge_result(&mut self, array: &mut dyn MutableArrayBuilder) -> Result<()>;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -163,8 +163,62 @@ where
         Ok(())
     }
 
-    fn merge_result(&mut self) -> Result<DataValue> {
-        Ok(self.data.clone())
+    #[allow(unused_mut)]
+    fn merge_result(&mut self, array: &mut dyn MutableArrayBuilder) -> Result<()> {
+        let datatype: DataType = array.data_type();
+        with_match_primitive_type!(datatype, |$T| {
+            let mut array = array
+                .as_mut_any()
+                .downcast_mut::<MutablePrimitiveArrayBuilder<$T>>()
+                .ok_or_else(|| {
+                    ErrorCode::UnexpectedError(
+                        "error occured when downcast MutableArray".to_string(),
+                    )
+                })?;
+            if self.data.is_null() {
+                array.push_null();
+            }else {
+                if self.data.is_integer() {
+                    let x = self.data.as_i64()?;
+                    array.push(x as $T);
+                }else {
+                    let x = self.data.as_f64()?;
+                    array.push(x as $T);
+                }
+            }
+        },
+        {
+            match &self.data {
+                DataValue::Boolean(val) => {
+                    let mut array = array
+                    .as_mut_any()
+                    .downcast_mut::<MutableBooleanArrayBuilder>()
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                    array.push_option(*val);
+                }
+                DataValue::String(val) => {
+                    let mut array = array
+                    .as_mut_any()
+                    .downcast_mut::<MutableStringArrayBuilder>()
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                    array.push_option(val.as_ref());
+                },
+                _ => {
+                    return Err(ErrorCode::UnexpectedError(
+                        "aggregate arg_min_max unexpected datatype".to_string(),
+                    ))
+                }
+            }
+        });
+        Ok(())
     }
 }
 
@@ -259,8 +313,62 @@ impl AggregateArgMinMaxState for StringState {
         Ok(())
     }
 
-    fn merge_result(&mut self) -> Result<DataValue> {
-        Ok(self.data.clone())
+    #[allow(unused_mut)]
+    fn merge_result(&mut self, array: &mut dyn MutableArrayBuilder) -> Result<()> {
+        let datatype: DataType = array.data_type();
+        with_match_primitive_type!(datatype, |$T| {
+            let mut array = array
+                .as_mut_any()
+                .downcast_mut::<MutablePrimitiveArrayBuilder<$T>>()
+                .ok_or_else(|| {
+                    ErrorCode::UnexpectedError(
+                        "error occured when downcast MutableArray".to_string(),
+                    )
+                })?;
+            if self.data.is_null() {
+                array.push_null();
+            }else {
+                if self.data.is_integer() {
+                    let x = self.data.as_i64()?;
+                    array.push(x as $T);
+                }else {
+                    let x = self.data.as_f64()?;
+                    array.push(x as $T);
+                }
+            }
+        },
+        {
+            match &self.data {
+                DataValue::Boolean(val) => {
+                    let mut array = array
+                    .as_mut_any()
+                    .downcast_mut::<MutableBooleanArrayBuilder>()
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                    array.push_option(*val);
+                }
+                DataValue::String(val) => {
+                    let mut array = array
+                    .as_mut_any()
+                    .downcast_mut::<MutableStringArrayBuilder>()
+                    .ok_or_else(|| {
+                        ErrorCode::UnexpectedError(
+                            "error occured when downcast MutableArray".to_string(),
+                        )
+                    })?;
+                array.push_option(val.as_ref());
+                },
+                _ => {
+                    return Err(ErrorCode::UnexpectedError(
+                        "aggregate arg_min_max unexpected datatype".to_string(),
+                    ))
+                }
+            }
+        });
+        Ok(())
     }
 }
 
@@ -333,9 +441,9 @@ where T: AggregateArgMinMaxState //  std::cmp::PartialOrd + DFTryFrom<DataValue>
         state.merge(rhs, self.is_min)
     }
 
-    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
         let state = place.get::<T>();
-        state.merge_result()
+        state.merge_result(array)
     }
 }
 

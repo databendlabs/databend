@@ -26,9 +26,11 @@ use crate::prelude::*;
 
 mod builder;
 mod iterator;
+mod mutable;
 
 pub use builder::*;
 pub use iterator::*;
+pub use mutable::*;
 
 #[derive(Debug, Clone)]
 pub struct DFBooleanArray {

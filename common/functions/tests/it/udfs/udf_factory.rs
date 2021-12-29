@@ -26,38 +26,44 @@ use sqlparser::ast::UnaryOperator;
 fn test_udf_factory() -> Result<()> {
     let tenant = "test_udf_factory_tenant";
     let name = "test_udf_factory";
-    let register_result = UDFFactory::register(tenant, name, "not(isnotnull(@0))");
+    let parameters = &vec!["p".to_string()];
+    let register_result = UDFFactory::register(tenant, name, parameters, "not(isnotnull(p))");
 
     assert!(register_result.is_ok());
     let definition_expr = UDFFactory::get_definition(tenant, name)?;
     assert_eq!(
         definition_expr,
-        Some(Expr::UnaryOp {
-            op: UnaryOperator::Not,
-            expr: Box::new(Expr::Nested(Box::new(Expr::Function(Function {
-                name: ObjectName(vec![Ident {
-                    value: "isnotnull".to_string(),
-                    quote_style: None,
-                }]),
-                params: vec![],
-                args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident {
-                    value: "@0".to_string(),
-                    quote_style: None,
-                }))],
-                over: None,
-                distinct: false,
-            }))))
+        Some(UDFDefinition {
+            parameters: parameters.clone(),
+            expr: Expr::UnaryOp {
+                op: UnaryOperator::Not,
+                expr: Box::new(Expr::Nested(Box::new(Expr::Function(Function {
+                    name: ObjectName(vec![Ident {
+                        value: "isnotnull".to_string(),
+                        quote_style: None,
+                    }]),
+                    params: vec![],
+                    args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident {
+                        value: "p".to_string(),
+                        quote_style: None,
+                    }))],
+                    over: None,
+                    distinct: false,
+                }))))
+            }
         })
     );
 
     // test register an existing UDF
-    assert!(UDFFactory::register(tenant, "test_udf_factory", "not(isnotnull(@0))").is_ok());
+    assert!(
+        UDFFactory::register(tenant, "test_udf_factory", parameters, "not(isnotnull(p))").is_ok()
+    );
 
     // test register an scalar function
-    assert!(UDFFactory::register(tenant, "isnotnull", "not(isnotnull(@0))").is_err());
+    assert!(UDFFactory::register(tenant, "isnotnull", parameters, "not(isnotnull(p))").is_err());
 
     // test register an aggregate function
-    assert!(UDFFactory::register(tenant, "count", "not(isnotnull(@0))").is_err());
+    assert!(UDFFactory::register(tenant, "count", parameters, "not(isnotnull(p))").is_err());
 
     // test unregister UDF
     let unregister_result = UDFFactory::unregister(tenant, name);
