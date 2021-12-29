@@ -21,13 +21,13 @@ use num::cast::AsPrimitive;
 
 use super::arithmetic::ArithmeticTrait;
 use super::result_type::ResultTypeOfBinaryArith;
-use crate::binary_arithmetic_helper;
 use crate::scalars::function_factory::ArithmeticDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::BinaryArithmeticOperator;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
+use crate::try_binary_arithmetic_helper;
 use crate::with_match_primitive_type;
 
 #[derive(Clone)]
@@ -51,13 +51,24 @@ where
         let lhs: &DFPrimitiveArray<T> = lhs.static_cast();
         let rhs: &DFPrimitiveArray<D> = rhs.static_cast();
 
-        if rhs.into_iter().any(|v| v == Some(&D::zero())) {
-            return Err(ErrorCode::BadArguments("Division by zero"));
-        }
-
-        let result: DataColumn = binary_arithmetic_helper!(lhs, rhs, f64, R, |l: f64, r: f64| {
-            AsPrimitive::<R>::as_(l / r)
-        });
+        let result: DataColumn = try_binary_arithmetic_helper! {
+            lhs,
+            rhs,
+            f64,
+            R,
+            |l: f64, r: f64| {
+                if r == 0.0 {
+                    return Err(ErrorCode::BadArguments("Division by zero"));
+                }
+                Ok(AsPrimitive::<R>::as_(l / r))
+            },
+            |r: f64| {
+                if r == 0.0 {
+                    return Err(ErrorCode::BadArguments("Division by zero"));
+                }
+                Ok(unary(lhs, |l| AsPrimitive::<R>::as_(l.as_() / r)))
+            }
+        };
 
         Ok(result.resize_constant(columns[0].column().len()))
     }

@@ -248,3 +248,31 @@ macro_rules! unary_arithmetic {
         Ok(result.resize_constant($self.len()))
     }};
 }
+
+#[macro_export]
+macro_rules! try_binary_arithmetic_helper {
+    ($lhs: ident, $rhs: ident, $T: ty, $R: ty, $op: expr, $scalar:expr) => {{
+        match ($lhs.len(), $rhs.len()) {
+            (a, b) if a == b => try_binary($lhs, $rhs, |l, r| $op(l.as_(), r.as_()))?,
+            (_, 1) => {
+                let opt_rhs = $rhs.get(0);
+                match opt_rhs {
+                    None => DFPrimitiveArray::<$R>::full_null($lhs.len()),
+                    Some(rhs) => $scalar(rhs.as_())?,
+                }
+            }
+            (1, _) => {
+                let opt_lhs = $lhs.get(0);
+                match opt_lhs {
+                    None => DFPrimitiveArray::<$R>::full_null($rhs.len()),
+                    Some(lhs) => {
+                        let l: $T = lhs.as_();
+                        try_unary($rhs, |r| $op(l, r.as_()))?
+                    }
+                }
+            }
+            _ => unreachable!(),
+        }
+        .into()
+    }};
+}
