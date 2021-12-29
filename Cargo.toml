@@ -8,6 +8,7 @@ members = [
     "common/clickhouse-srv",
     "common/containers",
     "common/dal",
+    "common/dal2",
     "common/datablocks",
     "common/datavalues",
     "common/exception",
