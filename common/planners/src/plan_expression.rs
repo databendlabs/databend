@@ -24,8 +24,7 @@ use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::aggregates::AggregateFunctionRef
-use common_functions::scalars::FunctionFactory;
+use common_functions::aggregates::AggregateFunctionRef;
 use once_cell::sync::Lazy;
 
 use crate::plan_expression_common::ExpressionDataTypeVisitor;
@@ -298,7 +297,10 @@ impl Expression {
             .clone())
     }
 
-    pub fn to_data_type_and_nullable(&self, input_schema: &DataSchemaRef) -> Result<DataTypeAndNullable> {
+    pub fn to_data_type_and_nullable(
+        &self,
+        input_schema: &DataSchemaRef,
+    ) -> Result<DataTypeAndNullable> {
         let visitor = ExpressionDataTypeVisitor::create(input_schema.clone());
         visitor.visit(self)?.finalize()
     }
@@ -373,7 +375,7 @@ impl fmt::Debug for Expression {
             Expression::Subquery { name, .. } => write!(f, "subquery({})", name),
             Expression::ScalarSubquery { name, .. } => write!(f, "scalar subquery({})", name),
             Expression::BinaryExpression { op, left, right } => {
-                write!(f, "({:?} {} {:?})", left, op, right, )
+                write!(f, "({:?} {} {:?})", left, op, right,)
             }
 
             Expression::UnaryExpression { op, expr } => {
@@ -387,7 +389,7 @@ impl fmt::Debug for Expression {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{:?}", args[i], )?;
+                    write!(f, "{:?}", args[i],)?;
                 }
                 write!(f, ")")
             }
