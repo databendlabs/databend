@@ -45,6 +45,7 @@ use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use once_cell::sync::OnceCell;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
@@ -57,6 +58,8 @@ use crate::sessions::Session;
 use crate::sessions::SessionManager;
 use crate::sessions::Settings;
 use crate::storages::Table;
+
+static S3_ACCESSOR: OnceCell<Arc<dyn DataAccessor>> = OnceCell::new();
 
 pub struct QueryContext {
     version: String,
@@ -258,14 +261,30 @@ impl QueryContext {
         let da: Arc<dyn DataAccessor> = match scheme {
             StorageScheme::S3 => {
                 let conf = &storage_conf.s3;
-                Arc::new(S3::try_create(
-                    &conf.region,
-                    &conf.endpoint_url,
-                    &conf.bucket,
-                    &conf.access_key_id,
-                    &conf.secret_access_key,
-                    conf.enable_pod_iam_policy,
-                )?)
+                if self.get_settings().get_global_s3_data_accessor()? == 1 {
+                    S3_ACCESSOR
+                        .get_or_try_init(|| {
+                            let da = S3::try_create(
+                                &conf.region,
+                                &conf.endpoint_url,
+                                &conf.bucket,
+                                &conf.access_key_id,
+                                &conf.secret_access_key,
+                                conf.enable_pod_iam_policy,
+                            )?;
+                            Ok::<_, ErrorCode>(Arc::new(da))
+                        })?
+                        .clone()
+                } else {
+                    Arc::new(S3::try_create(
+                        &conf.region,
+                        &conf.endpoint_url,
+                        &conf.bucket,
+                        &conf.access_key_id,
+                        &conf.secret_access_key,
+                        conf.enable_pod_iam_policy,
+                    )?)
+                }
             }
             StorageScheme::AzureStorageBlob => {
                 let conf: &AzureStorageBlobConfig = &storage_conf.azure_storage_blob;

@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::io::parquet::read::read_metadata_async;
+use common_dal::DataAccessor;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -30,6 +31,13 @@ use crate::sessions::QueryContext;
 use crate::storages::fuse::FuseTable;
 
 impl FuseTable {
+    // #[inline]
+    // pub async fn read_meta(da: &Arc<dyn DataAccessor>, loc: &str) -> Result<FileMetaData> {
+    //     let mut reader = da.get_input_stream(name, Some(size))?;
+    //     read_metadata_async(&mut reader)
+    //         .await
+    //         .map_err(|e| ErrorCode::ParquetError(e.to_string()))
+    // }
     #[inline]
     pub async fn do_read(
         &self,

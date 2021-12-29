@@ -33,7 +33,8 @@ impl Settings {
         ("min_distributed_rows", u64, 100000000, "Minimum distributed read rows. In cluster mode, when read rows exceeds this value, the local table converted to distributed query."),
         ("min_distributed_bytes", u64, 500 * 1024 * 1024, "Minimum distributed read bytes. In cluster mode, when read bytes exceeds this value, the local table converted to distributed query."),
         ("parallel_read_threads", u64, 1, "The maximum number of parallelism for reading data. By default, it is 1."),
-        ("decompress_in_thread_pool", u64, 0, "Use dedicated thread pool to depress data,  By default, it is 0.")
+        ("decompress_in_thread_pool", u64, 0, "Use dedicated thread pool to depress data,  By default, it is 0."),
+        ("global_s3_data_accessor", u64, 0, "Use dedicated thread pool to depress data,  By default, it is 0.")
     }
 
     pub fn try_create() -> Result<Arc<Settings>> {
