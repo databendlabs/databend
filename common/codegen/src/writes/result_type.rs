@@ -51,6 +51,7 @@ pub trait ResultTypeOfBinaryArith {{
     type Minus: DFPrimitiveType;
     type IntDiv: DFPrimitiveType;
     type Modulo: DFPrimitiveType;
+    type LeastSuper: DFPrimitiveType;
 }}
 
 pub trait ResultTypeOfUnaryArith {{
@@ -69,6 +70,7 @@ pub trait ResultTypeOfUnaryArith {{
             let minus = numerical_arithmetic_coercion(&Minus, left, right).unwrap();
             let int_div = numerical_arithmetic_coercion(&IntDiv, left, right).unwrap();
             let modulo = numerical_arithmetic_coercion(&Modulo, left, right).unwrap();
+            let least_super = numerical_coercion(left, right, true).unwrap();
             writeln!(
                 file,
                 "
@@ -77,6 +79,7 @@ impl ResultTypeOfBinaryArith for ({}, {}) {{
     type Minus = {};
     type IntDiv = {};
     type Modulo = {};
+    type LeastSuper = {};
 }}",
                 to_primitive_str(left),
                 to_primitive_str(right),
@@ -84,6 +87,7 @@ impl ResultTypeOfBinaryArith for ({}, {}) {{
                 to_primitive_str(&minus),
                 to_primitive_str(&int_div),
                 to_primitive_str(&modulo),
+                to_primitive_str(&least_super),
             )
             .unwrap();
         }

@@ -30,6 +30,7 @@ use super::arithmetic::ArithmeticTrait;
 use crate::scalars::ArithmeticDivFunction;
 use crate::scalars::ArithmeticIntDivFunction;
 use crate::scalars::ArithmeticMinusFunction;
+use crate::scalars::ArithmeticModuloFunction;
 use crate::scalars::ArithmeticMulFunction;
 use crate::scalars::ArithmeticPlusFunction;
 use crate::scalars::Function;
@@ -104,11 +105,11 @@ where T: ArithmeticTrait + Clone + Sync + Send + 'static
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
         match self.op {
             BinaryArithmeticOperator::Plus => ArithmeticPlusFunction::get_monotonicity(args),
+            BinaryArithmeticOperator::Minus => ArithmeticMinusFunction::get_monotonicity(args),
             BinaryArithmeticOperator::Mul => ArithmeticMulFunction::get_monotonicity(args),
             BinaryArithmeticOperator::Div => ArithmeticDivFunction::get_monotonicity(args),
             BinaryArithmeticOperator::IntDiv => ArithmeticIntDivFunction::get_monotonicity(args),
-            BinaryArithmeticOperator::Minus => ArithmeticMinusFunction::get_monotonicity(args),
-            _ => unimplemented!(),
+            BinaryArithmeticOperator::Modulo => ArithmeticModuloFunction::get_monotonicity(args),
         }
     }
 }

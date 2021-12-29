@@ -61,7 +61,7 @@ impl MathsFunction {
         factory.register("ceil", CeilFunction::desc());
         factory.register("ceiling", CeilFunction::desc());
         factory.register("floor", FloorFunction::desc());
-        factory.register("mod", ArithmeticModuloFunction::desc());
+        factory.register_arithmetic("mod", ArithmeticModuloFunction::desc());
         factory.register("exp", ExpFunction::desc());
         factory.register("asin", TrigonometricAsinFunction::desc());
         factory.register("acos", TrigonometricAcosFunction::desc());

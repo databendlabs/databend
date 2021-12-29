@@ -240,27 +240,21 @@ macro_rules! interval_arithmetic {
 
 #[macro_export]
 macro_rules! arithmetic_helper {
-    ($lhs: ident, $rhs: ident, $T: ty, $R: ty, $scalar: expr, $op: expr) => {{
+    ($lhs: ident, $rhs: ident, $R: ty, $scalar: expr, $op: expr) => {{
         match ($lhs.len(), $rhs.len()) {
-            (a, b) if a == b => binary($lhs, $rhs, |l, r| $op(l.as_(), r.as_())),
+            (a, b) if a == b => binary($lhs, $rhs, |l, r| $op(l, r)),
             (_, 1) => {
                 let opt_rhs = $rhs.get(0);
                 match opt_rhs {
                     None => DFPrimitiveArray::<$R>::full_null($lhs.len()),
-                    Some(rhs) => {
-                        let r: $T = rhs.as_();
-                        $scalar($lhs, &r)
-                    }
+                    Some(rhs) => $scalar($lhs, &rhs),
                 }
             }
             (1, _) => {
                 let opt_lhs = $lhs.get(0);
                 match opt_lhs {
                     None => DFPrimitiveArray::<$R>::full_null($rhs.len()),
-                    Some(lhs) => {
-                        let l: $T = lhs.as_();
-                        unary($rhs, |r| $op(l, r.as_()))
-                    }
+                    Some(lhs) => unary($rhs, |r| $op(lhs, r)),
                 }
             }
             _ => unreachable!(),
