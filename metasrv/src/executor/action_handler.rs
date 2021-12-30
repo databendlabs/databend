@@ -15,9 +15,12 @@
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
+use common_exception::SerializedError;
 use common_meta_api::KVApi;
-use common_meta_flight::MetaFlightAction;
-use common_meta_flight::RequestFor;
+use common_meta_raft_store::MetaGrpcReadReq;
+use common_meta_raft_store::MetaGrpcWriteReq;
+use common_meta_raft_store::RequestFor;
+use common_meta_types::protobuf::RaftReply;
 use serde::Serialize;
 
 use crate::meta_service::MetaNode;
@@ -45,37 +48,85 @@ impl ActionHandler {
         ActionHandler { meta_node }
     }
 
-    pub async fn execute<S, R>(
-        &self,
-        action: MetaFlightAction,
-        s: S,
-    ) -> common_exception::Result<R>
-    where
-        S: ReplySerializer<Output = R>,
-    {
+    pub async fn execute_write(&self, action: MetaGrpcWriteReq) -> RaftReply {
         // To keep the code IDE-friendly, we manually expand the enum variants and dispatch them one by one
 
         match action {
-            MetaFlightAction::UpsertKV(a) => s.serialize(self.meta_node.upsert_kv(a).await?),
-            MetaFlightAction::GetKV(a) => s.serialize(self.meta_node.get_kv(&a.key).await?),
-            MetaFlightAction::MGetKV(a) => s.serialize(self.meta_node.mget_kv(&a.keys).await?),
-            MetaFlightAction::PrefixListKV(a) => {
-                s.serialize(self.meta_node.prefix_list_kv(&a.0).await?)
+            MetaGrpcWriteReq::UpsertKV(a) => {
+                let r = self
+                    .meta_node
+                    .upsert_kv(a)
+                    .await
+                    .map_err(SerializedError::from);
+                RaftReply::from(r)
+            }
+            // database
+            MetaGrpcWriteReq::CreateDatabase(a) => {
+                let r = self.handle(a).await.map_err(SerializedError::from);
+                RaftReply::from(r)
+            }
+            MetaGrpcWriteReq::DropDatabase(a) => {
+                let r = self.handle(a).await.map_err(SerializedError::from);
+                RaftReply::from(r)
+            }
+
+            // table
+            MetaGrpcWriteReq::CreateTable(a) => {
+                let r = self.handle(a).await.map_err(SerializedError::from);
+                RaftReply::from(r)
+            }
+            MetaGrpcWriteReq::DropTable(a) => {
+                let r = self.handle(a).await.map_err(SerializedError::from);
+                RaftReply::from(r)
+            }
+            MetaGrpcWriteReq::CommitTable(a) => {
+                let r = self.handle(a).await.map_err(SerializedError::from);
+                RaftReply::from(r)
+            }
+        }
+    }
+
+    pub async fn execute_read(&self, action: MetaGrpcReadReq) -> common_exception::Result<String> {
+        // To keep the code IDE-friendly, we manually expand the enum variants and dispatch them one by one
+
+        let r = match action {
+            MetaGrpcReadReq::GetKV(a) => {
+                let r = self.meta_node.get_kv(&a.key).await?;
+                serde_json::to_string(&r)?
+            }
+            MetaGrpcReadReq::MGetKV(a) => {
+                let r = self.meta_node.mget_kv(&a.keys).await?;
+                serde_json::to_string(&r)?
+            }
+            MetaGrpcReadReq::PrefixListKV(a) => {
+                let r = self.meta_node.prefix_list_kv(&a.0).await?;
+                serde_json::to_string(&r)?
             }
 
             // database
-            MetaFlightAction::CreateDatabase(a) => s.serialize(self.handle(a).await?),
-            MetaFlightAction::GetDatabase(a) => s.serialize(self.handle(a).await?),
-            MetaFlightAction::DropDatabase(a) => s.serialize(self.handle(a).await?),
-            MetaFlightAction::ListDatabases(a) => s.serialize(self.handle(a).await?),
+            MetaGrpcReadReq::GetDatabase(a) => {
+                let r = self.handle(a).await?;
+                serde_json::to_string(&r)?
+            }
+            MetaGrpcReadReq::ListDatabases(a) => {
+                let r = self.handle(a).await?;
+                serde_json::to_string(&r)?
+            }
 
             // table
-            MetaFlightAction::CreateTable(a) => s.serialize(self.handle(a).await?),
-            MetaFlightAction::DropTable(a) => s.serialize(self.handle(a).await?),
-            MetaFlightAction::GetTable(a) => s.serialize(self.handle(a).await?),
-            MetaFlightAction::ListTables(a) => s.serialize(self.handle(a).await?),
-            MetaFlightAction::GetTableExt(a) => s.serialize(self.handle(a).await?),
-            MetaFlightAction::CommitTable(a) => s.serialize(self.handle(a).await?),
-        }
+            MetaGrpcReadReq::GetTable(a) => {
+                let r = self.handle(a).await?;
+                serde_json::to_string(&r)?
+            }
+            MetaGrpcReadReq::ListTables(a) => {
+                let r = self.handle(a).await?;
+                serde_json::to_string(&r)?
+            }
+            MetaGrpcReadReq::GetTableExt(a) => {
+                let r = self.handle(a).await?;
+                serde_json::to_string(&r)?
+            }
+        };
+        Ok(r)
     }
 }

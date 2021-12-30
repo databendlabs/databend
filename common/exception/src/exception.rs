@@ -14,6 +14,7 @@
 
 #![allow(non_snake_case)]
 
+use std::convert::Infallible;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -423,6 +424,12 @@ impl From<Box<bincode::ErrorKind>> for ErrorCode {
 impl From<serde_json::Error> for ErrorCode {
     fn from(error: serde_json::Error) -> Self {
         ErrorCode::from_std_error(error)
+    }
+}
+
+impl From<Infallible> for ErrorCode {
+    fn from(v: Infallible) -> Self {
+        ErrorCode::from_std_error(v)
     }
 }
 
