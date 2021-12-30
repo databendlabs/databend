@@ -8,6 +8,9 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Maximize build space
+      uses: ./.github/actions/cleanup
+
     - uses: actions-rs/toolchain@v1
       with:
         target: ${{ matrix.config.target }}
