@@ -26,6 +26,7 @@ use serde_json::json;
 use crate::cmds::clusters::cluster::ClusterProfile;
 use crate::cmds::clusters::stop::StopCommand;
 use crate::cmds::command::Command;
+use crate::cmds::loads::load::LoadCommand;
 use crate::cmds::packages::fetch::download_and_unpack;
 use crate::cmds::packages::fetch::get_rust_architecture;
 use crate::cmds::queries::query::QueryCommand;
@@ -151,7 +152,7 @@ CREATE TABLE ontime
     Div5LongestGTime                String,
     Div5WheelsOff                   String,
     Div5TailNum                     String
-) ENGINE = CSV location = "{{ csv_location }}";
+) ENGINE = FUSE";
 "#;
 
 const PLAYGROUND_VERSION: &str = "v0.4.1-nightly";
@@ -307,14 +308,20 @@ impl UpCommand {
                 writer.write_ok(format!("Download dataset to {}", dataset_location));
                 match dataset {
                     DataSets::OntimeMini(_, ddl) => {
+                        let table = "ontime".to_string();
                         if let Err(e) = self
-                            .create_ddl(writer, dataset_location, "ontime".to_string(), ddl)
+                            .create_ddl(writer, dataset_location.as_str(), table.as_str(), ddl)
                             .await
                         {
                             return Err(e);
                         }
+
+                        writer.write_ok(format!("Start to load data into table {}", table));
+                        self.load_data(writer, dataset_location.as_str(), table.as_str())
+                            .await?;
                     }
                 }
+
                 writer.write_ok("Start to download playground".to_string());
 
                 match self.download_playground().await {
@@ -382,14 +389,14 @@ impl UpCommand {
     async fn create_ddl(
         &self,
         writer: &mut Writer,
-        dataset_location: String,
-        table_name: String,
+        dataset_location: &str,
+        table_name: &str,
         ddl: &str,
     ) -> Result<()> {
-        if !Path::new(dataset_location.as_str()).exists() {
+        if !Path::new(dataset_location).exists() {
             return Err(CliError::Unknown(format!(
                 "Cannot find dataset on {}",
-                Path::new(dataset_location.as_str())
+                Path::new(dataset_location)
                     .canonicalize()
                     .unwrap()
                     .to_str()
@@ -399,7 +406,7 @@ impl UpCommand {
         let query = QueryCommand::create(self.conf.clone());
         let ddl = render(
             ddl,
-            json!({"csv_location": Path::new(dataset_location.as_str()).canonicalize().unwrap().to_str().unwrap()}),
+            json!({"csv_location": Path::new(dataset_location).canonicalize().unwrap().to_str().unwrap()}),
         );
         match ddl {
             Ok(ddl) => {
@@ -416,6 +423,28 @@ impl UpCommand {
             Err(e) => return Err(e),
         }
         Ok(())
+    }
+
+    async fn load_data(
+        &self,
+        writer: &mut Writer,
+        dataset_location: &str,
+        table_name: &str,
+    ) -> Result<()> {
+        if !Path::new(dataset_location).exists() {
+            return Err(CliError::Unknown(format!(
+                "Cannot find dataset on {}",
+                Path::new(dataset_location)
+                    .canonicalize()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+            )));
+        }
+        let loader = LoadCommand::create(self.conf.clone());
+        loader
+            .load(Some(dataset_location), table_name, "1", writer)
+            .await
     }
 
     async fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {

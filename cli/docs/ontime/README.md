@@ -142,8 +142,12 @@ CREATE TABLE ontime
     Div5LongestGTime                String,
     Div5WheelsOff                   String,
     Div5TailNum                     String
-) ENGINE = CSV location = <locatiion for local data>;
+) ENGINE = FUSE
 ```
+
+### Load data
+
+See [http streaming loading doc](https://databend.rs/user/data-loading/http-streaming-load)
 
 ### queries
 Q0:
