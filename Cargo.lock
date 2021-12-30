@@ -293,7 +293,7 @@ source = "git+https://github.com/datafuselabs/openraft?tag=v0.6.2-alpha.14.1#508
 dependencies = [
  "anyhow",
  "async-trait",
- "bytes",
+ "bytes 1.1.0",
  "derive_more",
  "futures",
  "log",
@@ -1261,7 +1261,7 @@ version = "0.1.0"
 dependencies = [
  "async-compat",
  "async-trait",
- "bytes 1.1.0",
+ "bytes",
  "common-exception",
  "futures",
  "reqwest",
