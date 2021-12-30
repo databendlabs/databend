@@ -268,7 +268,7 @@ def report(releaser, pull, files, type, current_log_link, ref_log_link):
         f.close()
 
 
-## python compare.py -r xxxx -p xxxx
+## python3 compare.py -r xxxx -p xxxx
 if __name__ == '__main__':
     parser = ArgumentParser(description='databend perf results compare tools')
     parser.add_argument('-r',
