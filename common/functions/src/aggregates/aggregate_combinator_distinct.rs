@@ -210,7 +210,7 @@ impl AggregateFunction for AggregateDistinctCombinator {
         if self.nested.name() == "AggregateFunctionCount" {
             let mut array = array
                 .as_mut_any()
-                .downcast_mut::<MutablePrimitiveArrayBuilder<u64>>()
+                .downcast_mut::<MutablePrimitiveArrayBuilder<u64, true>>()
                 .ok_or_else(|| {
                     ErrorCode::UnexpectedError(
                         "error occured when downcast MutableArray".to_string(),

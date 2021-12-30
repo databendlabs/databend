@@ -31,16 +31,16 @@ pub trait MutableArrayBuilder {
 pub fn create_mutable_array(datatype: DataType) -> Box<dyn MutableArrayBuilder> {
     match datatype {
         DataType::Boolean => Box::new(MutableBooleanArrayBuilder::default()),
-        DataType::UInt8 => Box::new(MutablePrimitiveArrayBuilder::<u8>::default()),
-        DataType::UInt16 => Box::new(MutablePrimitiveArrayBuilder::<u16>::default()),
-        DataType::UInt32 => Box::new(MutablePrimitiveArrayBuilder::<u32>::default()),
-        DataType::UInt64 => Box::new(MutablePrimitiveArrayBuilder::<u64>::default()),
-        DataType::Int8 => Box::new(MutablePrimitiveArrayBuilder::<i8>::default()),
-        DataType::Int16 => Box::new(MutablePrimitiveArrayBuilder::<i16>::default()),
-        DataType::Int32 => Box::new(MutablePrimitiveArrayBuilder::<i32>::default()),
-        DataType::Int64 => Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
-        DataType::Float32 => Box::new(MutablePrimitiveArrayBuilder::<f32>::default()),
-        DataType::Float64 => Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
+        DataType::UInt8 => Box::new(MutablePrimitiveArrayBuilder::<u8, true>::default()),
+        DataType::UInt16 => Box::new(MutablePrimitiveArrayBuilder::<u16, true>::default()),
+        DataType::UInt32 => Box::new(MutablePrimitiveArrayBuilder::<u32, true>::default()),
+        DataType::UInt64 => Box::new(MutablePrimitiveArrayBuilder::<u64, true>::default()),
+        DataType::Int8 => Box::new(MutablePrimitiveArrayBuilder::<i8, true>::default()),
+        DataType::Int16 => Box::new(MutablePrimitiveArrayBuilder::<i16, true>::default()),
+        DataType::Int32 => Box::new(MutablePrimitiveArrayBuilder::<i32, true>::default()),
+        DataType::Int64 => Box::new(MutablePrimitiveArrayBuilder::<i64, true>::default()),
+        DataType::Float32 => Box::new(MutablePrimitiveArrayBuilder::<f32, true>::default()),
+        DataType::Float64 => Box::new(MutablePrimitiveArrayBuilder::<f64, true>::default()),
         DataType::String => Box::new(MutableStringArrayBuilder::default()),
         _ => {
             todo!()

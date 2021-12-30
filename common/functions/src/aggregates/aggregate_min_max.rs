@@ -139,7 +139,7 @@ where
         if let Some(val) = self.value {
             let mut array = array
                 .as_mut_any()
-                .downcast_mut::<MutablePrimitiveArrayBuilder<T>>()
+                .downcast_mut::<MutablePrimitiveArrayBuilder<T, true>>()
                 .ok_or_else(|| {
                     ErrorCode::UnexpectedError(
                         "error occured when downcast MutableArray".to_string(),

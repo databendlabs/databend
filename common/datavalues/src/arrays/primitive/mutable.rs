@@ -26,7 +26,7 @@ use crate::DFPrimitiveType;
 use crate::DataType;
 
 #[derive(Debug)]
-pub struct MutablePrimitiveArrayBuilder<T>
+pub struct MutablePrimitiveArrayBuilder<T, const NULLABLE: bool>
 where T: DFPrimitiveType
 {
     data_type: DataType,
@@ -34,7 +34,7 @@ where T: DFPrimitiveType
     validity: Option<MutableBitmap>,
 }
 
-impl<T> MutableArrayBuilder for MutablePrimitiveArrayBuilder<T>
+impl<T, const NULLABLE: bool> MutableArrayBuilder for MutablePrimitiveArrayBuilder<T, NULLABLE>
 where T: DFPrimitiveType
 {
     fn data_type(&self) -> &DataType {
@@ -63,7 +63,7 @@ where T: DFPrimitiveType
     }
 }
 
-impl<T> Default for MutablePrimitiveArrayBuilder<T>
+impl<T> Default for MutablePrimitiveArrayBuilder<T, true>
 where T: DFPrimitiveType
 {
     fn default() -> Self {
@@ -71,13 +71,64 @@ where T: DFPrimitiveType
     }
 }
 
-impl<T> MutablePrimitiveArrayBuilder<T>
+impl<T> Default for MutablePrimitiveArrayBuilder<T, false>
+where T: DFPrimitiveType
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// for not nullable values
+impl<T> MutablePrimitiveArrayBuilder<T, false>
 where T: DFPrimitiveType
 {
     pub fn new() -> Self {
         Self::with_capacity(0)
     }
 
+    pub fn with_capacity(capacity: usize) -> Self {
+        MutablePrimitiveArrayBuilder {
+            data_type: T::data_type(),
+            values: MutableBuffer::<T>::with_capacity(capacity),
+            validity: Some(MutableBitmap::with_capacity(capacity)),
+        }
+    }
+
+    pub fn push(&mut self, val: T) {
+        self.values.push(val);
+        self.validity.as_mut().unwrap().push(true);
+    }
+}
+
+// for nullable values
+impl<T> MutablePrimitiveArrayBuilder<T, true>
+where T: DFPrimitiveType
+{
+    pub fn new() -> Self {
+        Self::with_capacity(0)
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        MutablePrimitiveArrayBuilder {
+            data_type: T::data_type(),
+            values: MutableBuffer::<T>::with_capacity(capacity),
+            validity: None,
+        }
+    }
+
+    pub fn push(&mut self, val: T) {
+        self.values.push(val);
+        match &mut self.validity {
+            Some(validity) => validity.push(true),
+            None => {}
+        }
+    }
+}
+
+impl<T, const NULLABLE: bool> MutablePrimitiveArrayBuilder<T, NULLABLE>
+where T: DFPrimitiveType
+{
     pub fn from_data(
         data_type: DataType,
         values: MutableBuffer<T>,
@@ -90,41 +141,8 @@ where T: DFPrimitiveType
         }
     }
 
-    pub fn with_capacity(capacity: usize) -> Self {
-        MutablePrimitiveArrayBuilder {
-            data_type: T::data_type(),
-            values: MutableBuffer::<T>::with_capacity(capacity),
-            validity: None,
-        }
-    }
-
     pub fn values(&self) -> &MutableBuffer<T> {
         &self.values
-    }
-
-    pub fn push(&mut self, val: T) {
-        self.values.push(val);
-        match &mut self.validity {
-            Some(validity) => validity.push(true),
-            None => {}
-        }
-    }
-
-    pub fn push_option(&mut self, val: Option<T>) {
-        match val {
-            Some(val) => {
-                self.push(val);
-            }
-            None => {
-                self.values.push(T::default());
-                match &mut self.validity {
-                    Some(validity) => validity.push(false),
-                    None => {
-                        self.init_validity();
-                    }
-                }
-            }
-        }
     }
 
     fn init_validity(&mut self) {
@@ -136,5 +154,26 @@ where T: DFPrimitiveType
 
     fn len(&self) -> usize {
         self.values.len()
+    }
+
+    pub fn push_option(&mut self, val: Option<T>) {
+        match val {
+            Some(val) => {
+                self.values.push(val);
+                match &mut self.validity {
+                    Some(validity) => validity.push(true),
+                    None => {}
+                }
+            }
+            None => {
+                self.values.push(T::default());
+                match &mut self.validity {
+                    Some(validity) => validity.push(false),
+                    None => {
+                        self.init_validity();
+                    }
+                }
+            }
+        }
     }
 }

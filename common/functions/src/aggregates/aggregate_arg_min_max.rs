@@ -169,7 +169,7 @@ where
         with_match_primitive_type!(datatype, |$T| {
             let mut array = array
                 .as_mut_any()
-                .downcast_mut::<MutablePrimitiveArrayBuilder<$T>>()
+                .downcast_mut::<MutablePrimitiveArrayBuilder<$T, true>>()
                 .ok_or_else(|| {
                     ErrorCode::UnexpectedError(
                         "error occured when downcast MutableArray".to_string(),
@@ -319,7 +319,7 @@ impl AggregateArgMinMaxState for StringState {
         with_match_primitive_type!(datatype, |$T| {
             let mut array = array
                 .as_mut_any()
-                .downcast_mut::<MutablePrimitiveArrayBuilder<$T>>()
+                .downcast_mut::<MutablePrimitiveArrayBuilder<$T, true>>()
                 .ok_or_else(|| {
                     ErrorCode::UnexpectedError(
                         "error occured when downcast MutableArray".to_string(),
