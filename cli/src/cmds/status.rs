@@ -303,7 +303,7 @@ impl LocalRuntime for LocalMetaConfig {
                 conf.log_dir,
             )
             .env(
-                databend_meta::configs::config::METASRV_FLIGHT_API_ADDRESS,
+                databend_meta::configs::config::METASRV_GRPC_API_ADDRESS,
                 conf.grpc_api_address,
             )
             .env(
@@ -315,11 +315,11 @@ impl LocalRuntime for LocalMetaConfig {
                 conf.metric_api_address,
             )
             .env(
-                databend_meta::configs::config::FLIGHT_TLS_SERVER_CERT,
+                databend_meta::configs::config::GRPC_TLS_SERVER_CERT,
                 conf.grpc_tls_server_cert,
             )
             .env(
-                databend_meta::configs::config::FLIGHT_TLS_SERVER_KEY,
+                databend_meta::configs::config::GRPC_TLS_SERVER_KEY,
                 conf.grpc_tls_server_key,
             )
             .env(
