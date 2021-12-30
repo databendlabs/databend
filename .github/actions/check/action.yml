@@ -7,6 +7,9 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Maximize build space
+      uses: ./.github/actions/cleanup
+
     - uses: arduino/setup-protoc@v1
       with:
         version: '3.x'
