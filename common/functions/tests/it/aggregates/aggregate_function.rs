@@ -17,7 +17,6 @@ use std::borrow::BorrowMut;
 use bumpalo::Bump;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::MutableBuffer;
-use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 use common_functions::aggregates::*;
@@ -72,7 +71,7 @@ fn test_aggregate_function() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<u64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::UInt64,
+                DataType::UInt64,
                 MutableBuffer::from([4u64]),
                 Some(MutableBitmap::from([true])),
             )),
@@ -88,7 +87,7 @@ fn test_aggregate_function() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Int64,
+                DataType::Int64,
                 MutableBuffer::from([4i64]),
                 Some(MutableBitmap::from([true])),
             )),
@@ -104,7 +103,7 @@ fn test_aggregate_function() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Int64,
+                DataType::Int64,
                 MutableBuffer::from([1i64]),
                 Some(MutableBitmap::from([true])),
             )),
@@ -120,7 +119,7 @@ fn test_aggregate_function() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Float64,
+                DataType::Float64,
                 MutableBuffer::from([2.5f64]),
                 Some(MutableBitmap::from([true])),
             )),
@@ -136,7 +135,7 @@ fn test_aggregate_function() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Int64,
+                DataType::Int64,
                 MutableBuffer::from([10i64]),
                 Some(MutableBitmap::from([true])),
             )),
@@ -152,7 +151,7 @@ fn test_aggregate_function() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Int64,
+                DataType::Int64,
                 MutableBuffer::from([1i64]),
                 Some(MutableBitmap::from([true])),
             )),
@@ -168,7 +167,7 @@ fn test_aggregate_function() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Int64,
+                DataType::Int64,
                 MutableBuffer::from([4i64]),
                 Some(MutableBitmap::from([true])),
             )),
@@ -184,7 +183,7 @@ fn test_aggregate_function() -> Result<()> {
             error: "Code: 28, displayText = argmin expect to have two arguments, but got 1.",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Int64,
+                DataType::Int64,
                 MutableBuffer::from([4i64]),
                 Some(MutableBitmap::from([true])),
             )),
@@ -200,7 +199,7 @@ fn test_aggregate_function() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<u64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::UInt64,
+                DataType::UInt64,
                 MutableBuffer::from([4u64]),
                 Some(MutableBitmap::from([true])),
             )),
@@ -216,7 +215,7 @@ fn test_aggregate_function() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Float64,
+                DataType::Float64,
                 MutableBuffer::from([1.118033988749895f64]),
                 Some(MutableBitmap::from([true])),
             )),
@@ -232,7 +231,7 @@ fn test_aggregate_function() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Float64,
+                DataType::Float64,
                 MutableBuffer::from([1.118033988749895f64]),
                 Some(MutableBitmap::from([true])),
             )),
@@ -248,7 +247,7 @@ fn test_aggregate_function() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Float64,
+                DataType::Float64,
                 MutableBuffer::from([1.118033988749895f64]),
                 Some(MutableBitmap::from([true])),
             )),
@@ -264,7 +263,7 @@ fn test_aggregate_function() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Float64,
+                DataType::Float64,
                 MutableBuffer::from([-1.6666666666666667f64]),
                 Some(MutableBitmap::from([true])),
             )),
@@ -280,7 +279,7 @@ fn test_aggregate_function() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Float64,
+                DataType::Float64,
                 MutableBuffer::from([-1.25000f64]),
                 Some(MutableBitmap::from([true])),
             )),
@@ -306,7 +305,7 @@ fn test_aggregate_function() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<u8>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::UInt8,
+                DataType::UInt8,
                 MutableBuffer::from([3u8]),
                 Some(MutableBitmap::from([true])),
             )),
@@ -420,7 +419,7 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<u64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::UInt64,
+                DataType::UInt64,
                 MutableBuffer::from([2u64, 2u64]),
                 Some(MutableBitmap::from([true, true])),
             )),
@@ -436,7 +435,7 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Int64,
+                DataType::Int64,
                 MutableBuffer::from([4i64, 3i64]),
                 Some(MutableBitmap::from([true, true])),
             )),
@@ -452,7 +451,7 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Int64,
+                DataType::Int64,
                 MutableBuffer::from([2i64, 1i64]),
                 Some(MutableBitmap::from([true, true])),
             )),
@@ -468,7 +467,7 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Float64,
+                DataType::Float64,
                 MutableBuffer::from([3.0f64, 2.0f64]),
                 Some(MutableBitmap::from([true, true])),
             )),
@@ -484,7 +483,7 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Int64,
+                DataType::Int64,
                 MutableBuffer::from([6i64, 4i64]),
                 Some(MutableBitmap::from([true, true])),
             )),
@@ -500,7 +499,7 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Int64,
+                DataType::Int64,
                 MutableBuffer::from([2i64, 1i64]),
                 Some(MutableBitmap::from([true, true])),
             )),
@@ -516,7 +515,7 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Int64,
+                DataType::Int64,
                 MutableBuffer::from([2i64, 1i64]),
                 Some(MutableBitmap::from([true, true])),
             )),
@@ -532,7 +531,7 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Int64,
+                DataType::Int64,
                 MutableBuffer::from([4i64, 3i64]),
                 Some(MutableBitmap::from([true, true])),
             )),
@@ -548,7 +547,7 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Int64,
+                DataType::Int64,
                 MutableBuffer::from([4i64, 3i64]),
                 Some(MutableBitmap::from([true, true])),
             )),
@@ -564,7 +563,7 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<u64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::UInt64,
+                DataType::UInt64,
                 MutableBuffer::from([2u64, 2u64]),
                 Some(MutableBitmap::from([true, true])),
             )),
@@ -580,7 +579,7 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Float64,
+                DataType::Float64,
                 MutableBuffer::from([1.0f64, 1.0f64]),
                 Some(MutableBitmap::from([true, true])),
             )),
@@ -596,7 +595,7 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Float64,
+                DataType::Float64,
                 MutableBuffer::from([1.0f64, 1.0f64]),
                 Some(MutableBitmap::from([true, true])),
             )),
@@ -612,7 +611,7 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Float64,
+                DataType::Float64,
                 MutableBuffer::from([1.0f64, 1.0f64]),
                 Some(MutableBitmap::from([true, true])),
             )),
@@ -628,7 +627,7 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Float64,
+                DataType::Float64,
                 MutableBuffer::from([-2.0f64, -2.0f64]),
                 Some(MutableBitmap::from([true, true])),
             )),
@@ -644,7 +643,7 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Float64,
+                DataType::Float64,
                 MutableBuffer::from([-1.0f64, -1.0f64]),
                 Some(MutableBitmap::from([true, true])),
             )),
@@ -665,7 +664,7 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<u8>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::UInt8,
+                DataType::UInt8,
                 MutableBuffer::from([2u8, 1u8]),
                 Some(MutableBitmap::from([true, true])),
             )),
@@ -763,7 +762,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<u64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::UInt64,
+                DataType::UInt64,
                 MutableBuffer::from([0u64]),
                 Some(MutableBitmap::from([true])),
             )),
@@ -779,7 +778,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Int64,
+                DataType::Int64,
                 MutableBuffer::from([0i64]),
                 Some(MutableBitmap::from([false])),
             )),
@@ -795,7 +794,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Int64,
+                DataType::Int64,
                 MutableBuffer::from([0i64]),
                 Some(MutableBitmap::from([false])),
             )),
@@ -811,7 +810,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Float64,
+                DataType::Float64,
                 MutableBuffer::from([0f64]),
                 Some(MutableBitmap::from([false])),
             )),
@@ -827,7 +826,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Int64,
+                DataType::Int64,
                 MutableBuffer::from([0i64]),
                 Some(MutableBitmap::from([false])),
             )),
@@ -843,7 +842,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Int64,
+                DataType::Int64,
                 MutableBuffer::from([0i64]),
                 Some(MutableBitmap::from([false])),
             )),
@@ -859,7 +858,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<i64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Int64,
+                DataType::Int64,
                 MutableBuffer::from([0i64]),
                 Some(MutableBitmap::from([false])),
             )),
@@ -875,7 +874,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<u64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::UInt64,
+                DataType::UInt64,
                 MutableBuffer::from([0u64]),
                 Some(MutableBitmap::from([true])),
             )),
@@ -891,7 +890,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Float64,
+                DataType::Float64,
                 MutableBuffer::from([0f64]),
                 Some(MutableBitmap::from([false])),
             )),
@@ -907,7 +906,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Float64,
+                DataType::Float64,
                 MutableBuffer::from([0f64]),
                 Some(MutableBitmap::from([false])),
             )),
@@ -923,7 +922,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Float64,
+                DataType::Float64,
                 MutableBuffer::from([0f64]),
                 Some(MutableBitmap::from([false])),
             )),
@@ -939,7 +938,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Float64,
+                DataType::Float64,
                 MutableBuffer::from([f64::INFINITY]),
                 Some(MutableBitmap::from([true])),
             )),
@@ -955,7 +954,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
             error: "",
             input_array: Box::new(MutablePrimitiveArrayBuilder::<f64>::default()),
             expect_array: Box::new(MutablePrimitiveArrayBuilder::from_data(
-                ArrowDataType::Float64,
+                DataType::Float64,
                 MutableBuffer::from([f64::INFINITY]),
                 Some(MutableBitmap::from([true])),
             )),

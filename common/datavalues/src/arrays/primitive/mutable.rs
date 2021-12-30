@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::MutableArray;
-use common_arrow::arrow::array::MutablePrimitiveArray;
+use std::sync::Arc;
+
+use common_arrow::arrow::array::Array;
+use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::MutableBuffer;
-use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 
 use crate::arrays::mutable::MutableArrayBuilder;
 use crate::series::IntoSeries;
@@ -24,19 +25,21 @@ use crate::series::Series;
 use crate::DFPrimitiveType;
 use crate::DataType;
 
-#[derive(Default)]
+#[derive(Debug)]
 pub struct MutablePrimitiveArrayBuilder<T>
 where T: DFPrimitiveType
 {
-    builder: MutablePrimitiveArray<T>,
+    data_type: DataType,
+    values: MutableBuffer<T>,
+    validity: Option<MutableBitmap>,
 }
 
 impl<T> MutableArrayBuilder for MutablePrimitiveArrayBuilder<T>
 where T: DFPrimitiveType
 {
+    // TODO(veeupup) change it into reference
     fn data_type(&self) -> DataType {
-        let datatype: DataType = self.builder.data_type().into();
-        datatype
+        self.data_type.clone()
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -48,45 +51,100 @@ where T: DFPrimitiveType
     }
 
     fn as_series(&mut self) -> Series {
-        self.builder.as_arc().into_series()
+        let arrow_data_type = self.data_type.to_arrow();
+        let array: Arc<dyn Array> = Arc::new(PrimitiveArray::<T>::from_data(
+            arrow_data_type,
+            std::mem::take(&mut self.values).into(),
+            std::mem::take(&mut self.validity).map(|x| x.into()),
+        ));
+        array.into_series()
     }
 
     fn push_null(&mut self) {
-        self.builder.push_null();
+        self.push_null()
+    }
+}
+
+impl<T> Default for MutablePrimitiveArrayBuilder<T>
+where T: DFPrimitiveType
+{
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 impl<T> MutablePrimitiveArrayBuilder<T>
 where T: DFPrimitiveType
 {
+    pub fn new() -> Self {
+        Self::with_capacity(0)
+    }
+
     pub fn from_data(
-        data_type: ArrowDataType,
+        data_type: DataType,
         values: MutableBuffer<T>,
         validity: Option<MutableBitmap>,
     ) -> Self {
-        let builder = MutablePrimitiveArray::<T>::from_data(data_type, values, validity);
-        Self { builder }
+        Self {
+            data_type,
+            values,
+            validity,
+        }
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
         MutablePrimitiveArrayBuilder {
-            builder: MutablePrimitiveArray::<T>::with_capacity(capacity),
+            data_type: T::data_type(),
+            values: MutableBuffer::<T>::with_capacity(capacity),
+            validity: None,
         }
     }
 
     pub fn values(&self) -> &MutableBuffer<T> {
-        self.builder.values()
+        &self.values
     }
 
-    pub fn push(&mut self, v: T) {
-        self.builder.push(Some(v));
+    pub fn push(&mut self, val: T) {
+        self.values.push(val);
+        match &mut self.validity {
+            Some(validity) => validity.push(true),
+            None => {}
+        }
     }
 
-    pub fn push_option(&mut self, v: Option<T>) {
-        self.builder.push(v)
+    pub fn push_option(&mut self, val: Option<T>) {
+        match val {
+            Some(val) => {
+                self.values.push(val);
+                match &mut self.validity {
+                    Some(validity) => validity.push(true),
+                    None => {}
+                }
+            }
+            None => {
+                self.values.push(T::default());
+                match &mut self.validity {
+                    Some(validity) => validity.push(false),
+                    None => {
+                        self.init_validity();
+                    }
+                }
+            }
+        }
     }
 
     pub fn push_null(&mut self) {
-        self.builder.push_null();
+        self.push_option(None);
+    }
+
+    fn init_validity(&mut self) {
+        let mut validity = MutableBitmap::with_capacity(self.values.capacity());
+        validity.extend_constant(self.len(), true);
+        validity.set(self.len() - 1, false);
+        self.validity = Some(validity)
+    }
+
+    fn len(&self) -> usize {
+        self.values.len()
     }
 }
