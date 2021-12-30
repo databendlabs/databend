@@ -37,9 +37,8 @@ where T: DFPrimitiveType
 impl<T> MutableArrayBuilder for MutablePrimitiveArrayBuilder<T>
 where T: DFPrimitiveType
 {
-    // TODO(veeupup) change it into reference
-    fn data_type(&self) -> DataType {
-        self.data_type.clone()
+    fn data_type(&self) -> &DataType {
+        &self.data_type
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -51,9 +50,8 @@ where T: DFPrimitiveType
     }
 
     fn as_series(&mut self) -> Series {
-        let arrow_data_type = self.data_type.to_arrow();
         let array: Arc<dyn Array> = Arc::new(PrimitiveArray::<T>::from_data(
-            arrow_data_type,
+            self.data_type.to_arrow(),
             std::mem::take(&mut self.values).into(),
             std::mem::take(&mut self.validity).map(|x| x.into()),
         ));

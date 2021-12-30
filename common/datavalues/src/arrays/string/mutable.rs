@@ -12,25 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::MutableArray;
-use common_arrow::arrow::array::MutableBinaryArray;
+use std::sync::Arc;
+
+use common_arrow::arrow::array::Array;
+use common_arrow::arrow::array::BinaryArray;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::MutableBuffer;
-use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 
 use crate::arrays::mutable::MutableArrayBuilder;
 use crate::series::IntoSeries;
 use crate::series::Series;
 use crate::DataType;
 
-#[derive(Default)]
 pub struct MutableStringArrayBuilder {
-    builder: MutableBinaryArray<i64>,
+    data_type: DataType,
+    offsets: MutableBuffer<i64>,
+    values: MutableBuffer<u8>,
+    validity: Option<MutableBitmap>,
 }
 
 impl MutableArrayBuilder for MutableStringArrayBuilder {
-    fn data_type(&self) -> DataType {
-        DataType::String
+    fn data_type(&self) -> &DataType {
+        &self.data_type
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -42,34 +45,92 @@ impl MutableArrayBuilder for MutableStringArrayBuilder {
     }
 
     fn as_series(&mut self) -> Series {
-        self.builder.as_arc().into_series()
+        let array: Arc<dyn Array> = Arc::new(BinaryArray::from_data(
+            self.data_type.to_arrow(),
+            std::mem::take(&mut self.offsets).into(),
+            std::mem::take(&mut self.values).into(),
+            std::mem::take(&mut self.validity).map(|x| x.into()),
+        ));
+        array.into_series()
     }
 
     fn push_null(&mut self) {
-        self.builder.push_null();
+        self.push_option::<&[u8]>(None);
+    }
+}
+
+impl Default for MutableStringArrayBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 impl MutableStringArrayBuilder {
+    pub fn new() -> Self {
+        Self::with_capacity(0)
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        let mut offsets = MutableBuffer::<i64>::with_capacity(capacity + 1);
+        offsets.push(0i64);
+        Self {
+            data_type: DataType::String,
+            offsets,
+            values: MutableBuffer::<u8>::new(),
+            validity: None,
+        }
+    }
+
     pub fn from_data(
-        data_type: ArrowDataType,
         offsets: MutableBuffer<i64>,
         values: MutableBuffer<u8>,
         validity: Option<MutableBitmap>,
     ) -> Self {
-        let builder = MutableBinaryArray::<i64>::from_data(data_type, offsets, values, validity);
-        Self { builder }
+        Self {
+            data_type: DataType::String,
+            offsets,
+            values,
+            validity,
+        }
     }
 
-    pub fn push(&mut self, value: impl AsRef<[u8]>) {
-        self.builder.push(Some(value));
+    pub fn push<T: AsRef<[u8]>>(&mut self, value: T) {
+        let bytes = value.as_ref();
+        let size = (self.values.len() + bytes.len()) as i64;
+        self.values.extend_from_slice(bytes);
+        self.offsets.push(size);
+        match &mut self.validity {
+            Some(validity) => validity.push(true),
+            None => {}
+        }
     }
 
-    pub fn push_option(&mut self, value: Option<impl AsRef<[u8]>>) {
-        self.builder.push(value);
+    pub fn push_option<T: AsRef<[u8]>>(&mut self, value: Option<T>) {
+        match value {
+            Some(value) => self.push(value),
+            None => {
+                self.offsets.push(self.last_offset());
+                match &mut self.validity {
+                    Some(validity) => validity.push(false),
+                    None => self.init_validity(),
+                }
+            }
+        }
     }
 
-    pub fn push_null(&mut self) {
-        self.builder.push_null();
+    fn init_validity(&mut self) {
+        let mut validity = MutableBitmap::with_capacity(self.offsets.capacity());
+        validity.extend_constant(self.len(), true);
+        validity.set(self.len() - 1, false);
+        self.validity = Some(validity)
+    }
+
+    #[inline]
+    fn last_offset(&self) -> i64 {
+        *self.offsets.last().unwrap()
+    }
+
+    fn len(&self) -> usize {
+        self.offsets.len() - 1
     }
 }

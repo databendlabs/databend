@@ -30,8 +30,8 @@ pub struct MutableBooleanArrayBuilder {
 }
 
 impl MutableArrayBuilder for MutableBooleanArrayBuilder {
-    fn data_type(&self) -> DataType {
-        DataType::Boolean
+    fn data_type(&self) -> &DataType {
+        &self.data_type
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -43,9 +43,8 @@ impl MutableArrayBuilder for MutableBooleanArrayBuilder {
     }
 
     fn as_series(&mut self) -> Series {
-        let arrow_data_type = self.data_type.to_arrow();
         let array: Arc<dyn Array> = Arc::new(BooleanArray::from_data(
-            arrow_data_type,
+            self.data_type.to_arrow(),
             std::mem::take(&mut self.values).into(),
             std::mem::take(&mut self.validity).map(|x| x.into()),
         ));
@@ -76,16 +75,9 @@ impl MutableBooleanArrayBuilder {
         }
     }
 
-    pub fn from_data(
-        data_type: DataType,
-        values: MutableBitmap,
-        validity: Option<MutableBitmap>,
-    ) -> Self {
-        if data_type != DataType::Boolean {
-            panic!("MutableBooleanArrayBuilder can only be initialized with DataType::Boolean")
-        }
+    pub fn from_data(values: MutableBitmap, validity: Option<MutableBitmap>) -> Self {
         Self {
-            data_type,
+            data_type: DataType::Boolean,
             values,
             validity,
         }

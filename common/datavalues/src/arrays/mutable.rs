@@ -21,7 +21,7 @@ use crate::series::Series;
 use crate::DataType;
 
 pub trait MutableArrayBuilder {
-    fn data_type(&self) -> DataType;
+    fn data_type(&self) -> &DataType;
     fn as_any(&self) -> &dyn Any;
     fn as_mut_any(&mut self) -> &mut dyn Any;
     fn as_series(&mut self) -> Series;
