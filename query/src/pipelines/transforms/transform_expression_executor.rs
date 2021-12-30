@@ -23,6 +23,7 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataValue;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_planners::ActionFunction;
 use common_planners::Expression;
 use common_planners::ExpressionAction;
 use common_planners::ExpressionChain;
@@ -40,8 +41,6 @@ pub struct ExpressionExecutor {
     // whether to perform alias action in executor
     alias_project: bool,
 }
-
-pub type ExpressionExecutorRef = Arc<ExpressionExecutor>;
 
 impl ExpressionExecutor {
     pub fn try_create(
@@ -112,51 +111,7 @@ impl ExpressionExecutor {
                     column_map.insert(input.name.as_str(), column);
                 }
                 ExpressionAction::Function(f) => {
-                    // check if it's cached
-                    let mut arg_columns = Vec::with_capacity(f.arg_names.len());
-
-                    for arg in f.arg_names.iter() {
-                        let column = column_map.get(arg.as_str()).cloned().ok_or_else(|| {
-                            ErrorCode::LogicalError(
-                                "Arguments must be prepared before function transform",
-                            )
-                        })?;
-                        arg_columns.push(column);
-                    }
-
-                    // 1. With nullable input, if the function is not nullable, e.g. it doesn't output null. We do NOT apply the input masking.
-                    // 2. With nullable input, if the function does NOT pass through null. That is, it doesn't simply pass the null input to output.
-                    // We do NOT apply the masking.
-                    let column = if f.is_nullable && f.func.passthrough_null() {
-                        let arg_column_validities = arg_columns
-                            .iter()
-                            .map(|column_with_field| {
-                                let col = column_with_field.column();
-                                col.get_validity()
-                            })
-                            .collect::<Vec<_>>();
-
-                        // If one of the columns is ALL null, then we just need to output a column with all null
-                        // values instead of really evaluate/execute the function.
-                        if arg_column_validities
-                            .iter()
-                            .any(|validity| validity.all_null())
-                        {
-                            // returns a column with constant value, all of them are null
-                            let null_value = DataValue::new_from_data_type(&f.return_type, true);
-                            DataColumn::Constant(null_value, rows)
-                        } else {
-                            let column = f.func.eval(&arg_columns, rows)?;
-                            column.apply_validities(arg_column_validities.as_ref())?
-                        }
-                    } else {
-                        f.func.eval(&arg_columns, rows)?
-                    };
-
-                    let column_with_field = DataColumnWithField::new(
-                        column,
-                        DataField::new(&f.name, f.return_type.clone(), f.is_nullable),
-                    );
+                    let column_with_field = self.execute_function(&mut column_map, f, rows)?;
                     column_map.insert(f.name.as_str(), column_with_field);
                 }
                 ExpressionAction::Constant(constant) => {
@@ -213,6 +168,58 @@ impl ExpressionExecutor {
         Ok(DataBlock::create(
             self.output_schema.clone(),
             project_columns,
+        ))
+    }
+
+    #[inline]
+    fn execute_function(
+        &self,
+        column_map: &mut HashMap<&str, DataColumnWithField>,
+        f: &ActionFunction,
+        rows: usize,
+    ) -> Result<DataColumnWithField> {
+        // check if it's cached
+        let mut arg_columns = Vec::with_capacity(f.arg_names.len());
+
+        for arg in f.arg_names.iter() {
+            let column = column_map.get(arg.as_str()).cloned().ok_or_else(|| {
+                ErrorCode::LogicalError("Arguments must be prepared before function transform")
+            })?;
+            arg_columns.push(column);
+        }
+
+        // 1. With nullable input, if the function is not nullable, e.g. it doesn't output null. We do NOT apply the input masking.
+        // 2. With nullable input, if the function does NOT pass through null. That is, it doesn't simply pass the null input to output.
+        // We do NOT apply the masking.
+        let column = if f.is_nullable && f.func.passthrough_null() {
+            let arg_column_validities = arg_columns
+                .iter()
+                .map(|column_with_field| {
+                    let col = column_with_field.column();
+                    col.get_validity()
+                })
+                .collect::<Vec<_>>();
+
+            // If one of the columns is ALL null, then we just need to output a column with all null
+            // values instead of really evaluate/execute the function.
+            if arg_column_validities
+                .iter()
+                .any(|validity| validity.all_null())
+            {
+                // returns a column with constant value, all of them are null
+                let null_value = DataValue::new_from_data_type(&f.return_type, true);
+                DataColumn::Constant(null_value, rows)
+            } else {
+                let column = f.func.eval(&arg_columns, rows)?;
+                column.apply_validities(arg_column_validities.as_ref())?
+            }
+        } else {
+            f.func.eval(&arg_columns, rows)?
+        };
+
+        Ok(DataColumnWithField::new(
+            column,
+            DataField::new(&f.name, f.return_type.clone(), f.is_nullable),
         ))
     }
 }

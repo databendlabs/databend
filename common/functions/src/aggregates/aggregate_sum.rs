@@ -163,9 +163,23 @@ where
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+    #[allow(unused_mut)]
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
         let state = place.get::<AggregateSumState<SumT>>();
-        Ok(state.value.into())
+        if let Some(val) = state.value {
+            let mut array = array
+                .as_mut_any()
+                .downcast_mut::<MutablePrimitiveArrayBuilder<SumT>>()
+                .ok_or_else(|| {
+                    ErrorCode::UnexpectedError(
+                        "error occured when downcast MutableArray".to_string(),
+                    )
+                })?;
+            array.push(val);
+        } else {
+            array.push_null();
+        }
+        Ok(())
     }
 }
 

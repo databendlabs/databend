@@ -21,7 +21,7 @@ common-meta-types = { path = "../types" }
 common-tracing = { path = "../../tracing" }
 
 # github deps
-async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.14.1" }
+async-raft = { git = "https://github.com/datafuselabs/openraft", tag = "v0.6.2-alpha.14.1" }
 
 # crates.io deps
 anyhow = "1.0.51"

@@ -14,6 +14,7 @@
 
 mod builder;
 mod iterator;
+mod mutable;
 
 pub use builder::*;
 use common_arrow::arrow::array::Array;
@@ -28,6 +29,7 @@ use common_arrow::arrow::datatypes::TimeUnit;
 use common_exception::ErrorCode;
 use common_exception::Result;
 pub use iterator::*;
+pub use mutable::*;
 
 use crate::prelude::*;
 

@@ -45,7 +45,6 @@ bstr = "0.2.17"
 uuid = { version = "0.8", features = ["v4"] }
 strength_reduce = "0.2.3"
 num-traits = "0.2"
-regex = "1.5.4"
 
 [dev-dependencies]
 bumpalo = "3.8.0"

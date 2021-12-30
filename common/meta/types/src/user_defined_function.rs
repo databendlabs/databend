@@ -24,14 +24,16 @@ use serde::Serialize;
 #[serde(default)]
 pub struct UserDefinedFunction {
     pub name: String,
+    pub parameters: Vec<String>,
     pub definition: String,
     pub description: String,
 }
 
 impl UserDefinedFunction {
-    pub fn new(name: &str, definition: &str, description: &str) -> Self {
+    pub fn new(name: &str, parameters: Vec<String>, definition: &str, description: &str) -> Self {
         Self {
             name: name.to_string(),
+            parameters,
             definition: definition.to_string(),
             description: description.to_string(),
         }

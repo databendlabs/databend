@@ -164,13 +164,11 @@ impl LoadCommand {
     async fn local_exec_match(&self, writer: &mut Writer, args: &ArgMatches) -> Result<()> {
         match self.local_exec_precheck(args).await {
             Ok(_) => {
-                let mut reader = build_reader(args.value_of("load")).await;
-                let mut data = vec![];
-                reader.read_to_end(&mut data)?;
-
+                let location = args.value_of("load");
                 let table = args.value_of("table").unwrap();
                 let skip_header = args.value_of("skip_header_lines").unwrap_or("1");
                 let schema = args.value_of("schema");
+
                 let table_with_schema = match schema {
                     Some(_) => {
                         let schema: Schema =
@@ -183,37 +181,52 @@ impl LoadCommand {
                     }
                     None => table.to_string(),
                 };
-                let start = time::Instant::now();
-                let status = Status::read(self.conf.clone())?;
-                let (cli, url) = build_load_endpoint(&status)?;
-                let mut headers = HeaderMap::new();
-                headers.insert(
-                    "insert_sql",
-                    format!("INSERT INTO {} format CSV", table_with_schema)
-                        .parse()
-                        .unwrap(),
-                );
-                headers.insert("csv_header", skip_header.to_string().parse().unwrap());
-                let progress = execute_load(&cli, &url, headers, data).await?;
-
-                let elapsed = start.elapsed();
-                let time = elapsed.as_millis() as f64 / 1000f64;
-                writer.write_ok(format!(
-                    "successfully loaded {} rows, rows/src: {} (rows/sec). time: {} sec",
-                    progress.read_rows.to_formatted_string(&Locale::en),
-                    (progress.read_rows as f64 / time)
-                        .as_u128()
-                        .to_formatted_string(&Locale::en),
-                    time
-                ));
-
-                Ok(())
+                self.load(location, table_with_schema.as_str(), skip_header, writer)
+                    .await
             }
             Err(e) => {
                 writer.write_err(format!("Query command precheck failed, error {:?}", e));
                 Ok(())
             }
         }
+    }
+
+    pub async fn load(
+        &self,
+        location: Option<&str>,
+        table_with_schema: &str,
+        skip_header: &str,
+        writer: &mut Writer,
+    ) -> Result<()> {
+        let mut reader = build_reader(location).await;
+        let mut data = vec![];
+        reader.read_to_end(&mut data)?;
+
+        let start = time::Instant::now();
+        let status = Status::read(self.conf.clone())?;
+        let (cli, url) = build_load_endpoint(&status)?;
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "insert_sql",
+            format!("INSERT INTO {} format CSV", table_with_schema)
+                .parse()
+                .unwrap(),
+        );
+        headers.insert("csv_header", skip_header.to_string().parse().unwrap());
+        let progress = execute_load(&cli, &url, headers, data).await?;
+
+        let elapsed = start.elapsed();
+        let time = elapsed.as_millis() as f64 / 1000f64;
+        writer.write_ok(format!(
+            "successfully loaded {} rows, rows/src: {} (rows/sec). time: {} sec",
+            progress.read_rows.to_formatted_string(&Locale::en),
+            (progress.read_rows as f64 / time)
+                .as_u128()
+                .to_formatted_string(&Locale::en),
+            time
+        ));
+
+        Ok(())
     }
 
     /// precheck would at build up and validate schema for incoming INSERT operations
@@ -250,7 +263,7 @@ impl LoadCommand {
     }
 }
 
-async fn build_reader(load: Option<&str>) -> Box<dyn std::io::Read + Send + Sync> {
+pub async fn build_reader(load: Option<&str>) -> Box<dyn std::io::Read + Send + Sync> {
     match load {
         Some(val) => {
             if Path::new(val).exists() {

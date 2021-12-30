@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -89,7 +90,6 @@ impl Processor for GroupByFinalTransform {
             .iter()
             .map(|x| x.to_aggregate_function(&self.schema_before_group_by))
             .collect::<Result<Vec<_>>>()?;
-
         let aggr_funcs_len = funcs.len();
         let group_expr_len = self.group_exprs.len();
 
@@ -179,13 +179,15 @@ impl Processor for GroupByFinalTransform {
                 // Collect the merge states.
                 let groups = groups_locker.read();
 
-                let mut aggr_values: Vec<Vec<DataValue>> = {
+                let mut aggr_values: Vec<Box<dyn MutableArrayBuilder>> = {
                     let mut values = vec![];
-                    for _i in 0..aggr_funcs_len {
-                        values.push(vec![])
+                    for func in &funcs {
+                        let array = create_mutable_array(func.return_type()?);
+                        values.push(array)
                     }
                     values
                 };
+
                 let mut keys = Vec::with_capacity(groups.len());
                 for (key, place) in groups.iter() {
                     keys.push(key.clone());
@@ -193,19 +195,15 @@ impl Processor for GroupByFinalTransform {
                     let place: StateAddr = (*place).into();
                     for (idx, func) in funcs.iter().enumerate() {
                         let arg_place = place.next(offsets_aggregate_states[idx]);
-                        let merge = func.merge_result(arg_place)?;
-                        aggr_values[idx].push(merge);
+                        let array: &mut dyn MutableArrayBuilder = aggr_values[idx].borrow_mut();
+                        func.merge_result(arg_place, array)?;
                     }
                 }
 
                 // Build final state block.
                 let mut columns: Vec<Series> = Vec::with_capacity(aggr_funcs_len + group_expr_len);
-
-                for (i, value) in aggr_values.iter().enumerate() {
-                    columns.push(DataValue::try_into_data_array(
-                        value.as_slice(),
-                        &self.aggr_exprs[i].to_data_type(&self.schema_before_group_by)?,
-                    )?);
+                for mut array in aggr_values {
+                    columns.push(array.as_series());
                 }
 
                 {
