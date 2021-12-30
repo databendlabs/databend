@@ -4,9 +4,9 @@ runs:
   using: "composite"
   steps:
     - shell: bash
-      run:
+      run: |
         set -euo pipefail
-        
+
         echo "Removing dotnet... "
         sudo rm -rf /usr/share/dotnet
         echo "Removing android... "
