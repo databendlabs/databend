@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::parquet::metadata::FileMetaData;
-use common_dal::DataAccessor;
 use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -82,6 +81,8 @@ impl FuseTable {
 
         let dedicated_decompression_thread_pool =
             ctx.get_settings().get_decompress_in_thread_pool()? == 1;
+
+        let read_buffer_size = ctx.get_settings().get_read_buffer_size()?;
         let stream = part_stream
             .map(move |part| {
                 let da = da.clone();
@@ -119,6 +120,7 @@ impl FuseTable {
                         projection,
                         parquet_meta,
                         size,
+                        read_buffer_size,
                     );
                     if dedicated_decompression_thread_pool {
                         source.enable_decompress_in_pool()
