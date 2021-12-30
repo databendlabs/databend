@@ -69,7 +69,7 @@ where
             M,
             R,
             |l: M, r: M| {
-                if need_check && r == M::zero() {
+                if std::intrinsics::unlikely(need_check && r == M::zero()) {
                     return Err(ErrorCode::BadArguments("Division by zero"));
                 }
                 Ok(AsPrimitive::<R>::as_(l % r))
