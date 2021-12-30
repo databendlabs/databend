@@ -26,7 +26,7 @@ use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
-use crate::try_binary_arithmetic_helper;
+use crate::try_binary_arithmetic;
 use crate::with_match_primitive_type;
 
 #[derive(Clone)]
@@ -46,59 +46,26 @@ where
     R: Into<DataValue>,
 {
     fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
-        let result: DataColumn = match (columns[0].column(), columns[1].column()) {
-            (DataColumn::Array(left), DataColumn::Array(right)) => {
-                let lhs: &DFPrimitiveArray<T> = left.static_cast();
-                let rhs: &DFPrimitiveArray<D> = right.static_cast();
-                try_binary(lhs, rhs, |l, r| {
-                    let l: f64 = l.as_();
-                    let r: f64 = r.as_();
-                    if std::intrinsics::unlikely(r == 0.0) {
-                        return Err(ErrorCode::BadArguments("Division by zero"));
-                    }
-                    Ok(AsPrimitive::<R>::as_(l / r))
-                })?
-                .into()
-            }
-            (DataColumn::Array(left), DataColumn::Constant(right, _)) => {
-                let lhs: &DFPrimitiveArray<T> = left.static_cast();
-                let rhs: D = DFTryFrom::try_from(right.clone()).unwrap_or(D::one());
-                let r: f64 = rhs.as_();
+        try_binary_arithmetic! {
+            columns[0].column(),
+            columns[1].column(),
+            f64,
+            |l: f64, r:f64| {
+                if std::intrinsics::unlikely(r == 0.0) {
+                    return Err(ErrorCode::BadArguments("Division by zero"));
+                }
+                Ok(AsPrimitive::<R>::as_(l / r))
+            },
+            |lhs: &DFPrimitiveArray<T>, r: f64| {
                 if r == 0.0 {
                     return Err(ErrorCode::BadArguments("Division by zero"));
                 }
-
-                unary(lhs, |l| {
+                Ok(unary(lhs, |l| {
                     AsPrimitive::<R>::as_(AsPrimitive::<f64>::as_(l) / r)
                 })
-                .into()
+                .into())
             }
-            (DataColumn::Constant(left, _), DataColumn::Array(right)) => {
-                let lhs: T = DFTryFrom::try_from(left.clone()).unwrap_or(T::default());
-                let l: f64 = lhs.as_();
-                let rhs: &DFPrimitiveArray<D> = right.static_cast();
-                try_unary(rhs, |r| {
-                    let r: f64 = r.as_();
-                    if std::intrinsics::unlikely(r == 0.0) {
-                        return Err(ErrorCode::BadArguments("Division by zero"));
-                    }
-                    Ok(AsPrimitive::<R>::as_(l / r))
-                })?
-                .into()
-            }
-            (DataColumn::Constant(left, size), DataColumn::Constant(right, _)) => {
-                let lhs: T = DFTryFrom::try_from(left.clone()).unwrap_or(T::default());
-                let l: f64 = lhs.as_();
-                let rhs: D = DFTryFrom::try_from(right.clone()).unwrap_or(D::one());
-                let r: f64 = rhs.as_();
-                if r == 0.0 {
-                    return Err(ErrorCode::BadArguments("Division by zero"));
-                }
-                DataColumn::Constant((AsPrimitive::<R>::as_(l / r)).into(), size.clone())
-            }
-        };
-
-        Ok(result)
+        }
     }
 }
 

@@ -18,7 +18,6 @@ use num::cast::AsPrimitive;
 
 use super::arithmetic::ArithmeticTrait;
 use super::utils::validate_input;
-use crate::binary_arithmetic_helper;
 use crate::interval_arithmetic;
 use crate::scalars::dates::IntervalFunctionFactory;
 

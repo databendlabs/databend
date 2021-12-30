@@ -23,7 +23,6 @@ use num::cast::AsPrimitive;
 use super::arithmetic::ArithmeticTrait;
 use super::arithmetic_mul::arithmetic_mul_div_monotonicity;
 use crate::binary_arithmetic;
-use crate::binary_arithmetic_helper;
 use crate::scalars::function_factory::ArithmeticDescription;
 use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::BinaryArithmeticFunction;

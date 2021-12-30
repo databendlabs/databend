@@ -31,7 +31,7 @@ use crate::scalars::function_factory::FunctionFeatures;
 use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
-use crate::try_binary_arithmetic_helper;
+use crate::try_binary_arithmetic;
 use crate::with_match_primitive_type;
 
 #[derive(Clone)]
@@ -45,7 +45,7 @@ pub struct ArithmeticModule<T, D, M, R> {
 impl<T, D, M, R> ArithmeticTrait for ArithmeticModule<T, D, M, R>
 where
     T: DFPrimitiveType + AsPrimitive<M>,
-    D: DFPrimitiveType + AsPrimitive<M>,
+    D: DFPrimitiveType + AsPrimitive<M> + num::One,
     R: DFPrimitiveType,
     M: DFPrimitiveType + num::Zero + AsPrimitive<R> + Rem<Output = M>,
     u8: AsPrimitive<R>,
@@ -53,36 +53,27 @@ where
     u32: AsPrimitive<R>,
     u64: AsPrimitive<R>,
     DFPrimitiveArray<R>: IntoSeries,
+    R: Into<DataValue>,
 {
     fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
-        let lhs = columns[0].column().to_minimal_array()?;
-        let rhs = columns[1].column().to_minimal_array()?;
-        let lhs: &DFPrimitiveArray<T> = lhs.static_cast();
-        let rhs: &DFPrimitiveArray<D> = rhs.static_cast();
-        let result_type = R::data_type();
-
-        let need_check = result_type.is_integer();
-
-        let result: DataColumn = try_binary_arithmetic_helper! {
-            lhs,
-            rhs,
+        let need_check = R::data_type().is_integer();
+        try_binary_arithmetic! {
+            columns[0].column(),
+            columns[1].column(),
             M,
-            R,
-            |l: M, r: M| {
+            |l: M, r:M| {
                 if std::intrinsics::unlikely(need_check && r == M::zero()) {
                     return Err(ErrorCode::BadArguments("Division by zero"));
                 }
                 Ok(AsPrimitive::<R>::as_(l % r))
             },
-            |r: M| {
+            |lhs: &DFPrimitiveArray<T>, r: M| {
                 if need_check && r == M::zero() {
                     return Err(ErrorCode::BadArguments("Division by zero"));
                 }
-                Ok(rem_scalar(lhs, &r))
+                Ok(rem_scalar(lhs, &r).into())
             }
-        };
-
-        Ok(result.resize_constant(columns[0].column().len()))
+        }
     }
 }
 

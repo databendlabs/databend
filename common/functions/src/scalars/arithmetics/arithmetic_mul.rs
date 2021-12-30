@@ -28,7 +28,6 @@ use num_traits::WrappingSub;
 
 use super::arithmetic::ArithmeticTrait;
 use crate::binary_arithmetic;
-use crate::binary_arithmetic_helper;
 use crate::impl_binary_arith;
 use crate::impl_wrapping_binary_arith;
 use crate::scalars::function_factory::ArithmeticDescription;
