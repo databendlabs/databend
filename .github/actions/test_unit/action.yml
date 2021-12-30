@@ -10,11 +10,8 @@ inputs:
 runs:
   using: "composite"
   steps:
-    # Workaround for Not Space Left: https://github.com/datafuselabs/databend/issues/3562
-    - shell: bash
-      run: rm -rf /usr/share/dotnet
-
-    - uses: actions/checkout@v2
+    - name: Maximize build space
+      uses: ./.github/actions/cleanup
 
     - uses: arduino/setup-protoc@v1
       with:
@@ -26,7 +23,10 @@ runs:
         target: ${{ matrix.config.target }}
         components: rustfmt, clippy
 
+    # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1
+      with:
+        sharedKey: unit-v1
 
     - name: Test
       uses: actions-rs/cargo@v1
@@ -35,7 +35,7 @@ runs:
         args: --all-features --no-fail-fast
       env:
         RUST_TEST_THREADS: 2
-        RUST_LOG: debug
+        RUST_LOG: ERROR
         RUST_BACKTRACE: full
         RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'
         RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests'

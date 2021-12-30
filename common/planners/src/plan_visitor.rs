@@ -18,16 +18,19 @@ use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
+use crate::AlterUDFPlan;
 use crate::AlterUserPlan;
 use crate::CopyPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
+use crate::CreateUDFPlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
 use crate::DescribeStagePlan;
 use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
+use crate::DropUDFPlan;
 use crate::DropUserPlan;
 use crate::DropUserStagePlan;
 use crate::EmptyPlan;
@@ -52,6 +55,7 @@ use crate::SettingPlan;
 use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
 use crate::ShowGrantsPlan;
+use crate::ShowUDFPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -143,6 +147,10 @@ pub trait PlanVisitor {
             PlanNode::ShowGrants(plan) => self.visit_show_grants(plan),
             PlanNode::DropUserStage(plan) => self.visit_drop_stage(plan),
             PlanNode::ShowCreateDatabase(plan) => self.visit_show_create_database(plan),
+            PlanNode::CreateUDF(plan) => self.visit_create_udf(plan),
+            PlanNode::DropUDF(plan) => self.visit_drop_udf(plan),
+            PlanNode::ShowUDF(plan) => self.visit_show_udf(plan),
+            PlanNode::AlterUDF(plan) => self.visit_alter_udf(plan),
         }
     }
 
@@ -342,6 +350,22 @@ pub trait PlanVisitor {
     }
 
     fn visit_show_create_database(&mut self, _: &ShowCreateDatabasePlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_create_udf(&mut self, _: &CreateUDFPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_drop_udf(&mut self, _: &DropUDFPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_show_udf(&mut self, _: &ShowUDFPlan) -> Result<()> {
+        Ok(())
+    }
+
+    fn visit_alter_udf(&mut self, _: &AlterUDFPlan) -> Result<()> {
         Ok(())
     }
 }

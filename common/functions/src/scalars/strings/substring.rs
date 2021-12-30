@@ -15,6 +15,7 @@
 use std::fmt;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::izip;
@@ -36,8 +37,11 @@ impl SubstringFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(2, 3),
+        )
     }
 }
 
@@ -46,32 +50,20 @@ impl Function for SubstringFunction {
         &*self.display_name
     }
 
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((2, 3))
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(true)
-    }
-
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        if !args[0].is_numeric() && args[0] != DataType::String && args[0] != DataType::Null {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        if !args[0].is_numeric() && !args[0].is_string() && !args[0].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null, but got {}",
                 args[0]
             )));
         }
-        if !args[1].is_integer() && args[1] != DataType::String && args[1] != DataType::Null {
+        if !args[1].is_integer() && !args[1].is_string() && !args[1].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[1]
             )));
         }
-        if args.len() > 2
-            && !args[2].is_integer()
-            && args[2] != DataType::String
-            && args[2] != DataType::Null
-        {
+        if args.len() > 2 && !args[2].is_integer() && !args[2].is_string() && !args[2].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
                 args[2]

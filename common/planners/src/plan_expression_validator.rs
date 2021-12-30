@@ -14,7 +14,6 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::scalars::Function;
 use common_functions::scalars::FunctionFactory;
 
 use crate::Expression;
@@ -55,29 +54,28 @@ where F: Fn(&Expression) -> Result<()>
     }
 }
 
-fn validate_function_arg(func: Box<dyn Function>, args: &[Expression]) -> Result<()> {
-    match func.variadic_arguments() {
+fn validate_function_arg(
+    name: &str,
+    args_len: usize,
+    variadic_arguments: Option<(usize, usize)>,
+    num_arguments: usize,
+) -> Result<()> {
+    match variadic_arguments {
         Some((start, end)) => {
-            return if args.len() < start || args.len() > end {
+            return if args_len < start || args_len > end {
                 Err(ErrorCode::NumberArgumentsNotMatch(format!(
-                    "{} expect to have [{}, {}] arguments, but got {}",
-                    func.name(),
-                    start,
-                    end,
-                    args.len()
+                    "Function `{}` expect to have [{}, {}] arguments, but got {}",
+                    name, start, end, args_len
                 )))
             } else {
                 Ok(())
             };
         }
         None => {
-            let num = func.num_arguments();
-            return if num != args.len() {
+            return if num_arguments != args_len {
                 Err(ErrorCode::NumberArgumentsNotMatch(format!(
-                    "{} expect to have {} arguments, but got {}",
-                    func.name(),
-                    num,
-                    args.len()
+                    "Function `{}` expect to have {} arguments, but got {}",
+                    name, num_arguments, args_len
                 )))
             } else {
                 Ok(())
@@ -90,8 +88,13 @@ fn validate_function_arg(func: Box<dyn Function>, args: &[Expression]) -> Result
 pub fn validate_expression(expr: &Expression) -> Result<()> {
     let validator = ExpressionValidator::new(&|expr: &Expression| match expr {
         Expression::ScalarFunction { op, args } => {
-            let func = FunctionFactory::instance().get(op)?;
-            validate_function_arg(func, args)
+            let features = FunctionFactory::instance().get_features(op)?;
+            validate_function_arg(
+                op,
+                args.len(),
+                features.variadic_arguments,
+                features.num_arguments,
+            )
         }
 
         // Currently no need to check  UnaryExpression and BinaryExpression

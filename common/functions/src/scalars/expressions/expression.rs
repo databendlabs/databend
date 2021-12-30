@@ -24,7 +24,10 @@ pub struct ToCastFunction;
 
 impl ToCastFunction {
     fn cast_function_creator(to_type: DataType) -> FunctionDescription {
-        let mut features = FunctionFeatures::default().deterministic().monotonicity();
+        let mut features = FunctionFeatures::default()
+            .deterministic()
+            .monotonicity()
+            .num_arguments(1);
         if to_type == DataType::Boolean {
             features = features.bool_function();
         }
@@ -62,6 +65,11 @@ impl ToCastFunction {
         factory.register(
             "toDateTime32",
             Self::cast_function_creator(DataType::DateTime32(None)),
+        );
+        // TODO support precision parameter
+        factory.register(
+            "toDateTime64",
+            Self::cast_function_creator(DataType::DateTime64(3, None)),
         );
     }
 }

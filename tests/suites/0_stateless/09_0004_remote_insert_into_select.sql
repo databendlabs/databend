@@ -39,7 +39,9 @@ select sum(cast(a as uint64)), sum(cast(b as uint64)) from s1;
 create table d1(n String, a UInt8 not null, b Int16 default a + 3, c String default 'c');
 insert into d1(a) values (1);
 insert into d1(b) values (2);
-select * from d1 order by a;
+-- https://github.com/datafuselabs/databend/issues/3636
+insert into d1(b) select b from d1;
+select * from d1 order by a, b;
 
 
 

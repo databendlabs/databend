@@ -13,11 +13,13 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::BorrowMut;
 use std::sync::Arc;
 use std::time::Instant;
 
 use common_datablocks::DataBlock;
-use common_datavalues::prelude::DFStringArray;
+use common_datavalues::prelude::*;
+use common_datavalues::series::Series;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
 use common_functions::aggregates::get_layout_offsets;
@@ -75,6 +77,7 @@ impl Processor for AggregatorFinalTransform {
         self
     }
 
+    #[tracing::instrument(level = "debug", name = "aggregator_final_execute", skip(self))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         tracing::debug!("execute...");
 
@@ -120,19 +123,30 @@ impl Processor for AggregatorFinalTransform {
         let delta = start.elapsed();
         tracing::debug!("Aggregator final cost: {:?}", delta);
 
-        let mut final_result = Vec::with_capacity(funcs.len());
+        let funcs_len = funcs.len();
+
+        let mut aggr_values: Vec<Box<dyn MutableArrayBuilder>> = {
+            let mut values = vec![];
+            for func in &funcs {
+                let array = create_mutable_array(func.return_type()?);
+                values.push(array)
+            }
+            values
+        };
+
         for (idx, func) in funcs.iter().enumerate() {
             let place = places[idx].into();
-            let merge_result = func.merge_result(place)?;
-            final_result.push(merge_result.to_series_with_size(1)?);
+            let array: &mut dyn MutableArrayBuilder = aggr_values[idx].borrow_mut();
+            let _ = func.merge_result(place, array)?;
         }
 
+        let mut columns: Vec<Series> = Vec::with_capacity(funcs_len);
+        for mut array in aggr_values {
+            columns.push(array.as_series());
+        }
         let mut blocks = vec![];
-        if !final_result.is_empty() {
-            blocks.push(DataBlock::create_by_array(
-                self.schema.clone(),
-                final_result,
-            ));
+        if !columns.is_empty() {
+            blocks.push(DataBlock::create_by_array(self.schema.clone(), columns));
         }
 
         Ok(Box::pin(DataBlockStream::create(

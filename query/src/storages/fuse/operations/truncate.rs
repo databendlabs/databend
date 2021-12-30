@@ -29,7 +29,7 @@ use crate::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 impl FuseTable {
     #[inline]
     pub async fn do_truncate(&self, ctx: Arc<QueryContext>, plan: TruncateTablePlan) -> Result<()> {
-        if let Some(prev_snapshot) = self.table_snapshot(ctx.as_ref()).await? {
+        if let Some(prev_snapshot) = self.read_table_snapshot(ctx.as_ref()).await? {
             let prev_id = prev_snapshot.snapshot_id;
             let mut new_snapshot = prev_snapshot;
             new_snapshot.segments = vec![];

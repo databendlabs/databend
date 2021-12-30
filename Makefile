@@ -149,6 +149,10 @@ build-perf-tool:
 	mkdir -p ./distro
 	mv ./target/x86_64-unknown-linux-gnu/debug/databend-benchmark  ./distro
 
+# generate common/functions/src/scalars/arithmetics/result_type.rs
+run-codegen:
+	cargo run --manifest-path=common/codegen/Cargo.toml
+
 perf-tool: build-perf-tool
 	docker buildx build . -f ./docker/perf-tool/Dockerfile  --platform linux/amd64 --allow network.host --builder host -t ${HUB}/perf-tool:${TAG} --push
 

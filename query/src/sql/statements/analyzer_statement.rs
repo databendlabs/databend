@@ -178,6 +178,10 @@ impl AnalyzableStatement for DfStatement {
             DfStatement::CreateStage(v) => v.analyze(ctx).await,
             DfStatement::ShowFunctions(v) => v.analyze(ctx).await,
             DfStatement::DropStage(v) => v.analyze(ctx).await,
+            DfStatement::CreateUDF(v) => v.analyze(ctx).await,
+            DfStatement::DropUDF(v) => v.analyze(ctx).await,
+            DfStatement::ShowUDF(v) => v.analyze(ctx).await,
+            DfStatement::AlterUDF(v) => v.analyze(ctx).await,
         }
     }
 }

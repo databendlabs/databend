@@ -44,7 +44,7 @@ impl FuseTable {
     ) -> Result<()> {
         // TODO OCC retry & resolves conflicts if applicable
 
-        let prev = self.table_snapshot(ctx.as_ref()).await?;
+        let prev = self.read_table_snapshot(ctx.as_ref()).await?;
         let new_snapshot = if overwrite {
             let schema = self.table_info.meta.schema.as_ref().clone();
             let (segments, summary) = Self::merge_append_operations(&schema, operation_log)?;

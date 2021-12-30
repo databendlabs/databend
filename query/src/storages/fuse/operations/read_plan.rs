@@ -34,7 +34,7 @@ impl FuseTable {
         ctx: Arc<QueryContext>,
         push_downs: Option<Extras>,
     ) -> Result<(Statistics, Partitions)> {
-        let snapshot = self.table_snapshot(ctx.as_ref()).await?;
+        let snapshot = self.read_table_snapshot(ctx.as_ref()).await?;
         match snapshot {
             Some(snapshot) => {
                 let da = ctx.get_data_accessor()?;

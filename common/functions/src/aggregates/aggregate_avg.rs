@@ -129,14 +129,12 @@ where
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
         let state = place.get::<AggregateAvgState<SumT>>();
-        let writer = BufMut::writer(writer);
-        bincode::serialize_into(writer, state)?;
-        Ok(())
+        serialize_into_buf(writer, state)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateAvgState<SumT>>();
-        *state = bincode::deserialize_from(reader)?;
+        *state = deserialize_from_slice(reader)?;
         Ok(())
     }
 
@@ -147,14 +145,27 @@ where
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+    #[allow(unused_mut)]
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
         let state = place.get::<AggregateAvgState<SumT>>();
 
         if state.count == 0 {
-            return Ok(DataValue::Float64(None));
+            array.push_null();
+            return Ok(());
         }
+
         let v: f64 = NumCast::from(state.value).unwrap_or_default();
-        Ok(DataValue::Float64(Some(v / state.count as f64)))
+        let val = v / state.count as f64;
+
+        let mut array = array
+            .as_mut_any()
+            .downcast_mut::<MutablePrimitiveArrayBuilder<f64>>()
+            .ok_or_else(|| {
+                ErrorCode::UnexpectedError("error occured when downcast MutableArray".to_string())
+            })?;
+        array.push(val);
+
+        Ok(())
     }
 }
 

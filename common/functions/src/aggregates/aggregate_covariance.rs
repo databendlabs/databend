@@ -230,14 +230,13 @@ where
 
     fn serialize(&self, place: StateAddr, writer: &mut BytesMut) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
-        let writer = BufMut::writer(writer);
-        bincode::serialize_into(writer, state)?;
-        Ok(())
+        serialize_into_buf(writer, state)
     }
 
     fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
-        *state = bincode::deserialize_from(reader)?;
+        *state = deserialize_from_slice(reader)?;
+
         Ok(())
     }
 
@@ -248,11 +247,17 @@ where
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+    #[allow(unused_mut)]
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
+        let mut array = array
+            .as_mut_any()
+            .downcast_mut::<MutablePrimitiveArrayBuilder<f64>>()
+            .ok_or_else(|| {
+                ErrorCode::UnexpectedError("error occured when downcast MutableArray".to_string())
+            })?;
         let state = place.get::<AggregateCovarianceState>();
-        Ok(R::apply(state).map_or(DataValue::Float64(None), |val| {
-            DataValue::Float64(Some(val))
-        }))
+        array.push_option(R::apply(state));
+        Ok(())
     }
 }
 

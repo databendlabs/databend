@@ -16,8 +16,8 @@ use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::Result;
 
 use crate::scalars::function_factory::FunctionDescription;
@@ -38,7 +38,7 @@ impl IfFunction {
 
     pub fn desc() -> FunctionDescription {
         FunctionDescription::creator(Box::new(Self::try_create_func))
-            .features(FunctionFeatures::default().deterministic())
+            .features(FunctionFeatures::default().deterministic().num_arguments(3))
     }
 }
 
@@ -47,16 +47,19 @@ impl Function for IfFunction {
         "IfFunction"
     }
 
-    fn num_arguments(&self) -> usize {
-        3
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+        let mut aggregate_args = Vec::with_capacity(args.len() - 1);
+        for arg in args.iter().skip(1) {
+            aggregate_args.push(arg.data_type().clone())
+        }
+        common_datavalues::aggregate_types(&aggregate_args)
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
-        common_datavalues::aggregate_types(&args[1..])
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
+    // IF(condition, value_if_true, value_if_false) is nullable if 'value_if_true' is nullable or 'value_if_false' is nullable.
+    // The condition of 'Null' is treated as false.
+    fn nullable(&self, args: &[DataTypeAndNullable]) -> Result<bool> {
+        let nullable = args[1].is_nullable() || args[2].is_nullable();
+        Ok(nullable)
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

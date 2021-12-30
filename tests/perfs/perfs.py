@@ -5,23 +5,18 @@ from errno import ESRCH
 import configargparse
 import yaml
 import re
-import subprocess
 import os
 
 from datetime import datetime
-from time import time, sleep
+from time import sleep
 
 from subprocess import Popen
-from subprocess import PIPE
-from subprocess import CalledProcessError
-from subprocess import TimeoutExpired
-from argparse import ArgumentParser
 from qcloud_cos import CosConfig
 from qcloud_cos import CosS3Client
 import sys
 import logging
 
-from qcloud_cos.cos_exception import CosException, CosServiceError
+from qcloud_cos.cos_exception import CosServiceError
 
 failures = 0
 passed = 0
@@ -111,7 +106,7 @@ def execute(suit, bin_path, host, port, concurrency, iterations, output_dir,
     json_path = os.path.join(output_dir, file_name)
     S3key = os.path.join(S3path, file_name)
     if type == "COS":
-        if rerun == "False":
+        if not rerun:
             COScli = build_COSclient(secretID, secretKey, region, endpoint)
             try:
                 response = COScli.get_object(
@@ -128,11 +123,11 @@ def execute(suit, bin_path, host, port, concurrency, iterations, output_dir,
                     logging.info("other issue occured, {}".format(
                         e.get_error_code()))
             except ConnectionError as ce:
-                logging.info("timeout for {}".format(S3key))
+                logging.info("timeout for {}, with error {}".format(
+                    S3key, str(ce)))
             else:
                 # S3 key exists in given bucket just return
                 index = json.load(response['Body'].get_raw_stream())
-                file_dict = {}
                 for elem in index['Contents']:
                     if elem['path'] == S3key:
                         logging.info(
@@ -175,6 +170,7 @@ def execute(suit, bin_path, host, port, concurrency, iterations, output_dir,
         failures += 1
     else:
         passed += 1
+    print("Total time: {}s".format(total_time))
 
 
 if __name__ == '__main__':
@@ -234,8 +230,10 @@ if __name__ == '__main__':
                         env_var='ENDPOINT')
     parser.add_argument(
         '--rerun',
-        default="False",
-        help='if rerun set as true, it will rerun all perfs.yaml completely')
+        action='store_true',
+        help=
+        'if use `--rerun` set as true, it will rerun all perfs.yaml completely'
+    )
     args = parser.parse_args()
 
     for suit in conf['perfs']:

@@ -8,12 +8,18 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Maximize build space
+      uses: ./.github/actions/cleanup
+
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: ${{ matrix.config.toolchain }}
         target: ${{ matrix.config.target }}
 
+    # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1
+      with:
+        sharedKey: stateless-v1
 
     - uses: actions/download-artifact@v2
       with:

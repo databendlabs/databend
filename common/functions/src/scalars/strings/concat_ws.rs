@@ -15,6 +15,7 @@
 use std::fmt;
 
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -35,8 +36,11 @@ impl ConcatWsFunction {
     }
 
     pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create))
-            .features(FunctionFeatures::default().deterministic())
+        FunctionDescription::creator(Box::new(Self::try_create)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .variadic_arguments(2, 1024),
+        )
     }
 
     fn concat_column_with_seperator(
@@ -172,19 +176,17 @@ impl Function for ConcatWsFunction {
         "concat_ws"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
         if args[0].is_null() {
             return Ok(DataType::Null);
         }
         Ok(DataType::String)
     }
 
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((2, 1024))
-    }
-
-    fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {
-        Ok(false)
+    // concat_ws(NULL, "a", "b") -> NULL
+    // concat_ws(",", NULL, NULL) -> ""
+    fn nullable(&self, args: &[DataTypeAndNullable]) -> Result<bool> {
+        Ok(args[0].is_nullable())
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

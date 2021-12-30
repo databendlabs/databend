@@ -7,9 +7,8 @@ inputs:
 runs:
   using: "composite"
   steps:
-    # Workaround for Not Space Left: https://github.com/datafuselabs/databend/issues/3562
-    - shell: bash
-      run: rm -rf /usr/share/dotnet
+    - name: Maximize build space
+      uses: ./.github/actions/cleanup
 
     - uses: arduino/setup-protoc@v1
       with:
@@ -21,7 +20,10 @@ runs:
         target: ${{ matrix.config.target }}
         components: rustfmt, clippy
 
+    # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1
+      with:
+        sharedKey: release-v1
 
     - name: Build Databend
       uses: actions-rs/cargo@v1

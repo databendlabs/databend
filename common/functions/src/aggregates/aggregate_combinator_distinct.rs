@@ -20,6 +20,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
 use serde::Deserialize;
@@ -42,13 +43,12 @@ pub struct AggregateDistinctState {
 
 impl AggregateDistinctState {
     pub fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        let writer = BufMut::writer(writer);
-        bincode::serialize_into(writer, &self.set)?;
-        Ok(())
+        serialize_into_buf(writer, &self.set)
     }
 
     pub fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.set = bincode::deserialize_from(reader)?;
+        self.set = deserialize_from_slice(reader)?;
+
         Ok(())
     }
 }
@@ -199,7 +199,8 @@ impl AggregateFunction for AggregateDistinctCombinator {
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+    #[allow(unused_mut)]
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
         let state = place.get::<AggregateDistinctState>();
 
         let layout = Layout::new::<AggregateDistinctState>();
@@ -207,10 +208,19 @@ impl AggregateFunction for AggregateDistinctCombinator {
 
         // faster path for count
         if self.nested.name() == "AggregateFunctionCount" {
-            Ok(DataValue::UInt64(Some(state.set.len() as u64)))
+            let mut array = array
+                .as_mut_any()
+                .downcast_mut::<MutablePrimitiveArrayBuilder<u64>>()
+                .ok_or_else(|| {
+                    ErrorCode::UnexpectedError(
+                        "error occured when downcast MutableArray".to_string(),
+                    )
+                })?;
+            array.push(state.set.len() as u64);
+            Ok(())
         } else {
             if state.set.is_empty() {
-                return self.nested.merge_result(netest_place);
+                return self.nested.merge_result(netest_place, array);
             }
             let mut results = Vec::with_capacity(state.set.len());
 
@@ -241,7 +251,7 @@ impl AggregateFunction for AggregateDistinctCombinator {
             self.nested
                 .accumulate(netest_place, &arrays, state.set.len())?;
             // merge_result
-            self.nested.merge_result(netest_place)
+            self.nested.merge_result(netest_place, array)
         }
     }
 }

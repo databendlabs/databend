@@ -25,7 +25,7 @@ use common_base::Progress;
 use common_base::ProgressValues;
 use common_base::Runtime;
 use common_base::TrySpawn;
-use common_cache::query::QueryCache;
+use common_cache::storage::StorageCache;
 use common_dal::AzureBlobAccessor;
 use common_dal::DalMetrics;
 use common_dal::DataAccessor;
@@ -123,7 +123,7 @@ impl QueryContext {
 
     // Steal n partitions from the partition pool by the pipeline worker.
     // This also can steal the partitions from distributed node.
-    pub fn try_get_partitions(&self, num: usize) -> Result<Partitions> {
+    pub fn try_get_partitions(&self, num: u64) -> Result<Partitions> {
         let mut partitions = vec![];
         for _ in 0..num {
             match self.partition_queue.write().pop_back() {
@@ -296,7 +296,7 @@ impl QueryContext {
     }
 
     // Get table cache
-    pub fn get_table_cache(&self) -> Arc<Option<Box<dyn QueryCache>>> {
+    pub fn get_table_cache(&self) -> Arc<Option<Box<dyn StorageCache>>> {
         self.shared.get_table_cache()
     }
 }

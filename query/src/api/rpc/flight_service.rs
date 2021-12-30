@@ -30,6 +30,7 @@ use common_arrow::arrow_format::flight::data::Result as FlightResult;
 use common_arrow::arrow_format::flight::data::SchemaResult;
 use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
+use common_tracing::tracing;
 use tokio_stream::Stream;
 use tonic::Request;
 use tonic::Response as RawResponse;
@@ -98,7 +99,9 @@ impl FlightService for DatabendQueryFlightService {
 
     type DoGetStream = FlightStream<FlightData>;
 
+    #[tracing::instrument(level = "debug", skip_all)]
     async fn do_get(&self, request: Request<Ticket>) -> Response<Self::DoGetStream> {
+        common_tracing::extract_remote_span_as_parent(&request);
         let ticket: FlightTicket = request.into_inner().try_into()?;
 
         match ticket {
@@ -130,7 +133,10 @@ impl FlightService for DatabendQueryFlightService {
 
     type DoActionStream = FlightStream<FlightResult>;
 
+    #[tracing::instrument(level = "debug", skip_all)]
     async fn do_action(&self, request: Request<Action>) -> Response<Self::DoActionStream> {
+        common_tracing::extract_remote_span_as_parent(&request);
+
         let action = request.into_inner();
         let flight_action: FlightAction = action.try_into()?;
 
@@ -175,7 +181,9 @@ impl FlightService for DatabendQueryFlightService {
 
     type ListActionsStream = FlightStream<ActionType>;
 
-    async fn list_actions(&self, _: Request<Empty>) -> Response<Self::ListActionsStream> {
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn list_actions(&self, request: Request<Empty>) -> Response<Self::ListActionsStream> {
+        common_tracing::extract_remote_span_as_parent(&request);
         Result::Ok(RawResponse::new(
             Box::pin(tokio_stream::iter(vec![
                 Ok(ActionType {

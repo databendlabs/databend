@@ -46,7 +46,7 @@ pub trait AggregateMinMaxState: Send + Sync + 'static {
     fn merge(&mut self, rhs: &Self, is_min: bool) -> Result<()>;
     fn serialize(&self, writer: &mut BytesMut) -> Result<()>;
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
-    fn merge_result(&mut self) -> Result<DataValue>;
+    fn merge_result(&mut self, array: &mut dyn MutableArrayBuilder) -> Result<()>;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -126,17 +126,30 @@ where
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        let writer = BufMut::writer(writer);
-        bincode::serialize_into(writer, &self.value)?;
-        Ok(())
+        serialize_into_buf(writer, self)
     }
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.value = bincode::deserialize_from(reader)?;
+        self.value = deserialize_from_slice(reader)?;
+
         Ok(())
     }
 
-    fn merge_result(&mut self) -> Result<DataValue> {
-        Ok(self.value.into())
+    #[allow(unused_mut)]
+    fn merge_result(&mut self, array: &mut dyn MutableArrayBuilder) -> Result<()> {
+        if let Some(val) = self.value {
+            let mut array = array
+                .as_mut_any()
+                .downcast_mut::<MutablePrimitiveArrayBuilder<T>>()
+                .ok_or_else(|| {
+                    ErrorCode::UnexpectedError(
+                        "error occured when downcast MutableArray".to_string(),
+                    )
+                })?;
+            array.push(val);
+        } else {
+            array.push_null();
+        }
+        Ok(())
     }
 }
 
@@ -196,18 +209,25 @@ impl AggregateMinMaxState for StringState {
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        let writer = BufMut::writer(writer);
-        bincode::serialize_into(writer, &self.value)?;
-        Ok(())
+        serialize_into_buf(writer, self)
     }
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.value = bincode::deserialize_from(reader)?;
+        self.value = deserialize_from_slice(reader)?;
+
         Ok(())
     }
 
-    fn merge_result(&mut self) -> Result<DataValue> {
+    #[allow(unused_mut)]
+    fn merge_result(&mut self, array: &mut dyn MutableArrayBuilder) -> Result<()> {
         let v = self.value.clone();
-        Ok(v.into())
+        let mut array = array
+            .as_mut_any()
+            .downcast_mut::<MutableStringArrayBuilder>()
+            .ok_or_else(|| {
+                ErrorCode::UnexpectedError("error occured when downcast MutableArray".to_string())
+            })?;
+        array.push_option(v);
+        Ok(())
     }
 }
 
@@ -273,9 +293,10 @@ where T: AggregateMinMaxState //  std::cmp::PartialOrd + DFTryFrom<DataValue> + 
         state.merge(rhs, self.is_min)
     }
 
-    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
         let state = place.get::<T>();
-        state.merge_result()
+        state.merge_result(array)?;
+        Ok(())
     }
 }
 

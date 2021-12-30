@@ -16,8 +16,8 @@ use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataSchema;
 use common_datavalues::DataType;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::Result;
 use dyn_clone::DynClone;
 
@@ -26,17 +26,6 @@ use crate::scalars::Monotonicity;
 pub trait Function: fmt::Display + Sync + Send + DynClone {
     /// Returns the name of the function, should be unique.
     fn name(&self) -> &str;
-
-    // Returns the number of arguments the function accepts.
-    fn num_arguments(&self) -> usize {
-        0
-    }
-
-    /// (1, 2) means we only accept [1, 2] arguments
-    /// None means it's not variadic function
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        None
-    }
 
     /// Calculate the monotonicity from arguments' monotonicity information.
     /// The input should be argument's monotonicity. For binary function it should be an
@@ -49,16 +38,12 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
     }
 
     /// The method returns the return_type of this function.
-    fn return_type(&self, args: &[DataType]) -> Result<DataType>;
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType>;
 
-    /// Whether the function may return null with specific input schema.
-    /// The default implementation check whether any nullable input exists.
-    /// If yes, return true; otherwise false.
-    fn nullable(&self, input_schema: &DataSchema) -> Result<bool> {
-        let any_input_nullable = input_schema
-            .fields()
-            .iter()
-            .any(|field| field.is_nullable());
+    /// Whether the function may return null.
+    /// The default implementation checks if any nullable input exists and returns true if exist; otherwise false.
+    fn nullable(&self, arg_fields: &[DataTypeAndNullable]) -> Result<bool> {
+        let any_input_nullable = arg_fields.iter().any(|field| field.is_nullable());
         Ok(any_input_nullable)
     }
 

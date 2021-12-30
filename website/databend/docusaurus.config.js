@@ -35,6 +35,14 @@ const config = {
                 theme: {
                     customCss: require.resolve('./src/css/custom.scss'),
                 },
+                gtag: {
+                  trackingID: 'G-WBQPTTG4ZG',
+                  anonymizeIP: true,
+                },
+                sitemap: {
+                    changefreq: 'daily',
+                    priority: 0.5,
+                },
             }),
         ],
     ],
@@ -63,6 +71,18 @@ const config = {
                 sidebarPath: require.resolve('./docs/dev/sidebars.js'),
                 editUrl: 'https://github.com/datafuselabs/databend/edit/main/website/databend',
             },
+        ],
+        [
+          '@docusaurus/plugin-client-redirects',
+          {
+            // this will be removed later, make a mark~.
+            redirects: [
+              {
+                to: '/', // string
+                from: '/overview/building-and-running', // string | string[]
+              },
+            ],
+          },
         ]
     ],
     themeConfig:
@@ -84,10 +104,10 @@ const config = {
                     {
                         to: '/user', label: 'User Guide', position: 'left', items: [
                             {label: 'Get Started', to: '/user'},
-                            {label: 'SQL', to: '/user/category/sql-statement'},
+                            {label: 'SQL', to: '/user/category/sql'},
                             {label: 'CLI', to: '/user/category/cli'},
-                            {label: 'APIs', to: '/user/category/api'},
-                            {label: 'Data Load', to: '/user/data-loading/http-streaming-load'}
+                            {label: 'APIs', to: '/user/category/apis'},
+                            {label: 'Data Loading', to: '/user/category/data-loading'}
                         ]
                     },
                     {
@@ -156,14 +176,11 @@ const config = {
                 darkTheme: darkCodeTheme,
             },
             algolia: {
-                apiKey: 'TBD',
-                indexName: 'TBD',
+                appId: 'RL7MS9PKE8',
+                apiKey: '78bb6be96bb0361a4be9dab6bd83936c',
+                indexName: 'databend-rs',
                 contextualSearch: true,
-                searchParameters: {},
-            },
-            gtag: {
-                trackingID: 'TBD',
-            },
+            }
         }),
 };
 

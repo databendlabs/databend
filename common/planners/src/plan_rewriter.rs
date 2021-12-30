@@ -25,22 +25,26 @@ use crate::plan_broadcast::BroadcastPlan;
 use crate::plan_subqueries_set::SubQueriesSetPlan;
 use crate::AggregatorFinalPlan;
 use crate::AggregatorPartialPlan;
+use crate::AlterUDFPlan;
 use crate::AlterUserPlan;
 use crate::CopyPlan;
 use crate::CreateDatabasePlan;
 use crate::CreateTablePlan;
+use crate::CreateUDFPlan;
 use crate::CreateUserPlan;
 use crate::CreateUserStagePlan;
 use crate::DescribeStagePlan;
 use crate::DescribeTablePlan;
 use crate::DropDatabasePlan;
 use crate::DropTablePlan;
+use crate::DropUDFPlan;
 use crate::DropUserPlan;
 use crate::DropUserStagePlan;
 use crate::EmptyPlan;
 use crate::ExplainPlan;
 use crate::Expression;
 use crate::ExpressionPlan;
+use crate::ExpressionRewriter;
 use crate::Expressions;
 use crate::FilterPlan;
 use crate::GrantPrivilegePlan;
@@ -61,6 +65,7 @@ use crate::SettingPlan;
 use crate::ShowCreateDatabasePlan;
 use crate::ShowCreateTablePlan;
 use crate::ShowGrantsPlan;
+use crate::ShowUDFPlan;
 use crate::SinkPlan;
 use crate::SortPlan;
 use crate::StagePlan;
@@ -86,7 +91,7 @@ use crate::UseDatabasePlan;
 /// let mut rewriter = FilterRewriter {};
 /// let new_plan = rewriter.rewrite_plan_node(&plan)?; // new_plan is the rewritten plan
 /// ```
-pub trait PlanRewriter {
+pub trait PlanRewriter: Sized {
     fn rewrite_plan_node(&mut self, plan: &PlanNode) -> Result<PlanNode> {
         match plan {
             PlanNode::AggregatorPartial(plan) => self.rewrite_aggregate_partial(plan),
@@ -130,6 +135,10 @@ pub trait PlanRewriter {
             PlanNode::ShowGrants(plan) => self.rewrite_show_grants(plan),
             PlanNode::DropUserStage(plan) => self.rewrite_drop_stage(plan),
             PlanNode::ShowCreateDatabase(plan) => self.rewrite_show_create_database(plan),
+            PlanNode::CreateUDF(plan) => self.rewrite_create_udf(plan),
+            PlanNode::DropUDF(plan) => self.rewrite_drop_udf(plan),
+            PlanNode::ShowUDF(plan) => self.rewrite_show_udf(plan),
+            PlanNode::AlterUDF(plan) => self.rewrite_alter_udf(plan),
         }
     }
 
@@ -138,78 +147,42 @@ pub trait PlanRewriter {
     }
 
     // TODO: Move it to ExpressionsRewrite trait
-    fn rewrite_expr(&mut self, schema: &DataSchemaRef, expr: &Expression) -> Result<Expression> {
-        match expr {
-            Expression::Alias(alias, input) => Ok(Expression::Alias(
-                alias.clone(),
-                Box::new(self.rewrite_expr(schema, input.as_ref())?),
-            )),
-            Expression::UnaryExpression { op, expr } => Ok(Expression::UnaryExpression {
-                op: op.clone(),
-                expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
-            }),
-            Expression::BinaryExpression { op, left, right } => Ok(Expression::BinaryExpression {
-                op: op.clone(),
-                left: Box::new(self.rewrite_expr(schema, left.as_ref())?),
-                right: Box::new(self.rewrite_expr(schema, right.as_ref())?),
-            }),
-            Expression::ScalarFunction { op, args } => Ok(Expression::ScalarFunction {
-                op: op.clone(),
-                args: self.rewrite_exprs(schema, args)?,
-            }),
-            Expression::AggregateFunction {
-                op,
-                distinct,
-                params,
-                args,
-            } => Ok(Expression::AggregateFunction {
-                op: op.clone(),
-                distinct: *distinct,
-                params: params.clone(),
-                args: self.rewrite_exprs(schema, args)?,
-            }),
-            Expression::Sort {
-                expr,
-                asc,
-                nulls_first,
-                origin_expr,
-            } => Ok(Expression::Sort {
-                expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
-                asc: *asc,
-                nulls_first: *nulls_first,
-                origin_expr: origin_expr.clone(),
-            }),
-            Expression::Cast { expr, data_type } => Ok(Expression::Cast {
-                expr: Box::new(self.rewrite_expr(schema, expr.as_ref())?),
-                data_type: data_type.clone(),
-            }),
-            Expression::Wildcard => Ok(Expression::Wildcard),
-            Expression::Column(column_name) => Ok(Expression::Column(column_name.clone())),
-            Expression::QualifiedColumn(v) => Ok(Expression::QualifiedColumn(v.clone())),
-            Expression::Literal {
-                value,
-                column_name,
-                data_type,
-            } => Ok(Expression::Literal {
-                value: value.clone(),
-                column_name: column_name.clone(),
-                data_type: data_type.clone(),
-            }),
-            Expression::Subquery { name, query_plan } => {
-                let new_subquery = self.rewrite_subquery_plan(query_plan)?;
-                Ok(Expression::Subquery {
-                    name: name.clone(),
-                    query_plan: Arc::new(new_subquery),
-                })
+    fn rewrite_expr(&mut self, _schema: &DataSchemaRef, expr: &Expression) -> Result<Expression> {
+        struct RewriteSubquery<T: PlanRewriter>(*mut T);
+
+        impl<T: PlanRewriter> ExpressionRewriter for RewriteSubquery<T> {
+            fn mutate_subquery(
+                &mut self,
+                name: &str,
+                subquery: &Arc<PlanNode>,
+                _origin_expr: &Expression,
+            ) -> Result<Expression> {
+                unsafe {
+                    let subquery = (*self.0).rewrite_subquery_plan(subquery)?;
+                    Ok(Expression::Subquery {
+                        name: name.to_string(),
+                        query_plan: Arc::new(subquery),
+                    })
+                }
             }
-            Expression::ScalarSubquery { name, query_plan } => {
-                let new_subquery = self.rewrite_subquery_plan(query_plan)?;
-                Ok(Expression::ScalarSubquery {
-                    name: name.clone(),
-                    query_plan: Arc::new(new_subquery),
-                })
+
+            fn mutate_scalar_subquery(
+                &mut self,
+                name: &str,
+                subquery: &Arc<PlanNode>,
+                _origin_expr: &Expression,
+            ) -> Result<Expression> {
+                unsafe {
+                    let subquery = (*self.0).rewrite_subquery_plan(subquery)?;
+                    Ok(Expression::ScalarSubquery {
+                        name: name.to_string(),
+                        query_plan: Arc::new(subquery),
+                    })
+                }
             }
         }
+
+        RewriteSubquery(self).mutate(expr)
     }
 
     // TODO: Move it to ExpressionsRewrite trait
@@ -414,6 +387,22 @@ pub trait PlanRewriter {
 
     fn rewrite_show_create_database(&mut self, plan: &ShowCreateDatabasePlan) -> Result<PlanNode> {
         Ok(PlanNode::ShowCreateDatabase(plan.clone()))
+    }
+
+    fn rewrite_create_udf(&mut self, plan: &CreateUDFPlan) -> Result<PlanNode> {
+        Ok(PlanNode::CreateUDF(plan.clone()))
+    }
+
+    fn rewrite_drop_udf(&mut self, plan: &DropUDFPlan) -> Result<PlanNode> {
+        Ok(PlanNode::DropUDF(plan.clone()))
+    }
+
+    fn rewrite_show_udf(&mut self, plan: &ShowUDFPlan) -> Result<PlanNode> {
+        Ok(PlanNode::ShowUDF(plan.clone()))
+    }
+
+    fn rewrite_alter_udf(&mut self, plan: &AlterUDFPlan) -> Result<PlanNode> {
+        Ok(PlanNode::AlterUDF(plan.clone()))
     }
 }
 

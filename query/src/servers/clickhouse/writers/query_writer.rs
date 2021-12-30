@@ -112,13 +112,7 @@ impl<'a> QueryWriter<'a> {
                     return Ok(());
                 }
                 Some(BlockItem::Block(Ok(block))) => {
-                    // Send header to client
-                    let schema = block.schema();
-                    let header = DataBlock::empty_with_schema(schema.clone());
-
-                    self.write_block(header).await?;
                     self.write_block(block).await?;
-                    return self.write_tail_data(receiver).await;
                 }
                 Some(BlockItem::InsertSample(block)) => {
                     let schema = block.schema();
@@ -128,19 +122,6 @@ impl<'a> QueryWriter<'a> {
                 }
             }
         }
-    }
-
-    async fn write_tail_data(&mut self, mut receiver: Receiver<BlockItem>) -> Result<()> {
-        while let Some(item) = receiver.next().await {
-            match item {
-                BlockItem::Block(Ok(block)) => self.write_block(block).await?,
-                BlockItem::Block(Err(error)) => self.write_error(error).await?,
-                BlockItem::InsertSample(block) => self.write_block(block).await?,
-                BlockItem::ProgressTicker(values) => self.write_progress(values).await?,
-            };
-        }
-
-        Ok(())
     }
 }
 

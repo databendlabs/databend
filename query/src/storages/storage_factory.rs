@@ -21,12 +21,10 @@ use common_infallible::RwLock;
 use common_meta_types::TableInfo;
 
 use crate::configs::Config;
-use crate::storages::csv::CsvTable;
 use crate::storages::fuse::FuseTable;
 use crate::storages::github::GithubTable;
 use crate::storages::memory::MemoryTable;
 use crate::storages::null::NullTable;
-use crate::storages::parquet::ParquetTable;
 use crate::storages::StorageContext;
 use crate::storages::Table;
 
@@ -53,19 +51,9 @@ impl StorageFactory {
     pub fn create(conf: Config) -> Self {
         let mut creators: HashMap<String, Arc<dyn StorageCreator>> = Default::default();
 
-        // Register csv table engine.
-        if conf.query.table_engine_csv_enabled {
-            creators.insert("CSV".to_string(), Arc::new(CsvTable::try_create));
-        }
-
         // Register memory table engine.
         if conf.query.table_engine_memory_enabled {
             creators.insert("MEMORY".to_string(), Arc::new(MemoryTable::try_create));
-        }
-
-        // Register parquet table engine.
-        if conf.query.table_engine_parquet_enabled {
-            creators.insert("PARQUET".to_string(), Arc::new(ParquetTable::try_create));
         }
 
         // Register github table engine;

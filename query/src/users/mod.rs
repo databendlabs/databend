@@ -16,6 +16,7 @@ mod user;
 mod user_api;
 mod user_mgr;
 mod user_stage;
+mod user_udf;
 
 pub use user::CertifiedInfo;
 pub use user::User;

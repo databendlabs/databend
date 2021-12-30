@@ -27,7 +27,7 @@ pub struct DfShowUsers;
 
 #[async_trait::async_trait]
 impl AnalyzableStatement for DfShowUsers {
-    #[tracing::instrument(level = "info", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+    #[tracing::instrument(level = "debug", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let rewritten_query = "SELECT * FROM system.users ORDER BY name";
         let rewritten_query_plan = PlanParser::parse(rewritten_query, ctx);

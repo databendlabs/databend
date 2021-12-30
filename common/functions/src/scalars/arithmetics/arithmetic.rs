@@ -16,6 +16,7 @@ use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
@@ -30,6 +31,10 @@ use crate::scalars::ArithmeticPlusFunction;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
 
+pub trait ArithmeticTrait {
+    fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn>;
+}
+
 #[derive(Clone)]
 pub struct ArithmeticFunction {
     op: DataValueArithmeticOperator,
@@ -37,8 +42,8 @@ pub struct ArithmeticFunction {
 
 impl ArithmeticFunction {
     pub fn register(factory: &mut FunctionFactory) {
-        factory.register("+", ArithmeticPlusFunction::desc());
-        factory.register("plus", ArithmeticPlusFunction::desc());
+        factory.register_arithmetic("+", ArithmeticPlusFunction::desc());
+        factory.register_arithmetic("plus", ArithmeticPlusFunction::desc());
         factory.register("-", ArithmeticMinusFunction::desc());
         factory.register("minus", ArithmeticMinusFunction::desc());
         factory.register("*", ArithmeticMulFunction::desc());
@@ -64,7 +69,7 @@ impl Function for ArithmeticFunction {
         "ArithmeticFunction"
     }
 
-    fn return_type(&self, args: &[DataType]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
         if args.len() == 1 {
             return numerical_unary_arithmetic_coercion(&self.op, &args[0]);
         }
@@ -98,7 +103,7 @@ impl Function for ArithmeticFunction {
         if has_date_or_date_time {
             let args = columns
                 .iter()
-                .map(|f| f.data_type().clone())
+                .map(|f| f.field().data_type_and_nullable().clone())
                 .collect::<Vec<_>>();
             let data_type = self.return_type(&args)?;
             result.cast_with_type(&data_type)
@@ -107,22 +112,14 @@ impl Function for ArithmeticFunction {
         }
     }
 
-    fn num_arguments(&self) -> usize {
-        0
-    }
-
-    fn variadic_arguments(&self) -> Option<(usize, usize)> {
-        Some((1, 2))
-    }
-
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
         match self.op {
-            Plus => ArithmeticPlusFunction::get_monotonicity(args),
             Minus => ArithmeticMinusFunction::get_monotonicity(args),
             Mul => ArithmeticMulFunction::get_monotonicity(args),
             Div => ArithmeticDivFunction::get_monotonicity(args),
             IntDiv => ArithmeticIntDivFunction::get_monotonicity(args),
             Modulo => ArithmeticModuloFunction::get_monotonicity(args),
+            _ => unimplemented!(),
         }
     }
 }

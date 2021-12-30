@@ -23,11 +23,11 @@ use common_streams::SendableDataBlockStream;
 use futures::TryStreamExt;
 
 use super::interpreter_insert_with_stream::SendableWithSchema;
-use crate::interpreters::interpreter_insert_with_plan::InsertWithPlan;
 use crate::interpreters::interpreter_insert_with_stream::InsertWithStream;
-use crate::interpreters::AddOnStream;
+use crate::interpreters::plan_schedulers::InsertWithPlan;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::pipelines::transforms::AddOnStream;
 use crate::sessions::QueryContext;
 
 pub struct InsertInterpreter {

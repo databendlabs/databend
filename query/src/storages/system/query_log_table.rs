@@ -55,7 +55,7 @@ impl QueryLogTable {
             DataField::new("query_kind", DataType::String, false),
             DataField::new("query_text", DataType::String, false),
             DataField::new("event_date", DataType::Date32, false),
-            DataField::new("event_time", DataType::DateTime32(None), false),
+            DataField::new("event_time", DataType::DateTime64(3, None), false),
             // Schema.
             DataField::new("current_database", DataType::String, false),
             DataField::new("databases", DataType::String, false),

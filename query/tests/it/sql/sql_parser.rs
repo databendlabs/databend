@@ -25,16 +25,19 @@ use common_meta_types::UserIdentity;
 use common_meta_types::UserPrivilegeSet;
 use common_meta_types::UserPrivilegeType;
 use common_planners::Optimization;
+use databend_query::sql::statements::DfAlterUDF;
 use databend_query::sql::statements::DfAlterUser;
 use databend_query::sql::statements::DfCopy;
 use databend_query::sql::statements::DfCreateDatabase;
 use databend_query::sql::statements::DfCreateStage;
 use databend_query::sql::statements::DfCreateTable;
+use databend_query::sql::statements::DfCreateUDF;
 use databend_query::sql::statements::DfCreateUser;
 use databend_query::sql::statements::DfDescribeTable;
 use databend_query::sql::statements::DfDropDatabase;
 use databend_query::sql::statements::DfDropStage;
 use databend_query::sql::statements::DfDropTable;
+use databend_query::sql::statements::DfDropUDF;
 use databend_query::sql::statements::DfDropUser;
 use databend_query::sql::statements::DfGrantObject;
 use databend_query::sql::statements::DfGrantStatement;
@@ -46,6 +49,7 @@ use databend_query::sql::statements::DfShowCreateTable;
 use databend_query::sql::statements::DfShowDatabases;
 use databend_query::sql::statements::DfShowGrants;
 use databend_query::sql::statements::DfShowTables;
+use databend_query::sql::statements::DfShowUDF;
 use databend_query::sql::statements::DfTruncateTable;
 use databend_query::sql::statements::DfUseDatabase;
 use databend_query::sql::*;
@@ -173,12 +177,12 @@ fn drop_database() -> Result<()> {
 #[test]
 fn create_table() -> Result<()> {
     // positive case
-    let sql = "CREATE TABLE t(c1 int) ENGINE = CSV location = '/data/33.csv' ";
+    let sql = "CREATE TABLE t(c1 int) ENGINE = Fuse location = '/data/33.csv' ";
     let expected = DfStatement::CreateTable(DfCreateTable {
         if_not_exists: false,
         name: ObjectName(vec![Ident::new("t")]),
         columns: vec![make_column_def("c1", DataType::Int(None))],
-        engine: "CSV".to_string(),
+        engine: "Fuse".to_string(),
         options: maplit::hashmap! {"location".into() => "/data/33.csv".into()},
         like: None,
         query: None,
@@ -186,7 +190,7 @@ fn create_table() -> Result<()> {
     expect_parse_ok(sql, expected)?;
 
     // positive case: it is ok for parquet files not to have columns specified
-    let sql = "CREATE TABLE t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Parquet location = 'foo.parquet' comment = 'foo'";
+    let sql = "CREATE TABLE t(c1 int, c2 bigint, c3 varchar(255) ) ENGINE = Fuse location = 'foo.parquet' comment = 'foo'";
     let expected = DfStatement::CreateTable(DfCreateTable {
         if_not_exists: false,
         name: ObjectName(vec![Ident::new("t")]),
@@ -195,7 +199,7 @@ fn create_table() -> Result<()> {
             make_column_def("c2", DataType::BigInt(None)),
             make_column_def("c3", DataType::Varchar(Some(255))),
         ],
-        engine: "Parquet".to_string(),
+        engine: "Fuse".to_string(),
 
         options: maplit::hashmap! {
             "location".into() => "foo.parquet".into(),
@@ -1327,6 +1331,213 @@ fn drop_stage_test() -> Result<()> {
         DfStatement::DropStage(DfDropStage {
             if_exists: true,
             stage_name: "test_stage".to_string(),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_create_udf() -> Result<()> {
+    expect_parse_err_contains(
+        "CREATE FUNCTION test_udf AS p -> not(isnotnull(p))",
+        "Expected (, found: p".to_string(),
+    )?;
+
+    expect_parse_err_contains(
+        "CREATE FUNCTION test_udf AS (as) -> not(isnotnull(as))",
+        "Keyword can not be parameter, got: as".to_string(),
+    )?;
+
+    expect_parse_err_contains(
+        "CREATE FUNCTION test_udf AS (\"p\") -> not(isnotnull(p))",
+        "Quote is not allowed in parameters, remove: \"".to_string(),
+    )?;
+
+    expect_parse_err_contains(
+        "CREATE FUNCTION test_udf AS (p, p) -> not(isnotnull(p))",
+        "Duplicate parameter is not allowed, keep only one: p".to_string(),
+    )?;
+
+    expect_parse_err_contains(
+        "CREATE FUNCTION test_udf AS (p:) -> not(isnotnull(p))",
+        "Expect words or comma, but got: :".to_string(),
+    )?;
+
+    expect_parse_err_contains(
+        "CREATE FUNCTION test_udf AS (p,) -> not(isnotnull(p))",
+        "Found a redundant `,` in the parameters".to_string(),
+    )?;
+
+    expect_parse_err_contains(
+        "CREATE FUNCTION test_udf AS (p;) -> not(isnotnull(p))",
+        "Can not find complete parameters, `)` is missing".to_string(),
+    )?;
+
+    expect_parse_ok(
+        "CREATE FUNCTION test_udf AS (p) -> not(isnotnull(p))",
+        DfStatement::CreateUDF(DfCreateUDF {
+            if_not_exists: false,
+            udf_name: "test_udf".to_string(),
+            parameters: vec!["p".to_string()],
+            definition: "not(isnotnull(p))".to_string(),
+            description: "".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE FUNCTION test_udf AS (p, d) -> not(isnotnull(p, d))",
+        DfStatement::CreateUDF(DfCreateUDF {
+            if_not_exists: false,
+            udf_name: "test_udf".to_string(),
+            parameters: vec!["p".to_string(), "d".to_string()],
+            definition: "not(isnotnull(p,d))".to_string(),
+            description: "".to_string(),
+        }),
+    )?;
+
+    expect_parse_err_contains(
+        "CREATE FUNCTION test_udf AS (p) -> not(isnotnull(p)) DESC",
+        "Expected =, found: ".to_string(),
+    )?;
+
+    expect_parse_err_contains(
+        "CREATE FUNCTION test_udf AS (p) -> not(isnotnull(p)) DESC =",
+        "Expected literal string, found: EOF".to_string(),
+    )?;
+
+    expect_parse_ok(
+        "CREATE FUNCTION test_udf AS (p, d) -> not(isnotnull(p, d)) DESC = 'this is a description'",
+        DfStatement::CreateUDF(DfCreateUDF {
+            if_not_exists: false,
+            udf_name: "test_udf".to_string(),
+            parameters: vec!["p".to_string(), "d".to_string()],
+            definition: "not(isnotnull(p,d))".to_string(),
+            description: "this is a description".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "CREATE FUNCTION test_udf as (p, d) -> not(isnotnull(p, d)) DESC = 'this is a description'",
+        DfStatement::CreateUDF(DfCreateUDF {
+            if_not_exists: false,
+            udf_name: "test_udf".to_string(),
+            parameters: vec!["p".to_string(), "d".to_string()],
+            definition: "not(isnotnull(p,d))".to_string(),
+            description: "this is a description".to_string(),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_drop_udf() -> Result<()> {
+    expect_parse_ok(
+        "DROP FUNCTION test_udf",
+        DfStatement::DropUDF(DfDropUDF {
+            if_exists: false,
+            udf_name: "test_udf".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "DROP FUNCTION IF EXISTS test_udf",
+        DfStatement::DropUDF(DfDropUDF {
+            if_exists: true,
+            udf_name: "test_udf".to_string(),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_show_udf() -> Result<()> {
+    expect_parse_ok(
+        "SHOW FUNCTION test_udf",
+        DfStatement::ShowUDF(DfShowUDF {
+            udf_name: "test_udf".to_string(),
+        }),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_alter_udf() -> Result<()> {
+    expect_parse_err_contains(
+        "ALTER FUNCTION test_udf AS p -> not(isnotnull(p))",
+        "Expected (, found: p".to_string(),
+    )?;
+
+    expect_parse_err_contains(
+        "ALTER FUNCTION test_udf AS (as) -> not(isnotnull(as))",
+        "Keyword can not be parameter, got: as".to_string(),
+    )?;
+
+    expect_parse_err_contains(
+        "ALTER FUNCTION test_udf AS (\"p\") -> not(isnotnull(p))",
+        "Quote is not allowed in parameters, remove: \"".to_string(),
+    )?;
+
+    expect_parse_err_contains(
+        "ALTER FUNCTION test_udf AS (p, p) -> not(isnotnull(p))",
+        "Duplicate parameter is not allowed, keep only one: p".to_string(),
+    )?;
+
+    expect_parse_err_contains(
+        "ALTER FUNCTION test_udf AS (p:) -> not(isnotnull(p))",
+        "Expect words or comma, but got: :".to_string(),
+    )?;
+
+    expect_parse_err_contains(
+        "ALTER FUNCTION test_udf AS (p,) -> not(isnotnull(p))",
+        "Found a redundant `,` in the parameters".to_string(),
+    )?;
+
+    expect_parse_err_contains(
+        "ALTER FUNCTION test_udf AS (p;) -> not(isnotnull(p))",
+        "Can not find complete parameters, `)` is missing".to_string(),
+    )?;
+
+    expect_parse_ok(
+        "ALTER FUNCTION test_udf AS (p) -> not(isnotnull(p))",
+        DfStatement::AlterUDF(DfAlterUDF {
+            udf_name: "test_udf".to_string(),
+            parameters: vec!["p".to_string()],
+            definition: "not(isnotnull(p))".to_string(),
+            description: "".to_string(),
+        }),
+    )?;
+
+    expect_parse_ok(
+        "ALTER FUNCTION test_udf AS (p, d) -> not(isnotnull(p, d))",
+        DfStatement::AlterUDF(DfAlterUDF {
+            udf_name: "test_udf".to_string(),
+            parameters: vec!["p".to_string(), "d".to_string()],
+            definition: "not(isnotnull(p,d))".to_string(),
+            description: "".to_string(),
+        }),
+    )?;
+
+    expect_parse_err_contains(
+        "ALTER FUNCTION test_udf AS (p) -> not(isnotnull(p)) DESC",
+        "Expected =, found: ".to_string(),
+    )?;
+
+    expect_parse_err_contains(
+        "ALTER FUNCTION test_udf AS (p) -> not(isnotnull(p)) DESC =",
+        "Expected literal string, found: EOF".to_string(),
+    )?;
+
+    expect_parse_ok(
+        "ALTER FUNCTION test_udf AS (p, d) -> not(isnotnull(p, d)) DESC = 'this is a description'",
+        DfStatement::AlterUDF(DfAlterUDF {
+            udf_name: "test_udf".to_string(),
+            parameters: vec!["p".to_string(), "d".to_string()],
+            definition: "not(isnotnull(p,d))".to_string(),
+            description: "this is a description".to_string(),
         }),
     )?;
 

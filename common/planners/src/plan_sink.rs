@@ -19,22 +19,22 @@ use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_meta_types::TableInfo;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 use crate::PlanNode;
 
-lazy_static! {
-    pub static ref SINK_SCHEMA: DataSchemaRef = DataSchemaRefExt::create(vec![
+pub static SINK_SCHEMA: Lazy<DataSchemaRef> = Lazy::new(|| {
+    DataSchemaRefExt::create(vec![
         DataField::new("seg_loc", DataType::String, false),
         DataField::new("seg_info", DataType::String, false),
-    ]);
-}
+    ])
+});
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct SinkPlan {
     pub table_info: TableInfo,
     pub input: Arc<PlanNode>,
-    pub cast_needed: bool,
+    pub cast_schema: Option<DataSchemaRef>,
 }
 
 impl SinkPlan {

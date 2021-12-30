@@ -52,13 +52,12 @@ where
     }
 
     fn serialize(&self, writer: &mut BytesMut) -> Result<()> {
-        let writer = BufMut::writer(writer);
-        bincode::serialize_into(writer, &self.value)?;
-        Ok(())
+        serialize_into_buf(writer, &self.value)
     }
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.value = bincode::deserialize_from(reader)?;
+        self.value = deserialize_from_slice(reader)?;
+
         Ok(())
     }
 }
@@ -164,9 +163,23 @@ where
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+    #[allow(unused_mut)]
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
         let state = place.get::<AggregateSumState<SumT>>();
-        Ok(state.value.into())
+        if let Some(val) = state.value {
+            let mut array = array
+                .as_mut_any()
+                .downcast_mut::<MutablePrimitiveArrayBuilder<SumT>>()
+                .ok_or_else(|| {
+                    ErrorCode::UnexpectedError(
+                        "error occured when downcast MutableArray".to_string(),
+                    )
+                })?;
+            array.push(val);
+        } else {
+            array.push_null();
+        }
+        Ok(())
     }
 }
 

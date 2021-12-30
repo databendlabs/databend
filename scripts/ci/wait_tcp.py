@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding: utf-8
 
 import socket
@@ -11,10 +11,10 @@ def tcp_ping(port, timeout):
 
     while time.time() - now < timeout:
         try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect(('0.0.0.0', port))
-            print("OK :{} is listening".format(port))
-            return
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.connect(('0.0.0.0', port))
+                print("OK :{} is listening".format(port))
+                return
         except:
             print("not connected to :{}".format(port))
             time.sleep(0.5)

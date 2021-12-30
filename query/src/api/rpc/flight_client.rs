@@ -23,6 +23,7 @@ use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_streams::SendableDataBlockStream;
+use common_tracing::tracing;
 use tonic::transport::channel::Channel;
 use tonic::Request;
 use tonic::Streaming;
@@ -58,8 +59,10 @@ impl FlightClient {
     }
 
     // Execute do_get.
+    #[tracing::instrument(level = "debug", skip_all)]
     async fn do_get(&mut self, ticket: Ticket, timeout: u64) -> Result<Streaming<FlightData>> {
-        let mut request = Request::new(ticket);
+        let request = Request::new(ticket);
+        let mut request = common_tracing::inject_span_to_tonic_request(request);
         request.set_timeout(Duration::from_secs(timeout));
 
         let response = self.inner.do_get(request).await?;
@@ -67,10 +70,12 @@ impl FlightClient {
     }
 
     // Execute do_action.
+    #[tracing::instrument(level = "debug", skip_all)]
     async fn do_action(&mut self, action: FlightAction, timeout: u64) -> Result<Vec<u8>> {
         let action: Action = action.try_into()?;
         let action_type = action.r#type.clone();
-        let mut request = Request::new(action);
+        let request = Request::new(action);
+        let mut request = common_tracing::inject_span_to_tonic_request(request);
         request.set_timeout(Duration::from_secs(timeout));
 
         let response = self.inner.do_action(request).await?;

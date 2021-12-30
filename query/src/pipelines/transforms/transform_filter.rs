@@ -27,7 +27,6 @@ use tokio_stream::StreamExt;
 
 use crate::pipelines::processors::EmptyProcessor;
 use crate::pipelines::processors::Processor;
-use crate::pipelines::transforms::transform_expression_executor::ExpressionExecutorRef;
 use crate::pipelines::transforms::ExpressionExecutor;
 
 pub type HavingTransform = FilterTransform<true>;
@@ -69,7 +68,7 @@ impl<const HAVING: bool> FilterTransform<HAVING> {
         DataBlock::filter_block(&data, filter_block.column(0))
     }
 
-    fn filter_map(executor: ExpressionExecutorRef, data: DataBlock) -> Option<Result<DataBlock>> {
+    fn filter_map(executor: Arc<ExpressionExecutor>, data: DataBlock) -> Option<Result<DataBlock>> {
         match Self::filter(executor, data) {
             Err(error) => Some(Err(error)),
             Ok(data_block) if data_block.is_empty() => None,
@@ -100,6 +99,7 @@ impl<const HAVING: bool> Processor for FilterTransform<HAVING> {
         self
     }
 
+    #[tracing::instrument(level = "debug", name = "filter_execute", skip(self))]
     async fn execute(&self) -> Result<SendableDataBlockStream> {
         let input_stream = self.input.execute().await?;
         let executor = self.executor.clone();
