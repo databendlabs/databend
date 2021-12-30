@@ -1,3 +1,5 @@
+# New SQL planner framework design
+
 - Start date: 2021/09/13
 - Tracking issues: https://github.com/datafuselabs/databend/issues/1217
 
