@@ -170,4 +170,6 @@ INSERT INTO t1 SELECT * FROM t1;
 
 ### Jaeger show
 
+Open http://127.0.0.1:16686/
+
 ![](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/jaeger-tracing-show.png)
