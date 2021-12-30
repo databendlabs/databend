@@ -14,6 +14,8 @@
 
 use std::any::Any;
 
+use common_arrow::arrow::bitmap::MutableBitmap;
+
 use super::MutableBooleanArrayBuilder;
 use super::MutablePrimitiveArrayBuilder;
 use super::MutableStringArrayBuilder;
@@ -26,6 +28,7 @@ pub trait MutableArrayBuilder {
     fn as_mut_any(&mut self) -> &mut dyn Any;
     fn as_series(&mut self) -> Series;
     fn push_null(&mut self);
+    fn validity(&self) -> Option<&MutableBitmap>;
 }
 
 pub fn create_mutable_array(datatype: DataType) -> Box<dyn MutableArrayBuilder> {
@@ -41,7 +44,7 @@ pub fn create_mutable_array(datatype: DataType) -> Box<dyn MutableArrayBuilder> 
         DataType::Int64 => Box::new(MutablePrimitiveArrayBuilder::<i64, true>::default()),
         DataType::Float32 => Box::new(MutablePrimitiveArrayBuilder::<f32, true>::default()),
         DataType::Float64 => Box::new(MutablePrimitiveArrayBuilder::<f64, true>::default()),
-        DataType::String => Box::new(MutableStringArrayBuilder::default()),
+        DataType::String => Box::new(MutableStringArrayBuilder::<true>::default()),
         _ => {
             todo!()
         }

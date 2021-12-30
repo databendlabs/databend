@@ -203,7 +203,7 @@ where
                 DataValue::String(val) => {
                     let mut array = array
                     .as_mut_any()
-                    .downcast_mut::<MutableStringArrayBuilder>()
+                    .downcast_mut::<MutableStringArrayBuilder<true>>()
                     .ok_or_else(|| {
                         ErrorCode::UnexpectedError(
                             "error occured when downcast MutableArray".to_string(),
@@ -353,7 +353,7 @@ impl AggregateArgMinMaxState for StringState {
                 DataValue::String(val) => {
                     let mut array = array
                     .as_mut_any()
-                    .downcast_mut::<MutableStringArrayBuilder>()
+                    .downcast_mut::<MutableStringArrayBuilder<true>>()
                     .ok_or_else(|| {
                         ErrorCode::UnexpectedError(
                             "error occured when downcast MutableArray".to_string(),

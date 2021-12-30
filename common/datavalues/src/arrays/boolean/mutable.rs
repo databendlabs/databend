@@ -54,15 +54,13 @@ impl<const NULLABLE: bool> MutableArrayBuilder for MutableBooleanArrayBuilder<NU
     fn push_null(&mut self) {
         self.push_option(None);
     }
-}
 
-impl Default for MutableBooleanArrayBuilder<true> {
-    fn default() -> Self {
-        Self::new()
+    fn validity(&self) -> Option<&MutableBitmap> {
+        self.validity.as_ref()
     }
 }
 
-impl Default for MutableBooleanArrayBuilder<false> {
+impl<const NULLABLE: bool> Default for MutableBooleanArrayBuilder<NULLABLE> {
     fn default() -> Self {
         Self::new()
     }
@@ -70,26 +68,23 @@ impl Default for MutableBooleanArrayBuilder<false> {
 
 // for not nullable values
 impl MutableBooleanArrayBuilder<false> {
-    pub fn new() -> Self {
-        Self::with_capacity(0)
-    }
-
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self {
-            data_type: DataType::Boolean,
-            values: MutableBitmap::with_capacity(capacity),
-            validity: Some(MutableBitmap::with_capacity(capacity)),
-        }
-    }
-
     pub fn push(&mut self, value: bool) {
         self.values.push(value);
-        self.validity.as_mut().unwrap().push(true);
     }
 }
 
 // for nullable values
 impl MutableBooleanArrayBuilder<true> {
+    pub fn push(&mut self, value: bool) {
+        self.values.push(value);
+        match &mut self.validity {
+            Some(validity) => validity.push(true),
+            None => {}
+        }
+    }
+}
+
+impl<const NULLABLE: bool> MutableBooleanArrayBuilder<NULLABLE> {
     pub fn new() -> Self {
         Self::with_capacity(0)
     }
@@ -102,16 +97,6 @@ impl MutableBooleanArrayBuilder<true> {
         }
     }
 
-    pub fn push(&mut self, value: bool) {
-        self.values.push(value);
-        match &mut self.validity {
-            Some(validity) => validity.push(true),
-            None => {}
-        }
-    }
-}
-
-impl<const NULLABLE: bool> MutableBooleanArrayBuilder<NULLABLE> {
     pub fn from_data(values: MutableBitmap, validity: Option<MutableBitmap>) -> Self {
         Self {
             data_type: DataType::Boolean,

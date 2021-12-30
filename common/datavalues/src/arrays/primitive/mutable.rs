@@ -61,17 +61,13 @@ where T: DFPrimitiveType
     fn push_null(&mut self) {
         self.push_option(None)
     }
-}
 
-impl<T> Default for MutablePrimitiveArrayBuilder<T, true>
-where T: DFPrimitiveType
-{
-    fn default() -> Self {
-        Self::new()
+    fn validity(&self) -> Option<&MutableBitmap> {
+        self.validity.as_ref()
     }
 }
 
-impl<T> Default for MutablePrimitiveArrayBuilder<T, false>
+impl<T, const NULLABLE: bool> Default for MutablePrimitiveArrayBuilder<T, NULLABLE>
 where T: DFPrimitiveType
 {
     fn default() -> Self {
@@ -83,26 +79,25 @@ where T: DFPrimitiveType
 impl<T> MutablePrimitiveArrayBuilder<T, false>
 where T: DFPrimitiveType
 {
-    pub fn new() -> Self {
-        Self::with_capacity(0)
-    }
-
-    pub fn with_capacity(capacity: usize) -> Self {
-        MutablePrimitiveArrayBuilder {
-            data_type: T::data_type(),
-            values: MutableBuffer::<T>::with_capacity(capacity),
-            validity: Some(MutableBitmap::with_capacity(capacity)),
-        }
-    }
-
     pub fn push(&mut self, val: T) {
         self.values.push(val);
-        self.validity.as_mut().unwrap().push(true);
     }
 }
 
 // for nullable values
 impl<T> MutablePrimitiveArrayBuilder<T, true>
+where T: DFPrimitiveType
+{
+    pub fn push(&mut self, val: T) {
+        self.values.push(val);
+        match &mut self.validity {
+            Some(validity) => validity.push(true),
+            None => {}
+        }
+    }
+}
+
+impl<T, const NULLABLE: bool> MutablePrimitiveArrayBuilder<T, NULLABLE>
 where T: DFPrimitiveType
 {
     pub fn new() -> Self {
@@ -117,18 +112,6 @@ where T: DFPrimitiveType
         }
     }
 
-    pub fn push(&mut self, val: T) {
-        self.values.push(val);
-        match &mut self.validity {
-            Some(validity) => validity.push(true),
-            None => {}
-        }
-    }
-}
-
-impl<T, const NULLABLE: bool> MutablePrimitiveArrayBuilder<T, NULLABLE>
-where T: DFPrimitiveType
-{
     pub fn from_data(
         data_type: DataType,
         values: MutableBuffer<T>,

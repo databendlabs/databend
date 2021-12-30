@@ -24,14 +24,14 @@ use crate::series::IntoSeries;
 use crate::series::Series;
 use crate::DataType;
 
-pub struct MutableStringArrayBuilder {
+pub struct MutableStringArrayBuilder<const NULLABLE: bool> {
     data_type: DataType,
     offsets: MutableBuffer<i64>,
     values: MutableBuffer<u8>,
     validity: Option<MutableBitmap>,
 }
 
-impl MutableArrayBuilder for MutableStringArrayBuilder {
+impl<const NULLABLE: bool> MutableArrayBuilder for MutableStringArrayBuilder<NULLABLE> {
     fn data_type(&self) -> &DataType {
         &self.data_type
     }
@@ -57,15 +57,43 @@ impl MutableArrayBuilder for MutableStringArrayBuilder {
     fn push_null(&mut self) {
         self.push_option::<&[u8]>(None);
     }
+
+    fn validity(&self) -> Option<&MutableBitmap> {
+        self.validity.as_ref()
+    }
 }
 
-impl Default for MutableStringArrayBuilder {
+impl<const NULLABLE: bool> Default for MutableStringArrayBuilder<NULLABLE> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl MutableStringArrayBuilder {
+// for not nullable values
+impl MutableStringArrayBuilder<false> {
+    pub fn push<T: AsRef<[u8]>>(&mut self, value: T) {
+        let bytes = value.as_ref();
+        let size = (self.values.len() + bytes.len()) as i64;
+        self.values.extend_from_slice(bytes);
+        self.offsets.push(size);
+    }
+}
+
+// for not nullable values
+impl MutableStringArrayBuilder<true> {
+    pub fn push<T: AsRef<[u8]>>(&mut self, value: T) {
+        let bytes = value.as_ref();
+        let size = (self.values.len() + bytes.len()) as i64;
+        self.values.extend_from_slice(bytes);
+        self.offsets.push(size);
+        match &mut self.validity {
+            Some(validity) => validity.push(true),
+            None => {}
+        }
+    }
+}
+
+impl<const NULLABLE: bool> MutableStringArrayBuilder<NULLABLE> {
     pub fn new() -> Self {
         Self::with_capacity(0)
     }
@@ -76,7 +104,7 @@ impl MutableStringArrayBuilder {
         Self {
             data_type: DataType::String,
             offsets,
-            values: MutableBuffer::<u8>::new(),
+            values: MutableBuffer::<u8>::with_capacity(capacity),
             validity: None,
         }
     }
@@ -94,20 +122,18 @@ impl MutableStringArrayBuilder {
         }
     }
 
-    pub fn push<T: AsRef<[u8]>>(&mut self, value: T) {
-        let bytes = value.as_ref();
-        let size = (self.values.len() + bytes.len()) as i64;
-        self.values.extend_from_slice(bytes);
-        self.offsets.push(size);
-        match &mut self.validity {
-            Some(validity) => validity.push(true),
-            None => {}
-        }
-    }
-
     pub fn push_option<T: AsRef<[u8]>>(&mut self, value: Option<T>) {
         match value {
-            Some(value) => self.push(value),
+            Some(value) => {
+                let bytes = value.as_ref();
+                let size = (self.values.len() + bytes.len()) as i64;
+                self.values.extend_from_slice(bytes);
+                self.offsets.push(size);
+                match &mut self.validity {
+                    Some(validity) => validity.push(true),
+                    None => {}
+                }
+            }
             None => {
                 self.offsets.push(self.last_offset());
                 match &mut self.validity {
