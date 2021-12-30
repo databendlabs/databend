@@ -89,7 +89,7 @@ impl FuseTable {
                 let table_schema = table_schema.clone();
                 let projection = projection.clone();
                 async move {
-                    let parts = part.name.split("-").collect::<Vec<_>>();
+                    let parts = part.name.split('-').collect::<Vec<_>>();
                     if parts.len() != 2 {
                         return Err(ErrorCode::LogicalError("invalid part format"));
                     }
@@ -129,11 +129,7 @@ impl FuseTable {
                         .read()
                         .await
                         .map_err(|e| {
-                            ErrorCode::ParquetError(format!(
-                                "fail to read block {}, {}",
-                                name,
-                                e.to_string()
-                            ))
+                            ErrorCode::ParquetError(format!("fail to read block {}, {}", name, e))
                         })?
                         .ok_or_else(|| {
                             ErrorCode::ParquetError(format!(
