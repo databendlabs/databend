@@ -119,6 +119,7 @@ impl FlightService for FlightServiceForTestImpl {
         &self,
         _request: Request<Action>,
     ) -> Result<Response<Self::DoActionStream>, Status> {
+        tokio::time::sleep(Duration::from_secs(60)).await;
         Err(Status::unimplemented("Not yet implemented"))
     }
 

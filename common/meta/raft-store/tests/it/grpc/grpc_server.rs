@@ -56,6 +56,8 @@ impl Meta for GrpcServiceForTestImpl {
     }
 
     async fn read_msg(&self, _request: Request<GetReq>) -> Result<Response<GetReply>, Status> {
+        // for timeout test
+        tokio::time::sleep(Duration::from_secs(60)).await;
         Err(Status::unimplemented("Not yet implemented"))
     }
 }
