@@ -948,8 +948,7 @@ impl<'a> DfParser<'a> {
                 .parse_keywords(&[Keyword::IF, Keyword::NOT, Keyword::EXISTS]);
 
         let udf_name = self.parser.parse_literal_string()?;
-        let as_token = Token::make_keyword("AS");
-        self.parser.expect_token(&as_token)?;
+        self.parser.expect_keyword(Keyword::AS)?;
 
         let desc_token = "DESC";
         let parameters = self.parse_udf_parameters()?;

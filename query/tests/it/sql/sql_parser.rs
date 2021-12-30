@@ -1417,6 +1417,17 @@ fn test_create_udf() -> Result<()> {
         }),
     )?;
 
+    expect_parse_ok(
+        "CREATE FUNCTION test_udf as (p, d) -> not(isnotnull(p, d)) DESC = 'this is a description'",
+        DfStatement::CreateUDF(DfCreateUDF {
+            if_not_exists: false,
+            udf_name: "test_udf".to_string(),
+            parameters: vec!["p".to_string(), "d".to_string()],
+            definition: "not(isnotnull(p,d))".to_string(),
+            description: "this is a description".to_string(),
+        }),
+    )?;
+
     Ok(())
 }
 
