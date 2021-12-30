@@ -27,7 +27,7 @@ use crate::InputStream;
 pub struct InputStreamInterceptor {
     ctx: Arc<DalContext>,
     inner: InputStream,
-    cost_ms: u128,
+    last_pending: Option<Instant>,
 }
 
 impl InputStreamInterceptor {
@@ -35,7 +35,7 @@ impl InputStreamInterceptor {
         Self {
             ctx,
             inner,
-            cost_ms: 0,
+            last_pending: None,
         }
     }
 }
@@ -45,16 +45,21 @@ impl futures::AsyncRead for InputStreamInterceptor {
         mut self: Pin<&mut Self>,
         ctx: &mut std::task::Context<'_>,
         buf: &mut [u8],
-    ) -> Poll<std::result::Result<usize, std::io::Error>> {
-        let start = Instant::now();
-        let r = Pin::new(&mut self.inner).poll_read(ctx, buf);
-        let duration = start.elapsed();
-        self.cost_ms += duration.as_millis();
-        if let Poll::Ready(Ok(len)) = r {
-            self.ctx.inc_read_bytes(len as usize);
-            self.ctx.inc_cost_ms(self.cost_ms as usize);
-            self.cost_ms = 0;
+    ) -> Poll<std::io::Result<usize>> {
+        let start = match self.last_pending {
+            None => Instant::now(),
+            Some(t) => t,
         };
+        let r = Pin::new(&mut self.inner).poll_read(ctx, buf);
+        match r {
+            Poll::Ready(Ok(len)) => {
+                self.ctx.inc_read_bytes(len as usize);
+                self.last_pending = None;
+            }
+            Poll::Ready(Err(_)) => self.last_pending = None,
+            Poll::Pending => self.last_pending = Some(start),
+        }
+        self.ctx.inc_cost_ms(start.elapsed().as_millis() as usize);
         r
     }
 }
@@ -65,6 +70,23 @@ impl futures::AsyncSeek for InputStreamInterceptor {
         cx: &mut std::task::Context<'_>,
         pos: SeekFrom,
     ) -> Poll<std::io::Result<u64>> {
-        Pin::new(&mut self.inner).poll_seek(cx, pos)
+        let start = match self.last_pending {
+            None => Instant::now(),
+            Some(t) => t,
+        };
+        let r = Pin::new(&mut self.inner).poll_seek(cx, pos);
+
+        match r {
+            Poll::Ready(Ok(_)) => {
+                self.last_pending = None;
+            }
+            Poll::Ready(Err(_)) => self.last_pending = None,
+            Poll::Pending => {
+                let _duration = start.elapsed();
+                self.last_pending = Some(start)
+            }
+        }
+        self.ctx.inc_cost_ms(start.elapsed().as_millis() as usize);
+        r
     }
 }
