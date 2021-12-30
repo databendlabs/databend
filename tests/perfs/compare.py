@@ -1,13 +1,9 @@
 #!coding: utf-8
 import yaml
 import re
-import subprocess
 import os
 import sys
 import json
-
-from datetime import datetime
-from time import time, sleep
 
 from argparse import ArgumentParser
 from qcloud_cos import CosConfig
@@ -210,9 +206,6 @@ def compare_suit(releaser, pull, suit_file, suit_name, type, releaser_suit_url,
     global stable
     global stats
 
-    r = {}
-    p = {}
-
     with open(os.path.join(releaser, suit_file)) as json_file:
         releaser_result = json.load(json_file)
 
@@ -275,7 +268,7 @@ def report(releaser, pull, files, type, current_log_link, ref_log_link):
         f.close()
 
 
-## python compare.py -r xxxx -p xxxx
+## python3 compare.py -r xxxx -p xxxx
 if __name__ == '__main__':
     parser = ArgumentParser(description='databend perf results compare tools')
     parser.add_argument('-r',

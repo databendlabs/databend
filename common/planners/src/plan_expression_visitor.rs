@@ -33,39 +33,56 @@ pub trait ExpressionVisitor: Sized {
     /// Invoked before any children of `expr` are visisted.
     fn pre_visit(self, expr: &Expression) -> Result<Recursion<Self>>;
 
-    fn visit(self, predecessor_expr: &Expression) -> Result<Self> {
-        // recursively visit (and cover all expression types)
-        match predecessor_expr {
-            Expression::Alias(_, expr) => expr.accept(self),
-            Expression::BinaryExpression { left, right, .. } => {
-                let mut visitor = self;
-                visitor = left.accept(visitor)?;
-                visitor = right.accept(visitor)?;
-                Ok(visitor)
-            }
-            Expression::UnaryExpression { expr, .. } => {
-                let mut visitor = self;
-                visitor = expr.accept(visitor)?;
-                Ok(visitor)
-            }
-            Expression::ScalarFunction { args, .. } => {
-                let mut visitor = self;
-                for arg in args {
-                    visitor = arg.accept(visitor)?;
+    fn visit(mut self, predecessor_expr: &Expression) -> Result<Self> {
+        let mut stack = vec![RecursionProcessing::Call(predecessor_expr)];
+        while let Some(element) = stack.pop() {
+            match element {
+                RecursionProcessing::Ret(expr) => {
+                    self = self.post_visit(expr)?;
                 }
-                Ok(visitor)
-            }
-            Expression::AggregateFunction { args, .. } => {
-                let mut visitor = self;
-                for arg in args {
-                    visitor = arg.accept(visitor)?;
+                RecursionProcessing::Call(expr) => {
+                    stack.push(RecursionProcessing::Ret(expr));
+                    self = match self.pre_visit(expr)? {
+                        Recursion::Stop(visitor) => visitor,
+                        Recursion::Continue(visitor) => {
+                            match expr {
+                                Expression::Alias(_, expr) => {
+                                    stack.push(RecursionProcessing::Call(expr))
+                                }
+                                Expression::BinaryExpression { left, right, .. } => {
+                                    stack.push(RecursionProcessing::Call(left));
+                                    stack.push(RecursionProcessing::Call(right));
+                                }
+                                Expression::UnaryExpression { expr, .. } => {
+                                    stack.push(RecursionProcessing::Call(expr));
+                                }
+                                Expression::ScalarFunction { args, .. } => {
+                                    for arg in args {
+                                        stack.push(RecursionProcessing::Call(arg));
+                                    }
+                                }
+                                Expression::AggregateFunction { args, .. } => {
+                                    for arg in args {
+                                        stack.push(RecursionProcessing::Call(arg));
+                                    }
+                                }
+                                Expression::Cast { expr, .. } => {
+                                    stack.push(RecursionProcessing::Call(expr));
+                                }
+                                Expression::Sort { expr, .. } => {
+                                    stack.push(RecursionProcessing::Call(expr));
+                                }
+                                _ => {}
+                            };
+
+                            visitor
+                        }
+                    }
                 }
-                Ok(visitor)
             }
-            Expression::Cast { expr, .. } => expr.accept(self),
-            Expression::Sort { expr, .. } => expr.accept(self),
-            _ => Ok(self),
         }
+
+        Ok(self)
     }
 
     /// Invoked after all children of `expr` are visited. Default
@@ -114,4 +131,9 @@ impl Expression {
         let visitor = visitor.visit(self)?;
         visitor.post_visit(self)
     }
+}
+
+enum RecursionProcessing<'a> {
+    Call(&'a Expression),
+    Ret(&'a Expression),
 }

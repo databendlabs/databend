@@ -27,7 +27,7 @@ async fn test_alter_udf_interpreter() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
 
     static TEST_QUERY: &str =
-        "CREATE FUNCTION IF NOT EXISTS isnotempty='not(isnull(@0))' desc='This is a description'";
+        "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(isnull(p)) DESC = 'This is a description'";
     if let PlanNode::CreateUDF(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
         let executor = CreatUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "CreatUDFInterpreter");
@@ -40,14 +40,15 @@ async fn test_alter_udf_interpreter() -> Result<()> {
             .await?;
 
         assert_eq!(udf.name, "isnotempty");
-        assert_eq!(udf.definition, "not(isnull(@0))");
+        assert_eq!(udf.parameters, vec!["p".to_string()]);
+        assert_eq!(udf.definition, "not(isnull(p))");
         assert_eq!(udf.description, "This is a description")
     } else {
         panic!()
     }
 
     static TEST_QUERY1: &str =
-        "ALTER FUNCTION isnotempty='not(isnotnull(@0))' desc='This is a new description'";
+        "ALTER FUNCTION isnotempty AS (d) -> not(isnotnull(d)) DESC = 'This is a new description'";
     if let PlanNode::AlterUDF(plan) = PlanParser::parse(TEST_QUERY1, ctx.clone()).await? {
         let executor = AlterUDFInterpreter::try_create(ctx.clone(), plan.clone())?;
         assert_eq!(executor.name(), "AlterUDFInterpreter");
@@ -62,7 +63,8 @@ async fn test_alter_udf_interpreter() -> Result<()> {
             .await?;
 
         assert_eq!(udf.name, "isnotempty");
-        assert_eq!(udf.definition, "not(isnotnull(@0))");
+        assert_eq!(udf.parameters, vec!["d".to_string()]);
+        assert_eq!(udf.definition, "not(isnotnull(d))");
         assert_eq!(udf.description, "This is a new description")
     } else {
         panic!()

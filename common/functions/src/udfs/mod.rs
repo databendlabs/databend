@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod udf_definition;
 mod udf_factory;
 mod udf_parser;
 mod udf_transformer;
 
+pub use udf_definition::UDFDefinition;
 pub use udf_factory::UDFFactory;
 pub use udf_parser::UDFParser;
 pub use udf_transformer::UDFTransformer;

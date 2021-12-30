@@ -25,9 +25,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
-use common_functions::scalars::FunctionFactory;
 use once_cell::sync::Lazy;
 
+use crate::plan_expression_common::ExpressionDataTypeVisitor;
+use crate::ExpressionVisitor;
 use crate::PlanNode;
 
 static OP_SET: Lazy<HashSet<&'static str>> = Lazy::new(|| {
@@ -300,72 +301,8 @@ impl Expression {
         &self,
         input_schema: &DataSchemaRef,
     ) -> Result<DataTypeAndNullable> {
-        match self {
-            Expression::Alias(_, expr) => expr.to_data_type_and_nullable(input_schema),
-            Expression::Column(s) => Ok(input_schema
-                .field_with_name(s)?
-                .data_type_and_nullable()
-                .clone()),
-            Expression::QualifiedColumn(_) => Err(ErrorCode::LogicalError(
-                "QualifiedColumn should be resolve in analyze.",
-            )),
-            Expression::Literal { data_type, .. } => {
-                Ok(DataTypeAndNullable::create(data_type, true))
-            }
-            Expression::Subquery { query_plan, .. } => Ok(Self::to_subquery_type(query_plan)),
-            Expression::ScalarSubquery { query_plan, .. } => {
-                Ok(Self::to_scalar_subquery_type(query_plan))
-            }
-            Expression::BinaryExpression { op, left, right } => {
-                let arguments = vec![
-                    left.to_data_type_and_nullable(input_schema)?,
-                    right.to_data_type_and_nullable(input_schema)?,
-                ];
-
-                let func = FunctionFactory::instance().get(op, &arguments)?;
-                Ok(DataTypeAndNullable::create(
-                    &func.return_type(&arguments)?,
-                    func.nullable(&arguments)?,
-                ))
-            }
-
-            Expression::UnaryExpression { op, expr } => {
-                let arguments = vec![expr.to_data_type_and_nullable(input_schema)?];
-                let func = FunctionFactory::instance().get(op, &arguments)?;
-                Ok(DataTypeAndNullable::create(
-                    &func.return_type(&arguments)?,
-                    func.nullable(&arguments)?,
-                ))
-            }
-
-            Expression::ScalarFunction { op, args } => {
-                let mut arguments = Vec::with_capacity(args.len());
-                for arg in args {
-                    arguments.push(arg.to_data_type_and_nullable(input_schema)?);
-                }
-
-                let func = FunctionFactory::instance().get(op, &arguments)?;
-                Ok(DataTypeAndNullable::create(
-                    &func.return_type(&arguments)?,
-                    func.nullable(&arguments)?,
-                ))
-            }
-            Expression::AggregateFunction { .. } => {
-                let func = self.to_aggregate_function(input_schema)?;
-                Ok(DataTypeAndNullable::create(
-                    &func.return_type()?,
-                    func.nullable(input_schema)?,
-                ))
-            }
-            Expression::Wildcard => Result::Err(ErrorCode::IllegalDataType(
-                "Wildcard expressions are not valid to get return type",
-            )),
-            Expression::Cast { data_type, expr } => Ok(DataTypeAndNullable::create(
-                data_type,
-                expr.to_data_type_and_nullable(input_schema)?.is_nullable(),
-            )),
-            Expression::Sort { expr, .. } => expr.to_data_type_and_nullable(input_schema),
-        }
+        let visitor = ExpressionDataTypeVisitor::create(input_schema.clone());
+        visitor.visit(self)?.finalize()
     }
 
     pub fn to_aggregate_function(&self, schema: &DataSchemaRef) -> Result<AggregateFunctionRef> {

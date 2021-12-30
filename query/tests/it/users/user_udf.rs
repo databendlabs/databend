@@ -31,13 +31,19 @@ async fn test_user_udf() -> Result<()> {
 
     // add isempty.
     {
-        let udf = UserDefinedFunction::new(isempty, "isnull(@0)", description);
+        let udf =
+            UserDefinedFunction::new(isempty, vec!["p".to_string()], "isnull(p)", description);
         user_mgr.add_udf(udf).await?;
     }
 
     // add isnotempty.
     {
-        let udf = UserDefinedFunction::new(isnotempty, "not(isempty(@0))", description);
+        let udf = UserDefinedFunction::new(
+            isnotempty,
+            vec!["p".to_string()],
+            "not(isempty(p))",
+            description,
+        );
         user_mgr.add_udf(udf).await?;
     }
 
