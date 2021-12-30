@@ -52,12 +52,10 @@ impl Meta for GrpcServiceForTestImpl {
         &self,
         _request: Request<RaftRequest>,
     ) -> Result<Response<RaftReply>, Status> {
-        tokio::time::sleep(Duration::from_secs(60)).await;
         Err(Status::unimplemented("Not yet implemented"))
     }
 
     async fn read_msg(&self, _request: Request<GetReq>) -> Result<Response<GetReply>, Status> {
-        tokio::time::sleep(Duration::from_secs(60)).await;
         Err(Status::unimplemented("Not yet implemented"))
     }
 }

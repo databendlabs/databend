@@ -103,9 +103,11 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
             tcs.push(tc);
         }
 
-        for meta_node in &tcs[0].meta_nodes {
+        for tc in &tcs {
             tracing::info!("--- wait until a leader is observed");
-
+            // Every tcs[i] contains one meta node in this context.
+            let g = tc.grpc_srv.as_ref().unwrap();
+            let meta_node = g.get_meta_node();
             let metrics = meta_node
                 .raft
                 .wait(timeout())

@@ -81,7 +81,6 @@ pub struct ForwardRequest {
 }
 
 impl ForwardRequest {
-    #[allow(dead_code)]
     pub fn decr_forward(&mut self) {
         self.forward_to_leader -= 1;
     }

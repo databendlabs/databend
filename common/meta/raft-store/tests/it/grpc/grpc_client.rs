@@ -23,8 +23,11 @@ use crate::grpc::start_grpc_server;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_grpc_client_action_timeout() {
+    // start_grpc_server will sleep 1 second.
     let srv_addr = start_grpc_server();
 
+    // use `timeout=3secs` here cause our mock grpc
+    // server's handshake impl will sleep 2secs.
     let timeout = Duration::from_secs(3);
     let client = MetaGrpcClient::with_tls_conf(&srv_addr, "", "", Some(timeout), None)
         .await
@@ -32,7 +35,6 @@ async fn test_grpc_client_action_timeout() {
 
     let res = client.get_database(GetDatabaseReq::new("xx")).await;
     let actual = res.unwrap_err().message();
-    println!("actual:{}", actual);
     let expect = "status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} }";
     assert_eq!(actual, expect);
 }
@@ -44,7 +46,6 @@ async fn test_grpc_client_handshake_timeout() {
     let timeout = Duration::from_secs(1);
     let res = MetaGrpcClient::with_tls_conf(&srv_addr, "", "", Some(timeout), None).await;
     let actual = res.unwrap_err().message();
-    println!("actual:{}", actual);
     let expect = "status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} }";
     assert_eq!(actual, expect);
 }
