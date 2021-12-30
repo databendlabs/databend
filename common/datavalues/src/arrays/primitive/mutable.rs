@@ -61,7 +61,7 @@ where T: DFPrimitiveType
     }
 
     fn push_null(&mut self) {
-        self.push_null()
+        self.push_option(None)
     }
 }
 
@@ -115,11 +115,7 @@ where T: DFPrimitiveType
     pub fn push_option(&mut self, val: Option<T>) {
         match val {
             Some(val) => {
-                self.values.push(val);
-                match &mut self.validity {
-                    Some(validity) => validity.push(true),
-                    None => {}
-                }
+                self.push(val);
             }
             None => {
                 self.values.push(T::default());
@@ -131,10 +127,6 @@ where T: DFPrimitiveType
                 }
             }
         }
-    }
-
-    pub fn push_null(&mut self) {
-        self.push_option(None);
     }
 
     fn init_validity(&mut self) {
