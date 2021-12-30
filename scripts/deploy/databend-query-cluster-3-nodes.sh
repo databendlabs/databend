@@ -39,7 +39,7 @@ if [ "$mode" == "boot" ]; then
 		--raft-dir "./_meta1" \
 		--metric-api-address 0.0.0.0:28100 \
 		--admin-api-address 0.0.0.0:28101 \
-		--flight-api-address 0.0.0.0:9191 \
+		--grpc-api-address 0.0.0.0:9191 \
 		--log-dir ./_logs1 \
 		--raft-api-port 28103 \
 		&
@@ -50,7 +50,7 @@ if [ "$mode" == "boot" ]; then
 		--raft-dir "./_meta2" \
 		--metric-api-address 0.0.0.0:28200 \
 		--admin-api-address 0.0.0.0:28201 \
-		--flight-api-address 0.0.0.0:28202 \
+		--grpc-api-address 0.0.0.0:28202 \
 		--log-dir ./_logs2 \
 		--raft-api-port 28203 \
 		--join 127.0.0.1:28103 \
@@ -62,7 +62,7 @@ if [ "$mode" == "boot" ]; then
 		--raft-dir "./_meta3" \
 		--metric-api-address 0.0.0.0:28300 \
 		--admin-api-address 0.0.0.0:28301 \
-		--flight-api-address 0.0.0.0:28302 \
+		--grpc-api-address 0.0.0.0:28302 \
 		--log-dir ./_logs3 \
 		--raft-api-port 28303 \
 		--join 127.0.0.1:28103 \
@@ -80,7 +80,7 @@ else
 		--raft-dir "./_meta1" \
 		--metric-api-address 0.0.0.0:28100 \
 		--admin-api-address 0.0.0.0:28101 \
-		--flight-api-address 0.0.0.0:9191 \
+		--grpc-api-address 0.0.0.0:9191 \
 		--log-dir ./_logs1 \
 		&
 	python scripts/ci/wait_tcp.py --timeout 5 --port 9191
@@ -89,7 +89,7 @@ else
 		--raft-dir "./_meta2" \
 		--metric-api-address 0.0.0.0:28200 \
 		--admin-api-address 0.0.0.0:28201 \
-		--flight-api-address 0.0.0.0:28202 \
+		--grpc-api-address 0.0.0.0:28202 \
 		--log-dir ./_logs2 \
 		&
 	python scripts/ci/wait_tcp.py --timeout 5 --port 28202
@@ -98,7 +98,7 @@ else
 		--raft-dir "./_meta3" \
 		--metric-api-address 0.0.0.0:28300 \
 		--admin-api-address 0.0.0.0:28301 \
-		--flight-api-address 0.0.0.0:28302 \
+		--grpc-api-address 0.0.0.0:28302 \
 		--log-dir ./_logs3 \
 		&
 	python scripts/ci/wait_tcp.py --timeout 5 --port 28302
