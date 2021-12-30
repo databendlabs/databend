@@ -23,13 +23,13 @@ use crate::series::IntoSeries;
 use crate::series::Series;
 use crate::DataType;
 
-pub struct MutableBooleanArrayBuilder {
+pub struct MutableBooleanArrayBuilder<const NULLABLE: bool> {
     data_type: DataType,
     values: MutableBitmap,
     validity: Option<MutableBitmap>,
 }
 
-impl MutableArrayBuilder for MutableBooleanArrayBuilder {
+impl<const NULLABLE: bool> MutableArrayBuilder for MutableBooleanArrayBuilder<NULLABLE> {
     fn data_type(&self) -> &DataType {
         &self.data_type
     }
@@ -56,13 +56,40 @@ impl MutableArrayBuilder for MutableBooleanArrayBuilder {
     }
 }
 
-impl Default for MutableBooleanArrayBuilder {
+impl Default for MutableBooleanArrayBuilder<true> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl MutableBooleanArrayBuilder {
+impl Default for MutableBooleanArrayBuilder<false> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// for not nullable values
+impl MutableBooleanArrayBuilder<false> {
+    pub fn new() -> Self {
+        Self::with_capacity(0)
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            data_type: DataType::Boolean,
+            values: MutableBitmap::with_capacity(capacity),
+            validity: Some(MutableBitmap::with_capacity(capacity)),
+        }
+    }
+
+    pub fn push(&mut self, value: bool) {
+        self.values.push(value);
+        self.validity.as_mut().unwrap().push(true);
+    }
+}
+
+// for nullable values
+impl MutableBooleanArrayBuilder<true> {
     pub fn new() -> Self {
         Self::with_capacity(0)
     }
@@ -75,6 +102,16 @@ impl MutableBooleanArrayBuilder {
         }
     }
 
+    pub fn push(&mut self, value: bool) {
+        self.values.push(value);
+        match &mut self.validity {
+            Some(validity) => validity.push(true),
+            None => {}
+        }
+    }
+}
+
+impl<const NULLABLE: bool> MutableBooleanArrayBuilder<NULLABLE> {
     pub fn from_data(values: MutableBitmap, validity: Option<MutableBitmap>) -> Self {
         Self {
             data_type: DataType::Boolean,
@@ -83,18 +120,14 @@ impl MutableBooleanArrayBuilder {
         }
     }
 
-    pub fn push(&mut self, value: bool) {
-        self.values.push(value);
-        match &mut self.validity {
-            Some(validity) => validity.push(true),
-            None => {}
-        }
-    }
-
     pub fn push_option(&mut self, value: Option<bool>) {
         match value {
             Some(value) => {
-                self.push(value);
+                self.values.push(value);
+                match &mut self.validity {
+                    Some(validity) => validity.push(true),
+                    None => {}
+                }
             }
             None => {
                 self.values.push(false);
