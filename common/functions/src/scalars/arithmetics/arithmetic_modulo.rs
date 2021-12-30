@@ -13,10 +13,7 @@
 // limitations under the License.
 
 use std::marker::PhantomData;
-use std::ops::Div;
-use std::ops::Mul;
 use std::ops::Rem;
-use std::ops::Sub;
 
 use common_datavalues::prelude::*;
 use common_datavalues::DataTypeAndNullable;
@@ -50,13 +47,7 @@ where
     T: DFPrimitiveType + AsPrimitive<M>,
     D: DFPrimitiveType + AsPrimitive<M>,
     R: DFPrimitiveType,
-    M: DFPrimitiveType
-        + num::Zero
-        + AsPrimitive<R>
-        + Div<Output = M>
-        + Mul<Output = M>
-        + Sub<Output = M>
-        + Rem<Output = M>,
+    M: DFPrimitiveType + num::Zero + AsPrimitive<R> + Rem<Output = M>,
     u8: AsPrimitive<R>,
     u16: AsPrimitive<R>,
     u32: AsPrimitive<R>,
@@ -69,68 +60,26 @@ where
         let lhs: &DFPrimitiveArray<T> = lhs.static_cast();
         let rhs: &DFPrimitiveArray<D> = rhs.static_cast();
         let result_type = R::data_type();
-        let least_super = M::data_type();
 
         let need_check = result_type.is_integer();
 
-        let result: DataColumn = match (rhs.len(), result_type) {
-            // TODO(sundy): add more specific cases
-            // TODO(sundy): fastmod https://lemire.me/blog/2019/02/08/faster-remainders-when-the-divisor-is-a-constant-beating-compilers-and-libdivide/
-            (1, DataType::UInt8) => {
-                let opt_rhs = rhs.get(0);
-                match opt_rhs {
-                    None => DFPrimitiveArray::<R>::full_null(lhs.len()),
-                    Some(rhs) => match least_super {
-                        DataType::UInt64 => {
-                            let rhs = rhs.to_u8().unwrap();
-                            if rhs == 0 {
-                                return Err(ErrorCode::BadArguments("Division by zero"));
-                            }
-                            let rhs = rhs as u64;
-
-                            if rhs & (rhs - 1) > 0 {
-                                let reduced_modulo = StrengthReducedU64::new(rhs);
-                                unary(lhs, |a| {
-                                    AsPrimitive::<R>::as_(a.to_u64().unwrap() % reduced_modulo)
-                                })
-                            } else {
-                                let mask = rhs - 1;
-                                unary(lhs, |a| AsPrimitive::<R>::as_(a.to_u64().unwrap() & mask))
-                            }
-                        }
-                        _ => {
-                            let r: M = rhs.as_();
-                            if r == M::zero() {
-                                return Err(ErrorCode::BadArguments("Division by zero"));
-                            }
-                            unary(lhs, |v| {
-                                let l: M = v.as_();
-                                AsPrimitive::<R>::as_(l - (l / r) * r)
-                            })
-                        }
-                    },
+        let result: DataColumn = try_binary_arithmetic_helper! {
+            lhs,
+            rhs,
+            M,
+            R,
+            |l: M, r: M| {
+                if need_check && r == M::zero() {
+                    return Err(ErrorCode::BadArguments("Division by zero"));
                 }
-                .into()
-            }
-
-            _ => try_binary_arithmetic_helper! {
-                lhs,
-                rhs,
-                M,
-                R,
-                |l: M, r: M| {
-                    if need_check && r == M::zero() {
-                        return Err(ErrorCode::BadArguments("Division by zero"));
-                    }
-                    Ok(AsPrimitive::<R>::as_(l % r))
-                },
-                |r: M| {
-                    if need_check && r == M::zero() {
-                        return Err(ErrorCode::BadArguments("Division by zero"));
-                    }
-                    Ok(rem_scalar(lhs, &r))
-                }
+                Ok(AsPrimitive::<R>::as_(l % r))
             },
+            |r: M| {
+                if need_check && r == M::zero() {
+                    return Err(ErrorCode::BadArguments("Division by zero"));
+                }
+                Ok(rem_scalar(lhs, &r))
+            }
         };
 
         Ok(result.resize_constant(columns[0].column().len()))
