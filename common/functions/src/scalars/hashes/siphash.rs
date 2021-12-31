@@ -47,8 +47,10 @@ impl Function for SipHashFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
-        match args[0].data_type() {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let nullable = args.iter().any(|arg| arg.is_nullable());
+
+        let data_type = match args[0].data_type() {
             DataType::Int8
             | DataType::Int16
             | DataType::Int32
@@ -67,7 +69,9 @@ impl Function for SipHashFunction {
                 "Function Error: {} does not support {} type parameters",
                 self.display_name, args[0]
             ))),
-        }
+        }?;
+
+        Ok(DataTypeAndNullable::create(&data_type, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

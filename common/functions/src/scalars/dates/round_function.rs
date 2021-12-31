@@ -52,14 +52,18 @@ impl Function for RoundFunction {
         self.display_name.as_str()
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
-        match args[0].data_type() {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let nullable = args.iter().any(|field| field.is_nullable());
+
+        let data_type = match args[0].data_type() {
             DataType::DateTime32(_) => Ok(DataType::DateTime32(None)),
             _ => Err(ErrorCode::BadDataValueType(format!(
                 "Function {} must have a DateTime type as argument, but got {}",
                 self.display_name, args[0],
             ))),
-        }
+        }?;
+
+        Ok(DataTypeAndNullable::create(&data_type, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

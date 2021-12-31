@@ -58,8 +58,9 @@ where T: ArithmeticTrait + Clone + Sync + Send + 'static
         "BinaryArithmeticFunction"
     }
 
-    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
-        Ok(self.result_type.clone())
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let nullable = args.iter().any(|arg| arg.is_nullable());
+        Ok(DataTypeAndNullable::create(&self.result_type, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

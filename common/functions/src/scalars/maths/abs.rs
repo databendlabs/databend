@@ -69,8 +69,9 @@ impl Function for AbsFunction {
         "abs"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
-        if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let nullable = args.iter().any(|arg| arg.is_nullable());
+        let data_type = if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
             Ok(match args[0].data_type() {
                 DataType::Int8 => DataType::UInt8,
                 DataType::Int16 => DataType::UInt16,
@@ -84,7 +85,9 @@ impl Function for AbsFunction {
                 "Expected numeric types, but got {}",
                 args[0]
             )))
-        }
+        }?;
+
+        Ok(DataTypeAndNullable::create(&data_type, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

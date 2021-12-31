@@ -46,7 +46,7 @@ impl Function for UnhexFunction {
         "unhex"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
         if !args[0].is_string() && !args[0].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null, but got {}",
@@ -54,7 +54,9 @@ impl Function for UnhexFunction {
             )));
         }
 
-        Ok(DataType::String)
+        let nullable = args.iter().any(|arg| arg.is_nullable());
+        let dt = DataType::String;
+        Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

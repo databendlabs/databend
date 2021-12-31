@@ -60,8 +60,10 @@ impl Function for CastFunction {
         "CastFunction"
     }
 
-    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
-        Ok(self.cast_type.clone())
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let dt = self.cast_type.clone();
+        let nullable = args.iter().any(|arg| arg.is_nullable());
+        Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

@@ -114,8 +114,10 @@ where
         self.display_name.as_str()
     }
 
-    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
-        T::return_type()
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let dt = T::return_type()?;
+        let nullable = args.iter().any(|arg| arg.is_nullable());
+        Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
