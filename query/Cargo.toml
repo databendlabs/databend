@@ -53,7 +53,7 @@ common-tracing = { path = "../common/tracing" }
 common-sql = { path = "../common/sql" }
 
 # Github dependencies
-clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_driver/", rev = "6e0ecb2" }
+clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_driver", rev = "6e0ecb2" }
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "e4c8f3d" }
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "b42ff01" }
 
