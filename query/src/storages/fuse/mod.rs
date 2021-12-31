@@ -16,7 +16,7 @@ pub mod cache;
 mod constants;
 pub mod io;
 pub mod meta;
-mod operations;
+pub mod operations;
 pub mod pruning;
 pub mod statistics;
 mod table;
