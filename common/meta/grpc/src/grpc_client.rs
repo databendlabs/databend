@@ -23,7 +23,7 @@ use common_grpc::ConnectionFactory;
 use common_grpc::RpcClientTlsConfig;
 use common_meta_types::protobuf::meta_client::MetaClient;
 use common_meta_types::protobuf::GetReply;
-use common_meta_types::protobuf::GetReq;
+use common_meta_types::protobuf::GetRequest;
 use common_meta_types::protobuf::HandshakeRequest;
 use common_meta_types::protobuf::RaftRequest;
 use common_tracing::tracing;
@@ -36,14 +36,14 @@ use tonic::service::Interceptor;
 use tonic::transport::Channel;
 use tonic::Request;
 
-use crate::grpc::grpc_action::MetaGrpcReadReq;
-use crate::grpc::grpc_action::MetaGrpcWriteReq;
-use crate::grpc::grpc_action::RequestFor;
+use crate::grpc_action::MetaGrpcReadReq;
+use crate::grpc_action::MetaGrpcWriteReq;
+use crate::grpc_action::RequestFor;
 use crate::MetaGrpcClientConf;
 
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct MetaGrpcClient {
+    #[allow(dead_code)]
     token: Vec<u8>,
     pub(crate) client: MetaClient<InterceptedService<Channel, AuthInterceptor>>,
 }
@@ -151,7 +151,7 @@ impl MetaGrpcClient {
         R: DeserializeOwned,
     {
         let act: MetaGrpcReadReq = v.into();
-        let req: Request<GetReq> = (&act).try_into()?;
+        let req: Request<GetRequest> = (&act).try_into()?;
         let req = common_tracing::inject_span_to_tonic_request(req);
 
         let result = self.client.clone().read_msg(req).await?.into_inner();
@@ -167,15 +167,14 @@ impl MetaGrpcClient {
     }
 
     #[tracing::instrument(level = "debug", skip(self, req))]
-    pub async fn check_connection(&self, req: Request<GetReq>) -> Result<GetReply> {
+    pub async fn check_connection(&self, req: Request<GetRequest>) -> Result<GetReply> {
         let result = self.client.clone().read_msg(req).await?.into_inner();
         if result.ok {
             Ok(result)
         } else {
-            Err(ErrorCode::EmptyData(format!(
-                "Can not receive data from grpc server, {:?}",
-                result.key
-            )))
+            Err(ErrorCode::EmptyData(
+                "Can not receive data from grpc server",
+            ))
         }
     }
 }

@@ -17,9 +17,9 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::SerializedError;
 use common_meta_api::KVApi;
-use common_meta_raft_store::MetaGrpcReadReq;
-use common_meta_raft_store::MetaGrpcWriteReq;
-use common_meta_raft_store::RequestFor;
+use common_meta_grpc::MetaGrpcReadReq;
+use common_meta_grpc::MetaGrpcWriteReq;
+use common_meta_grpc::RequestFor;
 use common_meta_types::protobuf::RaftReply;
 use serde::Serialize;
 

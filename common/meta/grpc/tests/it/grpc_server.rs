@@ -20,7 +20,7 @@ use common_base::tokio;
 use common_meta_types::protobuf::meta_server::Meta;
 use common_meta_types::protobuf::meta_server::MetaServer;
 use common_meta_types::protobuf::GetReply;
-use common_meta_types::protobuf::GetReq;
+use common_meta_types::protobuf::GetRequest;
 use common_meta_types::protobuf::HandshakeResponse;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
@@ -55,7 +55,7 @@ impl Meta for GrpcServiceForTestImpl {
         Err(Status::unimplemented("Not yet implemented"))
     }
 
-    async fn read_msg(&self, _request: Request<GetReq>) -> Result<Response<GetReply>, Status> {
+    async fn read_msg(&self, _request: Request<GetRequest>) -> Result<Response<GetReply>, Status> {
         // for timeout test
         tokio::time::sleep(Duration::from_secs(60)).await;
         Err(Status::unimplemented("Not yet implemented"))

@@ -19,12 +19,12 @@ use common_meta_types::PrefixListReply;
 use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 
-use crate::grpc::grpc_action::GetKVAction;
-use crate::grpc::grpc_action::MGetKVAction;
-use crate::grpc::grpc_action::PrefixListReq;
+use crate::grpc_action::GetKVAction;
+use crate::grpc_action::MGetKVAction;
+use crate::grpc_action::PrefixListReq;
 use crate::MetaGrpcClient;
 
-#[async_trait::async_trait]
+#[tonic::async_trait]
 impl KVApi for MetaGrpcClient {
     async fn upsert_kv(
         &self,

@@ -19,9 +19,9 @@ use async_raft::NodeId;
 use common_base::tokio;
 use common_base::GlobalSequence;
 use common_base::Stoppable;
-use common_meta_raft_store::MetaGrpcClient;
+use common_meta_grpc::MetaGrpcClient;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
-use common_meta_types::protobuf::GetReq;
+use common_meta_types::protobuf::GetRequest;
 use common_tracing::tracing;
 use databend_meta::api::GrpcServer;
 use databend_meta::configs;
@@ -169,7 +169,7 @@ impl MetaSrvTestContext {
     pub async fn assert_meta_connection(&self) -> anyhow::Result<()> {
         let mut client = self.raft_client().await?;
 
-        let req = tonic::Request::new(GetReq {
+        let req = tonic::Request::new(GetRequest {
             key: "ensure-connection".into(),
         });
         let rst = client.get(req).await?.into_inner();
@@ -182,7 +182,7 @@ pub async fn assert_metasrv_connection(addr: &str) -> anyhow::Result<()> {
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
     let mut client = MetaServiceClient::connect(format!("http://{}", addr)).await?;
-    let req = tonic::Request::new(GetReq {
+    let req = tonic::Request::new(GetRequest {
         key: "ensure-connection".into(),
     });
     let rst = client.get(req).await?.into_inner();

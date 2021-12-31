@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test arrow-flight API of metasrv
+//! Test arrow-grpc API of metasrv
 
 use common_base::tokio;
 use common_base::Stoppable;
 use common_meta_api::KVApi;
-use common_meta_raft_store::MetaGrpcClient;
+use common_meta_grpc::MetaGrpcClient;
 use common_meta_types::MatchSeq;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;

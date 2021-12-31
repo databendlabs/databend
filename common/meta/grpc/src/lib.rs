@@ -22,5 +22,5 @@ pub use grpc_action::GetTableExtReq;
 pub use grpc_action::MetaGrpcReadReq;
 pub use grpc_action::MetaGrpcWriteReq;
 pub use grpc_action::RequestFor;
-pub use grpc_client::*;
-pub use grpc_client_conf::*;
+pub use grpc_client::MetaGrpcClient;
+pub use grpc_client_conf::MetaGrpcClientConf;
