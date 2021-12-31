@@ -12,25 +12,84 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataValueArithmeticOperator;
+use std::marker::PhantomData;
+use std::ops::Add;
+use std::ops::Mul;
+use std::ops::Sub;
+
+use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use num::cast::AsPrimitive;
+use num_traits::WrappingAdd;
+use num_traits::WrappingMul;
+use num_traits::WrappingSub;
 
-use crate::scalars::function_factory::FunctionDescription;
+use super::arithmetic::ArithmeticTrait;
+use crate::binary_arithmetic;
+use crate::impl_binary_arith;
+use crate::impl_wrapping_binary_arith;
+use crate::scalars::function_factory::ArithmeticDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::ArithmeticFunction;
+use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
+use crate::with_match_primitive_type;
+
+impl_wrapping_binary_arith!(ArithmeticWrappingMul, wrapping_mul);
+
+impl_binary_arith!(ArithmeticMul, *);
 
 pub struct ArithmeticMulFunction;
 
 impl ArithmeticMulFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
-        ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Mul)
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[DataTypeAndNullable],
+    ) -> Result<Box<dyn Function>> {
+        let left_type = &args[0].data_type();
+        let right_type = &args[1].data_type();
+        let op = DataValueBinaryOperator::Mul;
+
+        let error_fn = || -> Result<Box<dyn Function>> {
+            Err(ErrorCode::BadDataValueType(format!(
+                "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
+                left_type, op, right_type
+            )))
+        };
+
+        if !left_type.is_numeric() || !right_type.is_numeric() {
+            return error_fn();
+        };
+
+        with_match_primitive_type!(left_type, |$T| {
+            with_match_primitive_type!(right_type, |$D| {
+                let result_type = <($T, $D) as ResultTypeOfBinary>::AddMul::data_type();
+                match result_type {
+                    DataType::UInt64 => BinaryArithmeticFunction::<ArithmeticWrappingMul<$T, $D, u64>>::try_create_func(
+                        op,
+                        result_type,
+                    ),
+                    DataType::Int64 => BinaryArithmeticFunction::<ArithmeticWrappingMul<$T, $D, i64>>::try_create_func(
+                        op,
+                        result_type,
+                    ),
+                    _ => BinaryArithmeticFunction::<ArithmeticMul<$T, $D, <($T, $D) as ResultTypeOfBinary>::AddMul>>::try_create_func(
+                        op,
+                        result_type,
+                    ),
+                }
+            }, {
+                error_fn()
+            })
+        }, {
+            error_fn()
+        })
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func)).features(
+    pub fn desc() -> ArithmeticDescription {
+        ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(
             FunctionFeatures::default()
                 .deterministic()
                 .monotonicity()
@@ -39,13 +98,13 @@ impl ArithmeticMulFunction {
     }
 
     pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
-        arithmetic_mul_div_monotonicity(args, DataValueArithmeticOperator::Mul)
+        arithmetic_mul_div_monotonicity(args, DataValueBinaryOperator::Mul)
     }
 }
 
 pub fn arithmetic_mul_div_monotonicity(
     args: &[Monotonicity],
-    op: DataValueArithmeticOperator,
+    op: DataValueBinaryOperator,
 ) -> Result<Monotonicity> {
     if args.len() != 2 {
         return Err(ErrorCode::BadArguments(format!(
@@ -56,7 +115,7 @@ pub fn arithmetic_mul_div_monotonicity(
 
     if !matches!(
         op,
-        DataValueArithmeticOperator::Mul | DataValueArithmeticOperator::Div
+        DataValueBinaryOperator::Mul | DataValueBinaryOperator::Div
     ) {
         return Err(ErrorCode::BadArguments(format!(
             "Invalid operator '{}' for get_monotonicity",
@@ -77,7 +136,7 @@ pub fn arithmetic_mul_div_monotonicity(
                 1 => {
                     match op {
                         // 12 * g(x)
-                        DataValueArithmeticOperator::Mul => Ok(Monotonicity::create(
+                        DataValueBinaryOperator::Mul => Ok(Monotonicity::create(
                             g_x.is_monotonic,
                             g_x.is_positive,
                             g_x.is_constant,
@@ -100,7 +159,7 @@ pub fn arithmetic_mul_div_monotonicity(
                 -1 => {
                     match op {
                         // -12 * g(x)
-                        DataValueArithmeticOperator::Mul => Ok(Monotonicity::create(
+                        DataValueBinaryOperator::Mul => Ok(Monotonicity::create(
                             g_x.is_monotonic,
                             !g_x.is_positive, // flip the is_positive
                             g_x.is_constant,
@@ -165,10 +224,10 @@ pub fn arithmetic_mul_div_monotonicity(
                         // f(x)⭣ / g(x)⭡ => ⭣
                         let (is_monotonic, mut is_positive) =
                             match (f_x.is_positive, g_x.is_positive, op) {
-                                (true, true, DataValueArithmeticOperator::Mul)
-                                | (true, false, DataValueArithmeticOperator::Div) => (true, true),
-                                (false, false, DataValueArithmeticOperator::Mul)
-                                | (false, true, DataValueArithmeticOperator::Div) => (true, false),
+                                (true, true, DataValueBinaryOperator::Mul)
+                                | (true, false, DataValueBinaryOperator::Div) => (true, true),
+                                (false, false, DataValueBinaryOperator::Mul)
+                                | (false, true, DataValueBinaryOperator::Div) => (true, false),
                                 _ => (false, false),
                             };
                         // if f(x) <= 0 && g(x) <= 0 flip the is_positive
@@ -189,10 +248,10 @@ pub fn arithmetic_mul_div_monotonicity(
                         // f(x)⭣ / g(x)⭡ => unknown
                         let (is_monotonic, mut is_positive) =
                             match (f_x.is_positive, g_x.is_positive, op) {
-                                (true, true, DataValueArithmeticOperator::Div)
-                                | (true, false, DataValueArithmeticOperator::Mul) => (true, false),
-                                (false, false, DataValueArithmeticOperator::Div)
-                                | (false, true, DataValueArithmeticOperator::Mul) => (true, true),
+                                (true, true, DataValueBinaryOperator::Div)
+                                | (true, false, DataValueBinaryOperator::Mul) => (true, false),
+                                (false, false, DataValueBinaryOperator::Div)
+                                | (false, true, DataValueBinaryOperator::Mul) => (true, true),
                                 _ => (false, false),
                             };
                         // if f(x) <= 0 && g(x) >= 0 flip the is_positive

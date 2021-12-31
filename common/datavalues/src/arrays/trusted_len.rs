@@ -18,7 +18,6 @@ use common_arrow::arrow::array::*;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::trusted_len::TrustedLen;
 
-use super::DFAsRef;
 use crate::prelude::*;
 
 pub trait CustomIterTools: Iterator {

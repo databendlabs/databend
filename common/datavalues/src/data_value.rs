@@ -26,14 +26,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_macros::MallocSizeOf;
 
-use crate::arrays::ListBooleanArrayBuilder;
-use crate::arrays::ListBuilderTrait;
-use crate::arrays::ListPrimitiveArrayBuilder;
-use crate::arrays::ListStringArrayBuilder;
 use crate::prelude::*;
-use crate::series::IntoSeries;
-use crate::series::Series;
-use crate::DataField;
 
 /// A specific value of a data type.
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, MallocSizeOf)]

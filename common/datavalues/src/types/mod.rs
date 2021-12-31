@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod arithmetics_type;
 mod data_df_type;
 mod data_type;
 mod data_type_coercion;
@@ -20,6 +21,7 @@ mod deserializations;
 mod physical_data_type;
 mod serializations;
 
+pub use arithmetics_type::*;
 pub use data_df_type::*;
 pub use data_type::*;
 pub use data_type_coercion::*;

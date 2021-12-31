@@ -51,7 +51,7 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
     fn eval(&self, _columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn>;
 
     /// Whether the function passes through null input.
-    /// Return true is the function just return null with any given null input.
+    /// Return true if the function just return null with any given null input.
     /// Return false if the function may return non-null with null input.
     ///
     /// For example, arithmetic plus('+') will output null for any null input, like '12 + null = null'.

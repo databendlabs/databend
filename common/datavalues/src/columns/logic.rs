@@ -16,7 +16,6 @@
 use common_exception::Result;
 
 use crate::prelude::*;
-use crate::DataValueLogicOperator;
 
 macro_rules! apply_logic {
     ($self: ident, $rhs: ident, $op: ident) => {{

@@ -16,8 +16,6 @@ use std::sync::Arc;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::array::ArrayRef;
 
-use super::take_random::TakeRandom;
-use super::take_random::TakeRandomString;
 use crate::prelude::*;
 
 macro_rules! impl_take_random_get {

@@ -14,5 +14,4 @@
 
 mod arrays;
 mod data_array_filter;
-mod series;
 mod types;

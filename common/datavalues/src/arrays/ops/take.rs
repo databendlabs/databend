@@ -24,7 +24,6 @@ use common_arrow::arrow::compute::take;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use super::TakeIdx;
 use crate::prelude::*;
 
 // TODO add unchecked take
