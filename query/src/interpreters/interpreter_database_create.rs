@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_types::GrantObject;
+use common_meta_types::UserPrivilegeType;
 use common_planners::CreateDatabasePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -48,6 +50,10 @@ impl Interpreter for CreateDatabaseInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
+        self.ctx
+            .get_session()
+            .validate_privilege(&GrantObject::Global, UserPrivilegeType::Create)?;
+
         let catalog = self.ctx.get_catalog();
         catalog.create_database(self.plan.clone().into()).await?;
 
