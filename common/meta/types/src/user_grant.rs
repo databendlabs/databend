@@ -205,40 +205,27 @@ impl UserGrantSet {
         &self.grants
     }
 
-    pub fn verify_global_privilege(
+    pub fn verify_privilege(
         &self,
         user: &str,
         host: &str,
+        object: &GrantObject,
         privilege: UserPrivilegeType,
     ) -> bool {
-        self.grants
-            .iter()
-            .any(|e| e.verify_global_privilege(user, host, privilege))
-    }
-
-    pub fn verify_database_privilege(
-        &self,
-        user: &str,
-        host: &str,
-        db: &str,
-        privilege: UserPrivilegeType,
-    ) -> bool {
-        self.grants
-            .iter()
-            .any(|e| e.verify_database_privilege(user, host, db, privilege))
-    }
-
-    pub fn verify_table_privilege(
-        &self,
-        user: &str,
-        host: &str,
-        db: &str,
-        table: &str,
-        privilege: UserPrivilegeType,
-    ) -> bool {
-        self.grants
-            .iter()
-            .any(|e| e.verify_table_privilege(user, host, db, table, privilege))
+        match object {
+            GrantObject::Global => self
+                .grants
+                .iter()
+                .any(|e| e.verify_global_privilege(user, host, privilege)),
+            GrantObject::Table(db, table) => self
+                .grants
+                .iter()
+                .any(|e| e.verify_table_privilege(user, host, db, table, privilege)),
+            GrantObject::Database(db) => self
+                .grants
+                .iter()
+                .any(|e| e.verify_database_privilege(user, host, db, privilege)),
+        }
     }
 
     pub fn grant_privileges(
