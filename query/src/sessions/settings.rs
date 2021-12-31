@@ -33,7 +33,7 @@ impl Settings {
         ("min_distributed_rows", u64, 100000000, "Minimum distributed read rows. In cluster mode, when read rows exceeds this value, the local table converted to distributed query."),
         ("min_distributed_bytes", u64, 500 * 1024 * 1024, "Minimum distributed read bytes. In cluster mode, when read bytes exceeds this value, the local table converted to distributed query."),
         ("parallel_read_threads", u64, 1, "The maximum number of parallelism for reading data. By default, it is 1."),
-        ("read_buffer_size", u64, 1024 * 1024, "The size of buffer in bytes for buffered reader of dal, default value is 1MB")
+        ("storage_read_buffer_size", u64, 1024 * 1024, "The size of buffer in bytes for buffered reader of dal, default value is 1MB")
     }
 
     pub fn try_create() -> Result<Arc<Settings>> {
