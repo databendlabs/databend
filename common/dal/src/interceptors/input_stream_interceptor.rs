@@ -16,6 +16,7 @@
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Poll;
+use std::time::Instant;
 
 use common_base::tokio::io::SeekFrom;
 
@@ -26,11 +27,16 @@ use crate::InputStream;
 pub struct InputStreamInterceptor {
     ctx: Arc<DalContext>,
     inner: InputStream,
+    last_pending: Option<Instant>,
 }
 
 impl InputStreamInterceptor {
     pub fn new(ctx: Arc<DalContext>, inner: InputStream) -> Self {
-        Self { ctx, inner }
+        Self {
+            ctx,
+            inner,
+            last_pending: None,
+        }
     }
 }
 
@@ -39,11 +45,22 @@ impl futures::AsyncRead for InputStreamInterceptor {
         mut self: Pin<&mut Self>,
         ctx: &mut std::task::Context<'_>,
         buf: &mut [u8],
-    ) -> Poll<std::result::Result<usize, std::io::Error>> {
-        let r = Pin::new(&mut self.inner).poll_read(ctx, buf);
-        if let Poll::Ready(Ok(len)) = r {
-            self.ctx.inc_read_bytes(len as usize);
+    ) -> Poll<std::io::Result<usize>> {
+        let start = match self.last_pending {
+            None => Instant::now(),
+            Some(t) => t,
         };
+        let r = Pin::new(&mut self.inner).poll_read(ctx, buf);
+        match r {
+            Poll::Ready(Ok(len)) => {
+                self.ctx.inc_read_bytes(len as usize);
+                self.last_pending = None;
+            }
+            Poll::Ready(Err(_)) => self.last_pending = None,
+            Poll::Pending => self.last_pending = Some(start),
+        }
+        self.ctx
+            .inc_read_byte_cost_ms(start.elapsed().as_millis() as usize);
         r
     }
 }
@@ -54,6 +71,25 @@ impl futures::AsyncSeek for InputStreamInterceptor {
         cx: &mut std::task::Context<'_>,
         pos: SeekFrom,
     ) -> Poll<std::io::Result<u64>> {
-        Pin::new(&mut self.inner).poll_seek(cx, pos)
+        let start = match self.last_pending {
+            None => Instant::now(),
+            Some(t) => t,
+        };
+        let r = Pin::new(&mut self.inner).poll_seek(cx, pos);
+
+        match r {
+            Poll::Ready(Ok(_)) => {
+                self.last_pending = None;
+                self.ctx.inc_read_seeks();
+            }
+            Poll::Ready(Err(_)) => self.last_pending = None,
+            Poll::Pending => {
+                let _duration = start.elapsed();
+                self.last_pending = Some(start)
+            }
+        }
+        self.ctx
+            .inc_read_seek_cost_ms(start.elapsed().as_millis() as usize);
+        r
     }
 }
