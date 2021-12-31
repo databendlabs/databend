@@ -23,7 +23,6 @@ use common_planners::*;
 use common_tracing::tracing;
 
 use super::MonotonicityCheckVisitor;
-use super::RequireColumnsVisitor;
 use crate::optimizers::Optimizer;
 use crate::sessions::QueryContext;
 

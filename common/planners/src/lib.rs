@@ -108,6 +108,7 @@ pub use plan_expression_common::rebase_expr_from_input;
 pub use plan_expression_common::resolve_aliases_to_exprs;
 pub use plan_expression_common::sort_to_inner_expr;
 pub use plan_expression_common::unwrap_alias_exprs;
+pub use plan_expression_common::RequireColumnsVisitor;
 pub use plan_expression_function::add;
 pub use plan_expression_function::avg;
 pub use plan_expression_function::modular;

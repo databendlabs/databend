@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
-
 use common_datavalues::prelude::DataColumn;
 use common_datavalues::prelude::DataColumnWithField;
 use common_datavalues::DataField;
@@ -25,40 +23,6 @@ use common_functions::scalars::FunctionFactory;
 use common_functions::scalars::Monotonicity;
 use common_planners::col;
 use common_planners::Expression;
-use common_planners::ExpressionVisitor;
-use common_planners::Recursion;
-
-// This visitor is for recursively visiting expression tree and collects all columns.
-pub struct RequireColumnsVisitor {
-    pub required_columns: HashSet<String>,
-}
-
-impl RequireColumnsVisitor {
-    pub fn default() -> Self {
-        Self {
-            required_columns: HashSet::new(),
-        }
-    }
-
-    pub fn collect_columns_from_expr(expr: &Expression) -> Result<HashSet<String>> {
-        let mut visitor = Self::default();
-        visitor = expr.accept(visitor)?;
-        Ok(visitor.required_columns)
-    }
-}
-
-impl ExpressionVisitor for RequireColumnsVisitor {
-    fn pre_visit(self, expr: &Expression) -> Result<Recursion<Self>> {
-        match expr {
-            Expression::Column(c) => {
-                let mut v = self;
-                v.required_columns.insert(c.clone());
-                Ok(Recursion::Continue(v))
-            }
-            _ => Ok(Recursion::Continue(self)),
-        }
-    }
-}
 
 // MonotonicityCheckVisitor visit the expression tree to calculate monotonicity.
 // For example, a function of Add(Neg(number), 5) for number < -100 will have a tree like this:

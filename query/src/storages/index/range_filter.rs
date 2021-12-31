@@ -25,9 +25,9 @@ use common_functions::scalars::FunctionFactory;
 use common_planners::lit;
 use common_planners::Expression;
 use common_planners::Expressions;
+use common_planners::RequireColumnsVisitor;
 
 use crate::optimizers::MonotonicityCheckVisitor;
-use crate::optimizers::RequireColumnsVisitor;
 use crate::pipelines::transforms::ExpressionExecutor;
 
 pub type BlockStatistics = HashMap<u32, ColumnStatistics>;
