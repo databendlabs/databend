@@ -177,8 +177,8 @@ impl Session {
         );
         if !ok {
             return Err(ErrorCode::PermissionDenied(format!(
-                "{} denied to user '{}'@'{}' on {}",
-                privilege, &current_user.name, &current_user.hostname, object
+                "Permission denied, user '{}'@'{}' requires {} privilege on {}",
+                &current_user.name, &current_user.hostname, privilege, object
             )));
         }
         Ok(())
