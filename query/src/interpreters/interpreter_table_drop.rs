@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_types::GrantObject;
+use common_meta_types::UserPrivilegeType;
 use common_planners::DropTablePlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
@@ -48,6 +50,11 @@ impl Interpreter for DropTableInterpreter {
         let db_name = self.plan.db.as_str();
         let tbl_name = self.plan.table.as_str();
         let tbl = self.ctx.get_table(db_name, tbl_name).await.ok();
+
+        self.ctx.get_session().validate_privilege(
+            &GrantObject::Database(db_name.into()),
+            UserPrivilegeType::Drop,
+        )?;
 
         let catalog = self.ctx.get_catalog();
         catalog.drop_table(self.plan.clone().into()).await?;
