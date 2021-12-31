@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::array::MutableArray;
-use common_arrow::arrow::array::MutablePrimitiveArray;
+use std::sync::Arc;
+
+use common_arrow::arrow::array::Array;
+use common_arrow::arrow::array::PrimitiveArray;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::MutableBuffer;
-use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 
 use crate::arrays::mutable::MutableArrayBuilder;
 use crate::series::IntoSeries;
@@ -24,19 +25,20 @@ use crate::series::Series;
 use crate::DFPrimitiveType;
 use crate::DataType;
 
-#[derive(Default)]
-pub struct MutablePrimitiveArrayBuilder<T>
+#[derive(Debug)]
+pub struct MutablePrimitiveArrayBuilder<T, const NULLABLE: bool>
 where T: DFPrimitiveType
 {
-    builder: MutablePrimitiveArray<T>,
+    data_type: DataType,
+    values: MutableBuffer<T>,
+    validity: Option<MutableBitmap>,
 }
 
-impl<T> MutableArrayBuilder for MutablePrimitiveArrayBuilder<T>
+impl<T, const NULLABLE: bool> MutableArrayBuilder for MutablePrimitiveArrayBuilder<T, NULLABLE>
 where T: DFPrimitiveType
 {
-    fn data_type(&self) -> DataType {
-        let datatype: DataType = self.builder.data_type().into();
-        datatype
+    fn data_type(&self) -> &DataType {
+        &self.data_type
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -48,45 +50,113 @@ where T: DFPrimitiveType
     }
 
     fn as_series(&mut self) -> Series {
-        self.builder.as_arc().into_series()
+        let array: Arc<dyn Array> = Arc::new(PrimitiveArray::<T>::from_data(
+            self.data_type.to_arrow(),
+            std::mem::take(&mut self.values).into(),
+            std::mem::take(&mut self.validity).map(|x| x.into()),
+        ));
+        array.into_series()
     }
 
     fn push_null(&mut self) {
-        self.builder.push_null();
+        self.push_option(None)
+    }
+
+    fn validity(&self) -> Option<&MutableBitmap> {
+        self.validity.as_ref()
     }
 }
 
-impl<T> MutablePrimitiveArrayBuilder<T>
+impl<T, const NULLABLE: bool> Default for MutablePrimitiveArrayBuilder<T, NULLABLE>
 where T: DFPrimitiveType
 {
-    pub fn from_data(
-        data_type: ArrowDataType,
-        values: MutableBuffer<T>,
-        validity: Option<MutableBitmap>,
-    ) -> Self {
-        let builder = MutablePrimitiveArray::<T>::from_data(data_type, values, validity);
-        Self { builder }
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// for not nullable values
+impl<T> MutablePrimitiveArrayBuilder<T, false>
+where T: DFPrimitiveType
+{
+    pub fn push(&mut self, val: T) {
+        self.values.push(val);
+    }
+}
+
+// for nullable values
+impl<T> MutablePrimitiveArrayBuilder<T, true>
+where T: DFPrimitiveType
+{
+    pub fn push(&mut self, val: T) {
+        self.values.push(val);
+        match &mut self.validity {
+            Some(validity) => validity.push(true),
+            None => {}
+        }
+    }
+}
+
+impl<T, const NULLABLE: bool> MutablePrimitiveArrayBuilder<T, NULLABLE>
+where T: DFPrimitiveType
+{
+    pub fn new() -> Self {
+        Self::with_capacity(0)
     }
 
     pub fn with_capacity(capacity: usize) -> Self {
         MutablePrimitiveArrayBuilder {
-            builder: MutablePrimitiveArray::<T>::with_capacity(capacity),
+            data_type: T::data_type(),
+            values: MutableBuffer::<T>::with_capacity(capacity),
+            validity: None,
+        }
+    }
+
+    pub fn from_data(
+        data_type: DataType,
+        values: MutableBuffer<T>,
+        validity: Option<MutableBitmap>,
+    ) -> Self {
+        Self {
+            data_type,
+            values,
+            validity,
         }
     }
 
     pub fn values(&self) -> &MutableBuffer<T> {
-        self.builder.values()
+        &self.values
     }
 
-    pub fn push(&mut self, v: T) {
-        self.builder.push(Some(v));
+    fn init_validity(&mut self) {
+        let mut validity = MutableBitmap::with_capacity(self.values.capacity());
+        validity.extend_constant(self.len(), true);
+        validity.set(self.len() - 1, false);
+        self.validity = Some(validity)
     }
 
-    pub fn push_option(&mut self, v: Option<T>) {
-        self.builder.push(v)
+    fn len(&self) -> usize {
+        self.values.len()
     }
 
-    pub fn push_null(&mut self) {
-        self.builder.push_null();
+    pub fn push_option(&mut self, val: Option<T>) {
+        match val {
+            Some(val) => {
+                self.values.push(val);
+                match &mut self.validity {
+                    Some(validity) => validity.push(true),
+                    None => {}
+                }
+            }
+            None => {
+                self.values.push(T::default());
+                match &mut self.validity {
+                    Some(validity) => validity.push(false),
+                    None => {
+                        self.init_validity();
+                    }
+                }
+            }
+        }
     }
 }
