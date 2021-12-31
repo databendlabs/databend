@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_meta_api::KVApi;
-use common_meta_raft_store::MetaGrpcClient;
-use common_meta_raft_store::MetaGrpcClientConf;
+use common_meta_grpc::MetaGrpcClient;
+use common_meta_grpc::MetaGrpcClientConf;
 
 // Since there is a pending dependency issue,
 // StoreApiProvider is temporarily moved from store-api-sdk

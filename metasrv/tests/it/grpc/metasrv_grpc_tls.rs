@@ -16,7 +16,7 @@ use common_base::tokio;
 use common_exception::ErrorCode;
 use common_grpc::RpcClientTlsConfig;
 use common_meta_api::MetaApi;
-use common_meta_raft_store::MetaGrpcClient;
+use common_meta_grpc::MetaGrpcClient;
 use pretty_assertions::assert_eq;
 
 use crate::init_meta_ut;

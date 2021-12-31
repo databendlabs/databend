@@ -14,7 +14,7 @@
 
 use common_base::tokio;
 use common_meta_api::KVApiTestSuite;
-use common_meta_raft_store::MetaGrpcClient;
+use common_meta_grpc::MetaGrpcClient;
 
 use crate::init_meta_ut;
 
