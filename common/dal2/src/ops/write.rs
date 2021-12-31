@@ -15,10 +15,11 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_exception::Result;
 
 use super::io::Reader;
+use crate::error::Result;
 
+/// `Write` will write data to the underlying storage.
 #[async_trait]
 pub trait Write<S: Send + Sync>: Send + Sync {
     async fn write(&self, r: Reader, args: &WriteBuilder<S>) -> Result<usize> {
