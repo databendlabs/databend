@@ -123,13 +123,10 @@ impl Function for ConcatFunction {
         "concat"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
-        for arg in args {
-            if arg.is_null() {
-                return Ok(DataType::Null);
-            }
-        }
-        Ok(DataType::String)
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let nullable = args.iter().any(|arg| arg.is_nullable());
+        let dt = DataType::String;
+        Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

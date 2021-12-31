@@ -62,14 +62,7 @@ pub trait Function: fmt::Display + Sync + Send + DynClone {
     }
 
     /// The method returns the return_type of this function.
-    fn return_type(&self, args: &[DataType]) -> Result<DataType>;
-
-    /// Whether the function may return null.
-    /// The default implementation checks if any nullable input exists and returns true if exist; otherwise false.
-    fn nullable(&self, arg_fields: &[DataField]) -> Result<bool> {
-        let any_input_nullable = arg_fields.iter().any(|field| field.is_nullable());
-        Ok(any_input_nullable)
-    }
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable>;
 
     /// Evaluate the function, e.g. run/execute the function.
     fn eval(&self, _columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn>;
@@ -183,8 +176,8 @@ binary
 binary(x_series.f64()?, y_series.f64()?, |x, y| x.pow(y))
 ```
 
-### Nullable check
-Nullable is annoying, but we can accept `DataType::Null` argument in most cases. The default implementation is to return true if any of the inputs is nullable, otherwise false. Some function may return null, even when none of the inputs is nullable. Thus we need to override the function to return true.
+### Return type
+The return value of `return_type` is `DataTypeAndNullable`, which is a wrapper of `DataType` and `nullable`. Most functions produces nullable data type only when one of the input data types is nullable. Some exceptions include `sqrt(-1)`,`from_base64("1")`, etc.
 
 ### Implicit cast
 Databend can accept implicit cast, eg: `pow('3', 2)`, `sign('1232')` we can cast the argument to specific column using `cast_with_type`.

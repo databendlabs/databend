@@ -46,8 +46,9 @@ impl Function for PiFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
-        Ok(DataType::Float64)
+    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let dt = DataType::Float64;
+        Ok(DataTypeAndNullable::create(&dt, false))
     }
 
     fn eval(&self, _columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

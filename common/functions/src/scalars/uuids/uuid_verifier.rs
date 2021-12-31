@@ -99,7 +99,7 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
         self.display_name.as_str()
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
         if !args[0].data_type().is_string() && !args[0].data_type().is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null, but got {}",
@@ -107,11 +107,8 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
             )));
         }
 
-        Ok(DataType::Boolean)
-    }
-
-    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
-        Ok(false)
+        let dt = DataType::Boolean;
+        Ok(DataTypeAndNullable::create(&dt, false))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

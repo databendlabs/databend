@@ -55,7 +55,7 @@ impl Function for TupleFunction {
         "TupleFunction"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
         let fields = args
             .iter()
             .enumerate()
@@ -63,11 +63,8 @@ impl Function for TupleFunction {
                 DataField::new(format!("item_{}", i).as_str(), x.data_type().clone(), false)
             })
             .collect::<Vec<_>>();
-        Ok(DataType::Struct(fields))
-    }
-
-    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
-        Ok(false)
+        let dt = DataType::Struct(fields);
+        Ok(DataTypeAndNullable::create(&dt, false))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

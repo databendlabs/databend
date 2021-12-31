@@ -52,19 +52,18 @@ impl Function for InetNtoaFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
-        if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let data_type = if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
             Ok(DataType::String)
         } else {
             Err(ErrorCode::IllegalDataType(format!(
                 "Expected numeric or string or null type, but got {}",
                 args[0]
             )))
-        }
-    }
+        }?;
 
-    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
-        Ok(true)
+        // The function returns null for invalid input, so the nullable is true.
+        Ok(DataTypeAndNullable::create(&data_type, true))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

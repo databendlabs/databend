@@ -57,15 +57,19 @@ where T: AngleConvertFunction + Clone + Sync + Send + 'static
         "AngleFunction"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
-        if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let nullable = args.iter().any(|arg| arg.is_nullable());
+
+        let data_type = if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
             Ok(DataType::Float64)
         } else {
             Err(ErrorCode::IllegalDataType(format!(
                 "Expected numeric, but got {}",
                 args[0]
             )))
-        }
+        }?;
+
+        Ok(DataTypeAndNullable::create(&data_type, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

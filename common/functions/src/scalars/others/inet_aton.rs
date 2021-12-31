@@ -52,19 +52,17 @@ impl Function for InetAtonFunction {
         &*self.display_name
     }
 
-    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
-        Ok(true)
-    }
-
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
-        if args[0].is_string() || args[0].is_null() {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let data_type = if args[0].is_string() || args[0].is_null() {
             Ok(DataType::UInt32)
         } else {
             Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null type, but got {}",
                 args[0]
             )))
-        }
+        }?;
+        // For invalid input, the function returns null, so the nullable is true.
+        Ok(DataTypeAndNullable::create(&data_type, true))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

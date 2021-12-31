@@ -80,14 +80,16 @@ where
         self.display_name.as_str()
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
         if !args[0].is_numeric() && !args[0].is_string() && !args[0].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null, but got {}",
                 args[0]
             )));
         }
-        T::return_type()
+        let nullable = args.iter().any(|arg| arg.is_nullable());
+        let dt = T::return_type()?;
+        Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

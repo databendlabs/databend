@@ -49,8 +49,10 @@ impl Function for LogicFunction {
         "LogicFunction"
     }
 
-    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
-        Ok(DataType::Boolean)
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let nullable = args.iter().any(|arg| arg.is_nullable());
+        let dt = DataType::Boolean;
+        Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

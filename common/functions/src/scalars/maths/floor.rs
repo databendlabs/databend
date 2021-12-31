@@ -55,8 +55,10 @@ impl Function for FloorFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
-        if matches!(
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let nullable = args.iter().any(|arg| arg.is_nullable());
+
+        let data_type = if matches!(
             args[0].data_type(),
             DataType::UInt8
                 | DataType::UInt16
@@ -77,7 +79,8 @@ impl Function for FloorFunction {
                 "Expected numeric types, but got {}",
                 args[0]
             )))
-        }
+        }?;
+        Ok(DataTypeAndNullable::create(&data_type, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

@@ -47,12 +47,9 @@ impl Function for CrashMeFunction {
         "CrashMeFunction"
     }
 
-    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
-        Ok(DataType::Null)
-    }
-
-    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
-        Ok(false)
+    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let dt = DataType::Null;
+        Ok(DataTypeAndNullable::create(&dt, true))
     }
 
     fn eval(&self, _columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
