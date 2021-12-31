@@ -101,18 +101,18 @@ impl ParquetSource {
 impl Source for ParquetSource {
     #[tracing::instrument(level = "debug", skip_all)]
     async fn read(&mut self) -> Result<Option<DataBlock>> {
-        let extern_meta;
+        let fetched_metadata;
         let metadata = match &self.metadata {
             Some(m) => m,
             None => {
                 let mut reader = self
                     .data_accessor
                     .get_input_stream(self.path.as_str(), None)?;
-                extern_meta = read_metadata_async(&mut reader)
+                fetched_metadata = read_metadata_async(&mut reader)
                     .instrument(debug_span!("parquet_source_read_meta"))
                     .await
                     .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-                &extern_meta
+                &fetched_metadata
             }
         };
 

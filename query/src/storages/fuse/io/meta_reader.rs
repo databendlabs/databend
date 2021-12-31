@@ -12,45 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_cache::storage::StorageCache;
 use common_dal::DataAccessor;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_infallible::RwLock;
-use once_cell::sync::OnceCell;
 use serde::de::DeserializeOwned;
 
 use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
 
-static SNAPSHOT_CACHE: OnceCell<RwLock<HashMap<String, TableSnapshot>>> = OnceCell::new();
-static SEGMENT_CACHE: OnceCell<RwLock<HashMap<String, SegmentInfo>>> = OnceCell::new();
-
-//async fn read_obj<T: DeserializeOwned>(
-//    da: &dyn DataAccessor,
-//    loc: impl AsRef<str>,
-//    cache: Arc<Option<Box<dyn StorageCache>>>,
-//) -> Result<T> {
-//    let loc = loc.as_ref();
-//    let bytes = if let Some(cache) = &*cache {
-//        cache.get(loc, da).await?
-//    } else {
-//        da.read(loc).await?
-//    };
-//    let r = serde_json::from_slice::<T>(&bytes)?;
-//    Ok(r)
-//}
-
-async fn read_obj_new<T: DeserializeOwned>(
+async fn read_obj<T: DeserializeOwned>(
     da: &dyn DataAccessor,
     loc: impl AsRef<str>,
+    cache: Arc<Option<Box<dyn StorageCache>>>,
 ) -> Result<T> {
     let loc = loc.as_ref();
-    let bytes = da.read(loc).await?;
+    let bytes = if let Some(cache) = &*cache {
+        cache.get(loc, da).await?
+    } else {
+        da.read(loc).await?
+    };
     let r = serde_json::from_slice::<T>(&bytes)?;
     Ok(r)
 }
@@ -61,24 +45,10 @@ impl SnapshotReader {
     pub async fn read(
         da: &dyn DataAccessor,
         loc: impl AsRef<str>,
-        _cache: Arc<Option<Box<dyn StorageCache>>>,
+        cache: Arc<Option<Box<dyn StorageCache>>>,
     ) -> Result<TableSnapshot> {
-        let cache = SNAPSHOT_CACHE
-            .get_or_init(|| common_infallible::RwLock::new(std::collections::HashMap::new()));
-
-        let obj = { cache.read().get(loc.as_ref()).cloned() };
-
-        let res = match obj {
-            Some(m) => m,
-            _ => {
-                let res: TableSnapshot = read_obj_new(da, loc.as_ref())
-                    .await
-                    .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-                cache.write().insert(loc.as_ref().to_owned(), res.clone());
-                res
-            }
-        };
-        Ok(res)
+        let snapshot: TableSnapshot = read_obj(da, loc, cache).await?;
+        Ok(snapshot)
     }
 
     pub async fn read_snapshot_history(
@@ -113,26 +83,9 @@ impl SegmentReader {
     pub async fn read(
         da: &dyn DataAccessor,
         loc: impl AsRef<str>,
-        _cache: Arc<Option<Box<dyn StorageCache>>>,
+        cache: Arc<Option<Box<dyn StorageCache>>>,
     ) -> Result<SegmentInfo> {
-        //let segment_info: SegmentInfo = read_obj(da, loc, cache).await?;
-        //Ok(segment_info)
-
-        let cache = SEGMENT_CACHE
-            .get_or_init(|| common_infallible::RwLock::new(std::collections::HashMap::new()));
-
-        let obj = { cache.read().get(loc.as_ref()).cloned() };
-
-        let res = match obj {
-            Some(m) => m,
-            _ => {
-                let res: SegmentInfo = read_obj_new(da, loc.as_ref())
-                    .await
-                    .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-                cache.write().insert(loc.as_ref().to_owned(), res.clone());
-                res
-            }
-        };
-        Ok(res)
+        let segment_info: SegmentInfo = read_obj(da, loc, cache).await?;
+        Ok(segment_info)
     }
 }
