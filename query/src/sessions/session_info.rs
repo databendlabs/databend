@@ -15,6 +15,8 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use common_base::ProgressValues;
+use common_dal::DalMetrics;
 use common_meta_types::UserInfo;
 
 use crate::sessions::MutableStatus;
@@ -27,11 +29,12 @@ pub struct ProcessInfo {
     pub state: String,
     pub database: String,
     pub user: Option<UserInfo>,
-    #[allow(unused)]
     pub settings: Arc<Settings>,
     pub client_address: Option<SocketAddr>,
     pub session_extra_info: Option<String>,
     pub memory_usage: i64,
+    pub dal_metrics: Option<DalMetrics>,
+    pub scan_progress_value: Option<ProgressValues>,
 }
 
 impl Session {
@@ -61,6 +64,8 @@ impl Session {
             client_address: status.get_client_host(),
             session_extra_info: self.process_extra_info(status),
             memory_usage,
+            dal_metrics: Session::query_dal_metrics(status),
+            scan_progress_value: Session::query_scan_progress_value(status),
         }
     }
 
@@ -90,5 +95,19 @@ impl Session {
             .get_context_shared()
             .as_ref()
             .map(|context_shared| context_shared.get_query_str())
+    }
+
+    fn query_dal_metrics(status: &MutableStatus) -> Option<DalMetrics> {
+        status
+            .get_context_shared()
+            .as_ref()
+            .map(|context_shared| context_shared.dal_ctx.get_metrics())
+    }
+
+    fn query_scan_progress_value(status: &MutableStatus) -> Option<ProgressValues> {
+        status
+            .get_context_shared()
+            .as_ref()
+            .map(|context_shared| context_shared.scan_progress.get_values())
     }
 }
