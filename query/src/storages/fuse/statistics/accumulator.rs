@@ -120,6 +120,7 @@ impl PartiallyAccumulated {
             },
             row_count: self.block_row_count,
             block_size: self.block_size,
+            file_size,
             col_stats: self.block_column_statistics,
         };
         stats.blocks_metas.push(block_meta);

@@ -24,6 +24,7 @@ use common_planners::Statistics;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::meta::BlockMeta;
+use crate::storages::fuse::operations::part_info::PartInfo;
 use crate::storages::fuse::pruning::apply_block_pruning;
 use crate::storages::fuse::FuseTable;
 
@@ -57,13 +58,11 @@ impl FuseTable {
         blocks_metas.iter().fold(
             (Statistics::default(), Partitions::default()),
             |(mut stats, mut parts), block_meta| {
-                parts.push(Part {
-                    name: block_meta.location.path.clone(),
-                    version: 0,
-                });
+                let name =
+                    PartInfo::new(block_meta.location.path.as_str(), block_meta.file_size).encode();
+                parts.push(Part { name, version: 0 });
 
                 stats.read_rows += block_meta.row_count as usize;
-
                 match &proj_cols {
                     Some(proj) => {
                         stats.read_bytes += block_meta
