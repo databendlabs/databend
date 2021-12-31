@@ -61,3 +61,17 @@ runs:
       if: "!contains(github.event.head_commit.message, 'skip audit')"
       with:
         command: audit
+
+    - name: Install cargo-udeps
+      uses: actions-rs/cargo@v1
+      if: "!contains(github.event.head_commit.message, 'skip udeps')"
+      with:
+        command: install
+        args: cargo-udeps --locked
+
+    - name: Check udeps
+      uses: actions-rs/cargo@v1
+      if: "!contains(github.event.head_commit.message, 'skip udeps')"
+      with:
+        command: udeps
+        args: --workspace
