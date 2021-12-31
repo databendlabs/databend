@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_functions::udfs::UDFFactory;
 use common_management::StageMgr;
 use common_management::StageMgrApi;
 use common_management::UdfMgr;
@@ -65,20 +64,5 @@ impl UserApiProvider {
 
     pub fn get_udf_api_client(&self) -> Arc<dyn UdfMgrApi> {
         self.udf_api_provider.clone()
-    }
-
-    pub async fn load_udfs(&self, cfg: Config) -> Result<()> {
-        let udfs = self.get_udf_api_client().get_udfs().await?;
-
-        for udf in udfs.iter() {
-            UDFFactory::register(
-                &cfg.query.tenant_id,
-                udf.name.as_str(),
-                &udf.parameters,
-                udf.definition.as_str(),
-            )?;
-        }
-
-        Ok(())
     }
 }
