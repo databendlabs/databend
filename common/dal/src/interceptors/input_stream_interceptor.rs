@@ -59,7 +59,8 @@ impl futures::AsyncRead for InputStreamInterceptor {
             Poll::Ready(Err(_)) => self.last_pending = None,
             Poll::Pending => self.last_pending = Some(start),
         }
-        self.ctx.inc_cost_ms(start.elapsed().as_millis() as usize);
+        self.ctx
+            .inc_read_byte_cost_ms(start.elapsed().as_millis() as usize);
         r
     }
 }
@@ -79,6 +80,7 @@ impl futures::AsyncSeek for InputStreamInterceptor {
         match r {
             Poll::Ready(Ok(_)) => {
                 self.last_pending = None;
+                self.ctx.inc_read_seeks();
             }
             Poll::Ready(Err(_)) => self.last_pending = None,
             Poll::Pending => {
@@ -86,7 +88,8 @@ impl futures::AsyncSeek for InputStreamInterceptor {
                 self.last_pending = Some(start)
             }
         }
-        self.ctx.inc_cost_ms(start.elapsed().as_millis() as usize);
+        self.ctx
+            .inc_read_seek_cost_ms(start.elapsed().as_millis() as usize);
         r
     }
 }

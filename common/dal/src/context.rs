@@ -18,9 +18,15 @@ use common_infallible::RwLock;
 
 #[derive(Clone, Debug, Default)]
 pub struct DalMetrics {
+    // Read bytes.
     pub read_bytes: usize,
+    // Seek times of read.
+    pub read_seeks: usize,
+    // Cost(in ms) of read bytes.
+    pub read_byte_cost_ms: usize,
+    // Cost(in ms) of seek by reading.
+    pub read_seek_cost_ms: usize,
     pub write_bytes: usize,
-    pub cost_ms: usize,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -47,10 +53,22 @@ impl DalContext {
         metrics.write_bytes += bytes;
     }
 
-    // Increment cost in ms.
-    pub fn inc_cost_ms(&self, cost: usize) {
+    /// Increment read seek times.
+    pub fn inc_read_seeks(&self) {
         let mut metrics = self.metrics.write();
-        metrics.cost_ms += cost;
+        metrics.read_seeks += 1;
+    }
+
+    // Increment cost for reading bytes.
+    pub fn inc_read_byte_cost_ms(&self, cost: usize) {
+        let mut metrics = self.metrics.write();
+        metrics.read_byte_cost_ms += cost;
+    }
+
+    // Increment cost for reading seek.
+    pub fn inc_read_seek_cost_ms(&self, cost: usize) {
+        let mut metrics = self.metrics.write();
+        metrics.read_seek_cost_ms += cost;
     }
 
     pub fn get_metrics(&self) -> DalMetrics {
