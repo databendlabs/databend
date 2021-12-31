@@ -191,6 +191,7 @@ build_exceptions! {
     InvalidSourceFormat(59),
     StrParseError(60),
     IllegalGrant(61),
+    PermissionDenied(62),
 
     SemanticError(100),
 
