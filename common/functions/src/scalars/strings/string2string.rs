@@ -66,7 +66,7 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
         &self.display_name
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
         if !args[0].is_numeric() && !args[0].is_string() && !args[0].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null, but got {}",
@@ -74,14 +74,12 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
             )));
         }
 
-        Ok(DataType::String)
-    }
-
-    fn nullable(&self, args: &[DataTypeAndNullable]) -> Result<bool> {
-        match T::default().may_turn_to_null() {
-            true => Ok(true),
-            false => Ok(args.iter().any(|arg| arg.is_nullable())),
-        }
+        let nullable = match T::default().may_turn_to_null() {
+            true => true,
+            false => args.iter().any(|arg| arg.is_nullable()),
+        };
+        let dt = DataType::String;
+        Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

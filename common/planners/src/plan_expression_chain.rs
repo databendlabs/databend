@@ -126,7 +126,6 @@ impl ExpressionChain {
                 let arg_types = vec![nested_expr.to_data_type_and_nullable(&self.schema)?];
                 let func = FunctionFactory::instance().get(op, &arg_types)?;
                 let return_type = func.return_type(&arg_types)?;
-                let is_nullable = func.nullable(&arg_types)?;
 
                 let function = ActionFunction {
                     name: expr.column_name(),
@@ -134,8 +133,8 @@ impl ExpressionChain {
                     func,
                     arg_names: vec![nested_expr.column_name()],
                     arg_types,
-                    is_nullable,
-                    return_type,
+                    is_nullable: return_type.is_nullable(),
+                    return_type: return_type.data_type().clone(),
                 };
 
                 self.actions.push(ExpressionAction::Function(function));
@@ -148,7 +147,6 @@ impl ExpressionChain {
                 ];
 
                 let func = FunctionFactory::instance().get(op, &arg_types)?;
-                let is_nullable = func.nullable(&arg_types)?;
                 let return_type = func.return_type(&arg_types)?;
 
                 let function = ActionFunction {
@@ -157,8 +155,8 @@ impl ExpressionChain {
                     func,
                     arg_names: vec![left.column_name(), right.column_name()],
                     arg_types,
-                    is_nullable,
-                    return_type,
+                    is_nullable: return_type.is_nullable(),
+                    return_type: return_type.data_type().clone(),
                 };
 
                 self.actions.push(ExpressionAction::Function(function));
@@ -171,7 +169,6 @@ impl ExpressionChain {
                     .collect::<Result<Vec<_>>>()?;
 
                 let func = FunctionFactory::instance().get(op, &arg_types)?;
-                let is_nullable = func.nullable(&arg_types)?;
                 let return_type = func.return_type(&arg_types)?;
 
                 let function = ActionFunction {
@@ -180,8 +177,8 @@ impl ExpressionChain {
                     func,
                     arg_names: args.iter().map(|action| action.column_name()).collect(),
                     arg_types,
-                    is_nullable,
-                    return_type,
+                    is_nullable: return_type.is_nullable(),
+                    return_type: return_type.data_type().clone(),
                 };
 
                 self.actions.push(ExpressionAction::Function(function));

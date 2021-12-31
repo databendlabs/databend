@@ -47,8 +47,9 @@ impl Function for NowFunction {
         self.display_name.as_str()
     }
 
-    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
-        Ok(DataType::DateTime32(None))
+    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let dt = DataType::DateTime32(None);
+        Ok(DataTypeAndNullable::create(&dt, false))
     }
 
     fn eval(&self, _columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

@@ -176,17 +176,18 @@ impl Function for ConcatWsFunction {
         "concat_ws"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
-        if args[0].is_null() {
-            return Ok(DataType::Null);
-        }
-        Ok(DataType::String)
-    }
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        // concat_ws(NULL, "a", "b") -> NULL
+        // concat_ws(",", NULL, NULL) -> ""
+        let nullable = args[0].is_nullable();
 
-    // concat_ws(NULL, "a", "b") -> NULL
-    // concat_ws(",", NULL, NULL) -> ""
-    fn nullable(&self, args: &[DataTypeAndNullable]) -> Result<bool> {
-        Ok(args[0].is_nullable())
+        let dt = if args[0].is_null() {
+            DataType::Null
+        } else {
+            DataType::String
+        };
+
+        Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

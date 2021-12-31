@@ -73,11 +73,11 @@ where T: IntegerTypedArithmetic + Clone + Sync + Send + 'static
         self.display_name.as_str()
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
         if args[0].is_date_or_date_time() {
-            Ok(args[0].data_type().clone())
+            Ok(args[0].clone())
         } else {
-            Ok(args[1].data_type().clone())
+            Ok(args[1].clone())
         }
     }
 

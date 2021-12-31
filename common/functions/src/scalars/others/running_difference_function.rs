@@ -49,8 +49,9 @@ impl Function for RunningDifferenceFunction {
         self.display_name.as_str()
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
-        match args[0].data_type() {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let nullable = args.iter().any(|arg| arg.is_nullable());
+        let data_type = match args[0].data_type() {
             DataType::Int8 | DataType::UInt8 => Ok(DataType::Int16),
             DataType::Int16 | DataType::UInt16 | DataType::Date16 => Ok(DataType::Int32),
             DataType::Int32
@@ -63,7 +64,8 @@ impl Function for RunningDifferenceFunction {
             _ => Result::Err(ErrorCode::IllegalDataType(
                 "Argument for function runningDifference must have numeric type",
             )),
-        }
+        }?;
+        Ok(DataTypeAndNullable::create(&data_type, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

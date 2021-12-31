@@ -409,10 +409,8 @@ impl ExpressionDataTypeVisitor {
         }
 
         let function = FunctionFactory::instance().get(op, &arguments)?;
-        let nullable = function.nullable(&arguments)?;
         let return_type = function.return_type(&arguments)?;
-        self.stack
-            .push(DataTypeAndNullable::create(&return_type, nullable));
+        self.stack.push(return_type);
         Ok(self)
     }
 }
