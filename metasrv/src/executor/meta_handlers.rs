@@ -17,7 +17,7 @@ use std::convert::TryInto;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
-use common_meta_flight::GetTableExtReq;
+use common_meta_raft_store::GetTableExtReq;
 use common_meta_types::AddResult;
 use common_meta_types::Change;
 use common_meta_types::Cmd::CreateDatabase;

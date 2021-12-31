@@ -21,8 +21,8 @@ use common_arrow::arrow_format::flight::data::HandshakeRequest;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_flight_rpc::ConnectionFactory;
-use common_flight_rpc::FlightClientTlsConfig;
+use common_grpc::ConnectionFactory;
+use common_grpc::RpcClientTlsConfig;
 use common_tracing::tracing;
 use futures::stream;
 use futures::StreamExt;
@@ -50,11 +50,11 @@ const AUTH_TOKEN_KEY: &str = "auth-token-bin";
 impl MetaFlightClient {
     pub async fn try_new(conf: &MetaFlightClientConf) -> Result<MetaFlightClient> {
         Self::with_tls_conf(
-            &conf.meta_service_config.address,
-            &conf.meta_service_config.username,
-            &conf.meta_service_config.password,
+            &conf.kv_service_config.address,
+            &conf.kv_service_config.username,
+            &conf.kv_service_config.password,
             Some(Duration::from_secs(conf.client_timeout_in_second)),
-            conf.meta_service_config.tls_conf.clone(),
+            conf.kv_service_config.tls_conf.clone(),
         )
         .await
     }
@@ -70,9 +70,9 @@ impl MetaFlightClient {
         username: &str,
         password: &str,
         timeout: Option<Duration>,
-        conf: Option<FlightClientTlsConfig>,
+        conf: Option<RpcClientTlsConfig>,
     ) -> Result<Self> {
-        let res = ConnectionFactory::create_flight_channel(addr, timeout, conf);
+        let res = ConnectionFactory::create_rpc_channel(addr, timeout, conf);
 
         tracing::debug!("connecting to {}, res: {:?}", addr, res);
 

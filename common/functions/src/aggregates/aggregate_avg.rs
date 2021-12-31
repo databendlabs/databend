@@ -18,7 +18,6 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
-use common_datavalues::DFTryFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
@@ -145,14 +144,27 @@ where
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr) -> Result<DataValue> {
+    #[allow(unused_mut)]
+    fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
         let state = place.get::<AggregateAvgState<SumT>>();
 
         if state.count == 0 {
-            return Ok(DataValue::Float64(None));
+            array.push_null();
+            return Ok(());
         }
+
         let v: f64 = NumCast::from(state.value).unwrap_or_default();
-        Ok(DataValue::Float64(Some(v / state.count as f64)))
+        let val = v / state.count as f64;
+
+        let mut array = array
+            .as_mut_any()
+            .downcast_mut::<MutablePrimitiveArrayBuilder<f64, true>>()
+            .ok_or_else(|| {
+                ErrorCode::UnexpectedError("error occured when downcast MutableArray".to_string())
+            })?;
+        array.push(val);
+
+        Ok(())
     }
 }
 

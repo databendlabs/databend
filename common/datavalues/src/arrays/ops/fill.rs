@@ -15,7 +15,6 @@
 use common_exception::Result;
 
 use crate::prelude::*;
-use crate::series::Series;
 
 #[derive(Copy, Clone, Debug)]
 pub enum FillNoneStrategy {

@@ -407,8 +407,13 @@ impl ExprRPNBuilder {
                     .push(ExprRPNItem::function(String::from("isnotnull"), 1));
             }
             Expr::UnaryOp { op, .. } => {
-                if !matches!(op, UnaryOperator::Plus) {
-                    self.rpn.push(ExprRPNItem::unary_operator(op.to_string()));
+                match op {
+                    UnaryOperator::Plus => {}
+                    // In order to distinguish it from binary addition.
+                    UnaryOperator::Minus => self
+                        .rpn
+                        .push(ExprRPNItem::unary_operator("NEGATE".to_string())),
+                    _ => self.rpn.push(ExprRPNItem::unary_operator(op.to_string())),
                 }
             }
             Expr::BinaryOp { op, .. } => {
@@ -487,7 +492,7 @@ impl ExprRPNBuilder {
 impl ExprVisitor for ExprRPNBuilder {
     fn pre_visit(&mut self, expr: &Expr) -> Result<Expr> {
         if let Expr::Function(function) = expr {
-            if let Some(transformed_expr) = UDFTransformer::transform_function(
+            if let Ok(Some(transformed_expr)) = UDFTransformer::transform_function(
                 self.context.get_config().query.tenant_id.as_str(),
                 function,
             ) {

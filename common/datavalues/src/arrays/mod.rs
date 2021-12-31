@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #[macro_use]
-mod arithmetic;
 mod builder;
 mod comparison;
+mod mutable;
 mod ops;
 mod trusted_len;
 mod upstream_traits;
@@ -27,11 +27,11 @@ mod primitive;
 mod string;
 mod r#struct;
 
-pub use arithmetic::*;
 pub use boolean::*;
 pub use builder::*;
 pub use comparison::*;
 pub use list::*;
+pub use mutable::*;
 pub use null::*;
 pub use ops::*;
 pub use primitive::*;

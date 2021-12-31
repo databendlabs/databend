@@ -17,12 +17,7 @@ use std::fmt::Debug;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::arrays::get_list_builder;
-use crate::arrays::BooleanArrayBuilder;
-use crate::arrays::PrimitiveArrayBuilder;
-use crate::arrays::StringArrayBuilder;
 use crate::prelude::*;
-use crate::utils::get_iter_capacity;
 
 pub trait ArrayScatter: Debug {
     /// # Safety

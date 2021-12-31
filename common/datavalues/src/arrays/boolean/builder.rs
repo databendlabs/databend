@@ -15,7 +15,6 @@
 use common_arrow::arrow::array::*;
 
 use crate::prelude::*;
-use crate::utils::get_iter_capacity;
 
 pub struct BooleanArrayBuilder {
     builder: MutableBooleanArray,

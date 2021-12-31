@@ -123,7 +123,8 @@ def execute(suit, bin_path, host, port, concurrency, iterations, output_dir,
                     logging.info("other issue occured, {}".format(
                         e.get_error_code()))
             except ConnectionError as ce:
-                logging.info("timeout for {}, with error {}".format(S3key, str(ce)))
+                logging.info("timeout for {}, with error {}".format(
+                    S3key, str(ce)))
             else:
                 # S3 key exists in given bucket just return
                 index = json.load(response['Body'].get_raw_stream())
@@ -230,7 +231,9 @@ if __name__ == '__main__':
     parser.add_argument(
         '--rerun',
         action='store_true',
-        help='if use `--rerun` set as true, it will rerun all perfs.yaml completely')
+        help=
+        'if use `--rerun` set as true, it will rerun all perfs.yaml completely'
+    )
     args = parser.parse_args()
 
     for suit in conf['perfs']:

@@ -15,8 +15,10 @@
 use std::collections::HashMap;
 
 use common_datavalues::DataSchemaRef;
+use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::scalars::FunctionFactory;
 
 use crate::Expression;
 use crate::ExpressionVisitor;
@@ -370,4 +372,121 @@ pub fn unwrap_alias_exprs(expr: &Expression) -> Result<Expression> {
         Expression::Alias(_, nested_expr) => Ok(Some(*nested_expr.clone())),
         _ => Ok(None),
     })
+}
+
+pub struct ExpressionDataTypeVisitor {
+    stack: Vec<DataTypeAndNullable>,
+    input_schema: DataSchemaRef,
+}
+
+impl ExpressionDataTypeVisitor {
+    pub fn create(input_schema: DataSchemaRef) -> ExpressionDataTypeVisitor {
+        ExpressionDataTypeVisitor {
+            input_schema,
+            stack: vec![],
+        }
+    }
+
+    pub fn finalize(mut self) -> Result<DataTypeAndNullable> {
+        match self.stack.len() {
+            1 => Ok(self.stack.remove(0)),
+            _ => Err(ErrorCode::LogicalError(
+                "Stack has too many elements in ExpressionDataTypeVisitor::finalize",
+            )),
+        }
+    }
+
+    fn visit_function(mut self, op: &str, args_size: usize) -> Result<ExpressionDataTypeVisitor> {
+        let mut arguments = Vec::with_capacity(args_size);
+        for index in 0..args_size {
+            arguments.push(match self.stack.pop() {
+                None => Err(ErrorCode::LogicalError(format!(
+                    "Expected {} arguments, actual {}.",
+                    args_size, index
+                ))),
+                Some(element) => Ok(element),
+            }?);
+        }
+
+        let function = FunctionFactory::instance().get(op, &arguments)?;
+        let nullable = function.nullable(&arguments)?;
+        let return_type = function.return_type(&arguments)?;
+        self.stack
+            .push(DataTypeAndNullable::create(&return_type, nullable));
+        Ok(self)
+    }
+}
+
+impl ExpressionVisitor for ExpressionDataTypeVisitor {
+    fn pre_visit(self, _expr: &Expression) -> Result<Recursion<Self>> {
+        Ok(Recursion::Continue(self))
+    }
+
+    fn post_visit(mut self, expr: &Expression) -> Result<Self> {
+        match expr {
+            Expression::Column(s) => {
+                let field = self.input_schema.field_with_name(s)?;
+                self.stack.push(DataTypeAndNullable::create(
+                    field.data_type(),
+                    field.is_nullable(),
+                ));
+                Ok(self)
+            }
+            Expression::Wildcard => Result::Err(ErrorCode::IllegalDataType(
+                "Wildcard expressions are not valid to get return type",
+            )),
+            Expression::QualifiedColumn(_) => Err(ErrorCode::LogicalError(
+                "QualifiedColumn should be resolve in analyze.",
+            )),
+            Expression::Literal { data_type, .. } => {
+                let data_type = DataTypeAndNullable::create(data_type, true);
+                self.stack.push(data_type);
+                Ok(self)
+            }
+            Expression::Subquery { query_plan, .. } => {
+                let data_type = Expression::to_subquery_type(query_plan);
+                self.stack.push(data_type);
+                Ok(self)
+            }
+            Expression::ScalarSubquery { query_plan, .. } => {
+                let data_type = Expression::to_subquery_type(query_plan);
+                self.stack.push(data_type);
+                Ok(self)
+            }
+            Expression::BinaryExpression { op, .. } => self.visit_function(op, 2),
+            Expression::UnaryExpression { op, .. } => self.visit_function(op, 1),
+            Expression::ScalarFunction { op, args } => self.visit_function(op, args.len()),
+            expr @ Expression::AggregateFunction { args, .. } => {
+                // Pop arguments.
+                for index in 0..args.len() {
+                    if self.stack.pop().is_none() {
+                        return Err(ErrorCode::LogicalError(format!(
+                            "Expected {} arguments, actual {}.",
+                            args.len(),
+                            index
+                        )));
+                    }
+                }
+
+                let aggregate_function = expr.to_aggregate_function(&self.input_schema)?;
+                let return_type = aggregate_function.return_type()?;
+                let nullable = aggregate_function.nullable(&self.input_schema)?;
+                let data_type = DataTypeAndNullable::create(&return_type, nullable);
+                self.stack.push(data_type);
+                Ok(self)
+            }
+            Expression::Cast { data_type, .. } => {
+                let inner_type = match self.stack.pop() {
+                    None => Err(ErrorCode::LogicalError(
+                        "Cast expr expected 1 arguments, actual 0.",
+                    )),
+                    Some(typ) => Ok(DataTypeAndNullable::create(data_type, typ.is_nullable())),
+                }?;
+
+                self.stack.push(inner_type);
+                Ok(self)
+            }
+            Expression::Alias(_, _) | Expression::Sort { .. } => Ok(self),
+        }
+    }
 }

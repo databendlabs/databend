@@ -24,9 +24,9 @@ use tempfile::tempdir;
 fn test_tls_rpc_enabled() -> anyhow::Result<()> {
     let mut conf = Config::empty();
     assert!(!conf.tls_rpc_server_enabled());
-    conf.flight_tls_server_key = "test".to_owned();
+    conf.grpc_tls_server_key = "test".to_owned();
     assert!(!conf.tls_rpc_server_enabled());
-    conf.flight_tls_server_cert = "test".to_owned();
+    conf.grpc_tls_server_cert = "test".to_owned();
     assert!(conf.tls_rpc_server_enabled());
     Ok(())
 }
@@ -51,9 +51,9 @@ metric_api_address = "0.0.0.0:8000"
 admin_api_address = "0.0.0.0:9000"
 admin_tls_server_cert = "admin tls cert"
 admin_tls_server_key = "admin tls key"
-flight_api_address = "0.0.0.0:10000"
-flight_tls_server_cert = "flight server cert"
-flight_tls_server_key = "flight server key"
+grpc_api_address = "0.0.0.0:10000"
+grpc_tls_server_cert = "flight server cert"
+grpc_tls_server_key = "flight server key"
 
 [raft_config]
 config_id = "raft config id"
@@ -79,9 +79,9 @@ sled_tree_prefix = "sled_foo"
     assert_eq!(cfg.admin_api_address, "0.0.0.0:9000");
     assert_eq!(cfg.admin_tls_server_cert, "admin tls cert");
     assert_eq!(cfg.admin_tls_server_key, "admin tls key");
-    assert_eq!(cfg.flight_api_address, "0.0.0.0:10000");
-    assert_eq!(cfg.flight_tls_server_cert, "flight server cert");
-    assert_eq!(cfg.flight_tls_server_key, "flight server key");
+    assert_eq!(cfg.grpc_api_address, "0.0.0.0:10000");
+    assert_eq!(cfg.grpc_tls_server_cert, "flight server cert");
+    assert_eq!(cfg.grpc_tls_server_key, "flight server key");
     assert_eq!(cfg.raft_config.config_id, "raft config id");
     assert_eq!(cfg.raft_config.raft_api_host, "0.0.0.0");
     assert_eq!(cfg.raft_config.raft_api_port, 11000);

@@ -21,9 +21,9 @@ BIN=${1:-debug}
 echo 'Start DatabendStore...'
 nohup target/${BIN}/databend-meta --single --log-level=ERROR &
 echo "Waiting on databend-meta 10 seconds..."
-python scripts/ci/wait_tcp.py --timeout 5 --port 9191
+python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
 
 echo 'Start DatabendQuery...'
 nohup target/${BIN}/databend-query -c scripts/deploy/config/databend-query-node-1.toml &
 echo "Waiting on databend-query 10 seconds..."
-python scripts/ci/wait_tcp.py --timeout 5 --port 3307
+python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307

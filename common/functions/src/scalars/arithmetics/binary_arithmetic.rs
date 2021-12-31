@@ -15,20 +15,23 @@
 use std::fmt;
 use std::marker::PhantomData;
 
-use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
 use common_datavalues::DataTypeAndNullable;
-use common_datavalues::DataValueArithmeticOperator;
 use common_exception::Result;
 
 use super::arithmetic::ArithmeticTrait;
+use crate::scalars::ArithmeticDivFunction;
+use crate::scalars::ArithmeticIntDivFunction;
+use crate::scalars::ArithmeticMinusFunction;
+use crate::scalars::ArithmeticModuloFunction;
+use crate::scalars::ArithmeticMulFunction;
 use crate::scalars::ArithmeticPlusFunction;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
 
 #[derive(Clone)]
 pub struct BinaryArithmeticFunction<T> {
-    op: DataValueArithmeticOperator,
+    op: DataValueBinaryOperator,
     result_type: DataType,
     t: PhantomData<T>,
 }
@@ -37,7 +40,7 @@ impl<T> BinaryArithmeticFunction<T>
 where T: ArithmeticTrait + Clone + Sync + Send + 'static
 {
     pub fn try_create_func(
-        op: DataValueArithmeticOperator,
+        op: DataValueBinaryOperator,
         result_type: DataType,
     ) -> Result<Box<dyn Function>> {
         Ok(Box::new(Self {
@@ -61,7 +64,7 @@ where T: ArithmeticTrait + Clone + Sync + Send + 'static
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         let result = T::arithmetic(columns)?;
-        if self.result_type.is_date_or_date_time() {
+        if result.data_type() != self.result_type {
             result.cast_with_type(&self.result_type)
         } else {
             Ok(result)
@@ -70,8 +73,12 @@ where T: ArithmeticTrait + Clone + Sync + Send + 'static
 
     fn get_monotonicity(&self, args: &[Monotonicity]) -> Result<Monotonicity> {
         match self.op {
-            Plus => ArithmeticPlusFunction::get_monotonicity(args),
-            _ => unimplemented!(),
+            DataValueBinaryOperator::Plus => ArithmeticPlusFunction::get_monotonicity(args),
+            DataValueBinaryOperator::Minus => ArithmeticMinusFunction::get_monotonicity(args),
+            DataValueBinaryOperator::Mul => ArithmeticMulFunction::get_monotonicity(args),
+            DataValueBinaryOperator::Div => ArithmeticDivFunction::get_monotonicity(args),
+            DataValueBinaryOperator::IntDiv => ArithmeticIntDivFunction::get_monotonicity(args),
+            DataValueBinaryOperator::Modulo => ArithmeticModuloFunction::get_monotonicity(args),
         }
     }
 }

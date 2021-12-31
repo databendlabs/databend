@@ -14,9 +14,20 @@ test = false
 common-datavalues = { path = "../../datavalues" }
 common-exception = { path = "../../exception" }
 
-async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.14.1" }
+async-raft = { git = "https://github.com/datafuselabs/openraft", tag = "v0.6.2-alpha.14.1" }
 derive_more = "0.99.17"
 enumflags2 = { version = "0.7.2", features = ["serde"] }
 maplit = "1.0.2"
 serde = { version = "1.0.132", features = ["derive"] }
 serde_json = "1.0.73"
+thiserror = "1.0.30"
+prost = "0.9.0"
+tonic = { version = "0.6.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
+lazy_static = "1.4.0"
+
+[build-dependencies]
+tonic-build = "0.6.2"
+common-building = { path = "../../building" }
+
+[dev-dependencies]
+anyhow = "1.0.51"

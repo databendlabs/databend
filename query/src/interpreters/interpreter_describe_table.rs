@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
-use common_datavalues::series::Series;
 use common_exception::Result;
 use common_planners::DescribeTablePlan;
 use common_streams::DataBlockStream;

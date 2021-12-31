@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_arrow::arrow::bitmap::Bitmap;
+use common_exception::Result;
 
 use crate::prelude::combine_validities;
 use crate::prelude::to_primitive;
@@ -74,4 +75,38 @@ where
 
     let av = AlignedVec::<_>::from_trusted_len_iter(values);
     to_primitive::<R>(av, validity)
+}
+
+#[inline]
+pub fn try_binary<T, D, R, F>(
+    lhs: &DFPrimitiveArray<T>,
+    rhs: &DFPrimitiveArray<D>,
+    op: F,
+) -> Result<DFPrimitiveArray<R>>
+where
+    T: DFPrimitiveType,
+    D: DFPrimitiveType,
+    R: DFPrimitiveType,
+    F: Fn(T, D) -> Result<R>,
+{
+    let validity = combine_validities(lhs.inner().validity(), rhs.inner().validity());
+    let values = lhs
+        .into_no_null_iter()
+        .zip(rhs.into_no_null_iter())
+        .map(|(l, r)| op(*l, *r));
+
+    let av = AlignedVec::<_>::try_from_trusted_len_iter(values)?;
+    Ok(to_primitive::<R>(av, validity))
+}
+
+#[inline]
+pub fn try_unary<I, O, F>(array: &DFPrimitiveArray<I>, op: F) -> Result<DFPrimitiveArray<O>>
+where
+    I: DFPrimitiveType,
+    O: DFPrimitiveType,
+    F: Fn(I) -> Result<O>,
+{
+    let values = array.into_no_null_iter().map(|v| op(*v));
+    let av = AlignedVec::<_>::try_from_trusted_len_iter(values)?;
+    Ok(to_primitive::<O>(av, array.inner().validity().cloned()))
 }
