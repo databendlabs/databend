@@ -13,8 +13,15 @@
 // limitations under the License.
 
 use async_trait::async_trait;
-use common_exception::Result;
 
+use crate::error::Result;
+
+/// `Delete` will invoke the `delete` operation.
+///
+/// ## Behavior
+///
+/// - `Delete` is an idempotent operation, it's safe to call `Delete` on the same path multiple times.
+/// - `Delete` will return `Ok(())` if the path is deleted successfully or not exist.
 #[async_trait]
 pub trait Delete<S: Send + Sync>: Send + Sync {
     async fn delete(&self, path: &str) -> Result<()> {

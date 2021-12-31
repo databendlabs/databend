@@ -15,10 +15,11 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_exception::Result;
 
 use super::io::Reader;
+use crate::error::Result;
 
+/// `Read` will read the data from the underlying storage.
 #[async_trait]
 pub trait Read<S: Send + Sync>: Send + Sync {
     async fn read(&self, args: &ReadBuilder<S>) -> Result<Reader> {

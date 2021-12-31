@@ -25,7 +25,7 @@ use async_raft::raft::VoteResponse;
 use async_raft::RaftNetwork;
 use common_containers::ItemManager;
 use common_containers::Pool;
-use common_meta_raft_store::protobuf::meta_service_client::MetaServiceClient;
+use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::LogEntry;
 use common_meta_types::NodeId;
 use common_tracing::tracing;

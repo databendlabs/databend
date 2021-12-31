@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataValueArithmeticOperator;
+use common_datavalues::DataValueBinaryOperator;
 use common_exception::Result;
 
 use super::interval_function::MonthsArithmeticFunction;
@@ -67,14 +67,14 @@ impl DateFunction {
             true => Box::new(move |display_name| {
                 MonthsArithmeticFunction::try_create(
                     display_name,
-                    DataValueArithmeticOperator::Plus,
+                    DataValueBinaryOperator::Plus,
                     factor,
                 )
             }),
             false => Box::new(move |display_name| {
                 MonthsArithmeticFunction::try_create(
                     display_name,
-                    DataValueArithmeticOperator::Minus,
+                    DataValueBinaryOperator::Minus,
                     -factor,
                 )
             }),
@@ -90,14 +90,14 @@ impl DateFunction {
             true => Box::new(move |display_name| {
                 SecondsArithmeticFunction::try_create(
                     display_name,
-                    DataValueArithmeticOperator::Plus,
+                    DataValueBinaryOperator::Plus,
                     factor,
                 )
             }),
             false => Box::new(move |display_name| {
                 SecondsArithmeticFunction::try_create(
                     display_name,
-                    DataValueArithmeticOperator::Minus,
+                    DataValueBinaryOperator::Minus,
                     -factor,
                 )
             }),

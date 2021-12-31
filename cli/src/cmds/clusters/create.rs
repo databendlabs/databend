@@ -244,7 +244,7 @@ pub fn generate_local_query_config(
     let mut config = generate_query_config();
     // configure meta address based on provisioned meta service
 
-    config.meta.meta_address = meta_config.clone().config.flight_api_address;
+    config.meta.meta_address = meta_config.clone().config.grpc_api_address;
 
     config.meta.meta_username = "root".to_string();
     config.meta.meta_password = "root".to_string();
@@ -452,7 +452,7 @@ impl CreateCommand {
         {
             config.admin_api_address = Status::find_unused_local_port()
         }
-        if config.flight_api_address.parse::<SocketAddr>().is_err()
+        if config.grpc_api_address.parse::<SocketAddr>().is_err()
             || !portpicker::is_free(
                 config
                     .admin_api_address
@@ -461,7 +461,7 @@ impl CreateCommand {
                     .port(),
             )
         {
-            config.flight_api_address = Status::find_unused_local_port()
+            config.grpc_api_address = Status::find_unused_local_port()
         }
         if !portpicker::is_free(config.raft_config.raft_api_port.as_u16()) {
             config.raft_config.raft_api_port = portpicker::pick_unused_port().unwrap() as u32;
@@ -481,7 +481,7 @@ impl CreateCommand {
         if args.value_of("meta_address").is_some()
             && !args.value_of("meta_address").unwrap().is_empty()
         {
-            config.flight_api_address = args.value_of("meta_address").unwrap().to_string();
+            config.grpc_api_address = args.value_of("meta_address").unwrap().to_string();
         }
         config.log_level = args.value_of("log_level").unwrap().to_string();
         let log_base = format!("{}/logs", self.conf.clone().databend_dir);
@@ -528,7 +528,7 @@ impl CreateCommand {
                 )?;
                 writer.write_ok(format!(
                     "Successfully started meta service with rpc endpoint {}",
-                    meta_config.config.flight_api_address
+                    meta_config.config.grpc_api_address
                 ));
                 Ok(())
             }

@@ -165,11 +165,11 @@ where
 
     #[allow(unused_mut)]
     fn merge_result(&mut self, array: &mut dyn MutableArrayBuilder) -> Result<()> {
-        let datatype: DataType = array.data_type();
+        let datatype = array.data_type();
         with_match_primitive_type!(datatype, |$T| {
             let mut array = array
                 .as_mut_any()
-                .downcast_mut::<MutablePrimitiveArrayBuilder<$T>>()
+                .downcast_mut::<MutablePrimitiveArrayBuilder<$T, true>>()
                 .ok_or_else(|| {
                     ErrorCode::UnexpectedError(
                         "error occured when downcast MutableArray".to_string(),
@@ -192,7 +192,7 @@ where
                 DataValue::Boolean(val) => {
                     let mut array = array
                     .as_mut_any()
-                    .downcast_mut::<MutableBooleanArrayBuilder>()
+                    .downcast_mut::<MutableBooleanArrayBuilder<true>>()
                     .ok_or_else(|| {
                         ErrorCode::UnexpectedError(
                             "error occured when downcast MutableArray".to_string(),
@@ -203,7 +203,7 @@ where
                 DataValue::String(val) => {
                     let mut array = array
                     .as_mut_any()
-                    .downcast_mut::<MutableStringArrayBuilder>()
+                    .downcast_mut::<MutableStringArrayBuilder<true>>()
                     .ok_or_else(|| {
                         ErrorCode::UnexpectedError(
                             "error occured when downcast MutableArray".to_string(),
@@ -315,11 +315,11 @@ impl AggregateArgMinMaxState for StringState {
 
     #[allow(unused_mut)]
     fn merge_result(&mut self, array: &mut dyn MutableArrayBuilder) -> Result<()> {
-        let datatype: DataType = array.data_type();
+        let datatype = array.data_type();
         with_match_primitive_type!(datatype, |$T| {
             let mut array = array
                 .as_mut_any()
-                .downcast_mut::<MutablePrimitiveArrayBuilder<$T>>()
+                .downcast_mut::<MutablePrimitiveArrayBuilder<$T, true>>()
                 .ok_or_else(|| {
                     ErrorCode::UnexpectedError(
                         "error occured when downcast MutableArray".to_string(),
@@ -342,7 +342,7 @@ impl AggregateArgMinMaxState for StringState {
                 DataValue::Boolean(val) => {
                     let mut array = array
                     .as_mut_any()
-                    .downcast_mut::<MutableBooleanArrayBuilder>()
+                    .downcast_mut::<MutableBooleanArrayBuilder<true>>()
                     .ok_or_else(|| {
                         ErrorCode::UnexpectedError(
                             "error occured when downcast MutableArray".to_string(),
@@ -353,7 +353,7 @@ impl AggregateArgMinMaxState for StringState {
                 DataValue::String(val) => {
                     let mut array = array
                     .as_mut_any()
-                    .downcast_mut::<MutableStringArrayBuilder>()
+                    .downcast_mut::<MutableStringArrayBuilder<true>>()
                     .ok_or_else(|| {
                         ErrorCode::UnexpectedError(
                             "error occured when downcast MutableArray".to_string(),

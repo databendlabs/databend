@@ -27,9 +27,5 @@ fn test_progress() -> Result<()> {
 
     assert_eq!(2, progress.get_values().read_rows);
     assert_eq!(10, progress.get_values().read_bytes);
-    progress.reset();
-
-    assert_eq!(0, progress.get_values().read_rows);
-    assert_eq!(0, progress.get_values().read_bytes);
     Ok(())
 }

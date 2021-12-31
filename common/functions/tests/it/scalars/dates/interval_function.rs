@@ -63,7 +63,7 @@ fn test_add_months() -> Result<()> {
     };
 
     let add_months =
-        MonthsArithmeticFunction::try_create("addYear", DataValueArithmeticOperator::Plus, 1)?;
+        MonthsArithmeticFunction::try_create("addYear", DataValueBinaryOperator::Plus, 1)?;
 
     {
         let mut expects: Vec<u16> = Vec::new();
@@ -170,7 +170,7 @@ fn test_add_subtract_seconds() -> Result<()> {
     };
 
     let add_seconds =
-        SecondsArithmeticFunction::try_create("addSeconds", DataValueArithmeticOperator::Plus, 1)?;
+        SecondsArithmeticFunction::try_create("addSeconds", DataValueBinaryOperator::Plus, 1)?;
     {
         let mut expects: Vec<u32> = Vec::new();
         expects.reserve(8);
@@ -194,7 +194,7 @@ fn test_add_subtract_seconds() -> Result<()> {
     }
     let sub_seconds = SecondsArithmeticFunction::try_create(
         "subtractSeconds",
-        DataValueArithmeticOperator::Minus,
+        DataValueBinaryOperator::Minus,
         1,
     )?;
     {

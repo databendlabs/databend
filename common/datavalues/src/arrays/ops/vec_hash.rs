@@ -18,7 +18,6 @@ use std::hash::Hasher;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use super::ArrayApply;
 use crate::prelude::*;
 
 pub trait VecHash: Debug {

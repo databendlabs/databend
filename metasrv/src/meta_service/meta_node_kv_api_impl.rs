@@ -15,7 +15,7 @@
 use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_meta_api::KVApi;
-use common_meta_raft_store::state_machine::AppliedState;
+use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::GetKVReq;

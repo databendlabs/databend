@@ -16,20 +16,25 @@
 //! It also serves RPC for user-data access.
 
 use std::convert::TryInto;
+use std::pin::Pin;
 use std::sync::Arc;
 
-use common_meta_raft_store::message::ForwardRequest;
-use common_meta_raft_store::protobuf::meta_service_server::MetaService;
-use common_meta_raft_store::protobuf::GetReply;
-use common_meta_raft_store::protobuf::GetReq;
-use common_meta_raft_store::protobuf::RaftReply;
-use common_meta_raft_store::protobuf::RaftRequest;
-use common_meta_raft_store::state_machine::AppliedState;
+use common_meta_types::protobuf::meta_service_server::MetaService;
+use common_meta_types::protobuf::GetReply;
+use common_meta_types::protobuf::GetReq;
+use common_meta_types::protobuf::RaftReply;
+use common_meta_types::protobuf::RaftRequest;
+use common_meta_types::AppliedState;
+use common_meta_types::ForwardRequest;
 use common_meta_types::LogEntry;
 use common_tracing::tracing;
+use tonic::codegen::futures_core::Stream;
 
 use crate::meta_service::ForwardRequestBody;
 use crate::meta_service::MetaNode;
+
+pub type GrpcStream<T> =
+    Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
 pub struct MetaServiceImpl {
     pub meta_node: Arc<MetaNode>,
@@ -79,7 +84,6 @@ impl MetaService for MetaServiceImpl {
         request: tonic::Request<GetReq>,
     ) -> Result<tonic::Response<GetReply>, tonic::Status> {
         // TODO(xp): this method should be removed along with DFS
-
         common_tracing::extract_remote_span_as_parent(&request);
 
         let req = request.into_inner();

@@ -16,8 +16,6 @@
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use super::Series;
-use crate::arrays::ArrayCompare;
 use crate::prelude::*;
 
 macro_rules! impl_compare {

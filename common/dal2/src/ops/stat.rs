@@ -13,10 +13,11 @@
 // limitations under the License.
 
 use async_trait::async_trait;
-use common_exception::Result;
 
+use crate::error::Result;
 use crate::ops::Object;
 
+/// `Stat` will invoke the `stat` operation on the specified path.
 #[async_trait]
 pub trait Stat<S: Send + Sync>: Send + Sync {
     async fn stat(&self, path: &str) -> Result<Object> {

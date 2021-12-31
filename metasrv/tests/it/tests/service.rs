@@ -19,11 +19,11 @@ use async_raft::NodeId;
 use common_base::tokio;
 use common_base::GlobalSequence;
 use common_base::Stoppable;
-use common_meta_flight::MetaFlightClient;
-use common_meta_raft_store::protobuf::meta_service_client::MetaServiceClient;
-use common_meta_raft_store::protobuf::GetReq;
+use common_meta_raft_store::MetaGrpcClient;
+use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
+use common_meta_types::protobuf::GetReq;
 use common_tracing::tracing;
-use databend_meta::api::FlightServer;
+use databend_meta::api::GrpcServer;
 use databend_meta::configs;
 use databend_meta::meta_service::MetaNode;
 
@@ -34,17 +34,17 @@ pub async fn start_metasrv() -> Result<(MetaSrvTestContext, String)> {
 
     start_metasrv_with_context(&mut tc).await?;
 
-    let addr = tc.config.flight_api_address.clone();
+    let addr = tc.config.grpc_api_address.clone();
 
     Ok((tc, addr))
 }
 
 pub async fn start_metasrv_with_context(tc: &mut MetaSrvTestContext) -> Result<()> {
     let mn = MetaNode::start(&tc.config.raft_config).await?;
-    let mut srv = FlightServer::create(tc.config.clone(), mn);
+    let mut srv = GrpcServer::create(tc.config.clone(), mn);
     srv.start().await?;
+    tc.grpc_srv = Some(Box::new(srv));
 
-    tc.flight_srv = Some(Box::new(srv));
     Ok(())
 }
 
@@ -85,7 +85,7 @@ pub struct MetaSrvTestContext {
 
     pub meta_nodes: Vec<Arc<MetaNode>>,
 
-    pub flight_srv: Option<Box<FlightServer>>,
+    pub grpc_srv: Option<Box<GrpcServer>>,
 }
 
 impl MetaSrvTestContext {
@@ -116,8 +116,8 @@ impl MetaSrvTestContext {
         config.raft_config.sled_tree_prefix = format!("test-{}-", config_id);
 
         {
-            let flight_port = next_port();
-            config.flight_api_address = format!("{}:{}", host, flight_port);
+            let grpc_port = next_port();
+            config.grpc_api_address = format!("{}:{}", host, grpc_port);
         }
 
         {
@@ -135,14 +135,14 @@ impl MetaSrvTestContext {
         MetaSrvTestContext {
             config,
             meta_nodes: vec![],
-            flight_srv: None,
+            grpc_srv: None,
         }
     }
 
-    pub async fn flight_client(&self) -> anyhow::Result<MetaFlightClient> {
-        let addr = self.config.flight_api_address.clone();
+    pub async fn grpc_client(&self) -> anyhow::Result<MetaGrpcClient> {
+        let addr = self.config.grpc_api_address.clone();
 
-        let client = MetaFlightClient::try_create(addr.as_str(), "root", "xxx").await?;
+        let client = MetaGrpcClient::try_create(addr.as_str(), "root", "xxx").await?;
         Ok(client)
     }
 

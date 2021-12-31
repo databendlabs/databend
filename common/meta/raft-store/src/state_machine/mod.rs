@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use applied_state::AppliedState;
 pub use client_last_resp::ClientLastRespValue;
 pub use sm::SerializableSnapshot;
 pub use sm::SnapshotKeyValue;
@@ -23,7 +22,6 @@ pub use state_machine_meta::StateMachineMetaValue;
 pub use table_lookup::TableLookupKey;
 pub use table_lookup::TableLookupValue;
 
-pub mod applied_state;
 pub mod client_last_resp;
 pub mod placement;
 pub mod sm;

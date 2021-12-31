@@ -20,9 +20,6 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
 
 use crate::prelude::*;
-use crate::series::IntoSeries;
-use crate::series::Series;
-use crate::DataValue;
 
 #[derive(Clone, Debug)]
 pub enum DataColumn {

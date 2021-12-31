@@ -251,7 +251,7 @@ where
     fn merge_result(&self, place: StateAddr, array: &mut dyn MutableArrayBuilder) -> Result<()> {
         let mut array = array
             .as_mut_any()
-            .downcast_mut::<MutablePrimitiveArrayBuilder<f64>>()
+            .downcast_mut::<MutablePrimitiveArrayBuilder<f64, true>>()
             .ok_or_else(|| {
                 ErrorCode::UnexpectedError("error occured when downcast MutableArray".to_string())
             })?;

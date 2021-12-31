@@ -14,7 +14,6 @@
 
 use common_exception::Result;
 
-use crate::columns::DataColumn;
 use crate::prelude::*;
 
 impl DataColumn {

@@ -164,7 +164,7 @@ impl Display for UnaryOperator {
                 write!(f, "+")
             }
             UnaryOperator::Minus => {
-                write!(f, "-")
+                write!(f, "NEGATE")
             }
             UnaryOperator::Not => {
                 write!(f, "NOT")

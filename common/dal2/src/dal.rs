@@ -15,8 +15,7 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use common_exception::Result;
-
+use crate::error::Result;
 use crate::ops::Delete;
 use crate::ops::Object;
 use crate::ops::Read;

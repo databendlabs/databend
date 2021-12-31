@@ -159,7 +159,7 @@ fn test_build_verifiable_function() -> Result<()> {
         Test {
             name: "1 > -a or 3 >= b",
             expr: lit(1).gt(neg(col("a"))).or(lit(3).gt_eq(col("b"))),
-            expect: "((min_(- a) < 1) or (min_b <= 3))",
+            expect: "((min_(negate a) < 1) or (min_b <= 3))",
         },
         Test {
             name: "a = 1 and b != 3",

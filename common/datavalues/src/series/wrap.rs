@@ -24,7 +24,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::prelude::*;
-use crate::series::*;
 
 pub struct SeriesWrap<T>(pub T);
 
@@ -131,27 +130,6 @@ macro_rules! impl_dyn_array {
 
             fn serialize(&self, vec: &mut Vec<Vec<u8>>) -> Result<()> {
                 self.0.serialize(vec)
-            }
-
-            fn subtract(&self, rhs: &Series) -> Result<Series> {
-                NumOpsDispatch::subtract(&self.0, rhs)
-            }
-            fn add_to(&self, rhs: &Series) -> Result<Series> {
-                NumOpsDispatch::add_to(&self.0, rhs)
-            }
-            fn multiply(&self, rhs: &Series) -> Result<Series> {
-                NumOpsDispatch::multiply(&self.0, rhs)
-            }
-            fn divide(&self, rhs: &Series) -> Result<Series> {
-                NumOpsDispatch::divide(&self.0, rhs)
-            }
-
-            fn remainder(&self, rhs: &Series, dtype: &DataType) -> Result<Series> {
-                NumOpsDispatch::remainder(&self.0, rhs, dtype)
-            }
-
-            fn negative(&self) -> Result<Series> {
-                NumOpsDispatch::negative(&self.0)
             }
 
             fn sum(&self) -> Result<DataValue> {

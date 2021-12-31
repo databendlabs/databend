@@ -255,7 +255,7 @@ where
         let result = self.get_event_level(place);
         let mut array = array
             .as_mut_any()
-            .downcast_mut::<MutablePrimitiveArrayBuilder<u8>>()
+            .downcast_mut::<MutablePrimitiveArrayBuilder<u8, true>>()
             .ok_or_else(|| {
                 ErrorCode::UnexpectedError("error occured when downcast MutableArray".to_string())
             })?;

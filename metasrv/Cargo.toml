@@ -25,7 +25,7 @@ common-arrow = { path = "../common/arrow" }
 common-containers = { path = "../common/containers" }
 common-datavalues = { path = "../common/datavalues" }
 common-exception = { path = "../common/exception" }
-common-flight-rpc = { path = "../common/flight-rpc" }
+common-grpc = { path = "../common/grpc" }
 common-infallible = { path = "../common/infallible" }
 common-base = { path = "../common/base" }
 common-meta-api = { path = "../common/meta/api" }
@@ -68,6 +68,10 @@ sha2 = "0.10.0"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 poem = { version = "1.2.14", features = ["rustls"] }
 toml = "0.5.8"
+
+[build-dependencies]
+tonic-build = "0.6.2"
+common-building = { path = "../common/building" }
 
 [dev-dependencies]
 common-meta-api = { path = "../common/meta/api" }
