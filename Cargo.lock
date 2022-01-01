@@ -1178,7 +1178,6 @@ dependencies = [
  "common-base",
  "common-dal",
  "common-exception",
- "common-metrics",
  "common-tracing",
  "filetime",
  "heapsize",
@@ -1509,6 +1508,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-meta-grpc"
+version = "0.1.0"
+dependencies = [
+ "common-arrow",
+ "common-base",
+ "common-exception",
+ "common-grpc",
+ "common-meta-api",
+ "common-meta-types",
+ "common-tracing",
+ "derive_more",
+ "futures",
+ "prost",
+ "rand 0.8.4",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tonic",
+]
+
+[[package]]
 name = "common-meta-raft-store"
 version = "0.1.0"
 dependencies = [
@@ -1520,7 +1541,6 @@ dependencies = [
  "common-arrow",
  "common-base",
  "common-exception",
- "common-grpc",
  "common-io",
  "common-meta-api",
  "common-meta-sled-store",
@@ -2148,7 +2168,7 @@ dependencies = [
  "common-infallible",
  "common-macros",
  "common-meta-api",
- "common-meta-flight",
+ "common-meta-grpc",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",
@@ -2217,7 +2237,7 @@ dependencies = [
  "common-mem-allocator",
  "common-meta-api",
  "common-meta-embedded",
- "common-meta-flight",
+ "common-meta-grpc",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",

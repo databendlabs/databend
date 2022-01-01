@@ -16,12 +16,11 @@ syntax = "proto3";
 
 package meta;
 
-message GetReq { string key = 1; }
+message GetRequest { string key = 1; }
 
 message GetReply {
   bool ok = 1;
-  string key = 2;
-  string value = 3;
+  string value = 2;
 }
 
 message RaftRequest {
@@ -46,7 +45,7 @@ message HandshakeResponse {
 service MetaService {
 
   rpc Write(RaftRequest) returns (RaftReply) {}
-  rpc Get(GetReq) returns (GetReply) {}
+  rpc Get(GetRequest) returns (GetReply) {}
 
   /// Forward a request to other
   rpc Forward(RaftRequest) returns (RaftReply) {}
@@ -64,5 +63,5 @@ service Meta {
 
   // message
   rpc WriteMsg(RaftRequest) returns (RaftReply);
-  rpc ReadMsg(GetReq) returns (GetReply);
+  rpc ReadMsg(GetRequest) returns (GetReply);
 }

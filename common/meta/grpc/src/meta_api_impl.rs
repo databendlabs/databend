@@ -35,10 +35,10 @@ use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 
-use crate::grpc::grpc_action::GetTableExtReq;
+use crate::grpc_action::GetTableExtReq;
 use crate::MetaGrpcClient;
 
-#[async_trait::async_trait]
+#[tonic::async_trait]
 impl MetaApi for MetaGrpcClient {
     async fn create_database(
         &self,

@@ -17,7 +17,7 @@ use std::fmt;
 use clap::Args;
 use common_grpc::RpcClientConf;
 use common_grpc::RpcClientTlsConfig;
-use common_meta_raft_store::MetaGrpcClientConf;
+use common_meta_grpc::MetaGrpcClientConf;
 use serde::Deserialize;
 use serde::Serialize;
 

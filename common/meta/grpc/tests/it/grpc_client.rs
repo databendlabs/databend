@@ -16,10 +16,10 @@ use std::time::Duration;
 
 use common_base::tokio;
 use common_meta_api::MetaApi;
-use common_meta_raft_store::MetaGrpcClient;
+use common_meta_grpc::MetaGrpcClient;
 use common_meta_types::GetDatabaseReq;
 
-use crate::grpc::start_grpc_server;
+use crate::grpc_server::start_grpc_server;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_grpc_client_action_timeout() {

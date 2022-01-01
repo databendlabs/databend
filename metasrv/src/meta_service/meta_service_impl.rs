@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use common_meta_types::protobuf::meta_service_server::MetaService;
 use common_meta_types::protobuf::GetReply;
-use common_meta_types::protobuf::GetReq;
+use common_meta_types::protobuf::GetRequest;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::AppliedState;
@@ -81,15 +81,14 @@ impl MetaService for MetaServiceImpl {
     #[tracing::instrument(level = "info", skip(self))]
     async fn get(
         &self,
-        request: tonic::Request<GetReq>,
+        request: tonic::Request<GetRequest>,
     ) -> Result<tonic::Response<GetReply>, tonic::Status> {
         // TODO(xp): this method should be removed along with DFS
         common_tracing::extract_remote_span_as_parent(&request);
 
-        let req = request.into_inner();
+        // let req = request.into_inner();
         let rst = GetReply {
             ok: false,
-            key: req.key,
             value: "".into(),
         };
 

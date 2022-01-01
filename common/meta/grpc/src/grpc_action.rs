@@ -17,7 +17,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
-use common_meta_types::protobuf::GetReq;
+use common_meta_types::protobuf::GetRequest;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::CreateDatabaseReply;
 use common_meta_types::CreateDatabaseReq;
@@ -100,7 +100,7 @@ impl TryInto<Request<RaftRequest>> for &MetaGrpcWriteReq {
     }
 }
 
-impl TryInto<MetaGrpcReadReq> for Request<GetReq> {
+impl TryInto<MetaGrpcReadReq> for Request<GetRequest> {
     type Error = tonic::Status;
 
     fn try_into(self) -> Result<MetaGrpcReadReq, Self::Error> {
@@ -113,11 +113,11 @@ impl TryInto<MetaGrpcReadReq> for Request<GetReq> {
     }
 }
 
-impl TryInto<Request<GetReq>> for &MetaGrpcReadReq {
+impl TryInto<Request<GetRequest>> for &MetaGrpcReadReq {
     type Error = ErrorCode;
 
-    fn try_into(self) -> Result<Request<GetReq>, Self::Error> {
-        let get_req = GetReq {
+    fn try_into(self) -> Result<Request<GetRequest>, Self::Error> {
+        let get_req = GetRequest {
             key: serde_json::to_string(&self)?,
         };
 
