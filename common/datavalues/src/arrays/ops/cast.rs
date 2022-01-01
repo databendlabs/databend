@@ -88,7 +88,7 @@ impl ArrayCast for DFNullArray {
     fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
         match data_type {
             DataType::Null => Ok(self.clone().into_series()),
-            DataType::Boolean => Ok(DFBooleanArray::full_null(self.len()).into_series()),
+            DataType::Boolean(_) => Ok(DFBooleanArray::full_null(self.len()).into_series()),
             DataType::UInt8 => Ok(DFUInt8Array::full_null(self.len()).into_series()),
             DataType::UInt16 => Ok(DFUInt16Array::full_null(self.len()).into_series()),
             DataType::UInt32 => Ok(DFUInt32Array::full_null(self.len()).into_series()),

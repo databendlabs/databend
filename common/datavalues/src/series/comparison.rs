@@ -29,7 +29,7 @@ macro_rules! impl_compare {
         }
 
         match $self.data_type() {
-            DataType::Boolean => $self.bool().unwrap().$method($rhs.bool().unwrap()),
+            DataType::Boolean(_) => $self.bool().unwrap().$method($rhs.bool().unwrap()),
             DataType::String => $self.string().unwrap().$method($rhs.string().unwrap()),
             DataType::UInt8 => $self.u8().unwrap().$method($rhs.u8().unwrap()),
             DataType::UInt16 => $self.u16().unwrap().$method($rhs.u16().unwrap()),

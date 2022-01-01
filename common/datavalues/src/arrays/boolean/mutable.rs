@@ -91,7 +91,7 @@ impl<const NULLABLE: bool> MutableBooleanArrayBuilder<NULLABLE> {
 
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            data_type: DataType::Boolean,
+            data_type: DataType::Boolean(true),
             values: MutableBitmap::with_capacity(capacity),
             validity: None,
         }
@@ -99,7 +99,7 @@ impl<const NULLABLE: bool> MutableBooleanArrayBuilder<NULLABLE> {
 
     pub fn from_data(values: MutableBitmap, validity: Option<MutableBitmap>) -> Self {
         Self {
-            data_type: DataType::Boolean,
+            data_type: DataType::Boolean(true),
             values,
             validity,
         }

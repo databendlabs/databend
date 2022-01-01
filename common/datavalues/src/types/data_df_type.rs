@@ -36,6 +36,17 @@ macro_rules! impl_df_datatype {
     };
 }
 
+macro_rules! impl_df_datatype_nullable {
+    ($ca:ident, $variant:ident, $nullable:ident) => {
+        impl DFDataType for $ca {
+            fn data_type() -> DataType {
+                DataType::$variant($nullable)
+            }
+        }
+    };
+}
+
+
 impl_df_datatype!(u8, UInt8);
 impl_df_datatype!(u16, UInt16);
 impl_df_datatype!(u32, UInt32);
@@ -47,7 +58,7 @@ impl_df_datatype!(i32, Int32);
 impl_df_datatype!(i64, Int64);
 impl_df_datatype!(f32, Float32);
 impl_df_datatype!(f64, Float64);
-impl_df_datatype!(bool, Boolean);
+impl_df_datatype_nullable!(bool, Boolean, true);
 
 #[derive(Debug)]
 pub struct Null;

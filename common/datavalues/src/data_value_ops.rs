@@ -94,7 +94,7 @@ impl DataValue {
             DataType::Float64 => {
                 try_build_array! {PrimitiveArrayBuilder, f64, Float64, values}
             }
-            DataType::Boolean => try_build_array! {values},
+            DataType::Boolean(_) => try_build_array! {values},
             DataType::String => try_build_array! {String, values},
             DataType::Date16 => {
                 try_build_array! {PrimitiveArrayBuilder, u16, UInt16, values}

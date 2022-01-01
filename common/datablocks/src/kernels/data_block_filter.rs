@@ -29,7 +29,7 @@ impl DataBlock {
             return Ok(block.clone());
         }
 
-        let predicate = predicate.cast_with_type(&DataType::Boolean)?;
+        let predicate = predicate.cast_with_type(&DataType::Boolean(true))?;
         if predicate.len() != block.num_rows() {
             return Err(ErrorCode::BadPredicateRows(format!(
                 "DataBlock rows({}) must be equals predicate rows({})",

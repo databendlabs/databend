@@ -28,7 +28,7 @@ impl ToCastFunction {
             .deterministic()
             .monotonicity()
             .num_arguments(1);
-        if to_type == DataType::Boolean {
+        if to_type.is_boolean() {
             features = features.bool_function();
         }
 
@@ -41,7 +41,7 @@ impl ToCastFunction {
 
     pub fn register(factory: &mut FunctionFactory) {
         factory.register("toNull", Self::cast_function_creator(DataType::Null));
-        factory.register("toBoolean", Self::cast_function_creator(DataType::Boolean));
+        factory.register("toBoolean", Self::cast_function_creator(DataType::Boolean(true)));
         factory.register("toUInt8", Self::cast_function_creator(DataType::UInt8));
         factory.register("toUInt16", Self::cast_function_creator(DataType::UInt16));
         factory.register("toUInt32", Self::cast_function_creator(DataType::UInt32));

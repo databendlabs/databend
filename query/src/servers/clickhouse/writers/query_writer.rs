@@ -316,7 +316,7 @@ fn to_clickhouse_column(field: &DataField, column: &Series) -> Result<ArcColumnD
             DataType::String => {
                 Vec::column_from::<ArcColumnWrapper>(column.string()?.collect_values())
             }
-            DataType::Boolean => {
+            DataType::Boolean(_) => {
                 let v: Vec<Option<u8>> = column
                     .bool()?
                     .into_iter()
@@ -409,7 +409,7 @@ fn to_clickhouse_column(field: &DataField, column: &Series) -> Result<ArcColumnD
                 let vs: Vec<&[u8]> = column.string()?.into_no_null_iter().collect();
                 Vec::column_from::<ArcColumnWrapper>(vs)
             }
-            DataType::Boolean => {
+            DataType::Boolean(_) => {
                 let vs: Vec<u8> = column
                     .bool()?
                     .into_no_null_iter()

@@ -44,7 +44,7 @@ fn test_aggregate_combinator_function() -> Result<()> {
 
     let args = vec![
         DataField::new("a", DataType::Int64, false),
-        DataField::new("b", DataType::Boolean, false),
+        DataField::new("b", DataType::Boolean(false), false),
     ];
 
     let tests = vec![
@@ -228,7 +228,7 @@ fn test_aggregate_combinator_function_on_empty_data() -> Result<()> {
 
     let args = vec![
         DataField::new("a", DataType::Int64, true),
-        DataField::new("b", DataType::Boolean, true),
+        DataField::new("b", DataType::Boolean(true), true),
     ];
 
     let tests = vec![

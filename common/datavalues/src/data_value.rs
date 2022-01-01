@@ -81,7 +81,7 @@ impl DataValue {
     pub fn data_type(&self) -> DataType {
         match self {
             DataValue::Null => DataType::Null,
-            DataValue::Boolean(_) => DataType::Boolean,
+            DataValue::Boolean(_) => DataType::Boolean(true),
             DataValue::Int8(_) => DataType::Int8,
             DataValue::Int16(_) => DataType::Int16,
             DataValue::Int32(_) => DataType::Int32,
@@ -184,7 +184,7 @@ impl DataValue {
                 DataType::Float32 => build_list_series! {f32, values, size, data_type },
                 DataType::Float64 => build_list_series! {f64, values, size, data_type },
 
-                DataType::Boolean => {
+                DataType::Boolean(_) => {
                     let mut builder = ListBooleanArrayBuilder::with_capacity(0, size);
                     match values {
                         Some(v) => {
@@ -325,7 +325,7 @@ impl DataValue {
         }
         match data_type {
             DataType::Null => DataValue::Null,
-            DataType::Boolean => DataValue::Boolean(Some(false)),
+            DataType::Boolean(_) => DataValue::Boolean(Some(false)),
             DataType::UInt8 => DataValue::UInt8(Some(0)),
             DataType::UInt16 => DataValue::UInt16(Some(0)),
             DataType::UInt32 => DataValue::UInt32(Some(0)),
@@ -439,7 +439,8 @@ impl From<&DataType> for DataValue {
     fn from(data_type: &DataType) -> Self {
         match data_type {
             DataType::Null => DataValue::Null,
-            DataType::Boolean => DataValue::Boolean(None),
+            DataType::Boolean(true) => DataValue::Boolean(Some(false)),
+            DataType::Boolean(false) => DataValue::Boolean(None),
             DataType::Int8 => DataValue::Int8(None),
             DataType::Int16 => DataValue::Int16(None),
             DataType::Int32 => DataValue::Int32(None),

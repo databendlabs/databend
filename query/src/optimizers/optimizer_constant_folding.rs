@@ -145,13 +145,13 @@ impl ConstantFoldingImpl {
                     Ok(Expression::Literal {
                         value: DataValue::Boolean(Some(true)),
                         column_name: Some(column_name),
-                        data_type: DataType::Boolean,
+                        data_type: DataType::Boolean(false),
                     })
                 } else {
                     Ok(Expression::Literal {
                         value: DataValue::Boolean(Some(false)),
                         column_name: Some(column_name),
-                        data_type: DataType::Boolean,
+                        data_type: DataType::Boolean(false),
                     })
                 }
             }
@@ -187,7 +187,7 @@ impl ConstantFoldingImpl {
                         return Ok(Expression::Literal {
                             value: DataValue::Boolean(Some(true)),
                             column_name: Some(column_name),
-                            data_type: DataType::Boolean,
+                            data_type: DataType::Boolean(false),
                         });
                     }
                 } else if is_and {
@@ -195,7 +195,7 @@ impl ConstantFoldingImpl {
                     return Ok(Expression::Literal {
                         value: DataValue::Boolean(Some(false)),
                         column_name: Some(column_name),
-                        data_type: DataType::Boolean,
+                        data_type: DataType::Boolean(false),
                     });
                 }
             }

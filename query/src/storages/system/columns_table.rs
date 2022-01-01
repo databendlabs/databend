@@ -44,7 +44,7 @@ impl ColumnsTable {
             DataField::new("database", DataType::String, false),
             DataField::new("table", DataType::String, false),
             DataField::new("data_type", DataType::String, false),
-            DataField::new("is_nullable", DataType::Boolean, false),
+            DataField::new("is_nullable", DataType::Boolean(false), false),
         ]);
 
         let table_info = TableInfo {

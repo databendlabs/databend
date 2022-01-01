@@ -35,17 +35,24 @@ pub use mutable::*;
 #[derive(Debug, Clone)]
 pub struct DFBooleanArray {
     pub(crate) array: BooleanArray,
+    data_type: DataType,
 }
 
 impl From<BooleanArray> for DFBooleanArray {
     fn from(array: BooleanArray) -> Self {
-        Self { array }
+        Self {
+            array,
+            data_type: DataType::Boolean(true)
+        }
     }
 }
 
 impl DFBooleanArray {
     pub fn new(array: BooleanArray) -> Self {
-        Self { array }
+        Self {
+            array,
+            data_type: DataType::Boolean(true)
+        }
     }
 
     pub fn from_arrow_array(array: &dyn Array) -> Self {
@@ -60,14 +67,14 @@ impl DFBooleanArray {
 
     pub fn from_arrow_data(values: Bitmap, validity: Option<Bitmap>) -> Self {
         Self::from_arrow_array(&BooleanArray::from_data(
-            DataType::Boolean.to_arrow(),
+            DataType::Boolean(true).to_arrow(),
             values,
             validity,
         ))
     }
 
     pub fn data_type(&self) -> &DataType {
-        &DataType::Boolean
+        &self.data_type
     }
 
     pub fn inner(&self) -> &BooleanArray {

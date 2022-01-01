@@ -355,7 +355,7 @@ pub fn try_create_aggregate_window_funnel_function(
     assert_variadic_arguments(display_name, arguments.len(), (1, 32))?;
 
     for (idx, arg) in arguments[1..].iter().enumerate() {
-        if arg.data_type() != &DataType::Boolean {
+        if !arg.data_type().is_boolean() {
             return Err(ErrorCode::BadDataValueType(format!(
                 "Illegal type of the argument {} in AggregateWindowFunnelFunction, must be boolean, got: {}",
                  idx + 1, arg.data_type()

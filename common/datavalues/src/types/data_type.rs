@@ -22,12 +22,15 @@ use common_macros::MallocSizeOf;
 use crate::DataField;
 use crate::PhysicalDataType;
 
+
+pub type Nullable = bool;
+
 #[derive(
     serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, MallocSizeOf,
 )]
 pub enum DataType {
     Null,
-    Boolean,
+    Boolean(Nullable),
     UInt8,
     UInt16,
     UInt32,
@@ -94,6 +97,11 @@ impl fmt::Display for IntervalUnit {
 impl DataType {
     pub fn to_physical_type(&self) -> PhysicalDataType {
         self.clone().into()
+    }
+
+    #[inline]
+    pub fn is_boolean(&self) -> bool {
+        matches!(self, DataType::Boolean(true) | DataType::Boolean(false))
     }
 
     #[inline]
@@ -200,7 +208,7 @@ impl DataType {
         use DataType::*;
         match self {
             Null => ArrowDataType::Null,
-            Boolean => ArrowDataType::Boolean,
+            Boolean(_) => ArrowDataType::Boolean,
             UInt8 => ArrowDataType::UInt8,
             UInt16 => ArrowDataType::UInt16,
             UInt32 => ArrowDataType::UInt32,
@@ -246,7 +254,7 @@ impl From<&ArrowDataType> for DataType {
             ArrowDataType::Int16 => DataType::Int16,
             ArrowDataType::Int32 => DataType::Int32,
             ArrowDataType::Int64 => DataType::Int64,
-            ArrowDataType::Boolean => DataType::Boolean,
+            ArrowDataType::Boolean => DataType::Boolean(true),
             ArrowDataType::Float32 => DataType::Float32,
             ArrowDataType::Float64 => DataType::Float64,
             ArrowDataType::List(f) | ArrowDataType::LargeList(f) => {
@@ -293,7 +301,7 @@ impl fmt::Debug for DataType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Null => write!(f, "Null"),
-            Self::Boolean => write!(f, "Boolean"),
+            Self::Boolean(_) => write!(f, "Boolean"),
             Self::UInt8 => write!(f, "UInt8"),
             Self::UInt16 => write!(f, "UInt16"),
             Self::UInt32 => write!(f, "UInt32"),

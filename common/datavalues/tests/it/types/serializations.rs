@@ -29,7 +29,7 @@ fn test_serializers() -> Result<()> {
     let tests = vec![
         Test {
             name: "boolean",
-            data_type: DataType::Boolean,
+            data_type: DataType::Boolean(true),
             value: DataValue::Boolean(Some(true)),
             column: Series::new(vec![Some(true), Some(false), None]).into(),
             val_str: "1",
@@ -90,7 +90,7 @@ fn test_serializers() -> Result<()> {
         let data_type = DataType::Struct(vec![
             DataField::new("item_0", DataType::Float64, false),
             DataField::new("item_1", DataType::String, false),
-            DataField::new("item_2", DataType::Boolean, false),
+            DataField::new("item_2", DataType::Boolean(false), false),
             DataField::new("item_3", DataType::Date16, false),
         ]);
         let serializer = data_type.create_serializer();

@@ -30,7 +30,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
         DataField::new("c1", DataType::Int32, is_nullable),
         DataField::new("c2", DataType::String, is_nullable),
-        DataField::new("c3", DataType::Boolean, is_nullable),
+        DataField::new("c3", DataType::Boolean(is_nullable), is_nullable),
         DataField::new("c4", DataType::Float64, is_nullable),
         DataField::new("c5", DataType::Date16, is_nullable),
     ]);

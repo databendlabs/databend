@@ -41,7 +41,7 @@ impl DataType {
     pub fn create_serializer(&self) -> Box<dyn TypeSerializer> {
         match self {
             DataType::Null => Box::new(NullSerializer {}),
-            DataType::Boolean => Box::new(BooleanSerializer {}),
+            DataType::Boolean(_) => Box::new(BooleanSerializer {}),
             DataType::UInt8 => Box::new(NumberSerializer::<u8>::default()),
             DataType::UInt16 => Box::new(NumberSerializer::<u16>::default()),
             DataType::UInt32 => Box::new(NumberSerializer::<u32>::default()),

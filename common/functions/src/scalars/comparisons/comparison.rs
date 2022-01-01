@@ -60,7 +60,7 @@ impl Function for ComparisonFunction {
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
         let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::Boolean;
+        let dt = DataType::Boolean(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 

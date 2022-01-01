@@ -107,7 +107,7 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
             )));
         }
 
-        let dt = DataType::Boolean;
+        let dt = DataType::Boolean(false);
         Ok(DataTypeAndNullable::create(&dt, false))
     }
 

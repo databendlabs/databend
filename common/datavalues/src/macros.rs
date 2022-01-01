@@ -47,7 +47,7 @@ macro_rules! match_data_type_apply_macro_ca {
 
         match $self.data_type() {
             DataType::String => $macro_string!($self.string().unwrap() $(, $opt_args)*),
-            DataType::Boolean => $macro_bool!($self.bool().unwrap() $(, $opt_args)*),
+            DataType::Boolean(_) => $macro_bool!($self.bool().unwrap() $(, $opt_args)*),
             DataType::UInt8 => $macro!($self.u8().unwrap() $(, $opt_args)*),
             DataType::UInt16 => $macro!($self.u16().unwrap() $(, $opt_args)*),
             DataType::UInt32 => $macro!($self.u32().unwrap() $(, $opt_args)*),
@@ -93,7 +93,7 @@ macro_rules! match_data_type_apply_macro {
     ($obj:expr, $macro:ident, $macro_string:ident, $macro_bool:ident $(, $opt_args:expr)*) => {{
         match $obj {
             DataType::String => $macro_string!($($opt_args)*),
-            DataType::Boolean => $macro_bool!($($opt_args)*),
+            DataType::Boolean(_) => $macro_bool!($($opt_args)*),
             DataType::UInt8 => $macro!(u8 $(, $opt_args)*),
             DataType::UInt16 => $macro!(u16 $(, $opt_args)*),
             DataType::UInt32 => $macro!(u32 $(, $opt_args)*),

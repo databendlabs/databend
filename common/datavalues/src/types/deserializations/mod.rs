@@ -50,7 +50,7 @@ impl DataType {
             },
 
             {match data_type {
-                DataType::Boolean => Ok(Box::new(BooleanDeserializer {
+                DataType::Boolean(_) => Ok(Box::new(BooleanDeserializer {
                     builder: BooleanArrayBuilder::with_capacity(capacity),
                 })),
                 DataType::Date16 => Ok(Box::new(DateDeserializer::<u16> {

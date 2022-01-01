@@ -21,7 +21,7 @@ fn test_empty_boolean_array() {
     let mut iter = data_array.into_iter();
     assert_eq!(None, iter.next());
     assert!(data_array.is_empty());
-    assert_eq!(&DataType::Boolean, data_array.data_type());
+    assert!(data_array.data_type().is_boolean());
 }
 
 #[test]

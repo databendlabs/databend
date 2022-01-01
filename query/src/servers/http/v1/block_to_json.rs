@@ -124,7 +124,7 @@ pub fn block_to_json(block: &DataBlock) -> Result<Vec<Vec<JsonValue>>> {
                     .map(|o| o.as_ref().map(|v| String::from_utf8(v.clone()).unwrap()))
                     .map(to_json_value)
                     .collect(),
-                DataType::Boolean => series.bool()?.into_iter().map(to_json_value).collect(),
+                DataType::Boolean(_) => series.bool()?.into_iter().map(to_json_value).collect(),
                 DataType::Date16 => date_array_to_string_array(series.u16()?, DATE_FMT),
                 DataType::Date32 => date_array_to_string_array(series.i32()?, DATE_FMT),
                 // TODO(youngsofun): add time zone?
@@ -143,7 +143,7 @@ pub fn block_to_json(block: &DataBlock) -> Result<Vec<Vec<JsonValue>>> {
                 DataType::UInt64 => primitive_array_to_json_not_null(series.u64()?),
                 DataType::Float32 => primitive_array_to_json_not_null(series.f32()?),
                 DataType::Float64 => primitive_array_to_json_not_null(series.f64()?),
-                DataType::Boolean => series
+                DataType::Boolean(_) => series
                     .bool()?
                     .into_no_null_iter()
                     .map(to_json_value)

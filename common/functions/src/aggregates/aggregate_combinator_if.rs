@@ -55,14 +55,11 @@ impl AggregateIfCombinator {
             )));
         }
 
-        match arguments[argument_len - 1].data_type() {
-            DataType::Boolean => {}
-            other => {
-                return Err(ErrorCode::BadArguments(format!(
-                    "The type of the last argument for {} must be boolean type, but got {:?}",
-                    name, other
-                )));
-            }
+        if !arguments[argument_len - 1].data_type().is_boolean() {
+            return Err(ErrorCode::BadArguments(format!(
+                "The type of the last argument for {} must be boolean type, but got {:?}",
+                name, arguments[argument_len - 1].data_type()
+            )));
         }
 
         let nested_arguments = &arguments[0..argument_len - 1];
@@ -107,7 +104,7 @@ impl AggregateFunction for AggregateIfCombinator {
             return Ok(());
         };
 
-        let predicate_array = arrays[self.argument_len - 1].cast_with_type(&DataType::Boolean)?;
+        let predicate_array = arrays[self.argument_len - 1].cast_with_type(&DataType::Boolean(true))?;
         let predicate = predicate_array.bool()?;
 
         let (column_array, rows_size) = self.filter_array(arrays, predicate)?;
@@ -127,7 +124,7 @@ impl AggregateFunction for AggregateIfCombinator {
             return Ok(());
         };
 
-        let predicate_array = arrays[self.argument_len - 1].cast_with_type(&DataType::Boolean)?;
+        let predicate_array = arrays[self.argument_len - 1].cast_with_type(&DataType::Boolean(true))?;
         let predicate = predicate_array.bool()?;
 
         let (column_array, row_size) = self.filter_array(arrays, predicate)?;

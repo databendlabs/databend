@@ -46,7 +46,7 @@ impl Function for ExistsFunction {
     }
 
     fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let dt = DataType::Boolean;
+        let dt = DataType::Boolean(false);
         Ok(DataTypeAndNullable::create(&dt, false))
     }
 

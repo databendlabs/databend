@@ -21,11 +21,11 @@ macro_rules! apply_logic {
     ($self: ident, $rhs: ident, $op: ident) => {{
         let lhs = $self.to_minimal_array()?;
 
-        let left = lhs.cast_with_type(&DataType::Boolean)?;
+        let left = lhs.cast_with_type(&DataType::Boolean(true))?;
         let left = left.bool()?;
 
         let rhs = $rhs[0].to_minimal_array()?;
-        let right = rhs.cast_with_type(&DataType::Boolean)?;
+        let right = rhs.cast_with_type(&DataType::Boolean(true))?;
         let right = right.bool()?;
 
         let result = left.$op(&right)?;
@@ -35,7 +35,7 @@ macro_rules! apply_logic {
 
     ($self: ident, $op: ident) => {{
         let lhs = $self.to_minimal_array()?;
-        let left = lhs.cast_with_type(&DataType::Boolean)?;
+        let left = lhs.cast_with_type(&DataType::Boolean(true))?;
         let left = left.bool()?;
 
         let result = left.$op()?;

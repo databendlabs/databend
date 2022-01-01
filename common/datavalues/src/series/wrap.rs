@@ -98,7 +98,7 @@ macro_rules! impl_dyn_array {
             }
 
             fn if_then_else(&self, rhs: &Series, predicate: &Series) -> Result<Series> {
-                if predicate.data_type() != &DataType::Boolean {
+                if !predicate.data_type().is_boolean() {
                     return Err(ErrorCode::BadDataValueType(
                         "If function requires the first argument type must be Boolean",
                     ));
@@ -261,7 +261,7 @@ macro_rules! impl_dyn_array {
             }
 
             fn bool(&self) -> Result<&DFBooleanArray> {
-                if matches!(self.0.data_type(), &DataType::Boolean) {
+                if self.0.data_type().is_boolean() {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFBooleanArray)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(

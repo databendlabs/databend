@@ -30,7 +30,7 @@ impl DescribeStagePlan {
             DataField::new("property_types", DataType::String, false),
             DataField::new("property_values", DataType::String, false),
             DataField::new("property_defaults", DataType::String, false),
-            DataField::new("property_changed", DataType::Boolean, false),
+            DataField::new("property_changed", DataType::Boolean(false), false),
         ])
     }
 }

@@ -54,9 +54,9 @@ fn test_aggregate_function() -> Result<()> {
         DataField::new("b", DataType::Int64, false),
         // args for window funnel function
         DataField::new("dt", DataType::DateTime32(None), false),
-        DataField::new("event = 1001", DataType::Boolean, false),
-        DataField::new("event = 1002", DataType::Boolean, false),
-        DataField::new("event = 1003", DataType::Boolean, false),
+        DataField::new("event = 1001", DataType::Boolean(false), false),
+        DataField::new("event = 1002", DataType::Boolean(false), false),
+        DataField::new("event = 1003", DataType::Boolean(false), false),
     ];
 
     let tests = vec![
@@ -403,8 +403,8 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
         DataField::new("c", DataType::String, false),
         // args for window funnel function
         DataField::new("dt", DataType::DateTime32(None), false),
-        DataField::new("event = 1001", DataType::Boolean, false),
-        DataField::new("event = 1002", DataType::Boolean, false),
+        DataField::new("event = 1001", DataType::Boolean(false), false),
+        DataField::new("event = 1002", DataType::Boolean(false), false),
     ];
 
     let tests = vec![

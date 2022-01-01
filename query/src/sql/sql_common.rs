@@ -34,7 +34,7 @@ impl SQLCommon {
             SQLDataType::Decimal(_, _) => Ok(DataType::Float64),
             SQLDataType::Float(_) => Ok(DataType::Float32),
             SQLDataType::Real | SQLDataType::Double => Ok(DataType::Float64),
-            SQLDataType::Boolean => Ok(DataType::Boolean),
+            SQLDataType::Boolean => Ok(DataType::Boolean(true)),
             SQLDataType::Date => Ok(DataType::Date16),
             SQLDataType::Timestamp => Ok(DataType::DateTime32(None)),
 

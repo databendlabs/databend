@@ -74,7 +74,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                 DataType::Float32 => Ok(ColumnType::MYSQL_TYPE_FLOAT),
                 DataType::Float64 => Ok(ColumnType::MYSQL_TYPE_FLOAT),
                 DataType::String => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
-                DataType::Boolean => Ok(ColumnType::MYSQL_TYPE_SHORT),
+                DataType::Boolean(_) => Ok(ColumnType::MYSQL_TYPE_SHORT),
                 DataType::Date16 | DataType::Date32 => Ok(ColumnType::MYSQL_TYPE_DATE),
                 DataType::DateTime32(_) => Ok(ColumnType::MYSQL_TYPE_DATETIME),
                 DataType::DateTime64(_, _) => Ok(ColumnType::MYSQL_TYPE_DATETIME),
@@ -120,7 +120,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                             }
                             let data_type = block.schema().fields()[col_index].data_type();
                             match (data_type, val.clone()) {
-                                (DataType::Boolean, DataValue::Boolean(Some(v))) => {
+                                (DataType::Boolean(_), DataValue::Boolean(Some(v))) => {
                                     row_writer.write_col(v as i8)?
                                 }
                                 (DataType::Int8, DataValue::Int8(Some(v))) => {
