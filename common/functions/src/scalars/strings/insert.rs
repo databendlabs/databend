@@ -108,17 +108,29 @@ impl<T: InsertOperator> Function for InsFunction<T> {
         }
 
         let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::String;
+        let dt = DataType::String(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let mut o = T::default();
 
-        let s_column = columns[0].column().cast_with_type(&DataType::String)?;
-        let p_column = columns[1].column().cast_with_type(&DataType::Int64)?;
-        let l_column = columns[2].column().cast_with_type(&DataType::Int64)?;
-        let ss_column = columns[3].column().cast_with_type(&DataType::String)?;
+        let column_nullables = columns
+            .iter()
+            .map(|col| col.field().is_nullable())
+            .collect::<Vec<_>>();
+        let s_column = columns[0]
+            .column()
+            .cast_with_type(&DataType::String(column_nullables[0]))?;
+        let p_column = columns[1]
+            .column()
+            .cast_with_type(&DataType::Int64(column_nullables[1]))?;
+        let l_column = columns[2]
+            .column()
+            .cast_with_type(&DataType::Int64(column_nullables[2]))?;
+        let ss_column = columns[3]
+            .column()
+            .cast_with_type(&DataType::String(column_nullables[3]))?;
 
         let r_column: DataColumn = match (s_column, p_column, l_column, ss_column) {
             // #0000

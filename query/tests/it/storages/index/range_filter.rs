@@ -29,9 +29,9 @@ use databend_query::storages::index::RangeFilter;
 #[test]
 fn test_range_filter() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int64, false),
-        DataField::new("b", DataType::Int32, false),
-        DataField::new("c", DataType::String, false),
+        DataField::new("a", DataType::Int64(false), false),
+        DataField::new("b", DataType::Int32(false), false),
+        DataField::new("c", DataType::String(false), false),
     ]);
 
     let mut stats: BlockStatistics = HashMap::new();
@@ -139,9 +139,9 @@ fn test_range_filter() -> Result<()> {
 #[test]
 fn test_build_verifiable_function() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int64, false),
-        DataField::new("b", DataType::Int32, false),
-        DataField::new("c", DataType::String, false),
+        DataField::new("a", DataType::Int64(false), false),
+        DataField::new("b", DataType::Int32(false), false),
+        DataField::new("c", DataType::String(false), false),
     ]);
 
     struct Test {

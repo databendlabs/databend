@@ -36,10 +36,10 @@ pub struct TablesTable {
 impl TablesTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("database", DataType::String, false),
-            DataField::new("name", DataType::String, false),
-            DataField::new("engine", DataType::String, false),
-            DataField::new("created_on", DataType::String, false),
+            DataField::new("database", DataType::String(false), false),
+            DataField::new("name", DataType::String(false), false),
+            DataField::new("engine", DataType::String(false), false),
+            DataField::new("created_on", DataType::String(false), false),
         ]);
 
         let table_info = TableInfo {

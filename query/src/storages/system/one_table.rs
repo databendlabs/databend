@@ -39,7 +39,7 @@ pub struct OneTable {
 impl OneTable {
     pub fn create(table_id: u64) -> Self {
         let schema =
-            DataSchemaRefExt::create(vec![DataField::new("dummy", DataType::UInt8, false)]);
+            DataSchemaRefExt::create(vec![DataField::new("dummy", DataType::UInt8(false), false)]);
 
         let table_info = TableInfo {
             desc: "'system'.'one'".to_string(),

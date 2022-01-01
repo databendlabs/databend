@@ -43,18 +43,18 @@ pub struct ProcessesTable {
 impl ProcessesTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("id", DataType::String, false),
-            DataField::new("type", DataType::String, false),
-            DataField::new("host", DataType::String, true),
-            DataField::new("user", DataType::String, true),
-            DataField::new("state", DataType::String, false),
-            DataField::new("database", DataType::String, false),
-            DataField::new("extra_info", DataType::String, true),
-            DataField::new("memory_usage", DataType::Int64, true),
-            DataField::new("dal_metrics_read_bytes", DataType::UInt64, true),
-            DataField::new("dal_metrics_write_bytes", DataType::UInt64, true),
-            DataField::new("scan_progress_read_rows", DataType::UInt64, true),
-            DataField::new("scan_progress_read_bytes", DataType::UInt64, true),
+            DataField::new("id", DataType::String(false), false),
+            DataField::new("type", DataType::String(false), false),
+            DataField::new("host", DataType::String(false), true),
+            DataField::new("user", DataType::String(true), true),
+            DataField::new("state", DataType::String(false), false),
+            DataField::new("database", DataType::String(false), false),
+            DataField::new("extra_info", DataType::String(true), true),
+            DataField::new("memory_usage", DataType::Int64(true), true),
+            DataField::new("dal_metrics_read_bytes", DataType::UInt64(true), true),
+            DataField::new("dal_metrics_write_bytes", DataType::UInt64(true), true),
+            DataField::new("scan_progress_read_rows", DataType::UInt64(true), true),
+            DataField::new("scan_progress_read_bytes", DataType::UInt64(true), true),
         ]);
 
         let table_info = TableInfo {

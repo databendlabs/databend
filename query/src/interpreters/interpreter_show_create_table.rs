@@ -74,8 +74,8 @@ impl Interpreter for ShowCreateTableInterpreter {
         );
 
         let show_fields = vec![
-            DataField::new("Table", DataType::String, false),
-            DataField::new("Create Table", DataType::String, false),
+            DataField::new("Table", DataType::String(false), false),
+            DataField::new("Create Table", DataType::String(false), false),
         ];
         let show_schema = DataSchemaRefExt::create(show_fields);
 

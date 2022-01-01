@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_datavalues::DataType;
-use common_exception::Result;
 
 use super::NumberResultFunction;
 use super::String2NumberFunction;
@@ -25,8 +24,8 @@ impl NumberResultFunction<u64> for CharLength {
     const IS_DETERMINISTIC: bool = true;
     const MAYBE_MONOTONIC: bool = false;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt64)
+    fn return_type(nullable: bool) -> DataType {
+        DataType::UInt64(nullable)
     }
 
     fn to_number(str: &[u8]) -> u64 {

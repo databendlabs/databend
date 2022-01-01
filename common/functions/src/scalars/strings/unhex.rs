@@ -55,16 +55,17 @@ impl Function for UnhexFunction {
         }
 
         let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::String;
+        let dt = DataType::String(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         const BUFFER_SIZE: usize = 32;
 
+        let nullable = columns[0].field().is_nullable();
         let array = columns[0]
             .column()
-            .cast_with_type(&DataType::String)?
+            .cast_with_type(&DataType::String(nullable))?
             .to_minimal_array()?;
         let c_array = array.string()?;
 

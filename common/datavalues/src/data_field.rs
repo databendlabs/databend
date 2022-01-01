@@ -146,14 +146,14 @@ impl DataField {
 
     pub fn to_arrow(&self) -> ArrowField {
         let custom_name = match self.data_type() {
-            DataType::Date16 => Some("Date16"),
-            DataType::Date32 => Some("Date32"),
-            DataType::DateTime32(_) => Some("DateTime32"),
+            DataType::Date16(_) => Some("Date16"),
+            DataType::Date32(_) => Some("Date32"),
+            DataType::DateTime32(_, _) => Some("DateTime32"),
             _ => None,
         };
 
         let custom_metadata = match self.data_type() {
-            DataType::DateTime32(tz) => tz.clone(),
+            DataType::DateTime32(_, tz) => tz.clone(),
             _ => None,
         };
 
@@ -184,9 +184,9 @@ impl From<&ArrowField> for DataField {
             if let Some(custom_name) = m.get("ARROW:extension:databend_name") {
                 let metatada = m.get("ARROW:extension:databend_metadata");
                 match custom_name.as_str() {
-                    "Date16" => dt = DataType::Date16,
-                    "Date32" => dt = DataType::Date32,
-                    "DateTime32" => dt = DataType::DateTime32(metatada.cloned()),
+                    "Date16" => dt = DataType::Date16(true),
+                    "Date32" => dt = DataType::Date32(true),
+                    "DateTime32" => dt = DataType::DateTime32(true, metatada.cloned()),
                     _ => {}
                 }
             }

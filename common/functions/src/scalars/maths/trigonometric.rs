@@ -68,23 +68,25 @@ impl Function for TrigonometricFunction {
     }
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let nullable = args.iter().any(|arg| arg.is_nullable());
         let data_type = if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
-            Ok(DataType::Float64)
+            Ok(DataType::Float64(nullable))
         } else {
             Err(ErrorCode::IllegalDataType(format!(
                 "Expected numeric, but got {}",
                 args[0]
             )))
         }?;
-        Ok(DataTypeAndNullable::create(&data_type, false))
+        Ok(DataTypeAndNullable::create(&data_type, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let result = if columns.len() == 1 {
+            let nullable = columns[0].field().is_nullable();
             let opt_iter = columns[0]
                 .column()
                 .to_minimal_array()?
-                .cast_with_type(&DataType::Float64)?;
+                .cast_with_type(&DataType::Float64(nullable))?;
             let opt_iter = opt_iter.f64()?.into_iter().map(|v| {
                 v.and_then(|&v| match self.t {
                     Trigonometric::COS => Some(v.cos()),
@@ -111,8 +113,15 @@ impl Function for TrigonometricFunction {
             });
             DFFloat64Array::new_from_opt_iter(opt_iter)
         } else {
-            let y_column: &DataColumn = &columns[0].column().cast_with_type(&DataType::Float64)?;
-            let x_column: &DataColumn = &columns[1].column().cast_with_type(&DataType::Float64)?;
+            let y_nullable = columns[0].field().is_nullable();
+            let y_column: &DataColumn = &columns[0]
+                .column()
+                .cast_with_type(&DataType::Float64(y_nullable))?;
+
+            let x_nullable = columns[1].field().is_nullable();
+            let x_column: &DataColumn = &columns[1]
+                .column()
+                .cast_with_type(&DataType::Float64(x_nullable))?;
 
             match (y_column, x_column) {
                 (DataColumn::Array(y_series), DataColumn::Constant(x, _)) => {

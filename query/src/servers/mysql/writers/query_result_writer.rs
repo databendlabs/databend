@@ -63,23 +63,23 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
 
         fn convert_field_type(field: &DataField) -> Result<ColumnType> {
             match field.data_type() {
-                DataType::Int8 => Ok(ColumnType::MYSQL_TYPE_LONG),
-                DataType::Int16 => Ok(ColumnType::MYSQL_TYPE_LONG),
-                DataType::Int32 => Ok(ColumnType::MYSQL_TYPE_LONG),
-                DataType::Int64 => Ok(ColumnType::MYSQL_TYPE_LONG),
-                DataType::UInt8 => Ok(ColumnType::MYSQL_TYPE_LONG),
-                DataType::UInt16 => Ok(ColumnType::MYSQL_TYPE_LONG),
-                DataType::UInt32 => Ok(ColumnType::MYSQL_TYPE_LONG),
-                DataType::UInt64 => Ok(ColumnType::MYSQL_TYPE_LONG),
-                DataType::Float32 => Ok(ColumnType::MYSQL_TYPE_FLOAT),
-                DataType::Float64 => Ok(ColumnType::MYSQL_TYPE_FLOAT),
-                DataType::String => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+                DataType::Int8(_) => Ok(ColumnType::MYSQL_TYPE_LONG),
+                DataType::Int16(_) => Ok(ColumnType::MYSQL_TYPE_LONG),
+                DataType::Int32(_) => Ok(ColumnType::MYSQL_TYPE_LONG),
+                DataType::Int64(_) => Ok(ColumnType::MYSQL_TYPE_LONG),
+                DataType::UInt8(_) => Ok(ColumnType::MYSQL_TYPE_LONG),
+                DataType::UInt16(_) => Ok(ColumnType::MYSQL_TYPE_LONG),
+                DataType::UInt32(_) => Ok(ColumnType::MYSQL_TYPE_LONG),
+                DataType::UInt64(_) => Ok(ColumnType::MYSQL_TYPE_LONG),
+                DataType::Float32(_) => Ok(ColumnType::MYSQL_TYPE_FLOAT),
+                DataType::Float64(_) => Ok(ColumnType::MYSQL_TYPE_FLOAT),
+                DataType::String(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Boolean(_) => Ok(ColumnType::MYSQL_TYPE_SHORT),
-                DataType::Date16 | DataType::Date32 => Ok(ColumnType::MYSQL_TYPE_DATE),
-                DataType::DateTime32(_) => Ok(ColumnType::MYSQL_TYPE_DATETIME),
-                DataType::DateTime64(_, _) => Ok(ColumnType::MYSQL_TYPE_DATETIME),
+                DataType::Date16(_) | DataType::Date32(_) => Ok(ColumnType::MYSQL_TYPE_DATE),
+                DataType::DateTime32(_, _) => Ok(ColumnType::MYSQL_TYPE_DATETIME),
+                DataType::DateTime64(_, _, _) => Ok(ColumnType::MYSQL_TYPE_DATETIME),
                 DataType::Null => Ok(ColumnType::MYSQL_TYPE_NULL),
-                DataType::Interval(_) => Ok(ColumnType::MYSQL_TYPE_LONG),
+                DataType::Interval(_, _) => Ok(ColumnType::MYSQL_TYPE_LONG),
                 DataType::Struct(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 _ => Err(ErrorCode::UnImplement(format!(
                     "Unsupported column type:{:?}",
@@ -123,50 +123,50 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                 (DataType::Boolean(_), DataValue::Boolean(Some(v))) => {
                                     row_writer.write_col(v as i8)?
                                 }
-                                (DataType::Int8, DataValue::Int8(Some(v))) => {
+                                (DataType::Int8(_), DataValue::Int8(Some(v))) => {
                                     row_writer.write_col(v)?
                                 }
-                                (DataType::Int16, DataValue::Int16(Some(v))) => {
+                                (DataType::Int16(_), DataValue::Int16(Some(v))) => {
                                     row_writer.write_col(v)?
                                 }
-                                (DataType::Int32, DataValue::Int32(Some(v))) => {
+                                (DataType::Int32(_), DataValue::Int32(Some(v))) => {
                                     row_writer.write_col(v)?
                                 }
-                                (DataType::Int64, DataValue::Int64(Some(v))) => {
+                                (DataType::Int64(_), DataValue::Int64(Some(v))) => {
                                     row_writer.write_col(v)?
                                 }
-                                (DataType::UInt8, DataValue::UInt8(Some(v))) => {
+                                (DataType::UInt8(_), DataValue::UInt8(Some(v))) => {
                                     row_writer.write_col(v)?
                                 }
-                                (DataType::UInt16, DataValue::UInt16(Some(v))) => {
+                                (DataType::UInt16(_), DataValue::UInt16(Some(v))) => {
                                     row_writer.write_col(v)?
                                 }
-                                (DataType::UInt32, DataValue::UInt32(Some(v))) => {
+                                (DataType::UInt32(_), DataValue::UInt32(Some(v))) => {
                                     row_writer.write_col(v)?
                                 }
-                                (DataType::UInt64, DataValue::UInt64(Some(v))) => {
+                                (DataType::UInt64(_), DataValue::UInt64(Some(v))) => {
                                     row_writer.write_col(v)?
                                 }
-                                (DataType::Float32, DataValue::Float32(Some(v))) => {
+                                (DataType::Float32(_), DataValue::Float32(Some(v))) => {
                                     row_writer.write_col(v)?
                                 }
-                                (DataType::Float64, DataValue::Float64(Some(v))) => {
+                                (DataType::Float64(_), DataValue::Float64(Some(v))) => {
                                     row_writer.write_col(v)?
                                 }
-                                (DataType::Date16, DataValue::UInt16(Some(v))) => {
+                                (DataType::Date16(_), DataValue::UInt16(Some(v))) => {
                                     row_writer.write_col(v.to_date(&utc).naive_local())?
                                 }
-                                (DataType::Date32, DataValue::Int32(Some(v))) => {
+                                (DataType::Date32(_), DataValue::Int32(Some(v))) => {
                                     row_writer.write_col(v.to_date(&utc).naive_local())?
                                 }
-                                (DataType::DateTime32(tz), DataValue::UInt32(Some(v))) => {
+                                (DataType::DateTime32(_, tz), DataValue::UInt32(Some(v))) => {
                                     let tz = tz.clone();
                                     let tz = tz.unwrap_or_else(|| "UTC".to_string());
                                     let tz: Tz = tz.parse().unwrap();
                                     row_writer.write_col(v.to_date_time(&tz).naive_local())?
                                 }
                                 (
-                                    DataType::DateTime64(precision, tz),
+                                    DataType::DateTime64(_, precision, tz),
                                     DataValue::UInt64(Some(v)),
                                 ) => {
                                     let tz = tz.clone();
@@ -181,7 +181,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                             .to_string(),
                                     )?
                                 }
-                                (DataType::String, DataValue::String(Some(v))) => {
+                                (DataType::String(_), DataValue::String(Some(v))) => {
                                     row_writer.write_col(v)?
                                 }
                                 (DataType::Struct(_), DataValue::Struct(_)) => {

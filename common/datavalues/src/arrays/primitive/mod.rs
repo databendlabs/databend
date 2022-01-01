@@ -147,16 +147,16 @@ impl<T: DFPrimitiveType> DFPrimitiveArray<T> {
         }
 
         let d = match T::data_type() {
-            DataType::UInt8 => DataValue::UInt8(v.to_u8()),
-            DataType::UInt16 => DataValue::UInt16(v.to_u16()),
-            DataType::UInt32 => DataValue::UInt32(v.to_u32()),
-            DataType::UInt64 => DataValue::UInt64(v.to_u64()),
-            DataType::Int8 => DataValue::Int8(v.to_i8()),
-            DataType::Int16 => DataValue::Int16(v.to_i16()),
-            DataType::Int32 => DataValue::Int32(v.to_i32()),
-            DataType::Int64 => DataValue::Int64(v.to_i64()),
-            DataType::Float32 => DataValue::Float32(v.to_f32()),
-            DataType::Float64 => DataValue::Float64(v.to_f64()),
+            DataType::UInt8(_) => DataValue::UInt8(v.to_u8()),
+            DataType::UInt16(_) => DataValue::UInt16(v.to_u16()),
+            DataType::UInt32(_) => DataValue::UInt32(v.to_u32()),
+            DataType::UInt64(_) => DataValue::UInt64(v.to_u64()),
+            DataType::Int8(_) => DataValue::Int8(v.to_i8()),
+            DataType::Int16(_) => DataValue::Int16(v.to_i16()),
+            DataType::Int32(_) => DataValue::Int32(v.to_i32()),
+            DataType::Int64(_) => DataValue::Int64(v.to_i64()),
+            DataType::Float32(_) => DataValue::Float32(v.to_f32()),
+            DataType::Float64(_) => DataValue::Float64(v.to_f64()),
             _ => unreachable!(),
         };
 

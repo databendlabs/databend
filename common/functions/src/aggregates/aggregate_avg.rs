@@ -79,8 +79,9 @@ where
         "AggregateAvgFunction"
     }
 
+    // TODO: input should be data_type, and return nullable=true if input is nullable
     fn return_type(&self) -> Result<DataType> {
-        Ok(DataType::Float64)
+        Ok(DataType::Float64(true))
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {

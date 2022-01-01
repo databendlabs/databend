@@ -52,10 +52,10 @@ impl Interpreter for ShowUDFInterpreter {
         let udf = user_mgr.get_udf(&plan.name).await?;
 
         let show_fields = vec![
-            DataField::new("name", DataType::String, false),
-            DataField::new("parameters", DataType::String, false),
-            DataField::new("definition", DataType::String, false),
-            DataField::new("description", DataType::String, false),
+            DataField::new("name", DataType::String(false), false),
+            DataField::new("parameters", DataType::String(false), false),
+            DataField::new("definition", DataType::String(false), false),
+            DataField::new("description", DataType::String(false), false),
         ];
         let show_schema = DataSchemaRefExt::create(show_fields);
 

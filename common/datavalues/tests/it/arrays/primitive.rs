@@ -21,7 +21,7 @@ fn test_empty_array() {
 
     // verify empty data array and data type
     assert!(data_array.is_empty());
-    assert_eq!(&DataType::Int64, data_array.data_type());
+    assert_eq!(&DataType::Int64(true), data_array.data_type());
 }
 
 #[test]

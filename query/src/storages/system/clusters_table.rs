@@ -35,9 +35,9 @@ pub struct ClustersTable {
 impl ClustersTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", DataType::String, false),
-            DataField::new("host", DataType::String, false),
-            DataField::new("port", DataType::UInt16, false),
+            DataField::new("name", DataType::String(false), false),
+            DataField::new("host", DataType::String(false), false),
+            DataField::new("port", DataType::UInt16(false), false),
         ]);
 
         let table_info = TableInfo {

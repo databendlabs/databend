@@ -106,15 +106,22 @@ impl<T: LeftRightOperator> Function for LeftRightFunction<T> {
         }
 
         let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::String;
+        let dt = DataType::String(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let mut op = T::default();
 
-        let s_column = columns[0].column().cast_with_type(&DataType::String)?;
-        let i_column = columns[1].column().cast_with_type(&DataType::UInt64)?;
+        let s_nullable = columns[0].field().is_nullable();
+        let s_column = columns[0]
+            .column()
+            .cast_with_type(&DataType::String(s_nullable))?;
+
+        let i_nullable = columns[1].field().is_nullable();
+        let i_column = columns[1]
+            .column()
+            .cast_with_type(&DataType::UInt64(i_nullable))?;
 
         let r_column: DataColumn = match (s_column, i_column) {
             // #00

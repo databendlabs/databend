@@ -40,10 +40,10 @@ impl TypeSerializer for StructSerializer {
                     let s = serializer.serialize_value(val).unwrap();
                     if matches!(
                         data_type,
-                        DataType::String
-                            | DataType::Date16
-                            | DataType::Date32
-                            | DataType::DateTime32(_)
+                        DataType::String(_)
+                            | DataType::Date16(_)
+                            | DataType::Date32(_)
+                            | DataType::DateTime32(_, _)
                     ) {
                         res.push_str(&format!("'{}'", s));
                     } else {

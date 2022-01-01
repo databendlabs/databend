@@ -440,15 +440,17 @@ impl ExprRPNBuilder {
                 }));
             }
             Expr::Cast { data_type, .. } => {
-                self.rpn
-                    .push(ExprRPNItem::Cast(SQLCommon::make_data_type(data_type)?));
+                self.rpn.push(ExprRPNItem::Cast(SQLCommon::make_data_type(
+                    data_type, false,
+                )?));
             }
             Expr::TypedString { data_type, value } => {
                 self.rpn.push(ExprRPNItem::Value(Value::SingleQuotedString(
                     value.to_string(),
                 )));
-                self.rpn
-                    .push(ExprRPNItem::Cast(SQLCommon::make_data_type(data_type)?));
+                self.rpn.push(ExprRPNItem::Cast(SQLCommon::make_data_type(
+                    data_type, false,
+                )?));
             }
             Expr::Position { .. } => {
                 let name = String::from("position");

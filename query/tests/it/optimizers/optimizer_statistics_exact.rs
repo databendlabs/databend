@@ -36,9 +36,9 @@ fn test_statistics_exact_optimizer() -> Result<()> {
             "system",
             "test",
             DataSchemaRefExt::create(vec![
-                DataField::new("a", DataType::String, false),
-                DataField::new("b", DataType::String, false),
-                DataField::new("c", DataType::String, false),
+                DataField::new("a", DataType::String(false), false),
+                DataField::new("b", DataType::String(false), false),
+                DataField::new("c", DataType::String(false), false),
             ]),
         ),
         scan_fields: None,

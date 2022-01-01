@@ -69,7 +69,11 @@ impl HashFlightScatter {
     }
 
     fn indices_expr_schema(output_name: &str) -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![DataField::new(output_name, DataType::UInt64, false)])
+        DataSchemaRefExt::create(vec![DataField::new(
+            output_name,
+            DataType::UInt64(false),
+            false,
+        )])
     }
 
     fn expr_executor(schema: DataSchemaRef, expr: &Expression) -> Result<ExpressionExecutor> {
@@ -88,7 +92,7 @@ impl HashFlightScatter {
             args: vec![
                 Expression::Cast {
                     expr: Box::new(expr),
-                    data_type: DataType::UInt64,
+                    data_type: DataType::UInt64(false),
                 },
                 Expression::create_literal(DataValue::UInt64(Some(num as u64))),
             ],

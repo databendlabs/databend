@@ -48,8 +48,8 @@ impl AnalyzableStatement for DfShowCreateDatabase {
 impl DfShowCreateDatabase {
     fn schema() -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
-            DataField::new("Database", DataType::String, false),
-            DataField::new("Create Database", DataType::String, false),
+            DataField::new("Database", DataType::String(false), false),
+            DataField::new("Create Database", DataType::String(false), false),
         ])
     }
 

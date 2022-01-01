@@ -33,27 +33,28 @@ pub fn construct_numeric_type(
     is_signed: bool,
     is_floating: bool,
     byte_size: usize,
+    nullable: bool,
 ) -> Result<DataType> {
     match (is_signed, is_floating, byte_size) {
-        (false, false, 1) => Ok(DataType::UInt8),
-        (false, false, 2) => Ok(DataType::UInt16),
-        (false, false, 4) => Ok(DataType::UInt32),
-        (false, false, 8) => Ok(DataType::UInt64),
-        (false, true, 4) => Ok(DataType::Float32),
-        (false, true, 8) => Ok(DataType::Float64),
-        (true, false, 1) => Ok(DataType::Int8),
-        (true, false, 2) => Ok(DataType::Int16),
-        (true, false, 4) => Ok(DataType::Int32),
-        (true, false, 8) => Ok(DataType::Int64),
-        (true, true, 1) => Ok(DataType::Float32),
-        (true, true, 2) => Ok(DataType::Float32),
-        (true, true, 4) => Ok(DataType::Float32),
-        (true, true, 8) => Ok(DataType::Float64),
+        (false, false, 1) => Ok(DataType::UInt8(nullable)),
+        (false, false, 2) => Ok(DataType::UInt16(nullable)),
+        (false, false, 4) => Ok(DataType::UInt32(nullable)),
+        (false, false, 8) => Ok(DataType::UInt64(nullable)),
+        (false, true, 4) => Ok(DataType::Float32(nullable)),
+        (false, true, 8) => Ok(DataType::Float64(nullable)),
+        (true, false, 1) => Ok(DataType::Int8(nullable)),
+        (true, false, 2) => Ok(DataType::Int16(nullable)),
+        (true, false, 4) => Ok(DataType::Int32(nullable)),
+        (true, false, 8) => Ok(DataType::Int64(nullable)),
+        (true, true, 1) => Ok(DataType::Float32(nullable)),
+        (true, true, 2) => Ok(DataType::Float32(nullable)),
+        (true, true, 4) => Ok(DataType::Float32(nullable)),
+        (true, true, 8) => Ok(DataType::Float64(nullable)),
 
         // TODO support bigint and decimal types, now we just let's overflow
-        (false, false, d) if d > 8 => Ok(DataType::Int64),
-        (true, false, d) if d > 8 => Ok(DataType::UInt64),
-        (_, true, d) if d > 8 => Ok(DataType::Float64),
+        (false, false, d) if d > 8 => Ok(DataType::Int64(nullable)),
+        (true, false, d) if d > 8 => Ok(DataType::UInt64(nullable)),
+        (_, true, d) if d > 8 => Ok(DataType::Float64(nullable)),
 
         _ => Result::Err(ErrorCode::BadDataValueType(format!(
             "Can't construct type from is_signed: {}, is_floating: {}, byte_size: {}",
@@ -70,6 +71,7 @@ pub fn numerical_coercion(
     rhs_type: &DataType,
     allow_overflow: bool,
 ) -> Result<DataType> {
+    let nullable = lhs_type.is_nullable() || rhs_type.is_nullable();
     let has_float = lhs_type.is_floating() || rhs_type.is_floating();
     let has_integer = lhs_type.is_integer() || rhs_type.is_integer();
     let has_signed = lhs_type.is_signed_numeric() || rhs_type.is_signed_numeric();
@@ -149,7 +151,7 @@ pub fn numerical_coercion(
         }
     }
 
-    construct_numeric_type(has_signed, has_float, max_size)
+    construct_numeric_type(has_signed, has_float, max_size, nullable)
 }
 
 #[inline]
@@ -166,18 +168,19 @@ pub fn numerical_arithmetic_coercion(
         )));
     };
 
+    let nullable = lhs_type.is_nullable() || rhs_type.is_nullable();
     let has_signed = lhs_type.is_signed_numeric() || rhs_type.is_signed_numeric();
     let has_float = lhs_type.is_floating() || rhs_type.is_floating();
     let max_size = cmp::max(lhs_type.numeric_byte_size()?, rhs_type.numeric_byte_size()?);
 
     match op {
         DataValueBinaryOperator::Plus | DataValueBinaryOperator::Mul => {
-            construct_numeric_type(has_signed, has_float, next_size(max_size))
+            construct_numeric_type(has_signed, has_float, next_size(max_size), nullable)
         }
 
         DataValueBinaryOperator::Modulo => {
             if has_float {
-                return Ok(DataType::Float64);
+                return Ok(DataType::Float64(nullable));
             }
             // From clickhouse: NumberTraits.h
             // If modulo of division can yield negative number, we need larger type to accommodate it.
@@ -189,13 +192,15 @@ pub fn numerical_arithmetic_coercion(
             } else {
                 right_size
             };
-            construct_numeric_type(result_is_signed, false, size_of_result)
+            construct_numeric_type(result_is_signed, false, size_of_result, nullable)
         }
         DataValueBinaryOperator::Minus => {
-            construct_numeric_type(true, has_float, next_size(max_size))
+            construct_numeric_type(true, has_float, next_size(max_size), nullable)
         }
-        DataValueBinaryOperator::Div => Ok(DataType::Float64),
-        DataValueBinaryOperator::IntDiv => construct_numeric_type(has_signed, false, max_size),
+        DataValueBinaryOperator::Div => Ok(DataType::Float64(nullable)),
+        DataValueBinaryOperator::IntDiv => {
+            construct_numeric_type(has_signed, false, max_size, nullable)
+        }
     }
 }
 
@@ -214,6 +219,7 @@ pub fn datetime_arithmetic_coercion(
         return e;
     }
 
+    let nullable = lhs_type.is_nullable() || rhs_type.is_nullable();
     let mut a = lhs_type.clone();
     let mut b = rhs_type.clone();
     if !a.is_date_or_date_time() {
@@ -222,14 +228,24 @@ pub fn datetime_arithmetic_coercion(
     }
 
     match op {
-        DataValueBinaryOperator::Plus => Ok(a),
+        DataValueBinaryOperator::Plus => {
+            if nullable {
+                Ok(a.enforce_nullable())
+            } else {
+                Ok(a)
+            }
+        }
 
         DataValueBinaryOperator::Minus => {
             if b.is_numeric() || b.is_interval() {
-                Ok(a)
+                if nullable {
+                    Ok(a.enforce_nullable())
+                } else {
+                    Ok(a)
+                }
             } else {
                 // Date minus Date or DateTime minus DateTime
-                Ok(DataType::Int32)
+                Ok(DataType::Int32(nullable))
             }
         }
         _ => e,
@@ -289,7 +305,7 @@ pub fn numerical_unary_arithmetic_coercion(
             } else {
                 next_size(numeric_size)
             };
-            construct_numeric_type(true, has_float, max_size)
+            construct_numeric_type(true, has_float, max_size, val_type.is_nullable())
         }
     }
 }
@@ -307,32 +323,49 @@ pub fn compare_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<Data
 
     //  one of is null
     {
-        if rhs_type == &DataType::Null {
+        if rhs_type.is_null() {
             return Ok(lhs_type.clone());
         }
-        if lhs_type == &DataType::Null {
+        if lhs_type.is_null() {
             return Ok(rhs_type.clone());
+        }
+    }
+
+    let nullable = lhs_type.is_nullable() || rhs_type.is_nullable();
+
+    // comparison between Nullable and Non-Nullable/Nullable
+    if nullable {
+        let (nullable_type, the_other) = if lhs_type.is_nullable() {
+            (lhs_type, rhs_type)
+        } else {
+            (rhs_type, lhs_type)
+        };
+
+        if *nullable_type == the_other.enforce_nullable() {
+            return Ok(nullable_type.clone());
         }
     }
 
     // one of is String and other is number
-    if (lhs_type.is_numeric() && rhs_type == &DataType::String)
-        || (rhs_type.is_numeric() && lhs_type == &DataType::String)
+    if (lhs_type.is_numeric() && rhs_type.is_string())
+        || (rhs_type.is_numeric() && lhs_type.is_string())
     {
-        return Ok(DataType::Float64);
+        return Ok(DataType::Float64(nullable));
     }
 
     // one of is datetime and other is number or string
     {
-        if (lhs_type.is_numeric() || lhs_type == &DataType::String)
-            && rhs_type.is_date_or_date_time()
-        {
+        if (lhs_type.is_numeric() || lhs_type.is_string()) && rhs_type.is_date_or_date_time() {
+            if nullable {
+                return Ok(rhs_type.enforce_nullable());
+            }
             return Ok(rhs_type.clone());
         }
 
-        if (rhs_type.is_numeric() || rhs_type == &DataType::String)
-            && lhs_type.is_date_or_date_time()
-        {
+        if (rhs_type.is_numeric() || rhs_type.is_string()) && lhs_type.is_date_or_date_time() {
+            if nullable {
+                return Ok(lhs_type.enforce_nullable());
+            }
             return Ok(lhs_type.clone());
         }
     }
@@ -340,13 +373,13 @@ pub fn compare_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<Data
     // one of is datetime and other is number or string
     if lhs_type.is_date_or_date_time() || rhs_type.is_date_or_date_time() {
         // one of is datetime
-        if matches!(lhs_type, DataType::DateTime32(_))
-            || matches!(rhs_type, DataType::DateTime32(_))
+        if matches!(lhs_type, DataType::DateTime32(_, _))
+            || matches!(rhs_type, DataType::DateTime32(_, _))
         {
-            return Ok(DataType::DateTime32(None));
+            return Ok(DataType::DateTime32(nullable, None));
         }
 
-        return Ok(DataType::Date32);
+        return Ok(DataType::Date32(nullable));
     }
 
     Err(ErrorCode::IllegalDataType(format!(

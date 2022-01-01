@@ -26,7 +26,7 @@ fn test_plan_display_indent() -> Result<()> {
     use pretty_assertions::assert_eq;
 
     // TODO test other plan type
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64(false), false)]);
 
     let mut options = HashMap::new();
     options.insert("opt_foo".to_string(), "opt_bar".to_string());

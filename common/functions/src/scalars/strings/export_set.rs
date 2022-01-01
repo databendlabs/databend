@@ -85,21 +85,36 @@ impl Function for ExportSetFunction {
         }
 
         let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::String;
+        let dt = DataType::String(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, r: usize) -> Result<DataColumn> {
-        let b_column = columns[0].column().cast_with_type(&DataType::UInt64)?;
-        let e_column = columns[1].column().cast_with_type(&DataType::String)?;
-        let d_column = columns[2].column().cast_with_type(&DataType::String)?;
+        let column_nullables = columns
+            .iter()
+            .map(|column| column.field().is_nullable())
+            .collect::<Vec<_>>();
+
+        let b_column = columns[0]
+            .column()
+            .cast_with_type(&DataType::UInt64(column_nullables[0]))?;
+        let e_column = columns[1]
+            .column()
+            .cast_with_type(&DataType::String(column_nullables[1]))?;
+        let d_column = columns[2]
+            .column()
+            .cast_with_type(&DataType::String(column_nullables[2]))?;
         let s_column = if columns.len() > 3 {
-            columns[3].column().cast_with_type(&DataType::String)?
+            columns[3]
+                .column()
+                .cast_with_type(&DataType::String(column_nullables[3]))?
         } else {
             DataColumn::Constant(DataValue::String(Some(vec![44])), r)
         };
         let n_column = if columns.len() > 4 {
-            columns[4].column().cast_with_type(&DataType::UInt64)?
+            columns[4]
+                .column()
+                .cast_with_type(&DataType::UInt64(column_nullables[4]))?
         } else {
             DataColumn::Constant(DataValue::UInt64(Some(64)), r)
         };

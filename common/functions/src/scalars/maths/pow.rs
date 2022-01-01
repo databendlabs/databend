@@ -51,7 +51,7 @@ impl Function for PowFunction {
         let nullable = args.iter().any(|arg| arg.is_nullable());
 
         let data_type = if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
-            Ok(DataType::Float64)
+            Ok(DataType::Float64(nullable))
         } else {
             Err(ErrorCode::IllegalDataType(format!(
                 "Expected numeric, but got {}",
@@ -63,8 +63,15 @@ impl Function for PowFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let x_column: &DataColumn = &columns[0].column().cast_with_type(&DataType::Float64)?;
-        let y_column: &DataColumn = &columns[1].column().cast_with_type(&DataType::Float64)?;
+        let x_nullable = columns[0].field().is_nullable();
+        let x_column: &DataColumn = &columns[0]
+            .column()
+            .cast_with_type(&DataType::Float64(x_nullable))?;
+
+        let y_nullable = columns[1].field().is_nullable();
+        let y_column: &DataColumn = &columns[1]
+            .column()
+            .cast_with_type(&DataType::Float64(y_nullable))?;
 
         let result = match (x_column, y_column) {
             (DataColumn::Array(x_series), DataColumn::Constant(y, _)) => {

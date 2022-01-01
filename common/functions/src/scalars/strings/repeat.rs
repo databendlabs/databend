@@ -64,14 +64,18 @@ impl Function for RepeatFunction {
         }
 
         let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::String;
+        let dt = DataType::String(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         match (
-            columns[0].column().cast_with_type(&DataType::String)?,
-            columns[1].column().cast_with_type(&DataType::UInt64)?,
+            columns[0]
+                .column()
+                .cast_with_type(&DataType::String(columns[0].field().is_nullable()))?,
+            columns[1]
+                .column()
+                .cast_with_type(&DataType::UInt64(columns[1].field().is_nullable()))?,
         ) {
             (
                 DataColumn::Constant(DataValue::String(input_string), _),

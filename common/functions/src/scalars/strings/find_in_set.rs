@@ -62,13 +62,20 @@ impl Function for FindInSetFunction {
         }
 
         let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::UInt64;
+        let dt = DataType::UInt64(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, r: usize) -> Result<DataColumn> {
-        let e_column = columns[0].column().cast_with_type(&DataType::String)?;
-        let d_column = columns[1].column().cast_with_type(&DataType::String)?;
+        let e_nullable = columns[0].field().is_nullable();
+        let e_column = columns[0]
+            .column()
+            .cast_with_type(&DataType::String(e_nullable))?;
+
+        let d_nullable = columns[1].field().is_nullable();
+        let d_column = columns[1]
+            .column()
+            .cast_with_type(&DataType::String(d_nullable))?;
 
         match (e_column, d_column) {
             (

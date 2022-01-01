@@ -103,7 +103,7 @@ impl TestFixture {
     }
 
     pub fn default_schema() -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![DataField::new("id", DataType::Int32, false)])
+        DataSchemaRefExt::create(vec![DataField::new("id", DataType::Int32(false), false)])
     }
 
     pub fn default_crate_table_plan(&self) -> CreateTablePlan {
@@ -132,8 +132,11 @@ impl TestFixture {
         (0..num)
             .into_iter()
             .map(|_v| {
-                let schema =
-                    DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
+                let schema = DataSchemaRefExt::create(vec![DataField::new(
+                    "a",
+                    DataType::Int32(false),
+                    false,
+                )]);
                 Ok(DataBlock::create_by_array(schema, vec![Series::new(vec![
                     start,
                     start + 1,

@@ -41,13 +41,13 @@ impl TracingTable {
         // {"v":0,"name":"databend-query","msg":"Group by partial cost: 9.071158ms","level":20,"hostname":"databend","pid":56776,"time":"2021-06-24T02:17:28.679642889+00:00"}
 
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("v", DataType::Int64, false),
-            DataField::new("name", DataType::String, false),
-            DataField::new("msg", DataType::String, false),
-            DataField::new("level", DataType::Int8, false),
-            DataField::new("hostname", DataType::String, false),
-            DataField::new("pid", DataType::Int64, false),
-            DataField::new("time", DataType::String, false),
+            DataField::new("v", DataType::Int64(false), false),
+            DataField::new("name", DataType::String(false), false),
+            DataField::new("msg", DataType::String(false), false),
+            DataField::new("level", DataType::Int8(false), false),
+            DataField::new("hostname", DataType::String(false), false),
+            DataField::new("pid", DataType::Int64(false), false),
+            DataField::new("time", DataType::String(false), false),
         ]);
 
         let table_info = TableInfo {

@@ -37,7 +37,7 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "int8",
-            data_type: DataType::Int8,
+            data_type: DataType::Int8(true),
             value: DataValue::Int8(Some(1)),
             column: Series::new(vec![Some(1i8), Some(2i8), None]).into(),
             val_str: "1",
@@ -45,7 +45,7 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "datetime32",
-            data_type: DataType::DateTime32(None),
+            data_type: DataType::DateTime32(true, None),
             value: DataValue::UInt32(Some(1630320462)),
             column: Series::new(vec![Some(1630320462u32), Some(1637117572u32), None]).into(),
             val_str: "2021-08-30 10:47:42",
@@ -57,7 +57,7 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "date32",
-            data_type: DataType::Date32,
+            data_type: DataType::Date32(true),
             value: DataValue::Int32(Some(18869)),
             column: Series::new(vec![Some(18869i32), Some(18948i32), None]).into(),
             val_str: "2021-08-30",
@@ -69,7 +69,7 @@ fn test_serializers() -> Result<()> {
         },
         Test {
             name: "string",
-            data_type: DataType::String,
+            data_type: DataType::String(true),
             value: DataValue::String(Some("hello".as_bytes().to_vec())),
             column: Series::new(vec![Some("hello"), Some("world"), None]).into(),
             val_str: "hello",
@@ -88,10 +88,10 @@ fn test_serializers() -> Result<()> {
 
     {
         let data_type = DataType::Struct(vec![
-            DataField::new("item_0", DataType::Float64, false),
-            DataField::new("item_1", DataType::String, false),
+            DataField::new("item_0", DataType::Float64(false), false),
+            DataField::new("item_1", DataType::String(false), false),
             DataField::new("item_2", DataType::Boolean(false), false),
-            DataField::new("item_3", DataType::Date16, false),
+            DataField::new("item_3", DataType::Date16(false), false),
         ]);
         let serializer = data_type.create_serializer();
         let value = DataValue::Struct(vec![

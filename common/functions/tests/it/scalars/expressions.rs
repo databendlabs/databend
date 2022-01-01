@@ -25,7 +25,7 @@ use crate::scalars::scalar_function_test::ScalarFunctionTestWithType;
 fn test_cast_function() -> Result<()> {
     let tests = vec![
         (
-            CastFunction::create("toint8".to_string(), DataType::Int8)?,
+            CastFunction::create("toint8".to_string(), DataType::Int8(false))?,
             ScalarFunctionTest {
                 name: "cast-int64-to-int8-passed",
                 nullable: false,
@@ -35,7 +35,7 @@ fn test_cast_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("toint8".to_string(), DataType::Int8)?,
+            CastFunction::create("toint8".to_string(), DataType::Int8(false))?,
             ScalarFunctionTest {
                 name: "cast-string-to-int8-passed",
                 nullable: false,
@@ -45,7 +45,7 @@ fn test_cast_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("toint16".to_string(), DataType::Int16)?,
+            CastFunction::create("toint16".to_string(), DataType::Int16(false))?,
             ScalarFunctionTest {
                 name: "cast-string-to-int16-passed",
                 nullable: false,
@@ -55,7 +55,7 @@ fn test_cast_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("toint32".to_string(), DataType::Int32)?,
+            CastFunction::create("toint32".to_string(), DataType::Int32(false))?,
             ScalarFunctionTest {
                 name: "cast-string-to-int32-passed",
                 nullable: false,
@@ -65,7 +65,7 @@ fn test_cast_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("toint64".to_string(), DataType::Int64)?,
+            CastFunction::create("toint64".to_string(), DataType::Int64(false))?,
             ScalarFunctionTest {
                 name: "cast-string-to-int64-passed",
                 nullable: false,
@@ -75,7 +75,7 @@ fn test_cast_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("cast".to_string(), DataType::Date16)?,
+            CastFunction::create("cast".to_string(), DataType::Date16(false))?,
             ScalarFunctionTest {
                 name: "cast-string-to-date16-passed",
                 nullable: false,
@@ -85,7 +85,7 @@ fn test_cast_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("cast".to_string(), DataType::Date32)?,
+            CastFunction::create("cast".to_string(), DataType::Date32(false))?,
             ScalarFunctionTest {
                 name: "cast-string-to-date32-passed",
                 nullable: false,
@@ -95,7 +95,7 @@ fn test_cast_function() -> Result<()> {
             },
         ),
         (
-            CastFunction::create("cast".to_string(), DataType::DateTime32(None))?,
+            CastFunction::create("cast".to_string(), DataType::DateTime32(false, None))?,
             ScalarFunctionTest {
                 name: "cast-string-to-datetime32-passed",
                 nullable: false,
@@ -119,26 +119,26 @@ fn test_cast_function() -> Result<()> {
 fn test_datetime_cast_function() -> Result<()> {
     let tests = vec![
         (
-            CastFunction::create("cast".to_string(), DataType::String)?,
+            CastFunction::create("cast".to_string(), DataType::String(false))?,
             ScalarFunctionTestWithType {
                 name: "cast-date32-to-string-passed",
                 nullable: false,
                 columns: vec![DataColumnWithField::new(
                     Series::new(vec![18691i32, 18924]).into(),
-                    DataField::new("dummy_1", DataType::Date32, false),
+                    DataField::new("dummy_1", DataType::Date32(false), false),
                 )],
                 expect: Series::new(vec!["2021-03-05", "2021-10-24"]).into(),
                 error: "",
             },
         ),
         (
-            CastFunction::create("cast".to_string(), DataType::String)?,
+            CastFunction::create("cast".to_string(), DataType::String(false))?,
             ScalarFunctionTestWithType {
                 name: "cast-datetime-to-string-passed",
                 nullable: false,
                 columns: vec![DataColumnWithField::new(
                     Series::new(vec![1614906061u32, 1635070210]).into(),
-                    DataField::new("dummy_1", DataType::DateTime32(None), false),
+                    DataField::new("dummy_1", DataType::DateTime32(false, None), false),
                 )],
                 expect: Series::new(vec!["2021-03-05 01:01:01", "2021-10-24 10:10:10"]).into(),
                 error: "",

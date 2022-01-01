@@ -22,9 +22,9 @@ use pretty_assertions::assert_eq;
 #[test]
 fn test_describe_table_plan() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("Field", DataType::String, false),
-        DataField::new("Type", DataType::String, false),
-        DataField::new("Null", DataType::String, false),
+        DataField::new("Field", DataType::String(false), false),
+        DataField::new("Type", DataType::String(false), false),
+        DataField::new("Null", DataType::String(false), false),
     ]);
 
     let describe = PlanNode::DescribeTable(DescribeTablePlan {

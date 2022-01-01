@@ -48,7 +48,7 @@ impl Function for PiFunction {
 
     fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
         let dt = DataType::Float64;
-        Ok(DataTypeAndNullable::create(&dt, false))
+        Ok(DataTypeAndNullable::create(&dt(false), false))
     }
 
     fn eval(&self, _columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

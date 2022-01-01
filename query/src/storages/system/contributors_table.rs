@@ -35,7 +35,7 @@ pub struct ContributorsTable {
 impl ContributorsTable {
     pub fn create(table_id: u64) -> Self {
         let schema =
-            DataSchemaRefExt::create(vec![DataField::new("name", DataType::String, false)]);
+            DataSchemaRefExt::create(vec![DataField::new("name", DataType::String(false), false)]);
 
         let table_info = TableInfo {
             desc: "'system'.'contributors'".to_string(),

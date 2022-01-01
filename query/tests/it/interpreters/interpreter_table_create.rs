@@ -39,15 +39,18 @@ async fn test_create_table_interpreter() -> Result<()> {
             let schema = plan.schema();
 
             let field_a = schema.field_with_name("a").unwrap();
+
+            // The default expression 'default 3' is converted to a literal expression with data type UInt8(true) -- which is arguably right.
+            // Maybe the 'UInt8(false)',the non-nullable type should be the right one.
             assert_eq!(
                 format!("{:?}", field_a),
-                r#"DataField { name: "a", data_type: Int64, nullable: false, default_expr: "{\"Literal\":{\"value\":{\"UInt8\":3},\"column_name\":null,\"data_type\":\"UInt8\"}}" }"#
+                r#"DataField { name: "a", data_type: Int64, nullable: false, default_expr: "{\"Literal\":{\"value\":{\"UInt8\":3},\"column_name\":null,\"data_type\":{\"UInt8\":true}}}" }"#
             );
 
             let field_b = schema.field_with_name("b").unwrap();
             assert_eq!(
                 format!("{:?}", field_b),
-                r#"DataField { name: "b", data_type: Int32, nullable: true, default_expr: "{\"BinaryExpression\":{\"left\":{\"Column\":\"a\"},\"op\":\"+\",\"right\":{\"Literal\":{\"value\":{\"UInt8\":3},\"column_name\":null,\"data_type\":\"UInt8\"}}}}" }"#
+                r#"DataField { name: "b", data_type: Int32, nullable: true, default_expr: "{\"BinaryExpression\":{\"left\":{\"Column\":\"a\"},\"op\":\"+\",\"right\":{\"Literal\":{\"value\":{\"UInt8\":3},\"column_name\":null,\"data_type\":{\"UInt8\":true}}}}}" }"#
             );
         } else {
             panic!()

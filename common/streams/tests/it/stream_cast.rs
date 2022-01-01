@@ -22,13 +22,13 @@ use futures::stream::StreamExt;
 #[tokio::test]
 async fn test_cast_stream() {
     let input_schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::String, false),
-        DataField::new("b", DataType::String, false),
+        DataField::new("a", DataType::String(false), false),
+        DataField::new("b", DataType::String(false), false),
     ]);
 
     let output_schema = DataSchemaRefExt::create(vec![
-        DataField::new("c", DataType::UInt8, false),
-        DataField::new("d", DataType::UInt16, false),
+        DataField::new("c", DataType::UInt8(false), false),
+        DataField::new("d", DataType::UInt16(false), false),
     ]);
 
     // create a data block [(1, 10), (2, 20), (3, 30), (4, 40), (5, 50)]
@@ -62,8 +62,8 @@ async fn test_cast_stream() {
     let stream = DataBlockStream::create(input_schema.clone(), None, vec![block0, block1]);
 
     // cast from String to UInt8 and String to UInt16
-    let to_uint8 = CastFunction::create("cast".to_string(), DataType::UInt8).unwrap();
-    let to_uint16 = CastFunction::create("cast".to_string(), DataType::UInt16).unwrap();
+    let to_uint8 = CastFunction::create("cast".to_string(), DataType::UInt8(true)).unwrap();
+    let to_uint16 = CastFunction::create("cast".to_string(), DataType::UInt16(true)).unwrap();
 
     let functions = vec![to_uint8, to_uint16];
     let mut cast_stream =

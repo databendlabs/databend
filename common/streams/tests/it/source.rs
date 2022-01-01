@@ -32,9 +32,9 @@ async fn test_parse_values() {
         "(1,  'str',   1) , (-1, ' str ' ,  1.1) , ( 2,  'aa aa', 2.2),  (3, \"33'33\", 3.3)   ";
 
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int8, false),
-        DataField::new("b", DataType::String, false),
-        DataField::new("c", DataType::Float64, false),
+        DataField::new("a", DataType::Int8(false), false),
+        DataField::new("b", DataType::String(false), false),
+        DataField::new("c", DataType::Float64(false), false),
     ]);
     let mut values_source = ValueSource::new(buffer.as_bytes(), schema, 10);
     let block = values_source.read().await.unwrap().unwrap();
@@ -81,9 +81,9 @@ async fn test_parse_csvs() {
             .unwrap();
 
             let schema = DataSchemaRefExt::create(vec![
-                DataField::new("a", DataType::Int8, false),
-                DataField::new("b", DataType::String, false),
-                DataField::new("c", DataType::Float64, false),
+                DataField::new("a", DataType::Int8(false), false),
+                DataField::new("b", DataType::String(false), false),
+                DataField::new("c", DataType::Float64(false), false),
             ]);
 
             let local = Local::with_path(dir.path().to_path_buf());

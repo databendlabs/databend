@@ -19,7 +19,8 @@ use common_functions::scalars::*;
 
 #[test]
 fn test_column_function() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Boolean(false), false)]);
+    let schema =
+        DataSchemaRefExt::create(vec![DataField::new("a", DataType::Boolean(false), false)]);
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![
         true, true, true, false,
     ])]);

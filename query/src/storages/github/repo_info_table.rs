@@ -63,14 +63,14 @@ impl RepoInfoTable {
 
     fn schema() -> Arc<DataSchema> {
         let fields = vec![
-            DataField::new(REPOSITORY, DataType::String, false),
-            DataField::new(LANGUAGE, DataType::String, true),
-            DataField::new(LICENSE, DataType::String, true),
-            DataField::new(STAR_COUNT, DataType::UInt32, true),
-            DataField::new(FORKS_COUNT, DataType::UInt32, true),
-            DataField::new(WATCHERS_COUNT, DataType::UInt32, true),
-            DataField::new(OPEN_ISSUES_COUNT, DataType::UInt32, true),
-            DataField::new(SUBSCRIBERS_COUNT, DataType::UInt32, true),
+            DataField::new(REPOSITORY, DataType::String(false), false),
+            DataField::new(LANGUAGE, DataType::String(true), true),
+            DataField::new(LICENSE, DataType::String(true), true),
+            DataField::new(STAR_COUNT, DataType::UInt32(true), true),
+            DataField::new(FORKS_COUNT, DataType::UInt32(true), true),
+            DataField::new(WATCHERS_COUNT, DataType::UInt32(true), true),
+            DataField::new(OPEN_ISSUES_COUNT, DataType::UInt32(true), true),
+            DataField::new(SUBSCRIBERS_COUNT, DataType::UInt32(true), true),
         ];
 
         Arc::new(DataSchema::new(fields))

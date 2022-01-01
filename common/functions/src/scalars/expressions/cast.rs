@@ -61,15 +61,22 @@ impl Function for CastFunction {
     }
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let dt = self.cast_type.clone();
+        let mut dt = self.cast_type.clone();
         let nullable = args.iter().any(|arg| arg.is_nullable());
+        if nullable {
+            dt = dt.enforce_nullable();
+        }
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        if columns[0].data_type() == &self.cast_type {
+        // TODO: this may be wrong here, nullable is ignored in the comparison.
+        // Think about when we compare UInt16(true) with Date16(false), the casting will happen from UInt16(true) to Date16(false).
+        // Although it doesn't make too much sense to convert nullable to non-nullable, we should figure out a way make it work.
+        if columns[0].data_type().enforce_nullable() == self.cast_type.enforce_nullable() {
             return Ok(columns[0].column().clone());
         }
+
         let series = columns[0].column().clone().to_minimal_array()?;
         const DATE_FMT: &str = "%Y-%m-%d";
         const TIME_FMT: &str = "%Y-%m-%d %H:%M:%S";
@@ -83,48 +90,50 @@ impl Function for CastFunction {
 
         let array = match (columns[0].data_type(), &self.cast_type) {
             // Date/DateTime to others
-            (DataType::Date16, _) => with_match_primitive_type!(&self.cast_type, |$T| {
+            (DataType::Date16(_), _) => with_match_primitive_type!(&self.cast_type, |$T| {
                 series.cast_with_type(&self.cast_type)
             }, {
                let arr = series.u16()?;
                match &self.cast_type {
-                Date32 => Ok(arr.apply_cast_numeric(|v| v as i32).into_series()),
-                DateTime32(_) => Ok(arr.apply_cast_numeric(|v|  Utc.timestamp(v as i64 * 24 * 3600, 0_u32).timestamp() as u32 ).into_series() ),
-                String => Ok(DFStringArray::from_iter(arr.into_iter().map(|v| v.map(|x| datetime_to_string( Utc.timestamp(*x as i64 * 24 * 3600, 0_u32), DATE_FMT))) ).into_series()),
+                Date32(_) => Ok(arr.apply_cast_numeric(|v| v as i32).into_series()),
+                DateTime32(_, _) => Ok(arr.apply_cast_numeric(|v|  Utc.timestamp(v as i64 * 24 * 3600, 0_u32).timestamp() as u32 ).into_series() ),
+                String(_) => Ok(DFStringArray::from_iter(arr.into_iter().map(|v| v.map(|x| datetime_to_string( Utc.timestamp(*x as i64 * 24 * 3600, 0_u32), DATE_FMT))) ).into_series()),
                 _ => error_fn(),
                }
             }),
 
-            (DataType::Date32, _) => with_match_primitive_type!(&self.cast_type, |$T| {
+            // TODO: optimize when nullable is false
+            (DataType::Date32(_), _) => with_match_primitive_type!(&self.cast_type, |$T| {
                 series.cast_with_type(&self.cast_type)
             }, {
                let arr = series.i32()?;
                match &self.cast_type {
-                Date32 => Ok(arr.apply_cast_numeric(|v| v as i32).into_series()),
-                DateTime32(_) => Ok(arr.apply_cast_numeric(|v|  Utc.timestamp(v as i64 * 24 * 3600, 0_u32).timestamp()  as u32).into_series() ),
-                String => Ok(DFStringArray::from_iter(arr.into_iter().map(|v| v.map(|x| datetime_to_string( Utc.timestamp(*x as i64 * 24 * 3600, 0_u32), DATE_FMT))) ).into_series()),
+                Date32(_) => Ok(arr.apply_cast_numeric(|v| v as i32).into_series()),
+                DateTime32(_, _) => Ok(arr.apply_cast_numeric(|v|  Utc.timestamp(v as i64 * 24 * 3600, 0_u32).timestamp()  as u32).into_series() ),
+                String(_) => Ok(DFStringArray::from_iter(arr.into_iter().map(|v| v.map(|x| datetime_to_string( Utc.timestamp(*x as i64 * 24 * 3600, 0_u32), DATE_FMT))) ).into_series()),
                 _ => error_fn(),
                }
             }),
 
-            (DataType::DateTime32(_), _) => with_match_primitive_type!(&self.cast_type, |$T| {
+            (DataType::DateTime32(_, _), _) => with_match_primitive_type!(&self.cast_type, |$T| {
                 series.cast_with_type(&self.cast_type)
             }, {
                let arr = series.u32()?;
                match &self.cast_type {
-                Date16 => Ok(arr.apply_cast_numeric(|v| (v as i64 / 24/ 3600) as u16).into_series()),
-                Date32 => Ok(arr.apply_cast_numeric(|v| (v as i64 / 24/ 3600) as i32).into_series()),
-                String => Ok(DFStringArray::from_iter(arr.into_iter().map(|v| v.map(|x| datetime_to_string( Utc.timestamp(*x as i64, 0_u32), TIME_FMT))) ).into_series()),
+                Date16(_) => Ok(arr.apply_cast_numeric(|v| (v as i64 / 24/ 3600) as u16).into_series()),
+                Date32(_) => Ok(arr.apply_cast_numeric(|v| (v as i64 / 24/ 3600) as i32).into_series()),
+                String(_) => Ok(DFStringArray::from_iter(arr.into_iter().map(|v| v.map(|x| datetime_to_string( Utc.timestamp(*x as i64, 0_u32), TIME_FMT))) ).into_series()),
                 _ => error_fn(),
                }
             }),
 
             // others to Date/DateTime
-            (_, DataType::Date16) => with_match_primitive_type!(columns[0].data_type(), |$T| {
+            // TODO: optimize when nullable is false
+            (_, DataType::Date16(_)) => with_match_primitive_type!(columns[0].data_type(), |$T| {
                 series.cast_with_type(&self.cast_type)
             }, {
                match columns[0].data_type() {
-                String => {
+                String(_) => {
                     let it = series.string()?.into_iter().map(|v| {
                         v.and_then(string_to_date).map(|d| (d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as u16 )
                     });
@@ -135,11 +144,12 @@ impl Function for CastFunction {
                }
             }),
 
-            (_, DataType::Date32) => with_match_primitive_type!(columns[0].data_type(), |$T| {
+            // TODO: optimize when nullable is false
+            (_, DataType::Date32(_)) => with_match_primitive_type!(columns[0].data_type(), |$T| {
                 series.cast_with_type(&self.cast_type)
             }, {
                match columns[0].data_type() {
-                String => {
+                String(_) => {
                     let it = series.string()?.into_iter().map(|v| {
                         v.and_then(string_to_date).map(|d| (d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as i32 )
                     });
@@ -150,12 +160,13 @@ impl Function for CastFunction {
                }
             }),
 
-            (_, DataType::DateTime32(_)) => {
+            // TODO: optimize when nullable is false
+            (_, DataType::DateTime32(_, _)) => {
                 with_match_primitive_type!(columns[0].data_type(), |$T| {
                     series.cast_with_type(&self.cast_type)
                 }, {
                    match columns[0].data_type() {
-                    String => {
+                    String(_) => {
                         let it = series.string()?.into_iter().map(|v| {
                             v.and_then(string_to_datetime).map(|t| t.timestamp() as u32)
                         });
@@ -165,12 +176,14 @@ impl Function for CastFunction {
                    }
                 })
             }
-            (_, DataType::DateTime64(precision, _)) => {
+
+            // TODO: optimize when nullable is false
+            (_, DataType::DateTime64(_, precision, _)) => {
                 with_match_primitive_type!(columns[0].data_type(), |$T| {
                     series.cast_with_type(&self.cast_type)
                 }, {
                    match columns[0].data_type() {
-                    String => {
+                    String(_) => {
                         let it = series.string()?.into_iter().map(|v| {
                             v.and_then(string_to_datetime64).map(|t| -> u64 {
                                 if *precision <= 3 {

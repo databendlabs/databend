@@ -43,10 +43,10 @@ pub struct MetricsTable {
 impl MetricsTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("metric", DataType::String, false),
-            DataField::new("kind", DataType::String, false),
-            DataField::new("labels", DataType::String, false),
-            DataField::new("value", DataType::String, false),
+            DataField::new("metric", DataType::String(false), false),
+            DataField::new("kind", DataType::String(false), false),
+            DataField::new("labels", DataType::String(false), false),
+            DataField::new("value", DataType::String(false), false),
         ]);
 
         let table_info = TableInfo {

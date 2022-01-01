@@ -45,8 +45,8 @@ impl Function for RoundingFunction {
     }
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let dt = DataType::Float64;
         let nullable = args.iter().any(|arg| arg.is_nullable());
+        let dt = DataType::Float64(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
@@ -63,7 +63,10 @@ impl Function for RoundingFunction {
             Ordering::Equal => (self.rounding_func)(x),
         };
 
-        let x_column: &DataColumn = &columns[0].column().cast_with_type(&DataType::Float64)?;
+        let x_nullable = columns[0].field().is_nullable();
+        let x_column: &DataColumn = &columns[0]
+            .column()
+            .cast_with_type(&DataType::Float64(x_nullable))?;
 
         let r_column: DataColumn = if columns.len() == 1 {
             x_column
@@ -71,7 +74,10 @@ impl Function for RoundingFunction {
                 .f64()?
                 .apply(|x| (self.rounding_func)(x))
         } else {
-            let d_column: &DataColumn = &columns[1].column().cast_with_type(&DataType::Int64)?;
+            let d_nullable = columns[1].field().is_nullable();
+            let d_column: &DataColumn = &columns[1]
+                .column()
+                .cast_with_type(&DataType::Int64(d_nullable))?;
 
             match (x_column, d_column) {
                 (DataColumn::Array(x_series), DataColumn::Constant(d, _)) => {

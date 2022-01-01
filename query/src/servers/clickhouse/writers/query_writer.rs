@@ -264,15 +264,25 @@ fn to_clickhouse_column(field: &DataField, column: &Series) -> Result<ArcColumnD
     let utc: Tz = "UTC".parse().unwrap();
     let result = match is_nullable {
         true => match field.data_type() {
-            DataType::Int8 => Vec::column_from::<ArcColumnWrapper>(column.i8()?.collect_values()),
-            DataType::Int16 => Vec::column_from::<ArcColumnWrapper>(column.i16()?.collect_values()),
-            DataType::Int32 => Vec::column_from::<ArcColumnWrapper>(column.i32()?.collect_values()),
-            DataType::Int64 => Vec::column_from::<ArcColumnWrapper>(column.i64()?.collect_values()),
-            DataType::UInt8 => Vec::column_from::<ArcColumnWrapper>(column.u8()?.collect_values()),
-            DataType::UInt16 => {
+            DataType::Int8(_) => {
+                Vec::column_from::<ArcColumnWrapper>(column.i8()?.collect_values())
+            }
+            DataType::Int16(_) => {
+                Vec::column_from::<ArcColumnWrapper>(column.i16()?.collect_values())
+            }
+            DataType::Int32(_) => {
+                Vec::column_from::<ArcColumnWrapper>(column.i32()?.collect_values())
+            }
+            DataType::Int64(_) => {
+                Vec::column_from::<ArcColumnWrapper>(column.i64()?.collect_values())
+            }
+            DataType::UInt8(_) => {
+                Vec::column_from::<ArcColumnWrapper>(column.u8()?.collect_values())
+            }
+            DataType::UInt16(_) => {
                 Vec::column_from::<ArcColumnWrapper>(column.u16()?.collect_values())
             }
-            DataType::Date16 => {
+            DataType::Date16(_) => {
                 let c: Vec<Option<Date<Tz>>> = column
                     .u16()?
                     .into_iter()
@@ -280,10 +290,10 @@ fn to_clickhouse_column(field: &DataField, column: &Series) -> Result<ArcColumnD
                     .collect();
                 Vec::column_from::<ArcColumnWrapper>(c)
             }
-            DataType::UInt32 => {
+            DataType::UInt32(_) => {
                 Vec::column_from::<ArcColumnWrapper>(column.u32()?.collect_values())
             }
-            DataType::Date32 => {
+            DataType::Date32(_) => {
                 let c: Vec<Option<Date<Tz>>> = column
                     .i32()?
                     .into_iter()
@@ -291,7 +301,7 @@ fn to_clickhouse_column(field: &DataField, column: &Series) -> Result<ArcColumnD
                     .collect();
                 Vec::column_from::<ArcColumnWrapper>(c)
             }
-            DataType::DateTime32(tz) => {
+            DataType::DateTime32(_, tz) => {
                 let tz = tz.clone();
                 let tz = tz.unwrap_or_else(|| "UTC".to_string());
                 let tz: Tz = tz.parse().unwrap();
@@ -304,16 +314,16 @@ fn to_clickhouse_column(field: &DataField, column: &Series) -> Result<ArcColumnD
 
                 Vec::column_from::<ArcColumnWrapper>(c)
             }
-            DataType::UInt64 => {
+            DataType::UInt64(_) => {
                 Vec::column_from::<ArcColumnWrapper>(column.u64()?.collect_values())
             }
-            DataType::Float32 => {
+            DataType::Float32(_) => {
                 Vec::column_from::<ArcColumnWrapper>(column.f32()?.collect_values())
             }
-            DataType::Float64 => {
+            DataType::Float64(_) => {
                 Vec::column_from::<ArcColumnWrapper>(column.f64()?.collect_values())
             }
-            DataType::String => {
+            DataType::String(_) => {
                 Vec::column_from::<ArcColumnWrapper>(column.string()?.collect_values())
             }
             DataType::Boolean(_) => {
@@ -343,25 +353,25 @@ fn to_clickhouse_column(field: &DataField, column: &Series) -> Result<ArcColumnD
             }
         },
         false => match field.data_type() {
-            DataType::Int8 => Vec::column_from::<ArcColumnWrapper>(
+            DataType::Int8(_) => Vec::column_from::<ArcColumnWrapper>(
                 column.i8()?.inner().values().as_slice().to_vec(),
             ),
-            DataType::Int16 => Vec::column_from::<ArcColumnWrapper>(
+            DataType::Int16(_) => Vec::column_from::<ArcColumnWrapper>(
                 column.i16()?.inner().values().as_slice().to_vec(),
             ),
-            DataType::Int32 => Vec::column_from::<ArcColumnWrapper>(
+            DataType::Int32(_) => Vec::column_from::<ArcColumnWrapper>(
                 column.i32()?.inner().values().as_slice().to_vec(),
             ),
-            DataType::Int64 => Vec::column_from::<ArcColumnWrapper>(
+            DataType::Int64(_) => Vec::column_from::<ArcColumnWrapper>(
                 column.i64()?.inner().values().as_slice().to_vec(),
             ),
-            DataType::UInt8 => Vec::column_from::<ArcColumnWrapper>(
+            DataType::UInt8(_) => Vec::column_from::<ArcColumnWrapper>(
                 column.u8()?.inner().values().as_slice().to_vec(),
             ),
-            DataType::UInt16 => Vec::column_from::<ArcColumnWrapper>(
+            DataType::UInt16(_) => Vec::column_from::<ArcColumnWrapper>(
                 column.u16()?.inner().values().as_slice().to_vec(),
             ),
-            DataType::Date16 => {
+            DataType::Date16(_) => {
                 let c: Vec<Date<Tz>> = column
                     .u16()?
                     .into_no_null_iter()
@@ -370,10 +380,10 @@ fn to_clickhouse_column(field: &DataField, column: &Series) -> Result<ArcColumnD
 
                 Vec::column_from::<ArcColumnWrapper>(c)
             }
-            DataType::UInt32 => Vec::column_from::<ArcColumnWrapper>(
+            DataType::UInt32(_) => Vec::column_from::<ArcColumnWrapper>(
                 column.u32()?.inner().values().as_slice().to_vec(),
             ),
-            DataType::Date32 => {
+            DataType::Date32(_) => {
                 let c: Vec<Date<Tz>> = column
                     .i32()?
                     .into_no_null_iter()
@@ -382,7 +392,7 @@ fn to_clickhouse_column(field: &DataField, column: &Series) -> Result<ArcColumnD
 
                 Vec::column_from::<ArcColumnWrapper>(c)
             }
-            DataType::DateTime32(tz) => {
+            DataType::DateTime32(_, tz) => {
                 let tz = tz.clone();
                 let tz = tz.unwrap_or_else(|| "UTC".to_string());
                 let tz: Tz = tz.parse().unwrap();
@@ -396,16 +406,16 @@ fn to_clickhouse_column(field: &DataField, column: &Series) -> Result<ArcColumnD
                 Vec::column_from::<ArcColumnWrapper>(c)
             }
 
-            DataType::UInt64 => Vec::column_from::<ArcColumnWrapper>(
+            DataType::UInt64(_) => Vec::column_from::<ArcColumnWrapper>(
                 column.u64()?.inner().values().as_slice().to_vec(),
             ),
-            DataType::Float32 => Vec::column_from::<ArcColumnWrapper>(
+            DataType::Float32(_) => Vec::column_from::<ArcColumnWrapper>(
                 column.f32()?.inner().values().as_slice().to_vec(),
             ),
-            DataType::Float64 => Vec::column_from::<ArcColumnWrapper>(
+            DataType::Float64(_) => Vec::column_from::<ArcColumnWrapper>(
                 column.f64()?.inner().values().as_slice().to_vec(),
             ),
-            DataType::String => {
+            DataType::String(_) => {
                 let vs: Vec<&[u8]> = column.string()?.into_no_null_iter().collect();
                 Vec::column_from::<ArcColumnWrapper>(vs)
             }
@@ -417,7 +427,7 @@ fn to_clickhouse_column(field: &DataField, column: &Series) -> Result<ArcColumnD
                     .collect();
                 Vec::column_from::<ArcColumnWrapper>(vs)
             }
-            DataType::Interval(_) => Vec::column_from::<ArcColumnWrapper>(
+            DataType::Interval(_, _) => Vec::column_from::<ArcColumnWrapper>(
                 column.i64()?.inner().values().as_slice().to_vec(),
             ),
             DataType::Struct(fields) => Vec::column_from::<ArcColumnWrapper>(

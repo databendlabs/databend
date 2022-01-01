@@ -47,16 +47,17 @@ impl Function for CRC32Function {
     }
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let dt = DataType::UInt32;
         let nullable = args.iter().any(|arg| arg.is_nullable());
+        let dt = DataType::UInt32(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        let nullable = columns[0].field().is_nullable();
         let result = columns[0]
             .column()
             .to_minimal_array()?
-            .cast_with_type(&DataType::String)?
+            .cast_with_type(&DataType::String(nullable))?
             .string()?
             .apply_cast_numeric(|v| {
                 let mut hasher = Hasher::new();

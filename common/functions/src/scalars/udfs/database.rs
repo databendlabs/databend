@@ -48,7 +48,7 @@ impl Function for DatabaseFunction {
     }
 
     fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let dt = DataType::String;
+        let dt = DataType::String(false);
         Ok(DataTypeAndNullable::create(&dt, false))
     }
 

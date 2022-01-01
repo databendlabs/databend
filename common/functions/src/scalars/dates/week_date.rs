@@ -41,7 +41,7 @@ pub struct WeekFunction<T, R> {
 pub trait WeekResultFunction<R> {
     const IS_DETERMINISTIC: bool;
 
-    fn return_type() -> Result<DataType>;
+    fn return_type(nullable: bool) -> DataType;
     fn to_number(_value: DateTime<Utc>, mode: Option<u64>) -> R;
     fn to_constant_value(_value: DateTime<Utc>, mode: Option<u64>) -> DataValue;
     fn factor_function() -> Result<Box<dyn Function>> {
@@ -57,8 +57,8 @@ pub struct ToStartOfWeek;
 impl WeekResultFunction<u32> for ToStartOfWeek {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::Date16)
+    fn return_type(nullable: bool) -> DataType {
+        DataType::Date16(nullable)
     }
     fn to_number(value: DateTime<Utc>, mode: Option<u64>) -> u32 {
         let week_mode = mode.unwrap_or(0);
@@ -115,8 +115,8 @@ where
     }
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let dt = T::return_type()?;
         let nullable = args.iter().any(|arg| arg.is_nullable());
+        let dt = T::return_type(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
@@ -134,7 +134,8 @@ where
             mode = Some(week_mode);
         }
         let number_array: DataColumn = match data_type {
-            DataType::Date16 => {
+            // TODO: optimize when nullable is false
+            DataType::Date16(_) => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
                     let date_time = Utc.timestamp(v.as_u64()? as i64 * 24 * 3600, 0_u32);
                     let constant_result = T::to_constant_value(date_time, mode);
@@ -151,7 +152,9 @@ where
                     Ok(result.into())
                 }
             },
-            DataType::Date32 => {
+
+            // TODO: optimize when nullable is false
+            DataType::Date32(_) => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
                     let date_time = Utc.timestamp(v.as_i64()?  * 24 * 3600, 0_u32);
                     let constant_result = T::to_constant_value(date_time, mode);
@@ -168,7 +171,9 @@ where
                     Ok(result.into())
                 }
             },
-            DataType::DateTime32(_) => {
+
+            // TODO: optimize when nullable is false
+            DataType::DateTime32(_, _) => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
                     let date_time = Utc.timestamp(v.as_i64()?, 0_u32);
                     let constant_result = T::to_constant_value(date_time, mode);

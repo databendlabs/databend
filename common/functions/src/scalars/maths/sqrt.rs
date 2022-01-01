@@ -48,23 +48,23 @@ impl Function for SqrtFunction {
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
         let data_type = if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
-            Ok(DataType::Float64)
+            // sqrt on negative returns null, so nullable should be true.
+            Ok(DataType::Float64(true))
         } else {
             Err(ErrorCode::IllegalDataType(format!(
                 "Expected numeric types, but got {}",
                 args[0]
             )))
         }?;
-
-        // sqrt on negative returns null, so nullable should be true.
         Ok(DataTypeAndNullable::create(&data_type, true))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        let nullable = columns[0].field().is_nullable();
         let opt_iter = columns[0]
             .column()
             .to_minimal_array()?
-            .cast_with_type(&DataType::Float64)?;
+            .cast_with_type(&DataType::Float64(nullable))?;
         let opt_iter = opt_iter
             .f64()?
             .into_iter()

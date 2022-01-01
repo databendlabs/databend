@@ -90,28 +90,28 @@ where
 {
     let rhs = *rhs;
     match D::data_type() {
-        DataType::UInt64 => {
+        DataType::UInt64(_) => {
             let rhs = rhs.to_u64().unwrap();
             let reduced_rem = StrengthReducedU64::new(rhs);
             unary(lhs, |a| {
                 AsPrimitive::<R>::as_(a.to_u64().unwrap() % reduced_rem)
             })
         }
-        DataType::UInt32 => {
+        DataType::UInt32(_) => {
             let rhs = rhs.to_u32().unwrap();
             let reduced_rem = StrengthReducedU32::new(rhs);
             unary(lhs, |a| {
                 AsPrimitive::<R>::as_(a.to_u32().unwrap() % reduced_rem)
             })
         }
-        DataType::UInt16 => {
+        DataType::UInt16(_) => {
             let rhs = rhs.to_u16().unwrap();
             let reduced_rem = StrengthReducedU16::new(rhs);
             unary(lhs, |a| {
                 AsPrimitive::<R>::as_(a.to_u16().unwrap() % reduced_rem)
             })
         }
-        DataType::UInt8 => {
+        DataType::UInt8(_) => {
             let rhs = rhs.to_u8().unwrap();
             let reduced_rem = StrengthReducedU8::new(rhs);
             unary(lhs, |a| {

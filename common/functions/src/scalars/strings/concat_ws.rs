@@ -58,10 +58,17 @@ impl ConcatWsFunction {
         }
         // whether is the last column to decide decide add separator or not
         let is_last = columns.len() == 1;
+
         // add this column value with acc
-        let current = current.cast_with_type(&DataType::String)?;
-        let acc = acc.cast_with_type(&DataType::String)?;
-        let sep = seperator.cast_with_type(&DataType::String)?;
+        let current_nullable = current.data_type().is_nullable();
+        let current = current.cast_with_type(&DataType::String(current_nullable))?;
+
+        let acc_nullable = acc.data_type().is_nullable();
+        let acc = acc.cast_with_type(&DataType::String(acc_nullable))?;
+
+        let sep_nullable = seperator.data_type().is_nullable();
+        let sep = seperator.cast_with_type(&DataType::String(sep_nullable))?;
+
         let column = match sep {
             DataColumn::Constant(DataValue::String(Some(sep)), len) => match (acc, current) {
                 (DataColumn::Array(lhs), DataColumn::Array(rhs)) => {
@@ -184,7 +191,7 @@ impl Function for ConcatWsFunction {
         let dt = if args[0].is_null() {
             DataType::Null
         } else {
-            DataType::String
+            DataType::String(nullable)
         };
 
         Ok(DataTypeAndNullable::create(&dt, nullable))

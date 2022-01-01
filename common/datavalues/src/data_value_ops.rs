@@ -72,37 +72,37 @@ impl DataValue {
     /// Convert data value vectors to data array.
     pub fn try_into_data_array(values: &[DataValue], data_type: &DataType) -> Result<Series> {
         match data_type {
-            DataType::Int8 => {
+            DataType::Int8(_) => {
                 try_build_array! {PrimitiveArrayBuilder, i8, Int8, values}
             }
-            DataType::Int16 => try_build_array! {PrimitiveArrayBuilder, i16, Int16, values},
-            DataType::Int32 => try_build_array! {PrimitiveArrayBuilder, i32, Int32, values},
-            DataType::Int64 => try_build_array! {PrimitiveArrayBuilder, i64, Int64, values},
-            DataType::UInt8 => try_build_array! {PrimitiveArrayBuilder, u8, UInt8, values},
-            DataType::UInt16 => {
+            DataType::Int16(_) => try_build_array! {PrimitiveArrayBuilder, i16, Int16, values},
+            DataType::Int32(_) => try_build_array! {PrimitiveArrayBuilder, i32, Int32, values},
+            DataType::Int64(_) => try_build_array! {PrimitiveArrayBuilder, i64, Int64, values},
+            DataType::UInt8(_) => try_build_array! {PrimitiveArrayBuilder, u8, UInt8, values},
+            DataType::UInt16(_) => {
                 try_build_array! {PrimitiveArrayBuilder, u16, UInt16, values}
             }
-            DataType::UInt32 => {
+            DataType::UInt32(_) => {
                 try_build_array! {PrimitiveArrayBuilder, u32, UInt32, values}
             }
-            DataType::UInt64 => {
+            DataType::UInt64(_) => {
                 try_build_array! {PrimitiveArrayBuilder, u64, UInt64, values}
             }
-            DataType::Float32 => {
+            DataType::Float32(_) => {
                 try_build_array! {PrimitiveArrayBuilder, f32, Float32, values}
             }
-            DataType::Float64 => {
+            DataType::Float64(_) => {
                 try_build_array! {PrimitiveArrayBuilder, f64, Float64, values}
             }
             DataType::Boolean(_) => try_build_array! {values},
-            DataType::String => try_build_array! {String, values},
-            DataType::Date16 => {
+            DataType::String(_) => try_build_array! {String, values},
+            DataType::Date16(_) => {
                 try_build_array! {PrimitiveArrayBuilder, u16, UInt16, values}
             }
-            DataType::Date32 => {
+            DataType::Date32(_) => {
                 try_build_array! {PrimitiveArrayBuilder, i32, Int32, values}
             }
-            DataType::DateTime32(_) => {
+            DataType::DateTime32(_, _) => {
                 try_build_array! {PrimitiveArrayBuilder, u32, UInt32, values}
             }
             other => Result::Err(ErrorCode::BadDataValueType(format!(

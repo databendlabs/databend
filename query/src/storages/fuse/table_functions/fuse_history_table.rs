@@ -60,13 +60,13 @@ impl FuseHistoryTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("snapshot_id", DataType::String, false),
-            DataField::new("prev_snapshot_id", DataType::String, true),
-            DataField::new("segment_count", DataType::UInt64, false),
-            DataField::new("block_count", DataType::UInt64, false),
-            DataField::new("row_count", DataType::UInt64, false),
-            DataField::new("bytes_uncompressed", DataType::UInt64, false),
-            DataField::new("bytes_compressed", DataType::UInt64, false),
+            DataField::new("snapshot_id", DataType::String(false), false),
+            DataField::new("prev_snapshot_id", DataType::String(true), true),
+            DataField::new("segment_count", DataType::UInt64(false), false),
+            DataField::new("block_count", DataType::UInt64(false), false),
+            DataField::new("row_count", DataType::UInt64(false), false),
+            DataField::new("bytes_uncompressed", DataType::UInt64(false), false),
+            DataField::new("bytes_compressed", DataType::UInt64(false), false),
         ]);
 
         let (arg_database_name, arg_table_name) = parse_func_history_args(&table_args)?;

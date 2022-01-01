@@ -28,7 +28,7 @@ pub trait NumberResultFunction<R> {
     const IS_DETERMINISTIC: bool;
     const MAYBE_MONOTONIC: bool;
 
-    fn return_type() -> Result<DataType>;
+    fn return_type(nullable: bool) -> DataType;
     fn to_number(_value: &[u8]) -> R;
 }
 
@@ -88,14 +88,15 @@ where
             )));
         }
         let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = T::return_type()?;
+        let dt = T::return_type(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
+        let nullable = columns[0].field().is_nullable();
         let column = columns[0]
             .column()
-            .cast_with_type(&DataType::String)?
+            .cast_with_type(&DataType::String(nullable))?
             .to_minimal_array()?
             .string()?
             .apply_cast_numeric(T::to_number);

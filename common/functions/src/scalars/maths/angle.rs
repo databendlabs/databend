@@ -61,7 +61,7 @@ where T: AngleConvertFunction + Clone + Sync + Send + 'static
         let nullable = args.iter().any(|arg| arg.is_nullable());
 
         let data_type = if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
-            Ok(DataType::Float64)
+            Ok(DataType::Float64(nullable))
         } else {
             Err(ErrorCode::IllegalDataType(format!(
                 "Expected numeric, but got {}",
@@ -73,10 +73,11 @@ where T: AngleConvertFunction + Clone + Sync + Send + 'static
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        let nullable = columns[0].field().is_nullable();
         let result = columns[0]
             .column()
             .to_minimal_array()?
-            .cast_with_type(&DataType::Float64)?
+            .cast_with_type(&DataType::Float64(nullable))?
             .f64()?
             .apply_cast_numeric(T::convert);
         let column: DataColumn = result.into();

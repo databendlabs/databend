@@ -63,15 +63,23 @@ impl ArithmeticMulFunction {
             return error_fn();
         };
 
+        let nullable = left_type.is_nullable() || right_type.is_nullable();
+
         with_match_primitive_type!(left_type, |$T| {
             with_match_primitive_type!(right_type, |$D| {
                 let result_type = <($T, $D) as ResultTypeOfBinary>::AddMul::data_type();
+                let result_type = if nullable {
+                    result_type.enforce_nullable()
+                } else {
+                    result_type
+                };
+
                 match result_type {
-                    DataType::UInt64 => BinaryArithmeticFunction::<ArithmeticWrappingMul<$T, $D, u64>>::try_create_func(
+                    DataType::UInt64(_) => BinaryArithmeticFunction::<ArithmeticWrappingMul<$T, $D, u64>>::try_create_func(
                         op,
                         result_type,
                     ),
-                    DataType::Int64 => BinaryArithmeticFunction::<ArithmeticWrappingMul<$T, $D, i64>>::try_create_func(
+                    DataType::Int64(_) => BinaryArithmeticFunction::<ArithmeticWrappingMul<$T, $D, i64>>::try_create_func(
                         op,
                         result_type,
                     ),

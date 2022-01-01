@@ -19,10 +19,10 @@ use common_exception::Result;
 #[test]
 fn test_data_block_group_by_hash() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int8, false),
-        DataField::new("b", DataType::Int8, false),
-        DataField::new("c", DataType::Int8, false),
-        DataField::new("x", DataType::String, false),
+        DataField::new("a", DataType::Int8(false), false),
+        DataField::new("b", DataType::Int8(false), false),
+        DataField::new("c", DataType::Int8(false), false),
+        DataField::new("x", DataType::String(false), false),
     ]);
 
     let block = DataBlock::create_by_array(schema, vec![

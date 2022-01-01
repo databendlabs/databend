@@ -28,8 +28,8 @@ use futures::TryStreamExt;
 async fn test_null_table() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::UInt64, false),
-        DataField::new("b", DataType::UInt64, false),
+        DataField::new("a", DataType::UInt64(false), false),
+        DataField::new("b", DataType::UInt64(false), false),
     ]);
     let table = NullTable::try_create(crate::tests::create_storage_context()?, TableInfo {
         desc: "'default'.'a'".into(),
@@ -37,7 +37,11 @@ async fn test_null_table() -> Result<()> {
         ident: Default::default(),
 
         meta: TableMeta {
-            schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::UInt64, false)]),
+            schema: DataSchemaRefExt::create(vec![DataField::new(
+                "a",
+                DataType::UInt64(false),
+                false,
+            )]),
             engine: "Null".to_string(),
             options: TableOptions::default(),
             ..Default::default()

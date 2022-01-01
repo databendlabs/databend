@@ -51,20 +51,20 @@ impl Function for SipHashFunction {
         let nullable = args.iter().any(|arg| arg.is_nullable());
 
         let data_type = match args[0].data_type() {
-            DataType::Int8
-            | DataType::Int16
-            | DataType::Int32
-            | DataType::Int64
-            | DataType::UInt8
-            | DataType::UInt16
-            | DataType::UInt32
-            | DataType::UInt64
-            | DataType::Float32
-            | DataType::Float64
-            | DataType::Date16
-            | DataType::Date32
-            | DataType::DateTime32(_)
-            | DataType::String => Ok(DataType::UInt64),
+            DataType::Int8(_)
+            | DataType::Int16(_)
+            | DataType::Int32(_)
+            | DataType::Int64(_)
+            | DataType::UInt8(_)
+            | DataType::UInt16(_)
+            | DataType::UInt32(_)
+            | DataType::UInt64(_)
+            | DataType::Float32(_)
+            | DataType::Float64(_)
+            | DataType::Date16(_)
+            | DataType::Date32(_)
+            | DataType::DateTime32(_, _)
+            | DataType::String(_) => Ok(DataType::UInt64(nullable)),
             _ => Result::Err(ErrorCode::BadArguments(format!(
                 "Function Error: {} does not support {} type parameters",
                 self.display_name, args[0]

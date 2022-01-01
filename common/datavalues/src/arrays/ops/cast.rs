@@ -56,7 +56,7 @@ where T: DFPrimitiveType
 impl ArrayCast for DFStringArray {
     fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
         // special case for string to float
-        if data_type == &DataType::Float32 {
+        if matches!(data_type, &DataType::Float32(_)) {
             let c = self.apply_cast_numeric(|v| {
                 lexical_core::parse_partial::<f32>(v)
                     .unwrap_or((0.0f32, 0))
@@ -64,7 +64,7 @@ impl ArrayCast for DFStringArray {
             });
 
             Ok(c.into_series())
-        } else if data_type == &DataType::Float64 {
+        } else if matches!(data_type, &DataType::Float64(_)) {
             let c = self.apply_cast_numeric(|v| {
                 lexical_core::parse_partial::<f64>(v)
                     .unwrap_or((0.0f64, 0))
@@ -85,21 +85,22 @@ impl ArrayCast for DFBooleanArray {
 }
 
 impl ArrayCast for DFNullArray {
+    // TODO: only nullable data_type can call full_null
     fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
         match data_type {
             DataType::Null => Ok(self.clone().into_series()),
             DataType::Boolean(_) => Ok(DFBooleanArray::full_null(self.len()).into_series()),
-            DataType::UInt8 => Ok(DFUInt8Array::full_null(self.len()).into_series()),
-            DataType::UInt16 => Ok(DFUInt16Array::full_null(self.len()).into_series()),
-            DataType::UInt32 => Ok(DFUInt32Array::full_null(self.len()).into_series()),
-            DataType::UInt64 => Ok(DFUInt64Array::full_null(self.len()).into_series()),
-            DataType::Int8 => Ok(DFInt8Array::full_null(self.len()).into_series()),
-            DataType::Int16 => Ok(DFInt16Array::full_null(self.len()).into_series()),
-            DataType::Int32 => Ok(DFInt32Array::full_null(self.len()).into_series()),
-            DataType::Int64 => Ok(DFInt64Array::full_null(self.len()).into_series()),
-            DataType::Float32 => Ok(DFFloat32Array::full_null(self.len()).into_series()),
-            DataType::Float64 => Ok(DFFloat64Array::full_null(self.len()).into_series()),
-            DataType::String => Ok(DFStringArray::full_null(self.len()).into_series()),
+            DataType::UInt8(_) => Ok(DFUInt8Array::full_null(self.len()).into_series()),
+            DataType::UInt16(_) => Ok(DFUInt16Array::full_null(self.len()).into_series()),
+            DataType::UInt32(_) => Ok(DFUInt32Array::full_null(self.len()).into_series()),
+            DataType::UInt64(_) => Ok(DFUInt64Array::full_null(self.len()).into_series()),
+            DataType::Int8(_) => Ok(DFInt8Array::full_null(self.len()).into_series()),
+            DataType::Int16(_) => Ok(DFInt16Array::full_null(self.len()).into_series()),
+            DataType::Int32(_) => Ok(DFInt32Array::full_null(self.len()).into_series()),
+            DataType::Int64(_) => Ok(DFInt64Array::full_null(self.len()).into_series()),
+            DataType::Float32(_) => Ok(DFFloat32Array::full_null(self.len()).into_series()),
+            DataType::Float64(_) => Ok(DFFloat64Array::full_null(self.len()).into_series()),
+            DataType::String(_) => Ok(DFStringArray::full_null(self.len()).into_series()),
             DataType::List(_) => Ok(DFListArray::full_null(self.len()).into_series()),
 
             _ => Err(ErrorCode::BadDataValueType(format!(

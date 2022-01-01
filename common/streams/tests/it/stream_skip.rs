@@ -21,8 +21,8 @@ use futures::stream::StreamExt;
 #[tokio::test]
 async fn test_skipstream() {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("id", DataType::Int32, false),
-        DataField::new("name", DataType::String, false),
+        DataField::new("id", DataType::Int32(false), false),
+        DataField::new("name", DataType::String(false), false),
     ]);
 
     // create a data block with 'id' from 0 to 20

@@ -72,15 +72,23 @@ impl ArithmeticPlusFunction {
             return error_fn();
         };
 
+        let nullable = left_type.is_nullable() || right_type.is_nullable();
+
         with_match_primitive_type!(left_type, |$T| {
             with_match_primitive_type!(right_type, |$D| {
                 let result_type = <($T, $D) as ResultTypeOfBinary>::AddMul::data_type();
+                let result_type = if nullable {
+                    result_type.enforce_nullable()
+                } else {
+                    result_type
+                };
+
                 match result_type {
-                    DataType::UInt64 => BinaryArithmeticFunction::<ArithmeticWrappingAdd<$T, $D, u64>>::try_create_func(
+                    DataType::UInt64(_) => BinaryArithmeticFunction::<ArithmeticWrappingAdd<$T, $D, u64>>::try_create_func(
                         op,
                         result_type,
                     ),
-                    DataType::Int64 => BinaryArithmeticFunction::<ArithmeticWrappingAdd<$T, $D, i64>>::try_create_func(
+                    DataType::Int64(_) => BinaryArithmeticFunction::<ArithmeticWrappingAdd<$T, $D, i64>>::try_create_func(
                         op,
                         result_type,
                     ),
@@ -110,47 +118,51 @@ impl ArithmeticPlusFunction {
             )));
         };
 
+        let nullable = lhs_type.is_nullable() || rhs_type.is_nullable();
+        let result_type = if nullable {
+            result_type.enforce_nullable()
+        } else {
+            result_type.clone()
+        };
+
         match interval {
-            DataType::Interval(IntervalUnit::YearMonth) => match result_type.clone() {
-                DataType::Date16 => {
+            DataType::Interval(_, IntervalUnit::YearMonth) => match result_type {
+                DataType::Date16(_) => {
                     BinaryArithmeticFunction::<IntervalMonthAddDate16>::try_create_func(
                         op,
-                        result_type.clone(),
+                        result_type,
                     )
                 }
-                DataType::Date32 => {
+                DataType::Date32(_) => {
                     BinaryArithmeticFunction::<IntervalMonthAddDate32>::try_create_func(
                         op,
-                        result_type.clone(),
+                        result_type,
                     )
                 }
-                DataType::DateTime32(_) => {
+                DataType::DateTime32(_, _) => {
                     BinaryArithmeticFunction::<IntervalMonthAddDatetime32>::try_create_func(
                         op,
-                        result_type.clone(),
+                        result_type,
                     )
                 }
                 _ => unreachable!(),
             },
-            DataType::Interval(IntervalUnit::DayTime) => match result_type.clone() {
-                DataType::Date16 => {
+            DataType::Interval(_, IntervalUnit::DayTime) => match result_type.clone() {
+                DataType::Date16(_) => {
                     BinaryArithmeticFunction::<IntervalDaytimeAddDate16>::try_create_func(
                         op,
-                        result_type.clone(),
+                        result_type,
                     )
                 }
-                DataType::Date32 => {
+                DataType::Date32(_) => {
                     BinaryArithmeticFunction::<IntervalDaytimeAddDate32>::try_create_func(
                         op,
-                        result_type.clone(),
+                        result_type,
                     )
                 }
-                DataType::DateTime32(_) => {
-                    BinaryArithmeticFunction::<IntervalDaytimeAddDatetime32>::try_create_func(
-                        op,
-                        result_type.clone(),
-                    )
-                }
+                DataType::DateTime32(_, _) => BinaryArithmeticFunction::<
+                    IntervalDaytimeAddDatetime32,
+                >::try_create_func(op, result_type),
                 _ => unreachable!(),
             },
             _ => unreachable!(),

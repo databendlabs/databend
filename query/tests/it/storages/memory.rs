@@ -29,8 +29,8 @@ use futures::TryStreamExt;
 async fn test_memorytable() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::UInt32, false),
-        DataField::new("b", DataType::UInt64, false),
+        DataField::new("a", DataType::UInt32(false), false),
+        DataField::new("b", DataType::UInt64(false), false),
     ]);
     let table = MemoryTable::try_create(crate::tests::create_storage_context()?, TableInfo {
         desc: "'default'.'a'".into(),

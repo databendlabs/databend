@@ -26,6 +26,7 @@ pub enum DataColumn {
     // Array of values.
     Array(Series),
     // A Single value.
+    // TODO: add data_type, mostly for nullable information.
     Constant(DataValue, usize),
 }
 

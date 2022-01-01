@@ -170,7 +170,7 @@ where
     }
 
     fn return_type(&self) -> Result<DataType> {
-        Ok(DataType::UInt8)
+        Ok(DataType::UInt8(false))
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {

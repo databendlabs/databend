@@ -74,7 +74,7 @@ impl ConstantFoldingImpl {
     }
 
     fn execute_expression(expression: Expression, origin_name: String) -> Result<Expression> {
-        let input_fields = vec![DataField::new("_dummy", DataType::UInt8, false)];
+        let input_fields = vec![DataField::new("_dummy", DataType::UInt8(false), false)];
         let input_schema = Arc::new(DataSchema::new(input_fields));
 
         let data_type = expression.to_data_type(&input_schema)?;

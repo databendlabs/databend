@@ -150,7 +150,7 @@ macro_rules! impl_dyn_array {
             }
 
             fn i8(&self) -> Result<&DFInt8Array> {
-                if matches!(self.0.data_type(), &DataType::Int8) {
+                if matches!(self.0.data_type(), &DataType::Int8(_)) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFInt8Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
@@ -162,7 +162,7 @@ macro_rules! impl_dyn_array {
 
             // For each column create a series
             fn i16(&self) -> Result<&DFInt16Array> {
-                if matches!(self.0.data_type(), &DataType::Int16) {
+                if matches!(self.0.data_type(), &DataType::Int16(_)) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFInt16Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
@@ -173,7 +173,7 @@ macro_rules! impl_dyn_array {
             }
 
             fn i32(&self) -> Result<&DFInt32Array> {
-                if matches!(self.0.data_type(), &DataType::Int32) {
+                if matches!(self.0.data_type(), &DataType::Int32(_)) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFInt32Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
@@ -184,7 +184,7 @@ macro_rules! impl_dyn_array {
             }
 
             fn i64(&self) -> Result<&DFInt64Array> {
-                if matches!(self.0.data_type(), &DataType::Int64) {
+                if matches!(self.0.data_type(), &DataType::Int64(_)) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFInt64Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
@@ -195,7 +195,7 @@ macro_rules! impl_dyn_array {
             }
 
             fn f32(&self) -> Result<&DFFloat32Array> {
-                if matches!(self.0.data_type(), &DataType::Float32) {
+                if matches!(self.0.data_type(), &DataType::Float32(_)) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFFloat32Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
@@ -206,7 +206,7 @@ macro_rules! impl_dyn_array {
             }
 
             fn f64(&self) -> Result<&DFFloat64Array> {
-                if matches!(self.0.data_type(), &DataType::Float64) {
+                if matches!(self.0.data_type(), &DataType::Float64(_)) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFFloat64Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
@@ -217,7 +217,7 @@ macro_rules! impl_dyn_array {
             }
 
             fn u8(&self) -> Result<&DFUInt8Array> {
-                if matches!(self.0.data_type(), &DataType::UInt8) {
+                if matches!(self.0.data_type(), &DataType::UInt8(_)) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFUInt8Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
@@ -228,7 +228,7 @@ macro_rules! impl_dyn_array {
             }
 
             fn u16(&self) -> Result<&DFUInt16Array> {
-                if matches!(self.0.data_type(), &DataType::UInt16) {
+                if matches!(self.0.data_type(), &DataType::UInt16(_)) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFUInt16Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
@@ -239,7 +239,7 @@ macro_rules! impl_dyn_array {
             }
 
             fn u32(&self) -> Result<&DFUInt32Array> {
-                if matches!(self.0.data_type(), &DataType::UInt32) {
+                if matches!(self.0.data_type(), &DataType::UInt32(_)) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFUInt32Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
@@ -250,7 +250,7 @@ macro_rules! impl_dyn_array {
             }
 
             fn u64(&self) -> Result<&DFUInt64Array> {
-                if matches!(self.0.data_type(), &DataType::UInt64) {
+                if matches!(self.0.data_type(), &DataType::UInt64(_)) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFUInt64Array)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(
@@ -273,7 +273,7 @@ macro_rules! impl_dyn_array {
 
             /// Unpack to DFArray of data_type string
             fn string(&self) -> Result<&DFStringArray> {
-                if matches!(self.0.data_type(), &DataType::String) {
+                if matches!(self.0.data_type(), &DataType::String(_)) {
                     unsafe { Ok(&*(self as *const dyn SeriesTrait as *const DFStringArray)) }
                 } else {
                     Err(ErrorCode::IllegalDataType(format!(

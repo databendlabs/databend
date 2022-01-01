@@ -82,16 +82,16 @@ impl DataValue {
         match self {
             DataValue::Null => DataType::Null,
             DataValue::Boolean(_) => DataType::Boolean(true),
-            DataValue::Int8(_) => DataType::Int8,
-            DataValue::Int16(_) => DataType::Int16,
-            DataValue::Int32(_) => DataType::Int32,
-            DataValue::Int64(_) => DataType::Int64,
-            DataValue::UInt8(_) => DataType::UInt8,
-            DataValue::UInt16(_) => DataType::UInt16,
-            DataValue::UInt32(_) => DataType::UInt32,
-            DataValue::UInt64(_) => DataType::UInt64,
-            DataValue::Float32(_) => DataType::Float32,
-            DataValue::Float64(_) => DataType::Float64,
+            DataValue::Int8(_) => DataType::Int8(true),
+            DataValue::Int16(_) => DataType::Int16(true),
+            DataValue::Int32(_) => DataType::Int32(true),
+            DataValue::Int64(_) => DataType::Int64(true),
+            DataValue::UInt8(_) => DataType::UInt8(true),
+            DataValue::UInt16(_) => DataType::UInt16(true),
+            DataValue::UInt32(_) => DataType::UInt32(true),
+            DataValue::UInt64(_) => DataType::UInt64(true),
+            DataValue::Float32(_) => DataType::Float32(true),
+            DataValue::Float64(_) => DataType::Float64(true),
             DataValue::List(_, data_type) => {
                 DataType::List(Box::new(DataField::new("item", data_type.clone(), true)))
             }
@@ -106,7 +106,7 @@ impl DataValue {
                     .collect::<Vec<_>>();
                 DataType::Struct(fields)
             }
-            DataValue::String(_) => DataType::String,
+            DataValue::String(_) => DataType::String(true),
         }
     }
 
@@ -171,18 +171,18 @@ impl DataValue {
                 Some(v) => Ok(DFStringArray::full(v.deref(), size).into_series()),
             },
             DataValue::List(values, data_type) => match data_type {
-                DataType::Int8 => build_list_series! {i8, values, size, data_type },
-                DataType::Int16 => build_list_series! {i16, values, size, data_type },
-                DataType::Int32 => build_list_series! {i32, values, size, data_type },
-                DataType::Int64 => build_list_series! {i64, values, size, data_type },
+                DataType::Int8(_) => build_list_series! {i8, values, size, data_type },
+                DataType::Int16(_) => build_list_series! {i16, values, size, data_type },
+                DataType::Int32(_) => build_list_series! {i32, values, size, data_type },
+                DataType::Int64(_) => build_list_series! {i64, values, size, data_type },
 
-                DataType::UInt8 => build_list_series! {u8, values, size, data_type },
-                DataType::UInt16 => build_list_series! {u16, values, size, data_type },
-                DataType::UInt32 => build_list_series! {u32, values, size, data_type },
-                DataType::UInt64 => build_list_series! {u64, values, size, data_type },
+                DataType::UInt8(_) => build_list_series! {u8, values, size, data_type },
+                DataType::UInt16(_) => build_list_series! {u16, values, size, data_type },
+                DataType::UInt32(_) => build_list_series! {u32, values, size, data_type },
+                DataType::UInt64(_) => build_list_series! {u64, values, size, data_type },
 
-                DataType::Float32 => build_list_series! {f32, values, size, data_type },
-                DataType::Float64 => build_list_series! {f64, values, size, data_type },
+                DataType::Float32(_) => build_list_series! {f32, values, size, data_type },
+                DataType::Float64(_) => build_list_series! {f64, values, size, data_type },
 
                 DataType::Boolean(_) => {
                     let mut builder = ListBooleanArrayBuilder::with_capacity(0, size);
@@ -199,7 +199,7 @@ impl DataValue {
                     }
                     Ok(builder.finish().into_series())
                 }
-                DataType::String => {
+                DataType::String(_) => {
                     let mut builder = ListStringArrayBuilder::with_capacity(0, size);
                     match values {
                         Some(v) => {
@@ -326,24 +326,24 @@ impl DataValue {
         match data_type {
             DataType::Null => DataValue::Null,
             DataType::Boolean(_) => DataValue::Boolean(Some(false)),
-            DataType::UInt8 => DataValue::UInt8(Some(0)),
-            DataType::UInt16 => DataValue::UInt16(Some(0)),
-            DataType::UInt32 => DataValue::UInt32(Some(0)),
-            DataType::UInt64 => DataValue::UInt64(Some(0)),
-            DataType::Int8 => DataValue::Int8(Some(0)),
-            DataType::Int16 => DataValue::Int16(Some(0)),
-            DataType::Int32 => DataValue::Int32(Some(0)),
-            DataType::Int64 => DataValue::Int64(Some(0)),
-            DataType::Float32 => DataValue::Float32(Some(0.0)),
-            DataType::Float64 => DataValue::Float64(Some(0.0)),
-            DataType::Date16 => DataValue::UInt16(Some(0)),
-            DataType::Date32 => DataValue::Int32(Some(0)),
-            DataType::DateTime32(_) => DataValue::UInt32(Some(0)),
-            DataType::DateTime64(_, _) => DataValue::UInt64(Some(0)),
-            DataType::Interval(_) => DataValue::Int64(Some(0)),
+            DataType::UInt8(_) => DataValue::UInt8(Some(0)),
+            DataType::UInt16(_) => DataValue::UInt16(Some(0)),
+            DataType::UInt32(_) => DataValue::UInt32(Some(0)),
+            DataType::UInt64(_) => DataValue::UInt64(Some(0)),
+            DataType::Int8(_) => DataValue::Int8(Some(0)),
+            DataType::Int16(_) => DataValue::Int16(Some(0)),
+            DataType::Int32(_) => DataValue::Int32(Some(0)),
+            DataType::Int64(_) => DataValue::Int64(Some(0)),
+            DataType::Float32(_) => DataValue::Float32(Some(0.0)),
+            DataType::Float64(_) => DataValue::Float64(Some(0.0)),
+            DataType::Date16(_) => DataValue::UInt16(Some(0)),
+            DataType::Date32(_) => DataValue::Int32(Some(0)),
+            DataType::DateTime32(_, _) => DataValue::UInt32(Some(0)),
+            DataType::DateTime64(_, _, _) => DataValue::UInt64(Some(0)),
+            DataType::Interval(_, _) => DataValue::Int64(Some(0)),
             DataType::List(f) => DataValue::List(Some(vec![]), f.data_type().clone()),
             DataType::Struct(_) => DataValue::Struct(vec![]),
-            DataType::String => DataValue::String(Some(vec![])),
+            DataType::String(_) => DataValue::String(Some(vec![])),
         }
     }
     pub fn as_string(&self) -> Result<Vec<u8>> {
@@ -439,26 +439,45 @@ impl From<&DataType> for DataValue {
     fn from(data_type: &DataType) -> Self {
         match data_type {
             DataType::Null => DataValue::Null,
-            DataType::Boolean(true) => DataValue::Boolean(Some(false)),
-            DataType::Boolean(false) => DataValue::Boolean(None),
-            DataType::Int8 => DataValue::Int8(None),
-            DataType::Int16 => DataValue::Int16(None),
-            DataType::Int32 => DataValue::Int32(None),
-            DataType::Int64 => DataValue::Int64(None),
-            DataType::UInt8 => DataValue::UInt8(None),
-            DataType::UInt16 => DataValue::UInt16(None),
-            DataType::UInt32 => DataValue::UInt32(None),
-            DataType::UInt64 => DataValue::UInt64(None),
-            DataType::Float32 => DataValue::Float32(None),
-            DataType::Float64 => DataValue::Float64(None),
-            DataType::Date16 => DataValue::UInt16(None),
-            DataType::Date32 => DataValue::Int32(None),
-            DataType::DateTime32(_) => DataValue::UInt32(None),
-            DataType::DateTime64(_, _) => DataValue::UInt64(None),
+
+            DataType::Boolean(false) => DataValue::Boolean(Some(false)),
+            DataType::Int8(false) => DataValue::Int8(Some(0)),
+            DataType::Int16(false) => DataValue::Int16(Some(0)),
+            DataType::Int32(false) => DataValue::Int32(Some(0)),
+            DataType::Int64(false) => DataValue::Int64(Some(0)),
+            DataType::UInt8(false) => DataValue::UInt8(Some(0)),
+            DataType::UInt16(false) => DataValue::UInt16(Some(0)),
+            DataType::UInt32(false) => DataValue::UInt32(Some(0)),
+            DataType::UInt64(false) => DataValue::UInt64(Some(0)),
+            DataType::Float32(false) => DataValue::Float32(Some(0.0)),
+            DataType::Float64(false) => DataValue::Float64(Some(0.0)),
+            DataType::Date16(false) => DataValue::UInt16(Some(0)),
+            DataType::Date32(false) => DataValue::Int32(Some(0)),
+            DataType::DateTime32(false, _) => DataValue::UInt32(Some(0)),
+            DataType::DateTime64(false, _, _) => DataValue::UInt64(Some(0)),
+            DataType::String(false) => DataValue::String(Some(vec![])),
+            DataType::Interval(false, _) => DataValue::Int64(Some(0)),
+
+            DataType::Boolean(true) => DataValue::Boolean(None),
+            DataType::Int8(true) => DataValue::Int8(None),
+            DataType::Int16(true) => DataValue::Int16(None),
+            DataType::Int32(true) => DataValue::Int32(None),
+            DataType::Int64(true) => DataValue::Int64(None),
+            DataType::UInt8(true) => DataValue::UInt8(None),
+            DataType::UInt16(true) => DataValue::UInt16(None),
+            DataType::UInt32(true) => DataValue::UInt32(None),
+            DataType::UInt64(true) => DataValue::UInt64(None),
+            DataType::Float32(true) => DataValue::Float32(None),
+            DataType::Float64(true) => DataValue::Float64(None),
+            DataType::Date16(true) => DataValue::UInt16(None),
+            DataType::Date32(true) => DataValue::Int32(None),
+            DataType::DateTime32(true, _) => DataValue::UInt32(None),
+            DataType::DateTime64(true, _, _) => DataValue::UInt64(None),
+            DataType::String(true) => DataValue::String(None),
+            DataType::Interval(true, _) => DataValue::Int64(None),
+
             DataType::List(f) => DataValue::List(None, f.data_type().clone()),
             DataType::Struct(_) => DataValue::Struct(vec![]),
-            DataType::String => DataValue::String(None),
-            DataType::Interval(_) => DataValue::Int64(None),
         }
     }
 }

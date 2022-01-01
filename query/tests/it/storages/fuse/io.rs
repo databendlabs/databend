@@ -32,7 +32,7 @@ async fn test_fuse_table_block_appender() {
     let tmp_dir = TempDir::new().unwrap();
     let local_fs = common_dal::Local::with_path(tmp_dir.path().to_owned());
     let local_fs = Arc::new(local_fs);
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32(false), false)]);
 
     // single segment
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
@@ -98,7 +98,7 @@ async fn test_fuse_table_block_appender() {
 
 #[test]
 fn test_fuse_table_block_appender_reshape() -> common_exception::Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32, false)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int32(false), false)]);
     let sample_block = DataBlock::create_by_array(schema, vec![Series::new(vec![1, 2, 3])]);
     let sample_block_size = sample_block.memory_size();
 

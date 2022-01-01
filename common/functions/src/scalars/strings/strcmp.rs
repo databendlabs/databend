@@ -63,13 +63,20 @@ impl Function for StrcmpFunction {
         }
 
         let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::Int8;
+        let dt = DataType::Int8(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let s1_column = columns[0].column().cast_with_type(&DataType::String)?;
-        let s2_column = columns[1].column().cast_with_type(&DataType::String)?;
+        let s1_nullable = columns[0].field().is_nullable();
+        let s1_column = columns[0]
+            .column()
+            .cast_with_type(&DataType::String(s1_nullable))?;
+
+        let s2_nullable = columns[1].field().is_nullable();
+        let s2_column = columns[1]
+            .column()
+            .cast_with_type(&DataType::String(s2_nullable))?;
 
         let r_column: DataColumn = match (s1_column, s2_column) {
             // #00

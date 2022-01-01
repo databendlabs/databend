@@ -217,7 +217,7 @@ impl MetaApiTestSuite {
             // Table schema with metadata(due to serde issue).
             let schema = Arc::new(DataSchema::new(vec![DataField::new(
                 "number",
-                DataType::UInt64,
+                DataType::UInt64(false),
                 false,
             )]));
 
@@ -416,7 +416,7 @@ impl MetaApiTestSuite {
             // Table schema with metadata(due to serde issue).
             let schema = Arc::new(DataSchema::new(vec![DataField::new(
                 "number",
-                DataType::UInt64,
+                DataType::UInt64(false),
                 false,
             )]));
 
@@ -591,7 +591,7 @@ impl MetaApiTestSuite {
             let tables = vec!["tb1", "tb2"];
             let schema = Arc::new(DataSchema::new(vec![DataField::new(
                 "number",
-                DataType::UInt64,
+                DataType::UInt64(false),
                 false,
             )]));
 
@@ -652,7 +652,7 @@ impl MetaApiTestSuite {
 
             let schema = Arc::new(DataSchema::new(vec![DataField::new(
                 "number",
-                DataType::UInt64,
+                DataType::UInt64(false),
                 false,
             )]));
 

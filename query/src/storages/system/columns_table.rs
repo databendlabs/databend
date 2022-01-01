@@ -40,10 +40,10 @@ pub struct ColumnsTable {
 impl ColumnsTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", DataType::String, false),
-            DataField::new("database", DataType::String, false),
-            DataField::new("table", DataType::String, false),
-            DataField::new("data_type", DataType::String, false),
+            DataField::new("name", DataType::String(false), false),
+            DataField::new("database", DataType::String(false), false),
+            DataField::new("table", DataType::String(false), false),
+            DataField::new("data_type", DataType::String(false), false),
             DataField::new("is_nullable", DataType::Boolean(false), false),
         ]);
 

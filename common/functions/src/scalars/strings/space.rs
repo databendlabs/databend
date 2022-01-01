@@ -83,14 +83,18 @@ impl<T: SpaceGenOperator> Function for SpaceGenFunction<T> {
         }
 
         let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::String;
+        let dt = DataType::String(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let mut op = T::default();
 
-        let r_column: DataColumn = match columns[0].column().cast_with_type(&DataType::UInt64)? {
+        let nullable = columns[0].field().is_nullable();
+        let r_column: DataColumn = match columns[0]
+            .column()
+            .cast_with_type(&DataType::UInt64(nullable))?
+        {
             DataColumn::Constant(DataValue::UInt64(c), _) => {
                 if let Some(c) = c {
                     DataColumn::Constant(DataValue::String(Some(op.apply_char(&c))), input_rows)

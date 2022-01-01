@@ -42,8 +42,8 @@ async fn test_block_pruner() -> Result<()> {
 
     let test_tbl_name = "test_index_helper";
     let test_schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::UInt64, false),
-        DataField::new("b", DataType::UInt64, false),
+        DataField::new("a", DataType::UInt64(false), false),
+        DataField::new("b", DataType::UInt64(false), false),
     ]);
 
     // create test table

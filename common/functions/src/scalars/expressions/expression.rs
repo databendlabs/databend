@@ -41,35 +41,78 @@ impl ToCastFunction {
 
     pub fn register(factory: &mut FunctionFactory) {
         factory.register("toNull", Self::cast_function_creator(DataType::Null));
-        factory.register("toBoolean", Self::cast_function_creator(DataType::Boolean(true)));
-        factory.register("toUInt8", Self::cast_function_creator(DataType::UInt8));
-        factory.register("toUInt16", Self::cast_function_creator(DataType::UInt16));
-        factory.register("toUInt32", Self::cast_function_creator(DataType::UInt32));
-        factory.register("toUInt64", Self::cast_function_creator(DataType::UInt64));
-        factory.register("toInt8", Self::cast_function_creator(DataType::Int8));
-        factory.register("toInt16", Self::cast_function_creator(DataType::Int16));
-        factory.register("toInt32", Self::cast_function_creator(DataType::Int32));
-        factory.register("toInt64", Self::cast_function_creator(DataType::Int64));
-        factory.register("toFloat32", Self::cast_function_creator(DataType::Float32));
-        factory.register("toFloat64", Self::cast_function_creator(DataType::Float64));
-        factory.register("toDate16", Self::cast_function_creator(DataType::Date16));
-        factory.register("toDate32", Self::cast_function_creator(DataType::Date32));
-        factory.register("toString", Self::cast_function_creator(DataType::String));
+        // it is ok to pass in a non-nullable type, the function may enforce to nullable.
+        factory.register(
+            "toBoolean",
+            Self::cast_function_creator(DataType::Boolean(false)),
+        );
+        factory.register(
+            "toUInt8",
+            Self::cast_function_creator(DataType::UInt8(false)),
+        );
+        factory.register(
+            "toUInt16",
+            Self::cast_function_creator(DataType::UInt16(false)),
+        );
+        factory.register(
+            "toUInt32",
+            Self::cast_function_creator(DataType::UInt32(false)),
+        );
+        factory.register(
+            "toUInt64",
+            Self::cast_function_creator(DataType::UInt64(false)),
+        );
+        factory.register("toInt8", Self::cast_function_creator(DataType::Int8(false)));
+        factory.register(
+            "toInt16",
+            Self::cast_function_creator(DataType::Int16(false)),
+        );
+        factory.register(
+            "toInt32",
+            Self::cast_function_creator(DataType::Int32(false)),
+        );
+        factory.register(
+            "toInt64",
+            Self::cast_function_creator(DataType::Int64(false)),
+        );
+        factory.register(
+            "toFloat32",
+            Self::cast_function_creator(DataType::Float32(false)),
+        );
+        factory.register(
+            "toFloat64",
+            Self::cast_function_creator(DataType::Float64(false)),
+        );
+        factory.register(
+            "toDate16",
+            Self::cast_function_creator(DataType::Date16(false)),
+        );
+        factory.register(
+            "toDate32",
+            Self::cast_function_creator(DataType::Date32(false)),
+        );
+        factory.register(
+            "toString",
+            Self::cast_function_creator(DataType::String(false)),
+        );
 
         // aliases
-        factory.register("toDate", Self::cast_function_creator(DataType::Date16));
+        factory.register(
+            "toDate",
+            Self::cast_function_creator(DataType::Date16(false)),
+        );
         factory.register(
             "toDateTime",
-            Self::cast_function_creator(DataType::DateTime32(None)),
+            Self::cast_function_creator(DataType::DateTime32(false, None)),
         );
         factory.register(
             "toDateTime32",
-            Self::cast_function_creator(DataType::DateTime32(None)),
+            Self::cast_function_creator(DataType::DateTime32(false, None)),
         );
         // TODO support precision parameter
         factory.register(
             "toDateTime64",
-            Self::cast_function_creator(DataType::DateTime64(3, None)),
+            Self::cast_function_creator(DataType::DateTime64(false, 3, None)),
         );
     }
 }

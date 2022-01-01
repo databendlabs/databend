@@ -49,19 +49,25 @@ impl Function for FieldFunction {
     }
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let dt = DataType::UInt64;
         let nullable = args.iter().any(|arg| arg.is_nullable());
+        let dt = DataType::UInt64(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let s_column = columns[0].column().cast_with_type(&DataType::String)?;
+        let s_nullable = columns[0].field().is_nullable();
+        let s_column = columns[0]
+            .column()
+            .cast_with_type(&DataType::String(s_nullable))?;
         let r_column: DataColumn = match s_column {
             DataColumn::Constant(DataValue::String(s), _) => {
                 let mut r_column = DataColumn::Constant(DataValue::UInt64(Some(0)), input_rows);
                 if let Some(s) = s {
                     for (i, c) in columns.iter().enumerate().skip(1) {
-                        match c.column().cast_with_type(&DataType::String)? {
+                        match c
+                            .column()
+                            .cast_with_type(&DataType::String(c.field().is_nullable()))?
+                        {
                             DataColumn::Constant(DataValue::String(ss), _) => {
                                 if let Some(ss) = ss {
                                     if s == ss {
@@ -95,7 +101,10 @@ impl Function for FieldFunction {
                 let mut r_column = DataColumn::Constant(DataValue::UInt64(Some(0)), input_rows);
                 let s_array = s_series.string()?;
                 for (i, c) in columns.iter().enumerate().skip(1) {
-                    match c.column().cast_with_type(&DataType::String)? {
+                    match c
+                        .column()
+                        .cast_with_type(&DataType::String(c.field().is_nullable()))?
+                    {
                         DataColumn::Constant(DataValue::String(ss), _) => {
                             if let Some(ss) = ss {
                                 let ss = Some(&ss[..]);

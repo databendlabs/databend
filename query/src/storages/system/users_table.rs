@@ -35,10 +35,10 @@ pub struct UsersTable {
 impl UsersTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", DataType::String, false),
-            DataField::new("hostname", DataType::String, false),
-            DataField::new("password", DataType::String, true),
-            DataField::new("password_type", DataType::UInt8, false),
+            DataField::new("name", DataType::String(false), false),
+            DataField::new("hostname", DataType::String(false), false),
+            DataField::new("password", DataType::String(true), true),
+            DataField::new("password_type", DataType::UInt8(false), false),
         ]);
 
         let table_info = TableInfo {

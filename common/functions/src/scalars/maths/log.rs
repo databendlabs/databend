@@ -44,27 +44,33 @@ impl Function for GenericLogFunction {
     }
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let dt = DataType::Float64;
         let nullable = args.iter().any(|arg| arg.is_nullable());
+        let dt = DataType::Float64(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let result = if columns.len() == 1 {
             // Log(num) with default_base if one arg
+            let nullable = columns[0].field().is_nullable();
             let num_series = columns[0]
                 .column()
                 .to_minimal_array()?
-                .cast_with_type(&DataType::Float64)?;
+                .cast_with_type(&DataType::Float64(nullable))?;
             num_series
                 .f64()?
                 .apply_cast_numeric(|v| v.log(self.default_base))
         } else {
             // Log(base, num) if two args
-            let base_column: &DataColumn =
-                &columns[0].column().cast_with_type(&DataType::Float64)?;
-            let num_column: &DataColumn =
-                &columns[1].column().cast_with_type(&DataType::Float64)?;
+            let base_nullable = columns[0].field().is_nullable();
+            let base_column: &DataColumn = &columns[0]
+                .column()
+                .cast_with_type(&DataType::Float64(base_nullable))?;
+
+            let num_nullable = columns[1].field().is_nullable();
+            let num_column: &DataColumn = &columns[1]
+                .column()
+                .cast_with_type(&DataType::Float64(num_nullable))?;
 
             match (base_column, num_column) {
                 (DataColumn::Array(base_series), DataColumn::Constant(v, _)) => {

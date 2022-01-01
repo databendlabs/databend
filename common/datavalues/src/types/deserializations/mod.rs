@@ -53,23 +53,23 @@ impl DataType {
                 DataType::Boolean(_) => Ok(Box::new(BooleanDeserializer {
                     builder: BooleanArrayBuilder::with_capacity(capacity),
                 })),
-                DataType::Date16 => Ok(Box::new(DateDeserializer::<u16> {
+                DataType::Date16(_) => Ok(Box::new(DateDeserializer::<u16> {
                     builder: PrimitiveArrayBuilder::<u16>::with_capacity(capacity),
                 })),
-                DataType::Date32 => Ok(Box::new(DateDeserializer::<i32> {
+                DataType::Date32(_) => Ok(Box::new(DateDeserializer::<i32> {
                     builder: PrimitiveArrayBuilder::<i32>::with_capacity(capacity),
                 })),
-                DataType::DateTime32(tz) => {
+                DataType::DateTime32(_, tz) => {
                     let tz = tz.unwrap_or_else(|| "UTC".to_string());
                     Ok(Box::new(DateTimeDeserializer::<u32> {
                         builder: PrimitiveArrayBuilder::<u32>::with_capacity(capacity),
                         tz: tz.parse::<Tz>().unwrap(),
                     }))
                 }
-                DataType::String => Ok(Box::new(
+                DataType::String(_) => Ok(Box::new(
                     StringDeserializer::with_capacity(capacity),
                 )),
-                DataType::Interval(_) => Ok(Box::new(DateDeserializer::<i64> {
+                DataType::Interval(_, _) => Ok(Box::new(DateDeserializer::<i64> {
                     builder: PrimitiveArrayBuilder::<i64>::with_capacity(capacity),
                 })),
                 other => Err(ErrorCode::BadDataValueType(format!(

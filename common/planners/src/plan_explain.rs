@@ -36,7 +36,11 @@ pub struct ExplainPlan {
 
 impl ExplainPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String, false)])
+        DataSchemaRefExt::create(vec![DataField::new(
+            "explain",
+            DataType::String(false),
+            false,
+        )])
     }
 
     pub fn set_input(&mut self, node: &PlanNode) {

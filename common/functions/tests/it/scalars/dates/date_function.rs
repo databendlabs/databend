@@ -27,7 +27,7 @@ fn test_toyyyymm_function() -> Result<()> {
             nullable: false,
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0u16]).into(),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             expect: Series::new(vec![197001u32]).into(),
             error: "",
@@ -36,7 +36,7 @@ fn test_toyyyymm_function() -> Result<()> {
             name: "test_toyyyymm_date32",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0i32, 1, 2, 3]).into(),
-                DataField::new("dummy_1", DataType::Date32, false),
+                DataField::new("dummy_1", DataType::Date32(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![197001u32, 197001u32, 197001u32, 197001u32]).into(),
@@ -46,7 +46,7 @@ fn test_toyyyymm_function() -> Result<()> {
             name: "test_toyyyymm_datetime",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0u32]).into(),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             nullable: false,
             expect: Series::new(vec![197001u32]).into(),
@@ -56,7 +56,7 @@ fn test_toyyyymm_function() -> Result<()> {
             name: "test_toyyyymm_constant_date16",
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::Int16(Some(0i16)), 1),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![197001u32]).into(),
@@ -66,7 +66,7 @@ fn test_toyyyymm_function() -> Result<()> {
             name: "test_toyyyymm_constant_date32",
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::Int32(Some(0i32)), 1),
-                DataField::new("dummy_1", DataType::Date32, false),
+                DataField::new("dummy_1", DataType::Date32(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![197001u32]).into(),
@@ -76,7 +76,7 @@ fn test_toyyyymm_function() -> Result<()> {
             name: "test_toyyyymm_constant_datetime",
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::UInt32(Some(0u32)), 1),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             nullable: false,
             expect: Series::new(vec![197001u32]).into(),
@@ -94,7 +94,7 @@ fn test_to_yyyymmdd_function() -> Result<()> {
             name: "test_toyyyymmdd_date16",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0u16]).into(),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![19700101u32]).into(),
@@ -104,7 +104,7 @@ fn test_to_yyyymmdd_function() -> Result<()> {
             name: "test_toyyyymmdd_date32",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0i32]).into(),
-                DataField::new("dummy_1", DataType::Date32, false),
+                DataField::new("dummy_1", DataType::Date32(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![19700101u32]).into(),
@@ -114,7 +114,7 @@ fn test_to_yyyymmdd_function() -> Result<()> {
             name: "test_toyyyymmdd_datetime",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![1630833797u32]).into(),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             nullable: false,
             expect: Series::new(vec![20210905u32]).into(),
@@ -124,7 +124,7 @@ fn test_to_yyyymmdd_function() -> Result<()> {
             name: "test_toyyyymmdd_date16",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0u16]).into(),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![19700101u32]).into(),
@@ -134,7 +134,7 @@ fn test_to_yyyymmdd_function() -> Result<()> {
             name: "test_toyyyymmdd_date32",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0i32]).into(),
-                DataField::new("dummy_1", DataType::Date32, false),
+                DataField::new("dummy_1", DataType::Date32(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![19700101u32]).into(),
@@ -144,7 +144,7 @@ fn test_to_yyyymmdd_function() -> Result<()> {
             name: "test_toyyyymmdd_datetime",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![1630833797u32]).into(),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             nullable: false,
             expect: Series::new(vec![20210905u32]).into(),
@@ -154,7 +154,7 @@ fn test_to_yyyymmdd_function() -> Result<()> {
             name: "test_toyyyymmdd_constant_date16",
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::UInt16(Some(0u16)), 1),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![19700101u32]).into(),
@@ -164,7 +164,7 @@ fn test_to_yyyymmdd_function() -> Result<()> {
             name: "test_toyyyymmdd_constant_date32",
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::Int32(Some(0i32)), 1),
-                DataField::new("dummy_1", DataType::Date32, false),
+                DataField::new("dummy_1", DataType::Date32(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![19700101u32]).into(),
@@ -174,7 +174,7 @@ fn test_to_yyyymmdd_function() -> Result<()> {
             name: "test_toyyyymmdd_constant_datetime",
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::UInt32(Some(1630833797u32)), 1),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             nullable: false,
             expect: Series::new(vec![20210905u32]).into(),
@@ -192,7 +192,7 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
             name: "test_toyyyymmddhhmmss_date16",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0u16]).into(),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![19700101000000u64]).into(),
@@ -202,7 +202,7 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
             name: "test_toyyyymmddhhmmss_date32",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0i32]).into(),
-                DataField::new("dummy_1", DataType::Date32, false),
+                DataField::new("dummy_1", DataType::Date32(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![19700101000000u64]).into(),
@@ -212,7 +212,7 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
             name: "test_toyyyymmddhhmmss_datetime",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![1630833797u32]).into(),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             nullable: false,
             expect: Series::new(vec![20210905092317u64]).into(),
@@ -222,7 +222,7 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
             name: "test_toyyyymmddhhmmss_date16_constant",
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::UInt16(Some(0u16)), 1),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![19700101000000u64]).into(),
@@ -232,7 +232,7 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
             name: "test_toyyyymmddhhmmss_date32_constant",
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::Int32(Some(0i32)), 1),
-                DataField::new("dummy_1", DataType::Date32, false),
+                DataField::new("dummy_1", DataType::Date32(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![19700101000000u64]).into(),
@@ -242,7 +242,7 @@ fn test_toyyyymmddhhmmss_function() -> Result<()> {
             name: "test_toyyyymmddhhmmss_datetime_constant",
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::UInt32(Some(1630833797u32)), 1),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             nullable: false,
             expect: Series::new(vec![20210905092317u64]).into(),
@@ -260,7 +260,7 @@ fn test_tomonth_function() -> Result<()> {
             name: "test_tomonth_date16",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0u16]).into(),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![1u8]).into(),
@@ -270,7 +270,7 @@ fn test_tomonth_function() -> Result<()> {
             name: "test_tomonth_date32",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0i32]).into(),
-                DataField::new("dummy_1", DataType::Date32, false),
+                DataField::new("dummy_1", DataType::Date32(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![1u8]).into(),
@@ -280,7 +280,7 @@ fn test_tomonth_function() -> Result<()> {
             name: "test_tomonth_datetime",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![1633081817u32]).into(),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             nullable: false,
             expect: Series::new(vec![10u8]).into(),
@@ -290,7 +290,7 @@ fn test_tomonth_function() -> Result<()> {
             name: "test_tomonth_date16_constant",
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::UInt16(Some(0u16)), 1),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![1u8]).into(),
@@ -300,7 +300,7 @@ fn test_tomonth_function() -> Result<()> {
             name: "test_tomonth_date32_constant",
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::Int32(Some(0i32)), 1),
-                DataField::new("dummy_1", DataType::Date32, false),
+                DataField::new("dummy_1", DataType::Date32(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![1u8]).into(),
@@ -310,7 +310,7 @@ fn test_tomonth_function() -> Result<()> {
             name: "test_tomonth_datetime_constant",
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::UInt32(Some(1633081817u32)), 1),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             nullable: false,
             expect: Series::new(vec![10u8]).into(),
@@ -328,7 +328,7 @@ fn test_todayofyear_function() -> Result<()> {
             name: "test_todayofyear_date16",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0u16]).into(),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![1u16]).into(),
@@ -338,7 +338,7 @@ fn test_todayofyear_function() -> Result<()> {
             name: "test_todayofyear_date32",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0i32]).into(),
-                DataField::new("dummy_1", DataType::Date32, false),
+                DataField::new("dummy_1", DataType::Date32(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![1u16]).into(),
@@ -348,7 +348,7 @@ fn test_todayofyear_function() -> Result<()> {
             name: "test_todayofyear_datetime",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![1633173324u32]).into(),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             nullable: false,
             expect: Series::new(vec![275u16]).into(),
@@ -358,7 +358,7 @@ fn test_todayofyear_function() -> Result<()> {
             name: "test_todayofyear_date16_constant",
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::UInt16(Some(0u16)), 1),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![1u16]).into(),
@@ -368,7 +368,7 @@ fn test_todayofyear_function() -> Result<()> {
             name: "test_todayofyear_date32_constant",
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::Int32(Some(0i32)), 1),
-                DataField::new("dummy_1", DataType::Date32, false),
+                DataField::new("dummy_1", DataType::Date32(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![1u16]).into(),
@@ -378,7 +378,7 @@ fn test_todayofyear_function() -> Result<()> {
             name: "test_todayofyear_datetime_constant",
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::UInt32(Some(1633173324u32)), 1),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             nullable: false,
             expect: Series::new(vec![275u16]).into(),
@@ -396,7 +396,7 @@ fn test_todatofweek_function() -> Result<()> {
             name: "test_todayofweek_date16",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0u16]).into(),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![4u8]).into(),
@@ -406,7 +406,7 @@ fn test_todatofweek_function() -> Result<()> {
             name: "test_todayofweek_date32",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0i32]).into(),
-                DataField::new("dummy_1", DataType::Date32, false),
+                DataField::new("dummy_1", DataType::Date32(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![4u8]).into(),
@@ -416,7 +416,7 @@ fn test_todatofweek_function() -> Result<()> {
             name: "test_todayofweek_datetime",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![1633173324u32]).into(),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             nullable: false,
             expect: Series::new(vec![6u8]).into(),
@@ -426,7 +426,7 @@ fn test_todatofweek_function() -> Result<()> {
             name: "test_todayofweek_date16_constant",
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::UInt16(Some(0u16)), 1),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![4u8]).into(),
@@ -436,7 +436,7 @@ fn test_todatofweek_function() -> Result<()> {
             name: "test_todayofweek_date32_constant",
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::Int32(Some(0i32)), 1),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             nullable: false,
             expect: Series::new(vec![4u8]).into(),
@@ -446,7 +446,7 @@ fn test_todatofweek_function() -> Result<()> {
             name: "test_todayofweek_datetime_constant",
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::UInt32(Some(1633173324u32)), 1),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             nullable: false,
             expect: Series::new(vec![6u8]).into(),
@@ -465,7 +465,7 @@ fn test_todayofmonth_function() -> Result<()> {
             nullable: false,
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0u16]).into(),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             expect: Series::new(vec![1u8]).into(),
             error: "",
@@ -475,7 +475,7 @@ fn test_todayofmonth_function() -> Result<()> {
             nullable: false,
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0i32]).into(),
-                DataField::new("dummy_1", DataType::Date32, false),
+                DataField::new("dummy_1", DataType::Date32(false), false),
             )],
             expect: Series::new(vec![1u8]).into(),
             error: "",
@@ -485,7 +485,7 @@ fn test_todayofmonth_function() -> Result<()> {
             nullable: false,
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![1633173324u32]).into(),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             expect: Series::new(vec![2u8]).into(),
             error: "",
@@ -495,7 +495,7 @@ fn test_todayofmonth_function() -> Result<()> {
             nullable: false,
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::UInt16(Some(0u16)), 1),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             expect: Series::new(vec![1u8]).into(),
             error: "",
@@ -505,7 +505,7 @@ fn test_todayofmonth_function() -> Result<()> {
             nullable: false,
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::Int32(Some(0i32)), 1),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             expect: Series::new(vec![1u8]).into(),
             error: "",
@@ -515,7 +515,7 @@ fn test_todayofmonth_function() -> Result<()> {
             nullable: false,
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::UInt32(Some(1633173324u32)), 1),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             expect: Series::new(vec![2u8]).into(),
             error: "",
@@ -533,7 +533,7 @@ fn test_tohour_function() -> Result<()> {
             nullable: false,
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0u16]).into(),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             expect: Series::new(vec![0u8]).into(),
             error: "",
@@ -543,7 +543,7 @@ fn test_tohour_function() -> Result<()> {
             nullable: false,
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0i32]).into(),
-                DataField::new("dummy_1", DataType::Date32, false),
+                DataField::new("dummy_1", DataType::Date32(false), false),
             )],
             expect: Series::new(vec![0u8]).into(),
             error: "",
@@ -553,7 +553,7 @@ fn test_tohour_function() -> Result<()> {
             nullable: false,
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![1634551542u32]).into(),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             expect: Series::new(vec![10u8]).into(),
             error: "",
@@ -563,7 +563,7 @@ fn test_tohour_function() -> Result<()> {
             nullable: false,
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::UInt16(Some(0u16)), 1),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             expect: Series::new(vec![0u8]).into(),
             error: "",
@@ -573,7 +573,7 @@ fn test_tohour_function() -> Result<()> {
             nullable: false,
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::Int32(Some(0i32)), 1),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             expect: Series::new(vec![0u8]).into(),
             error: "",
@@ -583,7 +583,7 @@ fn test_tohour_function() -> Result<()> {
             nullable: false,
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::UInt32(Some(1634551542u32)), 1),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             expect: Series::new(vec![10u8]).into(),
             error: "",
@@ -601,7 +601,7 @@ fn test_tominute_function() -> Result<()> {
             nullable: false,
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0u16]).into(),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             expect: Series::new(vec![0u8]).into(),
             error: "",
@@ -611,7 +611,7 @@ fn test_tominute_function() -> Result<()> {
             nullable: false,
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0i32]).into(),
-                DataField::new("dummy_1", DataType::Date32, false),
+                DataField::new("dummy_1", DataType::Date32(false), false),
             )],
             expect: Series::new(vec![0u8]).into(),
             error: "",
@@ -621,7 +621,7 @@ fn test_tominute_function() -> Result<()> {
             nullable: false,
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![1634551542u32]).into(),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             expect: Series::new(vec![5u8]).into(),
             error: "",
@@ -631,7 +631,7 @@ fn test_tominute_function() -> Result<()> {
             nullable: false,
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::UInt16(Some(0u16)), 1),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             expect: Series::new(vec![0u8]).into(),
             error: "",
@@ -641,7 +641,7 @@ fn test_tominute_function() -> Result<()> {
             nullable: false,
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::Int32(Some(0i32)), 1),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             expect: Series::new(vec![0u8]).into(),
             error: "",
@@ -651,7 +651,7 @@ fn test_tominute_function() -> Result<()> {
             nullable: false,
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::UInt32(Some(1634551542u32)), 1),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             expect: Series::new(vec![5u8]).into(),
             error: "",
@@ -668,7 +668,7 @@ fn test_tosecond_function() -> Result<()> {
             name: "test_tosecond_date16",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0u16]).into(),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![0u8]).into(),
@@ -678,7 +678,7 @@ fn test_tosecond_function() -> Result<()> {
             name: "test_tosecond_date32",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![0i32]).into(),
-                DataField::new("dummy_1", DataType::Date32, false),
+                DataField::new("dummy_1", DataType::Date32(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![0u8]).into(),
@@ -688,7 +688,7 @@ fn test_tosecond_function() -> Result<()> {
             name: "test_tosecond_datetime",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![1634551542u32]).into(),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             nullable: false,
             expect: Series::new(vec![42u8]).into(),
@@ -698,7 +698,7 @@ fn test_tosecond_function() -> Result<()> {
             name: "test_tosecond_date16_constant",
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::UInt16(Some(0u16)), 1),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![0u8]).into(),
@@ -708,7 +708,7 @@ fn test_tosecond_function() -> Result<()> {
             name: "test_tosecond_date32_constant",
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::Int32(Some(0i32)), 1),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             nullable: false,
             expect: Series::new(vec![0u8]).into(),
@@ -718,7 +718,7 @@ fn test_tosecond_function() -> Result<()> {
             name: "test_tosecond_datetime_constant",
             columns: vec![DataColumnWithField::new(
                 DataColumn::Constant(DataValue::UInt32(Some(1634551542u32)), 1),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             nullable: false,
             expect: Series::new(vec![42u8]).into(),
@@ -736,7 +736,7 @@ fn test_tomonday_function() -> Result<()> {
             name: "test_tomonday_date16",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![18919u16]).into(),
-                DataField::new("dummy_1", DataType::Date16, false),
+                DataField::new("dummy_1", DataType::Date16(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![18918u16]).into(),
@@ -746,7 +746,7 @@ fn test_tomonday_function() -> Result<()> {
             name: "test_tomonday_date32",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![18919i32]).into(),
-                DataField::new("dummy_1", DataType::Date32, false),
+                DataField::new("dummy_1", DataType::Date32(false), false),
             )],
             nullable: false,
             expect: Series::new(vec![18918u16]).into(),
@@ -756,7 +756,7 @@ fn test_tomonday_function() -> Result<()> {
             name: "test_tomonday_datetime",
             columns: vec![DataColumnWithField::new(
                 Series::new(vec![1634614318u32]).into(),
-                DataField::new("dummy_1", DataType::DateTime32(None), false),
+                DataField::new("dummy_1", DataType::DateTime32(false, None), false),
             )],
             nullable: false,
             expect: Series::new(vec![18918u16]).into(),

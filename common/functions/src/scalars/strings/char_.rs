@@ -51,7 +51,6 @@ impl Function for CharFunction {
     }
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let nullable = args.iter().any(|arg| arg.is_nullable());
         for arg in args {
             if !arg.is_numeric() && !arg.is_null() {
                 return Err(ErrorCode::IllegalDataType(format!(
@@ -60,7 +59,8 @@ impl Function for CharFunction {
                 )));
             }
         }
-        let dt = DataType::String;
+        let nullable = args.iter().any(|arg| arg.is_nullable());
+        let dt = DataType::String(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
@@ -74,11 +74,14 @@ impl Function for CharFunction {
         offsets.push(0);
 
         for (i, column) in columns.iter().enumerate() {
+            let nullable = column.field().is_nullable();
+
             let column = column.column();
             if column.data_type().is_null() {
                 return Ok(DataColumn::Constant(DataValue::Null, row_count));
             }
-            let column = column.cast_with_type(&DataType::UInt8)?;
+
+            let column = column.cast_with_type(&DataType::UInt8(nullable))?;
             match column {
                 DataColumn::Array(uint8_arr) => {
                     let uint8_arr = uint8_arr.u8()?;

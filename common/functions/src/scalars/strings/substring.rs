@@ -70,13 +70,20 @@ impl Function for SubstringFunction {
             )));
         }
         let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::String;
+        let dt = DataType::String(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let s_column = columns[0].column().cast_with_type(&DataType::String)?;
-        let p_column = columns[1].column().cast_with_type(&DataType::Int64)?;
+        let s_nullable = columns[0].field().is_nullable();
+        let s_column = columns[0]
+            .column()
+            .cast_with_type(&DataType::String(s_nullable))?;
+
+        let p_nullable = columns[1].field().is_nullable();
+        let p_column = columns[1]
+            .column()
+            .cast_with_type(&DataType::Int64(p_nullable))?;
 
         let r_column: DataColumn = match (s_column, p_column) {
             // #00
@@ -86,7 +93,11 @@ impl Function for SubstringFunction {
             ) => {
                 if let (Some(s), Some(p)) = (s, p) {
                     if columns.len() > 2 {
-                        match columns[2].column().cast_with_type(&DataType::UInt64)? {
+                        let nullable = columns[2].field().is_nullable();
+                        match columns[2]
+                            .column()
+                            .cast_with_type(&DataType::UInt64(nullable))?
+                        {
                             DataColumn::Constant(DataValue::UInt64(l), _) => {
                                 if let Some(l) = l {
                                     DataColumn::Constant(
@@ -122,7 +133,11 @@ impl Function for SubstringFunction {
             (DataColumn::Array(s_series), DataColumn::Constant(DataValue::Int64(p), _)) => {
                 if let Some(p) = p {
                     if columns.len() > 2 {
-                        match columns[2].column().cast_with_type(&DataType::UInt64)? {
+                        let nullable = columns[2].field().is_nullable();
+                        match columns[2]
+                            .column()
+                            .cast_with_type(&DataType::UInt64(nullable))?
+                        {
                             DataColumn::Constant(DataValue::UInt64(l), _) => {
                                 if let Some(l) = l {
                                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
@@ -162,7 +177,11 @@ impl Function for SubstringFunction {
             (DataColumn::Constant(DataValue::String(s), _), DataColumn::Array(p_series)) => {
                 if let Some(s) = s {
                     if columns.len() > 2 {
-                        match columns[2].column().cast_with_type(&DataType::UInt64)? {
+                        let nullable = columns[2].field().is_nullable();
+                        match columns[2]
+                            .column()
+                            .cast_with_type(&DataType::UInt64(nullable))?
+                        {
                             DataColumn::Constant(DataValue::UInt64(l), _) => {
                                 if let Some(l) = l {
                                     let mut r_array = StringArrayBuilder::with_capacity(input_rows);
@@ -201,7 +220,11 @@ impl Function for SubstringFunction {
             // #11
             (DataColumn::Array(s_series), DataColumn::Array(p_series)) => {
                 if columns.len() > 2 {
-                    match columns[2].column().cast_with_type(&DataType::UInt64)? {
+                    let nullable = columns[2].field().is_nullable();
+                    match columns[2]
+                        .column()
+                        .cast_with_type(&DataType::UInt64(nullable))?
+                    {
                         DataColumn::Constant(DataValue::UInt64(l), _) => {
                             if let Some(l) = l {
                                 let mut r_array = StringArrayBuilder::with_capacity(input_rows);

@@ -46,18 +46,17 @@ macro_rules! impl_df_datatype_nullable {
     };
 }
 
+impl_df_datatype_nullable!(u8, UInt8, true);
+impl_df_datatype_nullable!(u16, UInt16, true);
+impl_df_datatype_nullable!(u32, UInt32, true);
+impl_df_datatype_nullable!(u64, UInt64, true);
 
-impl_df_datatype!(u8, UInt8);
-impl_df_datatype!(u16, UInt16);
-impl_df_datatype!(u32, UInt32);
-impl_df_datatype!(u64, UInt64);
-
-impl_df_datatype!(i8, Int8);
-impl_df_datatype!(i16, Int16);
-impl_df_datatype!(i32, Int32);
-impl_df_datatype!(i64, Int64);
-impl_df_datatype!(f32, Float32);
-impl_df_datatype!(f64, Float64);
+impl_df_datatype_nullable!(i8, Int8, true);
+impl_df_datatype_nullable!(i16, Int16, true);
+impl_df_datatype_nullable!(i32, Int32, true);
+impl_df_datatype_nullable!(i64, Int64, true);
+impl_df_datatype_nullable!(f32, Float32, true);
+impl_df_datatype_nullable!(f64, Float64, true);
 impl_df_datatype_nullable!(bool, Boolean, true);
 
 #[derive(Debug)]
@@ -66,7 +65,7 @@ impl_df_datatype!(Null, Null);
 
 impl DFDataType for Vec<u8> {
     fn data_type() -> DataType {
-        DataType::String
+        DataType::String(true)
     }
 }
 

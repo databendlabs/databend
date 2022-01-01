@@ -46,7 +46,9 @@ impl ConcatFunction {
         if lhs.data_type().is_null() {
             return Ok(lhs);
         }
-        let lhs = lhs.cast_with_type(&DataType::String)?;
+
+        let lhs_nullable = lhs.data_type().is_nullable();
+        let lhs = lhs.cast_with_type(&DataType::String(lhs_nullable))?;
         if columns.is_empty() {
             return Ok(lhs);
         }
@@ -54,7 +56,9 @@ impl ConcatFunction {
         if rhs.data_type().is_null() {
             return Ok(rhs.clone());
         }
-        let rhs = rhs.cast_with_type(&DataType::String)?;
+
+        let rhs_nullable = rhs.data_type().is_nullable();
+        let rhs = rhs.cast_with_type(&DataType::String(rhs_nullable))?;
         let column = match (lhs, rhs) {
             (DataColumn::Array(lhs), DataColumn::Array(rhs)) => {
                 let l_array = lhs.string()?;
@@ -125,7 +129,7 @@ impl Function for ConcatFunction {
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
         let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::String;
+        let dt = DataType::String(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 

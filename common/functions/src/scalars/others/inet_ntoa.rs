@@ -54,7 +54,7 @@ impl Function for InetNtoaFunction {
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
         let data_type = if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
-            Ok(DataType::String)
+            Ok(DataType::String(true))
         } else {
             Err(ErrorCode::IllegalDataType(format!(
                 "Expected numeric or string or null type, but got {}",
@@ -67,10 +67,11 @@ impl Function for InetNtoaFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        let nullable = columns[0].field().is_nullable();
         let opt_iter = columns[0]
             .column()
             .to_minimal_array()?
-            .cast_with_type(&DataType::Float64)?;
+            .cast_with_type(&DataType::Float64(nullable))?;
         let opt_iter = opt_iter.f64()?.iter().map(|val_opt| {
             val_opt.and_then(|&val| {
                 if val.is_nan() || val < 0.0 || val > u32::MAX as f64 {

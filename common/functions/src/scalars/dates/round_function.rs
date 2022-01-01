@@ -56,7 +56,7 @@ impl Function for RoundFunction {
         let nullable = args.iter().any(|field| field.is_nullable());
 
         let data_type = match args[0].data_type() {
-            DataType::DateTime32(_) => Ok(DataType::DateTime32(None)),
+            DataType::DateTime32(_, _) => Ok(DataType::DateTime32(nullable, None)),
             _ => Err(ErrorCode::BadDataValueType(format!(
                 "Function {} must have a DateTime type as argument, but got {}",
                 self.display_name, args[0],

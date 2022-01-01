@@ -66,12 +66,15 @@ impl Function for EltFunction {
             }
         }
         let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::String;
+        let dt = DataType::String(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        let n_column = columns[0].column().cast_with_type(&DataType::Int64)?;
+        let n_nullable = columns[0].field().is_nullable();
+        let n_column = columns[0]
+            .column()
+            .cast_with_type(&DataType::Int64(n_nullable))?;
 
         let r_column = match n_column {
             DataColumn::Constant(DataValue::Int64(num), _) => {
@@ -89,7 +92,12 @@ impl Function for EltFunction {
             DataColumn::Array(n_series) => {
                 let series = columns[1..]
                     .iter()
-                    .map(|c| c.column().cast_with_type(&DataType::String)?.to_array())
+                    .map(|c| {
+                        let nullable = c.field().is_nullable();
+                        c.column()
+                            .cast_with_type(&DataType::String(nullable))?
+                            .to_array()
+                    })
                     .collect::<Result<Vec<Series>>>()?;
 
                 let columns = series

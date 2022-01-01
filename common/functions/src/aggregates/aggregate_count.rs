@@ -61,7 +61,7 @@ impl AggregateFunction for AggregateCountFunction {
     }
 
     fn return_type(&self) -> Result<DataType> {
-        Ok(DataType::UInt64)
+        Ok(DataType::UInt64(true))
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {

@@ -52,20 +52,20 @@ impl Function for RandomFunction {
         let data_type = if args.is_empty()
             || matches!(
                 args[0].data_type(),
-                DataType::UInt8
-                    | DataType::UInt16
-                    | DataType::UInt32
-                    | DataType::UInt64
-                    | DataType::Int8
-                    | DataType::Int16
-                    | DataType::Int32
-                    | DataType::Int64
-                    | DataType::Float32
-                    | DataType::Float64
-                    | DataType::String
+                DataType::UInt8(_)
+                    | DataType::UInt16(_)
+                    | DataType::UInt32(_)
+                    | DataType::UInt64(_)
+                    | DataType::Int8(_)
+                    | DataType::Int16(_)
+                    | DataType::Int32(_)
+                    | DataType::Int64(_)
+                    | DataType::Float32(_)
+                    | DataType::Float64(_)
+                    | DataType::String(_)
                     | DataType::Null
             ) {
-            Ok(DataType::Float64)
+            Ok(DataType::Float64(nullable))
         } else {
             Err(ErrorCode::IllegalDataType(format!(
                 "Expected numeric types, but got {}",
@@ -78,8 +78,10 @@ impl Function for RandomFunction {
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let r_column: DataColumn = match columns.len() {
             1 => {
-                let seed_column: &DataColumn =
-                    &columns[0].column().cast_with_type(&DataType::UInt64)?;
+                let seed_nullable = columns[0].field().is_nullable();
+                let seed_column: &DataColumn = &columns[0]
+                    .column()
+                    .cast_with_type(&DataType::UInt64(seed_nullable))?;
 
                 match seed_column {
                     DataColumn::Constant(seed, _) => {

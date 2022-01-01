@@ -49,8 +49,8 @@ impl AnalyzableStatement for DfShowCreateTable {
 impl DfShowCreateTable {
     fn schema() -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
-            DataField::new("Table", DataType::String, false),
-            DataField::new("Create Table", DataType::String, false),
+            DataField::new("Table", DataType::String(false), false),
+            DataField::new("Create Table", DataType::String(false), false),
         ])
     }
 

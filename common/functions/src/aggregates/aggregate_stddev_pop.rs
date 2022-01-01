@@ -87,7 +87,7 @@ where T: DFPrimitiveType + AsPrimitive<f64>
     }
 
     fn return_type(&self) -> Result<DataType> {
-        Ok(DataType::Float64)
+        Ok(DataType::Float64(false))
     }
 
     fn nullable(&self, _input_schema: &DataSchema) -> Result<bool> {

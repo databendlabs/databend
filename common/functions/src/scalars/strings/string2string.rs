@@ -78,16 +78,17 @@ impl<T: StringOperator> Function for String2StringFunction<T> {
             true => true,
             false => args.iter().any(|arg| arg.is_nullable()),
         };
-        let dt = DataType::String;
+        let dt = DataType::String(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let mut op = T::default();
 
+        let nullable = columns[0].field().is_nullable();
         let array = columns[0]
             .column()
-            .cast_with_type(&DataType::String)?
+            .cast_with_type(&DataType::String(nullable))?
             .to_minimal_array()?;
 
         let estimate_bytes = op.estimate_bytes(array.string()?);

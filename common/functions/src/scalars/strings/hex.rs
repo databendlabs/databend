@@ -56,17 +56,21 @@ impl Function for HexFunction {
         }
 
         let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::String;
+        let dt = DataType::String(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        let nullable = columns[0].field().is_nullable();
         match columns[0].data_type() {
-            DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64 => {
+            DataType::UInt8(_)
+            | DataType::UInt16(_)
+            | DataType::UInt32(_)
+            | DataType::UInt64(_) => {
                 let mut string_array = StringArrayBuilder::with_capacity(columns[0].column().len());
                 for value in columns[0]
                     .column()
-                    .cast_with_type(&DataType::UInt64)?
+                    .cast_with_type(&DataType::UInt64(nullable))?
                     .to_minimal_array()?
                     .u64()?
                 {
@@ -76,11 +80,11 @@ impl Function for HexFunction {
                 let column: DataColumn = string_array.finish().into();
                 Ok(column.resize_constant(columns[0].column().len()))
             }
-            DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => {
+            DataType::Int8(_) | DataType::Int16(_) | DataType::Int32(_) | DataType::Int64(_) => {
                 let mut string_array = StringArrayBuilder::with_capacity(columns[0].column().len());
                 for value in columns[0]
                     .column()
-                    .cast_with_type(&DataType::Int64)?
+                    .cast_with_type(&DataType::Int64(nullable))?
                     .to_minimal_array()?
                     .i64()?
                 {
@@ -98,7 +102,7 @@ impl Function for HexFunction {
             _ => {
                 let array = columns[0]
                     .column()
-                    .cast_with_type(&DataType::String)?
+                    .cast_with_type(&DataType::String(nullable))?
                     .to_minimal_array()?;
 
                 let array = array.string()?;

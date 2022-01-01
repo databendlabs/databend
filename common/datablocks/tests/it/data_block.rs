@@ -19,7 +19,7 @@ use pretty_assertions::assert_eq;
 
 #[test]
 fn test_data_block() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64(false), false)]);
 
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1, 2, 3])]);
     assert_eq!(&schema, block.schema());

@@ -183,11 +183,18 @@ impl IntervalFunctionFactory {
         D: DFPrimitiveType,
         R: DFPrimitiveType,
     {
+        let nullable = lhs.data_type().is_nullable() || rhs.data_type().is_nullable();
         let data = lhs
             .into_no_null_iter()
             .zip(rhs.into_no_null_iter())
             .map(|(t, d)| f(t, d))
             .collect::<Result<AlignedVec<R>>>()?;
+
+        if !nullable {
+            return Ok(DFPrimitiveArray::<R>::new_from_owned_with_null_bitmap(
+                data, None,
+            ));
+        }
 
         let validity = combine_validities(lhs.inner().validity(), rhs.inner().validity());
         let result = DFPrimitiveArray::<R>::new_from_owned_with_null_bitmap(data, validity);
@@ -240,37 +247,37 @@ impl IntervalFunctionFactory {
         date_datetime: &DataType,
     ) -> IntegerMonthsArithmeticFunction {
         match date_datetime {
-            DataType::Date16 => match integer {
-                DataType::UInt8 => Self::month_u8_plus_minus_date16,
-                DataType::UInt16 => Self::month_u16_plus_minus_date16,
-                DataType::UInt32 => Self::month_u32_plus_minus_date16,
-                DataType::UInt64 => Self::month_u64_plus_minus_date16,
-                DataType::Int8 => Self::month_i8_plus_minus_date16,
-                DataType::Int16 => Self::month_i16_plus_minus_date16,
-                DataType::Int32 => Self::month_i32_plus_minus_date16,
-                DataType::Int64 => Self::month_i64_plus_minus_date16,
+            DataType::Date16(_) => match integer {
+                DataType::UInt8(_) => Self::month_u8_plus_minus_date16,
+                DataType::UInt16(_) => Self::month_u16_plus_minus_date16,
+                DataType::UInt32(_) => Self::month_u32_plus_minus_date16,
+                DataType::UInt64(_) => Self::month_u64_plus_minus_date16,
+                DataType::Int8(_) => Self::month_i8_plus_minus_date16,
+                DataType::Int16(_) => Self::month_i16_plus_minus_date16,
+                DataType::Int32(_) => Self::month_i32_plus_minus_date16,
+                DataType::Int64(_) => Self::month_i64_plus_minus_date16,
                 _ => unreachable!(),
             },
-            DataType::Date32 => match integer {
-                DataType::UInt8 => Self::month_u8_plus_minus_date32,
-                DataType::UInt16 => Self::month_u16_plus_minus_date32,
-                DataType::UInt32 => Self::month_u32_plus_minus_date32,
-                DataType::UInt64 => Self::month_u64_plus_minus_date32,
-                DataType::Int8 => Self::month_i8_plus_minus_date32,
-                DataType::Int16 => Self::month_i16_plus_minus_date32,
-                DataType::Int32 => Self::month_i32_plus_minus_date32,
-                DataType::Int64 => Self::month_i64_plus_minus_date32,
+            DataType::Date32(_) => match integer {
+                DataType::UInt8(_) => Self::month_u8_plus_minus_date32,
+                DataType::UInt16(_) => Self::month_u16_plus_minus_date32,
+                DataType::UInt32(_) => Self::month_u32_plus_minus_date32,
+                DataType::UInt64(_) => Self::month_u64_plus_minus_date32,
+                DataType::Int8(_) => Self::month_i8_plus_minus_date32,
+                DataType::Int16(_) => Self::month_i16_plus_minus_date32,
+                DataType::Int32(_) => Self::month_i32_plus_minus_date32,
+                DataType::Int64(_) => Self::month_i64_plus_minus_date32,
                 _ => unreachable!(),
             },
-            DataType::DateTime32(_) => match integer {
-                DataType::UInt8 => Self::month_u8_plus_minus_datetime32,
-                DataType::UInt16 => Self::month_u16_plus_minus_datetime32,
-                DataType::UInt32 => Self::month_u32_plus_minus_datetime32,
-                DataType::UInt64 => Self::month_u64_plus_minus_datetime32,
-                DataType::Int8 => Self::month_i8_plus_minus_datetime32,
-                DataType::Int16 => Self::month_i16_plus_minus_datetime32,
-                DataType::Int32 => Self::month_i32_plus_minus_datetime32,
-                DataType::Int64 => Self::month_i64_plus_minus_datetime32,
+            DataType::DateTime32(_, _) => match integer {
+                DataType::UInt8(_) => Self::month_u8_plus_minus_datetime32,
+                DataType::UInt16(_) => Self::month_u16_plus_minus_datetime32,
+                DataType::UInt32(_) => Self::month_u32_plus_minus_datetime32,
+                DataType::UInt64(_) => Self::month_u64_plus_minus_datetime32,
+                DataType::Int8(_) => Self::month_i8_plus_minus_datetime32,
+                DataType::Int16(_) => Self::month_i16_plus_minus_datetime32,
+                DataType::Int32(_) => Self::month_i32_plus_minus_datetime32,
+                DataType::Int64(_) => Self::month_i64_plus_minus_datetime32,
                 _ => unreachable!(),
             },
             _ => unreachable!(),
@@ -319,37 +326,37 @@ impl IntervalFunctionFactory {
         date_datetime: &DataType,
     ) -> IntegerSecondsArithmeticFunction {
         match date_datetime {
-            DataType::Date16 => match integer {
-                DataType::UInt8 => Self::time_secs_u8_plus_minus_date16,
-                DataType::UInt16 => Self::time_secs_u16_plus_minus_date16,
-                DataType::UInt32 => Self::time_secs_u32_plus_minus_date16,
-                DataType::UInt64 => Self::time_secs_u64_plus_minus_date16,
-                DataType::Int8 => Self::time_secs_i8_plus_minus_date16,
-                DataType::Int16 => Self::time_secs_i16_plus_minus_date16,
-                DataType::Int32 => Self::time_secs_i32_plus_minus_date16,
-                DataType::Int64 => Self::time_secs_i64_plus_minus_date16,
+            DataType::Date16(_) => match integer {
+                DataType::UInt8(_) => Self::time_secs_u8_plus_minus_date16,
+                DataType::UInt16(_) => Self::time_secs_u16_plus_minus_date16,
+                DataType::UInt32(_) => Self::time_secs_u32_plus_minus_date16,
+                DataType::UInt64(_) => Self::time_secs_u64_plus_minus_date16,
+                DataType::Int8(_) => Self::time_secs_i8_plus_minus_date16,
+                DataType::Int16(_) => Self::time_secs_i16_plus_minus_date16,
+                DataType::Int32(_) => Self::time_secs_i32_plus_minus_date16,
+                DataType::Int64(_) => Self::time_secs_i64_plus_minus_date16,
                 _ => unreachable!(),
             },
-            DataType::Date32 => match integer {
-                DataType::UInt8 => Self::time_secs_u8_plus_minus_date32,
-                DataType::UInt16 => Self::time_secs_u16_plus_minus_date32,
-                DataType::UInt32 => Self::time_secs_u32_plus_minus_date32,
-                DataType::UInt64 => Self::time_secs_u64_plus_minus_date32,
-                DataType::Int8 => Self::time_secs_i8_plus_minus_date32,
-                DataType::Int16 => Self::time_secs_i16_plus_minus_date32,
-                DataType::Int32 => Self::time_secs_i32_plus_minus_date32,
-                DataType::Int64 => Self::time_secs_i64_plus_minus_date32,
+            DataType::Date32(_) => match integer {
+                DataType::UInt8(_) => Self::time_secs_u8_plus_minus_date32,
+                DataType::UInt16(_) => Self::time_secs_u16_plus_minus_date32,
+                DataType::UInt32(_) => Self::time_secs_u32_plus_minus_date32,
+                DataType::UInt64(_) => Self::time_secs_u64_plus_minus_date32,
+                DataType::Int8(_) => Self::time_secs_i8_plus_minus_date32,
+                DataType::Int16(_) => Self::time_secs_i16_plus_minus_date32,
+                DataType::Int32(_) => Self::time_secs_i32_plus_minus_date32,
+                DataType::Int64(_) => Self::time_secs_i64_plus_minus_date32,
                 _ => unreachable!(),
             },
-            DataType::DateTime32(_) => match integer {
-                DataType::UInt8 => Self::time_secs_u8_plus_minus_datetime32,
-                DataType::UInt16 => Self::time_secs_u16_plus_minus_datetime32,
-                DataType::UInt32 => Self::time_secs_u32_plus_minus_datetime32,
-                DataType::UInt64 => Self::time_secs_u64_plus_minus_datetime32,
-                DataType::Int8 => Self::time_secs_i8_plus_minus_datetime32,
-                DataType::Int16 => Self::time_secs_i16_plus_minus_datetime32,
-                DataType::Int32 => Self::time_secs_i32_plus_minus_datetime32,
-                DataType::Int64 => Self::time_secs_i64_plus_minus_datetime32,
+            DataType::DateTime32(_, _) => match integer {
+                DataType::UInt8(_) => Self::time_secs_u8_plus_minus_datetime32,
+                DataType::UInt16(_) => Self::time_secs_u16_plus_minus_datetime32,
+                DataType::UInt32(_) => Self::time_secs_u32_plus_minus_datetime32,
+                DataType::UInt64(_) => Self::time_secs_u64_plus_minus_datetime32,
+                DataType::Int8(_) => Self::time_secs_i8_plus_minus_datetime32,
+                DataType::Int16(_) => Self::time_secs_i16_plus_minus_datetime32,
+                DataType::Int32(_) => Self::time_secs_i32_plus_minus_datetime32,
+                DataType::Int64(_) => Self::time_secs_i64_plus_minus_datetime32,
                 _ => unreachable!(),
             },
             _ => unreachable!(),

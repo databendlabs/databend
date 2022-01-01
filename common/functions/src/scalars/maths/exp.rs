@@ -50,7 +50,7 @@ impl Function for ExpFunction {
         let nullable = args.iter().any(|arg| arg.is_nullable());
 
         let data_type = if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
-            Ok(DataType::Float64)
+            Ok(DataType::Float64(nullable))
         } else {
             Err(ErrorCode::IllegalDataType(format!(
                 "Expected numeric, but got {}",
@@ -62,12 +62,14 @@ impl Function for ExpFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        let nullable = columns[0].field().is_nullable();
         let result = columns[0]
             .column()
             .to_minimal_array()?
-            .cast_with_type(&DataType::Float64)?
+            .cast_with_type(&DataType::Float64(nullable))?
             .f64()?
             .apply_cast_numeric(|v| v.exp());
+
         let column: DataColumn = result.into();
         Ok(column.resize_constant(columns[0].column().len()))
     }

@@ -19,7 +19,7 @@ fn test_empty_array() {
     let mut builder = StringArrayBuilder::with_capacity(16);
     let data_array = builder.finish();
     assert!(data_array.is_empty());
-    assert_eq!(&DataType::String, data_array.data_type());
+    assert_eq!(&DataType::String(true), data_array.data_type());
 }
 
 #[test]

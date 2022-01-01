@@ -34,28 +34,28 @@ struct Test {
 }
 
 fn create_f64(d: f64) -> Option<DataColumnWithField> {
-    let data_field = DataField::new("x", DataType::Float64, false);
+    let data_field = DataField::new("x", DataType::Float64(false), false);
     let data_column = DataColumn::Constant(DataValue::Float64(Some(d)), 1);
     Some(DataColumnWithField::new(data_column, data_field))
 }
 
 fn create_u8(d: u8) -> Option<DataColumnWithField> {
-    let data_field = DataField::new("x", DataType::UInt8, false);
+    let data_field = DataField::new("x", DataType::UInt8(false), false);
     let data_column = DataColumn::Constant(DataValue::UInt8(Some(d)), 1);
     Some(DataColumnWithField::new(data_column, data_field))
 }
 
 fn create_datetime(d: u32) -> Option<DataColumnWithField> {
-    let data_field = DataField::new("x", DataType::DateTime32(None), false);
+    let data_field = DataField::new("x", DataType::DateTime32(false, None), false);
     let data_column = DataColumn::Constant(DataValue::UInt32(Some(d)), 1);
     Some(DataColumnWithField::new(data_column, data_field))
 }
 
 fn verify_test(t: Test) -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("x", DataType::Float64, false),
-        DataField::new("y", DataType::Int64, false),
-        DataField::new("z", DataType::DateTime32(None), false),
+        DataField::new("x", DataType::Float64(false), false),
+        DataField::new("y", DataType::Int64(false), false),
+        DataField::new("z", DataType::DateTime32(false, None), false),
     ]);
     let mono = match MonotonicityCheckVisitor::check_expression(
         schema, &t.expr, t.left, t.right, t.column,

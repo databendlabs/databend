@@ -28,8 +28,8 @@ use pretty_assertions::assert_eq;
 #[test]
 fn test_sparse_index() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("name", DataType::String, true),
-        DataField::new("age", DataType::Int32, false),
+        DataField::new("name", DataType::String(true), true),
+        DataField::new("age", DataType::Int32(false), false),
     ]);
 
     let block1 = DataBlock::create_by_array(schema.clone(), vec![

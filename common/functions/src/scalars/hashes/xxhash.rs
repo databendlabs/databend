@@ -15,7 +15,6 @@
 use std::hash::Hasher;
 
 use common_datavalues::DataType;
-use common_exception::Result;
 use twox_hash::XxHash32;
 use twox_hash::XxHash64;
 
@@ -29,8 +28,8 @@ impl NumberResultFunction<u32> for DfXxHash32 {
     const IS_DETERMINISTIC: bool = true;
     const MAYBE_MONOTONIC: bool = false;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt32)
+    fn return_type(nullable: bool) -> DataType {
+        DataType::UInt32(nullable)
     }
 
     fn to_number(value: &[u8]) -> u32 {
@@ -47,8 +46,8 @@ impl NumberResultFunction<u64> for DfXxHash64 {
     const IS_DETERMINISTIC: bool = true;
     const MAYBE_MONOTONIC: bool = false;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt64)
+    fn return_type(nullable: bool) -> DataType {
+        DataType::UInt64(nullable)
     }
 
     fn to_number(value: &[u8]) -> u64 {

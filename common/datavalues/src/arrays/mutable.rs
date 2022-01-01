@@ -32,19 +32,20 @@ pub trait MutableArrayBuilder {
 }
 
 pub fn create_mutable_array(datatype: DataType) -> Box<dyn MutableArrayBuilder> {
+    // TODO: need to revisit aggregator final, non-nullable data type should return MutableBooleanArrayBuilder::<false>
     match datatype {
         DataType::Boolean(_) => Box::new(MutableBooleanArrayBuilder::<true>::default()),
-        DataType::UInt8 => Box::new(MutablePrimitiveArrayBuilder::<u8, true>::default()),
-        DataType::UInt16 => Box::new(MutablePrimitiveArrayBuilder::<u16, true>::default()),
-        DataType::UInt32 => Box::new(MutablePrimitiveArrayBuilder::<u32, true>::default()),
-        DataType::UInt64 => Box::new(MutablePrimitiveArrayBuilder::<u64, true>::default()),
-        DataType::Int8 => Box::new(MutablePrimitiveArrayBuilder::<i8, true>::default()),
-        DataType::Int16 => Box::new(MutablePrimitiveArrayBuilder::<i16, true>::default()),
-        DataType::Int32 => Box::new(MutablePrimitiveArrayBuilder::<i32, true>::default()),
-        DataType::Int64 => Box::new(MutablePrimitiveArrayBuilder::<i64, true>::default()),
-        DataType::Float32 => Box::new(MutablePrimitiveArrayBuilder::<f32, true>::default()),
-        DataType::Float64 => Box::new(MutablePrimitiveArrayBuilder::<f64, true>::default()),
-        DataType::String => Box::new(MutableStringArrayBuilder::<true>::default()),
+        DataType::UInt8(_) => Box::new(MutablePrimitiveArrayBuilder::<u8, true>::default()),
+        DataType::UInt16(_) => Box::new(MutablePrimitiveArrayBuilder::<u16, true>::default()),
+        DataType::UInt32(_) => Box::new(MutablePrimitiveArrayBuilder::<u32, true>::default()),
+        DataType::UInt64(_) => Box::new(MutablePrimitiveArrayBuilder::<u64, true>::default()),
+        DataType::Int8(_) => Box::new(MutablePrimitiveArrayBuilder::<i8, true>::default()),
+        DataType::Int16(_) => Box::new(MutablePrimitiveArrayBuilder::<i16, true>::default()),
+        DataType::Int32(_) => Box::new(MutablePrimitiveArrayBuilder::<i32, true>::default()),
+        DataType::Int64(_) => Box::new(MutablePrimitiveArrayBuilder::<i64, true>::default()),
+        DataType::Float32(_) => Box::new(MutablePrimitiveArrayBuilder::<f32, true>::default()),
+        DataType::Float64(_) => Box::new(MutablePrimitiveArrayBuilder::<f64, true>::default()),
+        DataType::String(_) => Box::new(MutableStringArrayBuilder::<true>::default()),
         _ => {
             todo!()
         }

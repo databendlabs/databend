@@ -19,8 +19,8 @@ use common_exception::Result;
 #[test]
 fn test_data_block_slice() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int64, false),
-        DataField::new("b", DataType::Float64, false),
+        DataField::new("a", DataType::Int64(false), false),
+        DataField::new("b", DataType::Float64(false), false),
     ]);
 
     let raw = DataBlock::create(schema, vec![

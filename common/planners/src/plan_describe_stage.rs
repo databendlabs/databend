@@ -25,11 +25,11 @@ pub struct DescribeStagePlan {
 impl DescribeStagePlan {
     pub fn schema(&self) -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
-            DataField::new("parent_properties", DataType::String, false),
-            DataField::new("properties", DataType::String, false),
-            DataField::new("property_types", DataType::String, false),
-            DataField::new("property_values", DataType::String, false),
-            DataField::new("property_defaults", DataType::String, false),
+            DataField::new("parent_properties", DataType::String(false), false),
+            DataField::new("properties", DataType::String(false), false),
+            DataField::new("property_types", DataType::String(false), false),
+            DataField::new("property_values", DataType::String(false), false),
+            DataField::new("property_defaults", DataType::String(false), false),
             DataField::new("property_changed", DataType::Boolean(false), false),
         ])
     }

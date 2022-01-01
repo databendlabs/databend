@@ -87,7 +87,7 @@ impl NumbersTable {
             meta: TableMeta {
                 schema: DataSchemaRefExt::create(vec![DataField::new(
                     "number",
-                    DataType::UInt64,
+                    DataType::UInt64(false),
                     false,
                 )]),
                 engine: engine.to_string(),

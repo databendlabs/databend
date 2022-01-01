@@ -25,7 +25,8 @@ use crate::test::Test;
 fn test_expression_plan_format() -> Result<()> {
     use pretty_assertions::assert_eq;
 
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::String, false)]);
+    let schema =
+        DataSchemaRefExt::create(vec![DataField::new("a", DataType::String(false), false)]);
 
     let empty_plan = EmptyPlan::create_with_schema(schema.clone());
     let expression = PlanNode::Expression(ExpressionPlan {

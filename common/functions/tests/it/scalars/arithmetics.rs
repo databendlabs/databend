@@ -28,8 +28,8 @@ fn test_arithmetic_function() -> Result<()> {
     let tests = vec![
         (
             ArithmeticPlusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Int64, false),
-                DataTypeAndNullable::create(&DataType::Int64, false),
+                DataTypeAndNullable::create(&DataType::Int64(false), false),
+                DataTypeAndNullable::create(&DataType::Int64(false), false),
             ])?,
             ScalarFunctionTest {
                 name: "add-int64-passed",
@@ -44,8 +44,8 @@ fn test_arithmetic_function() -> Result<()> {
         ),
         (
             ArithmeticPlusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Int16, false),
-                DataTypeAndNullable::create(&DataType::Int64, false),
+                DataTypeAndNullable::create(&DataType::Int16(false), false),
+                DataTypeAndNullable::create(&DataType::Int64(false), false),
             ])?,
             ScalarFunctionTest {
                 name: "add-diff-passed",
@@ -60,8 +60,8 @@ fn test_arithmetic_function() -> Result<()> {
         ),
         (
             ArithmeticMinusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Int64, false),
-                DataTypeAndNullable::create(&DataType::Int64, false),
+                DataTypeAndNullable::create(&DataType::Int64(false), false),
+                DataTypeAndNullable::create(&DataType::Int64(false), false),
             ])?,
             ScalarFunctionTest {
                 name: "sub-int64-passed",
@@ -76,8 +76,8 @@ fn test_arithmetic_function() -> Result<()> {
         ),
         (
             ArithmeticMulFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Int64, false),
-                DataTypeAndNullable::create(&DataType::Int64, false),
+                DataTypeAndNullable::create(&DataType::Int64(false), false),
+                DataTypeAndNullable::create(&DataType::Int64(false), false),
             ])?,
             ScalarFunctionTest {
                 name: "mul-int64-passed",
@@ -92,8 +92,8 @@ fn test_arithmetic_function() -> Result<()> {
         ),
         (
             ArithmeticDivFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Int64, false),
-                DataTypeAndNullable::create(&DataType::Int64, false),
+                DataTypeAndNullable::create(&DataType::Int64(false), false),
+                DataTypeAndNullable::create(&DataType::Int64(false), false),
             ])?,
             ScalarFunctionTest {
                 name: "div-int64-passed",
@@ -108,8 +108,8 @@ fn test_arithmetic_function() -> Result<()> {
         ),
         (
             ArithmeticIntDivFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Int64, false),
-                DataTypeAndNullable::create(&DataType::Int64, false),
+                DataTypeAndNullable::create(&DataType::Int64(false), false),
+                DataTypeAndNullable::create(&DataType::Int64(false), false),
             ])?,
             ScalarFunctionTest {
                 name: "intdiv-int64-passed",
@@ -124,8 +124,8 @@ fn test_arithmetic_function() -> Result<()> {
         ),
         (
             ArithmeticModuloFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Int64, false),
-                DataTypeAndNullable::create(&DataType::Int64, false),
+                DataTypeAndNullable::create(&DataType::Int64(false), false),
+                DataTypeAndNullable::create(&DataType::Int64(false), false),
             ])?,
             ScalarFunctionTest {
                 name: "mod-int64-passed",
@@ -166,8 +166,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
     let tests = vec![
         (
             ArithmeticPlusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::DateTime32(None), false),
-                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::YearMonth), false),
+                DataTypeAndNullable::create(&DataType::DateTime32(false, None), false),
+                DataTypeAndNullable::create(
+                    &DataType::Interval(false, IntervalUnit::YearMonth),
+                    false,
+                ),
             ])?,
             ScalarFunctionTestWithType {
                 name: "datetime-add-year-month-passed",
@@ -179,7 +182,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                             to_seconds(2000, 1, 31, 15, 00, 00),
                         ])
                         .into(),
-                        DataField::new("dummy_1", DataType::DateTime32(None), false),
+                        DataField::new("dummy_1", DataType::DateTime32(false, None), false),
                     ),
                     DataColumnWithField::new(
                         Series::new(vec![
@@ -189,7 +192,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                         .into(),
                         DataField::new(
                             "dummy_1",
-                            DataType::Interval(IntervalUnit::YearMonth),
+                            DataType::Interval(false, IntervalUnit::YearMonth),
                             false,
                         ),
                     ),
@@ -204,8 +207,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
         ),
         (
             ArithmeticPlusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::DateTime32(None), false),
-                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::YearMonth), false),
+                DataTypeAndNullable::create(&DataType::DateTime32(false, None), false),
+                DataTypeAndNullable::create(
+                    &DataType::Interval(false, IntervalUnit::YearMonth),
+                    false,
+                ),
             ])?,
             ScalarFunctionTestWithType {
                 name: "datetime-add-year-month-passed",
@@ -217,13 +223,13 @@ fn test_arithmetic_date_interval() -> Result<()> {
                             to_seconds(2020, 2, 29, 15, 00, 00),
                         ])
                         .into(),
-                        DataField::new("dummy_1", DataType::DateTime32(None), false),
+                        DataField::new("dummy_1", DataType::DateTime32(false, None), false),
                     ),
                     DataColumnWithField::new(
                         Series::new(vec![-12i64 /* -1 year */, -1 /* -1 month */]).into(),
                         DataField::new(
                             "dummy_1",
-                            DataType::Interval(IntervalUnit::YearMonth),
+                            DataType::Interval(false, IntervalUnit::YearMonth),
                             false,
                         ),
                     ),
@@ -238,8 +244,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
         ),
         (
             ArithmeticPlusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::DateTime32(None), false),
-                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::DayTime), false),
+                DataTypeAndNullable::create(&DataType::DateTime32(false, None), false),
+                DataTypeAndNullable::create(
+                    &DataType::Interval(false, IntervalUnit::DayTime),
+                    false,
+                ),
             ])?,
             ScalarFunctionTestWithType {
                 name: "datetime-add-day-time-passed",
@@ -251,7 +260,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                             to_seconds(2020, 3, 1, 10, 30, 00),
                         ])
                         .into(),
-                        DataField::new("dummy_1", DataType::DateTime32(None), false),
+                        DataField::new("dummy_1", DataType::DateTime32(false, None), false),
                     ),
                     DataColumnWithField::new(
                         Series::new(vec![
@@ -259,7 +268,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
                             daytime_to_ms(-1, -1, 0, 0),
                         ])
                         .into(),
-                        DataField::new("dummy_1", DataType::Interval(IntervalUnit::DayTime), false),
+                        DataField::new(
+                            "dummy_1",
+                            DataType::Interval(false, IntervalUnit::DayTime),
+                            false,
+                        ),
                     ),
                 ],
                 expect: Series::new(vec![
@@ -272,8 +285,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
         ),
         (
             ArithmeticMinusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::DateTime32(None), false),
-                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::DayTime), false),
+                DataTypeAndNullable::create(&DataType::DateTime32(false, None), false),
+                DataTypeAndNullable::create(
+                    &DataType::Interval(false, IntervalUnit::DayTime),
+                    false,
+                ),
             ])?,
             ScalarFunctionTestWithType {
                 name: "datetime-minus-day-time-passed",
@@ -285,7 +301,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                             to_seconds(2020, 2, 29, 9, 30, 00),
                         ])
                         .into(),
-                        DataField::new("dummy_1", DataType::DateTime32(None), false),
+                        DataField::new("dummy_1", DataType::DateTime32(false, None), false),
                     ),
                     DataColumnWithField::new(
                         Series::new(vec![
@@ -293,7 +309,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
                             daytime_to_ms(-1, -1, 0, 0),
                         ])
                         .into(),
-                        DataField::new("dummy_1", DataType::Interval(IntervalUnit::DayTime), false),
+                        DataField::new(
+                            "dummy_1",
+                            DataType::Interval(false, IntervalUnit::DayTime),
+                            false,
+                        ),
                     ),
                 ],
                 expect: Series::new(vec![
@@ -306,8 +326,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
         ),
         (
             ArithmeticPlusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Date32, false),
-                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::YearMonth), false),
+                DataTypeAndNullable::create(&DataType::Date32(false), false),
+                DataTypeAndNullable::create(
+                    &DataType::Interval(false, IntervalUnit::YearMonth),
+                    false,
+                ),
             ])?,
             ScalarFunctionTestWithType {
                 name: "date32-plus-year-month",
@@ -315,7 +338,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 columns: vec![
                     DataColumnWithField::new(
                         Series::new(vec![to_days(2020, 2, 29), to_days(2000, 1, 31)]).into(),
-                        DataField::new("dummy_1", DataType::Date32, false),
+                        DataField::new("dummy_1", DataType::Date32(false), false),
                     ),
                     DataColumnWithField::new(
                         Series::new(vec![
@@ -325,7 +348,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                         .into(),
                         DataField::new(
                             "dummy_1",
-                            DataType::Interval(IntervalUnit::YearMonth),
+                            DataType::Interval(false, IntervalUnit::YearMonth),
                             false,
                         ),
                     ),
@@ -336,8 +359,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
         ),
         (
             ArithmeticMinusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Date32, false),
-                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::YearMonth), false),
+                DataTypeAndNullable::create(&DataType::Date32(false), false),
+                DataTypeAndNullable::create(
+                    &DataType::Interval(false, IntervalUnit::YearMonth),
+                    false,
+                ),
             ])?,
             ScalarFunctionTestWithType {
                 name: "date32-minus-year-month",
@@ -345,7 +371,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 columns: vec![
                     DataColumnWithField::new(
                         Series::new(vec![to_days(2020, 2, 29), to_days(2000, 1, 31)]).into(),
-                        DataField::new("dummy_1", DataType::Date32, false),
+                        DataField::new("dummy_1", DataType::Date32(false), false),
                     ),
                     DataColumnWithField::new(
                         Series::new(vec![
@@ -355,7 +381,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                         .into(),
                         DataField::new(
                             "dummy_1",
-                            DataType::Interval(IntervalUnit::YearMonth),
+                            DataType::Interval(false, IntervalUnit::YearMonth),
                             false,
                         ),
                     ),
@@ -366,8 +392,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
         ),
         (
             ArithmeticPlusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Date32, false),
-                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::DayTime), false),
+                DataTypeAndNullable::create(&DataType::Date32(false), false),
+                DataTypeAndNullable::create(
+                    &DataType::Interval(false, IntervalUnit::DayTime),
+                    false,
+                ),
             ])?,
             ScalarFunctionTestWithType {
                 name: "date32-plus-day-time",
@@ -375,7 +404,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 columns: vec![
                     DataColumnWithField::new(
                         Series::new(vec![to_days(2020, 3, 1), to_days(2021, 3, 1)]).into(),
-                        DataField::new("dummy_1", DataType::Date32, false),
+                        DataField::new("dummy_1", DataType::Date32(false), false),
                     ),
                     DataColumnWithField::new(
                         Series::new(vec![
@@ -383,7 +412,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
                             daytime_to_ms(-1, -1, 0, 0),
                         ])
                         .into(),
-                        DataField::new("dummy_1", DataType::Interval(IntervalUnit::DayTime), false),
+                        DataField::new(
+                            "dummy_1",
+                            DataType::Interval(false, IntervalUnit::DayTime),
+                            false,
+                        ),
                     ),
                 ],
                 expect: Series::new(vec![to_days(2020, 2, 29), to_days(2021, 2, 28)]).into(),
@@ -392,8 +425,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
         ),
         (
             ArithmeticMinusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Date32, false),
-                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::DayTime), false),
+                DataTypeAndNullable::create(&DataType::Date32(false), false),
+                DataTypeAndNullable::create(
+                    &DataType::Interval(false, IntervalUnit::DayTime),
+                    false,
+                ),
             ])?,
             ScalarFunctionTestWithType {
                 name: "date32-minus-day-time",
@@ -401,12 +437,16 @@ fn test_arithmetic_date_interval() -> Result<()> {
                 columns: vec![
                     DataColumnWithField::new(
                         Series::new(vec![to_days(2020, 3, 1), to_days(2021, 3, 1)]).into(),
-                        DataField::new("dummy_1", DataType::Date32, false),
+                        DataField::new("dummy_1", DataType::Date32(false), false),
                     ),
                     DataColumnWithField::new(
                         Series::new(vec![daytime_to_ms(1, 0, 0, 0), daytime_to_ms(1, 1, 0, 0)])
                             .into(),
-                        DataField::new("dummy_1", DataType::Interval(IntervalUnit::DayTime), false),
+                        DataField::new(
+                            "dummy_1",
+                            DataType::Interval(false, IntervalUnit::DayTime),
+                            false,
+                        ),
                     ),
                 ],
                 expect: Series::new(vec![to_days(2020, 2, 29), to_days(2021, 2, 28)]).into(),
@@ -415,8 +455,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
         ),
         (
             ArithmeticPlusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Date16, false),
-                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::YearMonth), false),
+                DataTypeAndNullable::create(&DataType::Date16(false), false),
+                DataTypeAndNullable::create(
+                    &DataType::Interval(false, IntervalUnit::YearMonth),
+                    false,
+                ),
             ])?,
             ScalarFunctionTestWithType {
                 name: "date16-plus-year-month",
@@ -428,7 +471,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                             to_days(2000, 1, 31) as u16,
                         ])
                         .into(),
-                        DataField::new("dummy_1", DataType::Date16, false),
+                        DataField::new("dummy_1", DataType::Date16(false), false),
                     ),
                     DataColumnWithField::new(
                         Series::new(vec![
@@ -438,7 +481,7 @@ fn test_arithmetic_date_interval() -> Result<()> {
                         .into(),
                         DataField::new(
                             "dummy_1",
-                            DataType::Interval(IntervalUnit::YearMonth),
+                            DataType::Interval(false, IntervalUnit::YearMonth),
                             false,
                         ),
                     ),
@@ -453,8 +496,11 @@ fn test_arithmetic_date_interval() -> Result<()> {
         ),
         (
             ArithmeticPlusFunction::try_create_func("", &[
-                DataTypeAndNullable::create(&DataType::Date16, false),
-                DataTypeAndNullable::create(&DataType::Interval(IntervalUnit::DayTime), false),
+                DataTypeAndNullable::create(&DataType::Date16(false), false),
+                DataTypeAndNullable::create(
+                    &DataType::Interval(false, IntervalUnit::DayTime),
+                    false,
+                ),
             ])?,
             ScalarFunctionTestWithType {
                 name: "date16-plus-day-time",
@@ -466,12 +512,16 @@ fn test_arithmetic_date_interval() -> Result<()> {
                             to_days(2021, 2, 28) as u16,
                         ])
                         .into(),
-                        DataField::new("dummy_1", DataType::Date16, false),
+                        DataField::new("dummy_1", DataType::Date16(false), false),
                     ),
                     DataColumnWithField::new(
                         Series::new(vec![daytime_to_ms(1, 0, 0, 0), daytime_to_ms(1, 1, 0, 0)])
                             .into(),
-                        DataField::new("dummy_1", DataType::Interval(IntervalUnit::DayTime), false),
+                        DataField::new(
+                            "dummy_1",
+                            DataType::Interval(false, IntervalUnit::DayTime),
+                            false,
+                        ),
                     ),
                 ],
                 expect: Series::new(vec![to_days(2020, 3, 1) as u16, to_days(2021, 3, 1) as u16])

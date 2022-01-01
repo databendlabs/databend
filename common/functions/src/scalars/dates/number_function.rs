@@ -42,7 +42,7 @@ pub struct NumberFunction<T, R> {
 pub trait NumberResultFunction<R> {
     const IS_DETERMINISTIC: bool;
 
-    fn return_type() -> Result<DataType>;
+    fn return_type(nullable: bool) -> DataType;
     fn to_number(_value: DateTime<Utc>) -> R;
     fn to_constant_value(_value: DateTime<Utc>) -> DataValue;
     // Used to check the monotonicity of the function.
@@ -62,9 +62,10 @@ pub struct ToYYYYMM;
 impl NumberResultFunction<u32> for ToYYYYMM {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt32)
+    fn return_type(nullable: bool) -> DataType {
+        DataType::UInt32(nullable)
     }
+
     fn to_number(value: DateTime<Utc>) -> u32 {
         value.year() as u32 * 100 + value.month()
     }
@@ -80,9 +81,10 @@ pub struct ToYYYYMMDD;
 impl NumberResultFunction<u32> for ToYYYYMMDD {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt32)
+    fn return_type(nullable: bool) -> DataType {
+        DataType::UInt32(nullable)
     }
+
     fn to_number(value: DateTime<Utc>) -> u32 {
         value.year() as u32 * 10000 + value.month() * 100 + value.day()
     }
@@ -98,8 +100,8 @@ pub struct ToYYYYMMDDhhmmss;
 impl NumberResultFunction<u64> for ToYYYYMMDDhhmmss {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt64)
+    fn return_type(nullable: bool) -> DataType {
+        DataType::UInt64(nullable)
     }
 
     fn to_number(value: DateTime<Utc>) -> u64 {
@@ -122,9 +124,10 @@ pub struct ToStartOfYear;
 impl NumberResultFunction<u16> for ToStartOfYear {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::Date16)
+    fn return_type(nullable: bool) -> DataType {
+        DataType::Date16(nullable)
     }
+
     fn to_number(value: DateTime<Utc>) -> u16 {
         let end: DateTime<Utc> = Utc.ymd(value.year(), 1, 1).and_hms(0, 0, 0);
         get_day(end) as u16
@@ -141,9 +144,10 @@ pub struct ToStartOfISOYear;
 impl NumberResultFunction<u16> for ToStartOfISOYear {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::Date16)
+    fn return_type(nullable: bool) -> DataType {
+        DataType::Date16(nullable)
     }
+
     fn to_number(value: DateTime<Utc>) -> u16 {
         let week_day = value.weekday().num_days_from_monday();
         let iso_week = value.iso_week();
@@ -165,9 +169,10 @@ pub struct ToStartOfQuarter;
 impl NumberResultFunction<u16> for ToStartOfQuarter {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::Date16)
+    fn return_type(nullable: bool) -> DataType {
+        DataType::Date16(nullable)
     }
+
     fn to_number(value: DateTime<Utc>) -> u16 {
         let new_month = value.month0() / 3 * 3 + 1;
         let date = Utc.ymd(value.year(), new_month, 1).and_hms(0, 0, 0);
@@ -185,9 +190,10 @@ pub struct ToStartOfMonth;
 impl NumberResultFunction<u16> for ToStartOfMonth {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::Date16)
+    fn return_type(nullable: bool) -> DataType {
+        DataType::Date16(nullable)
     }
+
     fn to_number(value: DateTime<Utc>) -> u16 {
         let date = Utc.ymd(value.year(), value.month(), 1).and_hms(0, 0, 0);
         get_day(date) as u16
@@ -204,9 +210,10 @@ pub struct ToMonth;
 impl NumberResultFunction<u8> for ToMonth {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt8)
+    fn return_type(nullable: bool) -> DataType {
+        DataType::UInt8(nullable)
     }
+
     fn to_number(value: DateTime<Utc>) -> u8 {
         value.month() as u8
     }
@@ -228,9 +235,10 @@ pub struct ToDayOfYear;
 impl NumberResultFunction<u16> for ToDayOfYear {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt16)
+    fn return_type(nullable: bool) -> DataType {
+        DataType::UInt16(nullable)
     }
+
     fn to_number(value: DateTime<Utc>) -> u16 {
         value.ordinal() as u16
     }
@@ -252,8 +260,8 @@ pub struct ToDayOfMonth;
 impl NumberResultFunction<u8> for ToDayOfMonth {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt8)
+    fn return_type(nullable: bool) -> DataType {
+        DataType::UInt8(nullable)
     }
     fn to_number(value: DateTime<Utc>) -> u8 {
         value.day() as u8
@@ -276,9 +284,10 @@ pub struct ToDayOfWeek;
 impl NumberResultFunction<u8> for ToDayOfWeek {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt8)
+    fn return_type(nullable: bool) -> DataType {
+        DataType::UInt8(nullable)
     }
+
     fn to_number(value: DateTime<Utc>) -> u8 {
         value.weekday().number_from_monday() as u8
     }
@@ -299,9 +308,10 @@ pub struct ToHour;
 impl NumberResultFunction<u8> for ToHour {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt8)
+    fn return_type(nullable: bool) -> DataType {
+        DataType::UInt8(nullable)
     }
+
     fn to_number(value: DateTime<Utc>) -> u8 {
         value.hour() as u8
     }
@@ -312,7 +322,7 @@ impl NumberResultFunction<u8> for ToHour {
 
     // ToHour is NOT a monotonic function in general, unless the time range is within the same day.
     fn factor_function() -> Result<Box<dyn Function>> {
-        CastFunction::create("toDate".to_string(), DataType::Date16)
+        CastFunction::create("toDate".to_string(), DataType::Date16(true))
     }
 }
 
@@ -322,9 +332,10 @@ pub struct ToMinute;
 impl NumberResultFunction<u8> for ToMinute {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt8)
+    fn return_type(nullable: bool) -> DataType {
+        DataType::UInt8(nullable)
     }
+
     fn to_number(value: DateTime<Utc>) -> u8 {
         value.minute() as u8
     }
@@ -345,9 +356,10 @@ pub struct ToSecond;
 impl NumberResultFunction<u8> for ToSecond {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::UInt8)
+    fn return_type(nullable: bool) -> DataType {
+        DataType::UInt8(nullable)
     }
+
     fn to_number(value: DateTime<Utc>) -> u8 {
         value.second() as u8
     }
@@ -368,9 +380,10 @@ pub struct ToMonday;
 impl NumberResultFunction<u16> for ToMonday {
     const IS_DETERMINISTIC: bool = true;
 
-    fn return_type() -> Result<DataType> {
-        Ok(DataType::Date16)
+    fn return_type(nullable: bool) -> DataType {
+        DataType::Date16(nullable)
     }
+
     fn to_number(value: DateTime<Utc>) -> u16 {
         let weekday = value.weekday();
         (get_day(value) - weekday.num_days_from_monday()) as u16
@@ -418,14 +431,15 @@ where
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
         let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = T::return_type()?;
+        let dt = T::return_type(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let data_type = columns[0].data_type();
         let number_array: DataColumn = match data_type {
-            DataType::Date16 => {
+            // TODO: optimize when nullable is false
+            DataType::Date16(_) => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
                     let date_time = Utc.timestamp(v.as_u64()? as i64 * 24 * 3600, 0_u32);
                     let constant_result = T::to_constant_value(date_time);
@@ -442,7 +456,9 @@ where
                     Ok(result.into())
                 }
             }
-            DataType::Date32 => {
+
+            // TODO: optimize when nullable is false
+            DataType::Date32(_) => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
                     let date_time = Utc.timestamp(v.as_i64()? * 24 * 3600, 0_u32);
                     let constant_result = T::to_constant_value(date_time);
@@ -459,7 +475,7 @@ where
                     Ok(result.into())
                 }
             }
-            DataType::DateTime32(_) => {
+            DataType::DateTime32(_, _) => {
                 if let DataColumn::Constant(v, _) = columns[0].column() {
                     let date_time = Utc.timestamp(v.as_u64()? as i64, 0_u32);
                     let constant_result = T::to_constant_value(date_time);

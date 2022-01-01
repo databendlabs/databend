@@ -85,7 +85,7 @@ impl Function for FormatFunction {
         if (args[0].is_numeric() || args[0].is_string() || args[0].is_null())
             && (args[1].is_numeric() || args[1].is_string() || args[1].is_null())
         {
-            let dt = DataType::String;
+            let dt = DataType::String(nullable);
             Ok(DataTypeAndNullable::create(&dt, nullable))
         } else {
             Err(ErrorCode::IllegalDataType(format!(
@@ -96,9 +96,17 @@ impl Function for FormatFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
+        let column_nullables = columns
+            .iter()
+            .map(|column| column.field().is_nullable())
+            .collect::<Vec<_>>();
         match (
-            columns[0].column().cast_with_type(&DataType::Float64)?,
-            columns[1].column().cast_with_type(&DataType::Int64)?,
+            columns[0]
+                .column()
+                .cast_with_type(&DataType::Float64(column_nullables[0]))?,
+            columns[1]
+                .column()
+                .cast_with_type(&DataType::Int64(column_nullables[1]))?,
         ) {
             (
                 DataColumn::Constant(DataValue::Float64(number), _),

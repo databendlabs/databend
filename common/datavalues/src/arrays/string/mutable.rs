@@ -102,7 +102,7 @@ impl<const NULLABLE: bool> MutableStringArrayBuilder<NULLABLE> {
         let mut offsets = MutableBuffer::<i64>::with_capacity(capacity + 1);
         offsets.push(0i64);
         Self {
-            data_type: DataType::String,
+            data_type: DataType::String(NULLABLE),
             offsets,
             values: MutableBuffer::<u8>::with_capacity(capacity),
             validity: None,
@@ -115,7 +115,7 @@ impl<const NULLABLE: bool> MutableStringArrayBuilder<NULLABLE> {
         validity: Option<MutableBitmap>,
     ) -> Self {
         Self {
-            data_type: DataType::String,
+            data_type: DataType::String(NULLABLE),
             offsets,
             values,
             validity,

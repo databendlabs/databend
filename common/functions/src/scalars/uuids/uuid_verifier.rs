@@ -113,11 +113,11 @@ where T: UUIDVerifier + Clone + Sync + Send + 'static
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         match columns[0].data_type() {
-            &DataType::String => {
+            &DataType::String(nullable) => {
                 if let Ok(string) = str::from_utf8(
                     columns[0]
                         .column()
-                        .cast_with_type(&DataType::String)?
+                        .cast_with_type(&DataType::String(nullable))?
                         .to_minimal_array()?
                         .string()?
                         .inner()

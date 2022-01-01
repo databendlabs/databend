@@ -60,20 +60,20 @@ impl Function for FloorFunction {
 
         let data_type = if matches!(
             args[0].data_type(),
-            DataType::UInt8
-                | DataType::UInt16
-                | DataType::UInt32
-                | DataType::UInt64
-                | DataType::Int8
-                | DataType::Int16
-                | DataType::Int32
-                | DataType::Int64
-                | DataType::Float32
-                | DataType::Float64
-                | DataType::String
+            DataType::UInt8(_)
+                | DataType::UInt16(_)
+                | DataType::UInt32(_)
+                | DataType::UInt64(_)
+                | DataType::Int8(_)
+                | DataType::Int16(_)
+                | DataType::Int32(_)
+                | DataType::Int64(_)
+                | DataType::Float32(_)
+                | DataType::Float64(_)
+                | DataType::String(_)
                 | DataType::Null
         ) {
-            Ok(DataType::Float64)
+            Ok(DataType::Float64(nullable))
         } else {
             Err(ErrorCode::IllegalDataType(format!(
                 "Expected numeric types, but got {}",
@@ -84,12 +84,14 @@ impl Function for FloorFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        let nullable = columns[0].field().is_nullable();
         let result = columns[0]
             .column()
             .to_minimal_array()?
-            .cast_with_type(&DataType::Float64)?
+            .cast_with_type(&DataType::Float64(nullable))?
             .f64()?
             .apply_cast_numeric(|v| v.floor());
+
         let column: DataColumn = result.into();
         Ok(column)
     }

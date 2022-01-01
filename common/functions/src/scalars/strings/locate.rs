@@ -61,26 +61,41 @@ impl<const T: u8> Function for LocatingFunction<T> {
     }
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let dt = DataType::UInt64;
         let nullable = args.iter().any(|arg| arg.is_nullable());
+        let dt = DataType::UInt64(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
+        let column_nullables = columns
+            .iter()
+            .map(|column| column.field().is_nullable())
+            .collect::<Vec<_>>();
+
         let (ss_column, s_column) = if T == FUNC_INSTR {
             (
-                columns[1].column().cast_with_type(&DataType::String)?,
-                columns[0].column().cast_with_type(&DataType::String)?,
+                columns[1]
+                    .column()
+                    .cast_with_type(&DataType::String(column_nullables[1]))?,
+                columns[0]
+                    .column()
+                    .cast_with_type(&DataType::String(column_nullables[0]))?,
             )
         } else {
             (
-                columns[0].column().cast_with_type(&DataType::String)?,
-                columns[1].column().cast_with_type(&DataType::String)?,
+                columns[0]
+                    .column()
+                    .cast_with_type(&DataType::String(column_nullables[0]))?,
+                columns[1]
+                    .column()
+                    .cast_with_type(&DataType::String(column_nullables[1]))?,
             )
         };
 
         let p_column = if T == FUNC_LOCATE && columns.len() == 3 {
-            columns[2].column().cast_with_type(&DataType::UInt64)?
+            columns[2]
+                .column()
+                .cast_with_type(&DataType::UInt64(column_nullables[2]))?
         } else {
             DataColumn::Constant(DataValue::UInt64(Some(1)), input_rows)
         };

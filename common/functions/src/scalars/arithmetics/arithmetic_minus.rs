@@ -72,11 +72,18 @@ impl ArithmeticMinusFunction {
             return error_fn();
         };
 
+        let has_nullable = left_type.is_nullable() || right_type.is_nullable();
+
         with_match_primitive_type!(left_type, |$T| {
             with_match_primitive_type!(right_type, |$D| {
                 let result_type = <($T, $D) as ResultTypeOfBinary>::Minus::data_type();
+                let result_type = if has_nullable {
+                    result_type.enforce_nullable()
+                } else {
+                    result_type
+                };
                 match result_type {
-                    DataType::Int64 => BinaryArithmeticFunction::<ArithmeticWrappingSub<$T, $D, i64>>::try_create_func(
+                    DataType::Int64(_) => BinaryArithmeticFunction::<ArithmeticWrappingSub<$T, $D, i64>>::try_create_func(
                         op,
                         result_type,
                     ),
@@ -106,47 +113,51 @@ impl ArithmeticMinusFunction {
             )));
         };
 
+        let has_nullable = lhs_type.is_nullable() || rhs_type.is_nullable();
+        let result_type = if has_nullable {
+            result_type.enforce_nullable()
+        } else {
+            result_type.clone()
+        };
+
         match interval {
-            DataType::Interval(IntervalUnit::YearMonth) => match result_type.clone() {
-                DataType::Date16 => {
+            DataType::Interval(_, IntervalUnit::YearMonth) => match result_type {
+                DataType::Date16(_) => {
                     BinaryArithmeticFunction::<IntervalMonthSubDate16>::try_create_func(
                         op,
-                        result_type.clone(),
+                        result_type,
                     )
                 }
-                DataType::Date32 => {
+                DataType::Date32(_) => {
                     BinaryArithmeticFunction::<IntervalMonthSubDate32>::try_create_func(
                         op,
-                        result_type.clone(),
+                        result_type,
                     )
                 }
-                DataType::DateTime32(_) => {
+                DataType::DateTime32(_, _) => {
                     BinaryArithmeticFunction::<IntervalMonthSubDatetime32>::try_create_func(
                         op,
-                        result_type.clone(),
+                        result_type,
                     )
                 }
                 _ => unreachable!(),
             },
-            DataType::Interval(IntervalUnit::DayTime) => match result_type.clone() {
-                DataType::Date16 => {
+            DataType::Interval(_, IntervalUnit::DayTime) => match result_type.clone() {
+                DataType::Date16(_) => {
                     BinaryArithmeticFunction::<IntervalDaytimeSubDate16>::try_create_func(
                         op,
-                        result_type.clone(),
+                        result_type,
                     )
                 }
-                DataType::Date32 => {
+                DataType::Date32(_) => {
                     BinaryArithmeticFunction::<IntervalDaytimeSubDate32>::try_create_func(
                         op,
-                        result_type.clone(),
+                        result_type,
                     )
                 }
-                DataType::DateTime32(_) => {
-                    BinaryArithmeticFunction::<IntervalDaytimeSubDatetime32>::try_create_func(
-                        op,
-                        result_type.clone(),
-                    )
-                }
+                DataType::DateTime32(_, _) => BinaryArithmeticFunction::<
+                    IntervalDaytimeSubDatetime32,
+                >::try_create_func(op, result_type),
                 _ => unreachable!(),
             },
             _ => unreachable!(),

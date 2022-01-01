@@ -49,7 +49,7 @@ impl Function for Sha2HashFunction {
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
         let data_type = if args[0].is_string() && args[1].is_unsigned_integer() {
-            Ok(DataType::String)
+            Ok(DataType::String(true))
         } else {
             Err(ErrorCode::IllegalDataType(format!(
                 "Expected string and numeric type, but got {}",
@@ -61,12 +61,17 @@ impl Function for Sha2HashFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
+        let i_nullable = columns[0].field().is_nullable();
         let i_series = columns[0]
             .column()
             .to_minimal_array()?
-            .cast_with_type(&DataType::String)?;
+            .cast_with_type(&DataType::String(i_nullable))?;
         let i_array = i_series.string()?;
-        let l_column: DataColumn = columns[1].column().cast_with_type(&DataType::UInt16)?;
+
+        let l_nullable = columns[1].field().is_nullable();
+        let l_column: DataColumn = columns[1]
+            .column()
+            .cast_with_type(&DataType::UInt16(l_nullable))?;
 
         let result = match l_column {
             DataColumn::Constant(v, _) => {

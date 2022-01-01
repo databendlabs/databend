@@ -42,7 +42,8 @@ impl From<BooleanArray> for DFBooleanArray {
     fn from(array: BooleanArray) -> Self {
         Self {
             array,
-            data_type: DataType::Boolean(true)
+            // TODO: need to pass in the nullable information
+            data_type: DataType::Boolean(true),
         }
     }
 }
@@ -51,7 +52,8 @@ impl DFBooleanArray {
     pub fn new(array: BooleanArray) -> Self {
         Self {
             array,
-            data_type: DataType::Boolean(true)
+            // TODO: need to pass in the nullable information
+            data_type: DataType::Boolean(true),
         }
     }
 

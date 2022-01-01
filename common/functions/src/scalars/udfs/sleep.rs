@@ -58,7 +58,7 @@ impl Function for SleepFunction {
             )));
         }
 
-        let dt = DataType::UInt8;
+        let dt = DataType::UInt8(false);
         Ok(DataTypeAndNullable::create(&dt, false))
     }
 

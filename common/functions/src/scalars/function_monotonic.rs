@@ -103,7 +103,7 @@ impl Monotonicity {
         if let (Some(max), Some(min)) = (max, min) {
             let min_val = min
                 .column()
-                .cast_with_type(&DataType::Float64)?
+                .cast_with_type(&DataType::Float64(true))?
                 .try_get(0)?
                 .as_f64()?;
             if min_val >= 0.0 {
@@ -116,7 +116,7 @@ impl Monotonicity {
 
             let max_val = max
                 .column()
-                .cast_with_type(&DataType::Float64)?
+                .cast_with_type(&DataType::Float64(true))?
                 .try_get(0)?
                 .as_f64()?;
             if max_val <= 0.0 {

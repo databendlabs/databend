@@ -34,17 +34,26 @@ use crate::prelude::*;
 #[derive(Debug, Clone)]
 pub struct DFStringArray {
     pub(crate) array: LargeBinaryArray,
+    data_type: DataType,
 }
 
 impl From<LargeBinaryArray> for DFStringArray {
     fn from(array: LargeBinaryArray) -> Self {
-        Self { array }
+        Self {
+            array,
+            // TODO: need to pass in the nullable information
+            data_type: DataType::String(true),
+        }
     }
 }
 
 impl DFStringArray {
     pub fn new(array: LargeBinaryArray) -> Self {
-        Self { array }
+        Self {
+            array,
+            // TODO: need to pass in the nullable information
+            data_type: DataType::String(true),
+        }
     }
 
     pub fn from_arrow_array(array: &dyn Array) -> Self {
@@ -98,7 +107,11 @@ impl DFStringArray {
             values,
             validity,
         );
-        Self { array }
+        Self {
+            array,
+            // TODO: need to pass in the nullable information
+            data_type: DataType::String(true),
+        }
     }
 
     pub fn inner(&self) -> &LargeBinaryArray {
@@ -106,7 +119,7 @@ impl DFStringArray {
     }
 
     pub fn data_type(&self) -> &DataType {
-        &DataType::String
+        &self.data_type
     }
 
     /// # Safety

@@ -48,7 +48,7 @@ impl Function for NowFunction {
     }
 
     fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let dt = DataType::DateTime32(None);
+        let dt = DataType::DateTime32(false, None);
         Ok(DataTypeAndNullable::create(&dt, false))
     }
 

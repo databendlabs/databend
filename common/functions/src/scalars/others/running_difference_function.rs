@@ -52,15 +52,17 @@ impl Function for RunningDifferenceFunction {
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
         let nullable = args.iter().any(|arg| arg.is_nullable());
         let data_type = match args[0].data_type() {
-            DataType::Int8 | DataType::UInt8 => Ok(DataType::Int16),
-            DataType::Int16 | DataType::UInt16 | DataType::Date16 => Ok(DataType::Int32),
-            DataType::Int32
-            | DataType::UInt32
-            | DataType::Int64
-            | DataType::UInt64
-            | DataType::Date32
-            | DataType::DateTime32(_) => Ok(DataType::Int64),
-            DataType::Float32 | DataType::Float64 => Ok(DataType::Float64),
+            DataType::Int8(_) | DataType::UInt8(_) => Ok(DataType::Int16(nullable)),
+            DataType::Int16(_) | DataType::UInt16(_) | DataType::Date16(_) => {
+                Ok(DataType::Int32(nullable))
+            }
+            DataType::Int32(_)
+            | DataType::UInt32(_)
+            | DataType::Int64(_)
+            | DataType::UInt64(_)
+            | DataType::Date32(_)
+            | DataType::DateTime32(_, _) => Ok(DataType::Int64(nullable)),
+            DataType::Float32(_) | DataType::Float64(_) => Ok(DataType::Float64(nullable)),
             _ => Result::Err(ErrorCode::IllegalDataType(
                 "Argument for function runningDifference must have numeric type",
             )),
@@ -70,18 +72,18 @@ impl Function for RunningDifferenceFunction {
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         match columns[0].data_type() {
-            DataType::Int8 => compute_i8(columns[0].column(), input_rows),
-            DataType::UInt8 => compute_u8(columns[0].column(), input_rows),
-            DataType::Int16 => compute_i16(columns[0].column(), input_rows),
-            DataType::UInt16 | DataType::Date16 => compute_u16(columns[0].column(), input_rows),
-            DataType::Int32 | DataType::Date32 => compute_i32(columns[0].column(), input_rows),
-            DataType::UInt32 | DataType::DateTime32(_) => {
+            DataType::Int8(_) => compute_i8(columns[0].column(), input_rows),
+            DataType::UInt8(_) => compute_u8(columns[0].column(), input_rows),
+            DataType::Int16(_) => compute_i16(columns[0].column(), input_rows),
+            DataType::UInt16(_) | DataType::Date16(_) => compute_u16(columns[0].column(), input_rows),
+            DataType::Int32(_) | DataType::Date32(_) => compute_i32(columns[0].column(), input_rows),
+            DataType::UInt32(_) | DataType::DateTime32(_, _) => {
                 compute_u32(columns[0].column(), input_rows)
             }
-            DataType::Int64 => compute_i64(columns[0].column(), input_rows),
-            DataType::UInt64 => compute_u64(columns[0].column(), input_rows),
-            DataType::Float32 => compute_f32(columns[0].column(), input_rows),
-            DataType::Float64 => compute_f64(columns[0].column(), input_rows),
+            DataType::Int64(_) => compute_i64(columns[0].column(), input_rows),
+            DataType::UInt64(_) => compute_u64(columns[0].column(), input_rows),
+            DataType::Float32(_) => compute_f32(columns[0].column(), input_rows),
+            DataType::Float64(_) => compute_f64(columns[0].column(), input_rows),
             _ => Result::Err(ErrorCode::IllegalDataType(
                 format!(
                     "Argument for function runningDifference must have numeric type.: While processing runningDifference({})",

@@ -113,7 +113,7 @@ where T: NoArgDateFunction + Clone + Sync + Send + 'static
     }
 
     fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let dt = DataType::Date16;
+        let dt = DataType::Date16(false);
         Ok(DataTypeAndNullable::create(&dt, false))
     }
 

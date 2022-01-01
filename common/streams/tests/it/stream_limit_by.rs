@@ -22,8 +22,8 @@ use futures::stream::StreamExt;
 #[tokio::test]
 async fn test_limitby_stream() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("id", DataType::UInt8, false),
-        DataField::new("name", DataType::String, false),
+        DataField::new("id", DataType::UInt8(false), false),
+        DataField::new("name", DataType::String(false), false),
     ]);
 
     let ids = vec![2u8, 2, 2, 2, 3, 3, 3];

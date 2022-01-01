@@ -130,7 +130,7 @@ impl PlanBuilder {
 
                 let mut partial_fields = fields
                     .iter()
-                    .map(|f| DataField::new(f.name(), DataType::String, false))
+                    .map(|f| DataField::new(f.name(), DataType::String(false), false))
                     .collect::<Vec<_>>();
 
                 if !group_expr.is_empty() {

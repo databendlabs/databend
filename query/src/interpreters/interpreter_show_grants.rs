@@ -46,8 +46,11 @@ impl Interpreter for ShowGrantsInterpreter {
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let schema =
-            DataSchemaRefExt::create(vec![DataField::new("Grants", DataType::String, false)]);
+        let schema = DataSchemaRefExt::create(vec![DataField::new(
+            "Grants",
+            DataType::String(false),
+            false,
+        )]);
 
         // TODO: add permission check on reading user grants
         let user_info = match self.plan.user_identity {

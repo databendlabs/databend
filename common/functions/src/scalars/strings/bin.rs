@@ -55,38 +55,41 @@ impl Function for BinFunction {
         }
 
         let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::String;
+        let dt = DataType::String(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let mut string_array = StringArrayBuilder::with_capacity(input_rows);
-        println!("bin's data type =>> {:?}", columns[0].data_type());
+        let nullable = columns[0].data_type().is_nullable();
         match columns[0].data_type() {
-            DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64 => {
+            DataType::UInt8(_)
+            | DataType::UInt16(_)
+            | DataType::UInt32(_)
+            | DataType::UInt64(_) => {
                 for value in columns[0]
                     .column()
-                    .cast_with_type(&DataType::UInt64)?
+                    .cast_with_type(&DataType::UInt64(nullable))?
                     .to_minimal_array()?
                     .u64()?
                 {
                     string_array.append_option(value.map(|n| format!("{:b}", n)));
                 }
             }
-            DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => {
+            DataType::Int8(_) | DataType::Int16(_) | DataType::Int32(_) | DataType::Int64(_) => {
                 for value in columns[0]
                     .column()
-                    .cast_with_type(&DataType::Int64)?
+                    .cast_with_type(&DataType::Int64(nullable))?
                     .to_minimal_array()?
                     .i64()?
                 {
                     string_array.append_option(value.map(|n| format!("{:b}", n)));
                 }
             }
-            DataType::Float32 | DataType::Float64 => {
+            DataType::Float32(_) | DataType::Float64(_) => {
                 for value in columns[0]
                     .column()
-                    .cast_with_type(&DataType::Float64)?
+                    .cast_with_type(&DataType::Float64(nullable))?
                     .to_minimal_array()?
                     .f64()?
                 {

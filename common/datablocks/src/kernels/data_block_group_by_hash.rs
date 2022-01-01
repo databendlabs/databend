@@ -141,11 +141,11 @@ impl HashMethodKind {
     }
     pub fn data_type(&self) -> DataType {
         match self {
-            HashMethodKind::Serializer(_) => DataType::String,
-            HashMethodKind::KeysU8(_) => DataType::UInt8,
-            HashMethodKind::KeysU16(_) => DataType::UInt16,
-            HashMethodKind::KeysU32(_) => DataType::UInt32,
-            HashMethodKind::KeysU64(_) => DataType::UInt64,
+            HashMethodKind::Serializer(_) => DataType::String(true),
+            HashMethodKind::KeysU8(_) => DataType::UInt8(true),
+            HashMethodKind::KeysU16(_) => DataType::UInt16(true),
+            HashMethodKind::KeysU32(_) => DataType::UInt32(true),
+            HashMethodKind::KeysU64(_) => DataType::UInt64(true),
         }
     }
 }

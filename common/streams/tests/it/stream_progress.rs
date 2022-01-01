@@ -24,7 +24,7 @@ use futures::TryStreamExt;
 
 #[tokio::test]
 async fn test_progress_stream() -> Result<()> {
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64, false)]);
+    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::Int64(false), false)]);
 
     let block = DataBlock::create_by_array(schema.clone(), vec![Series::new(vec![1i64, 2, 3])]);
 

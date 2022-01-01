@@ -25,8 +25,8 @@ use crate::PlanNode;
 
 pub static SINK_SCHEMA: Lazy<DataSchemaRef> = Lazy::new(|| {
     DataSchemaRefExt::create(vec![
-        DataField::new("seg_loc", DataType::String, false),
-        DataField::new("seg_info", DataType::String, false),
+        DataField::new("seg_loc", DataType::String(false), false),
+        DataField::new("seg_info", DataType::String(false), false),
     ])
 });
 

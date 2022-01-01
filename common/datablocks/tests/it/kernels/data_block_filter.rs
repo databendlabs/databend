@@ -25,8 +25,8 @@ use common_exception::Result;
 #[test]
 fn test_filter_non_const_data_block() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int8, false),
-        DataField::new("b", DataType::String, false),
+        DataField::new("a", DataType::Int8(false), false),
+        DataField::new("b", DataType::String(false), false),
     ]);
 
     let block = DataBlock::create_by_array(schema, vec![
@@ -56,8 +56,8 @@ fn test_filter_non_const_data_block() -> Result<()> {
 #[test]
 fn test_filter_all_false_data_block() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int8, false),
-        DataField::new("b", DataType::String, false),
+        DataField::new("a", DataType::Int8(false), false),
+        DataField::new("b", DataType::String(false), false),
     ]);
 
     let block = DataBlock::create_by_array(schema, vec![
@@ -79,8 +79,8 @@ fn test_filter_all_false_data_block() -> Result<()> {
 #[test]
 fn test_filter_const_data_block() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int8, false),
-        DataField::new("b", DataType::String, false),
+        DataField::new("a", DataType::Int8(false), false),
+        DataField::new("b", DataType::String(false), false),
     ]);
 
     let block = DataBlock::create(schema, vec![
@@ -110,8 +110,8 @@ fn test_filter_const_data_block() -> Result<()> {
 #[test]
 fn test_filter_all_const_data_block() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("a", DataType::Int8, false),
-        DataField::new("b", DataType::String, false),
+        DataField::new("a", DataType::Int8(false), false),
+        DataField::new("b", DataType::String(false), false),
     ]);
 
     let block = DataBlock::create(schema, vec![

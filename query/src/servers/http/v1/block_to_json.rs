@@ -107,17 +107,17 @@ pub fn block_to_json(block: &DataBlock) -> Result<Vec<Vec<JsonValue>>> {
         let data_type = field.data_type();
         let json_column: Vec<JsonValue> = match field.is_nullable() {
             true => match data_type {
-                DataType::Int8 => primitive_array_to_json(series.i8()?),
-                DataType::Int16 => primitive_array_to_json(series.i16()?),
-                DataType::Int32 => primitive_array_to_json(series.i32()?),
-                DataType::Int64 => primitive_array_to_json(series.i64()?),
-                DataType::UInt8 => primitive_array_to_json(series.u8()?),
-                DataType::UInt16 => primitive_array_to_json(series.u16()?),
-                DataType::UInt32 => primitive_array_to_json(series.u32()?),
-                DataType::UInt64 => primitive_array_to_json(series.u64()?),
-                DataType::Float32 => primitive_array_to_json(series.f32()?),
-                DataType::Float64 => primitive_array_to_json(series.f64()?),
-                DataType::String => series
+                DataType::Int8(_) => primitive_array_to_json(series.i8()?),
+                DataType::Int16(_) => primitive_array_to_json(series.i16()?),
+                DataType::Int32(_) => primitive_array_to_json(series.i32()?),
+                DataType::Int64(_) => primitive_array_to_json(series.i64()?),
+                DataType::UInt8(_) => primitive_array_to_json(series.u8()?),
+                DataType::UInt16(_) => primitive_array_to_json(series.u16()?),
+                DataType::UInt32(_) => primitive_array_to_json(series.u32()?),
+                DataType::UInt64(_) => primitive_array_to_json(series.u64()?),
+                DataType::Float32(_) => primitive_array_to_json(series.f32()?),
+                DataType::Float64(_) => primitive_array_to_json(series.f64()?),
+                DataType::String(_) => series
                     .string()?
                     .collect_values()
                     .iter()
@@ -125,38 +125,38 @@ pub fn block_to_json(block: &DataBlock) -> Result<Vec<Vec<JsonValue>>> {
                     .map(to_json_value)
                     .collect(),
                 DataType::Boolean(_) => series.bool()?.into_iter().map(to_json_value).collect(),
-                DataType::Date16 => date_array_to_string_array(series.u16()?, DATE_FMT),
-                DataType::Date32 => date_array_to_string_array(series.i32()?, DATE_FMT),
+                DataType::Date16(_) => date_array_to_string_array(series.u16()?, DATE_FMT),
+                DataType::Date32(_) => date_array_to_string_array(series.i32()?, DATE_FMT),
                 // TODO(youngsofun): add time zone?
-                DataType::DateTime32(_) => date_array_to_string_array(series.i32()?, TIME_FMT),
+                DataType::DateTime32(_, _) => date_array_to_string_array(series.i32()?, TIME_FMT),
                 // TODO(youngsofun): support other DataType
                 _ => return Err(bad_type(data_type)),
             },
             false => match data_type {
-                DataType::Int8 => primitive_array_to_json_not_null(series.i8()?),
-                DataType::Int16 => primitive_array_to_json_not_null(series.i16()?),
-                DataType::Int32 => primitive_array_to_json_not_null(series.i32()?),
-                DataType::Int64 => primitive_array_to_json_not_null(series.i64()?),
-                DataType::UInt8 => primitive_array_to_json_not_null(series.u8()?),
-                DataType::UInt16 => primitive_array_to_json_not_null(series.u16()?),
-                DataType::UInt32 => primitive_array_to_json_not_null(series.u32()?),
-                DataType::UInt64 => primitive_array_to_json_not_null(series.u64()?),
-                DataType::Float32 => primitive_array_to_json_not_null(series.f32()?),
-                DataType::Float64 => primitive_array_to_json_not_null(series.f64()?),
+                DataType::Int8(_) => primitive_array_to_json_not_null(series.i8()?),
+                DataType::Int16(_) => primitive_array_to_json_not_null(series.i16()?),
+                DataType::Int32(_) => primitive_array_to_json_not_null(series.i32()?),
+                DataType::Int64(_) => primitive_array_to_json_not_null(series.i64()?),
+                DataType::UInt8(_) => primitive_array_to_json_not_null(series.u8()?),
+                DataType::UInt16(_) => primitive_array_to_json_not_null(series.u16()?),
+                DataType::UInt32(_) => primitive_array_to_json_not_null(series.u32()?),
+                DataType::UInt64(_) => primitive_array_to_json_not_null(series.u64()?),
+                DataType::Float32(_) => primitive_array_to_json_not_null(series.f32()?),
+                DataType::Float64(_) => primitive_array_to_json_not_null(series.f64()?),
                 DataType::Boolean(_) => series
                     .bool()?
                     .into_no_null_iter()
                     .map(to_json_value)
                     .collect(),
-                DataType::String => series
+                DataType::String(_) => series
                     .string()?
                     .into_no_null_iter()
                     .map(|v| String::from_utf8(v.to_vec()).unwrap())
                     .map(to_json_value)
                     .collect(),
-                DataType::Date16 => date_array_to_string_array_not_null(series.u16()?, DATE_FMT),
-                DataType::Date32 => date_array_to_string_array_not_null(series.i32()?, DATE_FMT),
-                DataType::DateTime32(_) => {
+                DataType::Date16(_) => date_array_to_string_array_not_null(series.u16()?, DATE_FMT),
+                DataType::Date32(_) => date_array_to_string_array_not_null(series.i32()?, DATE_FMT),
+                DataType::DateTime32(_, _) => {
                     date_array_to_string_array_not_null(series.i32()?, TIME_FMT)
                 }
                 _ => return Err(bad_type(data_type)),

@@ -62,7 +62,26 @@ pub trait ResultTypeOfUnary {{
     .unwrap();
 
     let lhs = vec![
-        UInt8, UInt16, UInt32, UInt64, Int8, Int16, Int32, Int64, Float32, Float64,
+        UInt8(true),
+        UInt16(true),
+        UInt32(true),
+        UInt64(true),
+        Int8(true),
+        Int16(true),
+        Int32(true),
+        Int64(true),
+        Float32(true),
+        Float64(true),
+        UInt8(false),
+        UInt16(false),
+        UInt32(false),
+        UInt64(false),
+        Int8(false),
+        Int16(false),
+        Int32(false),
+        Int64(false),
+        Float32(false),
+        Float64(false),
     ];
     let rhs = lhs.clone();
     for left in &lhs {
@@ -113,16 +132,16 @@ impl ResultTypeOfUnary for {} {{
 fn to_primitive_str(dt: &DataType) -> &str {
     use DataType::*;
     match dt {
-        UInt8 => "u8",
-        UInt16 => "u16",
-        UInt32 => "u32",
-        UInt64 => "u64",
-        Int8 => "i8",
-        Int16 => "i16",
-        Int32 => "i32",
-        Int64 => "i64",
-        Float32 => "f32",
-        Float64 => "f64",
+        UInt8(_) => "u8",
+        UInt16(_) => "u16",
+        UInt32(_) => "u32",
+        UInt64(_) => "u64",
+        Int8(_) => "i8",
+        Int16(_) => "i16",
+        Int32(_) => "i32",
+        Int64(_) => "i64",
+        Float32(_) => "f32",
+        Float64(_) => "f64",
         _ => panic!("unsupported data type"),
     }
 }

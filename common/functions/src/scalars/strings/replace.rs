@@ -106,16 +106,27 @@ impl<T: ReplaceOperator> Function for ReplaceImplFunction<T> {
         }
 
         let nullable = args.iter().any(|arg| arg.is_nullable());
-        let dt = DataType::String;
+        let dt = DataType::String(nullable);
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
         let mut o = T::default();
 
-        let s_column = columns[0].column().cast_with_type(&DataType::String)?;
-        let f_column = columns[1].column().cast_with_type(&DataType::String)?;
-        let t_column = columns[2].column().cast_with_type(&DataType::String)?;
+        let s_nullable = columns[0].field().is_nullable();
+        let s_column = columns[0]
+            .column()
+            .cast_with_type(&DataType::String(s_nullable))?;
+
+        let f_nullable = columns[1].field().is_nullable();
+        let f_column = columns[1]
+            .column()
+            .cast_with_type(&DataType::String(f_nullable))?;
+
+        let t_nullable = columns[2].field().is_nullable();
+        let t_column = columns[2]
+            .column()
+            .cast_with_type(&DataType::String(t_nullable))?;
 
         let r_column: DataColumn = match (s_column, f_column, t_column) {
             // #000

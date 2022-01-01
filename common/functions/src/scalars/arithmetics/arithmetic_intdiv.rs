@@ -91,9 +91,17 @@ impl ArithmeticIntDivFunction {
             return error_fn();
         };
 
+        let nullable = left_type.is_nullable() || right_type.is_nullable();
+
         with_match_primitive_type!(left_type, |$T| {
             with_match_primitive_type!(right_type, |$D| {
                 let result_type = <($T, $D) as ResultTypeOfBinary>::IntDiv::data_type();
+                let result_type = if nullable {
+                    result_type.enforce_nullable()
+                } else {
+                    result_type
+                };
+
                 BinaryArithmeticFunction::<ArithmeticIntDiv::<$T,$D, <($T, $D) as ResultTypeOfBinary>::IntDiv>>::try_create_func(
                     op,
                     result_type,

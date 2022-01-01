@@ -37,7 +37,7 @@ pub struct FunctionsTable {
 impl FunctionsTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", DataType::String, false),
+            DataField::new("name", DataType::String(false), false),
             DataField::new("is_aggregate", DataType::Boolean(false), false),
         ]);
 

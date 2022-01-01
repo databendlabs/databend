@@ -153,10 +153,12 @@ impl DfCreateTable {
                             _ => {}
                         }
                     }
-                    let field = SQLCommon::make_data_type(&column.data_type).map(|data_type| {
-                        DataField::new(&column.name.value, data_type, nullable)
-                            .with_default_expr(default_expr)
-                    })?;
+                    let field = SQLCommon::make_data_type(&column.data_type, nullable).map(
+                        |data_type| {
+                            DataField::new(&column.name.value, data_type, nullable)
+                                .with_default_expr(default_expr)
+                        },
+                    )?;
                     fields.push(field);
                 }
                 Ok(DataSchemaRefExt::create(fields))

@@ -28,11 +28,11 @@ where T: Serialize {
 
 fn test_data_block(is_nullable: bool) -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("c1", DataType::Int32, is_nullable),
-        DataField::new("c2", DataType::String, is_nullable),
+        DataField::new("c1", DataType::Int32(is_nullable), is_nullable),
+        DataField::new("c2", DataType::String(is_nullable), is_nullable),
         DataField::new("c3", DataType::Boolean(is_nullable), is_nullable),
-        DataField::new("c4", DataType::Float64, is_nullable),
-        DataField::new("c5", DataType::Date16, is_nullable),
+        DataField::new("c4", DataType::Float64(is_nullable), is_nullable),
+        DataField::new("c5", DataType::Date16(is_nullable), is_nullable),
     ]);
 
     let block = DataBlock::create_by_array(schema, vec![
@@ -41,7 +41,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         Series::new(vec![true, true, false]),
         Series::new(vec![1.1, 2.2, 3.3]),
         Series::new(vec![1_u16, 2_u16, 3_u16])
-            .cast_with_type(&DataType::Date16)
+            .cast_with_type(&DataType::Date16(is_nullable))
             .unwrap(),
     ]);
     let json_block = block_to_json(&block)?;

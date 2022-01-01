@@ -65,9 +65,9 @@ impl DfDescribeTable {
 
     fn schema() -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
-            DataField::new("Field", DataType::String, false),
-            DataField::new("Type", DataType::String, false),
-            DataField::new("Null", DataType::String, false),
+            DataField::new("Field", DataType::String(false), false),
+            DataField::new("Type", DataType::String(false), false),
+            DataField::new("Null", DataType::String(false), false),
         ])
     }
 }

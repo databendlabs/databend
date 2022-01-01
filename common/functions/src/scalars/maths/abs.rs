@@ -51,9 +51,12 @@ macro_rules! impl_abs_function {
         let mut series = $column.column().to_minimal_array()?;
 
         // coerce String to Float
-        if *$column.data_type() == DataType::String {
-            series = series.cast_with_type(&DataType::Float64)?;
-        }
+        match $column.column().data_type() {
+            DataType::String(nullable) => {
+                series = series.cast_with_type(&DataType::Float64(nullable))?
+            }
+            _ => {}
+        };
 
         let primitive_array = series.$type()?;
         let column: DataColumn = primitive_array
@@ -73,11 +76,11 @@ impl Function for AbsFunction {
         let nullable = args.iter().any(|arg| arg.is_nullable());
         let data_type = if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
             Ok(match args[0].data_type() {
-                DataType::Int8 => DataType::UInt8,
-                DataType::Int16 => DataType::UInt16,
-                DataType::Int32 => DataType::UInt32,
-                DataType::Int64 => DataType::UInt64,
-                DataType::String => DataType::Float64,
+                DataType::Int8(nullable) => DataType::UInt8(*nullable),
+                DataType::Int16(nullable) => DataType::UInt16(*nullable),
+                DataType::Int32(nullable) => DataType::UInt32(*nullable),
+                DataType::Int64(nullable) => DataType::UInt64(*nullable),
+                DataType::String(nullable) => DataType::Float64(*nullable),
                 dt => dt.clone(),
             })
         } else {
@@ -92,16 +95,31 @@ impl Function for AbsFunction {
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
         match columns[0].data_type() {
-            DataType::Int8 => impl_abs_function!(columns[0], i8, DataType::UInt8),
-            DataType::Int16 => impl_abs_function!(columns[0], i16, DataType::UInt16),
-            DataType::Int32 => impl_abs_function!(columns[0], i32, DataType::UInt32),
-            DataType::Int64 => impl_abs_function!(columns[0], i64, DataType::UInt16),
-            DataType::Float32 => impl_abs_function!(columns[0], f32, DataType::Float32),
-            DataType::Float64 => impl_abs_function!(columns[0], f64, DataType::Float64),
-            DataType::String => impl_abs_function!(columns[0], f64, DataType::Float64),
-            DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64 => {
-                Ok(columns[0].column().clone())
+            DataType::Int8(nullable) => {
+                impl_abs_function!(columns[0], i8, DataType::UInt8(*nullable))
             }
+            DataType::Int16(nullable) => {
+                impl_abs_function!(columns[0], i16, DataType::UInt16(*nullable))
+            }
+            DataType::Int32(nullable) => {
+                impl_abs_function!(columns[0], i32, DataType::UInt32(*nullable))
+            }
+            DataType::Int64(nullable) => {
+                impl_abs_function!(columns[0], i64, DataType::UInt16(*nullable))
+            }
+            DataType::Float32(nullable) => {
+                impl_abs_function!(columns[0], f32, DataType::Float32(*nullable))
+            }
+            DataType::Float64(nullable) => {
+                impl_abs_function!(columns[0], f64, DataType::Float64(*nullable))
+            }
+            DataType::String(nullable) => {
+                impl_abs_function!(columns[0], f64, DataType::Float64(*nullable))
+            }
+            DataType::UInt8(_)
+            | DataType::UInt16(_)
+            | DataType::UInt32(_)
+            | DataType::UInt64(_) => Ok(columns[0].column().clone()),
             DataType::Null => Ok(columns[0].column().clone()),
             _ => unreachable!(),
         }

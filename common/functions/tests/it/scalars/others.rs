@@ -151,7 +151,7 @@ fn test_running_difference_datetime32_first_null() -> Result<()> {
             nullable: true,
             columns: vec![DataColumnWithField::new(
                 Series::new([None, Some(3_u32), None, Some(4), Some(10)]).into(),
-                DataField::new("dummy_1", DataType::DateTime32(None), true),
+                DataField::new("dummy_1", DataType::DateTime32(true, None), true),
             )],
             expect: Series::new([None, None, None, None, Some(6_i64)]).into(),
             error: "",
@@ -161,7 +161,7 @@ fn test_running_difference_datetime32_first_null() -> Result<()> {
             nullable: true,
             columns: vec![DataColumnWithField::new(
                 Series::new([Some(2_u32), Some(3), None, Some(4), Some(10)]).into(),
-                DataField::new("dummy_1", DataType::DateTime32(None), true),
+                DataField::new("dummy_1", DataType::DateTime32(true, None), true),
             )],
             expect: Series::new([Some(0_i64), Some(1), None, None, Some(6)]).into(),
             error: "",

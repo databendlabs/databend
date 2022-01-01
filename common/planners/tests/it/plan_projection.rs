@@ -22,12 +22,13 @@ use common_planners::*;
 fn test_projection_plan() -> Result<()> {
     use pretty_assertions::assert_eq;
 
-    let schema = DataSchemaRefExt::create(vec![DataField::new("a", DataType::String, false)]);
+    let schema =
+        DataSchemaRefExt::create(vec![DataField::new("a", DataType::String(false), false)]);
     let empty_plan = EmptyPlan::create_with_schema(schema);
 
     let projection = PlanNode::Projection(ProjectionPlan {
         expr: vec![col("a")],
-        schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::String, false)]),
+        schema: DataSchemaRefExt::create(vec![DataField::new("a", DataType::String(false), false)]),
         input: Arc::from(PlanBuilder::from(&PlanNode::Empty(empty_plan)).build()?),
     });
     let _ = projection.schema();

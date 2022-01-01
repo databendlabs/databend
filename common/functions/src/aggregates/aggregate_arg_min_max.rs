@@ -396,7 +396,11 @@ where T: AggregateArgMinMaxState //  std::cmp::PartialOrd + DFTryFrom<DataValue>
     }
 
     fn init_state(&self, place: StateAddr) {
-        place.write(|| T::new(self.arguments[0].data_type()));
+        // This is arguably right to enforce to a nullable data type. But we do want min/max to return NULL for compatibility
+        // with MySql. For example, we need 'SELECT MIN(number) from numbers where 1=2' to return NULL, instead of 0.
+        // So we enforce the init value to nullable data type, which will generate init value of None.
+        let data_type = self.arguments[0].data_type().enforce_nullable();
+        place.write(|| T::new(&data_type));
     }
 
     fn state_layout(&self) -> Layout {
@@ -506,7 +510,7 @@ pub fn try_create_aggregate_arg_minmax_function<const IS_MIN: bool>(
     },
 
     {
-        if data_type == &DataType::String {
+        if data_type.is_string() {
             if IS_MIN {
                 return AggregateArgMinMaxFunction::<StringState>::try_create_arg_min(
                     display_name,

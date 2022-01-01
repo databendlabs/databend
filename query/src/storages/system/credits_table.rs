@@ -36,9 +36,9 @@ pub struct CreditsTable {
 impl CreditsTable {
     pub fn create(table_id: u64) -> Self {
         let schema = DataSchemaRefExt::create(vec![
-            DataField::new("name", DataType::String, false),
-            DataField::new("version", DataType::String, false),
-            DataField::new("license", DataType::String, false),
+            DataField::new("name", DataType::String(false), false),
+            DataField::new("version", DataType::String(false), false),
+            DataField::new("license", DataType::String(false), false),
         ]);
 
         let table_info = TableInfo {

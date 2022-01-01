@@ -54,7 +54,7 @@ impl Function for InetAtonFunction {
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
         let data_type = if args[0].is_string() || args[0].is_null() {
-            Ok(DataType::UInt32)
+            Ok(DataType::UInt32(true))
         } else {
             Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null type, but got {}",
@@ -66,10 +66,11 @@ impl Function for InetAtonFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
+        let nullable = columns[0].field().is_nullable();
         let opt_iter = columns[0]
             .column()
             .to_minimal_array()?
-            .cast_with_type(&DataType::String)?;
+            .cast_with_type(&DataType::String(nullable))?;
 
         let opt_iter = opt_iter.string()?.into_iter().map(|vo| {
             vo.and_then(

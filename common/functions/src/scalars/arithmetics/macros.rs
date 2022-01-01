@@ -25,6 +25,8 @@ macro_rules! impl_try_create_datetime {
                 lhs_type, op, rhs_type
             )));
 
+            let nullable = lhs_type.is_nullable() || rhs_type.is_nullable();
+
             if lhs_type.is_date_or_date_time() {
                 with_match_date_type!(lhs_type, |$T| {
                     with_match_primitive_type!(rhs_type, |$D| {
@@ -42,7 +44,7 @@ macro_rules! impl_try_create_datetime {
                             } else {
                                 BinaryArithmeticFunction::<$func<$T, $D, i32>>::try_create_func(
                                     op.clone(),
-                                    DataType::Int32,
+                                    DataType::Int32(nullable),
                                 )
                             }
                         }, e)
@@ -189,9 +191,9 @@ macro_rules! with_match_date_type {
         }
 
         match $key_type {
-            DataType::Date16 => __with_ty__! { u16},
-            DataType::Date32 => __with_ty__! { i32},
-            DataType::DateTime32(_) => __with_ty__! { u32},
+            DataType::Date16(_) => __with_ty__! { u16},
+            DataType::Date32(_) => __with_ty__! { i32},
+            DataType::DateTime32(_, _) => __with_ty__! { u32},
 
             _ => $nbody,
         }

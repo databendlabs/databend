@@ -31,7 +31,7 @@ fn test_round_function() -> Result<()> {
                 nullable: false,
                 columns: vec![DataColumnWithField::new(
                     Series::new(vec![1630812366u32, 1630839682u32]).into(),
-                    DataField::new("dummy_1", DataType::DateTime32(None), false),
+                    DataField::new("dummy_1", DataType::DateTime32(false, None), false),
                 )],
                 expect: Series::new(vec![1630812366u32 / r * r, 1630839682u32 / r * r]).into(),
                 error: "",
@@ -53,7 +53,7 @@ fn test_to_start_of_function() -> Result<()> {
         nullable: false,
         columns: vec![DataColumnWithField::new(
             Series::new(vec![1631705259u32]).into(),
-            DataField::new("dummy_1", DataType::DateTime32(None), false),
+            DataField::new("dummy_1", DataType::DateTime32(false, None), false),
         )],
         expect: Series::new(vec![18809u16]).into(),
         error: "",

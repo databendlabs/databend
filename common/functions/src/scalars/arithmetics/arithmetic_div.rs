@@ -73,11 +73,13 @@ impl ArithmeticDivFunction {
             return error_fn();
         };
 
+        let nullable = left_type.is_nullable() || right_type.is_nullable();
+
         with_match_primitive_type!(left_type, |$T| {
             with_match_primitive_type!(right_type, |$D| {
                 BinaryArithmeticFunction::<ArithmeticDiv::<$T,$D>>::try_create_func(
                     op,
-                    DataType::Float64,
+                    DataType::Float64(nullable),
                 )
             }, {
                 error_fn()

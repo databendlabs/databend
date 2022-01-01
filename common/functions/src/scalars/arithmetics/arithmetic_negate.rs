@@ -60,19 +60,19 @@ impl ArithmeticNegateFunction {
         with_match_primitive_type!(arg_type, |$T| {
             let result_type = <$T as ResultTypeOfUnary>::Negate::data_type();
             match result_type {
-                DataType::Int64 => UnaryArithmeticFunction::<ArithmeticWrappingNeg<$T, i64>>::try_create_func(
+                DataType::Int64(_) => UnaryArithmeticFunction::<ArithmeticWrappingNeg<$T, i64>>::try_create_func(
                     op,
                     result_type,
                 ),
-                DataType::Int32 => UnaryArithmeticFunction::<ArithmeticWrappingNeg<$T, i32>>::try_create_func(
+                DataType::Int32(_) => UnaryArithmeticFunction::<ArithmeticWrappingNeg<$T, i32>>::try_create_func(
                     op,
                     result_type,
                 ),
-                DataType::Int16 => UnaryArithmeticFunction::<ArithmeticWrappingNeg<$T, i16>>::try_create_func(
+                DataType::Int16(_) => UnaryArithmeticFunction::<ArithmeticWrappingNeg<$T, i16>>::try_create_func(
                     op,
                     result_type,
                 ),
-                DataType::Int8 => UnaryArithmeticFunction::<ArithmeticWrappingNeg<$T, i8>>::try_create_func(
+                DataType::Int8(_) => UnaryArithmeticFunction::<ArithmeticWrappingNeg<$T, i8>>::try_create_func(
                     op,
                     result_type,
                 ),
