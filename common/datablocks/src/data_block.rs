@@ -143,6 +143,7 @@ impl DataBlock {
     }
 
     #[inline]
+    #[must_use]
     pub fn slice(&self, offset: usize, length: usize) -> Self {
         let rows = self.num_rows();
         if offset == 0 && length >= rows {

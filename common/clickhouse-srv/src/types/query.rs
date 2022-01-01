@@ -27,6 +27,7 @@ impl Query {
         }
     }
 
+    #[must_use]
     pub fn id(self, id: impl AsRef<str>) -> Self {
         Self {
             id: id.as_ref().to_string(),

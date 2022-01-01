@@ -74,16 +74,19 @@ impl<T> SeqV<T> {
         }
     }
 
+    #[must_use]
     pub fn set_seq(mut self, seq: u64) -> SeqV<T> {
         self.seq = seq;
         self
     }
 
+    #[must_use]
     pub fn set_meta(mut self, m: Option<KVMeta>) -> SeqV<T> {
         self.meta = m;
         self
     }
 
+    #[must_use]
     pub fn set_value(mut self, v: T) -> SeqV<T> {
         self.data = v;
         self

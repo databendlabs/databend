@@ -1368,7 +1368,7 @@ impl<'a> DfParser<'a> {
         if self.consume_token(expected) {
             Ok(())
         } else {
-            self.expected(&expected.to_string(), self.parser.peek_token())
+            self.expected(expected, self.parser.peek_token())
         }
     }
 

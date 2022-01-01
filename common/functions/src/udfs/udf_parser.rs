@@ -75,7 +75,7 @@ impl UDFParser {
 
         ExprTraverser::accept(definition_expr, self)?;
         let expr_params = &self.expr_params;
-        let parameters = parameters.to_owned().into_iter().collect::<HashSet<_>>();
+        let parameters = parameters.iter().cloned().collect::<HashSet<_>>();
         let params_not_declared: HashSet<_> = parameters.difference(expr_params).collect();
         let params_not_used: HashSet<_> = expr_params.difference(&parameters).collect();
 

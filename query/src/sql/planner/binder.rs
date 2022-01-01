@@ -178,18 +178,13 @@ impl Binder {
                         None => get_expr_display_string(expr),
                         Some(alias) => alias.name.clone(),
                     };
-                    let column_index: IndexType;
-                    match scalar_expr {
-                        ScalarExpr::BoundVariable(BoundVariable { index, .. }) => {
-                            column_index = index;
-                        }
-                        _ => {
-                            column_index = self.metadata.add_derived_column(
-                                alias.clone(),
-                                scalar_expr.data_type()?.clone(),
-                                scalar_expr.nullable(),
-                            );
-                        }
+                    let column_index: IndexType = match scalar_expr {
+                        ScalarExpr::BoundVariable(BoundVariable { index, .. }) => index,
+                        _ => self.metadata.add_derived_column(
+                            alias.clone(),
+                            scalar_expr.data_type()?.clone(),
+                            scalar_expr.nullable(),
+                        ),
                     };
                     let item = ProjectItem {
                         index: column_index,

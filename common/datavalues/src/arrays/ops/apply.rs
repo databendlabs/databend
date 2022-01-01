@@ -62,16 +62,17 @@ pub trait ArrayApply<'a, A, B> {
     /// than the closure application. Often it is.
     ///
     /// Null values remain null.
-    ///
-    /// ```
+    #[must_use]
     fn apply<F>(&'a self, f: F) -> Self
     where F: Fn(A) -> B + Copy;
 
     /// Apply a closure elementwise. The closure gets the index of the element as first argument.
+    #[must_use]
     fn apply_with_idx<F>(&'a self, f: F) -> Self
     where F: Fn((usize, A)) -> B + Copy;
 
     /// Apply a closure elementwise. The closure gets the index of the element as first argument.
+    #[must_use]
     fn apply_with_idx_on_opt<F>(&'a self, f: F) -> Self
     where F: Fn((usize, Option<A>)) -> Option<B> + Copy;
 }
