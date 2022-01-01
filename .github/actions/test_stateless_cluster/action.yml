@@ -13,6 +13,8 @@ runs:
 
     - uses: actions-rs/toolchain@v1
       with:
+        toolchain: nightly
+        override: true
         target: ${{ matrix.config.target }}
 
     # If you need to reset the cache version, increment the number after `v`

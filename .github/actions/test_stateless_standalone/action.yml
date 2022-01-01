@@ -15,6 +15,7 @@ runs:
       with:
         toolchain: ${{ matrix.config.toolchain }}
         target: ${{ matrix.config.target }}
+        override: true
 
     # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1

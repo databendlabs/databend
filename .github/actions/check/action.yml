@@ -17,6 +17,8 @@ runs:
 
     - uses: actions-rs/toolchain@v1
       with:
+        toolchain: nightly
+        override: true
         components: rustfmt, clippy
 
     # If you need to reset the cache version, increment the number after `v`
