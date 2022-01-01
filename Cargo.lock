@@ -2122,6 +2122,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ee2393c4a91429dffb4bedf19f4d6abf27d8a732c8ce4980305d782e5426d57"
 
 [[package]]
+name = "databend-benchmark"
+version = "0.1.0"
+dependencies = [
+ "clap 3.0.0-rc.9",
+ "clickhouse-driver",
+ "common-base",
+ "common-exception",
+ "common-infallible",
+ "common-macros",
+ "common-tracing",
+ "crossbeam-queue 0.3.2",
+ "ctrlc",
+ "futures",
+ "quantiles",
+ "rand 0.8.4",
+ "serde",
+]
+
+[[package]]
+name = "databend-fuzz"
+version = "0.1.0"
+dependencies = [
+ "databend-query",
+ "honggfuzz",
+]
+
+[[package]]
 name = "databend-meta"
 version = "0.1.0"
 dependencies = [
@@ -2220,9 +2247,6 @@ dependencies = [
  "common-streams",
  "common-tracing",
  "criterion",
- "crossbeam 0.8.1",
- "crossbeam-queue 0.3.2",
- "ctrlc",
  "dyn-clone",
  "futures",
  "headers",
@@ -2242,7 +2266,6 @@ dependencies = [
  "poem",
  "pretty_assertions",
  "prost",
- "quantiles",
  "rand 0.8.4",
  "reqwest",
  "serde",
@@ -2929,14 +2952,6 @@ dependencies = [
  "pin-project-lite 0.2.7",
  "pin-utils",
  "slab",
-]
-
-[[package]]
-name = "fuzz"
-version = "0.1.0"
-dependencies = [
- "databend-query",
- "honggfuzz",
 ]
 
 [[package]]
