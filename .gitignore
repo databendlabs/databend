@@ -38,6 +38,10 @@ tls/certs/
 .databend/
 checksums.txt
 
+# fuzz
+hfuzz_target/
+hfuzz_workspace/
+
 # for tests in mac
 *.stderr-e
 *.stdout-e
