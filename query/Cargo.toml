@@ -15,10 +15,6 @@ test = false
 name = "databend-query"
 path = "src/bin/databend-query.rs"
 
-[[bin]]
-name = "databend-benchmark"
-path = "src/bin/databend-benchmark.rs"
-
 [features]
 default = ["simd"]
 simd = ["common-arrow/simd"]

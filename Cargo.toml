@@ -42,6 +42,7 @@ members = [
 
     # Tools
     "tools/fuzz",
+    "tools/benchmark",
 ]
 
 [profile.release]
