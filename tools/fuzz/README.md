@@ -33,3 +33,15 @@ For example, with the `fuzz_parse_sql` target:
 cargo hfuzz run fuzz_parse_sql
 cargo hfuzz run-debug fuzz_parse_sql hfuzz_workspace/fuzz_parse_sql/*.fuzz
 ```
+
+## Notices
+
+Due to the LLVM version, errors like the following may occur:
+
+```text
+error: failed to run LLVM passes: unknown pass name 'sancov'
+
+error: could not compile `cfg-if` due to previous error
+```
+
+Please checkout [honggfuzz-rs#63](https://github.com/rust-fuzz/honggfuzz-rs/pull/63), which contains a possible fix.
