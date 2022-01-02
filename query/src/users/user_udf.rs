@@ -13,8 +13,10 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_functions::udfs::UDFFactory;
 use common_meta_types::UserDefinedFunction;
 
+use crate::configs::Config;
 use crate::users::UserApiProvider;
 
 /// UDF operations.
@@ -71,5 +73,20 @@ impl UserApiProvider {
                 }
             }
         }
+    }
+
+    pub async fn load_udfs(&self, cfg: Config) -> Result<()> {
+        let udfs = self.get_udf_api_client().get_udfs().await?;
+
+        for udf in udfs.iter() {
+            UDFFactory::register(
+                &cfg.query.tenant_id,
+                udf.name.as_str(),
+                &udf.parameters,
+                udf.definition.as_str(),
+            )?;
+        }
+
+        Ok(())
     }
 }
