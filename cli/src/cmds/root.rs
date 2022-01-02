@@ -138,7 +138,7 @@ impl Command for RootCommand {
             Arc::new(LoadCommand::create(config.clone())),
             Arc::new(UpCommand::create(config.clone())),
             Arc::new(CompletionCommand::create()),
-            Arc::new(GenerateCommand::create(config.clone())),
+            Arc::new(GenerateCommand::create(config)),
         ]
     }
 

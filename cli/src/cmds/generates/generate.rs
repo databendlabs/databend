@@ -99,12 +99,7 @@ impl GenerateCommand {
         Ok(())
     }
 
-    async fn create_ddl(
-        &self,
-        writer: &mut Writer,
-        table_name: &str,
-        ddl: &str,
-    ) -> Result<()> {
+    async fn create_ddl(&self, writer: &mut Writer, table_name: &str, ddl: &str) -> Result<()> {
         let query = QueryCommand::create(self.conf.clone());
         if let Err(e) = query
             .exec(writer, format!(r#"DROP TABLE IF EXISTS {}"#, table_name))
@@ -119,16 +114,9 @@ impl GenerateCommand {
         Ok(())
     }
 
-    async fn load_data(
-        &self,
-        writer: &mut Writer,
-        table_name: &str,
-        data: &str,
-    ) -> Result<()> {
+    async fn load_data(&self, writer: &mut Writer, table_name: &str, data: &str) -> Result<()> {
         let loader = LoadCommand::create(self.conf.clone());
-        loader
-            .load(Some(data), table_name, "1", writer)
-            .await?;
+        loader.load(Some(data), table_name, "1", writer).await?;
 
         Ok(())
     }
