@@ -142,7 +142,7 @@ impl FuseTable {
         if let Some(loc) = self.snapshot_loc() {
             let da = ctx.get_data_accessor()?;
             Ok(Some(
-                SnapshotReader::read(da.as_ref(), loc.to_string(), ctx.get_table_cache()).await?,
+                SnapshotReader::read(da.as_ref(), &loc, ctx.get_table_cache()).await?,
             ))
         } else {
             Ok(None)

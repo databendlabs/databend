@@ -98,6 +98,7 @@ impl DataField {
         }
     }
 
+    #[must_use]
     pub fn with_default_expr(mut self, default_expr: Option<Vec<u8>>) -> Self {
         self.default_expr = default_expr;
         self

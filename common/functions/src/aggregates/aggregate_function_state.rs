@@ -48,6 +48,7 @@ impl StateAddr {
     }
 
     #[inline]
+    #[must_use]
     pub fn next(&self, offset: usize) -> Self {
         Self {
             addr: self.addr + offset,
@@ -55,6 +56,7 @@ impl StateAddr {
     }
 
     #[inline]
+    #[must_use]
     pub fn prev(&self, offset: usize) -> Self {
         Self {
             addr: self.addr.wrapping_sub(offset),

@@ -683,8 +683,7 @@ impl Status {
         if !Path::new(meta_file.as_str()).exists() {
             return None;
         }
-        let file =
-            File::open(meta_file.to_string()).expect(&*format!("cannot read from {}", meta_file));
+        let file = File::open(&meta_file).expect(&*format!("cannot read from {}", meta_file));
         let reader = BufReader::new(file);
         return Some((
             meta_file.to_string(),
@@ -712,8 +711,7 @@ impl Status {
         if !Path::new(dashboard.as_str()).exists() {
             return None;
         }
-        let file =
-            File::open(dashboard.to_string()).expect(&*format!("cannot read from {}", dashboard));
+        let file = File::open(&dashboard).expect(&*format!("cannot read from {}", dashboard));
         let reader = BufReader::new(file);
         return Some((
             dashboard.to_string(),

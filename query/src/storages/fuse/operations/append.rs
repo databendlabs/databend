@@ -80,8 +80,7 @@ impl FuseTable {
         self.table_info
             .options()
             .get(opt_key)
-            .map(|s| s.parse::<T>().ok())
-            .flatten()
+            .and_then(|s| s.parse::<T>().ok())
             .unwrap_or(default)
     }
 }

@@ -62,17 +62,16 @@ impl OptionsSource {
     pub(crate) fn get(&self) -> Result<Cow<Options>> {
         let mut state = self.state.lock().unwrap();
         loop {
-            let new_state;
-            match &*state {
+            let new_state = match &*state {
                 State::Raw(ref options) => {
                     let ptr = options as *const Options;
                     return unsafe { Ok(Cow::Borrowed(ptr.as_ref().unwrap())) };
                 }
                 State::Url(url) => {
                     let options = from_url(url)?;
-                    new_state = State::Raw(options);
+                    State::Raw(options)
                 }
-            }
+            };
             *state = new_state;
         }
     }
@@ -291,6 +290,7 @@ macro_rules! property {
     };
     ( $(#[$attr:meta])* => $k:ident: $t:ty ) => {
         $(#[$attr])*
+        #[must_use]
         pub fn $k(self, $k: $t) -> Self {
             Self {
                 $k: $k.into(),
@@ -326,6 +326,7 @@ impl Options {
     }
 
     /// Enable compression (defaults to `false`).
+    #[must_use]
     pub fn with_compression(self) -> Self {
         Self {
             compression: true,

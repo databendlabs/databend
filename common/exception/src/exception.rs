@@ -73,6 +73,7 @@ impl ErrorCode {
             .unwrap_or_else(|| self.display_text.clone())
     }
 
+    #[must_use]
     pub fn add_message(self, msg: impl AsRef<str>) -> Self {
         Self {
             code: self.code(),
@@ -82,6 +83,7 @@ impl ErrorCode {
         }
     }
 
+    #[must_use]
     pub fn add_message_back(self, msg: impl AsRef<str>) -> Self {
         Self {
             code: self.code(),

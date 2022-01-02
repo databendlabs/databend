@@ -30,10 +30,7 @@ pub struct PartInfo<'a>(&'a str, u64);
 impl<'a> PartInfo<'a> {
     #[inline]
     pub fn new(location: &'a str, length: u64) -> Self {
-        Self {
-            0: location,
-            1: length,
-        }
+        Self(location, length)
     }
 
     #[inline]
@@ -62,10 +59,7 @@ impl<'a> PartInfo<'a> {
                 parts[1], e
             ))
         })?;
-        Ok(Self {
-            0: part_location,
-            1: part_len,
-        })
+        Ok(Self(part_location, part_len))
     }
 
     #[inline]

@@ -21,6 +21,8 @@ runs:
     - uses: actions-rs/toolchain@v1
       with:
         target: ${{ matrix.config.target }}
+        toolchain: nightly
+        override: true
         components: rustfmt, clippy
 
     # If you need to reset the cache version, increment the number after `v`

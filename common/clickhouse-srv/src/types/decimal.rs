@@ -245,6 +245,7 @@ impl Decimal {
         self.scale as usize
     }
 
+    #[must_use]
     pub fn set_scale(self, scale: u8) -> Self {
         let underlying = match scale.cmp(&self.scale) {
             Ordering::Less => {

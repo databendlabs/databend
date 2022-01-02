@@ -300,13 +300,13 @@ impl convert::From<AppDate> for Value {
 
 impl convert::From<Enum8> for Value {
     fn from(v: Enum8) -> Value {
-        Value::Enum8 { 0: vec![], 1: v }
+        Value::Enum8(vec![], v)
     }
 }
 
 impl convert::From<Enum16> for Value {
     fn from(v: Enum16) -> Value {
-        Value::Enum16 { 0: vec![], 1: v }
+        Value::Enum16(vec![], v)
     }
 }
 

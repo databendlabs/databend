@@ -33,13 +33,12 @@ fn test_parse_with_sqlparser() {
     ];
     let stmts: Vec<Statement> = sqls
         .into_iter()
-        .map(|sql| {
+        .flat_map(|sql| {
             parser
                 .parse_with_sqlparser(sql)
                 .map_err(|e| e.add_message(format!("SQL: {}", sql.to_owned())))
                 .unwrap()
         })
-        .flatten()
         .collect();
     let expected = vec![
         r#"SELECT DISTINCT a, count(*) FROM t WHERE a = 1 AND b - 1 < a GROUP BY a HAVING a = 1"#,
@@ -73,13 +72,12 @@ fn test_parse_with_ddl() {
     ];
     let stmts: Vec<Statement> = sqls
         .into_iter()
-        .map(|sql| {
+        .flat_map(|sql| {
             parser
                 .parse_with_sqlparser(sql)
                 .map_err(|e| e.add_message(format!("SQL: {}", sql.to_owned())))
                 .unwrap()
         })
-        .flatten()
         .collect();
     let expected = vec![
         r#"TRUNCATE TABLE test"#,

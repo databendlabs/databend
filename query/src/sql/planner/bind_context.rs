@@ -57,6 +57,7 @@ impl BindContext {
     }
 
     /// Generate a new BindContext and take current BindContext as its parent.
+    #[must_use]
     pub fn push(self) -> Self {
         Self::new_with_parent(Box::new(self))
     }

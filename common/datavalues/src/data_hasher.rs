@@ -45,6 +45,7 @@ macro_rules! apply_fn {
 }
 
 impl DFHasher {
+    #[must_use]
     pub fn clone_initial(&self) -> Self {
         match self {
             DFHasher::SipHasher(_) => DFHasher::SipHasher(DefaultHasher::new()),
