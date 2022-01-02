@@ -23,6 +23,7 @@ use crate::cmds::command::Command;
 use crate::cmds::completions::completion::CompletionCommand;
 use crate::cmds::config;
 use crate::cmds::config::Config;
+use crate::cmds::generates::generate::GenerateCommand;
 use crate::cmds::loads::load::LoadCommand;
 use crate::cmds::queries::query::QueryCommand;
 use crate::cmds::ups::up::UpCommand;
@@ -120,6 +121,7 @@ impl Command for RootCommand {
             .subcommand(QueryCommand::default().clap())
             .subcommand(UpCommand::default().clap())
             .subcommand(LoadCommand::default().clap())
+            .subcommand(GenerateCommand::default().clap())
     }
 
     fn about(&self) -> &'static str {
@@ -134,8 +136,9 @@ impl Command for RootCommand {
             Arc::new(ClusterCommand::create(config.clone())),
             Arc::new(QueryCommand::create(config.clone())),
             Arc::new(LoadCommand::create(config.clone())),
-            Arc::new(UpCommand::create(config)),
+            Arc::new(UpCommand::create(config.clone())),
             Arc::new(CompletionCommand::create()),
+            Arc::new(GenerateCommand::create(config.clone())),
         ]
     }
 
