@@ -18,7 +18,7 @@ use std::path::Path;
 
 use common_datavalues::prelude::*;
 
-pub fn write_arithmetic_result_type() {
+pub fn codegen_arithmetic_type() {
     use DataType::*;
     use DataValueBinaryOperator::*;
     use DataValueUnaryOperator::*;
