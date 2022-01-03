@@ -16,20 +16,20 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use async_recursion::async_recursion;
+use common_ast::parser::ast::Expr;
+use common_ast::parser::ast::Indirection;
+use common_ast::parser::ast::Query;
+use common_ast::parser::ast::SelectStmt;
+use common_ast::parser::ast::SelectTarget;
+use common_ast::parser::ast::SetExpr;
+use common_ast::parser::ast::Statement;
+use common_ast::parser::ast::TableReference;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
 use crate::sql::optimizer::SExpr;
-use crate::sql::parser::ast::Expr;
-use crate::sql::parser::ast::Indirection;
-use crate::sql::parser::ast::Query;
-use crate::sql::parser::ast::SelectStmt;
-use crate::sql::parser::ast::SelectTarget;
-use crate::sql::parser::ast::SetExpr;
-use crate::sql::parser::ast::Statement;
-use crate::sql::parser::ast::TableReference;
 use crate::sql::planner::bind_context::BindContext;
 use crate::sql::planner::expression_binder::ExpressionBinder;
 use crate::sql::planner::metadata::Metadata;

@@ -12,7 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod optimizer;
-mod plan_parser;
-mod sql_parser;
-mod statements;
+pub mod expr;
+pub mod parser;

@@ -15,13 +15,13 @@
 use std::convert::TryFrom;
 use std::sync::Arc;
 
+use common_ast::expr::ExprTraverser;
+use common_ast::expr::ExprVisitor;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::udfs::UDFTransformer;
 use common_planners::Expression;
-use common_sql::expr::ExprTraverser;
-use common_sql::expr::ExprVisitor;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Ident;
 use sqlparser::ast::Query;

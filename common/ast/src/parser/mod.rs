@@ -17,9 +17,9 @@ pub mod transformer;
 
 use common_exception::Result;
 
-use crate::sql::parser::ast::Statement;
-use crate::sql::parser::transformer::AstTransformer;
-use crate::sql::parser::transformer::AstTransformerFactory;
+use crate::parser::ast::Statement;
+use crate::parser::transformer::AstTransformer;
+use crate::parser::transformer::AstTransformerFactory;
 
 pub struct Parser;
 

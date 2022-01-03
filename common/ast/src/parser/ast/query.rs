@@ -15,9 +15,9 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use crate::sql::parser::ast::display_identifier_vec;
-use crate::sql::parser::ast::Expr;
-use crate::sql::parser::ast::Identifier;
+use crate::parser::ast::display_identifier_vec;
+use crate::parser::ast::Expr;
+use crate::parser::ast::Identifier;
 
 // Root node of a query tree
 #[derive(Debug, Clone, PartialEq)]

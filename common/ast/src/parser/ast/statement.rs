@@ -18,8 +18,8 @@ use std::fmt::Formatter;
 use super::expression::Literal;
 use super::expression::TypeName;
 use super::Identifier;
-use crate::sql::parser::ast::display_identifier_vec;
-use crate::sql::parser::ast::query::Query;
+use crate::parser::ast::display_identifier_vec;
+use crate::parser::ast::query::Query;
 
 // SQL statement
 #[derive(Debug, Clone, PartialEq)]

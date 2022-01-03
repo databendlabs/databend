@@ -14,26 +14,26 @@
 
 use common_exception::Result;
 
-use crate::sql::parser::ast::BinaryOperator;
-use crate::sql::parser::ast::ColumnDefinition;
-use crate::sql::parser::ast::Expr;
-use crate::sql::parser::ast::Identifier;
-use crate::sql::parser::ast::Indirection;
-use crate::sql::parser::ast::Join;
-use crate::sql::parser::ast::JoinCondition;
-use crate::sql::parser::ast::Literal;
-use crate::sql::parser::ast::OrderByExpr;
-use crate::sql::parser::ast::Query;
-use crate::sql::parser::ast::SQLProperty;
-use crate::sql::parser::ast::SelectStmt;
-use crate::sql::parser::ast::SelectTarget;
-use crate::sql::parser::ast::SetExpr;
-use crate::sql::parser::ast::SetOperator;
-use crate::sql::parser::ast::Statement;
-use crate::sql::parser::ast::TableAlias;
-use crate::sql::parser::ast::TableReference;
-use crate::sql::parser::ast::TypeName;
-use crate::sql::parser::ast::UnaryOperator;
+use crate::parser::ast::BinaryOperator;
+use crate::parser::ast::ColumnDefinition;
+use crate::parser::ast::Expr;
+use crate::parser::ast::Identifier;
+use crate::parser::ast::Indirection;
+use crate::parser::ast::Join;
+use crate::parser::ast::JoinCondition;
+use crate::parser::ast::Literal;
+use crate::parser::ast::OrderByExpr;
+use crate::parser::ast::Query;
+use crate::parser::ast::SQLProperty;
+use crate::parser::ast::SelectStmt;
+use crate::parser::ast::SelectTarget;
+use crate::parser::ast::SetExpr;
+use crate::parser::ast::SetOperator;
+use crate::parser::ast::Statement;
+use crate::parser::ast::TableAlias;
+use crate::parser::ast::TableReference;
+use crate::parser::ast::TypeName;
+use crate::parser::ast::UnaryOperator;
 
 pub trait AstVisitor {
     fn visit_expr(&mut self, expr: &Expr) -> Result<()> {
