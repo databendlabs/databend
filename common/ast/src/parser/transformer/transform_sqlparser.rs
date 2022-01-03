@@ -35,8 +35,10 @@ use sqlparser::ast::UnaryOperator as SqlparserUnaryOperator;
 use sqlparser::ast::Value;
 
 use super::AstTransformer;
-use crate::sql::parser::ast::Statement::Explain;
-use crate::sql::parser::ast::*;
+use crate::parser::ast::SetOperator;
+use crate::parser::ast::Statement;
+use crate::parser::ast::Statement::Explain;
+use crate::parser::ast::*;
 
 // Implementation of `AstTransformer` for sqlparser-rs
 pub struct TransformerSqlparser {

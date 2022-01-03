@@ -17,7 +17,7 @@ use std::fmt::Formatter;
 
 use super::Identifier;
 use super::Query;
-use crate::sql::parser::ast::display_identifier_vec;
+use crate::parser::ast::display_identifier_vec;
 
 #[derive(Debug, Clone, PartialEq)]
 #[allow(dead_code)]
