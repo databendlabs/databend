@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+use async_trait::async_trait;
 use common_ast::udfs::*;
+use common_base::tokio;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use pretty_assertions::assert_eq;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Function;
@@ -22,31 +25,46 @@ use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::UnaryOperator;
 
-#[test]
-fn test_udf_transformer() -> Result<()> {
-    let tenant = "tenant_1";
-    UDFFactory::register(
-        tenant,
-        "test_transformer",
-        &["p".to_string()],
-        "not(isnull(p))",
-    )?;
-    let result = UDFTransformer::transform_function(tenant, &Function {
-        name: ObjectName(vec![Ident {
-            value: "test_transformer".to_string(),
-            quote_style: None,
-        }]),
-        params: vec![],
-        args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident {
-            value: "test".to_string(),
-            quote_style: None,
-        }))],
-        over: None,
-        distinct: false,
-    })?;
+struct TestFetcher;
 
-    assert!(result.is_some());
-    assert_eq!(result.unwrap(), Expr::UnaryOp {
+#[async_trait]
+impl UDFFetcher for TestFetcher {
+    async fn get_udf_definition(&self, name: &str) -> Result<UDFDefinition> {
+        if name == "test_transformer" {
+            let mut parser = UDFParser::default();
+            let expr = parser
+                .parse(name, &["p".to_string()], "not(isnull(p))")
+                .await?;
+
+            Ok(UDFDefinition::new(vec!["p".to_string()], expr))
+        } else {
+            Err(ErrorCode::UnImplement("Unimplement error"))
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_udf_transformer() -> Result<()> {
+    let fetcher = &TestFetcher {};
+    let result = UDFTransformer::transform_function(
+        &Function {
+            name: ObjectName(vec![Ident {
+                value: "test_transformer".to_string(),
+                quote_style: None,
+            }]),
+            params: vec![],
+            args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident {
+                value: "test".to_string(),
+                quote_style: None,
+            }))],
+            over: None,
+            distinct: false,
+        },
+        fetcher,
+    )
+    .await?;
+
+    assert_eq!(result, Expr::UnaryOp {
         op: UnaryOperator::Not,
         expr: Box::new(Expr::Nested(Box::new(Expr::Function(Function {
             name: ObjectName(vec![Ident {
@@ -63,20 +81,24 @@ fn test_udf_transformer() -> Result<()> {
         }))))
     });
 
-    assert!(UDFTransformer::transform_function(tenant, &Function {
-        name: ObjectName(vec![Ident {
-            value: "test_transformer_not_exist".to_string(),
-            quote_style: None,
-        }]),
-        params: vec![],
-        args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident {
-            value: "test".to_string(),
-            quote_style: None,
-        }))],
-        over: None,
-        distinct: false,
-    })?
-    .is_none());
+    assert!(UDFTransformer::transform_function(
+        &Function {
+            name: ObjectName(vec![Ident {
+                value: "test_transformer_not_exist".to_string(),
+                quote_style: None,
+            }]),
+            params: vec![],
+            args: vec![FunctionArg::Unnamed(Expr::Identifier(Ident {
+                value: "test".to_string(),
+                quote_style: None,
+            }))],
+            over: None,
+            distinct: false,
+        },
+        fetcher
+    )
+    .await
+    .is_err());
 
     Ok(())
 }

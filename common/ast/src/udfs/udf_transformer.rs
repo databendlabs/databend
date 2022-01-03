@@ -21,48 +21,48 @@ use sqlparser::ast::Function;
 use sqlparser::ast::FunctionArg;
 use sqlparser::ast::Ident;
 
-use super::UDFDefinition;
-use super::UDFFactory;
+use super::UDFFetcher;
 
 pub struct UDFTransformer;
 
 impl UDFTransformer {
-    pub fn transform_function(tenant: &str, function: &Function) -> Result<Option<Expr>> {
-        if let Ok(Some(UDFDefinition { parameters, expr })) =
-            UDFFactory::get_definition(tenant, &function.name.to_string())
-        {
-            if parameters.len() != function.args.len() {
-                return Err(ErrorCode::SyntaxException(format!(
-                    "Requir {} parameters, but got: {}",
-                    parameters.len(),
-                    function.args.len()
-                )));
+    pub async fn transform_function<F: UDFFetcher>(
+        function: &Function,
+        fetcher: &F,
+    ) -> Result<Expr> {
+        let definition = fetcher
+            .get_udf_definition(&function.name.to_string())
+            .await?;
+        let parameters = definition.parameters;
+        let expr = definition.expr;
+
+        if parameters.len() != function.args.len() {
+            return Err(ErrorCode::SyntaxException(format!(
+                "Requir {} parameters, but got: {}",
+                parameters.len(),
+                function.args.len()
+            )));
+        }
+
+        let mut args_map = HashMap::new();
+        function.args.iter().enumerate().for_each(|(index, f_arg)| {
+            if let Some(param) = parameters.get(index) {
+                args_map.insert(param, match f_arg {
+                    FunctionArg::Named { arg, .. } => arg.clone(),
+                    FunctionArg::Unnamed(unnamed_arg) => unnamed_arg.clone(),
+                });
+            }
+        });
+
+        Self::clone_expr_with_replacement(&expr, &|nest_expr| {
+            if let Expr::Identifier(Ident { value, .. }) = nest_expr {
+                if let Some(arg) = args_map.get(value) {
+                    return Ok(Some(arg.clone()));
+                }
             }
 
-            let mut args_map = HashMap::new();
-            function.args.iter().enumerate().for_each(|(index, f_arg)| {
-                if let Some(param) = parameters.get(index) {
-                    args_map.insert(param, match f_arg {
-                        FunctionArg::Named { arg, .. } => arg.clone(),
-                        FunctionArg::Unnamed(unnamed_arg) => unnamed_arg.clone(),
-                    });
-                }
-            });
-            Ok(Some(
-                Self::clone_expr_with_replacement(&expr, &|nest_expr| {
-                    if let Expr::Identifier(Ident { value, .. }) = nest_expr {
-                        if let Some(arg) = args_map.get(value) {
-                            return Ok(Some(arg.clone()));
-                        }
-                    }
-
-                    Ok(None)
-                })
-                .unwrap(),
-            ))
-        } else {
             Ok(None)
-        }
+        })
     }
 
     fn clone_expr_with_replacement<F>(original_expr: &Expr, replacement_fn: &F) -> Result<Expr>

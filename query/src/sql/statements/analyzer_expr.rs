@@ -15,12 +15,17 @@
 use std::convert::TryFrom;
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use common_ast::parser::expr::ExprTraverser;
 use common_ast::parser::expr::ExprVisitor;
+use common_ast::udfs::UDFDefinition;
+use common_ast::udfs::UDFFetcher;
+use common_ast::udfs::UDFParser;
+use common_ast::udfs::UDFTransformer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_ast::udfs::UDFTransformer;
+use common_functions::is_builtin_function;
 use common_planners::Expression;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Ident;
@@ -50,7 +55,7 @@ impl ExpressionAnalyzer {
         let mut stack = Vec::new();
 
         // Build RPN for expr. because async function unsupported recursion
-        for rpn_item in &ExprRPNBuilder::build(self.context.clone(), expr)? {
+        for rpn_item in &ExprRPNBuilder::build(self.context.clone(), expr).await? {
             match rpn_item {
                 ExprRPNItem::Value(v) => Self::analyze_value(v, &mut stack)?,
                 ExprRPNItem::Identifier(v) => self.analyze_identifier(v, &mut stack)?,
@@ -379,12 +384,12 @@ struct ExprRPNBuilder {
 }
 
 impl ExprRPNBuilder {
-    pub fn build(context: Arc<QueryContext>, expr: &Expr) -> Result<Vec<ExprRPNItem>> {
+    pub async fn build(context: Arc<QueryContext>, expr: &Expr) -> Result<Vec<ExprRPNItem>> {
         let mut builder = ExprRPNBuilder {
             context,
             rpn: Vec::new(),
         };
-        ExprTraverser::accept(expr, &mut builder)?;
+        ExprTraverser::accept(expr, &mut builder).await?;
         Ok(builder.rpn)
     }
 
@@ -490,21 +495,37 @@ impl ExprRPNBuilder {
     }
 }
 
+#[async_trait]
+impl UDFFetcher for ExprRPNBuilder {
+    async fn get_udf_definition(&self, name: &str) -> Result<UDFDefinition> {
+        let udf = self
+            .context
+            .get_sessions_manager()
+            .get_user_manager()
+            .get_udf(name)
+            .await?;
+        let mut udf_parser = UDFParser::default();
+        let definition = udf_parser
+            .parse(&udf.name, &udf.parameters, &udf.definition)
+            .await?;
+
+        Ok(UDFDefinition::new(udf.parameters, definition))
+    }
+}
+
+#[async_trait]
 impl ExprVisitor for ExprRPNBuilder {
-    fn pre_visit(&mut self, expr: &Expr) -> Result<Expr> {
+    async fn pre_visit(&mut self, expr: &Expr) -> Result<Expr> {
         if let Expr::Function(function) = expr {
-            if let Ok(Some(transformed_expr)) = UDFTransformer::transform_function(
-                self.context.get_config().query.tenant_id.as_str(),
-                function,
-            ) {
-                return Ok(transformed_expr);
+            if !is_builtin_function(&function.name.to_string()) {
+                return UDFTransformer::transform_function(function, self).await;
             }
         }
 
         Ok(expr.clone())
     }
 
-    fn post_visit(&mut self, expr: &Expr) -> Result<()> {
+    async fn post_visit(&mut self, expr: &Expr) -> Result<()> {
         self.process_expr(expr)
     }
 }

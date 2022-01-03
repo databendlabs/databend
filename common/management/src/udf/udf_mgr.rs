@@ -15,11 +15,10 @@
 
 use std::sync::Arc;
 
+use common_ast::udfs::UDFParser;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::is_builtin_function;
-use common_ast::udfs::UDFFactory;
-use common_ast::udfs::UDFParser;
 use common_meta_api::KVApi;
 use common_meta_types::IntoSeqV;
 use common_meta_types::MatchSeq;
@@ -36,7 +35,6 @@ static UDF_API_KEY_PREFIX: &str = "__fd_udfs";
 
 pub struct UdfMgr {
     kv_api: Arc<dyn KVApi>,
-    tenant: String,
     udf_prefix: String,
 }
 
@@ -45,7 +43,6 @@ impl UdfMgr {
     pub fn new(kv_api: Arc<dyn KVApi>, tenant: &str) -> Self {
         UdfMgr {
             kv_api,
-            tenant: tenant.to_owned(),
             udf_prefix: format!("{}/{}", UDF_API_KEY_PREFIX, tenant),
         }
     }
@@ -62,12 +59,9 @@ impl UdfMgrApi for UdfMgr {
         }
 
         let mut udf_parser = UDFParser::default();
-        udf_parser.parse_definition(
-            &self.tenant,
-            &info.name,
-            &info.parameters,
-            &info.definition,
-        )?;
+        udf_parser
+            .parse(&info.name, &info.parameters, &info.definition)
+            .await?;
 
         let seq = MatchSeq::Exact(0);
         let val = Operation::Update(serde_json::to_vec(&info)?);
@@ -79,16 +73,7 @@ impl UdfMgrApi for UdfMgr {
         let res = upsert_info.await?.into_add_result()?;
 
         match res.res {
-            OkOrExist::Ok(v) => {
-                UDFFactory::register(
-                    self.tenant.as_str(),
-                    info.name.as_str(),
-                    &info.parameters,
-                    info.definition.as_str(),
-                )?;
-
-                Ok(v.seq)
-            }
+            OkOrExist::Ok(v) => Ok(v.seq),
             OkOrExist::Exists(v) => Err(ErrorCode::UDFAlreadyExists(format!(
                 "UDF already exists, seq [{}]",
                 v.seq
@@ -115,16 +100,7 @@ impl UdfMgrApi for UdfMgr {
 
         let res = upsert_info.await?;
         match res.result {
-            Some(SeqV { seq: s, .. }) => {
-                UDFFactory::register(
-                    self.tenant.as_str(),
-                    info.name.as_str(),
-                    &info.parameters,
-                    info.definition.as_str(),
-                )?;
-
-                Ok(s)
-            }
+            Some(SeqV { seq: s, .. }) => Ok(s),
             None => Err(ErrorCode::UnknownUDF(format!(
                 "unknown UDF, or seq not match {}",
                 info.name.clone()
@@ -172,8 +148,6 @@ impl UdfMgrApi for UdfMgr {
         };
         let res = upsert_kv.await?;
         if res.prev.is_some() && res.result.is_none() {
-            UDFFactory::unregister(self.tenant.as_str(), udf_name)?;
-
             Ok(())
         } else {
             Err(ErrorCode::UnknownUDF(format!("Unknown UDF {}", udf_name)))

@@ -14,10 +14,11 @@
 
 use std::collections::HashSet;
 
-use crate::parser::expr::ExprTraverser;
-use crate::parser::expr::ExprVisitor;
+use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::scalars::FunctionFactory;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Function;
 use sqlparser::ast::Ident;
@@ -25,33 +26,34 @@ use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 use sqlparser::tokenizer::Tokenizer;
 
-use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::scalars::FunctionFactory;
+use crate::parser::expr::ExprTraverser;
+use crate::parser::expr::ExprVisitor;
 
 #[derive(Default)]
 pub struct UDFParser {
-    tenant_id: String,
     name: String,
     expr_params: HashSet<String>,
 }
 
 impl UDFParser {
-    pub fn parse_definition(
+    pub async fn parse(
         &mut self,
-        tenant_id: &str,
         name: &str,
         parameters: &[String],
         definition: &str,
     ) -> Result<Expr> {
+        let expr = self.parse_definition(definition)?;
+        self.verify_definition_expr(name, parameters, &expr).await?;
+        Ok(expr)
+    }
+
+    fn parse_definition(&mut self, definition: &str) -> Result<Expr> {
         let dialect = &GenericDialect {};
         let mut tokenizer = Tokenizer::new(dialect, definition);
 
         match tokenizer.tokenize() {
             Ok(tokens) => match Parser::new(tokens, dialect).parse_expr() {
-                Ok(definition_expr) => {
-                    self.verify_definition_expr(tenant_id, name, parameters, &definition_expr)?;
-                    Ok(definition_expr)
-                }
+                Ok(definition_expr) => Ok(definition_expr),
                 Err(parse_error) => Err(ErrorCode::from(parse_error)),
             },
             Err(tokenize_error) => Err(ErrorCode::SyntaxException(format!(
@@ -61,19 +63,17 @@ impl UDFParser {
         }
     }
 
-    fn verify_definition_expr(
+    async fn verify_definition_expr(
         &mut self,
-        tenant_id: &str,
         name: &str,
         parameters: &[String],
         definition_expr: &Expr,
     ) -> Result<()> {
         let expr_params = &mut self.expr_params;
         expr_params.clear();
-        self.tenant_id = tenant_id.to_string();
         self.name = name.to_string();
 
-        ExprTraverser::accept(definition_expr, self)?;
+        ExprTraverser::accept(definition_expr, self).await?;
         let expr_params = &self.expr_params;
         let parameters = parameters.iter().cloned().collect::<HashSet<_>>();
         let params_not_declared: HashSet<_> = parameters.difference(expr_params).collect();
@@ -99,8 +99,9 @@ impl UDFParser {
     }
 }
 
+#[async_trait]
 impl ExprVisitor for UDFParser {
-    fn post_visit(&mut self, expr: &Expr) -> Result<()> {
+    async fn post_visit(&mut self, expr: &Expr) -> Result<()> {
         match expr {
             Expr::Identifier(Ident { value, .. }) => {
                 let expr_params = &mut self.expr_params;

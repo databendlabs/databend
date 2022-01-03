@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
 use common_ast::udfs::*;
+use common_base::tokio;
+use common_exception::Result;
 use pretty_assertions::assert_eq;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Function;
@@ -22,13 +23,14 @@ use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::UnaryOperator;
 
-#[test]
-fn test_udf_parser() -> Result<()> {
+#[tokio::test]
+async fn test_udf_parser() -> Result<()> {
     let mut parser = UDFParser::default();
-    let result = parser.parse_definition("tenant", "test", &["p".to_string()], "not(isnull(p))");
+    let result = parser
+        .parse("test", &["p".to_string()], "not(isnull(p))")
+        .await?;
 
-    assert!(result.is_ok());
-    assert_eq!(result.unwrap(), Expr::UnaryOp {
+    assert_eq!(result, Expr::UnaryOp {
         op: UnaryOperator::Not,
         expr: Box::new(Expr::Nested(Box::new(Expr::Function(Function {
             name: ObjectName(vec![Ident {
@@ -46,24 +48,28 @@ fn test_udf_parser() -> Result<()> {
     });
 
     assert!(parser
-        .parse_definition("tenant", "test", &["p".to_string()], "not(isnull(p, d))")
+        .parse("test", &["p".to_string()], "not(isnull(p, d))")
+        .await
         .is_err());
     assert!(parser
-        .parse_definition("tenant", "test", &["d".to_string()], "not(isnull(p))")
+        .parse("test", &["d".to_string()], "not(isnull(p))")
+        .await
         .is_err());
     assert!(parser
-        .parse_definition("tenant", "test", &["d".to_string()], "not(unknown_udf(p))")
+        .parse("test", &["d".to_string()], "not(unknown_udf(p))")
+        .await
         .is_err());
     assert!(parser
-        .parse_definition("recursive", "test", &["d".to_string()], "not(recursive(p))")
+        .parse("test", &["d".to_string()], "not(recursive(p))")
+        .await
         .is_err());
     assert!(parser
-        .parse_definition(
-            "tenant",
+        .parse(
             "test",
             &["d".to_string(), "p".to_string()],
             "not(isnull(p, d))"
         )
+        .await
         .is_ok());
 
     Ok(())
