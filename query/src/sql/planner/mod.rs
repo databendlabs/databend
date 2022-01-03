@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 pub use bind_context::BindContext;
+use common_ast::parser::Parser;
 use common_exception::ErrorCode;
 use common_exception::Result;
 pub use metadata::*;
@@ -26,7 +27,6 @@ use crate::sessions::QueryContext;
 use crate::sql::exec::Executor;
 use crate::sql::optimizer::optimize;
 use crate::sql::optimizer::OptimizeContext;
-use crate::sql::parser::Parser;
 use crate::sql::planner::binder::Binder;
 
 mod bind_context;

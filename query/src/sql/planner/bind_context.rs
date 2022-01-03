@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_ast::parser::ast::TableAlias;
 use common_datavalues::DataType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::sql::common::IndexType;
 use crate::sql::optimizer::SExpr;
-use crate::sql::parser::ast::TableAlias;
 use crate::sql::planner::scalar::ScalarExpr;
 
 #[derive(Clone)]

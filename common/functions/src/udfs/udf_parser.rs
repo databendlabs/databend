@@ -14,10 +14,10 @@
 
 use std::collections::HashSet;
 
+use common_ast::expr::ExprTraverser;
+use common_ast::expr::ExprVisitor;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_sql::expr::ExprTraverser;
-use common_sql::expr::ExprVisitor;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Function;
 use sqlparser::ast::Ident;

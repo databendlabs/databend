@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_query::sql::parser::ast::*;
+use common_ast::parser::ast::*;
 
 #[test]
 fn test_display_create_database() {
