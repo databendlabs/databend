@@ -1151,6 +1151,9 @@ name = "common-ast"
 version = "0.1.0"
 dependencies = [
  "common-exception",
+ "common-functions",
+ "once_cell",
+ "pretty_assertions",
  "sqlparser",
 ]
 
@@ -1344,7 +1347,6 @@ dependencies = [
  "bumpalo",
  "bytes 1.1.0",
  "common-arrow",
- "common-ast",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -1427,6 +1429,7 @@ name = "common-management"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "common-ast",
  "common-base",
  "common-exception",
  "common-functions",

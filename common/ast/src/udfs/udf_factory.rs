@@ -21,8 +21,8 @@ use once_cell::sync::Lazy;
 
 use super::UDFDefinition;
 use super::UDFParser;
-use crate::aggregates::AggregateFunctionFactory;
-use crate::scalars::FunctionFactory;
+use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::scalars::FunctionFactory;
 
 #[derive(Default)]
 pub struct UDFFactory {

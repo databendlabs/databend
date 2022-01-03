@@ -14,8 +14,8 @@
 
 use std::collections::HashSet;
 
-use common_ast::parser::expr::ExprTraverser;
-use common_ast::parser::expr::ExprVisitor;
+use crate::parser::expr::ExprTraverser;
+use crate::parser::expr::ExprVisitor;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use sqlparser::ast::Expr;
@@ -25,8 +25,8 @@ use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
 use sqlparser::tokenizer::Tokenizer;
 
-use crate::aggregates::AggregateFunctionFactory;
-use crate::scalars::FunctionFactory;
+use common_functions::aggregates::AggregateFunctionFactory;
+use common_functions::scalars::FunctionFactory;
 
 #[derive(Default)]
 pub struct UDFParser {

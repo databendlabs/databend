@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_functions::udfs::UDFFactory;
+use common_ast::udfs::UDFFactory;
 use common_meta_types::UserDefinedFunction;
 
 use crate::configs::Config;

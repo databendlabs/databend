@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_functions::udfs::*;
+use common_ast::udfs::*;
 use pretty_assertions::assert_eq;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Function;

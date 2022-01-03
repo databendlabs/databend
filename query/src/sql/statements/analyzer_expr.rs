@@ -20,7 +20,7 @@ use common_ast::parser::expr::ExprVisitor;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::udfs::UDFTransformer;
+use common_ast::udfs::UDFTransformer;
 use common_planners::Expression;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Ident;
