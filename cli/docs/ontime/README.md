@@ -2,6 +2,11 @@
 ## Introduction
 `Reporting Carrier On-Time Performance (1987-present)`  contains on-time arrival and departure data for non-stop domestic flights by month and year, by carrier and by origin and destination airport. Includes scheduled and actual departure and arrival times, canceled and diverted flights, taxi-out and taxi-in times, causes of delay and cancellation, air time, and non-stop distance.
 
+## Prerapre ontime dataset
+You can prepare dataset in 2 ways
+1. run `bendctl generate --dataset ontime` directly.
+2. download dataset on load by your own, see document below.
+
 ### Prepare dataset
 Download dataset
 ```bash
