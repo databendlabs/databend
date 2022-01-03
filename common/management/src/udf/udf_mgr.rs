@@ -17,8 +17,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::scalars::FunctionFactory;
+use common_functions::is_builtin_function;
 use common_ast::udfs::UDFFactory;
 use common_ast::udfs::UDFParser;
 use common_meta_api::KVApi;
@@ -50,16 +49,12 @@ impl UdfMgr {
             udf_prefix: format!("{}/{}", UDF_API_KEY_PREFIX, tenant),
         }
     }
-
-    fn is_builtin_function(name: &str) -> bool {
-        FunctionFactory::instance().check(name) || AggregateFunctionFactory::instance().check(name)
-    }
 }
 
 #[async_trait::async_trait]
 impl UdfMgrApi for UdfMgr {
     async fn add_udf(&self, info: UserDefinedFunction) -> Result<u64> {
-        if UdfMgr::is_builtin_function(info.name.as_str()) {
+        if is_builtin_function(info.name.as_str()) {
             return Err(ErrorCode::UDFAlreadyExists(format!(
                 "It's a builtin function: {}",
                 info.name.as_str()
@@ -102,7 +97,7 @@ impl UdfMgrApi for UdfMgr {
     }
 
     async fn update_udf(&self, info: UserDefinedFunction, seq: Option<u64>) -> Result<u64> {
-        if UdfMgr::is_builtin_function(info.name.as_str()) {
+        if is_builtin_function(info.name.as_str()) {
             return Err(ErrorCode::UDFAlreadyExists(format!(
                 "Builtin function can not be udpated: {}",
                 info.name.as_str()

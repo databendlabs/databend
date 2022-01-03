@@ -21,8 +21,7 @@ use once_cell::sync::Lazy;
 
 use super::UDFDefinition;
 use super::UDFParser;
-use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::scalars::FunctionFactory;
+use common_functions::is_builtin_function;
 
 #[derive(Default)]
 pub struct UDFFactory {
@@ -38,7 +37,7 @@ impl UDFFactory {
         parameters: &[String],
         definition: &str,
     ) -> Result<()> {
-        if UDFFactory::is_builtin_function(name) {
+        if is_builtin_function(name) {
             return Err(ErrorCode::RegisterUDFError(format!(
                 "Can not register builtin functions: {} - {}",
                 name, definition
@@ -94,10 +93,6 @@ impl UDFFactory {
                 name, lock_error
             ))),
         }
-    }
-
-    fn is_builtin_function(name: &str) -> bool {
-        FunctionFactory::instance().check(name) || AggregateFunctionFactory::instance().check(name)
     }
 
     fn get_udf_key(tenant: &str, name: &str) -> String {
