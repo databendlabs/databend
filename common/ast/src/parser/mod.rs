@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod ast;
+pub mod expr;
 pub mod transformer;
 
 use common_exception::Result;

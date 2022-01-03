@@ -14,8 +14,8 @@
 
 use std::collections::HashSet;
 
-use common_ast::expr::ExprTraverser;
-use common_ast::expr::ExprVisitor;
+use common_ast::parser::expr::ExprTraverser;
+use common_ast::parser::expr::ExprVisitor;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use sqlparser::ast::Expr;
