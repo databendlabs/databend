@@ -236,7 +236,7 @@ async fn execute(bench: BenchmarkRef) -> Result<()> {
                         .await
                         .map_err_to_code(ErrorCode::LogicalError, || "")?;
 
-                    while result.next().await.is_ok() {}
+                    while let Some(_) = result.next().await.unwrap() {}
 
                     let progress = &result.progress;
                     let mut stats = bench.stats.write();
