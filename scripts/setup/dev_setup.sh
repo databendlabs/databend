@@ -228,7 +228,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "false" ]] &&
 	INSTALL_BUILD_TOOLS="true"
 fi
 
-if [ ! -f rust-toolchain ]; then
+if [ ! -f rust-toolchain.toml ]; then
 	echo "Unknown location. Please run this from the databend repository. Abort."
 	exit 1
 fi
@@ -342,7 +342,8 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	esac
 
 	install_rustup "$BATCH_MODE"
-	install_toolchain "$(cat ./rust-toolchain)"
+
+	install_toolchain "$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)"
 
 	install_pkg lcov "$PACKAGE_MANAGER"
 fi
