@@ -1,41 +1,3 @@
-# Ontime dataset
-## Introduction
-`Reporting Carrier On-Time Performance (1987-present)`  contains on-time arrival and departure data for non-stop domestic flights by month and year, by carrier and by origin and destination airport. Includes scheduled and actual departure and arrival times, canceled and diverted flights, taxi-out and taxi-in times, causes of delay and cancellation, air time, and non-stop distance.
-
-## Prerapre ontime dataset
-You can prepare dataset in 2 ways
-1. run `bendctl generate --dataset ontime` directly.
-2. download dataset on load by your own, see document below.
-
-### Prepare dataset
-Download dataset
-```bash
-mkdir -p ./raw_datas
-cd ./raw_datas
-echo https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_{2019..2021}_{1..12}.zip | xargs -P10 wget --no-check-certificate --continue
-cd ../
-```
-
-Download csv tools
-```bash
-cargo install xsv
-```
-
-Unzip data
-```bash
-mkdir -p ./raw_csvs
-cd raw_csvs
-unzip "../raw_datas/*.zip"
-cd ../
-```
-
-Merge data(nearly 70G)
-```bash
-xsv cat rows ./raw_csvs/*.csv > merged.csv
-```
-
-### Create table
-```sql
 CREATE TABLE ontime
 (
     Year                            UInt16,
@@ -147,46 +109,4 @@ CREATE TABLE ontime
     Div5LongestGTime                String,
     Div5WheelsOff                   String,
     Div5TailNum                     String
-) ENGINE = FUSE
-```
-
-### Load data
-
-See [http streaming loading doc](https://databend.rs/user/data-loading/http-streaming-load)
-
-### queries
-Q0:
-```sql
-SELECT avg(c1)
-FROM
-(
-    SELECT Year, Month, count(*) AS c1
-    FROM ontime
-    GROUP BY Year, Month
-);
-```
-Q1: The number of flights per day from the year 2019 to 2021
-```sql
-SELECT DayOfWeek, count(*) AS c
-FROM ontime
-WHERE Year>=2019 AND Year<=2021
-GROUP BY DayOfWeek
-ORDER BY c DESC;
-```
-Q2: The number of flights delayed by more than 10 minutes, grouped by the day of the week, for 2019-2021
-```sql
-SELECT DayOfWeek, count(*) AS c
-FROM ontime
-WHERE DepDelay>10 AND Year>=2019 AND Year<=2021
-GROUP BY DayOfWeek
-ORDER BY c DESC;
-```
-Q3: The number of delays by the airport for 2019-2021
-```sql
-SELECT Origin, count(*) AS c
-FROM ontime
-WHERE DepDelay>10 AND Year>=2019 AND Year<=2021
-GROUP BY Origin
-ORDER BY c DESC
-LIMIT 10;
-```
+) ENGINE = FUSE;
