@@ -17,8 +17,7 @@ use std::collections::HashSet;
 use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::aggregates::AggregateFunctionFactory;
-use common_functions::scalars::FunctionFactory;
+use common_functions::is_builtin_function;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Function;
 use sqlparser::ast::Ident;
@@ -111,10 +110,7 @@ impl ExprVisitor for UDFParser {
             }
             Expr::Function(Function { name, .. }) => {
                 let name = name.to_string();
-                if !FunctionFactory::instance().check(&name)
-                    && !AggregateFunctionFactory::instance().check(&name)
-                    && self.name == name
-                {
+                if !is_builtin_function(&name) && self.name == name {
                     Err(ErrorCode::SyntaxException(format!(
                         "Function is not builtin or defined: {}",
                         name
