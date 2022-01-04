@@ -1150,7 +1150,12 @@ dependencies = [
 name = "common-ast"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "common-base",
  "common-exception",
+ "common-functions",
+ "once_cell",
+ "pretty_assertions",
  "sqlparser",
 ]
 
@@ -1342,7 +1347,6 @@ dependencies = [
  "bumpalo",
  "bytes 1.1.0",
  "common-arrow",
- "common-ast",
  "common-datablocks",
  "common-datavalues",
  "common-exception",
@@ -1425,6 +1429,7 @@ name = "common-management"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "common-ast",
  "common-base",
  "common-exception",
  "common-functions",
@@ -5162,9 +5167,9 @@ dependencies = [
 
 [[package]]
 name = "poem"
-version = "1.2.14"
+version = "1.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb0581eb36ceb10416158ec2063c3b3a3ddd07aa101d47943ed73c6f1e347419"
+checksum = "e8f609173a5155e4dd994804848f55a3de894e7daecd562312e69151ec6c3556"
 dependencies = [
  "async-trait",
  "bytes 1.1.0",
@@ -5194,9 +5199,9 @@ dependencies = [
 
 [[package]]
 name = "poem-derive"
-version = "1.2.14"
+version = "1.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cbef1d14bae249e06f97e824a37ccabe864c38801f3cfde7b0f96598ddc813e"
+checksum = "bb42548e64280207b0d28cb15ee93d4f22b4fd4f5aae857854f25ebf73cf8f3f"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
