@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod block_reader;
 mod block_stream_writer;
 mod block_writer;
 mod locations;
