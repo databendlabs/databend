@@ -22,6 +22,7 @@ runs:
         components: rustfmt, clippy
 
     - name: Bench Check
+      shell: bash
       run: cargo bench --no-run
 
     # If you need to reset the cache version, increment the number after `v`
