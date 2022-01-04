@@ -12,14 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod local_cache;
-use async_trait::async_trait;
-use common_dal::DataAccessor;
-use common_exception::Result;
+mod local_cache;
 pub use local_cache::LocalCache;
 pub use local_cache::LocalCacheConfig;
-
-#[async_trait]
-pub trait FuseCache: Send + Sync {
-    async fn get(&self, location: &str, da: &dyn DataAccessor) -> Result<Vec<u8>>;
-}

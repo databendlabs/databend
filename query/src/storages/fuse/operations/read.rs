@@ -70,7 +70,7 @@ impl FuseTable {
                 let da = da.clone();
                 let table_schema = table_schema.clone();
                 let projection = projection.clone();
-                let cache = ctx.get_fuse_cache();
+                let cache = ctx.get_storage_cache();
                 async move {
                     let part_info = PartInfo::decode(&part.name)?;
                     let part_location = part_info.location();
@@ -81,11 +81,11 @@ impl FuseTable {
                         part_info.location().to_owned(),
                         table_schema,
                         projection,
-                        None, // TODO cache parquet meta
                         Some(part_len),
                         Some(read_buffer_size),
                         cache,
-                    );
+                    )
+                    .await?;
                     reader
                         .read()
                         .await

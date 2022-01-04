@@ -27,7 +27,7 @@ use common_exception::Result;
 use common_metrics::label_counter;
 use common_metrics::label_counter_with_val;
 
-use crate::storages::fuse::cache::FuseCache;
+use crate::storages::cache::StorageCache;
 
 const CACHE_READ_BYTES_FROM_REMOTE: &str = "cache_read_bytes_from_remote";
 const CACHE_READ_BYTES_FROM_LOCAL: &str = "cache_read_bytes_from_local";
@@ -83,7 +83,7 @@ pub struct LocalCache {
 }
 
 impl LocalCache {
-    pub fn create(conf: LocalCacheConfig) -> Result<Box<dyn FuseCache>> {
+    pub fn create(conf: LocalCacheConfig) -> Result<Box<dyn StorageCache>> {
         let disk_cache = Arc::new(RwLock::new(LruDiskCache::new(
             conf.disk_cache_root,
             conf.disk_cache_size_mb * 1024 * 1024,
@@ -124,7 +124,7 @@ impl LocalCache {
 }
 
 #[async_trait]
-impl FuseCache for LocalCache {
+impl StorageCache for LocalCache {
     async fn get(&self, location: &str, da: &dyn DataAccessor) -> Result<Vec<u8>> {
         self.get_from_mem_cache(location, da).await
     }

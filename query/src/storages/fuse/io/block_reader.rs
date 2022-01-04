@@ -35,7 +35,7 @@ use futures::io::BufReader;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
-use crate::storages::fuse::cache::FuseCache;
+use crate::storages::cache::StorageCache;
 
 /// default buffer size of BufferedReader, 1MB
 const DEFAULT_READ_BUFFER_SIZE: u64 = 1024 * 1024;
@@ -49,21 +49,22 @@ pub struct BlockReader {
     projection: Vec<usize>,
     row_group: usize,
     row_groups: usize,
-    metadata: Option<FileMetaData>,
+    metadata: FileMetaData,
     file_len: Option<u64>,
     read_buffer_size: Option<u64>,
 
-    cache: Arc<Option<Box<dyn FuseCache>>>,
+    #[allow(dead_code)]
+    cache: Arc<Option<Box<dyn StorageCache>>>,
 }
 
 impl BlockReader {
-    pub fn new(
+    pub async fn new(
         data_accessor: Arc<dyn DataAccessor>,
         path: String,
         table_schema: DataSchemaRef,
         projection: Vec<usize>,
-        cache: Arc<Option<Box<dyn FuseCache>>>,
-    ) -> Self {
+        cache: Arc<Option<Box<dyn StorageCache>>>,
+    ) -> Result<Self> {
         Self::with_hints(
             data_accessor,
             path,
@@ -71,24 +72,35 @@ impl BlockReader {
             projection,
             None,
             None,
-            None,
             cache,
         )
+        .await
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn with_hints(
+    pub async fn with_hints(
         data_accessor: Arc<dyn DataAccessor>,
         path: String,
         table_schema: DataSchemaRef,
         projection: Vec<usize>,
-        metadata: Option<FileMetaData>,
         file_len: Option<u64>,
         read_buffer_size: Option<u64>,
-        cache: Arc<Option<Box<dyn FuseCache>>>,
-    ) -> Self {
+        cache: Arc<Option<Box<dyn StorageCache>>>,
+    ) -> Result<Self> {
         let block_schema = Arc::new(table_schema.project(projection.clone()));
-        Self {
+
+        let metadata = if let Some(cache) = &*cache {
+            let data = cache.get(path.as_str(), data_accessor.as_ref()).await?;
+            let mut buff = std::io::Cursor::new(data);
+            read_metadata(&mut buff)?
+        } else {
+            let mut reader = data_accessor.get_input_stream(path.as_str(), None)?;
+            read_metadata_async(&mut reader)
+                .instrument(debug_span!("parquet_source_read_meta"))
+                .await
+                .map_err(|e| ErrorCode::ParquetError(e.to_string()))?
+        };
+
+        Ok(Self {
             data_accessor,
             path,
             block_schema,
@@ -100,33 +112,12 @@ impl BlockReader {
             file_len,
             read_buffer_size,
             cache,
-        }
+        })
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
     pub async fn read(&mut self) -> Result<Option<DataBlock>> {
-        let fetched_metadata;
-        let metadata = match &self.metadata {
-            Some(m) => m,
-            None => {
-                fetched_metadata = if let Some(cache) = &*self.cache {
-                    let data = cache
-                        .get(self.path.as_str(), self.data_accessor.as_ref())
-                        .await?;
-                    let mut buff = std::io::Cursor::new(data);
-                    read_metadata(&mut buff)?
-                } else {
-                    let mut reader = self
-                        .data_accessor
-                        .get_input_stream(self.path.as_str(), None)?;
-                    read_metadata_async(&mut reader)
-                        .instrument(debug_span!("parquet_source_read_meta"))
-                        .await
-                        .map_err(|e| ErrorCode::ParquetError(e.to_string()))?
-                };
-                &fetched_metadata
-            }
-        };
+        let metadata = &self.metadata;
 
         self.row_groups = metadata.row_groups.len();
         self.row_group = 0;

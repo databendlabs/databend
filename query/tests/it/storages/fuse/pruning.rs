@@ -98,7 +98,7 @@ async fn test_block_pruner() -> Result<()> {
         .get(TBL_OPT_KEY_SNAPSHOT_LOC)
         .unwrap();
     let snapshot =
-        SnapshotReader::read(da.as_ref(), snapshot_loc.clone(), ctx.get_fuse_cache()).await?;
+        SnapshotReader::read(da.as_ref(), snapshot_loc.clone(), ctx.get_storage_cache()).await?;
 
     // no pruning
     let push_downs = None;

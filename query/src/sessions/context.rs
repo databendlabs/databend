@@ -55,7 +55,7 @@ use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionRef;
 use crate::sessions::Settings;
-use crate::storages::fuse::cache::FuseCache;
+use crate::storages::cache::StorageCache;
 use crate::storages::Table;
 use crate::users::UserApiProvider;
 
@@ -278,8 +278,8 @@ impl QueryContext {
     }
 
     // Get table cache.
-    pub fn get_fuse_cache(&self) -> Arc<Option<Box<dyn FuseCache>>> {
-        self.shared.session.sessions.get_fuse_cache()
+    pub fn get_storage_cache(&self) -> Arc<Option<Box<dyn StorageCache>>> {
+        self.shared.session.sessions.get_storage_cache()
     }
 
     // Get the storage data accessor by config.
