@@ -21,6 +21,9 @@ runs:
         override: true
         components: rustfmt, clippy
 
+    - name: Bench Check
+      run: cargo bench --no-run
+
     # If you need to reset the cache version, increment the number after `v`
     - uses: Swatinem/rust-cache@v1
       with:
