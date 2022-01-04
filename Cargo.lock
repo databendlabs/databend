@@ -1306,7 +1306,7 @@ dependencies = [
  "common-mem-allocator",
  "lexical-core 0.8.2",
  "num",
- "ordered-float 2.8.0",
+ "ordered-float 2.9.0",
  "pretty_assertions",
  "regex",
  "serde",
@@ -1360,7 +1360,7 @@ dependencies = [
  "num-format",
  "num-traits",
  "once_cell",
- "ordered-float 2.8.0",
+ "ordered-float 2.9.0",
  "pretty_assertions",
  "rand 0.8.4",
  "serde",
@@ -3303,13 +3303,13 @@ dependencies = [
 
 [[package]]
 name = "http"
-version = "0.2.5"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1323096b05d41827dadeaee54c9981958c0f94e670bc94ed80037d1a7b8b186b"
+checksum = "31f4c6746584866f0feabcc69893c5b51beef3831656a968ed7ae254cdc4fd03"
 dependencies = [
  "bytes 1.1.0",
  "fnv",
- "itoa 0.4.8",
+ "itoa 1.0.1",
 ]
 
 [[package]]
@@ -4125,7 +4125,7 @@ dependencies = [
  "indexmap",
  "metrics",
  "num_cpus",
- "ordered-float 2.8.0",
+ "ordered-float 2.9.0",
  "parking_lot",
  "quanta",
  "radix_trie",
@@ -4787,9 +4787,9 @@ dependencies = [
 
 [[package]]
 name = "ordered-float"
-version = "2.8.0"
+version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97c9d06878b3a851e8026ef94bf7fef9ba93062cd412601da4d9cf369b1cc62d"
+checksum = "8aa3d135650b150c29f0c3e385896f9d3ceb42d2d87b02f0d7a8cbd0fc7e19a6"
 dependencies = [
  "num-traits",
 ]
