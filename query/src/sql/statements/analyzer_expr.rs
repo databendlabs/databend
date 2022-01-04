@@ -498,12 +498,7 @@ impl ExprRPNBuilder {
 #[async_trait]
 impl UDFFetcher for ExprRPNBuilder {
     async fn get_udf_definition(&self, name: &str) -> Result<UDFDefinition> {
-        let udf = self
-            .context
-            .get_sessions_manager()
-            .get_user_manager()
-            .get_udf(name)
-            .await?;
+        let udf = self.context.get_user_manager().get_udf(name).await?;
         let mut udf_parser = UDFParser::default();
         let definition = udf_parser
             .parse(&udf.name, &udf.parameters, &udf.definition)
