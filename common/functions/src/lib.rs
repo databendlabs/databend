@@ -16,4 +16,10 @@
 
 pub mod aggregates;
 pub mod scalars;
-pub mod udfs;
+
+use aggregates::AggregateFunctionFactory;
+use scalars::FunctionFactory;
+
+pub fn is_builtin_function(name: &str) -> bool {
+    FunctionFactory::instance().check(name) || AggregateFunctionFactory::instance().check(name)
+}

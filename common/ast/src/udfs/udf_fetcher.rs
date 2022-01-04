@@ -12,6 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod udf_factory;
-mod udf_parser;
-mod udf_transformer;
+use async_trait::async_trait;
+use common_exception::Result;
+
+use super::UDFDefinition;
+
+#[async_trait]
+pub trait UDFFetcher: Sized + Send {
+    async fn get_udf_definition(&self, name: &str) -> Result<UDFDefinition>;
+}

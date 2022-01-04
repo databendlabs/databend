@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use sqlparser::ast::BinaryOperator;
@@ -27,50 +28,54 @@ use sqlparser::ast::Value;
 pub struct ExprTraverser;
 
 impl ExprTraverser {
-    pub fn accept<V: ExprVisitor>(expr: &Expr, visitor: &mut V) -> Result<()> {
-        let expr = visitor.pre_visit(expr)?;
-        visitor.visit(&expr)?;
-        visitor.post_visit(&expr)
+    pub async fn accept<V: ExprVisitor>(expr: &Expr, visitor: &mut V) -> Result<()> {
+        let expr = visitor.pre_visit(expr).await?;
+        visitor.visit(&expr).await?;
+        visitor.post_visit(&expr).await
     }
 }
 
-pub trait ExprVisitor: Sized {
-    fn pre_visit(&mut self, expr: &Expr) -> Result<Expr> {
+#[async_trait]
+pub trait ExprVisitor: Sized + Send {
+    async fn pre_visit(&mut self, expr: &Expr) -> Result<Expr> {
         Ok(expr.clone())
     }
 
-    fn visit(&mut self, expr: &Expr) -> Result<()> {
+    async fn visit(&mut self, expr: &Expr) -> Result<()> {
         match expr {
-            Expr::Nested(expr) => ExprTraverser::accept(expr, self),
+            Expr::Nested(expr) => ExprTraverser::accept(expr, self).await,
             Expr::Value(value) => self.visit_value(value),
             Expr::Identifier(ident) => self.visit_identifier(ident),
             Expr::CompoundIdentifier(idents) => self.visit_identifiers(idents),
-            Expr::IsNull(expr) => self.visit_simple_function(expr, "isnull"),
-            Expr::IsNotNull(expr) => self.visit_simple_function(expr, "isnotnull"),
-            Expr::UnaryOp { op, expr } => self.visit_unary_expr(op, expr),
-            Expr::BinaryOp { left, op, right } => self.visit_binary_expr(left, op, right),
+            Expr::IsNull(expr) => self.visit_simple_function(expr, "isnull").await,
+            Expr::IsNotNull(expr) => self.visit_simple_function(expr, "isnotnull").await,
+            Expr::UnaryOp { op, expr } => self.visit_unary_expr(op, expr).await,
+            Expr::BinaryOp { left, op, right } => self.visit_binary_expr(left, op, right).await,
             Expr::Wildcard => self.visit_wildcard(),
             Expr::Exists(subquery) => self.visit_exists(subquery),
             Expr::Subquery(subquery) => self.visit_subquery(subquery),
-            Expr::Function(function) => self.visit_function(function),
-            Expr::Cast { expr, data_type } => self.visit_cast(expr, data_type),
+            Expr::Function(function) => self.visit_function(function).await,
+            Expr::Cast { expr, data_type } => self.visit_cast(expr, data_type).await,
             Expr::TypedString { data_type, value } => self.visit_typed_string(data_type, value),
             Expr::Position {
                 substr_expr,
                 str_expr,
-            } => self.visit_position(substr_expr, str_expr),
+            } => self.visit_position(substr_expr, str_expr).await,
             Expr::Substring {
                 expr,
                 substring_from,
                 substring_for,
-            } => self.visit_substring(expr, substring_from, substring_for),
+            } => {
+                self.visit_substring(expr, substring_from, substring_for)
+                    .await
+            }
             Expr::Between {
                 expr,
                 negated,
                 low,
                 high,
-            } => self.visit_between(expr, negated, low, high),
-            Expr::Tuple(exprs) => self.visit_tuple(exprs),
+            } => self.visit_between(expr, negated, low, high).await,
+            Expr::Tuple(exprs) => self.visit_tuple(exprs).await,
             other => Result::Err(ErrorCode::SyntaxException(format!(
                 "Unsupported expression: {}, type: {:?}",
                 expr, other
@@ -78,19 +83,19 @@ pub trait ExprVisitor: Sized {
         }
     }
 
-    fn post_visit(&mut self, _expr: &Expr) -> Result<()> {
+    async fn post_visit(&mut self, _expr: &Expr) -> Result<()> {
         Ok(())
     }
 
-    fn visit_tuple(&mut self, exprs: &[Expr]) -> Result<()> {
+    async fn visit_tuple(&mut self, exprs: &[Expr]) -> Result<()> {
         match exprs.len() {
             0 => Err(ErrorCode::SyntaxException(
                 "Tuple must have at least one element.",
             )),
-            1 => ExprTraverser::accept(&exprs[0], self),
+            1 => ExprTraverser::accept(&exprs[0], self).await,
             _ => {
                 for expr in exprs {
-                    ExprTraverser::accept(expr, self)?;
+                    ExprTraverser::accept(expr, self).await?;
                 }
 
                 Ok(())
@@ -122,69 +127,74 @@ pub trait ExprVisitor: Sized {
         Ok(())
     }
 
-    fn visit_function(&mut self, function: &Function) -> Result<()> {
+    async fn visit_function(&mut self, function: &Function) -> Result<()> {
         for function_arg in &function.args {
             match function_arg {
-                FunctionArg::Named { arg, .. } => ExprTraverser::accept(arg, self)?,
-                FunctionArg::Unnamed(expr) => ExprTraverser::accept(expr, self)?,
+                FunctionArg::Named { arg, .. } => ExprTraverser::accept(arg, self).await?,
+                FunctionArg::Unnamed(expr) => ExprTraverser::accept(expr, self).await?,
             };
         }
 
         Ok(())
     }
 
-    fn visit_cast(&mut self, expr: &Expr, _data_type: &DataType) -> Result<()> {
-        ExprTraverser::accept(expr, self)
+    async fn visit_cast(&mut self, expr: &Expr, _data_type: &DataType) -> Result<()> {
+        ExprTraverser::accept(expr, self).await
     }
 
     fn visit_typed_string(&mut self, _data_type: &DataType, _value: &str) -> Result<()> {
         Ok(())
     }
 
-    fn visit_simple_function(&mut self, expr: &Expr, _name: impl ToString) -> Result<()> {
-        ExprTraverser::accept(expr, self)
+    async fn visit_simple_function(&mut self, expr: &Expr, _name: &str) -> Result<()> {
+        ExprTraverser::accept(expr, self).await
     }
 
-    fn visit_unary_expr(&mut self, _op: &UnaryOperator, expr: &Expr) -> Result<()> {
-        ExprTraverser::accept(expr, self)
+    async fn visit_unary_expr(&mut self, _op: &UnaryOperator, expr: &Expr) -> Result<()> {
+        ExprTraverser::accept(expr, self).await
     }
 
-    fn visit_binary_expr(&mut self, left: &Expr, _op: &BinaryOperator, right: &Expr) -> Result<()> {
-        ExprTraverser::accept(left, self)?;
-        ExprTraverser::accept(right, self)
+    async fn visit_binary_expr(
+        &mut self,
+        left: &Expr,
+        _op: &BinaryOperator,
+        right: &Expr,
+    ) -> Result<()> {
+        ExprTraverser::accept(left, self).await?;
+        ExprTraverser::accept(right, self).await
     }
 
-    fn visit_between(
+    async fn visit_between(
         &mut self,
         expr: &Expr,
         _negated: &bool,
         low: &Expr,
         high: &Expr,
     ) -> Result<()> {
-        ExprTraverser::accept(expr, self)?;
-        ExprTraverser::accept(low, self)?;
-        ExprTraverser::accept(high, self)
+        ExprTraverser::accept(expr, self).await?;
+        ExprTraverser::accept(low, self).await?;
+        ExprTraverser::accept(high, self).await
     }
 
-    fn visit_position(&mut self, substr_expr: &Expr, str_expr: &Expr) -> Result<()> {
-        ExprTraverser::accept(substr_expr, self)?;
-        ExprTraverser::accept(str_expr, self)
+    async fn visit_position(&mut self, substr_expr: &Expr, str_expr: &Expr) -> Result<()> {
+        ExprTraverser::accept(substr_expr, self).await?;
+        ExprTraverser::accept(str_expr, self).await
     }
 
-    fn visit_substring(
+    async fn visit_substring(
         &mut self,
         expr: &Expr,
         from: &Option<Box<Expr>>,
         length: &Option<Box<Expr>>,
     ) -> Result<()> {
-        ExprTraverser::accept(expr, self)?;
+        ExprTraverser::accept(expr, self).await?;
 
         if let Some(from) = from {
-            ExprTraverser::accept(from, self)?;
+            ExprTraverser::accept(from, self).await?;
         }
 
         if let Some(length) = length {
-            ExprTraverser::accept(length, self)?;
+            ExprTraverser::accept(length, self).await?;
         }
 
         Ok(())
