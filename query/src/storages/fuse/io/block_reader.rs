@@ -18,6 +18,7 @@ use common_arrow::arrow::datatypes::DataType;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::read::decompress;
 use common_arrow::arrow::io::parquet::read::page_stream_to_array;
+use common_arrow::arrow::io::parquet::read::read_metadata;
 use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::schema::FileMetaData;
 use common_arrow::parquet::metadata::ColumnChunkMetaData;
@@ -37,6 +38,8 @@ use futures::io::BufReader;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
+use crate::storages::cache::StorageCache;
+
 pub struct BlockReader {
     data_accessor: Arc<dyn DataAccessor>,
     path: String,
@@ -45,42 +48,17 @@ pub struct BlockReader {
     projection: Vec<usize>,
     file_len: u64,
     read_buffer_size: u64,
-    metadata: Option<FileMetaData>,
+    metadata: FileMetaData,
 }
 
 impl BlockReader {
-    pub fn new(
+    pub async fn new(
         data_accessor: Arc<dyn DataAccessor>,
         path: String,
         table_schema: DataSchemaRef,
         projection: Vec<usize>,
         file_len: u64,
         read_buffer_size: u64,
-        metadata: Option<FileMetaData>,
-    ) -> Self {
-        let block_schema = Arc::new(table_schema.project(projection.clone()));
-        Self {
-        cache: Arc<Option<Box<dyn StorageCache>>>,
-    ) -> Result<Self> {
-        Self::with_hints(
-            data_accessor,
-            path,
-            table_schema,
-            projection,
-            None,
-            None,
-            cache,
-        )
-        .await
-    }
-
-    pub async fn with_hints(
-        data_accessor: Arc<dyn DataAccessor>,
-        path: String,
-        table_schema: DataSchemaRef,
-        projection: Vec<usize>,
-        file_len: Option<u64>,
-        read_buffer_size: Option<u64>,
         cache: Arc<Option<Box<dyn StorageCache>>>,
     ) -> Result<Self> {
         let block_schema = Arc::new(table_schema.project(projection.clone()));
@@ -103,10 +81,10 @@ impl BlockReader {
             block_schema,
             arrow_table_schema: table_schema.to_arrow(),
             projection,
-            metadata,
             file_len,
             read_buffer_size,
-        }
+            metadata,
+        })
     }
 
     async fn read_column(
@@ -136,23 +114,9 @@ impl BlockReader {
 
     #[tracing::instrument(level = "debug", skip_all)]
     pub async fn read(&mut self) -> Result<DataBlock> {
-        // TODO cache parquet meta, and remove the following `let match clause`
-        let fetched_metadata;
-        let metadata = match &self.metadata {
-            Some(m) => m,
-            None => {
-                let mut reader = self
-                    .data_accessor
-                    .get_input_stream(self.path.as_str(), None)?;
-                fetched_metadata = read_metadata_async(&mut reader)
-                    .instrument(debug_span!("block_reader_read_meta"))
-                    .await
-                    .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-                &fetched_metadata
-            }
-        };
+        let metadata = &self.metadata;
 
-        // FUSE uses exact one "row group" only
+        // FUSE uses exact one "row group"
         let num_row_groups = metadata.row_groups.len();
         let row_group = if num_row_groups != 1 {
             return Err(ErrorCode::LogicalError(format!(
@@ -164,27 +128,6 @@ impl BlockReader {
         };
 
         let col_num = self.projection.len();
-            row_group: 0,
-            row_groups: 0,
-            metadata,
-            file_len,
-            read_buffer_size,
-            cache,
-        })
-    }
-
-    #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn read(&mut self) -> Result<Option<DataBlock>> {
-        let metadata = &self.metadata;
-
-        self.row_groups = metadata.row_groups.len();
-        self.row_group = 0;
-
-        if self.row_group >= self.row_groups {
-            return Ok(None);
-        }
-        let col_num = self.projection.len();
-        let row_group = self.row_group;
         let cols = self
             .projection
             .clone()
@@ -195,7 +138,7 @@ impl BlockReader {
         let stream_len = self.file_len;
         let read_buffer_size = self.read_buffer_size;
 
-        let streamsou = futures::stream::iter(cols).map(|(col_meta, idx)| {
+        let stream = futures::stream::iter(cols).map(|(col_meta, idx)| {
             let data_accessor = self.data_accessor.clone();
             let path = self.path.clone();
             async move {

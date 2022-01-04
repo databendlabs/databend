@@ -83,8 +83,9 @@ impl FuseTable {
                         projection,
                         part_len,
                         read_buffer_size,
-                        None, // TODO cache parquet meta
-                    );
+                        cache,
+                    )
+                    .await?;
                     block_reader.read().await.map_err(|e| {
                         ErrorCode::ParquetError(format!(
                             "fail to read block {}, {}",
