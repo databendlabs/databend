@@ -498,11 +498,11 @@ impl ExprRPNBuilder {
 #[async_trait]
 impl UDFFetcher for ExprRPNBuilder {
     async fn get_udf_definition(&self, name: &str) -> Result<UDFDefinition> {
-        let tenent = self.context.get_tenant();
+        let tenant = self.context.get_tenant();
         let udf = self
             .context
             .get_user_manager()
-            .get_udf(tenent, name)
+            .get_udf(tenant, name)
             .await?;
         let mut udf_parser = UDFParser::default();
         let definition = udf_parser
