@@ -19,14 +19,13 @@ use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Extras;
-use common_streams::ParquetSource;
 use common_streams::SendableDataBlockStream;
-use common_streams::Source;
 use common_tracing::tracing_futures::Instrument;
 use futures::StreamExt;
 
 use super::part_info::PartInfo;
 use crate::sessions::QueryContext;
+use crate::storages::fuse::io::BlockReader;
 use crate::storages::fuse::FuseTable;
 
 impl FuseTable {
@@ -76,30 +75,21 @@ impl FuseTable {
                     let part_location = part_info.location();
                     let part_len = part_info.length();
 
-                    let mut source = ParquetSource::with_hints(
+                    let mut source = BlockReader::new(
                         da,
                         part_info.location().to_owned(),
                         table_schema,
                         projection,
+                        part_len,
+                        read_buffer_size,
                         None, // TODO cache parquet meta
-                        Some(part_len),
-                        Some(read_buffer_size),
                     );
-                    source
-                        .read()
-                        .await
-                        .map_err(|e| {
-                            ErrorCode::ParquetError(format!(
-                                "fail to read block {}, {}",
-                                part_location, e
-                            ))
-                        })?
-                        .ok_or_else(|| {
-                            ErrorCode::ParquetError(format!(
-                                "reader returns None for block {}",
-                                part_location,
-                            ))
-                        })
+                    source.read().await.map_err(|e| {
+                        ErrorCode::ParquetError(format!(
+                            "fail to read block {}, {}",
+                            part_location, e
+                        ))
+                    })
                 }
             })
             .buffer_unordered(bite_size as usize)

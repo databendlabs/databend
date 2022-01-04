@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::read::decompress;
 use common_arrow::arrow::io::parquet::read::page_stream_to_array;
@@ -35,34 +34,26 @@ use futures::io::BufReader;
 use futures::StreamExt;
 use futures::TryStreamExt;
 
-/// default buffer size of BufferedReader, 1MB
-const DEFAULT_READ_BUFFER_SIZE: u64 = 1024 * 1024;
-
-use crate::Source;
-
 pub struct BlockReader {
     data_accessor: Arc<dyn DataAccessor>,
     path: String,
-
     block_schema: DataSchemaRef,
     arrow_table_schema: ArrowSchema,
     projection: Vec<usize>,
-    row_group: usize,
-    row_groups: usize,
+    file_len: u64,
+    read_buffer_size: u64,
     metadata: Option<FileMetaData>,
-    file_len: Option<u64>,
-    read_buffer_size: Option<u64>,
 }
 
 impl BlockReader {
-    pub fn with_hints(
+    pub fn new(
         data_accessor: Arc<dyn DataAccessor>,
         path: String,
         table_schema: DataSchemaRef,
         projection: Vec<usize>,
+        file_len: u64,
+        read_buffer_size: u64,
         metadata: Option<FileMetaData>,
-        file_len: Option<u64>,
-        read_buffer_size: Option<u64>,
     ) -> Self {
         let block_schema = Arc::new(table_schema.project(projection.clone()));
         Self {
@@ -71,19 +62,14 @@ impl BlockReader {
             block_schema,
             arrow_table_schema: table_schema.to_arrow(),
             projection,
-            row_group: 0,
-            row_groups: 0,
             metadata,
             file_len,
             read_buffer_size,
         }
     }
-}
 
-#[async_trait]
-impl Source for BlockReader {
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn read(&mut self) -> Result<DataBlock> {
+    pub async fn read(&mut self) -> Result<DataBlock> {
         let fetched_metadata;
         let metadata = match &self.metadata {
             Some(m) => m,
@@ -99,30 +85,30 @@ impl Source for BlockReader {
             }
         };
 
-        self.row_groups = metadata.row_groups.len();
-        self.row_group = 0;
+        let num_row_groups = metadata.row_groups.len();
+        let row_group = if num_row_groups != 1 {
+            return Err(ErrorCode::LogicalError("invalid parquet file"));
+        } else {
+            &metadata.row_groups[0]
+        };
 
-        if self.row_group >= self.row_groups {
-            return Ok(None);
-        }
         let col_num = self.projection.len();
-        let row_group = self.row_group;
         let cols = self
             .projection
             .clone()
             .into_iter()
-            .map(|idx| (metadata.row_groups[row_group].column(idx).clone(), idx));
+            .map(|idx| (row_group.column(idx).clone(), idx));
 
         let fields = self.arrow_table_schema.fields();
         let stream_len = self.file_len;
-        let read_buffer_size = self.read_buffer_size.unwrap_or(DEFAULT_READ_BUFFER_SIZE);
+        let read_buffer_size = self.read_buffer_size;
 
         let stream = futures::stream::iter(cols).map(|(col_meta, idx)| {
             let data_accessor = self.data_accessor.clone();
             let path = self.path.clone();
 
             async move {
-                let reader = data_accessor.get_input_stream(path.as_str(), stream_len)?;
+                let reader = data_accessor.get_input_stream(path.as_str(), Some(stream_len))?;
                 let mut reader = BufReader::with_capacity(read_buffer_size as usize, reader);
                 // TODO cache block column
                 let col_pages =
@@ -148,7 +134,6 @@ impl Source for BlockReader {
         let n = std::cmp::min(buffer_size, col_num);
         let data_cols = stream.buffered(n).try_collect().await?;
 
-        self.row_group += 1;
         let block = DataBlock::create(self.block_schema.clone(), data_cols);
         Ok(block)
     }
