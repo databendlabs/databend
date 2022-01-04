@@ -307,9 +307,9 @@ dependencies = [
 
 [[package]]
 name = "async-recursion"
-version = "0.3.2"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7d78656ba01f1b93024b7c3a0467f1608e4be67d725749fdcd7d2c7678fd7a2"
+checksum = "2cda8f4bcc10624c4e85bc66b3f452cca98cfa5ca002dc83a16aad2367641bea"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1309,7 +1309,7 @@ dependencies = [
  "common-mem-allocator",
  "lexical-core 0.8.2",
  "num",
- "ordered-float 2.8.0",
+ "ordered-float 2.9.0",
  "pretty_assertions",
  "regex",
  "serde",
@@ -1362,7 +1362,7 @@ dependencies = [
  "num-format",
  "num-traits",
  "once_cell",
- "ordered-float 2.8.0",
+ "ordered-float 2.9.0",
  "pretty_assertions",
  "rand 0.8.4",
  "serde",
@@ -4128,7 +4128,7 @@ dependencies = [
  "indexmap",
  "metrics",
  "num_cpus",
- "ordered-float 2.8.0",
+ "ordered-float 2.9.0",
  "parking_lot",
  "quanta",
  "radix_trie",
@@ -4790,9 +4790,9 @@ dependencies = [
 
 [[package]]
 name = "ordered-float"
-version = "2.8.0"
+version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97c9d06878b3a851e8026ef94bf7fef9ba93062cd412601da4d9cf369b1cc62d"
+checksum = "8aa3d135650b150c29f0c3e385896f9d3ceb42d2d87b02f0d7a8cbd0fc7e19a6"
 dependencies = [
  "num-traits",
 ]
@@ -5167,9 +5167,9 @@ dependencies = [
 
 [[package]]
 name = "poem"
-version = "1.2.14"
+version = "1.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb0581eb36ceb10416158ec2063c3b3a3ddd07aa101d47943ed73c6f1e347419"
+checksum = "e8f609173a5155e4dd994804848f55a3de894e7daecd562312e69151ec6c3556"
 dependencies = [
  "async-trait",
  "bytes 1.1.0",
@@ -5199,9 +5199,9 @@ dependencies = [
 
 [[package]]
 name = "poem-derive"
-version = "1.2.14"
+version = "1.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cbef1d14bae249e06f97e824a37ccabe864c38801f3cfde7b0f96598ddc813e"
+checksum = "bb42548e64280207b0d28cb15ee93d4f22b4fd4f5aae857854f25ebf73cf8f3f"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
