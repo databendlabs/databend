@@ -42,7 +42,6 @@ impl SourceFactory {
     pub fn try_get<R>(params: SourceParams<R>) -> Result<Box<dyn Source>>
     where R: AsyncRead + AsyncSeek + Unpin + Send + 'static {
         let format = params.format.to_lowercase();
-        //        let reader = params.acc.get_input_stream(params.path, None)?;
         match format.as_str() {
             "csv" => {
                 let has_header = params

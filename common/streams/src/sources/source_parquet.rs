@@ -92,7 +92,6 @@ where R: AsyncRead + AsyncSeek + Unpin + Send
             }
         };
 
-        eprintln!("row group len {}", metadata.row_groups.len());
         if self.current_row_group >= metadata.row_groups.len() {
             return Ok(None);
         }
