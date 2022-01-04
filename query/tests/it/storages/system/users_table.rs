@@ -29,10 +29,10 @@ use pretty_assertions::assert_eq;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_users_table() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
+    let tenant = ctx.get_tenant();
     ctx.get_settings().set_max_threads(2)?;
-    ctx.get_sessions_manager()
-        .get_user_manager()
-        .add_user(UserInfo {
+    ctx.get_user_manager()
+        .add_user(tenant, UserInfo {
             name: "test".to_string(),
             hostname: "localhost".to_string(),
             password: Vec::from(""),
@@ -41,9 +41,8 @@ async fn test_users_table() -> Result<()> {
             quota: UserQuota::no_limit(),
         })
         .await?;
-    ctx.get_sessions_manager()
-        .get_user_manager()
-        .add_user(UserInfo {
+    ctx.get_user_manager()
+        .add_user(tenant, UserInfo {
             name: "test1".to_string(),
             hostname: "%".to_string(),
             password: Vec::from("123456789"),

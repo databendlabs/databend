@@ -14,9 +14,9 @@
 
 use std::borrow::Borrow;
 
-use common_cache::basic::Cache;
-use common_cache::basic::LruCache;
-use common_cache::basic::Meter;
+use common_cache::Cache;
+use common_cache::LruCache;
+use common_cache::Meter;
 
 #[test]
 fn test_put_and_get() {
@@ -211,7 +211,7 @@ fn test_metered_cache_oversize() {
 #[cfg(not(target_os = "macos"))]
 #[test]
 fn test_heapsize_cache() {
-    use common_cache::basic::HeapSize;
+    use common_cache::HeapSize;
 
     let mut cache = LruCache::<&str, (u8, u8, u8), _, _>::with_meter(8, HeapSize);
     cache.put("foo1", (1, 2, 3));

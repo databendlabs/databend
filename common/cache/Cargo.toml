@@ -16,8 +16,6 @@ amortized = ["ritelinked/ahash-amortized", "ritelinked/inline-more-amortized"]
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
-common-base = { path = "../base" }
-common-dal = { path = "../dal" }
 common-tracing = { path = "../tracing" }
 common-exception = { path = "../exception" }
 

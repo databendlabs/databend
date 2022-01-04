@@ -22,8 +22,6 @@ use common_exception::Result;
 use common_planners::*;
 use common_tracing::tracing;
 
-use super::MonotonicityCheckVisitor;
-use super::RequireColumnsVisitor;
 use crate::optimizers::Optimizer;
 use crate::sessions::QueryContext;
 
@@ -173,7 +171,7 @@ impl TopNPushDownImpl {
                     Some((l, r)) => (l.clone(), r.clone()),
                 };
 
-                match MonotonicityCheckVisitor::extract_sort_column(
+                match ExpressionMonotonicityVisitor::extract_sort_column(
                     schema.clone(),
                     expr,
                     left,

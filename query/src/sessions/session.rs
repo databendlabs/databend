@@ -107,7 +107,7 @@ impl Session {
         let context_shared = self.mutable_state.get_context_shared();
 
         Ok(match context_shared.as_ref() {
-            Some(shared) => QueryContext::from_shared(shared.clone()),
+            Some(shared) => QueryContext::create_from_shared(shared.clone()),
             None => {
                 let config = self.config.clone();
                 let discovery = self.sessions.get_cluster_discovery();
@@ -118,10 +118,10 @@ impl Session {
 
                 let ctx_shared = self.mutable_state.get_context_shared();
                 match ctx_shared.as_ref() {
-                    Some(shared) => QueryContext::from_shared(shared.clone()),
+                    Some(shared) => QueryContext::create_from_shared(shared.clone()),
                     None => {
                         self.mutable_state.set_context_shared(Some(shared.clone()));
-                        QueryContext::from_shared(shared)
+                        QueryContext::create_from_shared(shared)
                     }
                 }
             }

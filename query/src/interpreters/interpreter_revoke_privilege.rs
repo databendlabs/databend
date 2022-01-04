@@ -55,9 +55,16 @@ impl Interpreter for RevokePrivilegeInterpreter {
         // TODO: check user existence
         // TODO: check privilege on granting on the grant object
 
-        let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
+        let tenant = self.ctx.get_tenant();
+        let user_mgr = self.ctx.get_user_manager();
         user_mgr
-            .revoke_user_privileges(&plan.username, &plan.hostname, plan.on, plan.priv_types)
+            .revoke_user_privileges(
+                tenant,
+                &plan.username,
+                &plan.hostname,
+                plan.on,
+                plan.priv_types,
+            )
             .await?;
 
         Ok(Box::pin(DataBlockStream::create(

@@ -29,9 +29,9 @@ use filetime::FileTime;
 use ritelinked::DefaultHashBuilder;
 use walkdir::WalkDir;
 
-use crate::basic::Cache;
-use crate::basic::FileSize;
-use crate::basic::LruCache;
+use crate::Cache;
+use crate::FileSize;
+use crate::LruCache;
 
 /// Return an iterator of `(path, size)` of files under `path` sorted by ascending last-modified
 /// time, such that the oldest modified file is returned first.

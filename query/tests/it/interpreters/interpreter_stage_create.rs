@@ -28,6 +28,7 @@ async fn test_create_stage_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
     let ctx = crate::tests::create_query_context()?;
+    let tenant = ctx.get_tenant();
 
     static TEST_QUERY: &str = "CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(access_key_id='1a2b3c' secret_access_key='4x5y6z') file_format=(FORMAT=CSV compression=GZIP record_delimiter='\n') comments='test'";
     if let PlanNode::CreateUserStage(plan) = PlanParser::parse(TEST_QUERY, ctx.clone()).await? {
@@ -36,9 +37,8 @@ async fn test_create_stage_interpreter() -> Result<()> {
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
         let stage = ctx
-            .get_sessions_manager()
             .get_user_manager()
-            .get_stage("test_stage")
+            .get_stage(tenant, "test_stage")
             .await?;
 
         assert_eq!(stage.file_format, FileFormat {
@@ -57,9 +57,8 @@ async fn test_create_stage_interpreter() -> Result<()> {
         let is_err = executor.execute(None).await.is_err();
         assert!(!is_err);
         let stage = ctx
-            .get_sessions_manager()
             .get_user_manager()
-            .get_stage("test_stage")
+            .get_stage(tenant, "test_stage")
             .await?;
 
         assert_eq!(stage.file_format, FileFormat {
@@ -79,9 +78,8 @@ async fn test_create_stage_interpreter() -> Result<()> {
         let is_err = executor.execute(None).await.is_err();
         assert!(is_err);
         let stage = ctx
-            .get_sessions_manager()
             .get_user_manager()
-            .get_stage("test_stage")
+            .get_stage(tenant, "test_stage")
             .await?;
 
         assert_eq!(stage.file_format, FileFormat {

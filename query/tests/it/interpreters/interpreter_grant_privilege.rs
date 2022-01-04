@@ -30,6 +30,8 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
     let ctx = crate::tests::create_query_context()?;
+    let tenant = ctx.get_tenant();
+
     let name = "test";
     let hostname = "localhost";
     let password = "test";
@@ -40,8 +42,8 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
         PasswordType::PlainText,
     );
     assert_eq!(user_info.grants, UserGrantSet::empty());
-    let user_mgr = ctx.get_sessions_manager().get_user_manager();
-    user_mgr.add_user(user_info).await?;
+    let user_mgr = ctx.get_user_manager();
+    user_mgr.add_user(tenant, user_info).await?;
 
     #[allow(dead_code)]
     struct Test {
@@ -116,7 +118,7 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
                 assert!(r.is_ok(), "got err on query {}: {:?}", tt.query, r);
             }
             if let Some((name, hostname)) = tt.user_identity {
-                let new_user = user_mgr.get_user(name, hostname).await?;
+                let new_user = user_mgr.get_user(tenant, name, hostname).await?;
                 assert_eq!(new_user.grants, tt.expected_grants.unwrap())
             }
         } else {

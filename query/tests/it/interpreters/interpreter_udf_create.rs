@@ -25,6 +25,7 @@ async fn test_create_udf_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
     let ctx = crate::tests::create_query_context()?;
+    let tenant = ctx.get_tenant();
 
     static TEST_QUERY: &str =
         "CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> not(isnull(p)) DESC = 'This is a description'";
@@ -33,11 +34,7 @@ async fn test_create_udf_interpreter() -> Result<()> {
         assert_eq!(executor.name(), "CreatUDFInterpreter");
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
-        let udf = ctx
-            .get_sessions_manager()
-            .get_user_manager()
-            .get_udf("isnotempty")
-            .await?;
+        let udf = ctx.get_user_manager().get_udf(tenant, "isnotempty").await?;
 
         assert_eq!(udf.name, "isnotempty");
         assert_eq!(udf.parameters, vec!["p".to_string()]);
@@ -52,11 +49,7 @@ async fn test_create_udf_interpreter() -> Result<()> {
         assert_eq!(executor.name(), "CreatUDFInterpreter");
         let is_err = executor.execute(None).await.is_err();
         assert!(!is_err);
-        let udf = ctx
-            .get_sessions_manager()
-            .get_user_manager()
-            .get_udf("isnotempty")
-            .await?;
+        let udf = ctx.get_user_manager().get_udf(tenant, "isnotempty").await?;
 
         assert_eq!(udf.name, "isnotempty");
         assert_eq!(udf.parameters, vec!["p".to_string()]);
@@ -73,11 +66,7 @@ async fn test_create_udf_interpreter() -> Result<()> {
         assert_eq!(executor.name(), "CreatUDFInterpreter");
         let is_err = executor.execute(None).await.is_err();
         assert!(is_err);
-        let udf = ctx
-            .get_sessions_manager()
-            .get_user_manager()
-            .get_udf("isnotempty")
-            .await?;
+        let udf = ctx.get_user_manager().get_udf(tenant, "isnotempty").await?;
 
         assert_eq!(udf.name, "isnotempty");
         assert_eq!(udf.parameters, vec!["p".to_string()]);
