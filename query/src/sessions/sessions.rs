@@ -22,7 +22,6 @@ use std::time::Duration;
 
 use common_base::tokio;
 use common_base::SignalStream;
-use common_cache::storage::StorageCache;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -38,6 +37,7 @@ use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
+use crate::storages::fuse::cache::FuseCache;
 use crate::storages::fuse::cache::LocalCache;
 use crate::storages::fuse::cache::LocalCacheConfig;
 use crate::users::UserApiProvider;
@@ -51,7 +51,7 @@ pub struct SessionManager {
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
-    pub(in crate::sessions) table_cache: Arc<Option<Box<dyn StorageCache>>>,
+    pub(in crate::sessions) table_cache: Arc<Option<Box<dyn FuseCache>>>,
 }
 
 impl SessionManager {
@@ -117,7 +117,7 @@ impl SessionManager {
         self.catalog.clone()
     }
 
-    pub fn get_table_cache(self: &Arc<Self>) -> Arc<Option<Box<dyn StorageCache>>> {
+    pub fn get_table_cache(self: &Arc<Self>) -> Arc<Option<Box<dyn FuseCache>>> {
         self.table_cache.clone()
     }
 

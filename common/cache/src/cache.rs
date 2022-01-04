@@ -18,7 +18,7 @@ use std::borrow::Borrow;
 use std::hash::BuildHasher;
 use std::hash::Hash;
 
-use crate::basic::Meter;
+use crate::Meter;
 
 /// A trait for a cache.
 pub trait Cache<K, V, S, M>

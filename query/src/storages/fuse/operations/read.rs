@@ -19,14 +19,13 @@ use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Extras;
-use common_streams::ParquetSource;
 use common_streams::SendableDataBlockStream;
-use common_streams::Source;
 use common_tracing::tracing_futures::Instrument;
 use futures::StreamExt;
 
 use super::part_info::PartInfo;
 use crate::sessions::QueryContext;
+use crate::storages::fuse::io::BlockReader;
 use crate::storages::fuse::FuseTable;
 
 impl FuseTable {
@@ -71,12 +70,13 @@ impl FuseTable {
                 let da = da.clone();
                 let table_schema = table_schema.clone();
                 let projection = projection.clone();
+                let cache = ctx.get_table_cache();
                 async move {
                     let part_info = PartInfo::decode(&part.name)?;
                     let part_location = part_info.location();
                     let part_len = part_info.length();
 
-                    let mut source = ParquetSource::with_hints(
+                    let mut reader = BlockReader::with_hints(
                         da,
                         part_info.location().to_owned(),
                         table_schema,
@@ -84,8 +84,9 @@ impl FuseTable {
                         None, // TODO cache parquet meta
                         Some(part_len),
                         Some(read_buffer_size),
+                        cache,
                     );
-                    source
+                    reader
                         .read()
                         .await
                         .map_err(|e| {

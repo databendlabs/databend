@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use common_base::Progress;
 use common_base::Runtime;
-use common_cache::storage::StorageCache;
 use common_dal::DalContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -37,6 +36,7 @@ use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::Session;
 use crate::sessions::Settings;
+use crate::storages::fuse::cache::FuseCache;
 use crate::storages::Table;
 
 type DatabaseAndTable = (String, String);
@@ -203,7 +203,7 @@ impl QueryContextShared {
         sources_abort_handle.push(handle);
     }
 
-    pub fn get_table_cache(&self) -> Arc<Option<Box<dyn StorageCache>>> {
+    pub fn get_table_cache(&self) -> Arc<Option<Box<dyn FuseCache>>> {
         self.session.sessions.get_table_cache()
     }
 }

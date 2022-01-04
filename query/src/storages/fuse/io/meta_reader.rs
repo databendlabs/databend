@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_cache::storage::StorageCache;
 use common_dal::DataAccessor;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::de::DeserializeOwned;
 
+use crate::storages::fuse::cache::FuseCache;
 use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;
@@ -27,7 +27,7 @@ use crate::storages::fuse::meta::TableSnapshot;
 async fn read_obj<T: DeserializeOwned>(
     da: &dyn DataAccessor,
     loc: impl AsRef<str>,
-    cache: Arc<Option<Box<dyn StorageCache>>>,
+    cache: Arc<Option<Box<dyn FuseCache>>>,
 ) -> Result<T> {
     let loc = loc.as_ref();
     let bytes = if let Some(cache) = &*cache {
@@ -45,7 +45,7 @@ impl SnapshotReader {
     pub async fn read(
         da: &dyn DataAccessor,
         loc: impl AsRef<str>,
-        cache: Arc<Option<Box<dyn StorageCache>>>,
+        cache: Arc<Option<Box<dyn FuseCache>>>,
     ) -> Result<TableSnapshot> {
         let snapshot: TableSnapshot = read_obj(da, loc, cache).await?;
         Ok(snapshot)
@@ -54,7 +54,7 @@ impl SnapshotReader {
     pub async fn read_snapshot_history(
         data_accessor: &dyn DataAccessor,
         latest_snapshot_location: Option<&String>,
-        cache: Arc<Option<Box<dyn StorageCache>>>,
+        cache: Arc<Option<Box<dyn FuseCache>>>,
     ) -> Result<Vec<TableSnapshot>> {
         let mut snapshots = vec![];
         let mut current_snapshot_location = latest_snapshot_location.cloned();
@@ -83,7 +83,7 @@ impl SegmentReader {
     pub async fn read(
         da: &dyn DataAccessor,
         loc: impl AsRef<str>,
-        cache: Arc<Option<Box<dyn StorageCache>>>,
+        cache: Arc<Option<Box<dyn FuseCache>>>,
     ) -> Result<SegmentInfo> {
         let segment_info: SegmentInfo = read_obj(da, loc, cache).await?;
         Ok(segment_info)

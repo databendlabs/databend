@@ -25,7 +25,6 @@ use common_base::Progress;
 use common_base::ProgressValues;
 use common_base::Runtime;
 use common_base::TrySpawn;
-use common_cache::storage::StorageCache;
 use common_dal::AzureBlobAccessor;
 use common_dal::DalMetrics;
 use common_dal::DataAccessor;
@@ -56,6 +55,7 @@ use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
 use crate::sessions::Settings;
+use crate::storages::fuse::cache::FuseCache;
 use crate::storages::Table;
 
 pub struct QueryContext {
@@ -296,7 +296,7 @@ impl QueryContext {
     }
 
     // Get table cache
-    pub fn get_table_cache(&self) -> Arc<Option<Box<dyn StorageCache>>> {
+    pub fn get_table_cache(&self) -> Arc<Option<Box<dyn FuseCache>>> {
         self.shared.get_table_cache()
     }
 }

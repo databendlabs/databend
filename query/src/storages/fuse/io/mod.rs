@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod block_reader;
 mod block_stream_writer;
 mod block_writer;
 mod locations;
 mod meta_reader;
 
+pub use block_reader::BlockReader;
 pub use block_stream_writer::BlockStreamWriter;
 pub use block_stream_writer::SegmentInfoStream;
 pub use locations::gen_segment_info_location;
