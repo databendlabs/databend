@@ -125,8 +125,7 @@ impl Table for ProcessesTable {
         ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let sessions_manager = ctx.get_sessions_manager();
-        let processes_info = sessions_manager.processes_info();
+        let processes_info = ctx.get_processes_info();
 
         let mut processes_id = Vec::with_capacity(processes_info.len());
         let mut processes_type = Vec::with_capacity(processes_info.len());

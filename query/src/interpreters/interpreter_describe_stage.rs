@@ -51,7 +51,6 @@ impl Interpreter for DescribeStageInterpreter {
         let default_stage = UserStageInfo::default();
         let stage = self
             .ctx
-            .get_sessions_manager()
             .get_user_manager()
             .get_stage(self.plan.name.as_str())
             .await?;

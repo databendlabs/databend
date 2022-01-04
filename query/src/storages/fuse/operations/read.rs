@@ -59,7 +59,7 @@ impl FuseTable {
                 },
             )
             .flatten();
-        let da = ctx.get_data_accessor()?;
+        let da = ctx.get_storage_accessor()?;
         let arrow_schema = self.table_info.schema().to_arrow();
         let table_schema = Arc::new(DataSchema::from(arrow_schema));
 

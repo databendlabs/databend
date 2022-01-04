@@ -158,7 +158,7 @@ impl InterpreterQueryLog {
 
     pub async fn log_start(&self) -> Result<()> {
         // User.
-        let handler_type = self.ctx.get_session().get_type();
+        let handler_type = self.ctx.get_current_session().get_type();
         let tenant_id = self.ctx.get_config().query.tenant_id;
         let cluster_id = self.ctx.get_config().query.cluster_id;
         let user = self.ctx.get_current_user()?;
@@ -191,7 +191,7 @@ impl InterpreterQueryLog {
         let result_rows = 0u64;
         let result_bytes = 0u64;
         let cpu_usage = self.ctx.get_settings().get_max_threads()? as u32;
-        let memory_usage = self.ctx.get_session().get_memory_usage() as u64;
+        let memory_usage = self.ctx.get_current_session().get_memory_usage() as u64;
 
         // Client.
         let client_address = format!("{:?}", self.ctx.get_client_address());
@@ -240,7 +240,7 @@ impl InterpreterQueryLog {
 
     pub async fn log_finish(&self) -> Result<()> {
         // User.
-        let handler_type = self.ctx.get_session().get_type();
+        let handler_type = self.ctx.get_current_session().get_type();
         let tenant_id = self.ctx.get_config().query.tenant_id;
         let cluster_id = self.ctx.get_config().query.cluster_id;
         let user = self.ctx.get_current_user()?;
@@ -269,7 +269,7 @@ impl InterpreterQueryLog {
         let scan_seeks = dal_metrics.read_seeks as u64;
         let scan_seek_cost_ms = dal_metrics.read_seek_cost_ms as u64;
         let cpu_usage = self.ctx.get_settings().get_max_threads()? as u32;
-        let memory_usage = self.ctx.get_session().get_memory_usage() as u64;
+        let memory_usage = self.ctx.get_current_session().get_memory_usage() as u64;
 
         // Result.
         let result_rows = self.ctx.get_result_progress_value().read_rows as u64;

@@ -37,7 +37,7 @@ impl FuseTable {
             new_snapshot.summary = Default::default();
             new_snapshot.snapshot_id = Uuid::new_v4();
             let new_snapshot_loc = io::snapshot_location(&new_snapshot.snapshot_id);
-            let da = ctx.get_data_accessor()?;
+            let da = ctx.get_storage_accessor()?;
             let bytes = serde_json::to_vec(&new_snapshot)?;
             da.put(&new_snapshot_loc, bytes).await?;
 

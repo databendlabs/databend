@@ -55,7 +55,7 @@ impl Interpreter for RevokePrivilegeInterpreter {
         // TODO: check user existence
         // TODO: check privilege on granting on the grant object
 
-        let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
+        let user_mgr = self.ctx.get_user_manager();
         user_mgr
             .revoke_user_privileges(&plan.username, &plan.hostname, plan.on, plan.priv_types)
             .await?;
