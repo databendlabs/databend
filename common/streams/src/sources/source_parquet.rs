@@ -38,22 +38,21 @@ use crate::Source;
 
 pub struct ParquetSource<R> {
     reader: R,
-
     block_schema: DataSchemaRef,
     arrow_table_schema: ArrowSchema,
     projection: Vec<usize>,
-    row_group: usize,
     metadata: Option<FileMetaData>,
+    current_row_group: usize,
 }
 
 impl<R> ParquetSource<R>
 where R: AsyncRead + AsyncSeek + Unpin + Send
 {
     pub fn new(reader: R, table_schema: DataSchemaRef, projection: Vec<usize>) -> Self {
-        Self::with_hints(reader, table_schema, projection, None)
+        Self::with_meta(reader, table_schema, projection, None)
     }
 
-    pub fn with_hints(
+    pub fn with_meta(
         reader: R,
         table_schema: DataSchemaRef,
         projection: Vec<usize>,
@@ -65,8 +64,8 @@ where R: AsyncRead + AsyncSeek + Unpin + Send
             block_schema,
             arrow_table_schema: table_schema.to_arrow(),
             projection,
-            row_group: 0,
             metadata,
+            current_row_group: 0,
         }
     }
 }
@@ -85,23 +84,25 @@ where R: AsyncRead + AsyncSeek + Unpin + Send
                     .instrument(debug_span!("parquet_source_read_meta"))
                     .await
                     .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-                &fetched_metadata
+                self.metadata = Some(fetched_metadata);
+                match self.metadata.as_ref() {
+                    Some(m) => m,
+                    _ => unreachable!(),
+                }
             }
         };
 
-        let row_groups = metadata.row_groups.len();
-        self.row_group = 0;
-        if self.row_group >= row_groups {
+        if self.current_row_group >= metadata.row_groups.len() {
             return Ok(None);
         }
-        let row_group = self.row_group;
+
+        let fields = self.arrow_table_schema.fields();
+        let row_grp = &metadata.row_groups[self.current_row_group];
         let cols = self
             .projection
             .clone()
             .into_iter()
-            .map(|idx| (metadata.row_groups[row_group].column(idx).clone(), idx));
-
-        let fields = self.arrow_table_schema.fields();
+            .map(|idx| (row_grp.column(idx).clone(), idx));
         let mut data_cols = Vec::with_capacity(cols.len());
         for (col_meta, idx) in cols {
             let col_pages =
@@ -109,18 +110,14 @@ where R: AsyncRead + AsyncSeek + Unpin + Send
                     .instrument(debug_span!("parquet_source_get_column_page"))
                     .await
                     .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-            let pages = col_pages.map(|compressed_page| {
-                debug_span!("parquet_source_decompress_page")
-                    .in_scope(|| decompress(compressed_page?, &mut vec![]))
-            });
+            let pages = col_pages.map(|compressed_page| decompress(compressed_page?, &mut vec![]));
             let array = page_stream_to_array(pages, &col_meta, fields[idx].data_type.clone())
                 .instrument(debug_span!("parquet_source_page_stream_to_array"))
                 .await?;
             let array: Arc<dyn common_arrow::arrow::array::Array> = array.into();
             data_cols.push(DataColumn::Array(array.into_series()))
         }
-
-        self.row_group += 1;
+        self.current_row_group += 1;
         let block = DataBlock::create(self.block_schema.clone(), data_cols);
         Ok(Some(block))
     }
