@@ -25,6 +25,7 @@ use common_streams::SendableDataBlockStream;
 use common_streams::SourceFactory;
 use common_streams::SourceParams;
 use common_streams::SourceStream;
+use futures::io::BufReader;
 use futures::TryStreamExt;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take_until;
@@ -71,8 +72,11 @@ impl Interpreter for CopyInterpreter {
 
         let acc = get_dal_by_stage(self.ctx.clone(), stage)?;
         let max_block_size = self.ctx.get_settings().get_max_block_size()? as usize;
+        let input_stream = acc.get_input_stream(path, None)?;
+        let read_buffer_size = self.ctx.get_settings().get_storage_read_buffer_size()?;
+        let reader = BufReader::with_capacity(read_buffer_size as usize, input_stream);
         let source_params = SourceParams {
-            acc,
+            reader,
             path,
             format: self.plan.format.as_str(),
             schema: self.plan.schema.clone(),

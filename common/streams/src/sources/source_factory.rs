@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
-use common_dal::DataAccessor;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use futures::AsyncRead;
+use futures::AsyncSeek;
 
 use crate::CsvSource;
 use crate::ParquetSource;
@@ -26,8 +26,10 @@ use crate::Source;
 
 pub struct SourceFactory {}
 
-pub struct SourceParams<'a> {
-    pub acc: Arc<dyn DataAccessor>,
+pub struct SourceParams<'a, R>
+where R: AsyncRead + Unpin + Send
+{
+    pub reader: R,
     pub path: &'a str,
     pub format: &'a str,
     pub schema: DataSchemaRef,
@@ -37,8 +39,10 @@ pub struct SourceParams<'a> {
 }
 
 impl SourceFactory {
-    pub fn try_get(params: SourceParams) -> Result<Box<dyn Source>> {
+    pub fn try_get<R>(params: SourceParams<R>) -> Result<Box<dyn Source>>
+    where R: AsyncRead + AsyncSeek + Unpin + Send + 'static {
         let format = params.format.to_lowercase();
+        //        let reader = params.acc.get_input_stream(params.path, None)?;
         match format.as_str() {
             "csv" => {
                 let has_header = params
@@ -65,9 +69,8 @@ impl SourceFactory {
                     })
                     .unwrap_or(b'\n');
 
-                let reader = params.acc.get_input_stream(params.path, None)?;
                 Ok(Box::new(CsvSource::try_create(
-                    reader,
+                    params.reader,
                     params.schema,
                     has_header.eq_ignore_ascii_case("1"),
                     field_delimitor,
@@ -76,8 +79,7 @@ impl SourceFactory {
                 )?))
             }
             "parquet" => Ok(Box::new(ParquetSource::new(
-                params.acc,
-                params.path.to_owned(),
+                params.reader,
                 params.schema,
                 params.projection,
             ))),
