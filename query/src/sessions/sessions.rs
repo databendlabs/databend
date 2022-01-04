@@ -22,7 +22,6 @@ use std::time::Duration;
 
 use common_base::tokio;
 use common_base::SignalStream;
-use common_cache::storage::StorageCache;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -38,6 +37,7 @@ use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
+use crate::storages::cache::StorageCache;
 use crate::storages::fuse::cache::LocalCache;
 use crate::storages::fuse::cache::LocalCacheConfig;
 use crate::users::UserApiProvider;
@@ -58,7 +58,7 @@ impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
         let storage_type = StorageType::from_str(conf.storage.storage_type.as_str())
             .map_err(|err| ErrorCode::InvalidConfig(format!("Invalid config: {}", err)))?;
-        let table_cache = if conf.query.table_cache_enabled && storage_type != StorageType::Disk {
+        let storage_cache = if conf.query.table_cache_enabled && storage_type != StorageType::Disk {
             let cache_conf = LocalCacheConfig {
                 memory_cache_size_mb: conf.query.table_memory_cache_mb_size,
                 disk_cache_size_mb: conf.query.table_disk_cache_mb_size,
@@ -66,8 +66,8 @@ impl SessionManager {
                 tenant_id: conf.query.tenant_id.clone(),
                 cluster_id: conf.query.cluster_id.clone(),
             };
-            let table_cache = LocalCache::create(cache_conf)?;
-            Arc::new(Some(table_cache))
+            let storage_cache = LocalCache::create(cache_conf)?;
+            Arc::new(Some(storage_cache))
         } else {
             Arc::new(None)
         };
@@ -92,7 +92,7 @@ impl SessionManager {
             http_query_manager,
             max_sessions: max_active_sessions,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
-            storage_cache: table_cache,
+            storage_cache,
         }))
     }
 

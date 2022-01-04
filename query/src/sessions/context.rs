@@ -24,7 +24,6 @@ use common_base::tokio::task::JoinHandle;
 use common_base::Progress;
 use common_base::ProgressValues;
 use common_base::TrySpawn;
-use common_cache::storage::StorageCache;
 use common_dal::AzureBlobAccessor;
 use common_dal::DalMetrics;
 use common_dal::DataAccessor;
@@ -56,6 +55,7 @@ use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionRef;
 use crate::sessions::Settings;
+use crate::storages::cache::StorageCache;
 use crate::storages::Table;
 use crate::users::UserApiProvider;
 

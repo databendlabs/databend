@@ -1183,8 +1183,6 @@ name = "common-cache"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "common-base",
- "common-dal",
  "common-exception",
  "common-tracing",
  "filetime",
