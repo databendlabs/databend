@@ -37,11 +37,7 @@ async fn test_drop_udf_interpreter() -> Result<()> {
         assert_eq!(executor.name(), "CreatUDFInterpreter");
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
-        let udf = ctx
-            .get_sessions_manager()
-            .get_user_manager()
-            .get_udf("isnotempty")
-            .await?;
+        let udf = ctx.get_user_manager().get_udf("isnotempty").await?;
 
         assert_eq!(udf.name, "isnotempty");
         assert_eq!(udf.parameters, vec!["p".to_string()]);
@@ -83,11 +79,7 @@ async fn test_drop_udf_interpreter() -> Result<()> {
         assert_eq!(executor.name(), "CreatUDFInterpreter");
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
-        let udf = ctx
-            .get_sessions_manager()
-            .get_user_manager()
-            .get_udf("isnotempty")
-            .await?;
+        let udf = ctx.get_user_manager().get_udf("isnotempty").await?;
 
         assert_eq!(udf.name, "isnotempty");
         assert_eq!(udf.parameters, vec!["p".to_string()]);

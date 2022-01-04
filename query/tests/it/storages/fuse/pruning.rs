@@ -80,7 +80,7 @@ async fn test_block_pruner() -> Result<()> {
         })
         .collect::<Vec<_>>();
 
-    let da = ctx.get_data_accessor()?;
+    let da = ctx.get_storage_accessor()?;
     let stream = Box::pin(futures::stream::iter(blocks));
     let r = table.append_data(ctx.clone(), stream).await?;
     table
@@ -98,7 +98,7 @@ async fn test_block_pruner() -> Result<()> {
         .get(TBL_OPT_KEY_SNAPSHOT_LOC)
         .unwrap();
     let snapshot =
-        SnapshotReader::read(da.as_ref(), snapshot_loc.clone(), ctx.get_table_cache()).await?;
+        SnapshotReader::read(da.as_ref(), snapshot_loc.clone(), ctx.get_fuse_cache()).await?;
 
     // no pruning
     let push_downs = None;

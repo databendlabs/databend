@@ -65,7 +65,7 @@ impl BlockPruner {
         let snapshot = SnapshotReader::read(
             self.data_accessor.as_ref(),
             self.table_snapshot_location.as_str(),
-            ctx.get_table_cache(),
+            ctx.get_fuse_cache(),
         )
         .await?;
         let segment_num = snapshot.segments.len();
@@ -77,12 +77,9 @@ impl BlockPruner {
 
         let res = futures::stream::iter(segment_locs)
             .map(|seg_loc| async {
-                let segment_info = SegmentReader::read(
-                    self.data_accessor.as_ref(),
-                    seg_loc,
-                    ctx.get_table_cache(),
-                )
-                .await?;
+                let segment_info =
+                    SegmentReader::read(self.data_accessor.as_ref(), seg_loc, ctx.get_fuse_cache())
+                        .await?;
                 Self::filter_segment(segment_info, &block_pred)
             })
             // configuration of the max size of buffered futures

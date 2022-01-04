@@ -35,11 +35,7 @@ async fn test_create_stage_interpreter() -> Result<()> {
         assert_eq!(executor.name(), "CreatStageInterpreter");
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
-        let stage = ctx
-            .get_sessions_manager()
-            .get_user_manager()
-            .get_stage("test_stage")
-            .await?;
+        let stage = ctx.get_user_manager().get_stage("test_stage").await?;
 
         assert_eq!(stage.file_format, FileFormat {
             format: Format::Csv,
@@ -56,11 +52,7 @@ async fn test_create_stage_interpreter() -> Result<()> {
         assert_eq!(executor.name(), "CreatStageInterpreter");
         let is_err = executor.execute(None).await.is_err();
         assert!(!is_err);
-        let stage = ctx
-            .get_sessions_manager()
-            .get_user_manager()
-            .get_stage("test_stage")
-            .await?;
+        let stage = ctx.get_user_manager().get_stage("test_stage").await?;
 
         assert_eq!(stage.file_format, FileFormat {
             format: Format::Csv,
@@ -78,11 +70,7 @@ async fn test_create_stage_interpreter() -> Result<()> {
         assert_eq!(executor.name(), "CreatStageInterpreter");
         let is_err = executor.execute(None).await.is_err();
         assert!(is_err);
-        let stage = ctx
-            .get_sessions_manager()
-            .get_user_manager()
-            .get_stage("test_stage")
-            .await?;
+        let stage = ctx.get_user_manager().get_stage("test_stage").await?;
 
         assert_eq!(stage.file_format, FileFormat {
             format: Format::Csv,

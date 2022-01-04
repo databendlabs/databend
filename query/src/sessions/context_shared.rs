@@ -36,7 +36,6 @@ use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryHandle;
 use crate::sessions::Session;
 use crate::sessions::Settings;
-use crate::storages::fuse::cache::FuseCache;
 use crate::storages::Table;
 
 type DatabaseAndTable = (String, String);
@@ -201,10 +200,6 @@ impl QueryContextShared {
     pub fn add_source_abort_handle(&self, handle: AbortHandle) {
         let mut sources_abort_handle = self.sources_abort_handle.write();
         sources_abort_handle.push(handle);
-    }
-
-    pub fn get_table_cache(&self) -> Arc<Option<Box<dyn FuseCache>>> {
-        self.session.sessions.get_table_cache()
     }
 }
 

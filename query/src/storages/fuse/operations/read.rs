@@ -58,7 +58,7 @@ impl FuseTable {
                 },
             )
             .flatten();
-        let da = ctx.get_data_accessor()?;
+        let da = ctx.get_storage_accessor()?;
         let arrow_schema = self.table_info.schema().to_arrow();
         let table_schema = Arc::new(DataSchema::from(arrow_schema));
 
@@ -70,7 +70,7 @@ impl FuseTable {
                 let da = da.clone();
                 let table_schema = table_schema.clone();
                 let projection = projection.clone();
-                let cache = ctx.get_table_cache();
+                let cache = ctx.get_fuse_cache();
                 async move {
                     let part_info = PartInfo::decode(&part.name)?;
                     let part_location = part_info.location();

@@ -51,14 +51,14 @@ pub struct SessionManager {
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
-    pub(in crate::sessions) table_cache: Arc<Option<Box<dyn FuseCache>>>,
+    pub(in crate::sessions) fuse_cache: Arc<Option<Box<dyn FuseCache>>>,
 }
 
 impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
         let storage_type = StorageType::from_str(conf.storage.storage_type.as_str())
             .map_err(|err| ErrorCode::InvalidConfig(format!("Invalid config: {}", err)))?;
-        let table_cache = if conf.query.table_cache_enabled && storage_type != StorageType::Disk {
+        let fuse_cache = if conf.query.table_cache_enabled && storage_type != StorageType::Disk {
             let cache_conf = LocalCacheConfig {
                 memory_cache_size_mb: conf.query.table_memory_cache_mb_size,
                 disk_cache_size_mb: conf.query.table_disk_cache_mb_size,
@@ -66,8 +66,8 @@ impl SessionManager {
                 tenant_id: conf.query.tenant_id.clone(),
                 cluster_id: conf.query.cluster_id.clone(),
             };
-            let table_cache = LocalCache::create(cache_conf)?;
-            Arc::new(Some(table_cache))
+            let fuse_cache = LocalCache::create(cache_conf)?;
+            Arc::new(Some(fuse_cache))
         } else {
             Arc::new(None)
         };
@@ -92,7 +92,7 @@ impl SessionManager {
             http_query_manager,
             max_sessions: max_active_sessions,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
-            table_cache,
+            fuse_cache,
         }))
     }
 
@@ -117,8 +117,8 @@ impl SessionManager {
         self.catalog.clone()
     }
 
-    pub fn get_table_cache(self: &Arc<Self>) -> Arc<Option<Box<dyn FuseCache>>> {
-        self.table_cache.clone()
+    pub fn get_fuse_cache(self: &Arc<Self>) -> Arc<Option<Box<dyn FuseCache>>> {
+        self.fuse_cache.clone()
     }
 
     pub fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {
@@ -175,7 +175,7 @@ impl SessionManager {
     }
 
     #[allow(clippy::ptr_arg)]
-    pub fn get_session(self: &Arc<Self>, id: &String) -> Option<SessionRef> {
+    pub fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
         let sessions = self.active_sessions.read();
         sessions
             .get(id)

@@ -48,7 +48,7 @@ impl Interpreter for CreatUDFInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
-        let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
+        let user_mgr = self.ctx.get_user_manager();
         let udf = plan.udf;
         let create_udf = user_mgr.add_udf(udf).await;
         if plan.if_not_exists {

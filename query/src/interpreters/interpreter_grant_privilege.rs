@@ -56,7 +56,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
         // TODO: check user existence
         // TODO: check privilege on granting on the grant object
 
-        let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
+        let user_mgr = self.ctx.get_user_manager();
         user_mgr
             .grant_user_privileges(&plan.name, &plan.hostname, plan.on, plan.priv_types)
             .await?;

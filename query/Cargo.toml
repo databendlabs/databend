@@ -18,6 +18,7 @@ path = "src/bin/databend-query.rs"
 [features]
 default = ["simd"]
 simd = ["common-arrow/simd"]
+tokio-console = ["common-tracing/console", "common-base/tracing"]
 
 [dependencies]
 # Workspace dependencies
