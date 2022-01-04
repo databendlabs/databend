@@ -48,10 +48,12 @@ impl Interpreter for AlterUserInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
+        let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
         //TODO:alter current user
         user_mgr
             .update_user(
+                tenant,
                 plan.name.as_str(),
                 plan.hostname.as_str(),
                 Some(plan.new_password_type),

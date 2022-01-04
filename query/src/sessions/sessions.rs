@@ -79,7 +79,7 @@ impl SessionManager {
 
         // User manager and init the default users.
         let user = UserApiProvider::create_global(conf.clone()).await?;
-        user.load_udfs(conf.clone()).await?;
+        user.load_udfs(&conf.query.tenant_id).await?;
 
         let http_query_manager = HttpQueryManager::create_global(conf.clone()).await?;
 
