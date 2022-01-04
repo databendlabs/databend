@@ -224,7 +224,7 @@ impl ExpressionAnalyzer {
         let statement = DfQueryStatement::try_from(subquery.clone())?;
 
         let query_context = self.context.clone();
-        let subquery_context = QueryContext::new(query_context.clone());
+        let subquery_context = QueryContext::create_from(query_context.clone());
 
         let analyze_subquery = statement.analyze(subquery_context);
         if let AnalyzedResult::SelectQuery(analyze_data) = analyze_subquery.await? {
@@ -249,7 +249,7 @@ impl ExpressionAnalyzer {
         let statement = DfQueryStatement::try_from(subquery.clone())?;
 
         let query_context = self.context.clone();
-        let subquery_context = QueryContext::new(query_context.clone());
+        let subquery_context = QueryContext::create_from(query_context.clone());
 
         let analyze_subquery = statement.analyze(subquery_context);
         if let AnalyzedResult::SelectQuery(analyze_data) = analyze_subquery.await? {

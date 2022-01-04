@@ -15,12 +15,14 @@ LOG_LEVEL=DEBUG ./databend-query
 ```
 
 If we want to track the execution of a query:
+
 ```
 set max_threads=1;
 select sum(number+1)+1 from numbers(10000) where number>0 group by number%3;
 ```
 
 ## Tracing log
+
 ```
 [2021-06-10T08:40:36Z DEBUG clickhouse_srv::cmd] Got packet Query(QueryRequest { query_id: "bac2b254-6245-4cae-910d-3e5e979c8b68", client_info: QueryClientInfo { query_kind: 1, initial_user: "", initial_query_id: "", initial_address: "0.0.0.0:0", interface: 1, os_user: "bohu", client_hostname: "thinkpad", client_name: "ClickHouse ", client_version_major: 21, client_version_minor: 4, client_version_patch: 6, client_revision: 54447, http_method: 0, http_user_agent: "", quota_key: "" }, stage: 2, compression: 1, query: "select sum(number+1)+1 from numbers(10000) where number>0 group by number%3;" })
 Jun 10 16:40:36.131 DEBUG ThreadId(16) databend_query::sql::plan_parser: query="select sum(number+1)+1 from numbers(10000) where number>0 group by number%3;"
@@ -150,18 +152,23 @@ Jun 10 16:40:36.167 DEBUG ThreadId(309) databend_query::pipelines::transforms::t
 Jun 10 16:40:36.168 DEBUG ThreadId(309) databend_query::pipelines::transforms::transform_expression_executor: (projection executor) execute, actions: [Input(ActionInput { name: "(sum((number + 1)) + 1)", return_type: UInt64 })]
 Jun 10 16:40:36.168 DEBUG ThreadId(309) databend_query::pipelines::transforms::transform_projection: Projection cost: 241.864µs
 ```
+
 ## Distributed tracing with Jaeger
 
 ### Start Databend
+
 ```
 LOG_LEVEL=DEBUG ./databend-query
 ```
 
-###  Start jaeger
+### Start jaeger
+
 ```
 docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest
 ```
+
 ### Create table and init datas
+
 ```
 CREATE TABLE t1(a INT);
 INSERT INTO t1 VALUES(1);
@@ -173,3 +180,49 @@ INSERT INTO t1 SELECT * FROM t1;
 Open http://127.0.0.1:16686/
 
 ![](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/jaeger-tracing-show.png)
+
+## Explore and diagnose with tokio-console
+
+[tokio-console](https://github.com/tokio-rs/console) is a diagnostics and debugging tool for asynchronous Rust programs. Make sure you have the tool installed before you use it.
+
+### Steps
+
+1. Compile with specific `RUSTFLAGS` and features. We can use `--bin` to specify binary.
+
+   ```shell
+   RUSTFLAGS="--cfg tokio_unstable" mold --run cargo build --features tokio-console
+   ```
+
+2. Run `databend-meta` or/and `databend-query`, remembering to set the log level of the program you need to diagnose to `TRACE`.
+
+   ```shell
+   LOG_LEVEL=TRACE databend-query # for query
+   ```
+
+   or
+
+   ```shell
+   databend-meta --single --log-level=TRACE # for meta
+   ```
+
+   Note that diagnostics are currently only supported for a single program, so please ensure that **only one** program has a log level of `TRACE`. Otherwise, only the first program to occupy the port will be monitored.
+
+3. Run `tokio-console`.
+
+   ```shell
+   tokio-console # default connection: http://127.0.0.1:6669
+   ```
+
+### Examples
+
+**databend-query**
+
+![query console](images/query-console.png)
+
+**databend-meta**
+
+![meta console](images/meta-console.png)
+
+**task in console**
+
+![task in console](images/task-in-console.png)

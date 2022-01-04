@@ -34,12 +34,15 @@ impl FuseTable {
         ctx: Arc<QueryContext>,
         keep_last_snapshot: bool,
     ) -> Result<()> {
-        let da = ctx.get_data_accessor()?;
+        let da = ctx.get_storage_accessor()?;
         let tbl_info = self.get_table_info();
         let snapshot_loc = tbl_info.meta.options.get(TBL_OPT_KEY_SNAPSHOT_LOC);
-        let mut snapshots =
-            SnapshotReader::read_snapshot_history(da.as_ref(), snapshot_loc, ctx.get_table_cache())
-                .await?;
+        let mut snapshots = SnapshotReader::read_snapshot_history(
+            da.as_ref(),
+            snapshot_loc,
+            ctx.get_storage_cache(),
+        )
+        .await?;
 
         let min_history_len = if !keep_last_snapshot { 0 } else { 1 };
 
@@ -104,7 +107,8 @@ impl FuseTable {
     ) -> Result<HashSet<String>> {
         let mut result = HashSet::new();
         for x in locations {
-            let res = SegmentReader::read(data_accessor.as_ref(), x, ctx.get_table_cache()).await?;
+            let res =
+                SegmentReader::read(data_accessor.as_ref(), x, ctx.get_storage_cache()).await?;
             for block_meta in res.blocks {
                 result.insert(block_meta.location.path);
             }

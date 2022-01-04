@@ -37,7 +37,7 @@ async fn test_alter_user_interpreter() -> Result<()> {
         Vec::from(password),
         PasswordType::PlainText,
     );
-    let user_mgr = ctx.get_sessions_manager().get_user_manager();
+    let user_mgr = ctx.get_user_manager();
     user_mgr.add_user(user_info).await?;
 
     let old_user = user_mgr.get_user(name, hostname).await?;

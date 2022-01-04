@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use common_base::Progress;
 use common_base::Runtime;
-use common_cache::storage::StorageCache;
 use common_dal::DalContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -201,10 +200,6 @@ impl QueryContextShared {
     pub fn add_source_abort_handle(&self, handle: AbortHandle) {
         let mut sources_abort_handle = self.sources_abort_handle.write();
         sources_abort_handle.push(handle);
-    }
-
-    pub fn get_table_cache(&self) -> Arc<Option<Box<dyn StorageCache>>> {
-        self.session.sessions.get_table_cache()
     }
 }
 

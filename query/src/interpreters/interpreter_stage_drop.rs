@@ -48,7 +48,7 @@ impl Interpreter for DropStageInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
-        let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
+        let user_mgr = self.ctx.get_user_manager();
         user_mgr
             .drop_stage(plan.name.as_str(), plan.if_exists)
             .await?;

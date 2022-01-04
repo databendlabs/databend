@@ -38,7 +38,7 @@ async fn test_revoke_privilege_interpreter() -> Result<()> {
         PasswordType::PlainText,
     );
     assert_eq!(user_info.grants, UserGrantSet::empty());
-    let user_mgr = ctx.get_sessions_manager().get_user_manager();
+    let user_mgr = ctx.get_user_manager();
     user_mgr.add_user(user_info).await?;
 
     let test_query = format!("REVOKE ALL ON *.* FROM '{}'@'{}'", name, hostname);

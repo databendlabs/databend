@@ -48,7 +48,7 @@ impl Interpreter for ShowUDFInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
-        let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
+        let user_mgr = self.ctx.get_user_manager();
         let udf = user_mgr.get_udf(&plan.name).await?;
 
         let show_fields = vec![

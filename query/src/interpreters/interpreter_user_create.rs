@@ -51,7 +51,7 @@ impl Interpreter for CreateUserInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
-        let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
+        let user_mgr = self.ctx.get_user_manager();
         let user_info = UserInfo {
             name: plan.name,
             hostname: plan.hostname,
