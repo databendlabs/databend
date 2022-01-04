@@ -126,7 +126,7 @@ impl DatabendQueryFlightDispatcher {
     #[tracing::instrument(level = "debug", skip_all, fields(session.id = session.get_id().as_str()))]
     async fn one_sink_action(&self, session: SessionRef, action: &FlightAction) -> Result<()> {
         let query_context = session.create_context().await?;
-        let action_context = QueryContext::new(query_context.clone());
+        let action_context = QueryContext::create_from(query_context.clone());
         let pipeline_builder = PipelineBuilder::create(action_context.clone());
 
         let query_plan = action.get_plan();
@@ -182,7 +182,7 @@ impl DatabendQueryFlightDispatcher {
         T: FlightScatter + Send + 'static,
     {
         let query_context = session.create_context().await?;
-        let action_context = QueryContext::new(query_context.clone());
+        let action_context = QueryContext::create_from(query_context.clone());
         let pipeline_builder = PipelineBuilder::create(action_context.clone());
 
         let query_plan = action.get_plan();

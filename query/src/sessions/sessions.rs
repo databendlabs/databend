@@ -51,7 +51,7 @@ pub struct SessionManager {
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
-    pub(in crate::sessions) table_cache: Arc<Option<Box<dyn StorageCache>>>,
+    pub(in crate::sessions) storage_cache: Arc<Option<Box<dyn StorageCache>>>,
 }
 
 impl SessionManager {
@@ -92,7 +92,7 @@ impl SessionManager {
             http_query_manager,
             max_sessions: max_active_sessions,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
-            table_cache,
+            storage_cache: table_cache,
         }))
     }
 
@@ -117,8 +117,8 @@ impl SessionManager {
         self.catalog.clone()
     }
 
-    pub fn get_table_cache(self: &Arc<Self>) -> Arc<Option<Box<dyn StorageCache>>> {
-        self.table_cache.clone()
+    pub fn get_storage_cache(self: &Arc<Self>) -> Arc<Option<Box<dyn StorageCache>>> {
+        self.storage_cache.clone()
     }
 
     pub fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {
@@ -175,7 +175,7 @@ impl SessionManager {
     }
 
     #[allow(clippy::ptr_arg)]
-    pub fn get_session(self: &Arc<Self>, id: &String) -> Option<SessionRef> {
+    pub fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
         let sessions = self.active_sessions.read();
         sessions
             .get(id)

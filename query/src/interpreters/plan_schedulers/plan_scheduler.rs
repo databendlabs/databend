@@ -639,7 +639,7 @@ impl PlanScheduler {
     }
 
     fn visit_subquery(&mut self, plan: &PlanNode, tasks: &mut Tasks) -> Result<Vec<PlanNode>> {
-        let subquery_context = QueryContext::new(self.query_context.clone());
+        let subquery_context = QueryContext::create_from(self.query_context.clone());
         let mut subquery_scheduler = PlanScheduler::try_create(subquery_context)?;
         subquery_scheduler.visit_plan_node(plan, tasks)?;
         Ok(subquery_scheduler.nodes_plan)

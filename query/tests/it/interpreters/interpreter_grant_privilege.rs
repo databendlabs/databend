@@ -40,7 +40,7 @@ async fn test_grant_privilege_interpreter() -> Result<()> {
         PasswordType::PlainText,
     );
     assert_eq!(user_info.grants, UserGrantSet::empty());
-    let user_mgr = ctx.get_sessions_manager().get_user_manager();
+    let user_mgr = ctx.get_user_manager();
     user_mgr.add_user(user_info).await?;
 
     #[allow(dead_code)]

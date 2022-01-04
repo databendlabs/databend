@@ -206,7 +206,7 @@ impl ScattersOptimizerImpl {
 
 impl PlanRewriter for ScattersOptimizerImpl {
     fn rewrite_subquery_plan(&mut self, subquery_plan: &PlanNode) -> Result<PlanNode> {
-        let subquery_ctx = QueryContext::new(self.ctx.clone());
+        let subquery_ctx = QueryContext::create_from(self.ctx.clone());
         let mut subquery_optimizer = ScattersOptimizerImpl::create(subquery_ctx);
         let rewritten_subquery = subquery_optimizer.rewrite_plan_node(subquery_plan)?;
 

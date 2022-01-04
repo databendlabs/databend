@@ -30,8 +30,7 @@ use pretty_assertions::assert_eq;
 async fn test_users_table() -> Result<()> {
     let ctx = crate::tests::create_query_context()?;
     ctx.get_settings().set_max_threads(2)?;
-    ctx.get_sessions_manager()
-        .get_user_manager()
+    ctx.get_user_manager()
         .add_user(UserInfo {
             name: "test".to_string(),
             hostname: "localhost".to_string(),
@@ -41,8 +40,7 @@ async fn test_users_table() -> Result<()> {
             quota: UserQuota::no_limit(),
         })
         .await?;
-    ctx.get_sessions_manager()
-        .get_user_manager()
+    ctx.get_user_manager()
         .add_user(UserInfo {
             name: "test1".to_string(),
             hostname: "%".to_string(),

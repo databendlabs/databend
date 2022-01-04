@@ -48,7 +48,7 @@ impl Interpreter for AlterUDFInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
-        let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
+        let user_mgr = self.ctx.get_user_manager();
         user_mgr.update_udf(plan.udf).await?;
 
         Ok(Box::pin(DataBlockStream::create(

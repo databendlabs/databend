@@ -38,7 +38,7 @@ impl FuseTable {
         let snapshot = self.read_table_snapshot(ctx.as_ref()).await?;
         match snapshot {
             Some(snapshot) => {
-                let da = ctx.get_data_accessor()?;
+                let da = ctx.get_storage_accessor()?;
                 let schema = self.table_info.schema();
                 let block_metas =
                     apply_block_pruning(&snapshot, schema, &push_downs, da, ctx.clone()).await?;

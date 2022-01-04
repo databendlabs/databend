@@ -70,11 +70,7 @@ impl Table for UsersTable {
         ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let users = ctx
-            .get_sessions_manager()
-            .get_user_manager()
-            .get_users()
-            .await?;
+        let users = ctx.get_user_manager().get_users().await?;
 
         let names: Vec<&str> = users.iter().map(|x| x.name.as_str()).collect();
         let hostnames: Vec<&str> = users.iter().map(|x| x.hostname.as_str()).collect();

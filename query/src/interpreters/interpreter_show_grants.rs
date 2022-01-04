@@ -54,7 +54,6 @@ impl Interpreter for ShowGrantsInterpreter {
             None => self.ctx.get_current_user()?,
             Some(ref user_identity) => {
                 self.ctx
-                    .get_sessions_manager()
                     .get_user_manager()
                     .get_user(&user_identity.username, &user_identity.hostname)
                     .await?
