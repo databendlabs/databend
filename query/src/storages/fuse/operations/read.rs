@@ -75,7 +75,7 @@ impl FuseTable {
                     let part_location = part_info.location();
                     let part_len = part_info.length();
 
-                    let mut source = BlockReader::new(
+                    let mut block_reader = BlockReader::new(
                         da,
                         part_info.location().to_owned(),
                         table_schema,
@@ -84,7 +84,7 @@ impl FuseTable {
                         read_buffer_size,
                         None, // TODO cache parquet meta
                     );
-                    source.read().await.map_err(|e| {
+                    block_reader.read().await.map_err(|e| {
                         ErrorCode::ParquetError(format!(
                             "fail to read block {}, {}",
                             part_location, e

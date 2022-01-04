@@ -71,20 +71,25 @@ impl BlockReader {
         }
     }
 
-    async fn read_col(
+    async fn read_column(
         mut reader: BufReader<InputStream>,
-        col_meta: &ColumnChunkMetaData,
+        column_chunk_meta: &ColumnChunkMetaData,
         data_type: DataType,
     ) -> Result<DataColumn> {
-        let col_pages = get_page_stream(col_meta, &mut reader, vec![], Arc::new(|_, _| true))
-            .instrument(debug_span!("block_reader_get_column_page"))
-            .await
-            .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
+        let col_pages = get_page_stream(
+            column_chunk_meta,
+            &mut reader,
+            vec![],
+            Arc::new(|_, _| true),
+        )
+        .instrument(debug_span!("block_reader_get_column_page"))
+        .await
+        .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
         let pages = col_pages.map(|compressed_page| {
             debug_span!("block_reader_decompress_page")
                 .in_scope(|| decompress(compressed_page?, &mut vec![]))
         });
-        let array = page_stream_to_array(pages, col_meta, data_type)
+        let array = page_stream_to_array(pages, column_chunk_meta, data_type)
             .instrument(debug_span!("block_reader_page_stream_to_array"))
             .await?;
         let array: Arc<dyn common_arrow::arrow::array::Array> = array.into();
@@ -138,7 +143,7 @@ impl BlockReader {
                 let reader = data_accessor.get_input_stream(path.as_str(), Some(stream_len))?;
                 let reader = BufReader::with_capacity(read_buffer_size as usize, reader);
                 let data_type = fields[idx].data_type.clone();
-                Self::read_col(reader, &col_meta, data_type).await
+                Self::read_column(reader, &col_meta, data_type).await
             }
             .instrument(debug_span!("block_reader_read_column").or_current())
         });
