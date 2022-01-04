@@ -21,7 +21,6 @@ use common_datavalues::DataValue;
 use common_exception::Result;
 use common_functions::scalars::Monotonicity;
 use common_planners::*;
-use databend_query::optimizers::MonotonicityCheckVisitor;
 
 struct Test {
     name: &'static str,
@@ -57,7 +56,7 @@ fn verify_test(t: Test) -> Result<()> {
         DataField::new("y", DataType::Int64, false),
         DataField::new("z", DataType::DateTime32(None), false),
     ]);
-    let mono = match MonotonicityCheckVisitor::check_expression(
+    let mono = match ExpressionMonotonicityVisitor::check_expression(
         schema, &t.expr, t.left, t.right, t.column,
     ) {
         Ok(mono) => mono,
@@ -161,7 +160,7 @@ fn test_arithmetic_plus_minus() -> Result<()> {
                 left: None,
                 right: None,
             },
-            error: "Code: 6, displayText = expect column name \"x\", get \"y\".",
+            error: "Code: 6, displayText = Multi-column expressions are not currently supported.",
         },
         Test {
             name: "f(x) = (-x + 12) - x + (1 - x)",
