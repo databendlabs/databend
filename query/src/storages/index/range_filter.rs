@@ -24,10 +24,10 @@ use common_exception::Result;
 use common_functions::scalars::FunctionFactory;
 use common_planners::lit;
 use common_planners::Expression;
+use common_planners::ExpressionMonotonicityVisitor;
 use common_planners::Expressions;
 use common_planners::RequireColumnsVisitor;
 
-use crate::optimizers::MonotonicityCheckVisitor;
 use crate::pipelines::transforms::ExpressionExecutor;
 
 pub type BlockStatistics = HashMap<u32, ColumnStatistics>;
@@ -215,7 +215,7 @@ impl StatColumn {
             self.column_field.clone(),
         ));
 
-        let monotonicity = MonotonicityCheckVisitor::check_expression(
+        let monotonicity = ExpressionMonotonicityVisitor::check_expression(
             schema,
             &self.expr,
             variable_left,
