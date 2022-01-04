@@ -208,10 +208,13 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
     ) -> Result<bool> {
         let user_name = &info.user_name;
         let address = &info.user_client_address;
-
         let user_manager = self.session.get_user_manager();
+
         // TODO: list user's grant list and check client address
-        let user_info = user_manager.get_user(user_name, "%").await?;
+        let ctx = self.session.create_context().await?;
+        let user_info = user_manager
+            .get_user(ctx.get_tenant(), user_name, "%")
+            .await?;
 
         let input = &info.user_password;
         let saved = &user_info.password;

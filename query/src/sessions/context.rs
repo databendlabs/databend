@@ -231,6 +231,10 @@ impl QueryContext {
         self.shared.conf.clone()
     }
 
+    pub fn get_tenant(&self) -> &str {
+        &self.shared.conf.query.tenant_id
+    }
+
     pub fn get_subquery_name(&self, _query: &PlanNode) -> String {
         let index = self.shared.subquery_index.fetch_add(1, Ordering::Relaxed);
         format!("_subquery_{}", index)

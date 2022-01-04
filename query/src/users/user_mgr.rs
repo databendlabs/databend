@@ -26,7 +26,7 @@ use crate::users::UserApiProvider;
 
 impl UserApiProvider {
     // Get one user from by tenant.
-    pub async fn get_user(&self, username: &str, hostname: &str) -> Result<UserInfo> {
+    pub async fn get_user(&self, tenant: &str, username: &str, hostname: &str) -> Result<UserInfo> {
         match username {
             // TODO(BohuTANG): Mock, need removed.
             "default" | "" | "root" => {
@@ -43,7 +43,7 @@ impl UserApiProvider {
                 Ok(user_info)
             }
             _ => {
-                let client = self.get_user_api_client();
+                let client = self.get_user_api_client(tenant);
                 let get_user = client.get_user(username.to_string(), hostname.to_string(), None);
                 Ok(get_user.await?.data)
             }
@@ -75,8 +75,8 @@ impl UserApiProvider {
     }
 
     // Get the tenant all users list.
-    pub async fn get_users(&self) -> Result<Vec<UserInfo>> {
-        let client = self.get_user_api_client();
+    pub async fn get_users(&self, tenant: &str) -> Result<Vec<UserInfo>> {
+        let client = self.get_user_api_client(tenant);
         let get_users = client.get_users();
 
         let mut res = vec![];
@@ -93,23 +93,23 @@ impl UserApiProvider {
     }
 
     // Add a new user info.
-    pub async fn add_user(&self, user_info: UserInfo) -> Result<u64> {
-        let client = self.get_user_api_client();
+    pub async fn add_user(&self, tenant: &str, user_info: UserInfo) -> Result<u64> {
+        let client = self.get_user_api_client(tenant);
         let add_user = client.add_user(user_info);
         match add_user.await {
             Ok(res) => Ok(res),
             Err(failure) => Err(failure.add_message_back("(while add user).")),
         }
     }
-
     pub async fn grant_user_privileges(
         &self,
+        tenant: &str,
         username: &str,
         hostname: &str,
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
-        let client = self.get_user_api_client();
+        let client = self.get_user_api_client(tenant);
         client
             .grant_user_privileges(
                 username.to_string(),
@@ -124,12 +124,13 @@ impl UserApiProvider {
 
     pub async fn revoke_user_privileges(
         &self,
+        tenant: &str,
         username: &str,
         hostname: &str,
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
-        let client = self.get_user_api_client();
+        let client = self.get_user_api_client(tenant);
         client
             .revoke_user_privileges(
                 username.to_string(),
@@ -143,8 +144,14 @@ impl UserApiProvider {
     }
 
     // Drop a user by name and hostname.
-    pub async fn drop_user(&self, username: &str, hostname: &str, if_exist: bool) -> Result<()> {
-        let client = self.get_user_api_client();
+    pub async fn drop_user(
+        &self,
+        tenant: &str,
+        username: &str,
+        hostname: &str,
+        if_exist: bool,
+    ) -> Result<()> {
+        let client = self.get_user_api_client(tenant);
         let drop_user = client.drop_user(username.to_string(), hostname.to_string(), None);
         match drop_user.await {
             Ok(res) => Ok(res),
@@ -161,12 +168,13 @@ impl UserApiProvider {
     // Update a user by name and hostname.
     pub async fn update_user(
         &self,
+        tenant: &str,
         username: &str,
         hostname: &str,
         new_password_type: Option<PasswordType>,
         new_password: Option<Vec<u8>>,
     ) -> Result<Option<u64>> {
-        let client = self.get_user_api_client();
+        let client = self.get_user_api_client(tenant);
         let update_user = client.update_user(
             username.to_string(),
             hostname.to_string(),
