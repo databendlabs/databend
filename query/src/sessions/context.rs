@@ -109,20 +109,16 @@ impl QueryContext {
         self.shared.scan_progress.clone()
     }
 
+    pub fn get_scan_progress_value(&self) -> ProgressValues {
+        self.shared.scan_progress.as_ref().get_values()
+    }
+
     pub fn get_result_progress(&self) -> Arc<Progress> {
         self.shared.result_progress.clone()
     }
 
     pub fn get_result_progress_value(&self) -> ProgressValues {
         self.shared.result_progress.as_ref().get_values()
-    }
-
-    pub fn get_scan_progress_value(&self) -> ProgressValues {
-        self.shared.scan_progress.as_ref().get_values()
-    }
-
-    pub fn get_and_reset_scan_progress_value(&self) -> ProgressValues {
-        self.shared.scan_progress.as_ref().get_and_reset()
     }
 
     // Steal n partitions from the partition pool by the pipeline worker.

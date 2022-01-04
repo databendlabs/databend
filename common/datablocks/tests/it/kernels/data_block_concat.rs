@@ -14,8 +14,6 @@
 
 use common_datablocks::*;
 use common_datavalues::prelude::*;
-use common_datavalues::series::Series;
-use common_datavalues::series::SeriesFrom;
 use common_exception::Result;
 
 #[test]

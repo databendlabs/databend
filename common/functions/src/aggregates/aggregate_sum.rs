@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use bytes::BytesMut;
 use common_datavalues::prelude::*;
-use common_datavalues::DFTryFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
@@ -169,7 +168,7 @@ where
         if let Some(val) = state.value {
             let mut array = array
                 .as_mut_any()
-                .downcast_mut::<MutablePrimitiveArrayBuilder<SumT>>()
+                .downcast_mut::<MutablePrimitiveArrayBuilder<SumT, true>>()
                 .ok_or_else(|| {
                     ErrorCode::UnexpectedError(
                         "error occured when downcast MutableArray".to_string(),

@@ -47,6 +47,7 @@ fn test_to_partitions() -> Result<()> {
             .iter()
             .map(|(_, col_stats)| col_stats.in_memory_size)
             .sum(),
+        file_size: 0,
         col_stats: cols_stats.clone(),
         location: BlockLocation {
             path: "".to_string(),

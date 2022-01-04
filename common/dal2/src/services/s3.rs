@@ -14,12 +14,12 @@
 
 use async_compat::CompatExt;
 use async_trait::async_trait;
-use common_exception::Result;
 use rusoto_core::Region;
 use rusoto_s3::GetObjectRequest;
 use rusoto_s3::S3Client;
 use rusoto_s3::S3 as RusotoS3;
 
+use crate::error::Result;
 use crate::ops::Read;
 use crate::ops::ReadBuilder;
 use crate::ops::Reader;

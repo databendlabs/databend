@@ -20,6 +20,7 @@ mod command;
 mod comments;
 mod completions;
 mod env;
+mod generates;
 mod helps;
 mod loads;
 mod packages;

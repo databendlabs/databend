@@ -41,7 +41,7 @@ impl SwitchCommand {
         let resp = ureq::get(tag_url.as_str()).call()?;
         let json: serde_json::Value = resp.into_json().unwrap();
 
-        Ok(format!("{}", json[0]["name"]).replace("\"", ""))
+        Ok(format!("{}", json[0]["name"]).replace('\"', ""))
     }
 }
 

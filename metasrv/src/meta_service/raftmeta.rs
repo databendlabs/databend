@@ -29,15 +29,15 @@ use common_exception::prelude::ErrorCode;
 use common_exception::prelude::ToErrorCode;
 use common_meta_api::MetaApi;
 use common_meta_raft_store::config::RaftConfig;
-use common_meta_raft_store::message::ForwardRequest;
-use common_meta_raft_store::message::ForwardResponse;
-use common_meta_raft_store::protobuf::meta_service_client::MetaServiceClient;
-use common_meta_raft_store::protobuf::meta_service_server::MetaServiceServer;
-use common_meta_raft_store::state_machine::AppliedState;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_raft_store::state_machine::TableLookupKey;
 use common_meta_raft_store::state_machine::TableLookupValue;
+use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
+use common_meta_types::protobuf::meta_service_server::MetaServiceServer;
+use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
+use common_meta_types::ForwardRequest;
+use common_meta_types::ForwardResponse;
 use common_meta_types::ListTableReq;
 use common_meta_types::LogEntry;
 use common_meta_types::Node;
@@ -136,18 +136,25 @@ impl MetaNodeBuilder {
         Ok(mn)
     }
 
+    #[must_use]
     pub fn node_id(mut self, node_id: NodeId) -> Self {
         self.node_id = Some(node_id);
         self
     }
+
+    #[must_use]
     pub fn sto(mut self, sto: Arc<MetaRaftStore>) -> Self {
         self.sto = Some(sto);
         self
     }
+
+    #[must_use]
     pub fn addr(mut self, a: String) -> Self {
         self.addr = Some(a);
         self
     }
+
+    #[must_use]
     pub fn monitor_metrics(mut self, b: bool) -> Self {
         self.monitor_metrics = b;
         self

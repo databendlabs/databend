@@ -7,9 +7,8 @@ inputs:
 runs:
   using: "composite"
   steps:
-    # Workaround for Not Space Left: https://github.com/datafuselabs/databend/issues/3562
-    - shell: bash
-      run: rm -rf /usr/share/dotnet
+    - name: Maximize build space
+      uses: ./.github/actions/cleanup
 
     - uses: arduino/setup-protoc@v1
       with:
@@ -19,6 +18,8 @@ runs:
     - uses: actions-rs/toolchain@v1
       with:
         target: ${{ matrix.config.target }}
+        toolchain: nightly
+        override: true
         components: rustfmt, clippy
 
     # If you need to reset the cache version, increment the number after `v`

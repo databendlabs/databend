@@ -60,8 +60,10 @@ impl<const T: u8> Function for LocatingFunction<T> {
         &*self.display_name
     }
 
-    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
-        Ok(DataType::UInt64)
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let dt = DataType::UInt64;
+        let nullable = args.iter().any(|arg| arg.is_nullable());
+        Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

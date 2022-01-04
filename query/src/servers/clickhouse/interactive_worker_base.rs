@@ -141,11 +141,17 @@ impl InteractiveWorkerBase {
         let progress_ctx = ctx.clone();
         let mut interval_stream = IntervalStream::new(interval(Duration::from_millis(30)));
         tokio::spawn(async move {
+            let mut prev_progress_values = ProgressValues::default();
             while !cancel.load(Ordering::Relaxed) {
                 let _ = interval_stream.next().await;
-                let values = progress_ctx.get_and_reset_scan_progress_value();
+                let cur_progress_values = progress_ctx.get_scan_progress_value();
+                let diff_progress_values = ProgressValues {
+                    read_rows: cur_progress_values.read_rows - prev_progress_values.read_rows,
+                    read_bytes: cur_progress_values.read_bytes - prev_progress_values.read_bytes,
+                };
+                prev_progress_values = cur_progress_values;
                 progress_tx
-                    .send(BlockItem::ProgressTicker(values))
+                    .send(BlockItem::ProgressTicker(diff_progress_values))
                     .await
                     .ok();
             }

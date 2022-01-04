@@ -87,7 +87,7 @@ For efficient pruning, Databend also creates indexes for each Parquet file to sp
 
 ## Roadmap
 
-Databend is currently in **Alpha** and is not ready to be used in production, [Roadmap 2021](https://github.com/datafuselabs/databend/issues/746)
+Databend is currently in **Alpha** and is not ready to be used in production, [Roadmap 2022](https://github.com/datafuselabs/databend/issues/3706)
 
 ## License
 

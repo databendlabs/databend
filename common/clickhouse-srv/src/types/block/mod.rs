@@ -240,12 +240,14 @@ impl<K: ColumnType> Block<K> {
     }
 
     /// Add new column into this block
+    #[must_use]
     pub fn add_column<S>(self, name: &str, values: S) -> Self
     where S: ColumnFrom {
         self.column(name, values)
     }
 
     /// Add new column into this block
+    #[must_use]
     pub fn column<S>(mut self, name: &str, values: S) -> Self
     where S: ColumnFrom {
         let data = S::column_from::<ArcColumnWrapper>(values);

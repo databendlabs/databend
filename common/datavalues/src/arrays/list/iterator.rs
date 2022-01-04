@@ -18,7 +18,6 @@ use common_arrow::arrow::array::*;
 use common_arrow::arrow::trusted_len::TrustedLen;
 
 use crate::prelude::*;
-use crate::series::Series;
 
 pub struct ListIter<'a> {
     array: &'a LargeListArray,

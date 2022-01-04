@@ -19,7 +19,7 @@ use clap::Parser;
 use common_dal::StorageScheme;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_flight_rpc::FlightClientTlsConfig;
+use common_grpc::RpcClientTlsConfig;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde::Serialize;
@@ -156,8 +156,8 @@ impl Config {
         Ok(())
     }
 
-    pub fn tls_query_client_conf(&self) -> FlightClientTlsConfig {
-        FlightClientTlsConfig {
+    pub fn tls_query_client_conf(&self) -> RpcClientTlsConfig {
+        RpcClientTlsConfig {
             rpc_tls_server_root_ca_cert: self.query.rpc_tls_query_server_root_ca_cert.to_string(),
             domain_name: self.query.rpc_tls_query_service_domain_name.to_string(),
         }

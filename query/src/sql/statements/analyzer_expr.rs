@@ -15,13 +15,13 @@
 use std::convert::TryFrom;
 use std::sync::Arc;
 
+use common_ast::parser::expr::ExprTraverser;
+use common_ast::parser::expr::ExprVisitor;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::udfs::UDFTransformer;
 use common_planners::Expression;
-use common_sql::expr::ExprTraverser;
-use common_sql::expr::ExprVisitor;
 use sqlparser::ast::Expr;
 use sqlparser::ast::Ident;
 use sqlparser::ast::Query;
@@ -93,10 +93,10 @@ impl ExpressionAnalyzer {
         args.push(
             match AggregateFunctionFactory::instance().check(&info.name) {
                 true => self.aggr_function(info, &arguments),
-                false => match (info.unary_operator, info.binary_operator) {
-                    (true, _) => Self::unary_function(info, &arguments),
-                    (_, true) => Self::binary_function(info, &arguments),
-                    _ => self.function(info, &arguments),
+                false => match info.kind {
+                    OperatorKind::Unary => Self::unary_function(info, &arguments),
+                    OperatorKind::Binary => Self::binary_function(info, &arguments),
+                    OperatorKind::Other => self.other_function(info, &arguments),
                 },
             }?,
         );
@@ -129,7 +129,7 @@ impl ExpressionAnalyzer {
         }
     }
 
-    fn function(&self, info: &FunctionExprInfo, args: &[Expression]) -> Result<Expression> {
+    fn other_function(&self, info: &FunctionExprInfo, args: &[Expression]) -> Result<Expression> {
         let query_context = self.context.clone();
         let context_args = ContextFunction::build_args_from_ctx(&info.name, query_context)?;
 
@@ -315,12 +315,17 @@ impl ExpressionAnalyzer {
     }
 }
 
+enum OperatorKind {
+    Unary,
+    Binary,
+    Other,
+}
+
 struct FunctionExprInfo {
     name: String,
     distinct: bool,
     args_count: usize,
-    unary_operator: bool,
-    binary_operator: bool,
+    kind: OperatorKind,
     parameters: Vec<Value>,
 }
 
@@ -342,8 +347,7 @@ impl ExprRPNItem {
             name,
             distinct: false,
             args_count,
-            unary_operator: false,
-            binary_operator: false,
+            kind: OperatorKind::Other,
             parameters: Vec::new(),
         })
     }
@@ -353,8 +357,7 @@ impl ExprRPNItem {
             name,
             distinct: false,
             args_count: 2,
-            unary_operator: false,
-            binary_operator: true,
+            kind: OperatorKind::Binary,
             parameters: Vec::new(),
         })
     }
@@ -364,8 +367,7 @@ impl ExprRPNItem {
             name,
             distinct: false,
             args_count: 1,
-            unary_operator: true,
-            binary_operator: false,
+            kind: OperatorKind::Unary,
             parameters: Vec::new(),
         })
     }
@@ -407,8 +409,13 @@ impl ExprRPNBuilder {
                     .push(ExprRPNItem::function(String::from("isnotnull"), 1));
             }
             Expr::UnaryOp { op, .. } => {
-                if !matches!(op, UnaryOperator::Plus) {
-                    self.rpn.push(ExprRPNItem::unary_operator(op.to_string()));
+                match op {
+                    UnaryOperator::Plus => {}
+                    // In order to distinguish it from binary addition.
+                    UnaryOperator::Minus => self
+                        .rpn
+                        .push(ExprRPNItem::unary_operator("NEGATE".to_string())),
+                    _ => self.rpn.push(ExprRPNItem::unary_operator(op.to_string())),
                 }
             }
             Expr::BinaryOp { op, .. } => {
@@ -428,8 +435,7 @@ impl ExprRPNBuilder {
                     name: function.name.to_string(),
                     distinct: function.distinct,
                     args_count: function.args.len(),
-                    unary_operator: false,
-                    binary_operator: false,
+                    kind: OperatorKind::Other,
                     parameters: function.params.to_owned(),
                 }));
             }
@@ -487,7 +493,7 @@ impl ExprRPNBuilder {
 impl ExprVisitor for ExprRPNBuilder {
     fn pre_visit(&mut self, expr: &Expr) -> Result<Expr> {
         if let Expr::Function(function) = expr {
-            if let Some(transformed_expr) = UDFTransformer::transform_function(
+            if let Ok(Some(transformed_expr)) = UDFTransformer::transform_function(
                 self.context.get_config().query.tenant_id.as_str(),
                 function,
             ) {

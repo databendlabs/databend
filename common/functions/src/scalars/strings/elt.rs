@@ -49,13 +49,14 @@ impl Function for EltFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
         if !args[0].is_numeric() && !args[0].is_string() && !args[0].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected string or null, but got {}",
                 args[0]
             )));
         }
+
         for arg in &args[1..] {
             if !arg.is_numeric() && !arg.is_string() && !arg.is_null() {
                 return Err(ErrorCode::IllegalDataType(format!(
@@ -64,7 +65,9 @@ impl Function for EltFunction {
                 )));
             }
         }
-        Ok(DataType::String)
+        let nullable = args.iter().any(|arg| arg.is_nullable());
+        let dt = DataType::String;
+        Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

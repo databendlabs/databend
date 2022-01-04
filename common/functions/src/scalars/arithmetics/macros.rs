@@ -14,7 +14,7 @@
 
 #[macro_export]
 macro_rules! impl_try_create_datetime {
-    ($op: expr, $func: ident) => {
+    ($op: expr, $func: ident, $add: expr) => {
         fn try_create_datetime(
             lhs_type: &DataType,
             rhs_type: &DataType,
@@ -33,20 +33,17 @@ macro_rules! impl_try_create_datetime {
                             lhs_type.clone(),
                         )
                     },{
-                        if !rhs_type.is_date_or_date_time() {
-                            return e;
-                        }
                         with_match_date_type!(rhs_type, |$D| {
-                            match op {
-                                DataValueArithmeticOperator::Plus => BinaryArithmeticFunction::<ArithmeticAdd<$T, $D, $T>>::try_create_func(
+                            if $add {
+                                BinaryArithmeticFunction::<$func<$T, $D, $T>>::try_create_func(
                                     op.clone(),
                                     lhs_type.clone(),
-                                ),
-                                DataValueArithmeticOperator::Minus => BinaryArithmeticFunction::<ArithmeticAdd<$T, $D, i32>>::try_create_func(
+                                )
+                            } else {
+                                BinaryArithmeticFunction::<$func<$T, $D, i32>>::try_create_func(
                                     op.clone(),
                                     DataType::Int32,
-                                ),
-                                _ => e,
+                                )
                             }
                         }, e)
                     })
@@ -66,7 +63,69 @@ macro_rules! impl_try_create_datetime {
 }
 
 #[macro_export]
-macro_rules! impl_wrapping_arithmetic {
+macro_rules! impl_unary_arith {
+    ($name: ident, $method: tt) => {
+        #[derive(Clone)]
+        pub struct $name<T, R> {
+            t: PhantomData<T>,
+            r: PhantomData<R>,
+        }
+
+        impl<T, R> ArithmeticTrait for $name<T, R>
+        where
+            T: DFPrimitiveType + AsPrimitive<R>,
+            R: DFPrimitiveType + Neg<Output = R>,
+            DFPrimitiveArray<R>: IntoSeries,
+        {
+            fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
+                unary_arithmetic!(columns[0].column(), |v: R| $method v)
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_wrapping_unary_arith {
+    ($name: ident, $method: ident) => {
+        #[derive(Clone)]
+        pub struct $name<T, R> {
+            t: PhantomData<T>,
+            r: PhantomData<R>,
+        }
+
+        impl<T, R> ArithmeticTrait for $name<T, R>
+        where
+            T: DFPrimitiveType + AsPrimitive<R>,
+            R: DFIntegerType + WrappingNeg,
+            DFPrimitiveArray<R>: IntoSeries,
+        {
+            fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
+                unary_arithmetic!(columns[0].column(), |v: R| v.$method())
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! unary_arithmetic {
+    ($self: expr, $op: expr) => {{
+        let result: DataColumn = match $self {
+            DataColumn::Array(series) => {
+                let array: &DFPrimitiveArray<T> = series.static_cast();
+                unary(array, |v| $op(v.as_())).into()
+            }
+            DataColumn::Constant(val, size) => {
+                let v: T = DFTryFrom::try_from(val.clone()).unwrap_or(T::default());
+                DataColumn::Constant($op(v.as_()).into(), size.clone())
+            }
+        };
+
+        Ok(result)
+    }};
+}
+
+#[macro_export]
+macro_rules! impl_wrapping_binary_arith {
     ($name: ident, $method: ident) => {
         #[derive(Clone)]
         pub struct $name<T, D, R> {
@@ -79,7 +138,10 @@ macro_rules! impl_wrapping_arithmetic {
         where
             T: DFPrimitiveType + AsPrimitive<R>,
             D: DFPrimitiveType + AsPrimitive<R>,
-            R: DFIntegerType + WrappingAdd<Output = R> + WrappingSub<Output = R>,
+            R: DFIntegerType
+                + WrappingAdd<Output = R>
+                + WrappingSub<Output = R>
+                + WrappingMul<Output = R>,
             DFPrimitiveArray<R>: IntoSeries,
         {
             fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
@@ -91,7 +153,7 @@ macro_rules! impl_wrapping_arithmetic {
 }
 
 #[macro_export]
-macro_rules! impl_arithmetic {
+macro_rules! impl_binary_arith {
     ($name: ident, $method: tt) => {
         #[derive(Clone)]
         pub struct $name<T, D, R> {
@@ -104,7 +166,7 @@ macro_rules! impl_arithmetic {
         where
             T: DFPrimitiveType + AsPrimitive<R>,
             D: DFPrimitiveType + AsPrimitive<R>,
-            R: DFPrimitiveType + Add<Output = R>,
+            R: DFPrimitiveType + Add<Output = R> + Sub<Output = R> + Mul<Output = R>,
             DFPrimitiveArray<R>: IntoSeries,
         {
             fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
@@ -137,46 +199,34 @@ macro_rules! with_match_date_type {
 }
 
 #[macro_export]
-macro_rules! binary_arithmetic_helper {
-    ($lhs: ident, $rhs: ident, $T:ty, $R:ty, $op: expr) => {{
-        match ($lhs.len(), $rhs.len()) {
-            (a, b) if a == b => binary($lhs, $rhs, |l, r| $op(l.as_(), r.as_())),
-            (_, 1) => {
-                let opt_rhs = $rhs.get(0);
-                match opt_rhs {
-                    None => DFPrimitiveArray::<$R>::full_null($lhs.len()),
-                    Some(rhs) => {
-                        let r: $T = rhs.as_();
-                        unary($lhs, |l| $op(l.as_(), r))
-                    }
-                }
-            }
-            (1, _) => {
-                let opt_lhs = $lhs.get(0);
-                match opt_lhs {
-                    None => DFPrimitiveArray::<$R>::full_null($rhs.len()),
-                    Some(lhs) => {
-                        let l: $T = lhs.as_();
-                        unary($rhs, |r| $op(l, r.as_()))
-                    }
-                }
-            }
-            _ => unreachable!(),
-        }
-        .into()
-    }};
-}
-
-#[macro_export]
 macro_rules! binary_arithmetic {
-    ($self: expr, $rhs: expr, $R:ty, $op: expr) => {{
-        let lhs = $self.to_minimal_array()?;
-        let rhs = $rhs.to_minimal_array()?;
-        let lhs: &DFPrimitiveArray<T> = lhs.static_cast();
-        let rhs: &DFPrimitiveArray<D> = rhs.static_cast();
+    ($lhs: expr, $rhs: expr, $R:ty, $op: expr) => {{
+        let result: DataColumn = match ($lhs, $rhs) {
+            (DataColumn::Array(left), DataColumn::Array(right)) => {
+                let lhs: &DFPrimitiveArray<T> = left.static_cast();
+                let rhs: &DFPrimitiveArray<D> = right.static_cast();
+                binary(lhs, rhs, |l, r| $op(l.as_(), r.as_())).into()
+            }
+            (DataColumn::Array(left), DataColumn::Constant(right, _)) => {
+                let lhs: &DFPrimitiveArray<T> = left.static_cast();
+                let rhs: D = DFTryFrom::try_from(right.clone()).unwrap_or(D::default());
+                let r: $R = rhs.as_();
+                unary(lhs, |l| $op(l.as_(), r)).into()
+            }
+            (DataColumn::Constant(left, _), DataColumn::Array(right)) => {
+                let lhs: T = DFTryFrom::try_from(left.clone()).unwrap_or(T::default());
+                let l: $R = lhs.as_();
+                let rhs: &DFPrimitiveArray<D> = right.static_cast();
+                unary(rhs, |r| $op(l, r.as_())).into()
+            }
+            (DataColumn::Constant(left, size), DataColumn::Constant(right, _)) => {
+                let l: T = DFTryFrom::try_from(left.clone()).unwrap_or(T::default());
+                let r: D = DFTryFrom::try_from(right.clone()).unwrap_or(D::default());
+                DataColumn::Constant($op(l.as_(), r.as_()).into(), size.clone())
+            }
+        };
 
-        let result: DataColumn = binary_arithmetic_helper!(lhs, rhs, $R, $R, $op);
-        Ok(result.resize_constant($self.len()))
+        Ok(result)
     }};
 }
 
@@ -184,43 +234,62 @@ macro_rules! binary_arithmetic {
 macro_rules! interval_arithmetic {
     ($self: expr, $rhs: expr, $R:ty, $op: expr) => {{
         let (interval, datetime) = validate_input($self, $rhs);
-        let lhs = datetime.column().to_minimal_array()?;
-        let lhs: &DFPrimitiveArray<$R> = lhs.static_cast();
-        let rhs = interval.column().to_minimal_array()?;
-        let rhs = rhs.i64()?;
+        let result: DataColumn = match (datetime.column(), interval.column()) {
+            (DataColumn::Array(left), DataColumn::Array(right)) => {
+                let lhs: &DFPrimitiveArray<$R> = left.static_cast();
+                let rhs = right.i64()?;
+                binary(lhs, rhs, |l, r| $op(l.as_(), r)).into()
+            }
+            (DataColumn::Array(left), DataColumn::Constant(right, _)) => {
+                let lhs: &DFPrimitiveArray<$R> = left.static_cast();
+                let r: i64 = DFTryFrom::try_from(right.clone()).unwrap_or(0i64);
+                unary(lhs, |l| $op(l.as_(), r)).into()
+            }
+            (DataColumn::Constant(left, _), DataColumn::Array(right)) => {
+                let lhs: $R = DFTryFrom::try_from(left.clone()).unwrap_or(<$R>::default());
+                let l: i64 = lhs.as_();
+                let rhs = right.i64()?;
+                unary(rhs, |r| $op(l, r)).into()
+            }
+            (DataColumn::Constant(left, size), DataColumn::Constant(right, _)) => {
+                let l: $R = DFTryFrom::try_from(left.clone()).unwrap_or(<$R>::default());
+                let r: i64 = DFTryFrom::try_from(right.clone()).unwrap_or(0i64);
+                DataColumn::Constant($op(l.as_(), r).into(), size.clone())
+            }
+        };
 
-        let result: DataColumn = binary_arithmetic_helper!(lhs, rhs, i64, $R, $op);
-        Ok(result.resize_constant($self.column().len()))
+        Ok(result)
     }};
 }
 
 #[macro_export]
-macro_rules! arithmetic_helper {
-    ($lhs: ident, $rhs: ident, $T: ty, $R: ty, $scalar: expr, $op: expr) => {{
-        match ($lhs.len(), $rhs.len()) {
-            (a, b) if a == b => binary($lhs, $rhs, |l, r| $op(l.as_(), r.as_())),
-            (_, 1) => {
-                let opt_rhs = $rhs.get(0);
-                match opt_rhs {
-                    None => DFPrimitiveArray::<$R>::full_null($lhs.len()),
-                    Some(rhs) => {
-                        let r: $T = rhs.as_();
-                        $scalar($lhs, &r)
-                    }
-                }
+macro_rules! try_binary_arithmetic {
+    ($lhs: expr, $rhs: expr, $M: ty, $op: expr, $scalar:expr) => {{
+        let result: DataColumn = match ($lhs, $rhs) {
+            (DataColumn::Array(left), DataColumn::Array(right)) => {
+                let lhs: &DFPrimitiveArray<T> = left.static_cast();
+                let rhs: &DFPrimitiveArray<D> = right.static_cast();
+                try_binary(lhs, rhs, |l, r| $op(l.as_(), r.as_()))?.into()
             }
-            (1, _) => {
-                let opt_lhs = $lhs.get(0);
-                match opt_lhs {
-                    None => DFPrimitiveArray::<$R>::full_null($rhs.len()),
-                    Some(lhs) => {
-                        let l: $T = lhs.as_();
-                        unary($rhs, |r| $op(l, r.as_()))
-                    }
-                }
+            (DataColumn::Array(left), DataColumn::Constant(right, _)) => {
+                let lhs: &DFPrimitiveArray<T> = left.static_cast();
+                let rhs: D = DFTryFrom::try_from(right.clone()).unwrap_or(D::one());
+                $scalar(lhs, rhs.as_())?
             }
-            _ => unreachable!(),
-        }
-        .into()
+            (DataColumn::Constant(left, _), DataColumn::Array(right)) => {
+                let lhs: T = DFTryFrom::try_from(left.clone()).unwrap_or(T::default());
+                let l: $M = lhs.as_();
+                let rhs: &DFPrimitiveArray<D> = right.static_cast();
+                try_unary(rhs, |r| $op(l, r.as_()))?.into()
+            }
+            (DataColumn::Constant(left, size), DataColumn::Constant(right, _)) => {
+                let lhs: T = DFTryFrom::try_from(left.clone()).unwrap_or(T::default());
+                let rhs: D = DFTryFrom::try_from(right.clone()).unwrap_or(D::one());
+                let value = $op(lhs.as_(), rhs.as_())?;
+                DataColumn::Constant(value.into(), size.clone())
+            }
+        };
+
+        Ok(result)
     }};
 }

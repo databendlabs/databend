@@ -25,11 +25,11 @@ common-arrow = { path = "../common/arrow" }
 common-containers = { path = "../common/containers" }
 common-datavalues = { path = "../common/datavalues" }
 common-exception = { path = "../common/exception" }
-common-flight-rpc = { path = "../common/flight-rpc" }
+common-grpc = { path = "../common/grpc" }
 common-infallible = { path = "../common/infallible" }
 common-base = { path = "../common/base" }
 common-meta-api = { path = "../common/meta/api" }
-common-meta-flight = { path = "../common/meta/flight" }
+common-meta-grpc = { path = "../common/meta/grpc" }
 common-meta-raft-store = { path = "../common/meta/raft-store" }
 common-meta-sled-store = { path = "../common/meta/sled-store" }
 common-meta-types = { path = "../common/meta/types" }
@@ -41,7 +41,7 @@ common-metrics = { path = "../common/metrics" }
 
 # Crates.io dependencies
 anyhow = "1.0.51"
-async-raft = { git = "https://github.com/datafuse-extras/async-raft", tag = "v0.6.2-alpha.14.1" }
+async-raft = { git = "https://github.com/datafuselabs/openraft", tag = "v0.6.2-alpha.14.1" }
 async-trait = "0.1.52"
 backtrace = "0.3.63"
 byteorder = "1.4.3"
@@ -68,6 +68,10 @@ sha2 = "0.10.0"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
 poem = { version = "1.2.14", features = ["rustls"] }
 toml = "0.5.8"
+
+[build-dependencies]
+tonic-build = "0.6.2"
+common-building = { path = "../common/building" }
 
 [dev-dependencies]
 common-meta-api = { path = "../common/meta/api" }

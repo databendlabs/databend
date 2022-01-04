@@ -107,7 +107,7 @@ fn test_generate_local_meta_config() -> Result<()> {
 
         assert_eq!(config.as_ref().unwrap().config.log_level, "DEBUG");
         assert_eq!(
-            config.as_ref().unwrap().config.flight_api_address,
+            config.as_ref().unwrap().config.grpc_api_address,
             "0.0.0.0:7777"
         );
     }

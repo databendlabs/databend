@@ -143,6 +143,7 @@ impl TableInfo {
         &self.meta.engine_options
     }
 
+    #[must_use]
     pub fn set_schema(mut self, schema: Arc<DataSchema>) -> TableInfo {
         self.meta.schema = schema;
         self

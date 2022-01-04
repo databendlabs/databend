@@ -20,7 +20,6 @@ use common_arrow::arrow::array::ArrayRef;
 use common_exception::Result;
 
 use crate::prelude::*;
-use crate::*;
 
 /// This trait is used to compact a column into a Vec<DataValue>.
 /// It is mainly used for subquery execution.

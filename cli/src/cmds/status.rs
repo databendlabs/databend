@@ -303,8 +303,8 @@ impl LocalRuntime for LocalMetaConfig {
                 conf.log_dir,
             )
             .env(
-                databend_meta::configs::config::METASRV_FLIGHT_API_ADDRESS,
-                conf.flight_api_address,
+                databend_meta::configs::config::METASRV_GRPC_API_ADDRESS,
+                conf.grpc_api_address,
             )
             .env(
                 databend_meta::configs::config::ADMIN_API_ADDRESS,
@@ -315,12 +315,12 @@ impl LocalRuntime for LocalMetaConfig {
                 conf.metric_api_address,
             )
             .env(
-                databend_meta::configs::config::FLIGHT_TLS_SERVER_CERT,
-                conf.flight_tls_server_cert,
+                databend_meta::configs::config::GRPC_TLS_SERVER_CERT,
+                conf.grpc_tls_server_cert,
             )
             .env(
-                databend_meta::configs::config::FLIGHT_TLS_SERVER_KEY,
-                conf.flight_tls_server_key,
+                databend_meta::configs::config::GRPC_TLS_SERVER_KEY,
+                conf.grpc_tls_server_key,
             )
             .env(
                 databend_meta::configs::config::ADMIN_TLS_SERVER_CERT,
@@ -366,11 +366,11 @@ impl LocalRuntime for LocalMetaConfig {
         return portpicker::is_free(self.config.raft_config.raft_api_port as u16)
             && portpicker::is_free(
                 self.config
-                    .flight_api_address
+                    .grpc_api_address
                     .parse::<SocketAddr>()
                     .expect(&*format!(
                         "cannot parse meta server address {} ",
-                        self.config.flight_api_address
+                        self.config.grpc_api_address
                     ))
                     .port(),
             )
@@ -683,8 +683,7 @@ impl Status {
         if !Path::new(meta_file.as_str()).exists() {
             return None;
         }
-        let file =
-            File::open(meta_file.to_string()).expect(&*format!("cannot read from {}", meta_file));
+        let file = File::open(&meta_file).expect(&*format!("cannot read from {}", meta_file));
         let reader = BufReader::new(file);
         return Some((
             meta_file.to_string(),
@@ -712,8 +711,7 @@ impl Status {
         if !Path::new(dashboard.as_str()).exists() {
             return None;
         }
-        let file =
-            File::open(dashboard.to_string()).expect(&*format!("cannot read from {}", dashboard));
+        let file = File::open(&dashboard).expect(&*format!("cannot read from {}", dashboard));
         let reader = BufReader::new(file);
         return Some((
             dashboard.to_string(),

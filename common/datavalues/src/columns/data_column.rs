@@ -20,9 +20,6 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
 
 use crate::prelude::*;
-use crate::series::IntoSeries;
-use crate::series::Series;
-use crate::DataValue;
 
 #[derive(Clone, Debug)]
 pub enum DataColumn {
@@ -176,6 +173,7 @@ impl DataColumn {
     }
 
     #[inline]
+    #[must_use]
     pub fn slice(&self, offset: usize, length: usize) -> DataColumn {
         match self {
             DataColumn::Array(array) => DataColumn::Array(array.slice(offset, length)),
@@ -184,6 +182,7 @@ impl DataColumn {
     }
 
     #[inline]
+    #[must_use]
     pub fn clone_empty(&self) -> DataColumn {
         match self {
             DataColumn::Array(array) => DataColumn::Array(array.slice(0, 0)),
@@ -206,6 +205,7 @@ impl DataColumn {
     }
 
     #[inline]
+    #[must_use]
     pub fn resize_constant(&self, size: usize) -> Self {
         match self {
             DataColumn::Array(array) if array.len() == 1 => {

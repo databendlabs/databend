@@ -115,7 +115,7 @@ pub use plan_expression_function::neg;
 pub use plan_expression_function::not;
 pub use plan_expression_function::sum;
 pub use plan_expression_literal::lit;
-pub use plan_expression_rewriter::ExprRewriter;
+pub use plan_expression_rewriter::ExpressionRewriter;
 pub use plan_expression_sort::sort;
 pub use plan_expression_validator::validate_expression;
 pub use plan_expression_visitor::ExpressionVisitor;

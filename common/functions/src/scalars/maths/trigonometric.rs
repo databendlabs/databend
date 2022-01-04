@@ -15,7 +15,6 @@
 use std::fmt;
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataType;
 use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -68,15 +67,16 @@ impl Function for TrigonometricFunction {
         "TrigonometricFunction"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
-        if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let data_type = if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
             Ok(DataType::Float64)
         } else {
             Err(ErrorCode::IllegalDataType(format!(
                 "Expected numeric, but got {}",
                 args[0]
             )))
-        }
+        }?;
+        Ok(DataTypeAndNullable::create(&data_type, false))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

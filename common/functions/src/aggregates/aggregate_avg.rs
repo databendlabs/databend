@@ -18,7 +18,6 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use common_datavalues::prelude::*;
-use common_datavalues::DFTryFrom;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::*;
@@ -159,7 +158,7 @@ where
 
         let mut array = array
             .as_mut_any()
-            .downcast_mut::<MutablePrimitiveArrayBuilder<f64>>()
+            .downcast_mut::<MutablePrimitiveArrayBuilder<f64, true>>()
             .ok_or_else(|| {
                 ErrorCode::UnexpectedError("error occured when downcast MutableArray".to_string())
             })?;

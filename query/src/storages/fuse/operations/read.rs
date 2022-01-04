@@ -25,6 +25,7 @@ use common_streams::Source;
 use common_tracing::tracing_futures::Instrument;
 use futures::StreamExt;
 
+use super::part_info::PartInfo;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::FuseTable;
 
@@ -35,12 +36,6 @@ impl FuseTable {
         ctx: Arc<QueryContext>,
         push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
-        let default_proj = || {
-            (0..self.table_info.schema().fields().len())
-                .into_iter()
-                .collect::<Vec<usize>>()
-        };
-
         let projection = if let Some(Extras {
             projection: Some(prj),
             ..
@@ -48,7 +43,9 @@ impl FuseTable {
         {
             prj.clone()
         } else {
-            default_proj()
+            (0..self.table_info.schema().fields().len())
+                .into_iter()
+                .collect::<Vec<usize>>()
         };
 
         let bite_size = ctx.get_settings().get_parallel_read_threads()?;
@@ -68,24 +65,44 @@ impl FuseTable {
 
         let part_stream = futures::stream::iter(iter);
 
-        // fallback to stream combinator from async_stream, since
-        // 1. when using `stream!`, the trace always contains a unclosed call-span (of ParquetSource::read)
-        // 2. later, when `bit_size` is larger than one, the async reads could be buffered
-
+        let read_buffer_size = ctx.get_settings().get_storage_read_buffer_size()?;
         let stream = part_stream
             .map(move |part| {
                 let da = da.clone();
                 let table_schema = table_schema.clone();
                 let projection = projection.clone();
                 async move {
-                    let mut source =
-                        ParquetSource::new(da, part.name.clone(), table_schema, projection);
-                    source.read().await?.ok_or_else(|| {
-                        ErrorCode::ParquetError(format!("fail to read block {}", part.name))
-                    })
+                    let part_info = PartInfo::decode(&part.name)?;
+                    let part_location = part_info.location();
+                    let part_len = part_info.length();
+
+                    let mut source = ParquetSource::with_hints(
+                        da,
+                        part_info.location().to_owned(),
+                        table_schema,
+                        projection,
+                        None, // TODO cache parquet meta
+                        Some(part_len),
+                        Some(read_buffer_size),
+                    );
+                    source
+                        .read()
+                        .await
+                        .map_err(|e| {
+                            ErrorCode::ParquetError(format!(
+                                "fail to read block {}, {}",
+                                part_location, e
+                            ))
+                        })?
+                        .ok_or_else(|| {
+                            ErrorCode::ParquetError(format!(
+                                "reader returns None for block {}",
+                                part_location,
+                            ))
+                        })
                 }
             })
-            .buffered(bite_size as usize) // buffer_unordered?
+            .buffer_unordered(bite_size as usize)
             .instrument(common_tracing::tracing::Span::current());
         Ok(Box::pin(stream))
     }

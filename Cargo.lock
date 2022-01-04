@@ -289,7 +289,7 @@ dependencies = [
 [[package]]
 name = "async-raft"
 version = "0.6.1"
-source = "git+https://github.com/datafuse-extras/async-raft?tag=v0.6.2-alpha.14.1#5086c8b38d2c3307b460fd958eb56d0b767e2467"
+source = "git+https://github.com/datafuselabs/openraft?tag=v0.6.2-alpha.14.1#5086c8b38d2c3307b460fd958eb56d0b767e2467"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1037,7 +1037,7 @@ dependencies = [
 [[package]]
 name = "clickhouse-driver"
 version = "0.1.0-alpha.3"
-source = "git+https://github.com/datafuse-extras/clickhouse_driver/?rev=6e0ecb2#6e0ecb2718cb5dd84ac76827e08586a48f2e719d"
+source = "git+https://github.com/datafuse-extras/clickhouse_driver?rev=6e0ecb2#6e0ecb2718cb5dd84ac76827e08586a48f2e719d"
 dependencies = [
  "byteorder",
  "bytes 0.5.6",
@@ -1063,7 +1063,7 @@ dependencies = [
 [[package]]
 name = "clickhouse-driver-cthrs"
 version = "0.1.1"
-source = "git+https://github.com/datafuse-extras/clickhouse_driver/?rev=6e0ecb2#6e0ecb2718cb5dd84ac76827e08586a48f2e719d"
+source = "git+https://github.com/datafuse-extras/clickhouse_driver?rev=6e0ecb2#6e0ecb2718cb5dd84ac76827e08586a48f2e719d"
 
 [[package]]
 name = "clipboard-win"
@@ -1147,6 +1147,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-ast"
+version = "0.1.0"
+dependencies = [
+ "common-exception",
+ "sqlparser",
+]
+
+[[package]]
 name = "common-base"
 version = "0.1.0"
 dependencies = [
@@ -1178,7 +1186,6 @@ dependencies = [
  "common-base",
  "common-dal",
  "common-exception",
- "common-metrics",
  "common-tracing",
  "filetime",
  "heapsize",
@@ -1262,12 +1269,11 @@ dependencies = [
  "async-compat",
  "async-trait",
  "bytes 1.1.0",
- "common-exception",
  "futures",
- "reqwest",
  "rusoto_core",
  "rusoto_credential",
  "rusoto_s3",
+ "thiserror",
  "tokio",
 ]
 
@@ -1329,7 +1335,46 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-flight-rpc"
+name = "common-functions"
+version = "0.1.0"
+dependencies = [
+ "base64 0.13.0",
+ "blake3",
+ "bstr",
+ "bumpalo",
+ "bytes 1.1.0",
+ "common-arrow",
+ "common-ast",
+ "common-datablocks",
+ "common-datavalues",
+ "common-exception",
+ "common-io",
+ "crc32fast",
+ "dyn-clone",
+ "float-cmp",
+ "hex",
+ "indexmap",
+ "itertools",
+ "md5",
+ "num",
+ "num-format",
+ "num-traits",
+ "once_cell",
+ "ordered-float 2.8.0",
+ "pretty_assertions",
+ "rand 0.8.4",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2 0.10.0",
+ "sqlparser",
+ "strength_reduce",
+ "twox-hash",
+ "uuid",
+]
+
+[[package]]
+name = "common-grpc"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -1347,46 +1392,6 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "trust-dns-resolver",
-]
-
-[[package]]
-name = "common-functions"
-version = "0.1.0"
-dependencies = [
- "base64 0.13.0",
- "blake3",
- "bstr",
- "bumpalo",
- "bytes 1.1.0",
- "common-arrow",
- "common-datablocks",
- "common-datavalues",
- "common-exception",
- "common-io",
- "common-sql",
- "crc32fast",
- "dyn-clone",
- "float-cmp",
- "hex",
- "indexmap",
- "itertools",
- "md5",
- "num",
- "num-format",
- "num-traits",
- "once_cell",
- "ordered-float 2.8.0",
- "pretty_assertions",
- "rand 0.8.4",
- "regex",
- "serde",
- "serde_json",
- "sha1",
- "sha2 0.10.0",
- "sqlparser",
- "strength_reduce",
- "twox-hash",
- "uuid",
 ]
 
 [[package]]
@@ -1492,7 +1497,7 @@ dependencies = [
  "common-base",
  "common-datavalues",
  "common-exception",
- "common-flight-rpc",
+ "common-grpc",
  "common-infallible",
  "common-meta-api",
  "common-meta-types",
@@ -1511,6 +1516,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-meta-grpc"
+version = "0.1.0"
+dependencies = [
+ "common-arrow",
+ "common-base",
+ "common-exception",
+ "common-grpc",
+ "common-meta-api",
+ "common-meta-types",
+ "common-tracing",
+ "derive_more",
+ "futures",
+ "prost",
+ "rand 0.8.4",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tonic",
+]
+
+[[package]]
 name = "common-meta-raft-store"
 version = "0.1.0"
 dependencies = [
@@ -1521,7 +1548,6 @@ dependencies = [
  "clap 3.0.0-rc.9",
  "common-arrow",
  "common-base",
- "common-building",
  "common-exception",
  "common-io",
  "common-meta-api",
@@ -1529,6 +1555,7 @@ dependencies = [
  "common-meta-types",
  "common-tracing",
  "derive_more",
+ "futures",
  "maplit",
  "once_cell",
  "pretty_assertions",
@@ -1539,7 +1566,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tonic",
- "tonic-build",
 ]
 
 [[package]]
@@ -1564,14 +1590,21 @@ dependencies = [
 name = "common-meta-types"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-raft",
+ "common-building",
  "common-datavalues",
  "common-exception",
  "derive_more",
  "enumflags2",
+ "lazy_static",
  "maplit",
+ "prost",
  "serde",
  "serde_json",
+ "thiserror",
+ "tonic",
+ "tonic-build",
 ]
 
 [[package]]
@@ -1603,14 +1636,6 @@ dependencies = [
  "once_cell",
  "pretty_assertions",
  "serde",
-]
-
-[[package]]
-name = "common-sql"
-version = "0.1.0"
-dependencies = [
- "common-exception",
- "sqlparser",
 ]
 
 [[package]]
@@ -2097,6 +2122,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ee2393c4a91429dffb4bedf19f4d6abf27d8a732c8ce4980305d782e5426d57"
 
 [[package]]
+name = "databend-benchmark"
+version = "0.1.0"
+dependencies = [
+ "clap 3.0.0-rc.9",
+ "clickhouse-driver",
+ "common-base",
+ "common-exception",
+ "common-infallible",
+ "common-macros",
+ "common-tracing",
+ "crossbeam-queue 0.3.2",
+ "ctrlc",
+ "futures",
+ "quantiles",
+ "rand 0.8.4",
+ "serde",
+]
+
+[[package]]
+name = "databend-fuzz"
+version = "0.1.0"
+dependencies = [
+ "databend-query",
+ "honggfuzz",
+]
+
+[[package]]
 name = "databend-meta"
 version = "0.1.0"
 dependencies = [
@@ -2108,14 +2160,15 @@ dependencies = [
  "clap 3.0.0-rc.9",
  "common-arrow",
  "common-base",
+ "common-building",
  "common-containers",
  "common-datavalues",
  "common-exception",
- "common-flight-rpc",
+ "common-grpc",
  "common-infallible",
  "common-macros",
  "common-meta-api",
- "common-meta-flight",
+ "common-meta-grpc",
  "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",
@@ -2144,6 +2197,7 @@ dependencies = [
  "tokio-stream",
  "toml",
  "tonic",
+ "tonic-build",
  "uuid",
 ]
 
@@ -2166,6 +2220,7 @@ dependencies = [
  "clap 3.0.0-rc.9",
  "clickhouse-driver",
  "common-arrow",
+ "common-ast",
  "common-base",
  "common-building",
  "common-cache",
@@ -2174,8 +2229,8 @@ dependencies = [
  "common-datablocks",
  "common-datavalues",
  "common-exception",
- "common-flight-rpc",
  "common-functions",
+ "common-grpc",
  "common-infallible",
  "common-io",
  "common-macros",
@@ -2183,18 +2238,15 @@ dependencies = [
  "common-mem-allocator",
  "common-meta-api",
  "common-meta-embedded",
- "common-meta-flight",
+ "common-meta-grpc",
+ "common-meta-raft-store",
  "common-meta-sled-store",
  "common-meta-types",
  "common-metrics",
  "common-planners",
- "common-sql",
  "common-streams",
  "common-tracing",
  "criterion",
- "crossbeam 0.8.1",
- "crossbeam-queue 0.3.2",
- "ctrlc",
  "dyn-clone",
  "futures",
  "headers",
@@ -2214,7 +2266,6 @@ dependencies = [
  "poem",
  "pretty_assertions",
  "prost",
- "quantiles",
  "rand 0.8.4",
  "reqwest",
  "serde",
@@ -2901,14 +2952,6 @@ dependencies = [
  "pin-project-lite 0.2.7",
  "pin-utils",
  "slab",
-]
-
-[[package]]
-name = "fuzz"
-version = "0.1.0"
-dependencies = [
- "databend-query",
- "honggfuzz",
 ]
 
 [[package]]

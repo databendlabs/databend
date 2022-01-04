@@ -14,6 +14,7 @@
 
 #![allow(non_snake_case)]
 
+use std::convert::Infallible;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -72,6 +73,7 @@ impl ErrorCode {
             .unwrap_or_else(|| self.display_text.clone())
     }
 
+    #[must_use]
     pub fn add_message(self, msg: impl AsRef<str>) -> Self {
         Self {
             code: self.code(),
@@ -81,6 +83,7 @@ impl ErrorCode {
         }
     }
 
+    #[must_use]
     pub fn add_message_back(self, msg: impl AsRef<str>) -> Self {
         Self {
             code: self.code(),
@@ -425,6 +428,12 @@ impl From<Box<bincode::ErrorKind>> for ErrorCode {
 impl From<serde_json::Error> for ErrorCode {
     fn from(error: serde_json::Error) -> Self {
         ErrorCode::from_std_error(error)
+    }
+}
+
+impl From<Infallible> for ErrorCode {
+    fn from(v: Infallible) -> Self {
+        ErrorCode::from_std_error(v)
     }
 }
 

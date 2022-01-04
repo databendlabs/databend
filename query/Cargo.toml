@@ -15,10 +15,6 @@ test = false
 name = "databend-query"
 path = "src/bin/databend-query.rs"
 
-[[bin]]
-name = "databend-benchmark"
-path = "src/bin/databend-benchmark.rs"
-
 [features]
 default = ["simd"]
 simd = ["common-arrow/simd"]
@@ -33,7 +29,7 @@ common-dal = { path = "../common/dal" }
 common-datablocks = { path = "../common/datablocks" }
 common-datavalues = { path = "../common/datavalues" }
 common-exception = { path = "../common/exception" }
-common-flight-rpc = { path = "../common/flight-rpc" }
+common-grpc = { path = "../common/grpc" }
 common-functions = { path = "../common/functions" }
 common-infallible = { path = "../common/infallible" }
 common-io = { path = "../common/io" }
@@ -41,18 +37,18 @@ common-management = { path = "../common/management" }
 common-mem-allocator = { path = "../common/mem-allocator" }
 common-meta-api = { path = "../common/meta/api" }
 common-meta-embedded = { path = "../common/meta/embedded" }
-common-meta-flight = { path = "../common/meta/flight" }
+common-meta-grpc = { path = "../common/meta/grpc" }
 common-meta-sled-store = { path = "../common/meta/sled-store" }
+common-meta-raft-store = { path="../common/meta/raft-store" }
 common-meta-types = { path = "../common/meta/types" }
 common-macros = { path = "../common/macros" }
 common-metrics = { path = "../common/metrics" }
 common-planners = { path = "../common/planners" }
 common-streams = { path = "../common/streams" }
 common-tracing = { path = "../common/tracing" }
-common-sql = { path = "../common/sql" }
+common-ast = { path = "../common/ast" }
 
 # Github dependencies
-clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_driver/", rev = "6e0ecb2" }
 msql-srv = { git = "https://github.com/datafuse-extras/msql-srv", rev = "e4c8f3d" }
 sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "b42ff01" }
 
@@ -71,9 +67,6 @@ cargo_metadata = "0.14.1"
 chrono = "0.4.19"
 chrono-tz = "0.6.1"
 clap = { version = "3.0.0-rc.7", features = ["derive", "env"] }
-crossbeam = "0.8.1"
-crossbeam-queue = "0.3.2"
-ctrlc = { version = "3.2.1", features = ["termination"] }
 dyn-clone = "1.0.4"
 futures = "0.3.18"
 headers = "0.3.5"
@@ -88,7 +81,6 @@ num_cpus = "1.13.1"
 octocrab = "0.15.3"
 paste = "1.0.6"
 prost = "0.9.0"
-quantiles = "0.7.1"
 rand = "0.8.4"
 reqwest = "0.11.8"
 serde = { version = "1.0.132", features = ["derive"] }
@@ -105,6 +97,7 @@ walkdir = "2.3.2"
 parquet-format-async-temp = "0.2.0"
 
 [dev-dependencies]
+clickhouse-driver = { git = "https://github.com/datafuse-extras/clickhouse_driver", rev = "6e0ecb2" }
 criterion = "0.3.5"
 mysql_async = "0.29.0"
 pretty_assertions = "1.0.0"

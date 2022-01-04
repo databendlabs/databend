@@ -19,10 +19,7 @@ use std::iter::FromIterator;
 
 use common_arrow::arrow::array::*;
 
-use super::get_list_builder;
 use crate::prelude::*;
-use crate::series::Series;
-use crate::utils::get_iter_capacity;
 
 /// FromIterator trait
 

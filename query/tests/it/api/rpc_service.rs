@@ -23,8 +23,8 @@ use common_base::tokio::net::TcpListener;
 use common_base::tokio::sync::Notify;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_flight_rpc::ConnectionFactory;
-use common_flight_rpc::FlightClientTlsConfig;
+use common_grpc::ConnectionFactory;
+use common_grpc::RpcClientTlsConfig;
 use databend_query::api::DatabendQueryFlightDispatcher;
 use databend_query::api::RpcService;
 use databend_query::servers::Server;
@@ -50,20 +50,20 @@ async fn test_tls_rpc_server() -> Result<()> {
     let mut listener_address = SocketAddr::from_str("127.0.0.1:0")?;
     listener_address = rpc_service.start(listener_address).await?;
 
-    let tls_conf = Some(FlightClientTlsConfig {
+    let tls_conf = Some(RpcClientTlsConfig {
         rpc_tls_server_root_ca_cert: TEST_CA_CERT.to_string(),
         domain_name: TEST_CN_NAME.to_string(),
     });
 
     // normal case
-    let conn = ConnectionFactory::create_flight_channel(listener_address, None, tls_conf)?;
+    let conn = ConnectionFactory::create_rpc_channel(listener_address, None, tls_conf)?;
     let mut f_client = FlightServiceClient::new(conn);
     let r = f_client.list_actions(Empty {}).await;
     assert!(r.is_ok());
 
     // client access without tls enabled will be failed
     // - channel can still be created, but communication will be failed
-    let channel = ConnectionFactory::create_flight_channel(listener_address, None, None)?;
+    let channel = ConnectionFactory::create_rpc_channel(listener_address, None, None)?;
     let mut f_client = FlightServiceClient::new(channel);
     let r = f_client.list_actions(Empty {}).await;
     assert!(r.is_err());
@@ -94,12 +94,12 @@ async fn test_tls_rpc_server_invalid_server_config() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tls_rpc_server_invalid_client_config() -> Result<()> {
     // setup, invalid cert locations
-    let client_conf = FlightClientTlsConfig {
+    let client_conf = RpcClientTlsConfig {
         rpc_tls_server_root_ca_cert: "../tests/data/certs/nowhere.pem".to_string(),
         domain_name: TEST_CN_NAME.to_string(),
     };
 
-    let r = ConnectionFactory::create_flight_channel("fake:1234", None, Some(client_conf));
+    let r = ConnectionFactory::create_rpc_channel("fake:1234", None, Some(client_conf));
     assert!(r.is_err());
     let e = r.unwrap_err();
     assert_eq!(e.code(), ErrorCode::TLSConfigurationFailure("").code());

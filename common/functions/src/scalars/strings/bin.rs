@@ -46,7 +46,7 @@ impl Function for BinFunction {
         "bin"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
         if !args[0].is_numeric() && !args[0].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected number or null, but got {}",
@@ -54,7 +54,9 @@ impl Function for BinFunction {
             )));
         }
 
-        Ok(DataType::String)
+        let nullable = args.iter().any(|arg| arg.is_nullable());
+        let dt = DataType::String;
+        Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

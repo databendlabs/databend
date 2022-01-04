@@ -23,9 +23,6 @@ use common_arrow::arrow::io::parquet::write::WriteOptions;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
 
 // Used to create test parquet files from blocks.
 pub struct ParquetTestData {}

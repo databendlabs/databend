@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_meta_api::KVApi;
+use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::GetKVActionReply;
 use common_meta_types::MGetKVActionReply;
@@ -21,7 +22,6 @@ use common_meta_types::UpsertKVAction;
 use common_meta_types::UpsertKVActionReply;
 use common_tracing::tracing;
 
-use crate::state_machine::AppliedState;
 use crate::state_machine::StateMachine;
 
 #[async_trait::async_trait]

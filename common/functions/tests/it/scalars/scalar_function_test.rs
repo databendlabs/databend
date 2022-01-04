@@ -112,12 +112,12 @@ pub fn test_scalar_functions_with_type(
             };
         }
 
-        assert_eq!(
-            test.nullable,
-            test_function.nullable(&arguments_type)?,
-            "{}",
-            test.name
-        );
+        // Check the return type and nullable for non-error.
+        if test.error.is_empty() {
+            let return_type = test_function.return_type(&arguments_type)?;
+            assert_eq!(test.nullable, return_type.is_nullable(), "{}", test.name);
+        }
+
         match eval(&test_function, rows_size, &test.columns, &arguments_type) {
             Ok(v) if !matches!(v.data_type(), DataType::Struct(_)) => {
                 let cmp = v.to_array()?.eq(&test.expect.to_array()?)?;

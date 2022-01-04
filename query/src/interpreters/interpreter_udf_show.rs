@@ -16,10 +16,6 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
-use common_datavalues::series::Series;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
 use common_exception::Result;
 use common_planners::ShowUDFPlan;
 use common_streams::DataBlockStream;
@@ -57,6 +53,7 @@ impl Interpreter for ShowUDFInterpreter {
 
         let show_fields = vec![
             DataField::new("name", DataType::String, false),
+            DataField::new("parameters", DataType::String, false),
             DataField::new("definition", DataType::String, false),
             DataField::new("description", DataType::String, false),
         ];
@@ -64,6 +61,7 @@ impl Interpreter for ShowUDFInterpreter {
 
         let block = DataBlock::create_by_array(show_schema.clone(), vec![
             Series::new(vec![udf.name.as_bytes()]),
+            Series::new(vec![udf.parameters.join(", ").as_bytes()]),
             Series::new(vec![udf.definition.as_bytes()]),
             Series::new(vec![udf.description.as_bytes()]),
         ]);

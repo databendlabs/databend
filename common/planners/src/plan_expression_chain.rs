@@ -24,6 +24,8 @@ use crate::ActionFunction;
 use crate::ActionInput;
 use crate::Expression;
 use crate::ExpressionAction;
+use crate::ExpressionVisitor;
+use crate::Recursion;
 
 #[derive(Debug, Clone)]
 pub struct ExpressionChain {
@@ -40,16 +42,35 @@ impl ExpressionChain {
         };
 
         for expr in exprs {
-            chain.add_expr(expr)?;
+            chain.recursion_add_expr(expr)?;
         }
 
         Ok(chain)
     }
 
+    fn recursion_add_expr(&mut self, expr: &Expression) -> Result<()> {
+        struct ExpressionActionVisitor(*mut ExpressionChain);
+
+        impl ExpressionVisitor for ExpressionActionVisitor {
+            fn pre_visit(self, _expr: &Expression) -> Result<Recursion<Self>> {
+                Ok(Recursion::Continue(self))
+            }
+
+            fn post_visit(self, expr: &Expression) -> Result<Self> {
+                unsafe {
+                    (&mut *self.0).add_expr(expr)?;
+                    Ok(self)
+                }
+            }
+        }
+
+        ExpressionActionVisitor(self).visit(expr)?;
+        Ok(())
+    }
+
     fn add_expr(&mut self, expr: &Expression) -> Result<()> {
         match expr {
             Expression::Alias(name, sub_expr) => {
-                self.add_expr(sub_expr)?;
                 let return_type = expr.to_data_type(&self.schema)?;
 
                 let alias = ActionAlias {
@@ -102,12 +123,9 @@ impl ExpressionChain {
                 op,
                 expr: nested_expr,
             } => {
-                self.add_expr(nested_expr)?;
-
                 let arg_types = vec![nested_expr.to_data_type_and_nullable(&self.schema)?];
                 let func = FunctionFactory::instance().get(op, &arg_types)?;
                 let return_type = func.return_type(&arg_types)?;
-                let is_nullable = func.nullable(&arg_types)?;
 
                 let function = ActionFunction {
                     name: expr.column_name(),
@@ -115,24 +133,20 @@ impl ExpressionChain {
                     func,
                     arg_names: vec![nested_expr.column_name()],
                     arg_types,
-                    is_nullable,
-                    return_type,
+                    is_nullable: return_type.is_nullable(),
+                    return_type: return_type.data_type().clone(),
                 };
 
                 self.actions.push(ExpressionAction::Function(function));
             }
 
             Expression::BinaryExpression { op, left, right } => {
-                self.add_expr(left)?;
-                self.add_expr(right)?;
-
                 let arg_types = vec![
                     left.to_data_type_and_nullable(&self.schema)?,
                     right.to_data_type_and_nullable(&self.schema)?,
                 ];
 
                 let func = FunctionFactory::instance().get(op, &arg_types)?;
-                let is_nullable = func.nullable(&arg_types)?;
                 let return_type = func.return_type(&arg_types)?;
 
                 let function = ActionFunction {
@@ -141,25 +155,20 @@ impl ExpressionChain {
                     func,
                     arg_names: vec![left.column_name(), right.column_name()],
                     arg_types,
-                    is_nullable,
-                    return_type,
+                    is_nullable: return_type.is_nullable(),
+                    return_type: return_type.data_type().clone(),
                 };
 
                 self.actions.push(ExpressionAction::Function(function));
             }
 
             Expression::ScalarFunction { op, args } => {
-                for expr in args.iter() {
-                    self.add_expr(expr)?;
-                }
-
                 let arg_types = args
                     .iter()
                     .map(|action| action.to_data_type_and_nullable(&self.schema))
                     .collect::<Result<Vec<_>>>()?;
 
                 let func = FunctionFactory::instance().get(op, &arg_types)?;
-                let is_nullable = func.nullable(&arg_types)?;
                 let return_type = func.return_type(&arg_types)?;
 
                 let function = ActionFunction {
@@ -168,8 +177,8 @@ impl ExpressionChain {
                     func,
                     arg_names: args.iter().map(|action| action.column_name()).collect(),
                     arg_types,
-                    is_nullable,
-                    return_type,
+                    is_nullable: return_type.is_nullable(),
+                    return_type: return_type.data_type().clone(),
                 };
 
                 self.actions.push(ExpressionAction::Function(function));
@@ -180,16 +189,11 @@ impl ExpressionChain {
                     "Action must be a non-aggregated function.",
                 ));
             }
-            Expression::Sort { expr, .. } => {
-                self.add_expr(expr)?;
-            }
-
-            Expression::Wildcard => {}
+            Expression::Wildcard | Expression::Sort { .. } => {}
             Expression::Cast {
                 expr: sub_expr,
                 data_type,
             } => {
-                self.add_expr(sub_expr)?;
                 let func_name = "cast".to_string();
                 let return_type = data_type.clone();
                 let func = CastFunction::create(func_name.clone(), return_type.clone())?;

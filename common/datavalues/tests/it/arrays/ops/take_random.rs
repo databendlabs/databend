@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//use common_arrow::arrow::array::ListArray;
-use common_datavalues::arrays::get_list_builder;
 use common_datavalues::prelude::*;
 use common_exception::Result;
 

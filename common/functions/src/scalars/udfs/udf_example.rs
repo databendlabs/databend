@@ -48,12 +48,9 @@ impl Function for UdfExampleFunction {
         "UdfExampleFunction"
     }
 
-    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
-        Ok(DataType::Boolean)
-    }
-
-    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
-        Ok(false)
+    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let dt = DataType::String;
+        Ok(DataTypeAndNullable::create(&dt, false))
     }
 
     fn eval(&self, _columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

@@ -28,6 +28,7 @@ impl DataValue {
         s
     }
 
+    #[allow(clippy::needless_late_init)]
     pub fn try_from_literal(literal: &str, radix: Option<u32>) -> Result<DataValue> {
         let radix = radix.unwrap_or(10);
 

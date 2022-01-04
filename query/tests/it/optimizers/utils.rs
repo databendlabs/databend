@@ -133,7 +133,7 @@ fn test_arithmetic_plus_minus() -> Result<()> {
         Test {
             name: "f(x) = -x + 12",
             expr: Expression::create_binary_expression("+", vec![
-                Expression::create_unary_expression("-", vec![col("x")]),
+                Expression::create_unary_expression("negate", vec![col("x")]),
                 lit(12i32),
             ]),
             column: "x",
@@ -169,13 +169,13 @@ fn test_arithmetic_plus_minus() -> Result<()> {
                 Expression::create_binary_expression("-", vec![
                     // -x + 12
                     Expression::create_binary_expression("+", vec![
-                        Expression::create_unary_expression("-", vec![col("x")]),
+                        Expression::create_unary_expression("negate", vec![col("x")]),
                         lit(12i32),
                     ]),
                     col("x"),
                 ]),
                 // 1 - x
-                Expression::create_unary_expression("-", vec![lit(1i64), col("x")]),
+                Expression::create_unary_expression("negate", vec![lit(1i64), col("x")]),
             ]),
             column: "x",
             left: None,
@@ -198,7 +198,7 @@ fn test_arithmetic_plus_minus() -> Result<()> {
                     col("x"),
                 ]),
                 // 1 - x
-                Expression::create_unary_expression("-", vec![lit(1i64), col("x")]),
+                Expression::create_unary_expression("negate", vec![lit(1i64), col("x")]),
             ]),
             column: "x",
             left: None,
@@ -325,7 +325,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
         Test {
             name: "f(x) = -x/(2/(x-2)) where  x in [0-10]",
             expr: Expression::create_binary_expression("/", vec![
-                Expression::create_unary_expression("-", vec![col("x")]),
+                Expression::create_unary_expression("negate", vec![col("x")]),
                 Expression::create_binary_expression("/", vec![
                     lit(2_i8),
                     Expression::create_binary_expression("-", vec![col("x"), lit(2_i8)]),
@@ -346,7 +346,7 @@ fn test_arithmetic_mul_div() -> Result<()> {
         Test {
             name: "f(x) = -x/(2/(x-2)) where  x in [4-10]",
             expr: Expression::create_binary_expression("/", vec![
-                Expression::create_unary_expression("-", vec![col("x")]),
+                Expression::create_unary_expression("negate", vec![col("x")]),
                 Expression::create_binary_expression("/", vec![
                     lit(2_i8),
                     Expression::create_binary_expression("-", vec![col("x"), lit(2_i8)]),
@@ -496,7 +496,7 @@ fn test_abs_function() -> Result<()> {
             expr: Expression::create_scalar_function("abs", vec![
                 Expression::create_binary_expression("-", vec![
                     Expression::create_binary_expression("+", vec![
-                        Expression::create_unary_expression("-", vec![col("x")]),
+                        Expression::create_unary_expression("negate", vec![col("x")]),
                         lit(8_i64),
                     ]),
                     col("x"),

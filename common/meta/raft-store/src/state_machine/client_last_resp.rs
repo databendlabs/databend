@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_meta_types::AppliedState;
 use serde::Deserialize;
 use serde::Serialize;
-
-use crate::state_machine::AppliedState;
 
 /// Client last response that is stored in SledTree
 /// raft state: A mapping of client serial IDs to their state info:

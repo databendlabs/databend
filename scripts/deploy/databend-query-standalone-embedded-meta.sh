@@ -21,4 +21,4 @@ BIN=${1:-debug}
 echo 'Start DatabendQuery...'
 nohup target/${BIN}/databend-query -c scripts/deploy/config/databend-query-embedded-meta.toml &
 echo "Waiting on databend-query 10 seconds..."
-python scripts/ci/wait_tcp.py --timeout 5 --port 3307
+python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307

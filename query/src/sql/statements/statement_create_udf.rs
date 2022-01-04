@@ -28,6 +28,7 @@ use crate::sql::statements::AnalyzedResult;
 pub struct DfCreateUDF {
     pub if_not_exists: bool,
     pub udf_name: String,
+    pub parameters: Vec<String>,
     pub definition: String,
     pub description: String,
 }
@@ -41,6 +42,7 @@ impl AnalyzableStatement for DfCreateUDF {
                 if_not_exists: self.if_not_exists,
                 udf: UserDefinedFunction::new(
                     self.udf_name.as_str(),
+                    self.parameters.clone(),
                     self.definition.as_str(),
                     self.description.as_str(),
                 ),
