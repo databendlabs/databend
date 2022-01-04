@@ -61,7 +61,7 @@ async-std = "1.10.0"
 tryhard = "0.4.0"
 tokio-util = "0.6.9"
 csv = "1.1.6"
-http = "0.2.5"
+http = "0.2.6"
 
 [dev-dependencies]
 tempfile = "3.2.0"
