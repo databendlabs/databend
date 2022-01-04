@@ -39,7 +39,7 @@ pub enum PhysicalDataType {
 impl From<DataType> for PhysicalDataType {
     fn from(t: DataType) -> Self {
         use PhysicalDataType::*;
-        match t {
+        match t.remove_nullable().clone() {
             DataType::Null => Null,
             DataType::Boolean => Boolean,
             DataType::UInt8 => UInt8,
@@ -56,6 +56,7 @@ impl From<DataType> for PhysicalDataType {
             DataType::Struct(x) => Struct(x),
             DataType::String => String,
             DataType::Interval(_) => Int64,
+            DataType::Nullable(_) => unreachable!(),
         }
     }
 }

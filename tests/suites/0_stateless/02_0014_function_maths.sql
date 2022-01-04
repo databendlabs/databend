@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS math_sample_numbers;
 CREATE TABLE math_sample_numbers (timestamp UInt32, value Int32) engine=Memory;
 INSERT INTO math_sample_numbers VALUES ('1', '-1'), ('2', '-2'), ('3', '3');
 
@@ -15,6 +16,7 @@ SELECT abs(value) FROM math_sample_numbers;
 SELECT abs(value) + abs(-1) FROM math_sample_numbers;
 
 SELECT '===log===';
+DROP TABLE IF EXISTS math_log_numbers;
 CREATE TABLE math_log_numbers (a Float, b Float) engine=Memory;
 INSERT INTO math_log_numbers VALUES (2.0, 1024.0), (NULL, 12), (12, NULL);
 

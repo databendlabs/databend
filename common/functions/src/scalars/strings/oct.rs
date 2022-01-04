@@ -87,7 +87,9 @@ impl Function for OctFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        match columns[0].data_type() {
+        // TODO: function doesn't need to check the nullable during eval, bitmap will be masked after evaluation.
+        let dt = columns[0].data_type().remove_nullable();
+        match dt {
             DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64 => {
                 let mut string_array = StringArrayBuilder::with_capacity(input_rows);
                 for value in columns[0]

@@ -719,7 +719,14 @@ fn test_aggregate_function_with_grpup_by() -> Result<()> {
         };
 
         if let Err(e) = func() {
-            assert_eq!(t.error, e.to_string());
+            assert_eq!(
+                t.error,
+                e.to_string(),
+                "Test: {}, expect:'{}', get:'{}'",
+                t.name,
+                t.error,
+                e.to_string()
+            );
         }
     }
     Ok(())
@@ -746,8 +753,8 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
     ];
 
     let args = vec![
-        DataField::new("a", DataType::Int64, true),
-        DataField::new("b", DataType::Int64, true),
+        DataField::new("a", DataType::Int64.enforce_nullable(), true),
+        DataField::new("b", DataType::Int64.enforce_nullable(), true),
     ];
 
     let tests = vec![
@@ -1002,7 +1009,7 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
                 assert_eq!(array.values(), expect.values(), "{}", t.name);
             },
             {
-                panic!("shoud never reach this way");
+                panic!("should never reach this way");
             });
 
             // assert_eq!(&t.expect, &result, "{}", t.name);
@@ -1011,7 +1018,14 @@ fn test_aggregate_function_on_empty_data() -> Result<()> {
         };
 
         if let Err(e) = func() {
-            assert_eq!(t.error, e.to_string());
+            assert_eq!(
+                t.error,
+                e.to_string(),
+                "Test: {}, expect:'{}', get:'{}'",
+                t.name,
+                t.error,
+                e.to_string()
+            );
         }
     }
     Ok(())

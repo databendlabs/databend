@@ -72,7 +72,7 @@ impl Function for AbsFunction {
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
         let nullable = args.iter().any(|arg| arg.is_nullable());
         let data_type = if args[0].is_numeric() || args[0].is_string() || args[0].is_null() {
-            Ok(match args[0].data_type() {
+            Ok(match args[0].data_type().remove_nullable() {
                 DataType::Int8 => DataType::UInt8,
                 DataType::Int16 => DataType::UInt16,
                 DataType::Int32 => DataType::UInt32,
@@ -91,7 +91,9 @@ impl Function for AbsFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {
-        match columns[0].data_type() {
+        // TODO: the input columns should be all non-nullable, thus we don't need to remove nullable.
+        let dt = columns[0].data_type().remove_nullable();
+        match dt {
             DataType::Int8 => impl_abs_function!(columns[0], i8, DataType::UInt8),
             DataType::Int16 => impl_abs_function!(columns[0], i16, DataType::UInt16),
             DataType::Int32 => impl_abs_function!(columns[0], i32, DataType::UInt32),

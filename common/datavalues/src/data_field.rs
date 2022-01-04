@@ -60,10 +60,7 @@ impl Deref for DataTypeAndNullable {
 
 impl Display for DataTypeAndNullable {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        match self.nullable {
-            true => write!(f, "Nullable({})", self.data_type),
-            false => write!(f, "{}", self.data_type),
-        }
+        write!(f, "{}", self.data_type)
     }
 }
 
@@ -191,7 +188,12 @@ impl From<&ArrowField> for DataField {
                 }
             }
         }
-        DataField::new(f.name(), dt, f.is_nullable())
+
+        if f.is_nullable() {
+            DataField::new(f.name(), dt.enforce_nullable(), f.is_nullable())
+        } else {
+            DataField::new(f.name(), dt, f.is_nullable())
+        }
     }
 }
 

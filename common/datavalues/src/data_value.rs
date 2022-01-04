@@ -92,16 +92,18 @@ impl DataValue {
             DataValue::UInt64(_) => DataType::UInt64,
             DataValue::Float32(_) => DataType::Float32,
             DataValue::Float64(_) => DataType::Float64,
-            DataValue::List(_, data_type) => {
-                DataType::List(Box::new(DataField::new("item", data_type.clone(), true)))
-            }
+            DataValue::List(_, data_type) => DataType::List(Box::new(DataField::new(
+                "item",
+                data_type.enforce_nullable(),
+                true,
+            ))),
             DataValue::Struct(v) => {
                 let fields = v
                     .iter()
                     .enumerate()
                     .map(|(i, x)| {
                         let typ = x.data_type();
-                        DataField::new(format!("item_{}", i).as_str(), typ, true)
+                        DataField::new(format!("item_{}", i).as_str(), typ.enforce_nullable(), true)
                     })
                     .collect::<Vec<_>>();
                 DataType::Struct(fields)
@@ -344,6 +346,7 @@ impl DataValue {
             DataType::List(f) => DataValue::List(Some(vec![]), f.data_type().clone()),
             DataType::Struct(_) => DataValue::Struct(vec![]),
             DataType::String => DataValue::String(Some(vec![])),
+            _ => unreachable!(),
         }
     }
     pub fn as_string(&self) -> Result<Vec<u8>> {
@@ -437,7 +440,7 @@ impl From<Option<Vec<u8>>> for DataValue {
 
 impl From<&DataType> for DataValue {
     fn from(data_type: &DataType) -> Self {
-        match data_type {
+        match data_type.remove_nullable() {
             DataType::Null => DataValue::Null,
             DataType::Boolean => DataValue::Boolean(None),
             DataType::Int8 => DataValue::Int8(None),
@@ -458,6 +461,7 @@ impl From<&DataType> for DataValue {
             DataType::Struct(_) => DataValue::Struct(vec![]),
             DataType::String => DataValue::String(None),
             DataType::Interval(_) => DataValue::Int64(None),
+            DataType::Nullable(_) => unreachable!(),
         }
     }
 }

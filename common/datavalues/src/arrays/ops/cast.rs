@@ -56,7 +56,7 @@ where T: DFPrimitiveType
 impl ArrayCast for DFStringArray {
     fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
         // special case for string to float
-        if data_type == &DataType::Float32 {
+        if data_type.remove_nullable() == &DataType::Float32 {
             let c = self.apply_cast_numeric(|v| {
                 lexical_core::parse_partial::<f32>(v)
                     .unwrap_or((0.0f32, 0))
@@ -64,7 +64,7 @@ impl ArrayCast for DFStringArray {
             });
 
             Ok(c.into_series())
-        } else if data_type == &DataType::Float64 {
+        } else if data_type.remove_nullable() == &DataType::Float64 {
             let c = self.apply_cast_numeric(|v| {
                 lexical_core::parse_partial::<f64>(v)
                     .unwrap_or((0.0f64, 0))
@@ -86,7 +86,8 @@ impl ArrayCast for DFBooleanArray {
 
 impl ArrayCast for DFNullArray {
     fn cast_with_type(&self, data_type: &DataType) -> Result<Series> {
-        match data_type {
+        // TODO: maybe should only allow casting to nullable data type ?
+        match data_type.remove_nullable() {
             DataType::Null => Ok(self.clone().into_series()),
             DataType::Boolean => Ok(DFBooleanArray::full_null(self.len()).into_series()),
             DataType::UInt8 => Ok(DFUInt8Array::full_null(self.len()).into_series()),

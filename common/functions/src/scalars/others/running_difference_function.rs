@@ -51,7 +51,7 @@ impl Function for RunningDifferenceFunction {
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
         let nullable = args.iter().any(|arg| arg.is_nullable());
-        let data_type = match args[0].data_type() {
+        let data_type = match args[0].data_type().remove_nullable() {
             DataType::Int8 | DataType::UInt8 => Ok(DataType::Int16),
             DataType::Int16 | DataType::UInt16 | DataType::Date16 => Ok(DataType::Int32),
             DataType::Int32
@@ -69,7 +69,9 @@ impl Function for RunningDifferenceFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        match columns[0].data_type() {
+        // TODO: remove_nullable() should be outside of eval, we need to have some check to make sure the input
+        // column's data type is non-nullable
+        match columns[0].data_type().remove_nullable() {
             DataType::Int8 => compute_i8(columns[0].column(), input_rows),
             DataType::UInt8 => compute_u8(columns[0].column(), input_rows),
             DataType::Int16 => compute_i16(columns[0].column(), input_rows),

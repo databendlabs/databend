@@ -217,9 +217,25 @@ impl ExpressionExecutor {
             f.func.eval(&arg_columns, rows)?
         };
 
-        Ok(DataColumnWithField::new(
-            column,
-            DataField::new(&f.name, f.return_type.clone(), f.is_nullable),
-        ))
+        if f.is_nullable {
+            Ok(DataColumnWithField::new(
+                column,
+                DataField::new(&f.name, f.return_type.enforce_nullable(), f.is_nullable),
+            ))
+        } else {
+            // TODO: f.return_type should be one of:
+            //   1. DataType::Null, like Constant(1) + Constant(Null), we can skip computing.
+            //   2. Non-nullable data type. -- the bitmap should be applied outside of function.
+            // Then we don't need to call f.return.type.remove_nullable().
+            // Currently we use f.return_type.remove_nullable() to make sure it is a non-nullable type.
+            Ok(DataColumnWithField::new(
+                column,
+                DataField::new(
+                    &f.name,
+                    f.return_type.remove_nullable().clone(),
+                    f.is_nullable,
+                ),
+            ))
+        }
     }
 }

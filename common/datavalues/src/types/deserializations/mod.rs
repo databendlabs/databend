@@ -49,7 +49,7 @@ impl DataType {
                 }))
             },
 
-            {match data_type {
+            {match data_type.remove_nullable().clone() {
                 DataType::Boolean => Ok(Box::new(BooleanDeserializer {
                     builder: BooleanArrayBuilder::with_capacity(capacity),
                 })),

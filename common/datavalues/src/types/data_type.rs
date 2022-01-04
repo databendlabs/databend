@@ -62,6 +62,8 @@ pub enum DataType {
     List(Box<DataField>),
     Struct(Vec<DataField>),
     String,
+
+    Nullable(Box<DataType>),
 }
 
 #[derive(
@@ -92,6 +94,28 @@ impl fmt::Display for IntervalUnit {
 }
 
 impl DataType {
+    #[inline]
+    #[must_use]
+    pub fn enforce_nullable(&self) -> DataType {
+        if let DataType::Nullable(_) = self {
+            return self.clone();
+        }
+        DataType::Nullable(Box::new(self.clone()))
+    }
+
+    #[inline]
+    pub fn remove_nullable(&self) -> &DataType {
+        match self {
+            DataType::Nullable(dt) => dt.as_ref(),
+            _ => self,
+        }
+    }
+
+    #[inline]
+    pub fn is_nullable(&self) -> bool {
+        matches!(self, &DataType::Nullable(_) | &DataType::Null)
+    }
+
     pub fn to_physical_type(&self) -> PhysicalDataType {
         self.clone().into()
     }
@@ -103,13 +127,18 @@ impl DataType {
 
     #[inline]
     pub fn is_string(&self) -> bool {
-        matches!(self, DataType::String)
+        matches!(self.remove_nullable(), DataType::String)
+    }
+
+    #[inline]
+    pub fn is_boolean(&self) -> bool {
+        matches!(self.remove_nullable(), DataType::Boolean)
     }
 
     #[inline]
     pub fn is_integer(&self) -> bool {
         matches!(
-            self,
+            self.remove_nullable(),
             DataType::Int8
                 | DataType::Int16
                 | DataType::Int32
@@ -124,7 +153,7 @@ impl DataType {
     #[inline]
     pub fn is_signed_integer(&self) -> bool {
         matches!(
-            self,
+            self.remove_nullable(),
             DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64
         )
     }
@@ -132,20 +161,23 @@ impl DataType {
     #[inline]
     pub fn is_unsigned_integer(&self) -> bool {
         matches!(
-            self,
+            self.remove_nullable(),
             DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64
         )
     }
 
     #[inline]
     pub fn is_floating(&self) -> bool {
-        matches!(self, DataType::Float32 | DataType::Float64)
+        matches!(
+            self.remove_nullable(),
+            DataType::Float32 | DataType::Float64
+        )
     }
 
     #[inline]
     pub fn is_date_or_date_time(&self) -> bool {
         matches!(
-            self,
+            self.remove_nullable(),
             DataType::Date16
                 | DataType::Date32
                 | DataType::DateTime32(_)
@@ -157,7 +189,7 @@ impl DataType {
     #[inline]
     pub fn is_signed_numeric(&self) -> bool {
         matches!(
-            self,
+            self.remove_nullable(),
             DataType::Int8
                 | DataType::Int16
                 | DataType::Int32
@@ -172,19 +204,19 @@ impl DataType {
     pub fn is_numeric(&self) -> bool {
         self.is_signed_numeric()
             || matches!(
-                self,
+                self.remove_nullable(),
                 DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64
             )
     }
 
     #[inline]
     pub fn is_interval(&self) -> bool {
-        matches!(self, DataType::Interval(_))
+        matches!(self.remove_nullable(), DataType::Interval(_))
     }
 
     #[inline]
     pub fn numeric_byte_size(&self) -> Result<usize> {
-        match self {
+        match self.remove_nullable() {
             DataType::Int8 | DataType::UInt8 => Ok(1),
             DataType::Int16 | DataType::UInt16 => Ok(2),
             DataType::Int32 | DataType::UInt32 | DataType::Float32 => Ok(4),
@@ -198,7 +230,7 @@ impl DataType {
 
     pub fn to_arrow(&self) -> ArrowDataType {
         use DataType::*;
-        match self {
+        match self.remove_nullable() {
             Null => ArrowDataType::Null,
             Boolean => ArrowDataType::Boolean,
             UInt8 => ArrowDataType::UInt8,
@@ -223,6 +255,7 @@ impl DataType {
             }
             String => ArrowDataType::LargeBinary,
             Interval(_) => ArrowDataType::Int64,
+            DataType::Nullable(_) => unreachable!(),
         }
     }
 }
@@ -324,6 +357,8 @@ impl fmt::Debug for DataType {
             Self::Struct(arg0) => f.debug_tuple("Struct").field(arg0).finish(),
             Self::String => write!(f, "String"),
             Self::Interval(unit) => write!(f, "Interval({})", unit),
+            // TODO: maybe should be "Nullable()", but need to update some tests
+            Self::Nullable(dt) => write!(f, "{}", dt.as_ref()),
         }
     }
 }

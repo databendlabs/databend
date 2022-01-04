@@ -62,7 +62,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         }
 
         fn convert_field_type(field: &DataField) -> Result<ColumnType> {
-            match field.data_type() {
+            match field.data_type().remove_nullable() {
                 DataType::Int8 => Ok(ColumnType::MYSQL_TYPE_LONG),
                 DataType::Int16 => Ok(ColumnType::MYSQL_TYPE_LONG),
                 DataType::Int32 => Ok(ColumnType::MYSQL_TYPE_LONG),
@@ -119,7 +119,7 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                 continue;
                             }
                             let data_type = block.schema().fields()[col_index].data_type();
-                            match (data_type, val.clone()) {
+                            match (data_type.remove_nullable(), val.clone()) {
                                 (DataType::Boolean, DataValue::Boolean(Some(v))) => {
                                     row_writer.write_col(v as i8)?
                                 }

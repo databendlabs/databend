@@ -110,6 +110,8 @@ impl ArithmeticPlusFunction {
             )));
         };
 
+        let interval = interval.remove_nullable();
+        let result_type = result_type.remove_nullable();
         match interval {
             DataType::Interval(IntervalUnit::YearMonth) => match result_type.clone() {
                 DataType::Date16 => {

@@ -67,7 +67,12 @@ impl Function for CastFunction {
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {
-        if columns[0].data_type() == &self.cast_type {
+        // TODO: ideally we don't need to do remove nullable -- the input should be always non-nullable.
+        // The null value will be masked after function.eval.
+        let source_type = columns[0].data_type().remove_nullable();
+        let cast_to = self.cast_type.remove_nullable();
+
+        if source_type == cast_to {
             return Ok(columns[0].column().clone());
         }
         let series = columns[0].column().clone().to_minimal_array()?;
@@ -81,112 +86,110 @@ impl Function for CastFunction {
             )))
         };
 
-        let array = match (columns[0].data_type(), &self.cast_type) {
+        let array = match (source_type, cast_to) {
             // Date/DateTime to others
-            (DataType::Date16, _) => with_match_primitive_type!(&self.cast_type, |$T| {
-                series.cast_with_type(&self.cast_type)
+            (DataType::Date16, _) => with_match_primitive_type!(cast_to, |$T| {
+                series.cast_with_type(cast_to)
             }, {
-               let arr = series.u16()?;
-               match &self.cast_type {
-                Date32 => Ok(arr.apply_cast_numeric(|v| v as i32).into_series()),
-                DateTime32(_) => Ok(arr.apply_cast_numeric(|v|  Utc.timestamp(v as i64 * 24 * 3600, 0_u32).timestamp() as u32 ).into_series() ),
-                String => Ok(DFStringArray::from_iter(arr.into_iter().map(|v| v.map(|x| datetime_to_string( Utc.timestamp(*x as i64 * 24 * 3600, 0_u32), DATE_FMT))) ).into_series()),
-                _ => error_fn(),
-               }
+                let arr = series.u16()?;
+                match cast_to {
+                    Date32 => Ok(arr.apply_cast_numeric(|v| v as i32).into_series()),
+                    DateTime32(_) => Ok(arr.apply_cast_numeric(|v|  Utc.timestamp(v as i64 * 24 * 3600, 0_u32).timestamp() as u32 ).into_series() ),
+                    String => Ok(DFStringArray::from_iter(arr.into_iter().map(|v| v.map(|x| datetime_to_string( Utc.timestamp(*x as i64 * 24 * 3600, 0_u32), DATE_FMT))) ).into_series()),
+                    _ => error_fn(),
+                }
             }),
 
-            (DataType::Date32, _) => with_match_primitive_type!(&self.cast_type, |$T| {
-                series.cast_with_type(&self.cast_type)
+            (DataType::Date32, _) => with_match_primitive_type!(cast_to, |$T| {
+                series.cast_with_type(cast_to)
             }, {
-               let arr = series.i32()?;
-               match &self.cast_type {
-                Date32 => Ok(arr.apply_cast_numeric(|v| v as i32).into_series()),
-                DateTime32(_) => Ok(arr.apply_cast_numeric(|v|  Utc.timestamp(v as i64 * 24 * 3600, 0_u32).timestamp()  as u32).into_series() ),
-                String => Ok(DFStringArray::from_iter(arr.into_iter().map(|v| v.map(|x| datetime_to_string( Utc.timestamp(*x as i64 * 24 * 3600, 0_u32), DATE_FMT))) ).into_series()),
-                _ => error_fn(),
-               }
+                let arr = series.i32()?;
+                match cast_to {
+                    Date32 => Ok(arr.apply_cast_numeric(|v| v as i32).into_series()),
+                    DateTime32(_) => Ok(arr.apply_cast_numeric(|v|  Utc.timestamp(v as i64 * 24 * 3600, 0_u32).timestamp()  as u32).into_series() ),
+                    String => Ok(DFStringArray::from_iter(arr.into_iter().map(|v| v.map(|x| datetime_to_string( Utc.timestamp(*x as i64 * 24 * 3600, 0_u32), DATE_FMT))) ).into_series()),
+                    _ => error_fn(),
+                }
             }),
 
-            (DataType::DateTime32(_), _) => with_match_primitive_type!(&self.cast_type, |$T| {
-                series.cast_with_type(&self.cast_type)
+            (DataType::DateTime32(_), _) => with_match_primitive_type!(cast_to, |$T| {
+                series.cast_with_type(cast_to)
             }, {
-               let arr = series.u32()?;
-               match &self.cast_type {
-                Date16 => Ok(arr.apply_cast_numeric(|v| (v as i64 / 24/ 3600) as u16).into_series()),
-                Date32 => Ok(arr.apply_cast_numeric(|v| (v as i64 / 24/ 3600) as i32).into_series()),
-                String => Ok(DFStringArray::from_iter(arr.into_iter().map(|v| v.map(|x| datetime_to_string( Utc.timestamp(*x as i64, 0_u32), TIME_FMT))) ).into_series()),
-                _ => error_fn(),
-               }
+                let arr = series.u32()?;
+                match cast_to {
+                    Date16 => Ok(arr.apply_cast_numeric(|v| (v as i64 / 24/ 3600) as u16).into_series()),
+                    Date32 => Ok(arr.apply_cast_numeric(|v| (v as i64 / 24/ 3600) as i32).into_series()),
+                    String => Ok(DFStringArray::from_iter(arr.into_iter().map(|v| v.map(|x| datetime_to_string( Utc.timestamp(*x as i64, 0_u32), TIME_FMT))) ).into_series()),
+                    _ => error_fn(),
+                }
             }),
 
             // others to Date/DateTime
-            (_, DataType::Date16) => with_match_primitive_type!(columns[0].data_type(), |$T| {
-                series.cast_with_type(&self.cast_type)
+            (_, DataType::Date16) => with_match_primitive_type!(source_type, |$T| {
+                series.cast_with_type(cast_to)
             }, {
-               match columns[0].data_type() {
-                String => {
-                    let it = series.string()?.into_iter().map(|v| {
-                        v.and_then(string_to_date).map(|d| (d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as u16 )
-                    });
-                    Ok(DFUInt16Array::from_iter(it).into_series())
-                },
-                _ => error_fn(),
-
-               }
+                match source_type {
+                    String => {
+                        let it = series.string()?.into_iter().map(|v| {
+                            v.and_then(string_to_date).map(|d| (d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as u16 )
+                        });
+                        Ok(DFUInt16Array::from_iter(it).into_series())
+                    },
+                    _ => error_fn(),
+                }
             }),
 
-            (_, DataType::Date32) => with_match_primitive_type!(columns[0].data_type(), |$T| {
-                series.cast_with_type(&self.cast_type)
+            (_, DataType::Date32) => with_match_primitive_type!(source_type, |$T| {
+                series.cast_with_type(cast_to)
             }, {
-               match columns[0].data_type() {
-                String => {
-                    let it = series.string()?.into_iter().map(|v| {
-                        v.and_then(string_to_date).map(|d| (d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as i32 )
-                    });
-                    Ok(DFInt32Array::from_iter(it).into_series())
-                },
-                _ => error_fn(),
-
-               }
+                match source_type {
+                    String => {
+                        let it = series.string()?.into_iter().map(|v| {
+                            v.and_then(string_to_date).map(|d| (d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as i32 )
+                        });
+                        Ok(DFInt32Array::from_iter(it).into_series())
+                    },
+                    _ => error_fn(),
+                }
             }),
 
             (_, DataType::DateTime32(_)) => {
-                with_match_primitive_type!(columns[0].data_type(), |$T| {
-                    series.cast_with_type(&self.cast_type)
+                with_match_primitive_type!(source_type, |$T| {
+                    series.cast_with_type(cast_to)
                 }, {
-                   match columns[0].data_type() {
-                    String => {
-                        let it = series.string()?.into_iter().map(|v| {
-                            v.and_then(string_to_datetime).map(|t| t.timestamp() as u32)
-                        });
-                        Ok(DFUInt32Array::from_iter(it).into_series())
-                    },
-                    _ => error_fn(),
+                    match source_type {
+                        String => {
+                            let it = series.string()?.into_iter().map(|v| {
+                                v.and_then(string_to_datetime).map(|t| t.timestamp() as u32)
+                            });
+                            Ok(DFUInt32Array::from_iter(it).into_series())
+                        },
+                        _ => error_fn(),
                    }
                 })
             }
             (_, DataType::DateTime64(precision, _)) => {
-                with_match_primitive_type!(columns[0].data_type(), |$T| {
-                    series.cast_with_type(&self.cast_type)
+                with_match_primitive_type!(source_type, |$T| {
+                    series.cast_with_type(cast_to)
                 }, {
-                   match columns[0].data_type() {
-                    String => {
-                        let it = series.string()?.into_iter().map(|v| {
-                            v.and_then(string_to_datetime64).map(|t| -> u64 {
-                                if *precision <= 3 {
-                                    t.timestamp_millis() as u64
-                                } else {
-                                    t.timestamp_nanos() as u64
-                                }
-                            })
-                        });
-                        Ok(DFUInt64Array::from_iter(it).into_series())
-                    },
-                    _ => error_fn()
-                   }
+                    match source_type {
+                        String => {
+                            let it = series.string()?.into_iter().map(|v| {
+                                v.and_then(string_to_datetime64).map(|t| -> u64 {
+                                    if *precision <= 3 {
+                                        t.timestamp_millis() as u64
+                                    } else {
+                                        t.timestamp_nanos() as u64
+                                    }
+                                })
+                            });
+                            Ok(DFUInt64Array::from_iter(it).into_series())
+                        },
+                        _ => error_fn()
+                    }
                 })
             }
-            _ => series.cast_with_type(&self.cast_type),
+            _ => series.cast_with_type(cast_to),
         }?;
 
         let column: DataColumn = array.into();

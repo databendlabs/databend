@@ -263,7 +263,7 @@ fn to_clickhouse_column(field: &DataField, column: &Series) -> Result<ArcColumnD
     let is_nullable = field.is_nullable();
     let utc: Tz = "UTC".parse().unwrap();
     let result = match is_nullable {
-        true => match field.data_type() {
+        true => match field.data_type().remove_nullable() {
             DataType::Int8 => Vec::column_from::<ArcColumnWrapper>(column.i8()?.collect_values()),
             DataType::Int16 => Vec::column_from::<ArcColumnWrapper>(column.i16()?.collect_values()),
             DataType::Int32 => Vec::column_from::<ArcColumnWrapper>(column.i32()?.collect_values()),

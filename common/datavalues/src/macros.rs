@@ -24,7 +24,7 @@ macro_rules! with_match_primitive_type {
         }
         use crate::prelude::DataType::*;
 
-        match $key_type {
+        match $key_type.remove_nullable() {
             Int8 => __with_ty__! { i8 },
             Int16 => __with_ty__! { i16 },
             Int32 => __with_ty__! { i32 },
@@ -91,7 +91,7 @@ macro_rules! apply_method_numeric_series {
 #[macro_export]
 macro_rules! match_data_type_apply_macro {
     ($obj:expr, $macro:ident, $macro_string:ident, $macro_bool:ident $(, $opt_args:expr)*) => {{
-        match $obj {
+        match $obj.remove_nullable() {
             DataType::String => $macro_string!($($opt_args)*),
             DataType::Boolean => $macro_bool!($($opt_args)*),
             DataType::UInt8 => $macro!(u8 $(, $opt_args)*),

@@ -336,7 +336,7 @@ where
 
 macro_rules! creator {
     ($T: ident, $data_type: expr, $display_name: expr, $params: expr, $arguments: expr) => {
-        if $T::data_type() == $data_type {
+        if $T::data_type().remove_nullable() == $data_type.remove_nullable() {
             return AggregateWindowFunnelFunction::<$T>::try_create(
                 $display_name,
                 $params,
@@ -355,7 +355,7 @@ pub fn try_create_aggregate_window_funnel_function(
     assert_variadic_arguments(display_name, arguments.len(), (1, 32))?;
 
     for (idx, arg) in arguments[1..].iter().enumerate() {
-        if arg.data_type() != &DataType::Boolean {
+        if !arg.data_type().is_boolean() {
             return Err(ErrorCode::BadDataValueType(format!(
                 "Illegal type of the argument {} in AggregateWindowFunnelFunction, must be boolean, got: {}",
                  idx + 1, arg.data_type()
@@ -363,7 +363,7 @@ pub fn try_create_aggregate_window_funnel_function(
         }
     }
 
-    let data_type = arguments[0].data_type();
+    let data_type = arguments[0].data_type().remove_nullable();
     with_match_date_date_time_types! {creator, data_type.clone(), display_name, params, arguments}
     with_match_unsigned_numeric_types! {creator, data_type.clone(), display_name, params, arguments}
 

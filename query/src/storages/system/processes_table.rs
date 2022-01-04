@@ -45,16 +45,32 @@ impl ProcessesTable {
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("id", DataType::String, false),
             DataField::new("type", DataType::String, false),
-            DataField::new("host", DataType::String, true),
-            DataField::new("user", DataType::String, true),
+            DataField::new("host", DataType::String.enforce_nullable(), true),
+            DataField::new("user", DataType::String.enforce_nullable(), true),
             DataField::new("state", DataType::String, false),
             DataField::new("database", DataType::String, false),
-            DataField::new("extra_info", DataType::String, true),
-            DataField::new("memory_usage", DataType::Int64, true),
-            DataField::new("dal_metrics_read_bytes", DataType::UInt64, true),
-            DataField::new("dal_metrics_write_bytes", DataType::UInt64, true),
-            DataField::new("scan_progress_read_rows", DataType::UInt64, true),
-            DataField::new("scan_progress_read_bytes", DataType::UInt64, true),
+            DataField::new("extra_info", DataType::String.enforce_nullable(), true),
+            DataField::new("memory_usage", DataType::Int64.enforce_nullable(), true),
+            DataField::new(
+                "dal_metrics_read_bytes",
+                DataType::UInt64.enforce_nullable(),
+                true,
+            ),
+            DataField::new(
+                "dal_metrics_write_bytes",
+                DataType::UInt64.enforce_nullable(),
+                true,
+            ),
+            DataField::new(
+                "scan_progress_read_rows",
+                DataType::UInt64.enforce_nullable(),
+                true,
+            ),
+            DataField::new(
+                "scan_progress_read_bytes",
+                DataType::UInt64.enforce_nullable(),
+                true,
+            ),
         ]);
 
         let table_info = TableInfo {

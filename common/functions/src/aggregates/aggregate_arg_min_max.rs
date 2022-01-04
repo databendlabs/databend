@@ -506,7 +506,7 @@ pub fn try_create_aggregate_arg_minmax_function<const IS_MIN: bool>(
     },
 
     {
-        if data_type == &DataType::String {
+        if data_type.is_string() {
             if IS_MIN {
                 return AggregateArgMinMaxFunction::<StringState>::try_create_arg_min(
                     display_name,

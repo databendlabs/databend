@@ -358,7 +358,7 @@ pub fn try_create_aggregate_minmax_function<const IS_MIN: bool>(
     },
 
     {
-        if data_type == &DataType::String {
+        if data_type.is_string() {
             if IS_MIN {
                 AggregateMinMaxFunction::<StringState>::try_create_min(display_name, arguments)
             } else {

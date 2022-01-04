@@ -226,8 +226,14 @@ impl Expression {
     pub fn to_data_field(&self, input_schema: &DataSchemaRef) -> Result<DataField> {
         let name = self.column_name();
         self.to_data_type(input_schema).and_then(|return_type| {
-            self.nullable(input_schema)
-                .map(|nullable| DataField::new(&name, return_type, nullable))
+            self.nullable(input_schema).map(|nullable| {
+                println!("return_type {}", return_type);
+                if nullable {
+                    DataField::new(&name, return_type.enforce_nullable(), nullable)
+                } else {
+                    DataField::new(&name, return_type, nullable)
+                }
+            })
         })
     }
 
@@ -260,7 +266,7 @@ impl Expression {
                 column_field.name(),
                 DataType::List(Box::new(DataField::new(
                     "item",
-                    column_field.data_type().clone(),
+                    column_field.data_type().enforce_nullable(),
                     true,
                 ))),
                 false,

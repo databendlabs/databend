@@ -28,7 +28,7 @@ use pretty_assertions::assert_eq;
 #[test]
 fn test_sparse_index() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![
-        DataField::new("name", DataType::String, true),
+        DataField::new("name", DataType::String.enforce_nullable(), true),
         DataField::new("age", DataType::Int32, false),
     ]);
 

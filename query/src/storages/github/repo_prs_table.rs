@@ -67,14 +67,26 @@ impl RepoPRsTable {
     fn schema() -> Arc<DataSchema> {
         let fields = vec![
             DataField::new(NUMBER, DataType::UInt64, false),
-            DataField::new(TITLE, DataType::String, true),
-            DataField::new(STATE, DataType::String, true),
-            DataField::new(USER, DataType::String, true),
-            DataField::new(LABELS, DataType::String, true),
-            DataField::new(ASSIGNESS, DataType::String, true),
-            DataField::new(CREATED_AT, DataType::DateTime32(None), true),
-            DataField::new(UPDATED_AT, DataType::DateTime32(None), true),
-            DataField::new(CLOSED_AT, DataType::DateTime32(None), true),
+            DataField::new(TITLE, DataType::String.enforce_nullable(), true),
+            DataField::new(STATE, DataType::String.enforce_nullable(), true),
+            DataField::new(USER, DataType::String.enforce_nullable(), true),
+            DataField::new(LABELS, DataType::String.enforce_nullable(), true),
+            DataField::new(ASSIGNESS, DataType::String.enforce_nullable(), true),
+            DataField::new(
+                CREATED_AT,
+                DataType::DateTime32(None).enforce_nullable(),
+                true,
+            ),
+            DataField::new(
+                UPDATED_AT,
+                DataType::DateTime32(None).enforce_nullable(),
+                true,
+            ),
+            DataField::new(
+                CLOSED_AT,
+                DataType::DateTime32(None).enforce_nullable(),
+                true,
+            ),
         ];
 
         Arc::new(DataSchema::new(fields))

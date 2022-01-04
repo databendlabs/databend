@@ -32,7 +32,8 @@ pub trait MutableArrayBuilder {
 }
 
 pub fn create_mutable_array(datatype: DataType) -> Box<dyn MutableArrayBuilder> {
-    match datatype {
+    // TODO: maybe nullable type should map to MutableBooleanArrayBuilder::<TRUE>
+    match datatype.remove_nullable() {
         DataType::Boolean => Box::new(MutableBooleanArrayBuilder::<true>::default()),
         DataType::UInt8 => Box::new(MutablePrimitiveArrayBuilder::<u8, true>::default()),
         DataType::UInt16 => Box::new(MutablePrimitiveArrayBuilder::<u16, true>::default()),

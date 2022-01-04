@@ -106,7 +106,7 @@ pub fn block_to_json(block: &DataBlock) -> Result<Vec<Vec<JsonValue>>> {
         let field = block.schema().field(col_index);
         let data_type = field.data_type();
         let json_column: Vec<JsonValue> = match field.is_nullable() {
-            true => match data_type {
+            true => match data_type.remove_nullable() {
                 DataType::Int8 => primitive_array_to_json(series.i8()?),
                 DataType::Int16 => primitive_array_to_json(series.i16()?),
                 DataType::Int32 => primitive_array_to_json(series.i32()?),

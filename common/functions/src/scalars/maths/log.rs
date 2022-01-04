@@ -44,8 +44,8 @@ impl Function for GenericLogFunction {
     }
 
     fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
-        let dt = DataType::Float64;
         let nullable = args.iter().any(|arg| arg.is_nullable());
+        let dt = DataType::Float64;
         Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 

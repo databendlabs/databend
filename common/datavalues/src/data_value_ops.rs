@@ -71,7 +71,7 @@ impl DataValue {
 
     /// Convert data value vectors to data array.
     pub fn try_into_data_array(values: &[DataValue], data_type: &DataType) -> Result<Series> {
-        match data_type {
+        match data_type.remove_nullable() {
             DataType::Int8 => {
                 try_build_array! {PrimitiveArrayBuilder, i8, Int8, values}
             }

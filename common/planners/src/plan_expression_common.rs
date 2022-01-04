@@ -438,7 +438,7 @@ impl ExpressionVisitor for ExpressionDataTypeVisitor {
                 "QualifiedColumn should be resolve in analyze.",
             )),
             Expression::Literal { data_type, .. } => {
-                let data_type = DataTypeAndNullable::create(data_type, true);
+                let data_type = DataTypeAndNullable::create(data_type, data_type.is_nullable());
                 self.stack.push(data_type);
                 Ok(self)
             }

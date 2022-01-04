@@ -154,8 +154,17 @@ impl DfCreateTable {
                         }
                     }
                     let field = SQLCommon::make_data_type(&column.data_type).map(|data_type| {
-                        DataField::new(&column.name.value, data_type, nullable)
+                        if nullable {
+                            DataField::new(
+                                &column.name.value,
+                                data_type.enforce_nullable(),
+                                nullable,
+                            )
                             .with_default_expr(default_expr)
+                        } else {
+                            DataField::new(&column.name.value, data_type, nullable)
+                                .with_default_expr(default_expr)
+                        }
                     })?;
                     fields.push(field);
                 }

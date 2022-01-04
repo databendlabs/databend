@@ -24,7 +24,7 @@ macro_rules! with_match_primitive_type {
         }
         use common_datavalues::prelude::DataType::*;
 
-        match $key_type {
+        match $key_type.remove_nullable() {
             Int8 => __with_ty__! { i8 },
             Int16 => __with_ty__! { i16 },
             Int32 => __with_ty__! { i32 },
@@ -54,7 +54,7 @@ macro_rules! with_match_primitive_types {
 
         macro_rules! __match_type__ {
             ($t:ident) => {
-                match $type1 {
+                match $type1.remove_nullable() {
                     Int8 => __with_types__! { $t, i8 },
                     Int16 => __with_types__! { $t, i16 },
                     Int32 => __with_types__! { $t, i32 },
@@ -72,7 +72,7 @@ macro_rules! with_match_primitive_types {
 
         use common_datavalues::prelude::DataType::*;
 
-        match $type0 {
+        match $type0.remove_nullable() {
             Int8 => __match_type__! { i8 },
             Int16 => __match_type__! { i16 },
             Int32 => __match_type__! { i32 },

@@ -60,8 +60,8 @@ impl RepoCommentsTable {
     fn schema() -> Arc<DataSchema> {
         let fields = vec![
             DataField::new(COMMENT_ID, DataType::UInt64, false),
-            DataField::new(USER, DataType::String, true),
-            DataField::new(BODY, DataType::String, true),
+            DataField::new(USER, DataType::String.enforce_nullable(), true),
+            DataField::new(BODY, DataType::String.enforce_nullable(), true),
         ];
 
         Arc::new(DataSchema::new(fields))

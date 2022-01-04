@@ -182,7 +182,11 @@ impl StatColumn {
     ) -> Self {
         let column_new = format!("{}_{}", stat_type, field.name());
         let data_type = if matches!(stat_type, StatType::Nulls) {
-            DataType::UInt64
+            if field.is_nullable() {
+                DataType::UInt64.enforce_nullable()
+            } else {
+                DataType::UInt64
+            }
         } else {
             field.data_type().clone()
         };

@@ -296,7 +296,7 @@ pub fn numerical_unary_arithmetic_coercion(
 
 // coercion rules for compare operations. This is a superset of all numerical coercion rules.
 pub fn compare_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<DataType> {
-    if lhs_type == rhs_type {
+    if lhs_type.remove_nullable() == rhs_type.remove_nullable() {
         // same type => equality is possible
         return Ok(lhs_type.clone());
     }
@@ -316,23 +316,19 @@ pub fn compare_coercion(lhs_type: &DataType, rhs_type: &DataType) -> Result<Data
     }
 
     // one of is String and other is number
-    if (lhs_type.is_numeric() && rhs_type == &DataType::String)
-        || (rhs_type.is_numeric() && lhs_type == &DataType::String)
+    if (lhs_type.is_numeric() && rhs_type.is_string())
+        || (rhs_type.is_numeric() && lhs_type.is_string())
     {
         return Ok(DataType::Float64);
     }
 
     // one of is datetime and other is number or string
     {
-        if (lhs_type.is_numeric() || lhs_type == &DataType::String)
-            && rhs_type.is_date_or_date_time()
-        {
+        if (lhs_type.is_numeric() || lhs_type.is_string()) && rhs_type.is_date_or_date_time() {
             return Ok(rhs_type.clone());
         }
 
-        if (rhs_type.is_numeric() || rhs_type == &DataType::String)
-            && lhs_type.is_date_or_date_time()
-        {
+        if (rhs_type.is_numeric() || rhs_type.is_string()) && lhs_type.is_date_or_date_time() {
             return Ok(lhs_type.clone());
         }
     }
