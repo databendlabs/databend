@@ -21,8 +21,8 @@ use crate::users::UserApiProvider;
 /// user stage operations.
 impl UserApiProvider {
     // Add a new stage.
-    pub async fn add_stage(&self, info: UserStageInfo) -> Result<u64> {
-        let stage_api_provider = self.get_stage_api_client();
+    pub async fn add_stage(&self, tenant: &str, info: UserStageInfo) -> Result<u64> {
+        let stage_api_provider = self.get_stage_api_client(tenant);
         let add_stage = stage_api_provider.add_stage(info);
         match add_stage.await {
             Ok(res) => Ok(res),
@@ -31,15 +31,15 @@ impl UserApiProvider {
     }
 
     // Get one stage from by tenant.
-    pub async fn get_stage(&self, stage_name: &str) -> Result<UserStageInfo> {
-        let stage_api_provider = self.get_stage_api_client();
+    pub async fn get_stage(&self, tenant: &str, stage_name: &str) -> Result<UserStageInfo> {
+        let stage_api_provider = self.get_stage_api_client(tenant);
         let get_stage = stage_api_provider.get_stage(stage_name, None);
         Ok(get_stage.await?.data)
     }
 
     // Get the tenant all stage list.
-    pub async fn get_stages(&self) -> Result<Vec<UserStageInfo>> {
-        let stage_api_provider = self.get_stage_api_client();
+    pub async fn get_stages(&self, tenant: &str) -> Result<Vec<UserStageInfo>> {
+        let stage_api_provider = self.get_stage_api_client(tenant);
         let get_stages = stage_api_provider.get_stages();
 
         match get_stages.await {
@@ -49,8 +49,8 @@ impl UserApiProvider {
     }
 
     // Drop a stage by name.
-    pub async fn drop_stage(&self, name: &str, if_exist: bool) -> Result<()> {
-        let stage_api_provider = self.get_stage_api_client();
+    pub async fn drop_stage(&self, tenant: &str, name: &str, if_exist: bool) -> Result<()> {
+        let stage_api_provider = self.get_stage_api_client(tenant);
         let drop_stage = stage_api_provider.drop_stage(name, None);
         match drop_stage.await {
             Ok(res) => Ok(res),
