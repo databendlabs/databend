@@ -193,6 +193,8 @@ build_exceptions! {
     InvalidSourceFormat(59),
     StrParseError(60),
     IllegalGrant(61),
+    UnknownEnumValue(62),
+    ParseEnumTypeError(63),
     ProxyModePermissionDenied(62),
     PermissionDenied(63),
 

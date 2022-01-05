@@ -344,6 +344,8 @@ impl DataValue {
             DataType::List(f) => DataValue::List(Some(vec![]), f.data_type().clone()),
             DataType::Struct(_) => DataValue::Struct(vec![]),
             DataType::String => DataValue::String(Some(vec![])),
+            DataType::Enum8(_) => DataValue::UInt8(Some(0)),
+            DataType::Enum16(_) => DataValue::UInt16(Some(0)),
         }
     }
     pub fn as_string(&self) -> Result<Vec<u8>> {
@@ -458,6 +460,8 @@ impl From<&DataType> for DataValue {
             DataType::Struct(_) => DataValue::Struct(vec![]),
             DataType::String => DataValue::String(None),
             DataType::Interval(_) => DataValue::Int64(None),
+            DataType::Enum8(_) => DataValue::UInt8(None),
+            DataType::Enum16(_) => DataValue::UInt16(None),
         }
     }
 }

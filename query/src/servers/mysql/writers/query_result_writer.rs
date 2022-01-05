@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::fmt::Debug;
+
 use chrono_tz::Tz;
 use common_datablocks::DataBlock;
 use common_datavalues::DataField;
@@ -188,6 +191,14 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
                                     let serializer = data_type.create_serializer();
                                     row_writer.write_col(serializer.serialize_value(&val)?)?
                                 }
+                                (DataType::Enum8(values), DataValue::UInt8(Some(v))) => {
+                                    let k = Self::find_enum_value(values, v)?;
+                                    row_writer.write_col(k)?
+                                }
+                                (DataType::Enum16(values), DataValue::UInt16(Some(v))) => {
+                                    let k = Self::find_enum_value(values, v)?;
+                                    row_writer.write_col(k)?
+                                }
                                 (_, v) => {
                                     return Err(ErrorCode::BadDataValueType(format!(
                                         "Unsupported column type:{:?}, expected type in schema: {:?}",
@@ -218,5 +229,20 @@ impl<'a, W: std::io::Write> DFQueryResultWriter<'a, W> {
         }
 
         Ok(())
+    }
+
+    fn find_enum_value<U>(values: &BTreeMap<String, U>, v: U) -> Result<String>
+    where U: Debug + std::cmp::PartialEq {
+        let (k, _) = values
+            .iter()
+            .find(|&(_, value)| *value == v)
+            .ok_or_else(|| {
+                ErrorCode::UnknownEnumValue(format!(
+                    "Unknown enum value:{:?}, expected enum values: {:?}",
+                    v, values
+                ))
+            })?;
+
+        Ok(k.to_string())
     }
 }

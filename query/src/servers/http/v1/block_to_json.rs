@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_datablocks::DataBlock;
@@ -92,6 +93,24 @@ where
         .collect()
 }
 
+fn enum_array_to_string_array_not_null<T, U>(
+    array: &DFPrimitiveArray<T>,
+    defs: &BTreeMap<String, U>,
+) -> Vec<JsonValue>
+where
+    T: DFPrimitiveType + Serialize + Into<U>,
+    U: PartialEq<T>,
+{
+    array
+        .into_no_null_iter()
+        .map(|o| {
+            let (k, _) = defs.iter().find(|&(_, v)| *v == *o).unwrap();
+            k.to_string()
+        })
+        .map(to_json_value)
+        .collect()
+}
+
 fn bad_type(data_type: &DataType) -> ErrorCode {
     ErrorCode::BadDataValueType(format!("Unsupported column type:{:?}", data_type))
 }
@@ -158,6 +177,12 @@ pub fn block_to_json(block: &DataBlock) -> Result<Vec<Vec<JsonValue>>> {
                 DataType::Date32 => date_array_to_string_array_not_null(series.i32()?, DATE_FMT),
                 DataType::DateTime32(_) => {
                     date_array_to_string_array_not_null(series.i32()?, TIME_FMT)
+                }
+                DataType::Enum8(values) => {
+                    enum_array_to_string_array_not_null(series.u8()?, values)
+                }
+                DataType::Enum16(values) => {
+                    enum_array_to_string_array_not_null(series.u16()?, values)
                 }
                 _ => return Err(bad_type(data_type)),
             },

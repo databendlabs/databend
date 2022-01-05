@@ -42,8 +42,8 @@ impl From<DataType> for PhysicalDataType {
         match t {
             DataType::Null => Null,
             DataType::Boolean => Boolean,
-            DataType::UInt8 => UInt8,
-            DataType::UInt16 | DataType::Date16 => UInt16,
+            DataType::UInt8 | DataType::Enum8(_) => UInt8,
+            DataType::UInt16 | DataType::Date16 | DataType::Enum16(_) => UInt16,
             DataType::UInt32 | DataType::DateTime32(_) => UInt32,
             DataType::UInt64 | DataType::DateTime64(_, _) => UInt64,
             DataType::Int8 => Int8,

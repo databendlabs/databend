@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use common_datavalues::prelude::*;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -41,32 +43,67 @@ impl SQLCommon {
             //custom types for databend
             // Custom(ObjectName([Ident { value: "uint8", quote_style: None }])
             SQLDataType::Custom(obj) if !obj.0.is_empty() => {
-                match obj.0[0].value.to_uppercase().as_str() {
-                    "UINT8" => Ok(DataType::UInt8),
-                    "UINT16" => Ok(DataType::UInt16),
-                    "UINT32" => Ok(DataType::UInt32),
-                    "UINT64" => Ok(DataType::UInt64),
+                let value = obj.0[0].value.to_uppercase();
+                if value.as_str().starts_with("ENUM8") {
+                    let enum_definition: Vec<String> = value
+                        .get(6..value.len() - 2)
+                        .ok_or_else(|| {
+                            ErrorCode::ParseEnumTypeError(format!("Parse enum type {:?}", value))
+                        })?
+                        .split(',')
+                        .map(|s| s.to_string())
+                        .collect();
 
-                    "INT8" => Ok(DataType::Int8),
-                    "INT16" => Ok(DataType::Int16),
-                    "INT32" => Ok(DataType::Int32),
-                    "INT64" => Ok(DataType::Int64),
-                    "FLOAT32" => Ok(DataType::Float32),
-                    "FLOAT64" => Ok(DataType::Float64),
-                    "STRING" => Ok(DataType::String),
-                    "DATE16" => Ok(DataType::Date16),
-                    "DATE32" => Ok(DataType::Date32),
-                    "DATETIME" => Ok(DataType::DateTime32(None)),
-                    "DATETIME32" => Ok(DataType::DateTime32(None)),
-                    // TODO parse precision
-                    "DATETIME64" => Ok(DataType::DateTime64(3, None)),
-                    "SIGNED" => Ok(DataType::Int64),
-                    "UNSIGNED" => Ok(DataType::UInt64),
+                    let map: BTreeMap<String, u8> = enum_definition
+                        .iter()
+                        .enumerate()
+                        .map(|(i, e)| (e.clone(), i as u8))
+                        .collect();
+                    Ok(DataType::Enum8(map))
+                } else if value.as_str().starts_with("ENUM16") {
+                    let enum_definition: Vec<String> = value
+                        .get(7..value.len() - 2)
+                        .ok_or_else(|| {
+                            ErrorCode::ParseEnumTypeError(format!("Parse enum type {:?}", value))
+                        })?
+                        .split(',')
+                        .map(|s| s.to_string())
+                        .collect();
 
-                    _ => Result::Err(ErrorCode::IllegalDataType(format!(
-                        "The SQL data type {:?} is not implemented",
-                        sql_type
-                    ))),
+                    let map: BTreeMap<String, u16> = enum_definition
+                        .iter()
+                        .enumerate()
+                        .map(|(i, e)| (e.clone(), i as u16))
+                        .collect();
+                    Ok(DataType::Enum16(map))
+                } else {
+                    match value.as_str() {
+                        "UINT8" => Ok(DataType::UInt8),
+                        "UINT16" => Ok(DataType::UInt16),
+                        "UINT32" => Ok(DataType::UInt32),
+                        "UINT64" => Ok(DataType::UInt64),
+
+                        "INT8" => Ok(DataType::Int8),
+                        "INT16" => Ok(DataType::Int16),
+                        "INT32" => Ok(DataType::Int32),
+                        "INT64" => Ok(DataType::Int64),
+                        "FLOAT32" => Ok(DataType::Float32),
+                        "FLOAT64" => Ok(DataType::Float64),
+                        "STRING" => Ok(DataType::String),
+                        "DATE16" => Ok(DataType::Date16),
+                        "DATE32" => Ok(DataType::Date32),
+                        "DATETIME" => Ok(DataType::DateTime32(None)),
+                        "DATETIME32" => Ok(DataType::DateTime32(None)),
+                        // TODO parse precision
+                        "DATETIME64" => Ok(DataType::DateTime64(3, None)),
+                        "SIGNED" => Ok(DataType::Int64),
+                        "UNSIGNED" => Ok(DataType::UInt64),
+
+                        _ => Result::Err(ErrorCode::IllegalDataType(format!(
+                            "The SQL data type {:?} is not implemented",
+                            sql_type
+                        ))),
+                    }
                 }
             }
             _ => Result::Err(ErrorCode::IllegalDataType(format!(

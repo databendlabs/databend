@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
 use common_exception::Result;
@@ -63,4 +65,37 @@ fn test_data_block_nullable() -> Result<()> {
 #[test]
 fn test_data_block_not_nullable() -> Result<()> {
     test_data_block(false)
+}
+
+#[test]
+fn test_enum_block() -> Result<()> {
+    let test_enum8_type = DataType::Enum8(BTreeMap::from([
+        (String::from("small"), 0_u8),
+        (String::from("medium"), 1_u8),
+        (String::from("large"), 2_u8),
+    ]));
+
+    let test_enum16_type = DataType::Enum16(BTreeMap::from([
+        (String::from("small"), 0_u16),
+        (String::from("medium"), 1_u16),
+        (String::from("large"), 2_u16),
+    ]));
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new("c1", test_enum8_type, false),
+        DataField::new("c2", test_enum16_type, false),
+    ]);
+
+    let block = DataBlock::create_by_array(schema, vec![
+        Series::new(vec![0_u8, 1_u8, 2_u8]),
+        Series::new(vec![0_u16, 1_u16, 2_u16]),
+    ]);
+    let json_block = block_to_json(&block)?;
+    let expect = vec![
+        vec![val("small"), val("small")],
+        vec![val("medium"), val("medium")],
+        vec![val("large"), val("large")],
+    ];
+
+    assert_eq!(json_block, expect);
+    Ok(())
 }

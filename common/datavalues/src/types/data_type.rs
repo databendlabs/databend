@@ -13,8 +13,10 @@
 // limitations under the License.
 
 use core::fmt;
+use std::collections::BTreeMap;
 
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use common_arrow::arrow::datatypes::IntegerType as ArrowIntegerType;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_macros::MallocSizeOf;
@@ -62,6 +64,9 @@ pub enum DataType {
     List(Box<DataField>),
     Struct(Vec<DataField>),
     String,
+
+    Enum8(BTreeMap<String, u8>),
+    Enum16(BTreeMap<String, u16>),
 }
 
 #[derive(
@@ -196,6 +201,11 @@ impl DataType {
         }
     }
 
+    #[inline]
+    pub fn is_enum(&self) -> bool {
+        matches!(self, DataType::Enum8(_) | DataType::Enum16(_))
+    }
+
     pub fn to_arrow(&self) -> ArrowDataType {
         use DataType::*;
         match self {
@@ -223,6 +233,12 @@ impl DataType {
             }
             String => ArrowDataType::LargeBinary,
             Interval(_) => ArrowDataType::Int64,
+            Enum8(_) => {
+                ArrowDataType::Dictionary(ArrowIntegerType::UInt8, Box::new(ArrowDataType::UInt8))
+            }
+            Enum16(_) => {
+                ArrowDataType::Dictionary(ArrowIntegerType::UInt16, Box::new(ArrowDataType::UInt16))
+            }
         }
     }
 }
@@ -272,6 +288,12 @@ impl From<&ArrowDataType> for DataType {
                 let fields: Vec<DataField> = fields.iter().map(|f| f.into()).collect();
                 DataType::Struct(fields)
             }
+
+            ArrowDataType::Dictionary(_, val) => match val.as_ref() {
+                ArrowDataType::UInt8 => DataType::UInt8,
+                ArrowDataType::UInt16 => DataType::UInt16,
+                _ => unimplemented!("data_type: {}", dt),
+            },
 
             // this is safe, because we define the datatype firstly
             _ => {
@@ -324,6 +346,8 @@ impl fmt::Debug for DataType {
             Self::Struct(arg0) => f.debug_tuple("Struct").field(arg0).finish(),
             Self::String => write!(f, "String"),
             Self::Interval(unit) => write!(f, "Interval({})", unit),
+            Self::Enum8(arg0) => f.debug_tuple("Enum8").field(arg0).finish(),
+            Self::Enum16(arg0) => f.debug_tuple("Enum16").field(arg0).finish(),
         }
     }
 }
