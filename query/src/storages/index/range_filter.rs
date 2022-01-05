@@ -206,6 +206,12 @@ impl StatColumn {
             return Ok(DataValue::UInt64(Some(column_stats.null_count)));
         }
 
+        let mut single_point = false;
+        if !column_stats.min.is_null() && (column_stats.min == column_stats.max) {
+            single_point = true;
+        }
+
+        let mut variables = HashMap::new();
         let variable_left = Some(DataColumnWithField::new(
             DataColumn::Constant(column_stats.min.clone(), 1),
             self.column_field.clone(),
@@ -214,13 +220,16 @@ impl StatColumn {
             DataColumn::Constant(column_stats.max.clone(), 1),
             self.column_field.clone(),
         ));
+        variables.insert(
+            self.column_field.name().clone(),
+            (variable_left, variable_right),
+        );
 
         let monotonicity = ExpressionMonotonicityVisitor::check_expression(
             schema,
             &self.expr,
-            variable_left,
-            variable_right,
-            self.column_field.name(),
+            variables,
+            single_point,
         )?;
         if !monotonicity.is_monotonic {
             return Err(ErrorCode::UnknownException(format!(

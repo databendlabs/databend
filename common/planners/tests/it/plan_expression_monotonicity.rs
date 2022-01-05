@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use common_datavalues::prelude::DataColumn;
 use common_datavalues::prelude::DataColumnWithField;
 use common_datavalues::DataField;
@@ -56,15 +58,16 @@ fn verify_test(t: Test) -> Result<()> {
         DataField::new("y", DataType::Int64, false),
         DataField::new("z", DataType::DateTime32(None), false),
     ]);
-    let mono = match ExpressionMonotonicityVisitor::check_expression(
-        schema, &t.expr, t.left, t.right, t.column,
-    ) {
-        Ok(mono) => mono,
-        Err(e) => {
-            assert_eq!(t.error, e.to_string(), "{}", t.name);
-            return Ok(());
-        }
-    };
+    let mut variables = HashMap::new();
+    variables.insert(t.column.to_string(), (t.left, t.right));
+    let mono =
+        match ExpressionMonotonicityVisitor::check_expression(schema, &t.expr, variables, false) {
+            Ok(mono) => mono,
+            Err(e) => {
+                assert_eq!(t.error, e.to_string(), "{}", t.name);
+                return Ok(());
+            }
+        };
 
     assert_eq!(
         mono.is_monotonic, t.expect_mono.is_monotonic,
@@ -148,9 +151,9 @@ fn test_arithmetic_plus_minus() -> Result<()> {
             error: "",
         },
         Test {
-            name: "f(x,y) = x + y", // multi-variable function is not supported,
+            name: "f(x,y) = x + y",
             expr: Expression::create_binary_expression("+", vec![col("x"), col("y")]),
-            column: "",
+            column: "x",
             left: None,
             right: None,
             expect_mono: Monotonicity {
@@ -160,7 +163,7 @@ fn test_arithmetic_plus_minus() -> Result<()> {
                 left: None,
                 right: None,
             },
-            error: "Code: 6, displayText = Multi-column expressions are not currently supported.",
+            error: "Code: 6, displayText = Cannot find the column name '\"y\"'.",
         },
         Test {
             name: "f(x) = (-x + 12) - x + (1 - x)",
