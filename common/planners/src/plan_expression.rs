@@ -227,7 +227,6 @@ impl Expression {
         let name = self.column_name();
         self.to_data_type(input_schema).and_then(|return_type| {
             self.nullable(input_schema).map(|nullable| {
-                println!("return_type {}", return_type);
                 if nullable {
                     DataField::new(&name, return_type.enforce_nullable(), nullable)
                 } else {

@@ -142,7 +142,7 @@ impl DataField {
     }
 
     pub fn to_arrow(&self) -> ArrowField {
-        let custom_name = match self.data_type() {
+        let custom_name = match self.data_type().remove_nullable() {
             DataType::Date16 => Some("Date16"),
             DataType::Date32 => Some("Date32"),
             DataType::DateTime32(_) => Some("DateTime32"),
