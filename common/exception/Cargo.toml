@@ -17,7 +17,7 @@ anyhow = "1.0.51"
 backtrace = "0.3.63"
 octocrab = "0.15.3"
 serde = { version = "1.0.132", features = ["derive"] }
-serde_json = "1.0.73"
+serde_json = "1.0.74"
 thiserror = "1.0.30"
 tonic = "0.6.2"
 prost = "0.9.0"
