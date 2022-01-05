@@ -92,7 +92,7 @@ impl Interpreter for CopyInterpreter {
             .await?
             .try_collect()
             .await?;
-        table.commit(self.ctx.clone(), r, false).await?;
+        table.commit_insertion(self.ctx.clone(), r, false).await?;
 
         Ok(Box::pin(DataBlockStream::create(
             self.plan.schema(),

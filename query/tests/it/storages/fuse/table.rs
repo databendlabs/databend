@@ -45,7 +45,7 @@ async fn test_fuse_table_simple_case() -> Result<()> {
 
     let r = table.append_data(ctx.clone(), stream).await?;
     table
-        .commit(ctx.clone(), r.try_collect().await?, false)
+        .commit_insertion(ctx.clone(), r.try_collect().await?, false)
         .await?;
 
     // get the latest tbl
@@ -106,7 +106,7 @@ async fn test_fuse_table_simple_case() -> Result<()> {
 
     let r = table.append_data(ctx.clone(), stream).await?;
     table
-        .commit(ctx.clone(), r.try_collect().await?, true)
+        .commit_insertion(ctx.clone(), r.try_collect().await?, true)
         .await?;
 
     // get the latest tbl
@@ -192,7 +192,7 @@ async fn test_fuse_table_truncate() -> Result<()> {
 
     let r = table.append_data(ctx.clone(), stream).await?;
     table
-        .commit(ctx.clone(), r.try_collect().await?, false)
+        .commit_insertion(ctx.clone(), r.try_collect().await?, false)
         .await?;
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
@@ -252,7 +252,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
         let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
         let r = table.append_data(ctx.clone(), stream).await?;
         table
-            .commit(ctx.clone(), r.try_collect().await?, false)
+            .commit_insertion(ctx.clone(), r.try_collect().await?, false)
             .await?;
     }
 

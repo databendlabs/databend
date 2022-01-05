@@ -100,7 +100,7 @@ impl Interpreter for InsertInterpreter {
         }?;
         // feed back the append operation logs to table
         table
-            .commit(
+            .commit_insertion(
                 self.ctx.clone(),
                 append_logs.try_collect().await?,
                 self.plan.overwrite,

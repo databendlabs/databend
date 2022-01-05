@@ -80,7 +80,7 @@ async fn test_fuse_history_optimize_compact() -> Result<()> {
         let stream = TestFixture::gen_sample_blocks_stream(num_blocks, 1);
         let r = table.append_data(ctx.clone(), stream).await?;
         table
-            .commit(ctx.clone(), r.try_collect().await?, false)
+            .commit_insertion(ctx.clone(), r.try_collect().await?, false)
             .await?;
     }
 

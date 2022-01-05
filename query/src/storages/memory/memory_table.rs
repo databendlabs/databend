@@ -162,7 +162,7 @@ impl Table for MemoryTable {
         Ok(Box::pin(stream))
     }
 
-    async fn commit(
+    async fn commit_insertion(
         &self,
         _ctx: Arc<QueryContext>,
         operations: Vec<DataBlock>,

@@ -25,6 +25,7 @@ use common_base::Progress;
 use common_base::ProgressValues;
 use common_base::TrySpawn;
 use common_dal::AzureBlobAccessor;
+use common_dal::DalContext;
 use common_dal::DalMetrics;
 use common_dal::DataAccessor;
 use common_dal::DataAccessorInterceptor;
@@ -318,6 +319,10 @@ impl QueryContext {
             self.shared.dal_ctx.clone(),
             da,
         )))
+    }
+
+    pub fn get_dal_context(&self) -> &DalContext {
+        self.shared.dal_ctx.as_ref()
     }
 }
 
