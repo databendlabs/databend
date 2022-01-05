@@ -95,7 +95,7 @@ impl ExpressionMonotonicityVisitor {
         result_type: &DataType,
         args: Vec<Option<DataColumnWithField>>,
     ) -> Result<Option<DataColumnWithField>> {
-        let res = if args.iter().any(|col| col.is_none()) {
+        if args.iter().any(|col| col.is_none()) {
             Ok(None)
         } else {
             let input_columns = args
@@ -107,8 +107,7 @@ impl ExpressionMonotonicityVisitor {
             let data_field = DataField::new("dummy", result_type.clone(), false);
             let data_column_field = DataColumnWithField::new(col, data_field);
             Ok(Some(data_column_field))
-        };
-        res
+        }
     }
 
     fn visit_function(mut self, op: &str, args_size: usize) -> Result<Self> {
@@ -134,23 +133,35 @@ impl ExpressionMonotonicityVisitor {
             }
         }
 
-        let func = FunctionFactory::instance().get(op, &args_type)?;
+        let instance = FunctionFactory::instance();
+        let func = instance.get(op, &args_type)?;
 
         let return_type = func.return_type(&args_type)?;
 
         let mut monotonic = match self.single_point {
             false => func.get_monotonicity(monotonicity_vec.as_ref())?,
-            true => Monotonicity::create_constant(),
+            true => {
+                let features = instance.get_features(op)?;
+                if features.is_deterministic {
+                    Monotonicity::create_constant()
+                } else {
+                    Monotonicity::default()
+                }
+            }
         };
 
-        // Neither a monotonic expression nor constant, no need to calculating boundary.
-        // The boundary may have been calculated during get_monotonicity.
-        if (monotonic.is_monotonic || monotonic.is_constant) && monotonic.left.is_none() {
-            monotonic.left =
-                Self::try_calculate_boundary(func.as_ref(), return_type.data_type(), left_vec)?;
-            monotonic.right =
-                Self::try_calculate_boundary(func.as_ref(), return_type.data_type(), right_vec)?;
+        // Neither a monotonic expression nor constant, interrupt the traversal and return an error directly.
+        if !monotonic.is_monotonic && !monotonic.is_constant {
+            return Err(ErrorCode::UnknownException(format!(
+                "Function '{}' is not monotonic in the variables range",
+                op
+            )));
         }
+
+        monotonic.left =
+            Self::try_calculate_boundary(func.as_ref(), return_type.data_type(), left_vec)?;
+        monotonic.right =
+            Self::try_calculate_boundary(func.as_ref(), return_type.data_type(), right_vec)?;
 
         self.stack.push((return_type, monotonic));
         Ok(self)
@@ -177,10 +188,10 @@ impl ExpressionMonotonicityVisitor {
         column_name: &str,
     ) -> Result<Expression> {
         if let Expression::Sort {
-            expr: _,
             asc,
             nulls_first,
             origin_expr,
+            ..
         } = sort_expr
         {
             let mut variables = HashMap::new();
