@@ -24,7 +24,7 @@ common-mem-allocator = { path = "../mem-allocator" }
 num = "0.4.0"
 ordered-float = "2.9.0"
 serde = { version = "1.0.132", features = ["derive"] }
-serde_json = "1.0.73"
+serde_json = "1.0.74"
 ahash = "0.7.6"
 strength_reduce = "0.2.3"
 lexical-core = "0.8.2"
