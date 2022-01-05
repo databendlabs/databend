@@ -82,7 +82,7 @@ async fn test_interpreter_interceptor_for_insert() -> Result<()> {
     common_tracing::init_default_ut_tracing();
     let ctx = crate::tests::create_query_context()?;
     {
-        let query = "create table t as select number from numbers_mt(100)";
+        let query = "create table t as select number from numbers_mt(1)";
         ctx.attach_query_str(query);
         let plan = PlanParser::parse(query, ctx.clone()).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
@@ -102,12 +102,12 @@ async fn test_interpreter_interceptor_for_insert() -> Result<()> {
         let result = stream.try_collect::<Vec<_>>().await?;
 
         let expected = vec![
-            "+----------+--------------+-----------+--------------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+------------------------------------------------------+-----------+-----------------------------+---------------------------------------------------------------------------+",
-            "| log_type | handler_type | cpu_usage | memory_usage | scan_rows | scan_bytes | scan_partitions | written_rows | written_bytes | result_rows | result_bytes | query_kind      | query_text                                           | sql_user  | sql_user_quota              | sql_user_privileges                                                       |",
-            "+----------+--------------+-----------+--------------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+------------------------------------------------------+-----------+-----------------------------+---------------------------------------------------------------------------+",
-            "| 1        | TestSession  | 8         | 4065         | 0         | 0          | 0               | 0            | 0             | 0           | 0            | CreateTablePlan | create table t as select number from numbers_mt(100) | test_user | UserGrantSet { grants: [] } | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
-            "| 2        | TestSession  | 8         | 4065         | 100       | 800        | 0               | 100          | 1550          | 0           | 0            | CreateTablePlan | create table t as select number from numbers_mt(100) | test_user | UserGrantSet { grants: [] } | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
-            "+----------+--------------+-----------+--------------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+------------------------------------------------------+-----------+-----------------------------+---------------------------------------------------------------------------+",
+            "+----------+--------------+-----------+--------------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+-----------+-----------------------------+---------------------------------------------------------------------------+",
+            "| log_type | handler_type | cpu_usage | memory_usage | scan_rows | scan_bytes | scan_partitions | written_rows | written_bytes | result_rows | result_bytes | query_kind      | query_text                                         | sql_user  | sql_user_quota              | sql_user_privileges                                                       |",
+            "+----------+--------------+-----------+--------------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+-----------+-----------------------------+---------------------------------------------------------------------------+",
+            "| 1        | TestSession  | 8         | 4065         | 0         | 0          | 0               | 0            | 0             | 0           | 0            | CreateTablePlan | create table t as select number from numbers_mt(1) | test_user | UserGrantSet { grants: [] } | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
+            "| 2        | TestSession  | 8         | 4065         | 1         | 8          | 0               | 1            | 1121          | 0           | 0            | CreateTablePlan | create table t as select number from numbers_mt(1) | test_user | UserGrantSet { grants: [] } | UserQuota { max_cpu: 0, max_memory_in_bytes: 0, max_storage_in_bytes: 0 } |",
+            "+----------+--------------+-----------+--------------+-----------+------------+-----------------+--------------+---------------+-------------+--------------+-----------------+----------------------------------------------------+-----------+-----------------------------+---------------------------------------------------------------------------+",
         ];
 
         common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());
