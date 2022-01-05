@@ -27,7 +27,7 @@ use common_dal::DataAccessor;
 use common_dal::InputStream;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::DataColumn;
-use common_datavalues::series::IntoSeries;
+use common_datavalues::prelude::IntoSeries;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
