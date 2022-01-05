@@ -69,6 +69,7 @@ table_cache_enabled = false
 table_memory_cache_mb_size = 256
 table_disk_cache_root = \"_cache\"
 table_disk_cache_mb_size = 1024
+proxy_mode = false
 
 [log]
 log_level = \"INFO\"

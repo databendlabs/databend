@@ -58,6 +58,8 @@ const QUERY_TABLE_ENGINE_PARQUET_ENABLED: &str = "QUERY_TABLE_ENGINE_PARQUET_ENA
 const QUERY_TABLE_ENGINE_MEMORY_ENABLED: &str = "QUERY_TABLE_ENGINE_MEMORY_ENABLED";
 const QUERY_DATABASE_ENGINE_GITHUB_ENABLED: &str = "QUERY_DATABASE_ENGINE_GITHUB_ENABLED";
 
+const QUERY_PROXY_MODE: &str = "QUERY_PROXY_MODE";
+
 /// Query config group.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
 #[serde(default)]
@@ -187,6 +189,10 @@ pub struct QueryConfig {
     /// Table disk cache size (mb)
     #[clap(long, env = QUERY_TABLE_DISK_CACHE_MB_SIZE, default_value = "1024")]
     pub table_disk_cache_mb_size: u64,
+
+    /// If in proxy mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
+    #[clap(long, env = QUERY_PROXY_MODE)]
+    pub proxy_mode: bool,
 }
 
 impl Default for QueryConfig {
@@ -225,6 +231,7 @@ impl Default for QueryConfig {
             table_memory_cache_mb_size: 256,
             table_disk_cache_root: "_cache".to_string(),
             table_disk_cache_mb_size: 1024,
+            proxy_mode: false,
         }
     }
 }
@@ -435,5 +442,6 @@ impl QueryConfig {
             u64,
             QUERY_TABLE_DISK_CACHE_MB_SIZE
         );
+        env_helper!(mut_config, query, proxy_mode, bool, QUERY_PROXY_MODE);
     }
 }

@@ -193,6 +193,7 @@ build_exceptions! {
     InvalidSourceFormat(59),
     StrParseError(60),
     IllegalGrant(61),
+    ProxyModeInvalidOperation(62),
 
     SemanticError(100),
 
@@ -203,14 +204,13 @@ build_exceptions! {
     TokioError(1001),
 
     // cache
-    DiskCacheIOError(2000),
-    DiskCacheFileTooLarge(2001),
-    DiskCacheFileNotInCache(2002),
+    DiskCacheIOError(1002),
+    DiskCacheFileTooLarge(1003),
+    DiskCacheFileNotInCache(1004),
 }
 
 // Store errors
 build_exceptions! {
-
     FileMetaNotFound(2001),
     FileDamaged(2002),
 
@@ -319,9 +319,9 @@ build_exceptions! {
     // network error
     NetworkRequestError(9001),
 }
+
 // General errors
 build_exceptions! {
-
     // A task that already stopped and can not stop twice.
     AlreadyStarted(7101),
 
