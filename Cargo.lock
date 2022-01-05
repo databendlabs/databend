@@ -716,13 +716,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "azure_core_mirror"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb4e1a4d791e647875096e7e9e5ad7248575a6483520f9b45fc3c0949d271a99"
+dependencies = [
+ "RustyXML",
+ "async-trait",
+ "base64 0.13.0",
+ "bytes 1.1.0",
+ "chrono",
+ "failure",
+ "futures",
+ "http",
+ "hyper",
+ "hyper-rustls 0.22.1",
+ "log",
+ "md5",
+ "oauth2",
+ "paste",
+ "quick-error 1.2.3",
+ "reqwest",
+ "serde",
+ "serde-xml-rs",
+ "serde_derive",
+ "serde_json",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "azure_storage_mirror"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e2665079cfc0a2fead0c23a018dbdecba53d0910a4590b1957e3803012eb002"
 dependencies = [
  "RustyXML",
- "azure_core_mirror",
+ "azure_core_mirror 0.1.0",
  "base64 0.13.0",
  "bytes 1.1.0",
  "chrono",
@@ -1521,7 +1551,7 @@ version = "0.1.0"
 dependencies = [
  "async-compat",
  "async-trait",
- "azure_core_mirror",
+ "azure_core_mirror 0.2.0",
  "azure_storage_mirror",
  "bytes 1.1.0",
  "common-base",
@@ -6432,9 +6462,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.73"
+version = "1.0.74"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bcbd0344bc6533bc7ec56df11d42fb70f1b912351c0825ccb7211b59d8af7cf5"
+checksum = "ee2bb9cd061c5865d345bb02ca49fcef1391741b672b54a0bf7b679badec3142"
 dependencies = [
  "indexmap",
  "itoa 1.0.1",
