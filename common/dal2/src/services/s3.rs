@@ -89,7 +89,7 @@ impl Builder {
 
         // strip the prefix of "/" in root only once.
         let root = if let Some(root) = self.root {
-            root.strip_prefix("/").unwrap_or(&root).to_string()
+            root.strip_prefix('/').unwrap_or(&root).to_string()
         } else {
             String::new()
         };
@@ -160,8 +160,8 @@ impl Backend {
     /// If user input an absolute path, we will return it as it is with the prefix `/` striped.
     /// If user input a relative path, we will calculate the absolute path with the root.
     fn get_abs_path(&self, path: &str) -> String {
-        if path.starts_with("/") {
-            path.strip_prefix("/").unwrap().to_string()
+        if path.starts_with('/') {
+            path.strip_prefix('/').unwrap().to_string()
         } else {
             format!("{}/{}", self.root, path)
         }
@@ -171,7 +171,7 @@ impl Backend {
 #[async_trait]
 impl<S: Send + Sync> Read<S> for Backend {
     async fn read(&self, args: &ReadBuilder<S>) -> Result<Reader> {
-        let p = self.get_abs_path(&args.path);
+        let p = self.get_abs_path(args.path);
 
         // TODO: Handle range header here.
         let resp = self
