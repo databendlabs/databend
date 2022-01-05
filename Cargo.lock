@@ -1579,7 +1579,6 @@ dependencies = [
  "ahash",
  "chrono",
  "chrono-tz 0.6.1",
- "comfy-table",
  "common-arrow",
  "common-exception",
  "common-io",

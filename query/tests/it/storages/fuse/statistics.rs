@@ -14,8 +14,8 @@
 //
 
 use common_datablocks::DataBlock;
+use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
-use common_datavalues::series::Series;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;

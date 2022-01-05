@@ -21,7 +21,7 @@ use common_dal::Local;
 use common_datablocks::assert_blocks_eq;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::DataColumn;
-use common_datavalues::series::Series;
+use common_datavalues::prelude::Series;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
