@@ -42,6 +42,8 @@ impl FuseTable {
                 let schema = self.table_info.schema();
                 let block_metas =
                     apply_block_pruning(&snapshot, schema, &push_downs, da, ctx.clone()).await?;
+                ctx.get_dal_context()
+                    .inc_partitions_scanned(block_metas.len());
                 let (statistics, parts) = Self::to_partitions(&block_metas, push_downs);
                 Ok((statistics, parts))
             }

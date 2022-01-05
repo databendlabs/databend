@@ -114,7 +114,7 @@ impl BlockPruner {
     }
 }
 
-#[tracing::instrument(level = "debug", skip(table_snapshot, schema, push_down, data_accessor, ctx), fields(ctx.id = ctx.get_id().as_str()))]
+#[tracing::instrument(level = "debug", skip_all, fields(ctx.id = ctx.get_id().as_str()))]
 pub async fn apply_block_pruning(
     table_snapshot: &TableSnapshot,
     schema: DataSchemaRef,

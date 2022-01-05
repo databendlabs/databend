@@ -66,6 +66,7 @@ pub struct LogEvent {
     pub scan_byte_cost_ms: u64,
     pub scan_seeks: u64,
     pub scan_seek_cost_ms: u64,
+    pub scan_partitions: u64,
     pub result_rows: u64,
     pub result_bytes: u64,
     pub cpu_usage: u32,
@@ -131,6 +132,7 @@ impl InterpreterQueryLog {
             Series::new(vec![event.scan_byte_cost_ms as u64]),
             Series::new(vec![event.scan_seeks as u64]),
             Series::new(vec![event.scan_seek_cost_ms as u64]),
+            Series::new(vec![event.scan_partitions as u64]),
             Series::new(vec![event.result_rows as u64]),
             Series::new(vec![event.result_bytes as u64]),
             Series::new(vec![event.cpu_usage]),
@@ -188,6 +190,7 @@ impl InterpreterQueryLog {
         let scan_byte_cost_ms = 0u64;
         let scan_seeks = 0u64;
         let scan_seek_cost_ms = 0u64;
+        let scan_partitions = 0u64;
         let result_rows = 0u64;
         let result_bytes = 0u64;
         let cpu_usage = self.ctx.get_settings().get_max_threads()? as u32;
@@ -221,6 +224,7 @@ impl InterpreterQueryLog {
             scan_byte_cost_ms,
             scan_seeks,
             scan_seek_cost_ms,
+            scan_partitions,
             result_rows,
             result_bytes,
             cpu_usage,
@@ -260,14 +264,15 @@ impl InterpreterQueryLog {
             .expect("Time went backwards")
             .as_millis() as u64;
         let event_date = (event_time / (24 * 3600000)) as i32;
-        let written_rows = 0u64;
         let dal_metrics = self.ctx.get_dal_metrics();
+        let written_rows = dal_metrics.write_rows as u64;
         let written_bytes = dal_metrics.write_bytes as u64;
         let scan_rows = self.ctx.get_scan_progress_value().read_rows as u64;
         let scan_bytes = self.ctx.get_scan_progress_value().read_bytes as u64;
         let scan_byte_cost_ms = dal_metrics.read_byte_cost_ms as u64;
         let scan_seeks = dal_metrics.read_seeks as u64;
         let scan_seek_cost_ms = dal_metrics.read_seek_cost_ms as u64;
+        let scan_partitions = dal_metrics.partitions_scanned as u64;
         let cpu_usage = self.ctx.get_settings().get_max_threads()? as u32;
         let memory_usage = self.ctx.get_current_session().get_memory_usage() as u64;
 
@@ -305,6 +310,7 @@ impl InterpreterQueryLog {
             scan_byte_cost_ms,
             scan_seeks,
             scan_seek_cost_ms,
+            scan_partitions,
             result_rows,
             result_bytes,
             cpu_usage,

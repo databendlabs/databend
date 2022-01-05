@@ -84,7 +84,7 @@ async fn test_block_pruner() -> Result<()> {
     let stream = Box::pin(futures::stream::iter(blocks));
     let r = table.append_data(ctx.clone(), stream).await?;
     table
-        .commit(ctx.clone(), r.try_collect().await?, false)
+        .commit_insertion(ctx.clone(), r.try_collect().await?, false)
         .await?;
 
     // get the latest tbl

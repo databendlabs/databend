@@ -99,7 +99,7 @@ impl Table for FuseTable {
         Ok(Box::pin(data_block_stream))
     }
 
-    async fn commit(
+    async fn commit_insertion(
         &self,
         _ctx: Arc<QueryContext>,
         operations: Vec<DataBlock>,

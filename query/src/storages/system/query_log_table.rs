@@ -70,6 +70,7 @@ impl QueryLogTable {
             DataField::new("scan_byte_cost_ms", DataType::UInt64, false),
             DataField::new("scan_seeks", DataType::UInt64, false),
             DataField::new("scan_seek_cost_ms", DataType::UInt64, false),
+            DataField::new("scan_partitions", DataType::UInt64, false),
             DataField::new("result_rows", DataType::UInt64, false),
             DataField::new("result_bytes", DataType::UInt64, false),
             DataField::new("cpu_usage", DataType::UInt32, false),
