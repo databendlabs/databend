@@ -19,10 +19,16 @@ use common_base::tokio;
 use common_dal::DataAccessor;
 use common_dal::Local;
 use common_datablocks::assert_blocks_eq;
+use common_datablocks::DataBlock;
+use common_datavalues::prelude::DataColumn;
+use common_datavalues::series::Series;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_streams::CsvSource;
+use common_streams::ParquetSource;
 use common_streams::Source;
 use common_streams::ValueSource;
 
@@ -112,4 +118,92 @@ async fn test_parse_csvs() {
             dir.close().unwrap();
         }
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_source_parquet() -> Result<()> {
+    use common_datavalues::DataType;
+    let schema = DataSchemaRefExt::create(vec![
+        DataField::new("a", DataType::Int8, false),
+        DataField::new("b", DataType::String, false),
+    ]);
+
+    let arrow_schema = schema.to_arrow();
+
+    use common_arrow::arrow::io::parquet::write::*;
+    let options = WriteOptions {
+        write_statistics: true,
+        compression: Compression::Lz4, // let's begin with lz4
+        version: Version::V2,
+    };
+
+    use common_datavalues::prelude::SeriesFrom;
+    let col_a = Series::new(vec![1i8, 1, 2, 1, 2, 3]);
+    let col_b = Series::new(vec!["1", "1", "2", "1", "2", "3"]);
+    let sample_block = DataBlock::create(schema.clone(), vec![
+        DataColumn::Array(col_a),
+        DataColumn::Array(col_b),
+    ]);
+
+    use common_arrow::arrow::record_batch::RecordBatch;
+    let batch = RecordBatch::try_from(sample_block)?;
+    use common_arrow::parquet::encoding::Encoding;
+    let encodings = std::iter::repeat(Encoding::Plain)
+        .take(arrow_schema.fields.len())
+        .collect::<Vec<_>>();
+
+    let page_nums_expects = 3;
+    let name = "test-parquet";
+    let dir = tempfile::tempdir().unwrap();
+
+    // write test parquet
+    let len = {
+        let rg_iter = std::iter::repeat(batch).map(Ok).take(page_nums_expects);
+        let row_groups = RowGroupIterator::try_new(rg_iter, &arrow_schema, options, encodings)?;
+        let parquet_schema = row_groups.parquet_schema().clone();
+        let path = dir.path().join(name);
+        let mut writer = File::create(path).unwrap();
+        common_arrow::parquet::write::write_file(
+            &mut writer,
+            row_groups,
+            parquet_schema,
+            options,
+            None,
+            None,
+        )
+        .map_err(|e| ErrorCode::ParquetError(e.to_string()))?
+    };
+
+    let local = Local::with_path(dir.path().to_path_buf());
+    let stream = local.get_input_stream(name, Some(len)).unwrap();
+
+    let default_proj = (0..schema.fields().len())
+        .into_iter()
+        .collect::<Vec<usize>>();
+
+    let mut page_nums = 0;
+    let mut parquet_source = ParquetSource::new(stream, schema, default_proj);
+    // expects `page_nums_expects` blocks, and
+    while let Some(block) = parquet_source.read().await? {
+        page_nums += 1;
+        // for each block, the content is the same of `sample_block`
+        assert_blocks_eq(
+            vec![
+                "+---+---+",
+                "| a | b |",
+                "+---+---+",
+                "| 1 | 1 |",
+                "| 1 | 1 |",
+                "| 2 | 2 |",
+                "| 1 | 1 |",
+                "| 2 | 2 |",
+                "| 3 | 3 |",
+                "+---+---+",
+            ],
+            &[block],
+        );
+    }
+
+    assert_eq!(page_nums_expects, page_nums);
+    Ok(())
 }

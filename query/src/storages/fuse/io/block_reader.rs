@@ -14,14 +14,17 @@
 
 use std::sync::Arc;
 
+use common_arrow::arrow::datatypes::DataType;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::read::decompress;
 use common_arrow::arrow::io::parquet::read::page_stream_to_array;
 use common_arrow::arrow::io::parquet::read::read_metadata;
 use common_arrow::arrow::io::parquet::read::read_metadata_async;
 use common_arrow::arrow::io::parquet::read::schema::FileMetaData;
+use common_arrow::parquet::metadata::ColumnChunkMetaData;
 use common_arrow::parquet::read::get_page_stream;
 use common_dal::DataAccessor;
+use common_dal::InputStream;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::DataColumn;
 use common_datavalues::series::IntoSeries;
@@ -37,24 +40,15 @@ use futures::TryStreamExt;
 
 use crate::storages::cache::StorageCache;
 
-/// default buffer size of BufferedReader, 1MB
-const DEFAULT_READ_BUFFER_SIZE: u64 = 1024 * 1024;
-
 pub struct BlockReader {
     data_accessor: Arc<dyn DataAccessor>,
     path: String,
-
     block_schema: DataSchemaRef,
     arrow_table_schema: ArrowSchema,
     projection: Vec<usize>,
-    row_group: usize,
-    row_groups: usize,
+    file_len: u64,
+    read_buffer_size: u64,
     metadata: FileMetaData,
-    file_len: Option<u64>,
-    read_buffer_size: Option<u64>,
-
-    #[allow(dead_code)]
-    cache: Arc<Option<Box<dyn StorageCache>>>,
 }
 
 impl BlockReader {
@@ -63,27 +57,8 @@ impl BlockReader {
         path: String,
         table_schema: DataSchemaRef,
         projection: Vec<usize>,
-        cache: Arc<Option<Box<dyn StorageCache>>>,
-    ) -> Result<Self> {
-        Self::with_hints(
-            data_accessor,
-            path,
-            table_schema,
-            projection,
-            None,
-            None,
-            cache,
-        )
-        .await
-    }
-
-    pub async fn with_hints(
-        data_accessor: Arc<dyn DataAccessor>,
-        path: String,
-        table_schema: DataSchemaRef,
-        projection: Vec<usize>,
-        file_len: Option<u64>,
-        read_buffer_size: Option<u64>,
+        file_len: u64,
+        read_buffer_size: u64,
         cache: Arc<Option<Box<dyn StorageCache>>>,
     ) -> Result<Self> {
         let block_schema = Arc::new(table_schema.project(projection.clone()));
@@ -106,61 +81,73 @@ impl BlockReader {
             block_schema,
             arrow_table_schema: table_schema.to_arrow(),
             projection,
-            row_group: 0,
-            row_groups: 0,
-            metadata,
             file_len,
             read_buffer_size,
-            cache,
+            metadata,
         })
     }
 
+    async fn read_column(
+        mut reader: BufReader<InputStream>,
+        column_chunk_meta: &ColumnChunkMetaData,
+        data_type: DataType,
+    ) -> Result<DataColumn> {
+        let col_pages = get_page_stream(
+            column_chunk_meta,
+            &mut reader,
+            vec![],
+            Arc::new(|_, _| true),
+        )
+        .instrument(debug_span!("block_reader_get_column_page"))
+        .await
+        .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
+        let pages = col_pages.map(|compressed_page| {
+            debug_span!("block_reader_decompress_page")
+                .in_scope(|| decompress(compressed_page?, &mut vec![]))
+        });
+        let array = page_stream_to_array(pages, column_chunk_meta, data_type)
+            .instrument(debug_span!("block_reader_page_stream_to_array"))
+            .await?;
+        let array: Arc<dyn common_arrow::arrow::array::Array> = array.into();
+        Ok::<_, ErrorCode>(DataColumn::Array(array.into_series()))
+    }
+
     #[tracing::instrument(level = "debug", skip_all)]
-    pub async fn read(&mut self) -> Result<Option<DataBlock>> {
+    pub async fn read(&mut self) -> Result<DataBlock> {
         let metadata = &self.metadata;
 
-        self.row_groups = metadata.row_groups.len();
-        self.row_group = 0;
+        // FUSE uses exact one "row group"
+        let num_row_groups = metadata.row_groups.len();
+        let row_group = if num_row_groups != 1 {
+            return Err(ErrorCode::LogicalError(format!(
+                "invalid parquet file, expect exact one row group insides, but got {}",
+                num_row_groups
+            )));
+        } else {
+            &metadata.row_groups[0]
+        };
 
-        if self.row_group >= self.row_groups {
-            return Ok(None);
-        }
         let col_num = self.projection.len();
-        let row_group = self.row_group;
         let cols = self
             .projection
             .clone()
             .into_iter()
-            .map(|idx| (metadata.row_groups[row_group].column(idx).clone(), idx));
+            .map(|idx| (row_group.column(idx).clone(), idx));
 
         let fields = self.arrow_table_schema.fields();
         let stream_len = self.file_len;
-        let read_buffer_size = self.read_buffer_size.unwrap_or(DEFAULT_READ_BUFFER_SIZE);
+        let read_buffer_size = self.read_buffer_size;
 
         let stream = futures::stream::iter(cols).map(|(col_meta, idx)| {
             let data_accessor = self.data_accessor.clone();
             let path = self.path.clone();
-
             async move {
-                let reader = data_accessor.get_input_stream(path.as_str(), stream_len)?;
-                let mut reader = BufReader::with_capacity(read_buffer_size as usize, reader);
-                // TODO cache block column
-                let col_pages =
-                    get_page_stream(&col_meta, &mut reader, vec![], Arc::new(|_, _| true))
-                        .instrument(debug_span!("parquet_source_get_column_page"))
-                        .await
-                        .map_err(|e| ErrorCode::ParquetError(e.to_string()))?;
-                let pages = col_pages.map(|compressed_page| {
-                    debug_span!("parquet_source_decompress_page")
-                        .in_scope(|| decompress(compressed_page?, &mut vec![]))
-                });
-                let array = page_stream_to_array(pages, &col_meta, fields[idx].data_type.clone())
-                    .instrument(debug_span!("parquet_source_page_stream_to_array"))
-                    .await?;
-                let array: Arc<dyn common_arrow::arrow::array::Array> = array.into();
-                Ok::<_, ErrorCode>(DataColumn::Array(array.into_series()))
+                let reader = data_accessor.get_input_stream(path.as_str(), Some(stream_len))?;
+                let reader = BufReader::with_capacity(read_buffer_size as usize, reader);
+                let data_type = fields[idx].data_type.clone();
+                Self::read_column(reader, &col_meta, data_type).await
             }
-            .instrument(debug_span!("parquet_source_read_column").or_current())
+            .instrument(debug_span!("block_reader_read_column").or_current())
         });
 
         // TODO configuration of the buffer size
@@ -168,8 +155,7 @@ impl BlockReader {
         let n = std::cmp::min(buffer_size, col_num);
         let data_cols = stream.buffered(n).try_collect().await?;
 
-        self.row_group += 1;
         let block = DataBlock::create(self.block_schema.clone(), data_cols);
-        Ok(Some(block))
+        Ok(block)
     }
 }

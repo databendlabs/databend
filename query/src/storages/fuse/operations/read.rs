@@ -76,31 +76,22 @@ impl FuseTable {
                     let part_location = part_info.location();
                     let part_len = part_info.length();
 
-                    let mut reader = BlockReader::with_hints(
+                    let mut block_reader = BlockReader::new(
                         da,
                         part_info.location().to_owned(),
                         table_schema,
                         projection,
-                        Some(part_len),
-                        Some(read_buffer_size),
+                        part_len,
+                        read_buffer_size,
                         cache,
                     )
                     .await?;
-                    reader
-                        .read()
-                        .await
-                        .map_err(|e| {
-                            ErrorCode::ParquetError(format!(
-                                "fail to read block {}, {}",
-                                part_location, e
-                            ))
-                        })?
-                        .ok_or_else(|| {
-                            ErrorCode::ParquetError(format!(
-                                "reader returns None for block {}",
-                                part_location,
-                            ))
-                        })
+                    block_reader.read().await.map_err(|e| {
+                        ErrorCode::ParquetError(format!(
+                            "fail to read block {}, {}",
+                            part_location, e
+                        ))
+                    })
                 }
             })
             .buffer_unordered(bite_size as usize)
