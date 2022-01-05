@@ -10,6 +10,7 @@ select written_rows from system.query_log where query_text='insert into  tbl_01_
 insert into  tbl_01_0002 values(2);
 -- two rows and two partitions will be scanned
 select count(*) from tbl_01_0002;
-select scan_rows, scan_partitions from system.query_log where query_text='select count(*) from tbl_01_0002' and scan_partitions != 0;
+-- unfortunately, scan_rows does not work in cluster setting
+select scan_partitions from system.query_log where query_text='select count(*) from tbl_01_0002' and scan_partitions != 0;
 
 drop table tbl_01_0002;
