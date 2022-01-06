@@ -51,6 +51,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sled::transaction::ConflictableTransactionError;
 use sled::IVec;
+use uuid::Uuid;
 
 use crate::config::RaftConfig;
 use crate::sled_key_spaces::ClientLastResps;
@@ -63,6 +64,7 @@ use crate::sled_key_spaces::StateMachineMeta;
 use crate::sled_key_spaces::TableLookup;
 use crate::sled_key_spaces::Tables;
 use crate::state_machine::ClientLastRespValue;
+use crate::state_machine::DatabaseLookupKey;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaKey::Initialized;
 use crate::state_machine::StateMachineMetaKey::LastApplied;
@@ -348,7 +350,11 @@ impl StateMachine {
                 }
             }
 
-            Cmd::CreateDatabase { ref name, ref meta } => {
+            Cmd::CreateDatabase {
+                ref tenant_id,
+                ref name,
+                ref meta,
+            } => {
                 let db_id = self.txn_incr_seq(SEQ_DATABASE_ID, txn_tree).map_err(|e| {
                     let e: ConflictableTransactionError<Infallible> = e.into();
                     ErrorCode::from(e)
@@ -359,7 +365,7 @@ impl StateMachine {
                 let (prev, result) = self
                     .sub_txn_tree_upsert(
                         &db_lookup_tree,
-                        name,
+                        &DatabaseLookupKey::new(tenant_id.to_owned(), name.to_string()),
                         &MatchSeq::Exact(0),
                         Operation::Update(db_id),
                         None,
@@ -430,11 +436,20 @@ impl StateMachine {
                 )))
             }
 
-            Cmd::DropDatabase { ref name } => {
+            Cmd::DropDatabase {
+                ref tenant_id,
+                ref name,
+            } => {
                 let dbs = txn_tree.key_space::<DatabaseLookup>();
 
                 let (prev, result) = self
-                    .sub_txn_tree_upsert(&dbs, name, &MatchSeq::Any, Operation::Delete, None)
+                    .sub_txn_tree_upsert(
+                        &dbs,
+                        &DatabaseLookupKey::new(tenant_id.to_owned(), name.to_string()),
+                        &MatchSeq::Any,
+                        Operation::Delete,
+                        None,
+                    )
                     .map_err(|e| {
                         let e: ConflictableTransactionError<Infallible> = e.into();
                         ErrorCode::from(e)
@@ -480,14 +495,17 @@ impl StateMachine {
             }
 
             Cmd::CreateTable {
+                ref tenant_id,
                 ref db_name,
                 ref table_name,
                 ref table_meta,
             } => {
-                let db_id = self.txn_get_database_id(db_name, txn_tree).map_err(|e| {
-                    let e: ConflictableTransactionError<Infallible> = e.into();
-                    ErrorCode::from(e)
-                })?;
+                let db_id = self
+                    .txn_get_database_id(tenant_id.to_owned(), db_name, txn_tree)
+                    .map_err(|e| {
+                        let e: ConflictableTransactionError<Infallible> = e.into();
+                        ErrorCode::from(e)
+                    })?;
 
                 let lookup_key = TableLookupKey {
                     database_id: db_id.unwrap(),
@@ -563,13 +581,16 @@ impl StateMachine {
             }
 
             Cmd::DropTable {
+                tenant_id,
                 ref db_name,
                 ref table_name,
             } => {
-                let db_id = self.txn_get_database_id(db_name, txn_tree).map_err(|e| {
-                    let e: ConflictableTransactionError<Infallible> = e.into();
-                    ErrorCode::from(e)
-                })?;
+                let db_id = self
+                    .txn_get_database_id(tenant_id.to_owned(), db_name, txn_tree)
+                    .map_err(|e| {
+                        let e: ConflictableTransactionError<Infallible> = e.into();
+                        ErrorCode::from(e)
+                    })?;
 
                 let lookup_key = TableLookupKey {
                     database_id: db_id.unwrap(),
@@ -840,10 +861,14 @@ impl StateMachine {
     }
 
     #[allow(clippy::ptr_arg)]
-    pub fn get_database_id(&self, db_name: &String) -> common_exception::Result<u64> {
+    pub fn get_database_id(
+        &self,
+        tenant_id: Uuid,
+        db_name: &String,
+    ) -> common_exception::Result<u64> {
         let seq_dbi = self
             .database_lookup()
-            .get(db_name)?
+            .get(&(DatabaseLookupKey::new(tenant_id, db_name.to_string())))?
             .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
 
         Ok(seq_dbi.data)
@@ -851,11 +876,14 @@ impl StateMachine {
 
     pub fn txn_get_database_id(
         &self,
+        tenant_id: Uuid,
         db_name: &str,
         txn_tree: &TransactionSledTree,
     ) -> TxnResult<Option<u64>> {
         let txn_db_lookup = txn_tree.key_space::<DatabaseLookup>();
-        let seq_dbi = txn_db_lookup.get(&db_name.to_string())?.map(|x| x.data);
+        let seq_dbi = txn_db_lookup
+            .get(&(DatabaseLookupKey::new(tenant_id, db_name.to_string())))?
+            .map(|x| x.data);
 
         Ok(seq_dbi)
     }

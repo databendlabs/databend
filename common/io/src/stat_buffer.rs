@@ -104,3 +104,11 @@ impl StatBuffer for bool {
         [0; 1]
     }
 }
+
+impl StatBuffer for char {
+    type Buffer = [u8; 4];
+
+    fn buffer() -> Self::Buffer {
+        [0; 4]
+    }
+}

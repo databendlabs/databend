@@ -26,6 +26,7 @@ use common_ast::parser::ast::Statement;
 use common_ast::parser::ast::TableReference;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use uuid::Uuid;
 
 use crate::catalogs::Catalog;
 use crate::sessions::QueryContext;
@@ -110,10 +111,12 @@ impl Binder {
                 let table = table.name.clone();
                 // TODO: simply normalize table name to lower case, maybe use a more reasonable way
                 let table = table.to_lowercase();
+                let tenant_id = self.context.get_tenant_id()?;
 
                 // Resolve table with catalog
                 let table_meta: Arc<dyn Table> = Self::resolve_data_source(
                     self.catalog.as_ref(),
+                    tenant_id,
                     database.as_str(),
                     table.as_str(),
                 )
@@ -258,11 +261,12 @@ impl Binder {
 
     pub async fn resolve_data_source(
         catalog: &dyn Catalog,
+        tenant_id: Uuid,
         database: &str,
         table: &str,
     ) -> Result<Arc<dyn Table>> {
         // Resolve table with catalog
-        let table_meta = catalog.get_table(database, table).await?;
+        let table_meta = catalog.get_table(tenant_id, database, table).await?;
         Ok(table_meta)
     }
 }

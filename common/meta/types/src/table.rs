@@ -23,6 +23,7 @@ use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
 use common_datavalues::DataSchema;
 use maplit::hashmap;
+use uuid::Uuid;
 
 use crate::database::DatabaseNameIdent;
 use crate::MatchSeq;
@@ -53,19 +54,25 @@ impl TableIdent {
 
 impl Display for TableIdent {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "id:{}, ver:{}", self.table_id, self.version)
+        write!(f, "table_id:{}, ver:{}", self.table_id, self.version)
     }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableNameIndent {
+    pub tenant_id: Uuid,
     pub db_name: String,
     pub table_name: String,
 }
 
 impl TableNameIndent {
-    pub fn new(db_name: impl Into<String>, table_name: impl Into<String>) -> TableNameIndent {
+    pub fn new(
+        tenant: Uuid,
+        db_name: impl Into<String>,
+        table_name: impl Into<String>,
+    ) -> TableNameIndent {
         TableNameIndent {
+            tenant_id: tenant,
             db_name: db_name.into(),
             table_name: table_name.into(),
         }
@@ -185,6 +192,7 @@ impl Display for TableInfo {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateTableReq {
     pub if_not_exists: bool,
+    pub tenant_id: Uuid,
     pub db: String,
     pub table: String,
     pub table_meta: TableMeta,
@@ -198,6 +206,7 @@ pub struct CreateTableReply {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropTableReq {
     pub if_exists: bool,
+    pub tenant_id: Uuid,
     pub db: String,
     pub table: String,
 }
@@ -247,16 +256,20 @@ impl Deref for GetTableReq {
     }
 }
 
-impl From<(&str, &str)> for GetTableReq {
-    fn from(db_table: (&str, &str)) -> Self {
-        Self::new(db_table.0, db_table.1)
+impl From<(Uuid, &str, &str)> for GetTableReq {
+    fn from(db_table: (Uuid, &str, &str)) -> Self {
+        Self::new(db_table.0, db_table.1, db_table.2)
     }
 }
 
 impl GetTableReq {
-    pub fn new(db_name: impl Into<String>, table_name: impl Into<String>) -> GetTableReq {
+    pub fn new(
+        tenant_id: Uuid,
+        db_name: impl Into<String>,
+        table_name: impl Into<String>,
+    ) -> GetTableReq {
         GetTableReq {
-            inner: TableNameIndent::new(db_name, table_name),
+            inner: TableNameIndent::new(tenant_id, db_name, table_name),
         }
     }
 }
@@ -275,9 +288,10 @@ impl Deref for ListTableReq {
 }
 
 impl ListTableReq {
-    pub fn new(db_name: impl Into<String>) -> ListTableReq {
+    pub fn new(tenant_id: Uuid, db_name: impl Into<String>) -> ListTableReq {
         ListTableReq {
             inner: DatabaseNameIdent {
+                tenant_id,
                 db_name: db_name.into(),
             },
         }

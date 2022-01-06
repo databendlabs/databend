@@ -17,6 +17,8 @@ use std::mem::MaybeUninit;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use uuid::Bytes;
+use uuid::Uuid;
 
 use crate::stat_buffer::StatBuffer;
 use crate::unmarshal::Unmarshal;
@@ -33,6 +35,7 @@ pub trait BinaryRead {
     fn read_string(&mut self) -> Result<String>;
     fn skip_string(&mut self) -> Result<()>;
     fn read_uvarint(&mut self) -> Result<u64>;
+    fn read_uuid(&mut self) -> Result<Uuid>;
 
     // in place read
     fn read_to_scalar<V>(&mut self, v: &mut V) -> Result<()>
@@ -117,5 +120,12 @@ where T: io::Read
 
             i += 1;
         }
+    }
+
+    fn read_uuid(&mut self) -> Result<Uuid> {
+        let mut buffer: Bytes = [0_u8; 16];
+        self.read_exact(buffer.as_mut())?;
+
+        Ok(Uuid::from_bytes(buffer))
     }
 }

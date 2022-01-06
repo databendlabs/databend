@@ -51,6 +51,7 @@ impl MetaApi for StateMachine {
         req: CreateDatabaseReq,
     ) -> Result<CreateDatabaseReply, ErrorCode> {
         let cmd = Cmd::CreateDatabase {
+            tenant_id: req.tenant_id,
             name: req.db.clone(),
             meta: req.meta.clone(),
         };
@@ -78,6 +79,7 @@ impl MetaApi for StateMachine {
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, ErrorCode> {
         let cmd = Cmd::DropDatabase {
+            tenant_id: req.tenant_id,
             name: req.db.clone(),
         };
 
@@ -99,7 +101,7 @@ impl MetaApi for StateMachine {
     }
 
     async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, ErrorCode> {
-        let db_id = self.get_database_id(&req.db_name)?;
+        let db_id = self.get_database_id(req.tenant_id, &req.db_name)?;
         let seq_meta = self.get_database_meta_by_id(&db_id)?;
 
         let dbi = DatabaseInfo {
@@ -118,12 +120,12 @@ impl MetaApi for StateMachine {
 
         let it = self.database_lookup().range(..)?;
         for r in it {
-            let (db_name, seq_id) = r?;
+            let (db_lookup_key, seq_id) = r?;
             let seq_meta = self.get_database_meta_by_id(&seq_id.data)?;
 
             let db_info = DatabaseInfo {
                 database_id: seq_id.data,
-                db: db_name,
+                db: db_lookup_key.get_database_name(),
                 meta: seq_meta.data,
             };
             res.push(Arc::new(db_info));
@@ -133,6 +135,7 @@ impl MetaApi for StateMachine {
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, ErrorCode> {
+        let tenant_id = req.tenant_id;
         let db_name = &req.db;
         let table_name = &req.table;
         let if_not_exists = req.if_not_exists;
@@ -142,6 +145,7 @@ impl MetaApi for StateMachine {
         let table_meta = req.table_meta;
 
         let cr = Cmd::CreateTable {
+            tenant_id,
             db_name: db_name.clone(),
             table_name: table_name.clone(),
             table_meta,
@@ -169,11 +173,13 @@ impl MetaApi for StateMachine {
     }
 
     async fn drop_table(&self, req: DropTableReq) -> Result<DropTableReply, ErrorCode> {
+        let tenant_id = req.tenant_id;
         let db_name = &req.db;
         let table_name = &req.table;
         let if_exists = req.if_exists;
 
         let cr = Cmd::DropTable {
+            tenant_id,
             db_name: db_name.clone(),
             table_name: table_name.clone(),
         };
@@ -196,10 +202,11 @@ impl MetaApi for StateMachine {
     }
 
     async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, ErrorCode> {
+        let tenant_id = req.tenant_id;
         let db = &req.db_name;
         let table_name = &req.table_name;
 
-        let db_id = self.get_database_id(db)?;
+        let db_id = self.get_database_id(tenant_id, db)?;
 
         let table_id = self
             .table_lookup()
@@ -219,7 +226,7 @@ impl MetaApi for StateMachine {
 
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, version),
-            desc: format!("'{}'.'{}'", db, table_name),
+            desc: format!("'{}'.'{}'.'{}'", tenant_id, db, table_name),
             name: table_name.to_string(),
             meta: table_meta,
         };
@@ -228,8 +235,9 @@ impl MetaApi for StateMachine {
     }
 
     async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, ErrorCode> {
+        let tenant_id = req.tenant_id;
         let db_name = &req.db_name;
-        let db_id = self.get_database_id(db_name)?;
+        let db_id = self.get_database_id(tenant_id, db_name)?;
 
         let mut tbls = vec![];
         let tables = self.tables();

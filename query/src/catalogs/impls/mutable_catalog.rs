@@ -15,6 +15,7 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_api::MetaApi;
 use common_meta_embedded::MetaEmbedded;
@@ -37,6 +38,7 @@ use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
+use uuid::Uuid;
 
 use crate::catalogs::backends::MetaRemote;
 use crate::catalogs::catalog::Catalog;
@@ -92,9 +94,13 @@ impl MutableCatalog {
             Arc::new(meta_remote)
         };
 
+        let tenant_id = Uuid::parse_str(conf.query.tenant_id.as_str())
+            .map_err(|e| ErrorCode::InvalidConfig(format!("failed to parse tenant id: {}", e)))?;
+
         // Create default database.
         let req = CreateDatabaseReq {
             if_not_exists: true,
+            tenant_id,
             db: "default".to_string(),
             meta: DatabaseMeta {
                 engine: "".to_string(),
@@ -129,17 +135,21 @@ impl MutableCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for MutableCatalog {
-    async fn get_database(&self, db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, tenant_id: Uuid, db_name: &str) -> Result<Arc<dyn Database>> {
         let db_info = self
             .ctx
             .meta
-            .get_database(GetDatabaseReq::new(db_name))
+            .get_database(GetDatabaseReq::new(tenant_id, db_name))
             .await?;
         self.build_db_instance(&db_info)
     }
 
-    async fn list_databases(&self) -> Result<Vec<Arc<dyn Database>>> {
-        let dbs = self.ctx.meta.list_databases(ListDatabaseReq {}).await?;
+    async fn list_databases(&self, tenant_id: Uuid) -> Result<Vec<Arc<dyn Database>>> {
+        let dbs = self
+            .ctx
+            .meta
+            .list_databases(ListDatabaseReq { tenant_id })
+            .await?;
 
         dbs.iter().try_fold(vec![], |mut acc, item| {
             let db = self.build_db_instance(item)?;
@@ -160,7 +170,7 @@ impl Catalog for MutableCatalog {
             meta: req.meta.clone(),
         });
         let database = self.build_db_instance(&db_info)?;
-        database.init_database().await?;
+        database.init_database(req.tenant_id).await?;
         Ok(CreateDatabaseReply {
             database_id: res.database_id,
         })
@@ -187,20 +197,25 @@ impl Catalog for MutableCatalog {
         self.ctx.meta.get_table_by_id(table_id).await
     }
 
-    async fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
+    async fn get_table(
+        &self,
+        tenant_id: Uuid,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<Arc<dyn Table>> {
         let table_info = self
             .ctx
             .meta
-            .get_table(GetTableReq::new(db_name, table_name))
+            .get_table(GetTableReq::new(tenant_id, db_name, table_name))
             .await?;
         self.get_table_by_info(table_info.as_ref())
     }
 
-    async fn list_tables(&self, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self, tenant_id: Uuid, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let table_infos = self
             .ctx
             .meta
-            .list_tables(ListTableReq::new(db_name))
+            .list_tables(ListTableReq::new(tenant_id, db_name))
             .await?;
 
         table_infos.iter().try_fold(vec![], |mut acc, item| {

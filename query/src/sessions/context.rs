@@ -44,6 +44,7 @@ use common_planners::Statistics;
 use common_streams::AbortStream;
 use common_streams::SendableDataBlockStream;
 use common_tracing::tracing;
+use uuid::Uuid;
 
 use crate::catalogs::Catalog;
 use crate::catalogs::DatabaseCatalog;
@@ -202,8 +203,9 @@ impl QueryContext {
     }
 
     pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
+        let tenent_id = self.get_tenant_id()?;
         let catalog = self.get_catalog();
-        match catalog.get_database(&new_database_name).await {
+        match catalog.get_database(tenent_id, &new_database_name).await {
             Ok(_) => self.shared.set_current_database(new_database_name),
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(
@@ -224,6 +226,11 @@ impl QueryContext {
 
     pub fn get_current_user(&self) -> Result<UserInfo> {
         self.shared.get_current_user()
+    }
+
+    pub fn get_tenant_id(&self) -> Result<Uuid> {
+        Uuid::parse_str(self.shared.conf.query.tenant_id.as_str())
+            .map_err(|e| ErrorCode::InvalidConfig(format!("failed to parse tenant id: {}", e)))
     }
 
     pub fn get_fuse_version(&self) -> String {

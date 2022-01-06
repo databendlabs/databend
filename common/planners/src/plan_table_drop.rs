@@ -17,10 +17,12 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::DropTableReq;
+use uuid::Uuid;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropTablePlan {
     pub if_exists: bool,
+    pub tenant_id: Uuid,
     pub db: String,
     /// The table name
     pub table: String,
@@ -36,6 +38,7 @@ impl From<DropTablePlan> for DropTableReq {
     fn from(p: DropTablePlan) -> Self {
         DropTableReq {
             if_exists: p.if_exists,
+            tenant_id: p.tenant_id,
             db: p.db,
             table: p.table,
         }

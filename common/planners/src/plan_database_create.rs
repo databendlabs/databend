@@ -19,12 +19,14 @@ use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::CreateDatabaseReq;
 use common_meta_types::DatabaseMeta;
+use uuid::Uuid;
 
 pub type DatabaseOptions = HashMap<String, String>;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateDatabasePlan {
     pub if_not_exists: bool,
+    pub tenant: Uuid,
     pub db: String,
     pub meta: DatabaseMeta,
 }
@@ -33,7 +35,8 @@ impl From<CreateDatabasePlan> for CreateDatabaseReq {
     fn from(p: CreateDatabasePlan) -> Self {
         CreateDatabaseReq {
             if_not_exists: p.if_not_exists,
-            db: p.db.clone(),
+            tenant_id: p.tenant,
+            db: p.db,
             meta: p.meta,
         }
     }
@@ -43,6 +46,7 @@ impl From<&CreateDatabasePlan> for CreateDatabaseReq {
     fn from(p: &CreateDatabasePlan) -> Self {
         CreateDatabaseReq {
             if_not_exists: p.if_not_exists,
+            tenant_id: p.tenant,
             db: p.db.clone(),
             meta: p.meta.clone(),
         }

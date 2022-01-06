@@ -16,6 +16,7 @@ use common_exception::Result;
 use common_meta_types::DatabaseInfo;
 use common_tracing::tracing;
 use octocrab::params;
+use uuid::Uuid;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
@@ -49,7 +50,7 @@ impl Database for GithubDatabase {
         &self.db_info
     }
 
-    async fn init_database(&self) -> Result<()> {
+    async fn init_database(&self, tenant_id: Uuid) -> Result<()> {
         let token = self
             .get_db_info()
             .meta
@@ -85,13 +86,14 @@ impl Database for GithubDatabase {
 
             tracing::error!("creating {} related repo", &repo.name);
             // Create default db
-            RepoInfoTable::create_table(storage_ctx.clone(), options.clone()).await?;
+            RepoInfoTable::create_table(storage_ctx.clone(), tenant_id, options.clone()).await?;
 
-            RepoIssuesTable::create_table(storage_ctx.clone(), options.clone()).await?;
+            RepoIssuesTable::create_table(storage_ctx.clone(), tenant_id, options.clone()).await?;
 
-            RepoPRsTable::create_table(storage_ctx.clone(), options.clone()).await?;
+            RepoPRsTable::create_table(storage_ctx.clone(), tenant_id, options.clone()).await?;
 
-            RepoCommentsTable::create_table(storage_ctx.clone(), options.clone()).await?;
+            RepoCommentsTable::create_table(storage_ctx.clone(), tenant_id, options.clone())
+                .await?;
         }
 
         Ok(())
