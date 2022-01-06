@@ -23,7 +23,7 @@ $ bendctl cluster create
 
 ```shell
 $ docker pull datafuselabs/databend
-$ docker run --init --rm -p 3307:3307 datafuselabs/databend
+$ docker run --init --rm -p 3307:3307 -p 8001:8001 -p 9001:9001 datafuselabs/databend
 ```
   </TabItem>
   <TabItem value="source" label="From source">
