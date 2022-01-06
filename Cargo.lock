@@ -1780,33 +1780,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-meta-flight"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "common-arrow",
- "common-base",
- "common-datavalues",
- "common-exception",
- "common-grpc",
- "common-infallible",
- "common-meta-api",
- "common-meta-types",
- "common-tracing",
- "derive_more",
- "futures",
- "hyper",
- "prost",
- "rand 0.8.4",
- "serde",
- "serde_json",
- "tokio-stream",
- "tonic",
- "tonic-build",
- "trust-dns-resolver",
-]
-
-[[package]]
 name = "common-meta-grpc"
 version = "0.1.0"
 dependencies = [
@@ -5430,9 +5403,9 @@ dependencies = [
 
 [[package]]
 name = "poem"
-version = "1.2.25"
+version = "1.2.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8f609173a5155e4dd994804848f55a3de894e7daecd562312e69151ec6c3556"
+checksum = "dcdb8c924d03e0454183f4b19722fc2001e62ccb4e1fb7f6cc51b90811f394b8"
 dependencies = [
  "async-trait",
  "bytes 1.1.0",
@@ -5462,9 +5435,9 @@ dependencies = [
 
 [[package]]
 name = "poem-derive"
-version = "1.2.25"
+version = "1.2.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb42548e64280207b0d28cb15ee93d4f22b4fd4f5aae857854f25ebf73cf8f3f"
+checksum = "44dfd3dc0a380a6ddbc37a873ec66b446ee1eec70711cb10aa75735d79e644f2"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
