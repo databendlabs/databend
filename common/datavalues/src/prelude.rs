@@ -30,6 +30,7 @@ pub use crate::series::Series;
 pub use crate::series::SeriesFrom;
 pub use crate::series::SeriesTrait;
 pub use crate::types::*;
+pub use crate::types2::*;
 pub use crate::utils::*;
 pub use crate::DFHasher;
 // common structs

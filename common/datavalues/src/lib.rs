@@ -35,6 +35,7 @@ pub mod columns;
 pub mod prelude;
 mod series;
 pub mod types;
+pub mod types2;
 
 /// third partry
 pub use chrono;
