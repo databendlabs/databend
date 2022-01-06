@@ -104,11 +104,14 @@ impl ClickHouseSession for InteractiveWorker {
         let user_manager = self.session.get_user_manager();
         // TODO: push async up to clickhouse server lib
         futures::executor::block_on(async move {
-            // TODO: use get_users and check client address
             // Here we don't handle the create context error.
             let ctx = self.session.create_context().await.unwrap();
             let tenant = ctx.get_tenant();
-            let (authed, user_info) = match user_manager.get_user(tenant, user, "%").await {
+            let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
+            let (authed, user_info) = match user_manager
+                .get_user_with_client_ip(tenant, user, client_ip)
+                .await
+            {
                 Ok(user_info) => (
                     user_manager.auth_user(user_info.clone(), info).await,
                     Some(user_info),

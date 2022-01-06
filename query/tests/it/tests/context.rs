@@ -66,6 +66,20 @@ pub fn create_query_context_with_config(config: Config) -> Result<Arc<QueryConte
     let sessions = SessionManagerBuilder::create().build()?;
     let dummy_session = sessions.create_session("TestSession")?;
 
+    let mut user_info = UserInfo::new(
+        "root".to_string(),
+        "127.0.0.1".to_string(),
+        Vec::from("pass"),
+        PasswordType::Sha256,
+    );
+    user_info.grants.grant_privileges(
+        "root",
+        "127.0.0.1",
+        &GrantObject::Global,
+        UserPrivilegeSet::available_privileges_on_global(),
+    );
+    dummy_session.set_current_user(user_info);
+
     let context = QueryContext::create_from_shared(QueryContextShared::try_create(
         config,
         Arc::new(dummy_session.as_ref().clone()),
