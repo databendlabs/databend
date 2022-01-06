@@ -8,7 +8,7 @@ use common_exception::Result;
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
 
-pub enum PrepareState {
+pub enum Event {
     NeedData,
     NeedConsume,
     Sync,
@@ -19,7 +19,7 @@ pub enum PrepareState {
 // The design is inspired by ClickHouse processors
 #[async_trait::async_trait]
 pub trait Processor: Send {
-    fn prepare(&mut self) -> Result<PrepareState>;
+    fn event(&mut self) -> Result<Event>;
 
     // Synchronous work.
     fn process(&mut self) -> Result<()> {

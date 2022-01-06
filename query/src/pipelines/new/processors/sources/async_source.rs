@@ -7,7 +7,7 @@ use common_exception::Result;
 
 use crate::pipelines::new::processors::port::InputPort;
 use crate::pipelines::new::processors::port::OutputPort;
-use crate::pipelines::new::processors::processor::PrepareState;
+use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 use crate::pipelines::new::processors::sources::SyncSource;
 use crate::pipelines::new::processors::Processor;
@@ -25,12 +25,12 @@ pub struct ASyncSourceProcessorWrap<T: 'static + AsyncSource> {
     best_push_pos: usize,
 
     inner: T,
-    outputs: Vec<OutputPort>,
+    outputs: Vec<Arc<OutputPort>>,
     generated_data: Option<DataBlock>,
 }
 
 impl<T: 'static + AsyncSource> ASyncSourceProcessorWrap<T> {
-    pub fn create(mut outputs: Vec<OutputPort>, inner: T) -> Result<ProcessorPtr> {
+    pub fn create(mut outputs: Vec<Arc<OutputPort>>, inner: T) -> Result<ProcessorPtr> {
         match outputs.len() {
             0 => Err(ErrorCode::LogicalError("Source output port is empty.")),
             1 => Ok(SingleOutputASyncSourceProcessorWrap::create(
@@ -82,7 +82,7 @@ impl<T: 'static + AsyncSource> ASyncSourceProcessorWrap<T> {
     }
 
     #[inline(always)]
-    fn close_outputs(&mut self) -> PrepareState {
+    fn close_outputs(&mut self) -> Event {
         if !self.is_finish {
             self.is_finish = true;
         }
@@ -93,19 +93,19 @@ impl<T: 'static + AsyncSource> ASyncSourceProcessorWrap<T> {
             }
         }
 
-        PrepareState::Finished
+        Event::Finished
     }
 }
 
 #[async_trait::async_trait]
 impl<T: 'static + AsyncSource> Processor for ASyncSourceProcessorWrap<T> {
-    fn prepare(&mut self) -> Result<PrepareState> {
+    fn event(&mut self) -> Result<Event> {
         Ok(match &self.generated_data {
             None if self.is_finish => self.close_outputs(),
-            None => PrepareState::Async,
+            None => Event::Async,
             Some(_) => match self.push_data_to_outputs() {
                 true => self.close_outputs(),
-                false => PrepareState::NeedConsume,
+                false => Event::NeedConsume,
             },
         })
     }
@@ -126,12 +126,12 @@ struct SingleOutputASyncSourceProcessorWrap<T: 'static + AsyncSource> {
     is_finish: bool,
 
     inner: T,
-    output: OutputPort,
+    output: Arc<OutputPort>,
     generated_data: Option<DataBlock>,
 }
 
 impl<T: 'static + AsyncSource> SingleOutputASyncSourceProcessorWrap<T> {
-    pub fn create(output: OutputPort, inner: T) -> ProcessorPtr {
+    pub fn create(output: Arc<OutputPort>, inner: T) -> ProcessorPtr {
         Arc::new(UnsafeCell::new(Self {
             inner,
             output,
@@ -141,17 +141,17 @@ impl<T: 'static + AsyncSource> SingleOutputASyncSourceProcessorWrap<T> {
     }
 
     #[inline(always)]
-    fn push_data(&mut self) -> PrepareState {
+    fn push_data(&mut self) -> Event {
         if let Some(generated_data) = self.generated_data.take() {
             self.generated_data = None;
             self.output.push_data(Ok(generated_data));
         }
 
-        PrepareState::NeedConsume
+        Event::NeedConsume
     }
 
     #[inline(always)]
-    fn close_output(&mut self) -> PrepareState {
+    fn close_output(&mut self) -> Event {
         if !self.is_finish {
             self.is_finish = true;
         }
@@ -160,19 +160,19 @@ impl<T: 'static + AsyncSource> SingleOutputASyncSourceProcessorWrap<T> {
             self.output.finish();
         }
 
-        PrepareState::Finished
+        Event::Finished
     }
 }
 
 #[async_trait::async_trait]
 impl<T: 'static + AsyncSource> Processor for SingleOutputASyncSourceProcessorWrap<T> {
-    fn prepare(&mut self) -> Result<PrepareState> {
+    fn event(&mut self) -> Result<Event> {
         Ok(match &self.generated_data {
             None if self.is_finish => self.close_output(),
-            None => PrepareState::Async,
+            None => Event::Async,
             Some(_) if self.output.can_push() => self.push_data(),
             Some(_) if self.output.is_finished() => self.close_output(),
-            Some(_) => PrepareState::NeedConsume,
+            Some(_) => Event::NeedConsume,
         })
     }
 

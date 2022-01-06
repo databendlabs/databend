@@ -2263,6 +2263,7 @@ dependencies = [
  "once_cell",
  "parquet-format-async-temp",
  "paste",
+ "petgraph 0.6.0",
  "poem",
  "pretty_assertions",
  "prost",

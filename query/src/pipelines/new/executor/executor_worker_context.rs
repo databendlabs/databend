@@ -15,48 +15,44 @@ use crate::pipelines::new::executor::executor_graph::RunningGraph;
 use crate::pipelines::new::executor::executor_tasks::{ExecutingAsyncTask, ExecutorTasksQueue};
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 
-enum ExecutorWorkerTask {
+pub enum ExecutorTask {
     None,
     Sync(ProcessorPtr),
     Async(ProcessorPtr),
-    AsyncSchedule(BoxFuture<'static, Result<()>>),
+    AsyncSchedule(ExecutingAsyncTask),
 }
 
 pub struct ExecutorWorkerContext {
     worker_num: usize,
-    task: ExecutorWorkerTask,
+    task: ExecutorTask,
 }
 
 impl ExecutorWorkerContext {
     pub fn create(worker_num: usize) -> Self {
         ExecutorWorkerContext {
             worker_num,
-            task: ExecutorWorkerTask::None,
+            task: ExecutorTask::None,
         }
     }
 
     pub fn has_task(&self) -> bool {
-        !matches!(&self.task, ExecutorWorkerTask::None)
+        !matches!(&self.task, ExecutorTask::None)
     }
 
     pub fn get_worker_num(&self) -> usize {
         self.worker_num
     }
 
-    pub fn set_sync_task(&mut self, processor: ProcessorPtr) {
-        self.task = ExecutorWorkerTask::Sync(processor)
-    }
-
-    pub fn set_async_task(&mut self, processor: ProcessorPtr) {
-        self.task = ExecutorWorkerTask::Async(processor)
+    pub fn set_task(&mut self, task: ExecutorTask) {
+        self.task = task
     }
 
     pub fn execute_task(&mut self, queue: &ExecutorTasksQueue) -> Result<usize> {
-        match std::mem::replace(&mut self.task, ExecutorWorkerTask::None) {
-            ExecutorWorkerTask::None => Err(ErrorCode::LogicalError("Execute none task.")),
-            ExecutorWorkerTask::Sync(processor) => self.execute_sync_task(processor),
-            ExecutorWorkerTask::Async(processor) => self.execute_async_task(processor, queue),
-            ExecutorWorkerTask::AsyncSchedule(boxed_future) => self.schedule_async_task(boxed_future, queue),
+        match std::mem::replace(&mut self.task, ExecutorTask::None) {
+            ExecutorTask::None => Err(ErrorCode::LogicalError("Execute none task.")),
+            ExecutorTask::Sync(processor) => self.execute_sync_task(processor),
+            ExecutorTask::Async(processor) => self.execute_async_task(processor, queue),
+            ExecutorTask::AsyncSchedule(boxed_future) => self.schedule_async_task(boxed_future, queue),
         }
     }
 
@@ -69,28 +65,28 @@ impl ExecutorWorkerContext {
 
     fn execute_async_task(&mut self, processor: ProcessorPtr, queue: &ExecutorTasksQueue) -> Result<usize> {
         unsafe {
-            let mut boxed_future = (&mut *processor.get()).async_process().boxed();
-            self.schedule_async_task(boxed_future, queue)
+            let finished = Arc::new(AtomicBool::new(false));
+            let mut future = (&mut *processor.get()).async_process().boxed();
+            self.schedule_async_task(ExecutingAsyncTask { finished, future }, queue)
         }
     }
 
-    fn schedule_async_task(&mut self, mut boxed_future: BoxFuture<'static, Result<()>>, queue: &ExecutorTasksQueue) -> Result<usize> {
+    fn schedule_async_task(&mut self, mut task: ExecutingAsyncTask, queue: &ExecutorTasksQueue) -> Result<usize> {
+        task.finished.store(false, Ordering::Relaxed);
+
         loop {
-            let finished = Arc::new(AtomicBool::new(false));
-            let waker = ExecutingAsyncTaskWaker::create(&finished);
+            let waker = ExecutingAsyncTaskWaker::create(&task.finished);
 
             let waker = futures::task::waker_ref(&waker);
             let mut cx = Context::from_waker(&waker);
 
-            match boxed_future.as_mut().poll(&mut cx) {
+            match task.future.as_mut().poll(&mut cx) {
                 Poll::Ready(Ok(res)) => { return unimplemented!(); }
                 Poll::Ready(Err(cause)) => { return Err(cause); }
                 Poll::Pending => {
-                    let async_task = ExecutingAsyncTask { finished: finished.clone(), future: boxed_future };
-
-                    match queue.push_executing_async_task(self.worker_num, async_task) {
+                    match queue.push_executing_async_task(self.worker_num, task) {
                         None => { return unimplemented!(); }
-                        Some(task) => { boxed_future = task.future; }
+                        Some(t) => { task = t; }
                     };
                 }
             };

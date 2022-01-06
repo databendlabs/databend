@@ -1,8 +1,9 @@
-use common_exception::Result;
+use common_exception::{ErrorCode, Result};
 
 use crate::pipelines::new::executor::executor_graph::RunningGraph;
 use crate::pipelines::new::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::new::executor::executor_worker_context::ExecutorWorkerContext;
+use crate::pipelines::new::pipeline::NewPipeline;
 
 pub struct PipelineExecutor {
     graph: RunningGraph,
@@ -10,14 +11,16 @@ pub struct PipelineExecutor {
 }
 
 impl PipelineExecutor {
-    pub fn create() -> PipelineExecutor {
-        // PipelineExecutor {}
-        unimplemented!()
+    pub fn create(pipeline: NewPipeline, workers: usize) -> Result<PipelineExecutor> {
+        Ok(PipelineExecutor {
+            graph: RunningGraph::create(pipeline)?,
+            global_tasks_queue: ExecutorTasksQueue::create(workers),
+        })
     }
 
     pub fn initialize_executor(&self, workers: usize) -> Result<()> {
         self.graph.initialize_executor()?;
-        unimplemented!()
+        Ok(())
     }
 
     pub fn execute_with_single_worker(&self, worker_num: usize) -> Result<()> {

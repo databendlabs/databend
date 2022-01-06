@@ -10,6 +10,7 @@ use common_infallible::Mutex;
 use futures::future::Shared;
 
 use crate::pipelines::new::executor::RunningProcessor;
+use crate::pipelines::new::processors::PortTrigger;
 
 const HAS_DATA: usize = 1;
 
@@ -17,17 +18,27 @@ const FLAGS_MASK: usize = 0b111;
 const UNSET_FLAGS_MASK: usize = !FLAGS_MASK;
 
 #[repr(align(8))]
-struct SharedData(pub Result<DataBlock>);
+pub struct SharedData(pub Result<DataBlock>);
 
 pub struct SharedStatus {
-    data: AtomicPtr<SharedData>,
+    data: UnsafeCell<Arc<AtomicPtr<SharedData>>>,
 }
 
+unsafe impl Send for SharedStatus {}
+
 impl SharedStatus {
-    pub fn create() -> Arc<SharedStatus> {
-        Arc::new(SharedStatus {
-            data: AtomicPtr::new(std::ptr::null_mut()),
-        })
+    pub fn create() -> SharedStatus {
+        SharedStatus {
+            data: UnsafeCell::new(Arc::new(AtomicPtr::new(std::ptr::null_mut()))),
+        }
+    }
+
+    pub unsafe fn set_data_ptr(&self, data: &Arc<AtomicPtr<SharedData>>) {
+        (*self.data.get()) = data.clone()
+    }
+
+    pub unsafe fn get_data_ptr(&self) -> &Arc<AtomicPtr<SharedData>> {
+        &(*self.data.get())
     }
 
     pub fn swap(&self, data: Option<Result<DataBlock>>, flags: usize) -> Option<Result<DataBlock>> {
@@ -41,25 +52,27 @@ impl SharedStatus {
         };
 
         loop {
-            match self.data.compare_exchange_weak(
-                expected,
-                desired,
-                Ordering::SeqCst,
-                Ordering::Relaxed,
-            ) {
-                Err(new_expected) => {
-                    expected = new_expected;
-                }
-                Ok(old_value) => {
-                    let old_value_ptr = old_value as usize;
+            unsafe {
+                match self.get_data_ptr().compare_exchange_weak(
+                    expected,
+                    desired,
+                    Ordering::SeqCst,
+                    Ordering::Relaxed,
+                ) {
+                    Err(new_expected) => {
+                        expected = new_expected;
+                    }
+                    Ok(old_value) => {
+                        let old_value_ptr = old_value as usize;
 
-                    return match old_value_ptr & FLAGS_MASK {
-                        HAS_DATA => unsafe {
-                            let raw_ptr = (old_value_ptr & UNSET_FLAGS_MASK) as *mut SharedData;
-                            Some((*Box::from_raw(raw_ptr)).0)
-                        },
-                        _ => None,
-                    };
+                        return match old_value_ptr & FLAGS_MASK {
+                            HAS_DATA => {
+                                let raw_ptr = (old_value_ptr & UNSET_FLAGS_MASK) as *mut SharedData;
+                                Some((*Box::from_raw(raw_ptr)).0)
+                            }
+                            _ => None,
+                        };
+                    }
                 }
             }
         }
@@ -76,46 +89,52 @@ pub trait PortReactor<Data> {
     fn on_pull(&self, pull_from: Data);
 }
 
-pub struct ReactiveInputPort<Data: Copy, T: PortReactor<Data> + Sized> {
-    shared: Arc<SharedStatus>,
-
-    reactor: Arc<T>,
-    reactor_data: Data,
+pub struct InputPort {
+    shared: SharedStatus,
 }
 
-impl<Data: Copy, T: PortReactor<Data> + Sized> ReactiveInputPort<Data, T> {
-    pub fn create(shared: Arc<SharedStatus>, reactor: Arc<T>, data: Data) -> Self {
-        Self {
-            reactor,
-            reactor_data: data,
-            shared,
-        }
+unsafe impl Send for InputPort {}
+
+unsafe impl Sync for InputPort {}
+
+impl InputPort {
+    pub fn create() -> Arc<InputPort> {
+        Arc::new(InputPort {
+            shared: SharedStatus::create()
+        })
+    }
+
+    pub fn set_trigger(&self, trigger: Arc<PortTrigger>) {
+        unimplemented!()
     }
 
     pub fn pull_data(&self) -> Option<Result<DataBlock>> {
-        self.reactor.on_pull(self.reactor_data);
         self.shared.swap(None, 0)
     }
 }
 
-pub struct ReactiveOutputPort<Data: Copy, T: PortReactor<Data> + Sized> {
-    shared: Arc<SharedStatus>,
-
-    reactor: Arc<T>,
-    reactor_data: Data,
+pub struct OutputPort {
+    shared: SharedStatus,
 }
 
-impl<Data: Copy, T: PortReactor<Data> + Sized> ReactiveOutputPort<Data, T> {
-    pub fn create(shared: Arc<SharedStatus>, reactor: Arc<T>, data: Data) -> Self {
-        Self {
-            reactor,
-            reactor_data: data,
-            shared,
-        }
+/// Safely:
+unsafe impl Send for OutputPort {}
+
+unsafe impl Sync for OutputPort {}
+
+impl OutputPort {
+    pub fn create() -> Arc<OutputPort> {
+        Arc::new(OutputPort {
+            shared: SharedStatus::create()
+        })
+    }
+
+    pub fn set_trigger(&self, trigger: Arc<PortTrigger>) {
+        unimplemented!()
     }
 
     pub fn push_data(&self, data: Result<DataBlock>) {
-        self.reactor.on_push(self.reactor_data);
+        // self.reactor.on_push(self.reactor_data);
         if let Some(value) = self.shared.swap(Some(data), HAS_DATA) {
             // It shouldn't have happened
             unreachable!("Cannot push data to port which already has data. old value {:?}", value);
@@ -135,24 +154,6 @@ impl<Data: Copy, T: PortReactor<Data> + Sized> ReactiveOutputPort<Data, T> {
     }
 }
 
-unsafe impl<Data: Copy, T: PortReactor<Data> + Sized> Send for ReactiveInputPort<Data, T> {}
-
-unsafe impl<Data: Copy, T: PortReactor<Data> + Sized> Send for ReactiveOutputPort<Data, T> {}
-
-pub type InputPort = ReactiveInputPort<usize, RunningProcessor>;
-pub type OutputPort = ReactiveOutputPort<usize, RunningProcessor>;
-
-pub fn create_port(
-    processors: &[Arc<RunningProcessor>],
-    input: usize,
-    output: usize,
-) -> (InputPort, OutputPort) {
-    let input_reactor = processors[input].clone();
-    let output_reactor = processors[output].clone();
-
-    let state = SharedStatus::create();
-    (
-        InputPort::create(state.clone(), input_reactor, output),
-        OutputPort::create(state, output_reactor, input),
-    )
+pub unsafe fn connect(input: Arc<InputPort>, output: Arc<OutputPort>) {
+    output.shared.set_data_ptr(input.shared.get_data_ptr());
 }

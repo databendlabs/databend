@@ -1,12 +1,15 @@
 mod async_source;
 mod sync_source;
+mod table_source;
 
 pub use async_source::ASyncSourceProcessorWrap;
 pub use async_source::AsyncSource;
 pub use sync_source::SyncSource;
 pub use sync_source::SyncSourceProcessorWrap;
+pub use table_source::TableSource;
 
 mod source_example {
+    use std::sync::Arc;
     use common_datablocks::DataBlock;
     use common_exception::Result;
 
@@ -25,7 +28,7 @@ mod source_example {
     impl ExampleSyncSource {
         pub fn create(
             data_blocks: Vec<DataBlock>,
-            outputs: Vec<OutputPort>,
+            outputs: Vec<Arc<OutputPort>>,
         ) -> Result<ProcessorPtr> {
             SyncSourceProcessorWrap::create(outputs, ExampleSyncSource {
                 pos: 0,
@@ -52,7 +55,7 @@ mod source_example {
     impl ExampleAsyncSource {
         pub fn create(
             data_blocks: Vec<DataBlock>,
-            outputs: Vec<OutputPort>,
+            outputs: Vec<Arc<OutputPort>>,
         ) -> Result<ProcessorPtr> {
             ASyncSourceProcessorWrap::create(outputs, ExampleAsyncSource {
                 pos: 0,

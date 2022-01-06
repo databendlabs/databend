@@ -195,6 +195,7 @@ build_exceptions! {
     IllegalGrant(61),
     PipelineAreadlyStarted(62),
     PipelineNotStarted(63),
+    PipelineUnInitialized(64),
 
     SemanticError(100),
 

@@ -10,7 +10,7 @@ use common_exception::Result;
 use common_infallible::Mutex;
 
 use crate::pipelines::new::executor::executor_graph::RunningGraph;
-use crate::pipelines::new::executor::executor_worker_context::ExecutorWorkerContext;
+use crate::pipelines::new::executor::executor_worker_context::{ExecutorWorkerContext, ExecutorTask};
 use crate::pipelines::new::processors::processor::ProcessorPtr;
 
 pub struct ExecutorTasksQueue {
@@ -35,9 +35,10 @@ impl ExecutorTasksQueue {
         unsafe {
             let mut workers_tasks = self.workers_tasks.lock();
             if !workers_tasks.is_empty() {
-                let best_worker_id = workers_tasks.best_worker_id(context.get_worker_num());
-                // context.task = workers_tasks.pop_task(best_worker_id);
+                let task = workers_tasks.pop_task(context.get_worker_num());
+                context.set_task(task);
 
+                // TODO:
                 // if thread.task.is_some() && !workers_tasks.is_empty() {
                 //     // TODO:
                 // }
@@ -47,6 +48,15 @@ impl ExecutorTasksQueue {
         }
 
         self.wait_wakeup(context)
+    }
+
+    pub fn push_tasks(&self, worker_id: usize, mut tasks: VecDeque<ExecutorTask>) {
+        unsafe {
+            let mut workers_tasks = self.workers_tasks.lock();
+            while let Some(task) = tasks.pop_front() {
+                workers_tasks.push_task(worker_id, task);
+            }
+        }
     }
 
     pub fn push_executing_async_task(&self, worker_id: usize, task: ExecutingAsyncTask) -> Option<ExecutingAsyncTask> {
@@ -66,6 +76,7 @@ impl ExecutorTasksQueue {
 
     pub fn wait_wakeup(&self, thread: &mut ExecutorWorkerContext) {
         // condvar.wait(guard);
+        // TODO:
         unimplemented!()
     }
 }
@@ -108,28 +119,60 @@ impl ExecutorTasks {
         self.tasks_size == 0
     }
 
-    pub unsafe fn best_worker_id(&mut self, mut priority_works_id: usize) -> usize {
-        for _index in 0..self.workers_sync_tasks.len() {
-            if !self.workers_sync_tasks[priority_works_id].is_empty() {
-                break;
-            }
+    #[inline]
+    fn pop_worker_task(&mut self, worker_id: usize) -> ExecutorTask {
+        if let Some(processor) = self.workers_sync_tasks[worker_id].pop_front() {
+            return ExecutorTask::Sync(processor);
+        }
 
-            priority_works_id += 1;
-            if priority_works_id >= self.workers_sync_tasks.len() {
-                priority_works_id = 0;
+        if let Some(processor) = self.workers_async_tasks[worker_id].pop_front() {
+            return ExecutorTask::Async(processor);
+        }
+
+        if !self.workers_executing_async_tasks[worker_id].is_empty() {
+            let async_tasks = &mut self.workers_executing_async_tasks[worker_id];
+            for index in 0..async_tasks.len() {
+                if async_tasks[index].finished.load(Ordering::Relaxed) {
+                    return ExecutorTask::AsyncSchedule(async_tasks.swap_remove_front(index).unwrap());
+                }
             }
         }
 
-        priority_works_id
+        ExecutorTask::None
     }
 
-    pub unsafe fn pop_task(&mut self, worker_id: usize) -> Option<ProcessorPtr> {
-        self.tasks_size -= 1;
-        self.workers_sync_tasks[worker_id].pop_front()
+    pub unsafe fn pop_task(&mut self, mut worker_id: usize) -> ExecutorTask {
+        for _index in 0..self.workers_sync_tasks.len() {
+            match self.pop_worker_task(worker_id) {
+                ExecutorTask::None => {
+                    worker_id += 1;
+                    if worker_id >= self.workers_sync_tasks.len() {
+                        worker_id = 0;
+                    }
+                }
+                other => { return other; }
+            }
+        }
+
+        ExecutorTask::None
     }
 
-    pub unsafe fn push_executing_async_task(&mut self, worker_id: usize, task: ExecutingAsyncTask) {
+    pub unsafe fn push_task(&mut self, worker_id: usize, task: ExecutorTask) {
         self.tasks_size += 1;
-        self.workers_executing_async_tasks[worker_id].push_back(task)
+        let sync_queue = &mut self.workers_sync_tasks[worker_id];
+        let async_queue = &mut self.workers_async_tasks[worker_id];
+        let executing_queue = &mut self.workers_executing_async_tasks[worker_id];
+
+        match task {
+            ExecutorTask::None => unreachable!(),
+            ExecutorTask::Sync(processor) => sync_queue.push_back(processor),
+            ExecutorTask::Async(processor) => async_queue.push_back(processor),
+            ExecutorTask::AsyncSchedule(task) => executing_queue.push_back(task),
+        }
+    }
+
+    pub unsafe fn push_executing_async_task(&mut self, worker: usize, task: ExecutingAsyncTask) {
+        self.tasks_size += 1;
+        self.workers_executing_async_tasks[worker].push_back(task)
     }
 }

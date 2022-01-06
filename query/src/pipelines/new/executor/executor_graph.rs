@@ -4,6 +4,8 @@ use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use petgraph::Direction;
+use petgraph::prelude::EdgeRef;
 
 use common_clickhouse_srv::protocols::Stage::Default;
 use common_exception::ErrorCode;
@@ -13,11 +15,11 @@ use common_infallible::RwLock;
 use common_infallible::RwLockUpgradableReadGuard;
 
 use crate::pipelines::new::executor::executor_tasks::ExecutorTasksQueue;
-use crate::pipelines::new::executor::executor_worker_context::ExecutorWorkerContext;
-use crate::pipelines::new::processors::create_port;
-use crate::pipelines::new::processors::processor::PrepareState;
+use crate::pipelines::new::executor::executor_worker_context::{ExecutorTask, ExecutorWorkerContext};
+use crate::pipelines::new::pipeline::NewPipeline;
+use crate::pipelines::new::processors::processor::Event;
 use crate::pipelines::new::processors::processor::ProcessorPtr;
-use crate::pipelines::new::processors::PortReactor;
+use crate::pipelines::new::processors::{PortReactor, UpdateList};
 use crate::pipelines::new::processors::Processor;
 use crate::pipelines::new::processors::Processors;
 
@@ -31,19 +33,19 @@ pub enum RunningState {
 pub struct RunningProcessor {
     state: RunningState,
     processor: ProcessorPtr,
-    inputs: UnsafeCell<Vec<usize>>,
-    outputs: UnsafeCell<Vec<usize>>,
+    inputs: Arc<UpdateList>,
+    outputs: Arc<UpdateList>,
 }
 
 unsafe impl Send for RunningProcessor {}
 
 impl RunningProcessor {
-    pub fn create(processor: &ProcessorPtr) -> Arc<Mutex<RunningProcessor>> {
+    pub fn create(processor: &ProcessorPtr, input_list: &Arc<UpdateList>, output_list: &Arc<UpdateList>) -> Arc<Mutex<RunningProcessor>> {
         Arc::new(Mutex::new(RunningProcessor {
             state: RunningState::Idle,
             processor: processor.clone(),
-            inputs: UnsafeCell::new(vec![]),
-            outputs: UnsafeCell::new(vec![]),
+            inputs: input_list.clone(),
+            outputs: output_list.clone(),
         }))
     }
 }
@@ -55,24 +57,23 @@ struct RunningGraphState {
 type StateLockGuard<'a> = RwLockUpgradableReadGuard<'a, RunningGraphState>;
 
 impl RunningGraphState {
-    pub fn create(
-        mut processors: Processors,
-        edges: Vec<(usize, usize)>,
-    ) -> Result<RunningGraphState> {
-        let mut nodes = Vec::with_capacity(processors.len());
+    pub fn create(mut graph: NewPipeline) -> Result<RunningGraphState> {
+        let mut nodes = Vec::with_capacity(graph.node_count());
 
-        for processor in &processors {
-            nodes.push(RunningProcessor::create(processor));
-        }
+        for index in graph.node_indices() {
+            if let Some(node) = graph.node_weight(index) {
+                let inputs = UpdateList::create();
+                let outputs = UpdateList::create();
+                nodes.push(RunningProcessor::create(node, &inputs, &outputs));
 
-        for (input, output) in edges {
-            if input == output {
-                return Err(ErrorCode::IllegalPipelineState(""));
+                for input in graph.edges_directed(index, Direction::Incoming) {
+                    input.weight().set_input_trigger(input.source().index(), &inputs);
+                }
+
+                for output in graph.edges_directed(index, Direction::Outgoing) {
+                    output.weight().set_output_trigger(output.target().index(), &outputs);
+                }
             }
-
-            // let (input_port, output_port) = create_port(&nodes, input, output);
-            // processors[input].connect_input(input_port)?;
-            // processors[output].connect_output(output_port)?;
         }
 
         Ok(RunningGraphState { nodes })
@@ -91,27 +92,22 @@ impl RunningGraphState {
             if let Some(need_schedule_pid) = need_schedule_nodes.pop() {
                 let mut node = graph.nodes[need_schedule_pid].lock();
 
-                match (*node.processor.get()).prepare()? {
-                    PrepareState::Finished => {
+                match (*node.processor.get()).event()? {
+                    Event::Finished => {
                         node.state = RunningState::Finished;
                     }
-                    PrepareState::NeedData | PrepareState::NeedConsume => {
+                    Event::NeedData | Event::NeedConsume => {
                         node.state = RunningState::Idle;
                     }
-                    PrepareState::Sync => {
+                    Event::Sync => {
                         node.state = RunningState::Processing;
                         schedule_queue.push_sync(node.processor.clone());
                     }
-                    PrepareState::Async => {
+                    Event::Async => {
                         node.state = RunningState::Processing;
                         schedule_queue.push_async(node.processor.clone());
                     }
                 }
-
-                let need_schedule_inputs = &mut *node.inputs.get();
-                let need_schedule_outputs = &mut *node.outputs.get();
-
-                while let Some(need_schedule) = need_schedule_inputs.pop() {}
             }
         }
         unimplemented!()
@@ -139,42 +135,54 @@ impl ScheduleQueue {
         self.async_queue.push_back(processor)
     }
 
-    pub fn schedule(self, global: &ExecutorTasksQueue, context: &mut ExecutorWorkerContext) {
+    pub fn schedule_tail(mut self, worker_id: usize, global: &ExecutorTasksQueue) {
+        let mut tasks = VecDeque::with_capacity(self.sync_queue.len());
+
+        if !self.sync_queue.is_empty() {
+            while let Some(processor) = self.sync_queue.pop_front() {
+                tasks.push_back(ExecutorTask::Sync(processor));
+            }
+        }
+
+        if !self.async_queue.is_empty() {
+            while let Some(processor) = self.async_queue.pop_front() {
+                tasks.push_back(ExecutorTask::Async(processor));
+            }
+        }
+
+        global.push_tasks(worker_id, tasks)
+    }
+
+    pub fn schedule(mut self, global: &ExecutorTasksQueue, context: &mut ExecutorWorkerContext) {
+        debug_assert!(!context.has_task());
+
         match self.sync_queue.is_empty() {
             true => self.schedule_async(global, context),
-            false => self.schedule_sync(global, context),
+            false if !self.async_queue.is_empty() => self.schedule_sync(global, context),
+            false => { /* do nothing*/ }
         }
-        // if !self.sync_queue.is_empty() || !self.async_queue.is_empty() {
-        //     match self.sync_queue.is_empty() {
-        //         true => {}
-        //         false => {}
-        //     }
-        // }
-        //
-        // if !self.sync_queue.is_empty() {
-        //     // TODO:
-        // }
-        //
-        // if !self.async_queue.is_empty() {
-        //     // TODO:
-        // }
+
+        self.schedule_tail(context.get_worker_num(), global)
     }
-    fn schedule_sync(mut self, queue: &ExecutorTasksQueue, context: &mut ExecutorWorkerContext) {
+
+    fn schedule_sync(&mut self, _: &ExecutorTasksQueue, ctx: &mut ExecutorWorkerContext) {
         if let Some(processor) = self.sync_queue.pop_front() {
-            context.set_sync_task(processor);
+            ctx.set_task(ExecutorTask::Sync(processor));
         }
     }
 
-    fn schedule_async(mut self, queue: &ExecutorTasksQueue, context: &mut ExecutorWorkerContext) {}
+    fn schedule_async(&mut self, _: &ExecutorTasksQueue, ctx: &mut ExecutorWorkerContext) {
+        if let Some(processor) = self.async_queue.pop_front() {
+            ctx.set_task(ExecutorTask::Async(processor));
+        }
+    }
 }
 
 pub struct RunningGraph(RwLock<RunningGraphState>);
 
 impl RunningGraph {
-    pub fn create(nodes: Processors, edges: Vec<(usize, usize)>) -> Result<RunningGraph> {
-        Ok(RunningGraph(RwLock::new(RunningGraphState::create(
-            nodes, edges,
-        )?)))
+    pub fn create(pipeline: NewPipeline) -> Result<RunningGraph> {
+        Ok(RunningGraph(RwLock::new(RunningGraphState::create(pipeline)?)))
     }
 }
 
@@ -185,23 +193,5 @@ impl RunningGraph {
 
     pub fn initialize_executor(&self) -> Result<()> {
         RunningGraphState::initialize_executor(&self.0)
-    }
-}
-
-// Thread safe: because locked before call prepare
-// We always push and pull ports in processor prepare method.
-impl PortReactor<usize> for RunningProcessor {
-    #[inline(always)]
-    fn on_push(&self, push_to: usize) {
-        unsafe {
-            (*self.outputs.get()).push(push_to);
-        }
-    }
-
-    #[inline(always)]
-    fn on_pull(&self, pull_from: usize) {
-        unsafe {
-            (*self.inputs.get()).push(pull_from);
-        }
     }
 }

@@ -3,8 +3,12 @@ pub mod processor;
 
 mod sources;
 mod transforms;
+mod port_trigger;
 
-pub use port::create_port;
+pub use port::connect;
 pub use port::PortReactor;
 pub use processor::Processor;
 pub use processor::Processors;
+pub use sources::TableSource;
+pub use port_trigger::UpdateList;
+pub use port_trigger::PortTrigger;
