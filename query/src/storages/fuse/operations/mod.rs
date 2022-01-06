@@ -18,7 +18,7 @@ mod operation_log;
 mod optimize;
 mod part_info;
 mod read;
-mod read_plan;
+mod read_partitions;
 mod truncate;
 
 pub use operation_log::AppendOperationLogEntry;

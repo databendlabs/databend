@@ -24,44 +24,9 @@ use common_cache::LruCache;
 use common_cache::LruDiskCache;
 use common_dal::DataAccessor;
 use common_exception::Result;
-use common_metrics::label_counter;
-use common_metrics::label_counter_with_val;
 
 use crate::storages::cache::StorageCache;
-
-const CACHE_READ_BYTES_FROM_REMOTE: &str = "cache_read_bytes_from_remote";
-const CACHE_READ_BYTES_FROM_LOCAL: &str = "cache_read_bytes_from_local";
-const CACHE_ACCESS_COUNT: &str = "cache_access_count";
-const CACHE_ACCESS_HIT_COUNT: &str = "cache_access_hit_count";
-
-struct CacheDeferMetrics<'a> {
-    tenant_id: &'a str,
-    cluster_id: &'a str,
-    cache_hit: bool,
-    read_bytes: u64,
-}
-
-impl Drop for CacheDeferMetrics<'_> {
-    fn drop(&mut self) {
-        label_counter(CACHE_ACCESS_COUNT, self.tenant_id, self.cluster_id);
-        if self.cache_hit {
-            label_counter(CACHE_ACCESS_HIT_COUNT, self.tenant_id, self.cluster_id);
-            label_counter_with_val(
-                CACHE_READ_BYTES_FROM_LOCAL,
-                self.read_bytes,
-                self.tenant_id,
-                self.cluster_id,
-            );
-        } else {
-            label_counter_with_val(
-                CACHE_READ_BYTES_FROM_REMOTE,
-                self.read_bytes,
-                self.tenant_id,
-                self.cluster_id,
-            );
-        }
-    }
-}
+use crate::storages::fuse::cache::metrics::CacheDeferMetrics;
 
 pub struct LocalCacheConfig {
     pub memory_cache_size_mb: u64,

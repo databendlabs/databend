@@ -47,11 +47,12 @@ impl BlockPruner {
         }
     }
 
+    #[tracing::instrument(level = "debug", skip_all, fields(ctx.id = ctx.get_id().as_str()))]
     pub async fn apply(
         &self,
         schema: DataSchemaRef,
         push_down: &Option<Extras>,
-        ctx: Arc<QueryContext>,
+        ctx: &QueryContext,
     ) -> Result<Vec<BlockMeta>> {
         let block_pred: Pred = match push_down {
             Some(exprs) if !exprs.filters.is_empty() => {
@@ -114,15 +115,15 @@ impl BlockPruner {
     }
 }
 
-#[tracing::instrument(level = "debug", skip_all, fields(ctx.id = ctx.get_id().as_str()))]
-pub async fn apply_block_pruning(
-    table_snapshot: &TableSnapshot,
-    schema: DataSchemaRef,
-    push_down: &Option<Extras>,
-    data_accessor: Arc<dyn DataAccessor>,
-    ctx: Arc<QueryContext>,
-) -> Result<Vec<BlockMeta>> {
-    BlockPruner::new(table_snapshot, data_accessor)
-        .apply(schema, push_down, ctx)
-        .await
-}
+//#[tracing::instrument(level = "debug", skip_all, fields(ctx.id = ctx.get_id().as_str()))]
+//pub async fn apply_block_pruning(
+//    table_snapshot: &TableSnapshot,
+//    schema: DataSchemaRef,
+//    push_down: &Option<Extras>,
+//    data_accessor: Arc<dyn DataAccessor>,
+//    ctx: Arc<QueryContext>,
+//) -> Result<Vec<BlockMeta>> {
+//    BlockPruner::new(table_snapshot, data_accessor)
+//        .apply(schema, push_down, ctx.as_ref())
+//        .await
+//}

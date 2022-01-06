@@ -25,7 +25,7 @@ use common_planners::Statistics;
 use crate::sessions::QueryContext;
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::operations::part_info::PartInfo;
-use crate::storages::fuse::pruning::apply_block_pruning;
+use crate::storages::fuse::pruning::BlockPruner;
 use crate::storages::fuse::FuseTable;
 
 impl FuseTable {
@@ -38,10 +38,11 @@ impl FuseTable {
         let snapshot = self.read_table_snapshot(ctx.as_ref()).await?;
         match snapshot {
             Some(snapshot) => {
-                let da = ctx.get_storage_accessor()?;
+                let data_accessor = ctx.get_storage_accessor()?;
                 let schema = self.table_info.schema();
-                let block_metas =
-                    apply_block_pruning(&snapshot, schema, &push_downs, da, ctx.clone()).await?;
+                let block_metas = BlockPruner::new(&snapshot, data_accessor)
+                    .apply(schema, &push_downs, ctx.as_ref())
+                    .await?;
                 ctx.get_dal_context()
                     .inc_partitions_scanned(block_metas.len());
                 let (statistics, parts) = Self::to_partitions(&block_metas, push_downs);

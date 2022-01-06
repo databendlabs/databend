@@ -13,11 +13,15 @@
 //  limitations under the License.
 //
 
+use std::sync::Arc;
+
 use common_base::tokio;
+use common_dal::DataAccessor;
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
 use common_datavalues::DataField;
+use common_datavalues::DataSchemaRef;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
 use common_exception::Result;
@@ -27,13 +31,28 @@ use common_planners::col;
 use common_planners::lit;
 use common_planners::Extras;
 use databend_query::catalogs::Catalog;
+use databend_query::sessions::QueryContext;
 use databend_query::storages::fuse::io::SnapshotReader;
-use databend_query::storages::fuse::pruning::apply_block_pruning;
+use databend_query::storages::fuse::meta::BlockMeta;
+use databend_query::storages::fuse::meta::TableSnapshot;
+use databend_query::storages::fuse::pruning::BlockPruner;
 use databend_query::storages::fuse::TBL_OPT_KEY_CHUNK_BLOCK_NUM;
 use databend_query::storages::fuse::TBL_OPT_KEY_SNAPSHOT_LOC;
 use futures::TryStreamExt;
 
 use crate::storages::fuse::table_test_fixture::TestFixture;
+
+async fn apply_block_pruning(
+    table_snapshot: &TableSnapshot,
+    schema: DataSchemaRef,
+    push_down: &Option<Extras>,
+    data_accessor: Arc<dyn DataAccessor>,
+    ctx: Arc<QueryContext>,
+) -> Result<Vec<BlockMeta>> {
+    BlockPruner::new(table_snapshot, data_accessor)
+        .apply(schema, push_down, ctx.as_ref())
+        .await
+}
 
 #[tokio::test]
 async fn test_block_pruner() -> Result<()> {
