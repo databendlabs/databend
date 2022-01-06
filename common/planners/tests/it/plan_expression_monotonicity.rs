@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use common_datavalues::prelude::DataColumn;
 use common_datavalues::prelude::DataColumnWithField;
 use common_datavalues::DataField;
@@ -56,8 +58,24 @@ fn verify_test(t: Test) -> Result<()> {
         DataField::new("y", DataType::Int64, false),
         DataField::new("z", DataType::DateTime32(None), false),
     ]);
+
+    let mut variables = HashMap::new();
+    variables.insert(t.column.to_string(), (t.left.clone(), t.right.clone()));
+
+    let mut single_point = false;
+    if t.left.is_some() && t.right.is_some() {
+        let left = t.left.unwrap().column().try_get(0)?;
+        let right = t.right.unwrap().column().try_get(0)?;
+        if left == right {
+            single_point = true;
+        }
+    }
+
     let mono = match ExpressionMonotonicityVisitor::check_expression(
-        schema, &t.expr, t.left, t.right, t.column,
+        schema,
+        &t.expr,
+        variables,
+        single_point,
     ) {
         Ok(mono) => mono,
         Err(e) => {
@@ -148,9 +166,9 @@ fn test_arithmetic_plus_minus() -> Result<()> {
             error: "",
         },
         Test {
-            name: "f(x,y) = x + y", // multi-variable function is not supported,
+            name: "f(x,y) = x + y",
             expr: Expression::create_binary_expression("+", vec![col("x"), col("y")]),
-            column: "",
+            column: "x",
             left: None,
             right: None,
             expect_mono: Monotonicity {
@@ -160,7 +178,7 @@ fn test_arithmetic_plus_minus() -> Result<()> {
                 left: None,
                 right: None,
             },
-            error: "Code: 6, displayText = Multi-column expressions are not currently supported.",
+            error: "Code: 6, displayText = Cannot find the column name '\"y\"'.",
         },
         Test {
             name: "f(x) = (-x + 12) - x + (1 - x)",
@@ -202,14 +220,9 @@ fn test_arithmetic_plus_minus() -> Result<()> {
             column: "x",
             left: None,
             right: None,
-            expect_mono: Monotonicity {
-                is_monotonic: false,
-                is_positive: false,
-                is_constant: false,
-                left: None,
-                right: None,
-            },
-            error: "",
+            expect_mono: Monotonicity::default(),
+            error:
+                "Code: 1000, displayText = Function '-' is not monotonic in the variables range.",
         },
     ];
 
@@ -276,14 +289,9 @@ fn test_arithmetic_mul_div() -> Result<()> {
             column: "x",
             left: create_f64(10.0),
             right: create_f64(1000.0),
-            expect_mono: Monotonicity {
-                is_monotonic: false,
-                is_positive: false,
-                is_constant: false,
-                left: None,
-                right: None,
-            },
-            error: "",
+            expect_mono: Monotonicity::default(),
+            error:
+                "Code: 1000, displayText = Function '*' is not monotonic in the variables range.",
         },
         Test {
             name: "f(x) = x * (x-12) where x in [12, 100]",
@@ -333,14 +341,9 @@ fn test_arithmetic_mul_div() -> Result<()> {
             column: "x",
             left: create_f64(0.0),
             right: create_f64(10.0),
-            expect_mono: Monotonicity {
-                is_monotonic: false,
-                is_positive: false,
-                is_constant: false,
-                left: None,
-                right: None,
-            },
-            error: "",
+            expect_mono: Monotonicity::default(),
+            error:
+                "Code: 1000, displayText = Function '/' is not monotonic in the variables range.",
         },
         Test {
             name: "f(x) = -x/(2/(x-2)) where  x in [4-10]",
@@ -382,14 +385,9 @@ fn test_abs_function() -> Result<()> {
             column: "x",
             left: None,
             right: None,
-            expect_mono: Monotonicity {
-                is_monotonic: false,
-                is_positive: true,
-                is_constant: false,
-                left: None,
-                right: None,
-            },
-            error: "",
+            expect_mono: Monotonicity::default(),
+            error:
+                "Code: 1000, displayText = Function 'abs' is not monotonic in the variables range.",
         },
         Test {
             name: "f(x) = abs(x) where  0 <= x <= 10",
@@ -427,14 +425,9 @@ fn test_abs_function() -> Result<()> {
             column: "x",
             left: create_f64(-5.0),
             right: create_f64(5.0),
-            expect_mono: Monotonicity {
-                is_monotonic: false,
-                is_positive: false,
-                is_constant: false,
-                left: None,
-                right: None,
-            },
-            error: "",
+            expect_mono: Monotonicity::default(),
+            error:
+                "Code: 1000, displayText = Function 'abs' is not monotonic in the variables range.",
         },
         Test {
             name: "f(x) = abs(x + 12) where -12 <= x <= 1000",
@@ -461,14 +454,9 @@ fn test_abs_function() -> Result<()> {
             column: "x",
             left: create_f64(-14.0),
             right: create_f64(20.0),
-            expect_mono: Monotonicity {
-                is_monotonic: false,
-                is_positive: true,
-                is_constant: false,
-                left: None,
-                right: None,
-            },
-            error: "",
+            expect_mono: Monotonicity::default(),
+            error:
+                "Code: 1000, displayText = Function 'abs' is not monotonic in the variables range.",
         },
         Test {
             name: "f(x) = abs( (x - 7) + (x - 3) ) where 5 <= x <= 100",
@@ -562,14 +550,8 @@ fn test_dates_function() -> Result<()> {
             column: "x",
             left: None,
             right: None,
-            expect_mono: Monotonicity {
-                is_monotonic: false,
-                is_positive: true,
-                is_constant: false,
-                left: None,
-                right: None,
-            },
-            error: "",
+            expect_mono: Monotonicity::default(),
+            error: "Code: 1000, displayText = Function 'toSecond' is not monotonic in the variables range.",
         },
         Test {
             name: "f(z) = toSecond(z)",
@@ -592,14 +574,8 @@ fn test_dates_function() -> Result<()> {
             column: "z",
             left: create_datetime(1606752119),
             right: create_datetime(1638288059),
-            expect_mono: Monotonicity {
-                is_monotonic: false,
-                is_positive: true,
-                is_constant: false,
-                left: None,
-                right: None,
-            },
-            error: "",
+            expect_mono: Monotonicity::default(),
+            error: "Code: 1000, displayText = Function 'toDayOfYear' is not monotonic in the variables range.",
         },
         Test {
             name: "f(z) = toStartOfHour(z)",
@@ -613,6 +589,48 @@ fn test_dates_function() -> Result<()> {
                 is_constant: false,
                 left: None,
                 right: None,
+            },
+            error: "",
+        },
+    ];
+
+    for t in test_suite.into_iter() {
+        verify_test(t)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn test_single_point() -> Result<()> {
+    let test_suite = vec![
+        Test {
+            name: "f(x) = rand() + x",
+            expr: Expression::create_binary_expression("+", vec![
+                col("x"),
+                Expression::create_scalar_function("rand", vec![]),
+            ]),
+            column: "x",
+            left: create_f64(1.0),
+            right: create_f64(1.0),
+            expect_mono: Monotonicity::default(),
+            error:
+                "Code: 1000, displayText = Function 'rand' is not monotonic in the variables range.",
+        },
+        Test {
+            name: "f(x) = x * (12-x)",
+            expr: Expression::create_binary_expression("*", vec![
+                col("x"),
+                Expression::create_binary_expression("-", vec![lit(12_i64), col("x")]),
+            ]),
+            column: "x",
+            left: create_f64(1.0),
+            right: create_f64(1.0),
+            expect_mono: Monotonicity {
+                is_monotonic: true,
+                is_positive: true,
+                is_constant: true,
+                left: create_f64(11.0),
+                right: create_f64(11.0),
             },
             error: "",
         },

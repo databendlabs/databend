@@ -165,21 +165,11 @@ impl ArithmeticMinusFunction {
     }
 
     pub fn get_monotonicity(args: &[Monotonicity]) -> Result<Monotonicity> {
-        if args.is_empty() || args.len() > 2 {
+        if args.len() != 2 {
             return Err(ErrorCode::BadArguments(format!(
                 "Invalid argument lengths {} for get_monotonicity",
                 args.len()
             )));
-        }
-
-        // unary operation like '-f(x)', just flip the is_positive.
-        // also pass the is_constant, in case the input is a constant value.
-        if args.len() == 1 {
-            return Ok(Monotonicity::create(
-                args[0].is_monotonic || args[0].is_constant,
-                !args[0].is_positive,
-                args[0].is_constant,
-            ));
         }
 
         // For expression f(x) - g(x), only when both f(x) and g(x) are monotonic and have

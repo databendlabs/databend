@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use common_datavalues::prelude::DataColumn;
 use common_datavalues::prelude::DataColumnWithField;
 use common_datavalues::DataField;
@@ -52,30 +54,27 @@ use crate::Recursion;
 pub struct ExpressionMonotonicityVisitor {
     input_schema: DataSchemaRef,
 
-    // the variable range left, we assume only one variable.
-    variable_left: Option<DataColumnWithField>,
-
-    // the variable range right, we assume only one variable.
-    variable_right: Option<DataColumnWithField>,
-
-    column_name: String,
+    // HashMap<column_name, (variable_left, variable_right)>
+    // variable_left: the variable range left.
+    // variable_right: the variable range right.
+    variables: HashMap<String, (Option<DataColumnWithField>, Option<DataColumnWithField>)>,
 
     stack: Vec<(DataTypeAndNullable, Monotonicity)>,
+
+    single_point: bool,
 }
 
 impl ExpressionMonotonicityVisitor {
     fn create(
         input_schema: DataSchemaRef,
-        variable_left: Option<DataColumnWithField>,
-        variable_right: Option<DataColumnWithField>,
-        column_name: String,
+        variables: HashMap<String, (Option<DataColumnWithField>, Option<DataColumnWithField>)>,
+        single_point: bool,
     ) -> Self {
         Self {
             input_schema,
-            variable_left,
-            variable_right,
-            column_name,
+            variables,
             stack: vec![],
+            single_point,
         }
     }
 
@@ -96,7 +95,7 @@ impl ExpressionMonotonicityVisitor {
         result_type: &DataType,
         args: Vec<Option<DataColumnWithField>>,
     ) -> Result<Option<DataColumnWithField>> {
-        let res = if args.iter().any(|col| col.is_none()) {
+        if args.iter().any(|col| col.is_none()) {
             Ok(None)
         } else {
             let input_columns = args
@@ -108,8 +107,7 @@ impl ExpressionMonotonicityVisitor {
             let data_field = DataField::new("dummy", result_type.clone(), false);
             let data_column_field = DataColumnWithField::new(col, data_field);
             Ok(Some(data_column_field))
-        };
-        res
+        }
     }
 
     fn visit_function(mut self, op: &str, args_size: usize) -> Result<Self> {
@@ -135,18 +133,35 @@ impl ExpressionMonotonicityVisitor {
             }
         }
 
-        let func = FunctionFactory::instance().get(op, &args_type)?;
+        let instance = FunctionFactory::instance();
+        let func = instance.get(op, &args_type)?;
 
         let return_type = func.return_type(&args_type)?;
 
-        let mut monotonic = func.get_monotonicity(monotonicity_vec.as_ref())?;
-        // neither a monotonic expression nor constant, no need to calculating boundary
-        if monotonic.is_monotonic || monotonic.is_constant {
-            monotonic.left =
-                Self::try_calculate_boundary(func.as_ref(), return_type.data_type(), left_vec)?;
-            monotonic.right =
-                Self::try_calculate_boundary(func.as_ref(), return_type.data_type(), right_vec)?;
+        let mut monotonic = match self.single_point {
+            false => func.get_monotonicity(monotonicity_vec.as_ref())?,
+            true => {
+                let features = instance.get_features(op)?;
+                if features.is_deterministic {
+                    Monotonicity::create_constant()
+                } else {
+                    Monotonicity::default()
+                }
+            }
+        };
+
+        // Neither a monotonic expression nor constant, interrupt the traversal and return an error directly.
+        if !monotonic.is_monotonic && !monotonic.is_constant {
+            return Err(ErrorCode::UnknownException(format!(
+                "Function '{}' is not monotonic in the variables range",
+                op
+            )));
         }
+
+        monotonic.left =
+            Self::try_calculate_boundary(func.as_ref(), return_type.data_type(), left_vec)?;
+        monotonic.right =
+            Self::try_calculate_boundary(func.as_ref(), return_type.data_type(), right_vec)?;
 
         self.stack.push((return_type, monotonic));
         Ok(self)
@@ -157,11 +172,10 @@ impl ExpressionMonotonicityVisitor {
     pub fn check_expression(
         schema: DataSchemaRef,
         expr: &Expression,
-        left: Option<DataColumnWithField>,
-        right: Option<DataColumnWithField>,
-        column_name: &str,
+        variables: HashMap<String, (Option<DataColumnWithField>, Option<DataColumnWithField>)>,
+        single_point: bool,
     ) -> Result<Monotonicity> {
-        let visitor = Self::create(schema, left, right, column_name.to_string());
+        let visitor = Self::create(schema, variables, single_point);
         visitor.visit(expr)?.finalize()
     }
 
@@ -171,18 +185,18 @@ impl ExpressionMonotonicityVisitor {
     pub fn extract_sort_column(
         schema: DataSchemaRef,
         sort_expr: &Expression,
-        left: Option<DataColumnWithField>,
-        right: Option<DataColumnWithField>,
         column_name: &str,
     ) -> Result<Expression> {
         if let Expression::Sort {
-            expr: _,
             asc,
             nulls_first,
             origin_expr,
+            ..
         } = sort_expr
         {
-            let mono = Self::check_expression(schema, origin_expr, left, right, column_name)
+            let mut variables = HashMap::new();
+            variables.insert(column_name.to_owned(), (None, None));
+            let mono = Self::check_expression(schema, origin_expr, variables, false)
                 .unwrap_or_else(|_| Monotonicity::default());
             if !mono.is_monotonic {
                 return Ok(sort_expr.clone());
@@ -212,13 +226,9 @@ impl ExpressionVisitor for ExpressionMonotonicityVisitor {
     fn post_visit(mut self, expr: &Expression) -> Result<Self> {
         match expr {
             Expression::Column(s) => {
-                if self.column_name.is_empty() {
-                    self.column_name = s.clone();
-                } else if self.column_name != *s {
-                    return Err(ErrorCode::BadArguments(
-                        "Multi-column expressions are not currently supported",
-                    ));
-                }
+                let (left, right) = self.variables.get(&*s).ok_or_else(|| {
+                    ErrorCode::BadArguments(format!("Cannot find the column name '{:?}'", *s))
+                })?;
 
                 let field = self.input_schema.field_with_name(s)?;
                 let return_type =
@@ -228,8 +238,8 @@ impl ExpressionVisitor for ExpressionMonotonicityVisitor {
                     is_monotonic: true,
                     is_positive: true,
                     is_constant: false,
-                    left: self.variable_left.clone(),
-                    right: self.variable_right.clone(),
+                    left: left.clone(),
+                    right: right.clone(),
                 };
 
                 self.stack.push((return_type, monotonic));
