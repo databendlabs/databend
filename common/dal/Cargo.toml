@@ -22,7 +22,7 @@ azure_core = { version = "0.1.0", git = "https://github.com/datafuse-extras/azur
 azure_storage = { version = "0.1.0", git = "https://github.com/datafuse-extras/azure-sdk-for-rust.git", rev = "b5bf36b" }
 azure_storage_blobs = { version = "0.1.0", git = "https://github.com/datafuse-extras/azure-sdk-for-rust.git", rev = "b5bf36b" }
 bytes = "1.1.0"
-futures = "0.3.18"
+futures = "0.3.19"
 metrics = "0.17.1"
 reqwest = "0.11.8"
 rusoto_core = "0.47.0"

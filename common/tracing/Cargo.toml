@@ -22,6 +22,6 @@ tonic = "0.6.2"
 tracing = "0.1.29"
 tracing-appender = "0.2.0"
 tracing-bunyan-formatter = "0.3.1"
-tracing-futures = {version ="0.2.5", features = ["futures-03"]}
+tracing-futures = { version = "0.2.5", features = ["futures-03"] }
 tracing-opentelemetry = "0.16.0"
 tracing-subscriber = { version = "0.3.5", features = ["env-filter"] }
