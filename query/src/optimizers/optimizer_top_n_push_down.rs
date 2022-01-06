@@ -12,18 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datavalues::prelude::DataColumnWithField;
 use common_datavalues::DataSchemaRef;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::*;
 use common_tracing::tracing;
 
-use super::MonotonicityCheckVisitor;
-use super::RequireColumnsVisitor;
 use crate::optimizers::Optimizer;
 use crate::sessions::QueryContext;
 
@@ -36,7 +32,6 @@ struct TopNPushDownImpl {
     before_group_by_schema: Option<DataSchemaRef>,
     limit: Option<usize>,
     order_by: Vec<Expression>,
-    variables_range: HashMap<String, (Option<DataColumnWithField>, Option<DataColumnWithField>)>,
 }
 
 impl PlanRewriter for TopNPushDownImpl {
@@ -149,7 +144,6 @@ impl TopNPushDownImpl {
             before_group_by_schema: None,
             limit: None,
             order_by: vec![],
-            variables_range: HashMap::new(),
         }
     }
 
@@ -168,16 +162,9 @@ impl TopNPushDownImpl {
 
                 let column_name = columns.iter().next().unwrap();
 
-                let (left, right) = match self.variables_range.get(column_name) {
-                    None => (None, None),
-                    Some((l, r)) => (l.clone(), r.clone()),
-                };
-
-                match MonotonicityCheckVisitor::extract_sort_column(
+                match ExpressionMonotonicityVisitor::extract_sort_column(
                     schema.clone(),
                     expr,
-                    left,
-                    right,
                     column_name,
                 ) {
                     Ok(new_expr) => Ok(new_expr),

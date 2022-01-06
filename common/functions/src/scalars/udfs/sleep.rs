@@ -50,7 +50,7 @@ impl Function for SleepFunction {
         "SleepFunction"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
         if !args[0].is_numeric() {
             return Err(ErrorCode::BadArguments(format!(
                 "Illegal type {} of argument of function {}, expected numeric",
@@ -58,11 +58,8 @@ impl Function for SleepFunction {
             )));
         }
 
-        Ok(DataType::UInt8)
-    }
-
-    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
-        Ok(false)
+        let dt = DataType::UInt8;
+        Ok(DataTypeAndNullable::create(&dt, false))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

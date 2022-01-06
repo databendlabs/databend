@@ -45,9 +45,10 @@ impl FuseTable {
         // TODO OCC retry & resolves conflicts if applicable
 
         let prev = self.read_table_snapshot(ctx.as_ref()).await?;
+        let schema = self.table_info.meta.schema.as_ref().clone();
+        let (segments, summary) = Self::merge_append_operations(&schema, operation_log)?;
+        let rows_written = summary.row_count;
         let new_snapshot = if overwrite {
-            let schema = self.table_info.meta.schema.as_ref().clone();
-            let (segments, summary) = Self::merge_append_operations(&schema, operation_log)?;
             TableSnapshot {
                 snapshot_id: Uuid::new_v4(),
                 prev_snapshot_id: prev.as_ref().map(|v| v.snapshot_id),
@@ -56,38 +57,43 @@ impl FuseTable {
                 segments,
             }
         } else {
-            Self::merge_table_operations(self.table_info.meta.schema.as_ref(), prev, operation_log)?
+            Self::merge_table_operations(
+                self.table_info.meta.schema.as_ref(),
+                prev,
+                segments,
+                summary,
+            )?
         };
 
         let uuid = new_snapshot.snapshot_id;
         let snapshot_loc = io::snapshot_location(&uuid);
         let bytes = serde_json::to_vec(&new_snapshot)?;
-        let da = ctx.get_data_accessor()?;
+        let da = ctx.get_storage_accessor()?;
         da.put(&snapshot_loc, bytes).await?;
 
-        self.commit_to_meta_server(ctx, snapshot_loc).await?;
+        self.commit_to_meta_server(ctx.as_ref(), snapshot_loc)
+            .await?;
+        ctx.get_dal_context().inc_write_rows(rows_written as usize);
         Ok(())
     }
 
     fn merge_table_operations(
         schema: &DataSchema,
-        prev: Option<TableSnapshot>,
-        ops: TableOperationLog,
+        previous: Option<TableSnapshot>,
+        mut new_segments: Vec<String>,
+        statistics: Statistics,
     ) -> Result<TableSnapshot> {
-        // 1. merge operations(appends, currently)
-        let (mut segs, stats) = Self::merge_append_operations(schema, ops)?;
-
-        // 2. merge stats with previous snapshot, if any
-        let stats = if let Some(TableSnapshot { summary, .. }) = &prev {
-            statistics::merge_statistics(schema, &stats, summary)?
+        // 1. merge stats with previous snapshot, if any
+        let stats = if let Some(TableSnapshot { summary, .. }) = &previous {
+            statistics::merge_statistics(schema, &statistics, summary)?
         } else {
-            stats
+            statistics
         };
-        let prev_snapshot_id = prev.as_ref().map(|v| v.snapshot_id);
+        let prev_snapshot_id = previous.as_ref().map(|v| v.snapshot_id);
 
-        // 3. merge segment locations with previous snapshot, if any
-        if let Some(TableSnapshot { mut segments, .. }) = prev {
-            segs.append(&mut segments)
+        // 2. merge segment locations with previous snapshot, if any
+        if let Some(TableSnapshot { mut segments, .. }) = previous {
+            new_segments.append(&mut segments)
         };
 
         let new_snapshot = TableSnapshot {
@@ -95,14 +101,14 @@ impl FuseTable {
             prev_snapshot_id,
             schema: schema.clone(),
             summary: stats,
-            segments: segs,
+            segments: new_segments,
         };
         Ok(new_snapshot)
     }
 
     async fn commit_to_meta_server(
         &self,
-        ctx: Arc<QueryContext>,
+        ctx: &QueryContext,
         new_snapshot_location: String,
     ) -> Result<UpsertTableOptionReply> {
         let table_id = self.table_info.ident.table_id;

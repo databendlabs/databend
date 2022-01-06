@@ -14,12 +14,12 @@
 
 use std::sync::Arc;
 
-use common_cache::storage::StorageCache;
 use common_dal::DataAccessor;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use serde::de::DeserializeOwned;
 
+use crate::storages::cache::StorageCache;
 use crate::storages::fuse::io::snapshot_location;
 use crate::storages::fuse::meta::SegmentInfo;
 use crate::storages::fuse::meta::TableSnapshot;

@@ -9,6 +9,7 @@ Sync from the [#476](https://github.com/datafuselabs/databend/issues/3706)
 
 This is Databend Roadmap 2022 :rocket: 
 
+
 # Main tasks
 
 ###  1. Query 
@@ -22,6 +23,7 @@ This is Databend Roadmap 2022 :rocket:
 | [ Database sharing #3430](https://github.com/datafuselabs/databend/issues/3430)| PROGRESS  |     | |
 | [ Stage #2976](https://github.com/datafuselabs/databend/issues/2976)| PROGRESS  |     | |
 | Push-Based + Pull-Based processor | PROGRESS  |   |  |
+| [Index design #3711](https://github.com/datafuselabs/databend/issues/3711) | PLANNING  |   |   |
 | Limited support for transactions | PLANNING  |   |  |
 | Window functions | PLANNING  |   |  |
 | Lambda functions | PLANNING  |   |  |
@@ -29,7 +31,7 @@ This is Databend Roadmap 2022 :rocket:
 | Compile aggregate functions(JIT) | PLANNING  |   | |
 
 
-### 2. Testing
+###  2. Testing
 
 | Task                                         | Status    | Release Target | Comments        | 
 | ----------------------------------------------- | --------- | -------------- | --------------- | 

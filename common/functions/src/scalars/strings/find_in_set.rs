@@ -47,7 +47,7 @@ impl Function for FindInSetFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
         if !args[0].is_integer() && !args[0].is_string() && !args[0].is_null() {
             return Err(ErrorCode::IllegalDataType(format!(
                 "Expected integer or string or null, but got {}",
@@ -60,7 +60,10 @@ impl Function for FindInSetFunction {
                 args[1]
             )));
         }
-        Ok(DataType::UInt64)
+
+        let nullable = args.iter().any(|arg| arg.is_nullable());
+        let dt = DataType::UInt64;
+        Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, r: usize) -> Result<DataColumn> {

@@ -49,9 +49,10 @@ pub struct FunctionFeatures {
     pub is_bool_func: bool,
     pub is_context_func: bool,
     pub maybe_monotonic: bool,
+    // The number of arguments the function accepts.
     pub num_arguments: usize,
     // (1, 2) means we only accept [1, 2] arguments
-    // None means it's not variadic function
+    // None means it's not variadic function.
     pub variadic_arguments: Option<(usize, usize)>,
 }
 

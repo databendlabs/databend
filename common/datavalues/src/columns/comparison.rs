@@ -16,7 +16,6 @@
 use common_exception::Result;
 
 use crate::prelude::*;
-use crate::DataValueComparisonOperator;
 
 macro_rules! apply_cmp {
     ($self: ident, $rhs: ident, $op: ident) => {{

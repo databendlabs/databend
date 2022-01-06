@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_ast::parser::ast::Expr;
 use common_exception::Result;
 
-use crate::sql::parser::ast::Expr;
 use crate::sql::planner::bind_context::BindContext;
 use crate::sql::planner::scalar::ScalarExpr;
 use crate::sql::BoundVariable;

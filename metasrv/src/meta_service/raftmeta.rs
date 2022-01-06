@@ -136,18 +136,25 @@ impl MetaNodeBuilder {
         Ok(mn)
     }
 
+    #[must_use]
     pub fn node_id(mut self, node_id: NodeId) -> Self {
         self.node_id = Some(node_id);
         self
     }
+
+    #[must_use]
     pub fn sto(mut self, sto: Arc<MetaRaftStore>) -> Self {
         self.sto = Some(sto);
         self
     }
+
+    #[must_use]
     pub fn addr(mut self, a: String) -> Self {
         self.addr = Some(a);
         self
     }
+
+    #[must_use]
     pub fn monitor_metrics(mut self, b: bool) -> Self {
         self.monitor_metrics = b;
         self

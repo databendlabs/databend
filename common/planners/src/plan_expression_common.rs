@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use common_datavalues::DataSchemaRef;
 use common_datavalues::DataTypeAndNullable;
@@ -409,10 +410,8 @@ impl ExpressionDataTypeVisitor {
         }
 
         let function = FunctionFactory::instance().get(op, &arguments)?;
-        let nullable = function.nullable(&arguments)?;
         let return_type = function.return_type(&arguments)?;
-        self.stack
-            .push(DataTypeAndNullable::create(&return_type, nullable));
+        self.stack.push(return_type);
         Ok(self)
     }
 }
@@ -487,6 +486,38 @@ impl ExpressionVisitor for ExpressionDataTypeVisitor {
                 Ok(self)
             }
             Expression::Alias(_, _) | Expression::Sort { .. } => Ok(self),
+        }
+    }
+}
+
+// This visitor is for recursively visiting expression tree and collects all columns.
+pub struct RequireColumnsVisitor {
+    pub required_columns: HashSet<String>,
+}
+
+impl RequireColumnsVisitor {
+    pub fn default() -> Self {
+        Self {
+            required_columns: HashSet::new(),
+        }
+    }
+
+    pub fn collect_columns_from_expr(expr: &Expression) -> Result<HashSet<String>> {
+        let mut visitor = Self::default();
+        visitor = expr.accept(visitor)?;
+        Ok(visitor.required_columns)
+    }
+}
+
+impl ExpressionVisitor for RequireColumnsVisitor {
+    fn pre_visit(self, expr: &Expression) -> Result<Recursion<Self>> {
+        match expr {
+            Expression::Column(c) => {
+                let mut v = self;
+                v.required_columns.insert(c.clone());
+                Ok(Recursion::Continue(v))
+            }
+            _ => Ok(Recursion::Continue(self)),
         }
     }
 }

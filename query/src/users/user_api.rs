@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_functions::udfs::UDFFactory;
 use common_management::StageMgr;
 use common_management::StageMgrApi;
 use common_management::UdfMgr;
@@ -28,9 +27,7 @@ use crate::common::MetaClientProvider;
 use crate::configs::Config;
 
 pub struct UserApiProvider {
-    user_api_provider: Arc<dyn UserMgrApi>,
-    stage_api_provider: Arc<dyn StageMgrApi>,
-    udf_api_provider: Arc<dyn UdfMgrApi>,
+    client: Arc<dyn KVApi>,
 }
 
 impl UserApiProvider {
@@ -44,41 +41,21 @@ impl UserApiProvider {
         }
     }
 
-    pub async fn create_global(cfg: Config) -> Result<Arc<UserApiProvider>> {
-        let tenant_id = &cfg.query.tenant_id;
-        let client = UserApiProvider::create_kv_client(&cfg).await?;
+    pub async fn create_global(conf: Config) -> Result<Arc<UserApiProvider>> {
+        let client = UserApiProvider::create_kv_client(&conf).await?;
 
-        Ok(Arc::new(UserApiProvider {
-            user_api_provider: Arc::new(UserMgr::new(client.clone(), tenant_id)),
-            stage_api_provider: Arc::new(StageMgr::new(client.clone(), tenant_id)),
-            udf_api_provider: Arc::new(UdfMgr::new(client, tenant_id)),
-        }))
+        Ok(Arc::new(UserApiProvider { client }))
     }
 
-    pub fn get_user_api_client(&self) -> Arc<dyn UserMgrApi> {
-        self.user_api_provider.clone()
+    pub fn get_user_api_client(&self, tenant: &str) -> Arc<dyn UserMgrApi> {
+        Arc::new(UserMgr::new(self.client.clone(), tenant))
     }
 
-    pub fn get_stage_api_client(&self) -> Arc<dyn StageMgrApi> {
-        self.stage_api_provider.clone()
+    pub fn get_stage_api_client(&self, tenant: &str) -> Arc<dyn StageMgrApi> {
+        Arc::new(StageMgr::new(self.client.clone(), tenant))
     }
 
-    pub fn get_udf_api_client(&self) -> Arc<dyn UdfMgrApi> {
-        self.udf_api_provider.clone()
-    }
-
-    pub async fn load_udfs(&self, cfg: Config) -> Result<()> {
-        let udfs = self.get_udf_api_client().get_udfs().await?;
-
-        for udf in udfs.iter() {
-            UDFFactory::register(
-                &cfg.query.tenant_id,
-                udf.name.as_str(),
-                &udf.parameters,
-                udf.definition.as_str(),
-            )?;
-        }
-
-        Ok(())
+    pub fn get_udf_api_client(&self, tenant: &str) -> Arc<dyn UdfMgrApi> {
+        Arc::new(UdfMgr::new(self.client.clone(), tenant))
     }
 }

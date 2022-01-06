@@ -18,6 +18,7 @@ mod plan_describe_table;
 mod plan_display;
 mod plan_explain;
 mod plan_expression;
+mod plan_expression_monotonicity;
 mod plan_extras;
 mod plan_filter;
 mod plan_having;

@@ -12,25 +12,112 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_datavalues::DataValueArithmeticOperator;
-use common_exception::Result;
+use std::marker::PhantomData;
+use std::ops::Rem;
 
-use crate::scalars::function_factory::FunctionDescription;
+use common_datavalues::prelude::*;
+use common_datavalues::DataTypeAndNullable;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use num::cast::AsPrimitive;
+
+use super::arithmetic::ArithmeticTrait;
+use super::utils::rem_scalar;
+use crate::scalars::function_factory::ArithmeticDescription;
 use crate::scalars::function_factory::FunctionFeatures;
-use crate::scalars::ArithmeticFunction;
+use crate::scalars::BinaryArithmeticFunction;
 use crate::scalars::Function;
 use crate::scalars::Monotonicity;
+use crate::try_binary_arithmetic;
+use crate::with_match_primitive_type;
+
+#[derive(Clone)]
+pub struct ArithmeticModule<T, D, M, R> {
+    t: PhantomData<T>,
+    d: PhantomData<D>,
+    m: PhantomData<M>,
+    r: PhantomData<R>,
+}
+
+impl<T, D, M, R> ArithmeticTrait for ArithmeticModule<T, D, M, R>
+where
+    T: DFPrimitiveType + AsPrimitive<M>,
+    D: DFPrimitiveType + AsPrimitive<M> + num::One,
+    R: DFPrimitiveType,
+    M: DFPrimitiveType + num::Zero + AsPrimitive<R> + Rem<Output = M>,
+    u8: AsPrimitive<R>,
+    u16: AsPrimitive<R>,
+    u32: AsPrimitive<R>,
+    u64: AsPrimitive<R>,
+    DFPrimitiveArray<R>: IntoSeries,
+    R: Into<DataValue>,
+{
+    fn arithmetic(columns: &DataColumnsWithField) -> Result<DataColumn> {
+        let need_check = R::data_type().is_integer();
+        try_binary_arithmetic! {
+            columns[0].column(),
+            columns[1].column(),
+            M,
+            |l: M, r:M| {
+                if std::intrinsics::unlikely(need_check && r == M::zero()) {
+                    return Err(ErrorCode::BadArguments("Division by zero"));
+                }
+                Ok(AsPrimitive::<R>::as_(l % r))
+            },
+            |lhs: &DFPrimitiveArray<T>, r: M| {
+                if need_check && r == M::zero() {
+                    return Err(ErrorCode::BadArguments("Division by zero"));
+                }
+                Ok(rem_scalar(lhs, &r).into())
+            }
+        }
+    }
+}
 
 pub struct ArithmeticModuloFunction;
 
 impl ArithmeticModuloFunction {
-    pub fn try_create_func(_display_name: &str) -> Result<Box<dyn Function>> {
-        ArithmeticFunction::try_create_func(DataValueArithmeticOperator::Modulo)
+    pub fn try_create_func(
+        _display_name: &str,
+        args: &[DataTypeAndNullable],
+    ) -> Result<Box<dyn Function>> {
+        let left_type = &args[0].data_type();
+        let right_type = &args[1].data_type();
+        let op = DataValueBinaryOperator::Modulo;
+
+        let error_fn = || -> Result<Box<dyn Function>> {
+            Err(ErrorCode::BadDataValueType(format!(
+                "DataValue Error: Unsupported arithmetic ({:?}) {} ({:?})",
+                left_type, op, right_type
+            )))
+        };
+
+        if !left_type.is_numeric() || !right_type.is_numeric() {
+            return error_fn();
+        };
+
+        with_match_primitive_type!(left_type, |$T| {
+            with_match_primitive_type!(right_type, |$D| {
+                let result_type = <($T, $D) as ResultTypeOfBinary>::Modulo::data_type();
+                BinaryArithmeticFunction::<ArithmeticModule<$T, $D, <($T, $D) as ResultTypeOfBinary>::LeastSuper, <($T, $D) as ResultTypeOfBinary>::Modulo>>::try_create_func(
+                    op,
+                    result_type,
+                )
+            }, {
+                error_fn()
+            })
+        }, {
+            error_fn()
+        })
     }
 
-    pub fn desc() -> FunctionDescription {
-        FunctionDescription::creator(Box::new(Self::try_create_func))
-            .features(FunctionFeatures::default().deterministic().num_arguments(2))
+    pub fn desc() -> ArithmeticDescription {
+        ArithmeticDescription::creator(Box::new(Self::try_create_func)).features(
+            FunctionFeatures::default()
+                .deterministic()
+                .monotonicity()
+                .num_arguments(2),
+        )
     }
 
     pub fn get_monotonicity(_args: &[Monotonicity]) -> Result<Monotonicity> {

@@ -52,8 +52,8 @@ admin_api_address = "0.0.0.0:9000"
 admin_tls_server_cert = "admin tls cert"
 admin_tls_server_key = "admin tls key"
 grpc_api_address = "0.0.0.0:10000"
-grpc_tls_server_cert = "flight server cert"
-grpc_tls_server_key = "flight server key"
+grpc_tls_server_cert = "grpc server cert"
+grpc_tls_server_key = "grpc server key"
 
 [raft_config]
 config_id = "raft config id"
@@ -80,8 +80,8 @@ sled_tree_prefix = "sled_foo"
     assert_eq!(cfg.admin_tls_server_cert, "admin tls cert");
     assert_eq!(cfg.admin_tls_server_key, "admin tls key");
     assert_eq!(cfg.grpc_api_address, "0.0.0.0:10000");
-    assert_eq!(cfg.grpc_tls_server_cert, "flight server cert");
-    assert_eq!(cfg.grpc_tls_server_key, "flight server key");
+    assert_eq!(cfg.grpc_tls_server_cert, "grpc server cert");
+    assert_eq!(cfg.grpc_tls_server_key, "grpc server key");
     assert_eq!(cfg.raft_config.config_id, "raft config id");
     assert_eq!(cfg.raft_config.raft_api_host, "0.0.0.0");
     assert_eq!(cfg.raft_config.raft_api_port, 11000);

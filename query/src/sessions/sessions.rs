@@ -22,7 +22,6 @@ use std::time::Duration;
 
 use common_base::tokio;
 use common_base::SignalStream;
-use common_cache::storage::StorageCache;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -38,6 +37,7 @@ use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session::Session;
 use crate::sessions::session_ref::SessionRef;
+use crate::storages::cache::StorageCache;
 use crate::storages::fuse::cache::LocalCache;
 use crate::storages::fuse::cache::LocalCacheConfig;
 use crate::users::UserApiProvider;
@@ -51,14 +51,14 @@ pub struct SessionManager {
 
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Arc<Session>>>>,
-    pub(in crate::sessions) table_cache: Arc<Option<Box<dyn StorageCache>>>,
+    pub(in crate::sessions) storage_cache: Arc<Option<Box<dyn StorageCache>>>,
 }
 
 impl SessionManager {
     pub async fn from_conf(conf: Config) -> Result<Arc<SessionManager>> {
         let storage_type = StorageType::from_str(conf.storage.storage_type.as_str())
             .map_err(|err| ErrorCode::InvalidConfig(format!("Invalid config: {}", err)))?;
-        let table_cache = if conf.query.table_cache_enabled && storage_type != StorageType::Disk {
+        let storage_cache = if conf.query.table_cache_enabled && storage_type != StorageType::Disk {
             let cache_conf = LocalCacheConfig {
                 memory_cache_size_mb: conf.query.table_memory_cache_mb_size,
                 disk_cache_size_mb: conf.query.table_disk_cache_mb_size,
@@ -66,8 +66,8 @@ impl SessionManager {
                 tenant_id: conf.query.tenant_id.clone(),
                 cluster_id: conf.query.cluster_id.clone(),
             };
-            let table_cache = LocalCache::create(cache_conf)?;
-            Arc::new(Some(table_cache))
+            let storage_cache = LocalCache::create(cache_conf)?;
+            Arc::new(Some(storage_cache))
         } else {
             Arc::new(None)
         };
@@ -79,8 +79,6 @@ impl SessionManager {
 
         // User manager and init the default users.
         let user = UserApiProvider::create_global(conf.clone()).await?;
-        user.load_udfs(conf.clone()).await?;
-
         let http_query_manager = HttpQueryManager::create_global(conf.clone()).await?;
 
         let max_active_sessions = conf.query.max_active_sessions as usize;
@@ -92,7 +90,7 @@ impl SessionManager {
             http_query_manager,
             max_sessions: max_active_sessions,
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_active_sessions))),
-            table_cache,
+            storage_cache,
         }))
     }
 
@@ -117,8 +115,8 @@ impl SessionManager {
         self.catalog.clone()
     }
 
-    pub fn get_table_cache(self: &Arc<Self>) -> Arc<Option<Box<dyn StorageCache>>> {
-        self.table_cache.clone()
+    pub fn get_storage_cache(self: &Arc<Self>) -> Arc<Option<Box<dyn StorageCache>>> {
+        self.storage_cache.clone()
     }
 
     pub fn create_session(self: &Arc<Self>, typ: impl Into<String>) -> Result<SessionRef> {
@@ -175,7 +173,7 @@ impl SessionManager {
     }
 
     #[allow(clippy::ptr_arg)]
-    pub fn get_session(self: &Arc<Self>, id: &String) -> Option<SessionRef> {
+    pub fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
         let sessions = self.active_sessions.read();
         sessions
             .get(id)

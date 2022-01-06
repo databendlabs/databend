@@ -14,11 +14,7 @@
 
 use common_datablocks::HashMethod;
 use common_datablocks::HashMethodFixedKeys;
-use common_datavalues::arrays::ArrayBuilder;
-use common_datavalues::arrays::PrimitiveArrayBuilder;
-use common_datavalues::arrays::StringArrayBuilder;
 use common_datavalues::prelude::*;
-use common_datavalues::DFPrimitiveType;
 
 use crate::pipelines::transforms::group_by::keys_ref::KeysRef;
 

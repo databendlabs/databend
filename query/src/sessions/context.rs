@@ -23,10 +23,9 @@ use std::sync::Arc;
 use common_base::tokio::task::JoinHandle;
 use common_base::Progress;
 use common_base::ProgressValues;
-use common_base::Runtime;
 use common_base::TrySpawn;
-use common_cache::storage::StorageCache;
 use common_dal::AzureBlobAccessor;
+use common_dal::DalContext;
 use common_dal::DalMetrics;
 use common_dal::DataAccessor;
 use common_dal::DataAccessorInterceptor;
@@ -52,11 +51,14 @@ use crate::clusters::Cluster;
 use crate::configs::AzureStorageBlobConfig;
 use crate::configs::Config;
 use crate::servers::http::v1::HttpQueryHandle;
+use crate::sessions::ProcessInfo;
 use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
-use crate::sessions::SessionManager;
+use crate::sessions::SessionRef;
 use crate::sessions::Settings;
+use crate::storages::cache::StorageCache;
 use crate::storages::Table;
+use crate::users::UserApiProvider;
 
 pub struct QueryContext {
     version: String,
@@ -66,14 +68,14 @@ pub struct QueryContext {
 }
 
 impl QueryContext {
-    pub fn new(other: Arc<QueryContext>) -> Arc<QueryContext> {
-        QueryContext::from_shared(other.shared.clone())
+    pub fn create_from(other: Arc<QueryContext>) -> Arc<QueryContext> {
+        QueryContext::create_from_shared(other.shared.clone())
     }
 
-    pub fn from_shared(shared: Arc<QueryContextShared>) -> Arc<QueryContext> {
+    pub fn create_from_shared(shared: Arc<QueryContextShared>) -> Arc<QueryContext> {
         shared.increment_ref_count();
 
-        tracing::debug!("Create DatabendQueryContext");
+        tracing::debug!("Create QueryContext");
 
         Arc::new(QueryContext {
             statistics: Arc::new(RwLock::new(Statistics::default())),
@@ -109,20 +111,16 @@ impl QueryContext {
         self.shared.scan_progress.clone()
     }
 
+    pub fn get_scan_progress_value(&self) -> ProgressValues {
+        self.shared.scan_progress.as_ref().get_values()
+    }
+
     pub fn get_result_progress(&self) -> Arc<Progress> {
         self.shared.result_progress.clone()
     }
 
     pub fn get_result_progress_value(&self) -> ProgressValues {
         self.shared.result_progress.as_ref().get_values()
-    }
-
-    pub fn get_scan_progress_value(&self) -> ProgressValues {
-        self.shared.scan_progress.as_ref().get_values()
-    }
-
-    pub fn get_and_reset_scan_progress_value(&self) -> ProgressValues {
-        self.shared.scan_progress.as_ref().get_and_reset()
     }
 
     // Steal n partitions from the partition pool by the pipeline worker.
@@ -203,10 +201,6 @@ impl QueryContext {
         self.shared.get_current_database()
     }
 
-    pub fn get_current_user(&self) -> Result<UserInfo> {
-        self.shared.get_current_user()
-    }
-
     pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
         let catalog = self.get_catalog();
         match catalog.get_database(&new_database_name).await {
@@ -222,6 +216,10 @@ impl QueryContext {
         Ok(())
     }
 
+    pub fn get_current_user(&self) -> Result<UserInfo> {
+        self.shared.get_current_user()
+    }
+
     pub fn get_fuse_version(&self) -> String {
         self.version.clone()
     }
@@ -234,24 +232,63 @@ impl QueryContext {
         self.shared.conf.clone()
     }
 
+    pub fn get_tenant(&self) -> &str {
+        &self.shared.conf.query.tenant_id
+    }
+
     pub fn get_subquery_name(&self, _query: &PlanNode) -> String {
         let index = self.shared.subquery_index.fetch_add(1, Ordering::Relaxed);
         format!("_subquery_{}", index)
     }
 
-    pub fn get_sessions_manager(self: &Arc<Self>) -> Arc<SessionManager> {
-        self.shared.session.get_sessions_manager()
+    // Get user manager api.
+    pub fn get_user_manager(self: &Arc<Self>) -> Arc<UserApiProvider> {
+        self.shared
+            .session
+            .get_sessions_manager()
+            .get_user_manager()
     }
 
-    pub fn get_session(self: &Arc<Self>) -> Arc<Session> {
+    // Get the current session.
+    pub fn get_current_session(self: &Arc<Self>) -> Arc<Session> {
         self.shared.session.clone()
     }
 
-    pub fn get_shared_runtime(&self) -> Result<Arc<Runtime>> {
-        self.shared.try_get_runtime()
+    // Get one session by session id.
+    pub fn get_session_by_id(self: &Arc<Self>, id: &str) -> Option<SessionRef> {
+        self.shared
+            .session
+            .get_sessions_manager()
+            .get_session_by_id(id)
     }
 
-    pub fn get_data_accessor(&self) -> Result<Arc<dyn DataAccessor>> {
+    // Get all the processes list info.
+    pub fn get_processes_info(self: &Arc<Self>) -> Vec<ProcessInfo> {
+        self.shared.session.get_sessions_manager().processes_info()
+    }
+
+    /// Get the data accessor metrics.
+    pub fn get_dal_metrics(&self) -> DalMetrics {
+        self.shared.dal_ctx.get_metrics()
+    }
+
+    /// Get the session running query.
+    pub fn get_query_str(&self) -> String {
+        self.shared.get_query_str()
+    }
+
+    // Get the client socket address.
+    pub fn get_client_address(&self) -> Option<SocketAddr> {
+        self.shared.session.mutable_state.get_client_host()
+    }
+
+    // Get table cache.
+    pub fn get_storage_cache(&self) -> Arc<Option<Box<dyn StorageCache>>> {
+        self.shared.session.sessions.get_storage_cache()
+    }
+
+    // Get the storage data accessor by config.
+    pub fn get_storage_accessor(&self) -> Result<Arc<dyn DataAccessor>> {
         let storage_conf = &self.get_config().storage;
         let scheme_name = &storage_conf.storage_type;
         let scheme = StorageScheme::from_str(scheme_name)?;
@@ -284,24 +321,8 @@ impl QueryContext {
         )))
     }
 
-    /// Get the data accessor metrics.
-    pub fn get_dal_metrics(&self) -> DalMetrics {
-        self.shared.dal_ctx.get_metrics()
-    }
-
-    /// Get the session running query.
-    pub fn get_query_str(&self) -> String {
-        self.shared.get_query_str()
-    }
-
-    // Get the client socket address.
-    pub fn get_client_address(&self) -> Option<SocketAddr> {
-        self.shared.session.mutable_state.get_client_host()
-    }
-
-    // Get table cache
-    pub fn get_table_cache(&self) -> Arc<Option<Box<dyn StorageCache>>> {
-        self.shared.get_table_cache()
+    pub fn get_dal_context(&self) -> &DalContext {
+        self.shared.dal_ctx.as_ref()
     }
 }
 
@@ -333,7 +354,7 @@ impl QueryContextShared {
     pub(in crate::sessions) fn destroy_context_ref(&self) {
         if self.ref_count.fetch_sub(1, Ordering::Release) == 1 {
             std::sync::atomic::fence(Acquire);
-            tracing::debug!("Destroy DatabendQueryContext");
+            tracing::debug!("Destroy QueryContext");
             self.session.destroy_context_shared();
         }
     }

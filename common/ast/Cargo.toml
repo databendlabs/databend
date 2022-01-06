@@ -1,0 +1,27 @@
+[package]
+name = "common-ast"
+version = "0.1.0"
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[lib]
+doctest = false
+test = false
+
+[dependencies] # In alphabetical order
+# Workspace dependencies
+common-exception = { path = "../exception" }
+common-functions = { path = "../functions" }
+
+# Github dependencies
+sqlparser = { git = "https://github.com/datafuse-extras/sqlparser-rs", rev = "b42ff01" }
+
+# Crates.io dependencies
+async-trait = "0.1.52"
+once_cell = "1.9.0"
+
+[dev-dependencies]
+pretty_assertions = "1.0.0"
+common-base = { path = "../base" }

@@ -141,7 +141,7 @@ fn test_plan_parser() -> Result<()> {
             name: "unsupported-function",
             sql: "select unsupported()",
             expect: "",
-            error: "Code: 8, displayText = Unsupported function: \"unsupported\" (while in analyze select projection).",
+            error: "Code: 4071, displayText = Unknown UDF unsupported (while in analyze select projection).",
         },
         Test {
             name: "interval-passed",
@@ -231,8 +231,8 @@ fn test_plan_parser() -> Result<()> {
             name: "show-processlist",
             sql: "show processlist",
             expect: "\
-            Projection: id:String, type:String, host:String, user:String, state:String, database:String, extra_info:String, memory_usage:Int64\
-            \n  ReadDataSource: scan partitions: [1], scan schema: [id:String, type:String, host:String;N, user:String;N, state:String, database:String, extra_info:String;N, memory_usage:Int64;N], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0, 1, 2, 3, 4, 5, 6, 7]]",
+            Projection: id:String, type:String, host:String, user:String, state:String, database:String, extra_info:String, memory_usage:Int64, dal_metrics_read_bytes:UInt64, dal_metrics_write_bytes:UInt64, scan_progress_read_rows:UInt64, scan_progress_read_bytes:UInt64\
+            \n  ReadDataSource: scan partitions: [1], scan schema: [id:String, type:String, host:String;N, user:String;N, state:String, database:String, extra_info:String;N, memory_usage:Int64;N, dal_metrics_read_bytes:UInt64;N, dal_metrics_write_bytes:UInt64;N, scan_progress_read_rows:UInt64;N, scan_progress_read_bytes:UInt64;N], statistics: [read_rows: 0, read_bytes: 0], push_downs: [projections: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]]",
             error: "",
         },
     ];

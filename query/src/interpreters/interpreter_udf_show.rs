@@ -16,10 +16,6 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
-use common_datavalues::series::Series;
-use common_datavalues::DataField;
-use common_datavalues::DataSchemaRefExt;
-use common_datavalues::DataType;
 use common_exception::Result;
 use common_planners::ShowUDFPlan;
 use common_streams::DataBlockStream;
@@ -52,8 +48,9 @@ impl Interpreter for ShowUDFInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
-        let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
-        let udf = user_mgr.get_udf(&plan.name).await?;
+        let tenant = self.ctx.get_tenant();
+        let user_mgr = self.ctx.get_user_manager();
+        let udf = user_mgr.get_udf(tenant, &plan.name).await?;
 
         let show_fields = vec![
             DataField::new("name", DataType::String, false),

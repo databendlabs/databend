@@ -20,8 +20,8 @@ use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
-use common_cache::basic::DiskCacheError;
-use common_cache::basic::LruDiskCache;
+use common_cache::DiskCacheError;
+use common_cache::LruDiskCache;
 use filetime::set_file_times;
 use filetime::FileTime;
 use tempfile::TempDir;

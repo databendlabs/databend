@@ -53,7 +53,7 @@ impl Interpreter for KillInterpreter {
             .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super)?;
 
         let id = &self.plan.id;
-        match self.ctx.get_sessions_manager().get_session(id) {
+        match self.ctx.get_session_by_id(id) {
             None => Err(ErrorCode::UnknownSession(format!(
                 "Not found session id {}",
                 id

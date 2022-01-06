@@ -47,7 +47,7 @@ impl FuseTable {
             DEFAULT_BLOCK_SIZE_IN_MEM_SIZE_THRESHOLD,
         );
 
-        let da = ctx.get_data_accessor()?;
+        let da = ctx.get_storage_accessor()?;
 
         let mut segment_stream = BlockStreamWriter::write_block_stream(
             da.clone(),
@@ -80,8 +80,7 @@ impl FuseTable {
         self.table_info
             .options()
             .get(opt_key)
-            .map(|s| s.parse::<T>().ok())
-            .flatten()
+            .and_then(|s| s.parse::<T>().ok())
             .unwrap_or(default)
     }
 }

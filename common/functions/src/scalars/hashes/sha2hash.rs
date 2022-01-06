@@ -14,9 +14,7 @@
 
 use std::fmt;
 
-use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::*;
-use common_datavalues::DataType;
 use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -49,19 +47,17 @@ impl Function for Sha2HashFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
-        if args[0].is_string() && args[1].is_unsigned_integer() {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let data_type = if args[0].is_string() && args[1].is_unsigned_integer() {
             Ok(DataType::String)
         } else {
             Err(ErrorCode::IllegalDataType(format!(
                 "Expected string and numeric type, but got {}",
                 args[0]
             )))
-        }
-    }
+        }?;
 
-    fn nullable(&self, _args: &[DataTypeAndNullable]) -> Result<bool> {
-        Ok(true)
+        Ok(DataTypeAndNullable::create(&data_type, true))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

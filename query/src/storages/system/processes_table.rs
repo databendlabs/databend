@@ -16,9 +16,11 @@ use std::any::Any;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use common_base::ProgressValues;
+use common_dal::DalMetrics;
 use common_datablocks::DataBlock;
-use common_datavalues::series::Series;
-use common_datavalues::series::SeriesFrom;
+use common_datavalues::prelude::Series;
+use common_datavalues::prelude::SeriesFrom;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
@@ -49,6 +51,10 @@ impl ProcessesTable {
             DataField::new("database", DataType::String, false),
             DataField::new("extra_info", DataType::String, true),
             DataField::new("memory_usage", DataType::Int64, true),
+            DataField::new("dal_metrics_read_bytes", DataType::UInt64, true),
+            DataField::new("dal_metrics_write_bytes", DataType::UInt64, true),
+            DataField::new("scan_progress_read_rows", DataType::UInt64, true),
+            DataField::new("scan_progress_read_bytes", DataType::UInt64, true),
         ]);
 
         let table_info = TableInfo {
@@ -76,6 +82,32 @@ impl ProcessesTable {
     fn process_extra_info(session_extra_info: &Option<String>) -> Option<Vec<u8>> {
         session_extra_info.clone().map(|s| s.into_bytes())
     }
+
+    fn process_dal_metrics(dal_metrics_opt: &Option<DalMetrics>) -> (Option<u64>, Option<u64>) {
+        if dal_metrics_opt.is_some() {
+            let dal_metrics = dal_metrics_opt.as_ref().unwrap();
+            (
+                Some(dal_metrics.read_bytes as u64),
+                Some(dal_metrics.write_bytes as u64),
+            )
+        } else {
+            (None, None)
+        }
+    }
+
+    fn process_scan_progress_values(
+        scan_progress_opt: &Option<ProgressValues>,
+    ) -> (Option<u64>, Option<u64>) {
+        if scan_progress_opt.is_some() {
+            let scan_progress = scan_progress_opt.as_ref().unwrap();
+            (
+                Some(scan_progress.read_rows as u64),
+                Some(scan_progress.read_bytes as u64),
+            )
+        } else {
+            (None, None)
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -93,8 +125,7 @@ impl Table for ProcessesTable {
         ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let sessions_manager = ctx.get_sessions_manager();
-        let processes_info = sessions_manager.processes_info();
+        let processes_info = ctx.get_processes_info();
 
         let mut processes_id = Vec::with_capacity(processes_info.len());
         let mut processes_type = Vec::with_capacity(processes_info.len());
@@ -104,6 +135,10 @@ impl Table for ProcessesTable {
         let mut processes_database = Vec::with_capacity(processes_info.len());
         let mut processes_extra_info = Vec::with_capacity(processes_info.len());
         let mut processes_memory_usage = Vec::with_capacity(processes_info.len());
+        let mut processes_dal_metrics_read_bytes = Vec::with_capacity(processes_info.len());
+        let mut processes_dal_metrics_write_bytes = Vec::with_capacity(processes_info.len());
+        let mut processes_scan_progress_read_rows = Vec::with_capacity(processes_info.len());
+        let mut processes_scan_progress_read_bytes = Vec::with_capacity(processes_info.len());
 
         for process_info in &processes_info {
             processes_id.push(process_info.id.clone().into_bytes());
@@ -116,6 +151,14 @@ impl Table for ProcessesTable {
                 &process_info.session_extra_info,
             ));
             processes_memory_usage.push(process_info.memory_usage);
+            let (dal_metrics_read_bytes, dal_metrics_write_bytes) =
+                ProcessesTable::process_dal_metrics(&process_info.dal_metrics);
+            processes_dal_metrics_read_bytes.push(dal_metrics_read_bytes);
+            processes_dal_metrics_write_bytes.push(dal_metrics_write_bytes);
+            let (scan_progress_read_rows, scan_progress_read_bytes) =
+                ProcessesTable::process_scan_progress_values(&process_info.scan_progress_value);
+            processes_scan_progress_read_rows.push(scan_progress_read_rows);
+            processes_scan_progress_read_bytes.push(scan_progress_read_bytes);
         }
 
         let schema = self.table_info.schema();
@@ -128,6 +171,10 @@ impl Table for ProcessesTable {
             Series::new(processes_database),
             Series::new(processes_extra_info),
             Series::new(processes_memory_usage),
+            Series::new(processes_dal_metrics_read_bytes),
+            Series::new(processes_dal_metrics_write_bytes),
+            Series::new(processes_scan_progress_read_rows),
+            Series::new(processes_scan_progress_read_bytes),
         ]);
 
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![block])))

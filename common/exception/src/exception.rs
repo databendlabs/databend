@@ -73,6 +73,7 @@ impl ErrorCode {
             .unwrap_or_else(|| self.display_text.clone())
     }
 
+    #[must_use]
     pub fn add_message(self, msg: impl AsRef<str>) -> Self {
         Self {
             code: self.code(),
@@ -82,6 +83,7 @@ impl ErrorCode {
         }
     }
 
+    #[must_use]
     pub fn add_message_back(self, msg: impl AsRef<str>) -> Self {
         Self {
             code: self.code(),
@@ -191,7 +193,8 @@ build_exceptions! {
     InvalidSourceFormat(59),
     StrParseError(60),
     IllegalGrant(61),
-    PermissionDenied(62),
+    ProxyModeInvalidOperation(62),
+    PermissionDenied(63),
 
     SemanticError(100),
 
@@ -202,14 +205,13 @@ build_exceptions! {
     TokioError(1001),
 
     // cache
-    DiskCacheIOError(2000),
-    DiskCacheFileTooLarge(2001),
-    DiskCacheFileNotInCache(2002),
+    DiskCacheIOError(1002),
+    DiskCacheFileTooLarge(1003),
+    DiskCacheFileNotInCache(1004),
 }
 
 // Store errors
 build_exceptions! {
-
     FileMetaNotFound(2001),
     FileDamaged(2002),
 
@@ -318,9 +320,9 @@ build_exceptions! {
     // network error
     NetworkRequestError(9001),
 }
+
 // General errors
 build_exceptions! {
-
     // A task that already stopped and can not stop twice.
     AlreadyStarted(7101),
 

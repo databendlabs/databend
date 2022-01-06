@@ -15,7 +15,6 @@
 use std::fmt;
 
 use common_datavalues::prelude::*;
-use common_datavalues::DataType;
 use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -48,8 +47,9 @@ impl Function for RandomFunction {
         &*self.display_name
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
-        if args.is_empty()
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let nullable = args.iter().any(|arg| arg.is_nullable());
+        let data_type = if args.is_empty()
             || matches!(
                 args[0].data_type(),
                 DataType::UInt8
@@ -64,15 +64,15 @@ impl Function for RandomFunction {
                     | DataType::Float64
                     | DataType::String
                     | DataType::Null
-            )
-        {
+            ) {
             Ok(DataType::Float64)
         } else {
             Err(ErrorCode::IllegalDataType(format!(
                 "Expected numeric types, but got {}",
                 args[0]
             )))
-        }
+        }?;
+        Ok(DataTypeAndNullable::create(&data_type, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

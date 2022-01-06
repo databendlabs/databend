@@ -18,6 +18,7 @@ path = "src/bin/metasrv.rs"
 [features]
 default = ["simd"]
 simd = ["common-arrow/simd"]
+tokio-console = ["common-tracing/console", "common-base/tracing"]
 
 [dependencies]
 # Workspace dependencies
@@ -29,7 +30,7 @@ common-grpc = { path = "../common/grpc" }
 common-infallible = { path = "../common/infallible" }
 common-base = { path = "../common/base" }
 common-meta-api = { path = "../common/meta/api" }
-common-meta-flight = { path = "../common/meta/flight" }
+common-meta-grpc = { path = "../common/meta/grpc" }
 common-meta-raft-store = { path = "../common/meta/raft-store" }
 common-meta-sled-store = { path = "../common/meta/sled-store" }
 common-meta-types = { path = "../common/meta/types" }
@@ -57,7 +58,7 @@ num_cpus = "1.13.1"
 prost = "0.9.0"
 rand = "0.8.4"
 serde = { version = "1.0.132", features = ["derive"] }
-serde_json = "1.0.73"
+serde_json = "1.0.74"
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
 tempfile = "3.2.0"
 thiserror = "1.0.30"
@@ -66,7 +67,7 @@ tokio-stream = "0.1.8"
 tonic = { version = "0.6.2", features = ["tls"] }
 sha2 = "0.10.0"
 uuid = { version = "0.8.2", features = ["serde", "v4"] }
-poem = { version = "1.2.14", features = ["rustls"] }
+poem = { version = "1.2.25", features = ["rustls"] }
 toml = "0.5.8"
 
 [build-dependencies]

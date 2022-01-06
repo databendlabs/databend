@@ -19,13 +19,13 @@ use common_datavalues::DataSchema;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::Extras;
-use common_streams::ParquetSource;
 use common_streams::SendableDataBlockStream;
-use common_streams::Source;
 use common_tracing::tracing_futures::Instrument;
 use futures::StreamExt;
 
+use super::part_info::PartInfo;
 use crate::sessions::QueryContext;
+use crate::storages::fuse::io::BlockReader;
 use crate::storages::fuse::FuseTable;
 
 impl FuseTable {
@@ -35,12 +35,6 @@ impl FuseTable {
         ctx: Arc<QueryContext>,
         push_downs: &Option<Extras>,
     ) -> Result<SendableDataBlockStream> {
-        let default_proj = || {
-            (0..self.table_info.schema().fields().len())
-                .into_iter()
-                .collect::<Vec<usize>>()
-        };
-
         let projection = if let Some(Extras {
             projection: Some(prj),
             ..
@@ -48,7 +42,9 @@ impl FuseTable {
         {
             prj.clone()
         } else {
-            default_proj()
+            (0..self.table_info.schema().fields().len())
+                .into_iter()
+                .collect::<Vec<usize>>()
         };
 
         let bite_size = ctx.get_settings().get_parallel_read_threads()?;
@@ -62,30 +58,43 @@ impl FuseTable {
                 },
             )
             .flatten();
-        let da = ctx.get_data_accessor()?;
+        let da = ctx.get_storage_accessor()?;
         let arrow_schema = self.table_info.schema().to_arrow();
         let table_schema = Arc::new(DataSchema::from(arrow_schema));
 
         let part_stream = futures::stream::iter(iter);
 
-        // fallback to stream combinator from async_stream, since
-        // 1. when using `stream!`, the trace always contains a unclosed call-span (of ParquetSource::read)
-        // 2. later, when `bit_size` is larger than one, the async reads could be buffered
-
+        let read_buffer_size = ctx.get_settings().get_storage_read_buffer_size()?;
         let stream = part_stream
             .map(move |part| {
                 let da = da.clone();
                 let table_schema = table_schema.clone();
                 let projection = projection.clone();
+                let cache = ctx.get_storage_cache();
                 async move {
-                    let mut source =
-                        ParquetSource::new(da, part.name.clone(), table_schema, projection);
-                    source.read().await?.ok_or_else(|| {
-                        ErrorCode::ParquetError(format!("fail to read block {}", part.name))
+                    let part_info = PartInfo::decode(&part.name)?;
+                    let part_location = part_info.location();
+                    let part_len = part_info.length();
+
+                    let mut block_reader = BlockReader::new(
+                        da,
+                        part_info.location().to_owned(),
+                        table_schema,
+                        projection,
+                        part_len,
+                        read_buffer_size,
+                        cache,
+                    )
+                    .await?;
+                    block_reader.read().await.map_err(|e| {
+                        ErrorCode::ParquetError(format!(
+                            "fail to read block {}, {}",
+                            part_location, e
+                        ))
                     })
                 }
             })
-            .buffered(bite_size as usize) // buffer_unordered?
+            .buffer_unordered(bite_size as usize)
             .instrument(common_tracing::tracing::Span::current());
         Ok(Box::pin(stream))
     }

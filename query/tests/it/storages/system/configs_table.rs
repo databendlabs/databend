@@ -38,7 +38,7 @@ async fn test_configs_table() -> Result<()> {
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
     assert_eq!(block.num_columns(), 4);
-    assert_eq!(block.num_rows(), 42);
+    assert_eq!(block.num_rows(), 43);
 
     let expected = vec![
         "+--------------------------------------+------------------+-------+-------------+",
@@ -50,6 +50,7 @@ async fn test_configs_table() -> Result<()> {
         "| clickhouse_handler_host              | 127.0.0.1        | query |             |",
         "| clickhouse_handler_port              | 9000             | query |             |",
         "| cluster_id                           |                  | query |             |",
+        "| database_engine_github_enabled       | true             | query |             |",
         "| flight_api_address                   | 127.0.0.1:9090   | query |             |",
         "| http_api_address                     | 127.0.0.1:8080   | query |             |",
         "| http_handler_host                    | 127.0.0.1        | query |             |",
@@ -70,22 +71,22 @@ async fn test_configs_table() -> Result<()> {
         "| mysql_handler_host                   | 127.0.0.1        | query |             |",
         "| mysql_handler_port                   | 3307             | query |             |",
         "| num_cpus                             | 8                | query |             |",
+        "| proxy_mode                           | false            | query |             |",
         "| rpc_tls_meta_server_root_ca_cert     |                  | meta  |             |",
         "| rpc_tls_meta_service_domain_name     | localhost        | meta  |             |",
         "| rpc_tls_query_server_root_ca_cert    |                  | query |             |",
         "| rpc_tls_query_service_domain_name    | localhost        | query |             |",
         "| rpc_tls_server_cert                  |                  | query |             |",
         "| rpc_tls_server_key                   |                  | query |             |",
+        "| table_cache_enabled                  | false            | query |             |",
+        "| table_disk_cache_mb_size             | 1024             | query |             |",
+        "| table_disk_cache_root                | _cache           | query |             |",
         "| table_engine_csv_enabled             | false            | query |             |",
-        "| database_engine_github_enabled       | true             | query |             |",
         "| table_engine_memory_enabled          | true             | query |             |",
         "| table_engine_parquet_enabled         | false            | query |             |",
+        "| table_memory_cache_mb_size           | 256              | query |             |",
         "| tenant_id                            |                  | query |             |",
         "| wait_timeout_mills                   | 5000             | query |             |",
-        "| table_cache_enabled                  | false            | query |             |",
-        "| table_memory_cache_mb_size           | 256              | query |             |",
-        "| table_disk_cache_root                | _cache           | query |             |",
-        "| table_disk_cache_mb_size             | 1024             | query |             |",
         "+--------------------------------------+------------------+-------+-------------+",
     ];
     common_datablocks::assert_blocks_sorted_eq(expected, result.as_slice());

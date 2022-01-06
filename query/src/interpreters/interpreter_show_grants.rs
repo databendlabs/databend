@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_datablocks::DataBlock;
 use common_datavalues::prelude::*;
-use common_datavalues::series::Series;
 use common_exception::Result;
 use common_planners::ShowGrantsPlan;
 use common_streams::DataBlockStream;
@@ -54,10 +53,10 @@ impl Interpreter for ShowGrantsInterpreter {
         let user_info = match self.plan.user_identity {
             None => self.ctx.get_current_user()?,
             Some(ref user_identity) => {
-                self.ctx
-                    .get_sessions_manager()
-                    .get_user_manager()
-                    .get_user(&user_identity.username, &user_identity.hostname)
+                let tenant = self.ctx.get_tenant();
+                let user_mgr = self.ctx.get_user_manager();
+                user_mgr
+                    .get_user(tenant, &user_identity.username, &user_identity.hostname)
                     .await?
             }
         };

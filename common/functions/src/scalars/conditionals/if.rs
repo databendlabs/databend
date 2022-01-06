@@ -16,7 +16,6 @@ use std::fmt;
 
 use common_datavalues::columns::DataColumn;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::DataType;
 use common_datavalues::DataTypeAndNullable;
 use common_exception::Result;
 
@@ -47,19 +46,18 @@ impl Function for IfFunction {
         "IfFunction"
     }
 
-    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataType> {
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        // IF(condition, value_if_true, value_if_false) is nullable if 'value_if_true' is nullable or 'value_if_false' is nullable.
+        // The condition of 'Null' is treated as false. SELECT IF(NULL, "YES", "NO") -> "No"
+        let nullable = args[1].is_nullable() || args[2].is_nullable();
+
         let mut aggregate_args = Vec::with_capacity(args.len() - 1);
         for arg in args.iter().skip(1) {
             aggregate_args.push(arg.data_type().clone())
         }
-        common_datavalues::aggregate_types(&aggregate_args)
-    }
+        let data_type = common_datavalues::aggregate_types(&aggregate_args)?;
 
-    // IF(condition, value_if_true, value_if_false) is nullable if 'value_if_true' is nullable or 'value_if_false' is nullable.
-    // The condition of 'Null' is treated as false.
-    fn nullable(&self, args: &[DataTypeAndNullable]) -> Result<bool> {
-        let nullable = args[1].is_nullable() || args[2].is_nullable();
-        Ok(nullable)
+        Ok(DataTypeAndNullable::create(&data_type, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, _input_rows: usize) -> Result<DataColumn> {

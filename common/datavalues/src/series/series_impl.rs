@@ -23,7 +23,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::prelude::*;
-use crate::DataValue;
 
 #[derive(Debug, Clone)]
 pub struct Series(pub Arc<dyn SeriesTrait>);
@@ -68,13 +67,6 @@ pub trait SeriesTrait: Send + Sync + fmt::Debug {
     fn vec_hash(&self, hasher: DFHasher) -> Result<DFUInt64Array>;
     fn fixed_hash(&self, ptr: *mut u8, step: usize) -> Result<()>;
     fn serialize(&self, vec: &mut Vec<Vec<u8>>) -> Result<()>;
-
-    fn subtract(&self, rhs: &Series) -> Result<Series>;
-    fn add_to(&self, rhs: &Series) -> Result<Series>;
-    fn multiply(&self, rhs: &Series) -> Result<Series>;
-    fn divide(&self, rhs: &Series) -> Result<Series>;
-    fn remainder(&self, rhs: &Series, dtype: &DataType) -> Result<Series>;
-    fn negative(&self) -> Result<Series>;
 
     fn sum(&self) -> Result<DataValue>;
     fn max(&self) -> Result<DataValue>;

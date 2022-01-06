@@ -1,4 +1,41 @@
+queue_rules:
+  - name: shared_queue
+    conditions:
+      - "#approved-reviews-by>=2"
+
+      - '#check-success>=10'
+      - check-success=check
+      - check-success~=build
+      - check-success~=test_unit
+      - check-success~=test_stateless_standalone
+      - check-success~=test_stateless_cluster
+      - check-success~=test_stateful_standalone
+
 pull_request_rules:
+
+  - name: put bug fix pr to queue with high priority
+    conditions:
+      - "#approved-reviews-by>=2"
+      - check-success=check
+      - label=pr-bugfix
+
+    actions:
+      queue:
+        name: shared_queue
+        priority: high
+
+  - name: put other pr to queue
+    conditions:
+      - "#approved-reviews-by>=2"
+      - check-success=check
+      - label!=pr-bugfix
+
+    actions:
+      queue:
+        name: shared_queue
+        priority: medium
+
+
   # if there is a conflict in a approved PR, ping the author.
   - name: ping author on conflicts
     conditions:

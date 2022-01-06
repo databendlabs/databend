@@ -24,6 +24,7 @@ use common_planners::Statistics;
 
 use crate::sessions::QueryContext;
 use crate::storages::fuse::meta::BlockMeta;
+use crate::storages::fuse::operations::part_info::PartInfo;
 use crate::storages::fuse::pruning::apply_block_pruning;
 use crate::storages::fuse::FuseTable;
 
@@ -37,10 +38,12 @@ impl FuseTable {
         let snapshot = self.read_table_snapshot(ctx.as_ref()).await?;
         match snapshot {
             Some(snapshot) => {
-                let da = ctx.get_data_accessor()?;
+                let da = ctx.get_storage_accessor()?;
                 let schema = self.table_info.schema();
                 let block_metas =
                     apply_block_pruning(&snapshot, schema, &push_downs, da, ctx.clone()).await?;
+                ctx.get_dal_context()
+                    .inc_partitions_scanned(block_metas.len());
                 let (statistics, parts) = Self::to_partitions(&block_metas, push_downs);
                 Ok((statistics, parts))
             }
@@ -57,13 +60,11 @@ impl FuseTable {
         blocks_metas.iter().fold(
             (Statistics::default(), Partitions::default()),
             |(mut stats, mut parts), block_meta| {
-                parts.push(Part {
-                    name: block_meta.location.path.clone(),
-                    version: 0,
-                });
+                let name =
+                    PartInfo::new(block_meta.location.path.as_str(), block_meta.file_size).encode();
+                parts.push(Part { name, version: 0 });
 
                 stats.read_rows += block_meta.row_count as usize;
-
                 match &proj_cols {
                     Some(proj) => {
                         stats.read_bytes += block_meta

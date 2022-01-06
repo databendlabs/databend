@@ -15,8 +15,8 @@
 
 use common_base::tokio;
 use common_datablocks::DataBlock;
+use common_datavalues::prelude::Series;
 use common_datavalues::prelude::SeriesFrom;
-use common_datavalues::series::Series;
 use common_datavalues::DataField;
 use common_datavalues::DataSchemaRefExt;
 use common_datavalues::DataType;
@@ -80,11 +80,11 @@ async fn test_block_pruner() -> Result<()> {
         })
         .collect::<Vec<_>>();
 
-    let da = ctx.get_data_accessor()?;
+    let da = ctx.get_storage_accessor()?;
     let stream = Box::pin(futures::stream::iter(blocks));
     let r = table.append_data(ctx.clone(), stream).await?;
     table
-        .commit(ctx.clone(), r.try_collect().await?, false)
+        .commit_insertion(ctx.clone(), r.try_collect().await?, false)
         .await?;
 
     // get the latest tbl
@@ -98,7 +98,7 @@ async fn test_block_pruner() -> Result<()> {
         .get(TBL_OPT_KEY_SNAPSHOT_LOC)
         .unwrap();
     let snapshot =
-        SnapshotReader::read(da.as_ref(), snapshot_loc.clone(), ctx.get_table_cache()).await?;
+        SnapshotReader::read(da.as_ref(), snapshot_loc.clone(), ctx.get_storage_cache()).await?;
 
     // no pruning
     let push_downs = None;

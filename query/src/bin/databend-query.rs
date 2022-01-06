@@ -131,7 +131,7 @@ async fn main(_global_tracker: Arc<RuntimeTracker>) -> common_exception::Result<
         let mut srv = MetricService::create(session_manager.clone());
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
-        tracing::info!("Metric API server listening on {}", listening);
+        tracing::info!("Metric API server listening on {}/metrics", listening);
     }
 
     // HTTP API service.

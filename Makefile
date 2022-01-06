@@ -83,7 +83,7 @@ cli-test:
 	bash ./scripts/ci/ci-run-cli-unit-tests.sh
 
 unit-test:
-	ulimit -n 10000; bash ./scripts/ci/ci-run-unit-tests.sh
+	ulimit -n 10000;ulimit -s 16384; RUST_LOG="ERROR" bash ./scripts/ci/ci-run-unit-tests.sh
 
 # Bendctl with cluster for stateful test.
 cluster: build cli-build
@@ -106,12 +106,12 @@ embedded-meta-test: build-debug
 
 stateless-test: build-debug
 	rm -rf ./_meta*/
-	ulimit -n 10000; bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
+	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
 
 stateful-ctl-test:
 	rm -rf ./_meta*/
 	rm -rf ./.databend/
-	ulimit -n 10000; bash ./scripts/ci/ci-run-stateful-tests-standalone-ctl.sh
+	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-stateful-tests-standalone-ctl.sh
 
 stateful-ctl-cluster-test:
 	rm -rf ./_meta*/

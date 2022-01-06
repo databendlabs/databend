@@ -20,8 +20,8 @@ use common_arrow::arrow;
 use common_arrow::arrow::array::ArrayRef;
 use common_arrow::arrow::record_batch::RecordBatch;
 use common_datavalues::columns::DataColumn;
-use common_datavalues::series::IntoSeries;
-use common_datavalues::series::Series;
+use common_datavalues::prelude::IntoSeries;
+use common_datavalues::prelude::Series;
 use common_datavalues::DataField;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
@@ -143,6 +143,7 @@ impl DataBlock {
     }
 
     #[inline]
+    #[must_use]
     pub fn slice(&self, offset: usize, length: usize) -> Self {
         let rows = self.num_rows();
         if offset == 0 && length >= rows {

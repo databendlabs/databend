@@ -29,8 +29,8 @@ use common_datavalues::prelude::DFUInt16Array;
 use common_datavalues::prelude::DFUInt32Array;
 use common_datavalues::prelude::DFUInt64Array;
 use common_datavalues::prelude::DataColumnsWithField;
-use common_datavalues::series::IntoSeries;
-use common_datavalues::series::Series;
+use common_datavalues::prelude::IntoSeries;
+use common_datavalues::prelude::Series;
 use common_datavalues::DataType;
 use common_datavalues::DataTypeAndNullable;
 use common_exception::ErrorCode;
@@ -60,8 +60,10 @@ impl Function for CastFunction {
         "CastFunction"
     }
 
-    fn return_type(&self, _args: &[DataTypeAndNullable]) -> Result<DataType> {
-        Ok(self.cast_type.clone())
+    fn return_type(&self, args: &[DataTypeAndNullable]) -> Result<DataTypeAndNullable> {
+        let dt = self.cast_type.clone();
+        let nullable = args.iter().any(|arg| arg.is_nullable());
+        Ok(DataTypeAndNullable::create(&dt, nullable))
     }
 
     fn eval(&self, columns: &DataColumnsWithField, input_rows: usize) -> Result<DataColumn> {

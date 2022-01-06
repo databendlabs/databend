@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use bytes::BytesMut;
 use common_datavalues::arrays::MutableArrayBuilder;
-use common_datavalues::series::Series;
+use common_datavalues::prelude::Series;
 use common_datavalues::DataSchema;
 use common_datavalues::DataType;
 use common_exception::Result;

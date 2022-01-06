@@ -262,14 +262,14 @@ impl KVApiTestSuite {
 
         tracing::info!("---get unexpired");
         {
-            let res = client.get_kv(&"k1".to_string()).await?;
+            let res = client.get_kv("k1").await?;
             assert!(res.is_some(), "got unexpired");
         }
 
         tracing::info!("---get expired");
         {
             tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
-            let res = client.get_kv(&"k1".to_string()).await?;
+            let res = client.get_kv("k1").await?;
             tracing::debug!("got k1:{:?}", res);
             assert!(res.is_none(), "got expired");
         }
@@ -339,7 +339,7 @@ impl KVApiTestSuite {
                 ))
                 .await?;
 
-            let res = client.get_kv(&"k2".to_string()).await?;
+            let res = client.get_kv("k2").await?;
             assert!(res.is_none(), "k2 expired");
         }
 

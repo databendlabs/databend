@@ -148,7 +148,7 @@ fn get_latest_tag(conf: &Config) -> Result<String> {
     let tag_url = conf.mirror.databend_tag_url.clone();
     let resp = ureq::get(tag_url.as_str()).call()?;
     let json: serde_json::Value = resp.into_json().unwrap();
-    Ok(format!("{}", json[0]["name"]).replace("\"", ""))
+    Ok(format!("{}", json[0]["name"]).replace('\"', ""))
 }
 
 pub fn get_version(conf: &Config, version: Option<String>) -> Result<String> {

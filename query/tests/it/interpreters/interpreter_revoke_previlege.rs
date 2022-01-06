@@ -28,6 +28,8 @@ async fn test_revoke_privilege_interpreter() -> Result<()> {
     common_tracing::init_default_ut_tracing();
 
     let ctx = crate::tests::create_query_context()?;
+    let tenant = ctx.get_tenant().to_string();
+
     let name = "test";
     let hostname = "localhost";
     let password = "test";
@@ -38,8 +40,8 @@ async fn test_revoke_privilege_interpreter() -> Result<()> {
         PasswordType::PlainText,
     );
     assert_eq!(user_info.grants, UserGrantSet::empty());
-    let user_mgr = ctx.get_sessions_manager().get_user_manager();
-    user_mgr.add_user(user_info).await?;
+    let user_mgr = ctx.get_user_manager();
+    user_mgr.add_user(&tenant, user_info).await?;
 
     let test_query = format!("REVOKE ALL ON *.* FROM '{}'@'{}'", name, hostname);
     if let PlanNode::RevokePrivilege(plan) = PlanParser::parse(&test_query, ctx.clone()).await? {
@@ -47,7 +49,7 @@ async fn test_revoke_privilege_interpreter() -> Result<()> {
         assert_eq!(executor.name(), "RevokePrivilegeInterpreter");
         let mut stream = executor.execute(None).await?;
         while let Some(_block) = stream.next().await {}
-        let new_user = user_mgr.get_user(name, hostname).await?;
+        let new_user = user_mgr.get_user(&tenant, name, hostname).await?;
         assert_eq!(new_user.grants, UserGrantSet::empty());
     } else {
         panic!()

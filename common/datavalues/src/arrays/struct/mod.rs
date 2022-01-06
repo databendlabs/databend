@@ -95,10 +95,12 @@ impl DFStructArray {
     }
 
     /// Take a view of top n elements
+    #[must_use]
     pub fn limit(&self, num_elements: usize) -> Self {
         self.slice(0, num_elements)
     }
 
+    #[must_use]
     pub fn slice(&self, offset: usize, length: usize) -> Self {
         let array = self.array.slice(offset, length);
         Self::new(array)

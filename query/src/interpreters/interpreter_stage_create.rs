@@ -48,9 +48,10 @@ impl Interpreter for CreatStageInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         let plan = self.plan.clone();
-        let user_mgr = self.ctx.get_sessions_manager().get_user_manager();
+        let tenant = self.ctx.get_tenant();
+        let user_mgr = self.ctx.get_user_manager();
         let user_stage = plan.user_stage_info;
-        let create_stage = user_mgr.add_stage(user_stage).await;
+        let create_stage = user_mgr.add_stage(tenant, user_stage).await;
         if plan.if_not_exists {
             create_stage.or_else(|e| {
                 // StageAlreadyExists(4061)
