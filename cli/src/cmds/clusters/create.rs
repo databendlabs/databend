@@ -28,7 +28,6 @@ use databend_meta::configs::Config as MetaConfig;
 use databend_query::configs::Config as QueryConfig;
 use lexical_util::num::AsPrimitive;
 use sysinfo::ProcessExt;
-use sysinfo::Signal;
 use sysinfo::System;
 use sysinfo::SystemExt;
 
@@ -648,13 +647,13 @@ impl CreateCommand {
                 .expect("cannot stop current services");
             let s = System::new_all();
             for elem in s.process_by_name("databend-meta") {
-                elem.kill(Signal::Term);
+                elem.kill();
             }
             for elem in s.process_by_name("databend-query") {
-                elem.kill(Signal::Term);
+                elem.kill();
             }
             for elem in s.process_by_name("databend-dashboard") {
-                elem.kill(Signal::Term);
+                elem.kill();
             }
         }
         if let Err(e) = reconcile_local(&mut status).await {
