@@ -46,7 +46,7 @@ impl Interpreter for UseTenantInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         self.ctx
-            .set_current_database(self.plan.tenant.clone())
+            .set_current_tenant(self.plan.tenant.clone())
             .await?;
         let schema = Arc::new(DataSchema::empty());
         Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))

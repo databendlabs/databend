@@ -14,7 +14,6 @@
 
 use common_base::tokio;
 use common_exception::Result;
-use common_planners::*;
 use databend_query::configs::Config;
 use databend_query::interpreters::*;
 use futures::stream::StreamExt;
@@ -28,17 +27,15 @@ async fn test_use_tenant_interpreter() -> Result<()> {
     config.query.proxy_mode = true;
     let ctx = crate::tests::create_query_context_with_config(config.clone())?;
 
-    if let PlanNode::UseTenant(plan) = parse_query("USE TENANT 't1'", &ctx)? {
-        let interpreter = UseTenantInterpreter::try_create(ctx.clone(), plan)?;
-        assert_eq!(interpreter.name(), "UseTenantInterpreter");
+    let plan = parse_query("USE TENANT 't1'", &ctx)?;
+    let interpreter = InterpreterFactory::get(ctx.clone(), plan)?;
 
-        let mut stream = interpreter.execute(None).await?;
-        while let Some(_block) = stream.next().await {}
+    assert_eq!(interpreter.name(), "UseTenantInterpreter");
 
-        assert_eq!(ctx.get_tenant().as_str(), "t1");
-    } else {
-        panic!()
-    }
+    let mut stream = interpreter.execute(None).await?;
+    while let Some(_block) = stream.next().await {}
+
+    assert_eq!(ctx.get_tenant().as_str(), "t1");
 
     Ok(())
 }
