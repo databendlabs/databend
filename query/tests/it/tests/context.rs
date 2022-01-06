@@ -36,8 +36,8 @@ pub fn create_query_context() -> Result<Arc<QueryContext>> {
 
     // Set user.
     let user_info = UserInfo::new(
-        "test_user".to_string(),
-        "%".to_string(),
+        "root".to_string(),
+        "127.0.0.1".to_string(),
         Vec::from("pass"),
         PasswordType::Sha256,
     );
