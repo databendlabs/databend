@@ -133,8 +133,10 @@ impl Config {
     pub fn load_from_toml(file: &str) -> Result<Self, ErrorCode> {
         let txt = std::fs::read_to_string(file)
             .map_err(|e| ErrorCode::CannotReadFile(format!("File: {}, err: {:?}", file, e)))?;
+
         let cfg = toml::from_str::<Config>(txt.as_str())
             .map_err(|e| ErrorCode::BadArguments(format!("{:?}", e)))?;
+
         Ok(cfg)
     }
 

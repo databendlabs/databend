@@ -33,40 +33,13 @@ if [ "$mode" == "boot" ]; then
 
 	echo 'Start Meta service HA cluster(3 nodes)...'
 
-	nohup ./target/debug/databend-meta \
-		--single \
-		--id 1 \
-		--raft-dir "./_meta1" \
-		--metric-api-address 0.0.0.0:28100 \
-		--admin-api-address 0.0.0.0:28101 \
-		--grpc-api-address 0.0.0.0:9191 \
-		--log-dir ./_logs1 \
-		--raft-api-port 28103 \
-		&
+	nohup ./target/debug/databend-meta -c scripts/deploy/config/databend-meta-node-1.toml &
 	python3 scripts/ci/wait_tcp.py --timeout 5 --port 9191
 
-	nohup ./target/debug/databend-meta \
-		--id 2 \
-		--raft-dir "./_meta2" \
-		--metric-api-address 0.0.0.0:28200 \
-		--admin-api-address 0.0.0.0:28201 \
-		--grpc-api-address 0.0.0.0:28202 \
-		--log-dir ./_logs2 \
-		--raft-api-port 28203 \
-		--join 127.0.0.1:28103 \
-		&
+	nohup ./target/debug/databend-meta -c scripts/deploy/config/databend-meta-node-2.toml &
 	python3 scripts/ci/wait_tcp.py --timeout 5 --port 28202
 
-	nohup ./target/debug/databend-meta \
-		--id 3 \
-		--raft-dir "./_meta3" \
-		--metric-api-address 0.0.0.0:28300 \
-		--admin-api-address 0.0.0.0:28301 \
-		--grpc-api-address 0.0.0.0:28302 \
-		--log-dir ./_logs3 \
-		--raft-api-port 28303 \
-		--join 127.0.0.1:28103 \
-		&
+	nohup ./target/debug/databend-meta -c scripts/deploy/config/databend-meta-node-3.toml &
 	python3 scripts/ci/wait_tcp.py --timeout 5 --port 28302
 
 else

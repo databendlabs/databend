@@ -1,0 +1,15 @@
+# Usage:
+# databend-meta -c databend-meta-node-2.toml
+
+log_dir            = "./_logs2"
+metric_api_address = "0.0.0.0:28200"
+admin_api_address  = "0.0.0.0:28201"
+grpc_api_address   = "0.0.0.0:28202"
+
+[raft_config]
+id            = 2
+raft_dir      = "./_meta2"
+raft_api_port = 28203
+
+# Start up mode: join a cluster
+join          = ["127.0.0.1:28103"]
