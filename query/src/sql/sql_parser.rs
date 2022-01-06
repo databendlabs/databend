@@ -88,6 +88,7 @@ use crate::sql::statements::DfShowUDF;
 use crate::sql::statements::DfShowUsers;
 use crate::sql::statements::DfTruncateTable;
 use crate::sql::statements::DfUseDatabase;
+use crate::sql::statements::DfUseTenant;
 use crate::sql::DfHint;
 use crate::sql::DfStatement;
 
@@ -250,7 +251,7 @@ impl<'a> DfParser<'a> {
                     }
                     Keyword::NoKeyword => match w.value.to_uppercase().as_str() {
                         // Use database
-                        "USE" => self.parse_use_database(),
+                        "USE" => self.parse_use(),
                         "KILL" => self.parse_kill_query(),
                         "OPTIMIZE" => self.parse_optimize(),
                         _ => self.expected("Keyword", self.parser.peek_token()),
@@ -637,12 +638,28 @@ impl<'a> DfParser<'a> {
         Ok(DfStatement::DropTable(drop))
     }
 
-    // Parse 'use database' db name.
-    fn parse_use_database(&mut self) -> Result<DfStatement, ParserError> {
-        if !self.consume_token("USE") {
-            return self.expected("Must USE", self.parser.peek_token());
+    // Parse 'use'.
+    fn parse_use(&mut self) -> Result<DfStatement, ParserError> {
+        self.parser.next_token();
+        if self.peek_token("TENANT") {
+            self.parse_use_tenant()
+        } else {
+            self.parse_use_database()
+        }
+    }
+
+    // Parse 'use tenant [tenant id]'.
+    fn parse_use_tenant(&mut self) -> Result<DfStatement, ParserError> {
+        if !self.consume_token("tenant") {
+            return self.expected("Must TENANT", self.parser.peek_token());
         }
 
+        let name = self.parser.parse_object_name()?;
+        Ok(DfStatement::UseTenant(DfUseTenant { name }))
+    }
+
+    // Parse 'use database' db name.
+    fn parse_use_database(&mut self) -> Result<DfStatement, ParserError> {
         let name = self.parser.parse_object_name()?;
         Ok(DfStatement::UseDatabase(DfUseDatabase { name }))
     }
@@ -1343,6 +1360,10 @@ impl<'a> DfParser<'a> {
         } else {
             false
         }
+    }
+
+    fn peek_token(&mut self, expected: &str) -> bool {
+        self.parser.peek_token().to_string().to_uppercase() == *expected.to_uppercase()
     }
 
     fn consume_token_until_or_end(&mut self, until_tokens: Vec<&str>) -> Vec<String> {

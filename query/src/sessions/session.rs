@@ -150,6 +150,14 @@ impl Session {
         self.mutable_state.get_current_database()
     }
 
+    pub fn get_current_tenant(self: &Arc<Self>) -> String {
+        self.mutable_state.get_current_tenant()
+    }
+
+    pub fn set_current_tenant(self: &Arc<Self>, tenant: String) {
+        self.mutable_state.set_current_tenant(tenant);
+    }
+
     pub fn get_current_user(self: &Arc<Self>) -> Result<UserInfo> {
         self.mutable_state
             .get_current_user()

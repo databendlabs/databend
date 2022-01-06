@@ -14,50 +14,41 @@
 
 use std::sync::Arc;
 
+use common_datavalues::DataSchema;
 use common_exception::Result;
-use common_planners::DropUDFPlan;
+use common_planners::UseTenantPlan;
 use common_streams::DataBlockStream;
 use common_streams::SendableDataBlockStream;
-use common_tracing::tracing;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::sessions::QueryContext;
 
-#[derive(Debug)]
-pub struct DropUDFInterpreter {
+pub struct UseTenantInterpreter {
     ctx: Arc<QueryContext>,
-    plan: DropUDFPlan,
+    plan: UseTenantPlan,
 }
 
-impl DropUDFInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropUDFPlan) -> Result<InterpreterPtr> {
-        Ok(Arc::new(DropUDFInterpreter { ctx, plan }))
+impl UseTenantInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: UseTenantPlan) -> Result<InterpreterPtr> {
+        Ok(Arc::new(UseTenantInterpreter { ctx, plan }))
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for DropUDFInterpreter {
+impl Interpreter for UseTenantInterpreter {
     fn name(&self) -> &str {
-        "DropUDFInterpreter"
+        "UseTenantInterpreter"
     }
 
-    #[tracing::instrument(level = "info", skip(self, _input_stream), fields(ctx.id = self.ctx.get_id().as_str()))]
     async fn execute(
         &self,
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        let plan = self.plan.clone();
-        let tenant = self.ctx.get_tenant();
-        let user_mgr = self.ctx.get_user_manager();
-        user_mgr
-            .drop_udf(&tenant, plan.name.as_str(), plan.if_exists)
+        self.ctx
+            .set_current_database(self.plan.tenant.clone())
             .await?;
-
-        Ok(Box::pin(DataBlockStream::create(
-            self.plan.schema(),
-            None,
-            vec![],
-        )))
+        let schema = Arc::new(DataSchema::empty());
+        Ok(Box::pin(DataBlockStream::create(schema, None, vec![])))
     }
 }

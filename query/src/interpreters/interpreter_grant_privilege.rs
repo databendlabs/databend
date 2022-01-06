@@ -59,7 +59,13 @@ impl Interpreter for GrantPrivilegeInterpreter {
         let tenant = self.ctx.get_tenant();
         let user_mgr = self.ctx.get_user_manager();
         user_mgr
-            .grant_user_privileges(tenant, &plan.name, &plan.hostname, plan.on, plan.priv_types)
+            .grant_user_privileges(
+                &tenant,
+                &plan.name,
+                &plan.hostname,
+                plan.on,
+                plan.priv_types,
+            )
             .await?;
 
         Ok(Box::pin(DataBlockStream::create(

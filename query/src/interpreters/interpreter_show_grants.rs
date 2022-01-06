@@ -56,7 +56,7 @@ impl Interpreter for ShowGrantsInterpreter {
                 let tenant = self.ctx.get_tenant();
                 let user_mgr = self.ctx.get_user_manager();
                 user_mgr
-                    .get_user(tenant, &user_identity.username, &user_identity.hostname)
+                    .get_user(&tenant, &user_identity.username, &user_identity.hostname)
                     .await?
             }
         };
