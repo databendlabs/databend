@@ -49,7 +49,7 @@ impl Interpreter for TruncateTableInterpreter {
         let db_name = self.plan.db.as_str();
         let tbl_name = self.plan.table.as_str();
 
-        self.ctx.get_session().validate_privilege(
+        self.ctx.get_current_session().validate_privilege(
             &GrantObject::Table(db_name.into(), tbl_name.into()),
             UserPrivilegeType::Delete,
         )?;

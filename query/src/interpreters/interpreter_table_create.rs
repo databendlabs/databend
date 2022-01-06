@@ -53,7 +53,7 @@ impl Interpreter for CreateTableInterpreter {
         &self,
         input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
-        self.ctx.get_session().validate_privilege(
+        self.ctx.get_current_session().validate_privilege(
             &GrantObject::Database(self.plan.db.clone()),
             UserPrivilegeType::Create,
         )?;

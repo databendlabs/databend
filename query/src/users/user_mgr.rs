@@ -54,13 +54,14 @@ impl UserApiProvider {
     /// user@host is not found, try 'u1'@'%'.
     pub async fn get_user_with_client_ip(
         &self,
+        tenant: &str,
         username: &str,
         client_ip: &str,
     ) -> Result<UserInfo> {
         let user = self
-            .get_user(username, client_ip)
+            .get_user(tenant, username, client_ip)
             .await
-            .map(|u| Some(u))
+            .map(Some)
             .or_else(|err| {
                 if err.code() == ErrorCode::unknown_user_code() {
                     Ok(None)
@@ -69,10 +70,8 @@ impl UserApiProvider {
                 }
             })?;
         match user {
-            Some(user) => {
-                return Ok(user);
-            }
-            None => self.get_user(username, "%").await,
+            Some(user) => Ok(user),
+            None => self.get_user(tenant, username, "%").await,
         }
     }
 

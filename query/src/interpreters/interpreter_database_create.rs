@@ -51,7 +51,7 @@ impl Interpreter for CreateDatabaseInterpreter {
         _input_stream: Option<SendableDataBlockStream>,
     ) -> Result<SendableDataBlockStream> {
         self.ctx
-            .get_session()
+            .get_current_session()
             .validate_privilege(&GrantObject::Global, UserPrivilegeType::Create)?;
 
         let catalog = self.ctx.get_catalog();
