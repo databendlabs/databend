@@ -13,7 +13,7 @@ We need to redesign the `datatype` system because current implementation had som
 - Hard to put attributes into enum based `DataType`, such as nullable attribute #3726 #3769
 
 
-## New Ddatatype system design
+## New Datatype system design
 
 ### Enum `TypeID`
 
