@@ -13,12 +13,12 @@ test = false
 [dependencies]
 async-compat = "0.2.1"
 async-trait = "0.1.52"
-bytes = "1"
+bytes = "1.1.0"
 futures = "0.3.19"
 tokio = { version = "1.15.0", features = ["fs"] }
-thiserror = "1"
+thiserror = "1.0.30"
 aws-config = "0.3.0"
-aws-types = {version = "0.3.0", features = ["hardcoded-credentials"]}
+aws-types = { version = "0.3.0", features = ["hardcoded-credentials"] }
 aws-sdk-s3 = "0.3.0"
 aws-endpoint = "0.3.0"
 http = "0.2.6"

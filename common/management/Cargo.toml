@@ -22,7 +22,7 @@ common-functions= {path = "../functions"}
 common-ast= {path = "../ast"}
 
 async-trait = "0.1.52"
-serde = { version = "1.0.132", features = ["derive"] }
+serde = { version = "1.0.133", features = ["derive"] }
 serde_json = "1.0.74"
 tempfile = "3.2.0"
 
