@@ -1780,33 +1780,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common-meta-flight"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "common-arrow",
- "common-base",
- "common-datavalues",
- "common-exception",
- "common-grpc",
- "common-infallible",
- "common-meta-api",
- "common-meta-types",
- "common-tracing",
- "derive_more",
- "futures",
- "hyper",
- "prost",
- "rand 0.8.4",
- "serde",
- "serde_json",
- "tokio-stream",
- "tonic",
- "tonic-build",
- "trust-dns-resolver",
-]
-
-[[package]]
 name = "common-meta-grpc"
 version = "0.1.0"
 dependencies = [
