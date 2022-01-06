@@ -18,8 +18,9 @@ common-infallible = { path = "../infallible" }
 
 async-compat = "0.2.1"
 async-trait = "0.1.52"
-azure_core_mirror = "0.1.0"
-azure_storage_mirror = { version = "0.1.0", features = ["blob"] }
+azure_core = { version = "0.1.0", git = "https://github.com/datafuse-extras/azure-sdk-for-rust.git", rev = "b5bf36b" }
+azure_storage = { version = "0.1.0", git = "https://github.com/datafuse-extras/azure-sdk-for-rust.git", rev = "b5bf36b" }
+azure_storage_blobs = { version = "0.1.0", git = "https://github.com/datafuse-extras/azure-sdk-for-rust.git", rev = "b5bf36b" }
 bytes = "1.1.0"
 futures = "0.3.18"
 metrics = "0.17.1"
