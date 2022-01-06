@@ -13,6 +13,8 @@
 //  limitations under the License.
 //
 
+use common_cache::HeapSizeOf;
+
 use crate::storages::fuse::meta::BlockMeta;
 use crate::storages::fuse::meta::Statistics;
 
@@ -26,4 +28,10 @@ pub struct SegmentInfo {
 
     /// summary statistics
     pub summary: Statistics,
+}
+
+impl HeapSizeOf for SegmentInfo {
+    fn heap_size_of_children(&self) -> usize {
+        todo!()
+    }
 }
