@@ -17,6 +17,7 @@ mod block_stream_writer;
 mod block_writer;
 mod locations;
 mod meta_reader;
+mod meta_reader_new;
 mod wip_cache_readers;
 
 pub use block_reader::BlockReader;

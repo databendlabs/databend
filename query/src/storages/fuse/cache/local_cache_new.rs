@@ -57,8 +57,9 @@ where K: Eq + Hash
 }
 
 #[async_trait::async_trait]
-pub trait LocalCache<V> {
-    async fn read<R: Loader<V> + Send + Sync>(&self, loader: R, loc: &str) -> Result<Arc<V>>;
+pub trait LocalCache<V, R> {
+    //async fn read<R: Loader<V> + Send + Sync>(&self, loader: R, loc: &str) -> Result<Arc<V>>;
+    async fn read(&self, loader: R, loc: &str) -> Result<Arc<V>>;
 }
 
 #[async_trait::async_trait]
@@ -66,20 +67,23 @@ pub trait Loader<T> {
     async fn load(&self, key: &str) -> Result<T>;
 }
 
-#[async_trait::async_trait]
-impl<V> LocalCache<V> for LoadingCache<String, V>
-where V: Send + Sync
-{
-    async fn read<R: Loader<V> + Send + Sync>(&self, loader: R, loc: &str) -> Result<Arc<V>> {
-        let cache = &mut *self.cache.write().await;
-        match cache.get(loc) {
-            Some(item) => Ok(item.clone()),
-            None => {
-                let val = loader.load(loc).await?;
-                let item = Arc::new(val);
-                cache.put(loc.to_owned(), item.clone());
-                Ok(item)
-            }
-        }
-    }
-}
+//#[async_trait::async_trait]
+//impl<V, R> LocalCache<V, R> for LoadingCache<String, V>
+//where
+//    V: Send + Sync,
+//    R: Loader<V> + Send + Sync,
+//{
+//    //async fn read<R: Loader<V> + Send + Sync>(&self, loader: R, loc: &str) -> Result<Arc<V>> {
+//    async fn read(&self, loader: R, loc: &str) -> Result<Arc<V>> {
+//        let cache = &mut *self.cache.write().await;
+//        match cache.get(loc) {
+//            Some(item) => Ok(item.clone()),
+//            None => {
+//                let val = loader.load(loc).await?;
+//                let item = Arc::new(val);
+//                cache.put(loc.to_owned(), item.clone());
+//                Ok(item)
+//            }
+//        }
+//    }
+//}

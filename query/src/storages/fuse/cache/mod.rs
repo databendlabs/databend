@@ -13,7 +13,7 @@
 // limitations under the License.
 
 mod local_cache;
-mod local_cache_new;
+pub mod local_cache_new;
 mod metrics;
 pub use local_cache::LocalCache;
 pub use local_cache::LocalCacheConfig;
