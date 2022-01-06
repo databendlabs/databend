@@ -112,3 +112,21 @@ struct DataField {
     }
 ```
 
+
+### Example of `numerical_coercion`
+
+```rust
+pub fn numerical_coercion(
+    lhs_type: &Box<DataType>,
+    rhs_type: &Box<DataType>,
+    allow_overflow: bool,
+) -> Result<Box<DataType>> {
+
+    let has_float = lhs_type.is_floating() || rhs_type.is_floating();
+    let has_integer = lhs_type.is_integer() || rhs_type.is_integer();
+    let has_signed = lhs_type.is_signed_numeric() || rhs_type.is_signed_numeric();
+
+    ....
+}
+```
+
