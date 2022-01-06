@@ -114,16 +114,3 @@ impl BlockPruner {
         }
     }
 }
-
-//#[tracing::instrument(level = "debug", skip_all, fields(ctx.id = ctx.get_id().as_str()))]
-//pub async fn apply_block_pruning(
-//    table_snapshot: &TableSnapshot,
-//    schema: DataSchemaRef,
-//    push_down: &Option<Extras>,
-//    data_accessor: Arc<dyn DataAccessor>,
-//    ctx: Arc<QueryContext>,
-//) -> Result<Vec<BlockMeta>> {
-//    BlockPruner::new(table_snapshot, data_accessor)
-//        .apply(schema, push_down, ctx.as_ref())
-//        .await
-//}
