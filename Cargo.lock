@@ -806,8 +806,8 @@ dependencies = [
  "async-std",
  "async-trait",
  "byte-unit",
- "clap 3.0.0-rc.9",
- "clap_generate",
+ "clap 3.0.5",
+ "clap_complete",
  "colored",
  "comfy-table",
  "common-base",
@@ -1272,9 +1272,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.0.0-rc.9"
+version = "3.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7843ae7a539bef687e018bf9edf7e87728024b29d02b0f8409726be8880ae1a"
+checksum = "f6f34b09b9ee8c7c7b400fe2f8df39cafc9538b03d6ba7f4ae13e4cb90bfbb7d"
 dependencies = [
  "atty",
  "bitflags",
@@ -1288,25 +1288,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "clap_derive"
-version = "3.0.0-rc.9"
+name = "clap_complete"
+version = "3.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cae3cc2f259ea636871f5da15b0ac033f1821d7a5506c3d1bfbdde201f14c803"
+checksum = "a394f7ec0715b42a4e52b294984c27c9a61f77c8d82f7774c5198350be143f19"
 dependencies = [
- "heck",
+ "clap 3.0.5",
+]
+
+[[package]]
+name = "clap_derive"
+version = "3.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41a0645a430ec9136d2d701e54a95d557de12649a9dd7109ced3187e648ac824"
+dependencies = [
+ "heck 0.4.0",
  "proc-macro-error",
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "clap_generate"
-version = "3.0.0-rc.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c85d334a8eeb937cb285ab86e9eb141a3639ab8b0eb9b20677edbd00ccdda8f5"
-dependencies = [
- "clap 3.0.0-rc.9",
 ]
 
 [[package]]
@@ -1824,7 +1824,7 @@ dependencies = [
  "async-raft",
  "async-trait",
  "bytes 1.1.0",
- "clap 3.0.0-rc.9",
+ "clap 3.0.5",
  "common-arrow",
  "common-base",
  "common-exception",
@@ -2439,7 +2439,7 @@ checksum = "3ee2393c4a91429dffb4bedf19f4d6abf27d8a732c8ce4980305d782e5426d57"
 name = "databend-benchmark"
 version = "0.1.0"
 dependencies = [
- "clap 3.0.0-rc.9",
+ "clap 3.0.5",
  "clickhouse-driver",
  "common-base",
  "common-exception",
@@ -2471,7 +2471,7 @@ dependencies = [
  "async-trait",
  "backtrace",
  "byteorder",
- "clap 3.0.0-rc.9",
+ "clap 3.0.5",
  "common-arrow",
  "common-base",
  "common-building",
@@ -2531,7 +2531,7 @@ dependencies = [
  "cargo_metadata",
  "chrono",
  "chrono-tz 0.6.1",
- "clap 3.0.0-rc.9",
+ "clap 3.0.5",
  "clickhouse-driver",
  "common-arrow",
  "common-ast",
@@ -2821,7 +2821,7 @@ version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c5f0096a91d210159eceb2ff5e1c4da18388a170e1e3ce948aac9c8fdbbf595"
 dependencies = [
- "heck",
+ "heck 0.3.3",
  "proc-macro2",
  "quote",
  "syn",
@@ -3508,6 +3508,12 @@ checksum = "6d621efb26863f0e9924c6ac577e8275e5e6b77455db64ffa6c65c904e9e132c"
 dependencies = [
  "unicode-segmentation",
 ]
+
+[[package]]
+name = "heck"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2540771e65fc8cb83cd6e8a237f70c319bd5c29f78ed1084ba5d50eeac86f7f9"
 
 [[package]]
 name = "hermit-abi"
@@ -5662,7 +5668,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62941722fb675d463659e49c4f3fe1fe792ff24fe5bbaa9c08cd3b98a1c354f5"
 dependencies = [
  "bytes 1.1.0",
- "heck",
+ "heck 0.3.3",
  "itertools",
  "lazy_static",
  "log",
@@ -6895,7 +6901,7 @@ version = "0.4.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dcb5ae327f9cc13b68763b5749770cb9e048a99bd9dfdfa58d0cf05d5f64afe0"
 dependencies = [
- "heck",
+ "heck 0.3.3",
  "proc-macro-error",
  "proc-macro2",
  "quote",
@@ -6914,7 +6920,7 @@ version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "339f799d8b549e3744c7ac7feb216383e4005d94bdb22561b3ab8f3b808ae9fb"
 dependencies = [
- "heck",
+ "heck 0.3.3",
  "proc-macro2",
  "quote",
  "syn",

@@ -46,7 +46,7 @@ async-raft = { git = "https://github.com/datafuselabs/openraft", tag = "v0.6.2-a
 async-trait = "0.1.52"
 backtrace = "0.3.63"
 byteorder = "1.4.3"
-clap = { version = "3.0.0-rc.7", features = ["derive", "env"] }
+clap = { version = "3.0.0", features = ["derive", "env"] }
 derive_more = "0.99.17"
 futures = "0.3.18"
 indexmap = "1.7.0"
