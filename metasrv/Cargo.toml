@@ -50,7 +50,6 @@ clap = { version = "3.0.0-rc.7", features = ["derive", "env"] }
 derive_more = "0.99.17"
 futures = "0.3.18"
 indexmap = "1.7.0"
-maplit = "1.0.2"
 metrics = "0.17.1"
 metrics-exporter-prometheus = "0.7.0"
 num = "0.4.0"
@@ -76,6 +75,7 @@ common-building = { path = "../common/building" }
 
 [dev-dependencies]
 common-meta-api = { path = "../common/meta/api" }
+maplit = "1.0.2"
 
 pretty_assertions = "1.0.0"
 reqwest = { version = "0.11.8", features = ["json"] }

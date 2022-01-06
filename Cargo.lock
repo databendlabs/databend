@@ -1763,7 +1763,6 @@ dependencies = [
  "common-tracing",
  "derive_more",
  "futures",
- "maplit",
  "once_cell",
  "tempfile",
 ]
