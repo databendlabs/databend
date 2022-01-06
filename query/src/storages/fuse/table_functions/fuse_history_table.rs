@@ -147,11 +147,11 @@ impl Table for FuseHistoryTable {
         ctx: Arc<QueryContext>,
         _plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        let tenant_id = ctx.get_tenant_id()?;
+        let tenant_id = ctx.get_tenant_id();
         let tbl = ctx
             .get_catalog()
             .get_table(
-                tenant_id,
+                tenant_id.as_str(),
                 self.arg_database_name.as_str(),
                 self.arg_table_name.as_str(),
             )

@@ -23,7 +23,6 @@ use common_datavalues::chrono::DateTime;
 use common_datavalues::chrono::Utc;
 use common_datavalues::DataSchema;
 use maplit::hashmap;
-use uuid::Uuid;
 
 use crate::database::DatabaseNameIdent;
 use crate::MatchSeq;
@@ -60,19 +59,19 @@ impl Display for TableIdent {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableNameIndent {
-    pub tenant_id: Uuid,
+    pub tenant_id: String,
     pub db_name: String,
     pub table_name: String,
 }
 
 impl TableNameIndent {
     pub fn new(
-        tenant: Uuid,
+        tenant: impl Into<String>,
         db_name: impl Into<String>,
         table_name: impl Into<String>,
     ) -> TableNameIndent {
         TableNameIndent {
-            tenant_id: tenant,
+            tenant_id: tenant.into(),
             db_name: db_name.into(),
             table_name: table_name.into(),
         }
@@ -192,7 +191,7 @@ impl Display for TableInfo {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateTableReq {
     pub if_not_exists: bool,
-    pub tenant_id: Uuid,
+    pub tenant_id: String,
     pub db: String,
     pub table: String,
     pub table_meta: TableMeta,
@@ -206,7 +205,7 @@ pub struct CreateTableReply {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropTableReq {
     pub if_exists: bool,
-    pub tenant_id: Uuid,
+    pub tenant_id: String,
     pub db: String,
     pub table: String,
 }
@@ -256,15 +255,15 @@ impl Deref for GetTableReq {
     }
 }
 
-impl From<(Uuid, &str, &str)> for GetTableReq {
-    fn from(db_table: (Uuid, &str, &str)) -> Self {
+impl From<(&str, &str, &str)> for GetTableReq {
+    fn from(db_table: (&str, &str, &str)) -> Self {
         Self::new(db_table.0, db_table.1, db_table.2)
     }
 }
 
 impl GetTableReq {
     pub fn new(
-        tenant_id: Uuid,
+        tenant_id: impl Into<String>,
         db_name: impl Into<String>,
         table_name: impl Into<String>,
     ) -> GetTableReq {
@@ -288,10 +287,10 @@ impl Deref for ListTableReq {
 }
 
 impl ListTableReq {
-    pub fn new(tenant_id: Uuid, db_name: impl Into<String>) -> ListTableReq {
+    pub fn new(tenant_id: impl Into<String>, db_name: impl Into<String>) -> ListTableReq {
         ListTableReq {
             inner: DatabaseNameIdent {
-                tenant_id,
+                tenant_id: tenant_id.into(),
                 db_name: db_name.into(),
             },
         }

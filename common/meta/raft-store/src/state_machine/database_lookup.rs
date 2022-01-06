@@ -1,7 +1,6 @@
 use std::fmt;
 use std::io::Cursor;
 
-use bytes::Buf;
 use bytes::BytesMut;
 use common_exception::ErrorCode;
 use common_io::prelude::BinaryRead;
@@ -10,19 +9,18 @@ use common_meta_sled_store::sled::IVec;
 use common_meta_sled_store::SledOrderedSerde;
 use serde::Deserialize;
 use serde::Serialize;
-use uuid::Uuid;
 
-const DB_LOOKUP_KEY_DELIMITER: char = '🐋'; // we love whale:)
+const DB_LOOKUP_KEY_DELIMITER: u8 = '/' as u8;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DatabaseLookupKey {
-    tenant_id: Uuid,
-    delimiter: char,
+    tenant_id: String,
+    delimiter: u8,
     database_name: String,
 }
 
 impl DatabaseLookupKey {
-    pub fn new(tenant_id: Uuid, database_name: String) -> Self {
+    pub fn new(tenant_id: String, database_name: String) -> Self {
         DatabaseLookupKey {
             tenant_id,
             delimiter: DB_LOOKUP_KEY_DELIMITER,
@@ -39,7 +37,7 @@ impl SledOrderedSerde for DatabaseLookupKey {
     fn ser(&self) -> Result<IVec, ErrorCode> {
         let mut buf = BytesMut::new();
 
-        if buf.write_binary(self.tenant_id).is_ok()
+        if buf.write_string(&self.tenant_id).is_ok()
             && buf.write_scalar(&self.delimiter).is_ok()
             && buf.write_string(&self.database_name).is_ok()
         {
@@ -51,9 +49,9 @@ impl SledOrderedSerde for DatabaseLookupKey {
     fn de<V: AsRef<[u8]>>(v: V) -> Result<Self, ErrorCode>
     where Self: Sized {
         let mut buf_read = Cursor::new(v);
-        let tenant_id = buf_read.read_uuid();
+        let tenant_id = buf_read.read_tenant_id(DB_LOOKUP_KEY_DELIMITER);
         if let Ok(tenant_id) = tenant_id {
-            buf_read.advance(4); // skip delimiter
+            // read_tenant_id already put cursor at next byte of delimiter, no need advance cursor here.
             let database_name_result = buf_read.read_string();
             if let Ok(database_name) = database_name_result {
                 return Ok(DatabaseLookupKey {

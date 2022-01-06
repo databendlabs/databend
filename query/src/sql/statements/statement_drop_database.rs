@@ -37,7 +37,7 @@ impl AnalyzableStatement for DfDropDatabase {
     async fn analyze(&self, ctx: Arc<QueryContext>) -> Result<AnalyzedResult> {
         let db = self.database_name()?;
         let if_exists = self.if_exists;
-        let tenant_id = ctx.get_tenant_id()?;
+        let tenant_id = ctx.get_tenant_id();
 
         Ok(AnalyzedResult::SimpleQuery(Box::new(
             PlanNode::DropDatabase(DropDatabasePlan {

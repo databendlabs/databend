@@ -69,11 +69,11 @@ impl Interpreter for OptimizeTableInterpreter {
             if do_purge {
                 // currently, context caches the table, we have to "refresh"
                 // the table by using the catalog API directly
-                let tenant_id = self.ctx.get_tenant_id()?;
+                let tenant_id = self.ctx.get_tenant_id();
                 table = self
                     .ctx
                     .get_catalog()
-                    .get_table(tenant_id, &plan.database, &plan.table)
+                    .get_table(tenant_id.as_str(), &plan.database, &plan.table)
                     .await?;
             }
         }

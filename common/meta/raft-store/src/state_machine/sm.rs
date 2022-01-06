@@ -51,7 +51,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use sled::transaction::ConflictableTransactionError;
 use sled::IVec;
-use uuid::Uuid;
 
 use crate::config::RaftConfig;
 use crate::sled_key_spaces::ClientLastResps;
@@ -365,7 +364,7 @@ impl StateMachine {
                 let (prev, result) = self
                     .sub_txn_tree_upsert(
                         &db_lookup_tree,
-                        &DatabaseLookupKey::new(tenant_id.to_owned(), name.to_string()),
+                        &DatabaseLookupKey::new(tenant_id.to_string(), name.to_string()),
                         &MatchSeq::Exact(0),
                         Operation::Update(db_id),
                         None,
@@ -445,7 +444,7 @@ impl StateMachine {
                 let (prev, result) = self
                     .sub_txn_tree_upsert(
                         &dbs,
-                        &DatabaseLookupKey::new(tenant_id.to_owned(), name.to_string()),
+                        &DatabaseLookupKey::new(tenant_id.to_string(), name.to_string()),
                         &MatchSeq::Any,
                         Operation::Delete,
                         None,
@@ -501,7 +500,7 @@ impl StateMachine {
                 ref table_meta,
             } => {
                 let db_id = self
-                    .txn_get_database_id(tenant_id.to_owned(), db_name, txn_tree)
+                    .txn_get_database_id(tenant_id, db_name, txn_tree)
                     .map_err(|e| {
                         let e: ConflictableTransactionError<Infallible> = e.into();
                         ErrorCode::from(e)
@@ -586,7 +585,7 @@ impl StateMachine {
                 ref table_name,
             } => {
                 let db_id = self
-                    .txn_get_database_id(tenant_id.to_owned(), db_name, txn_tree)
+                    .txn_get_database_id(tenant_id, db_name, txn_tree)
                     .map_err(|e| {
                         let e: ConflictableTransactionError<Infallible> = e.into();
                         ErrorCode::from(e)
@@ -861,14 +860,10 @@ impl StateMachine {
     }
 
     #[allow(clippy::ptr_arg)]
-    pub fn get_database_id(
-        &self,
-        tenant_id: Uuid,
-        db_name: &String,
-    ) -> common_exception::Result<u64> {
+    pub fn get_database_id(&self, tenant_id: &str, db_name: &str) -> common_exception::Result<u64> {
         let seq_dbi = self
             .database_lookup()
-            .get(&(DatabaseLookupKey::new(tenant_id, db_name.to_string())))?
+            .get(&(DatabaseLookupKey::new(tenant_id.to_string(), db_name.to_string())))?
             .ok_or_else(|| ErrorCode::UnknownDatabase(db_name.to_string()))?;
 
         Ok(seq_dbi.data)
@@ -876,13 +871,13 @@ impl StateMachine {
 
     pub fn txn_get_database_id(
         &self,
-        tenant_id: Uuid,
+        tenant_id: &str,
         db_name: &str,
         txn_tree: &TransactionSledTree,
     ) -> TxnResult<Option<u64>> {
         let txn_db_lookup = txn_tree.key_space::<DatabaseLookup>();
         let seq_dbi = txn_db_lookup
-            .get(&(DatabaseLookupKey::new(tenant_id, db_name.to_string())))?
+            .get(&(DatabaseLookupKey::new(tenant_id.to_string(), db_name.to_string())))?
             .map(|x| x.data);
 
         Ok(seq_dbi)

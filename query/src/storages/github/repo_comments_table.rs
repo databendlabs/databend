@@ -19,7 +19,6 @@ use common_exception::Result;
 use common_meta_types::CreateTableReq;
 use common_meta_types::TableMeta;
 use octocrab::models;
-use uuid::Uuid;
 
 use crate::storages::github::github_client::create_github_client;
 use crate::storages::github::GithubDataGetter;
@@ -42,14 +41,14 @@ impl RepoCommentsTable {
 
     pub async fn create_table(
         ctx: StorageContext,
-        tenant_id: Uuid,
+        tenant_id: &str,
         options: RepoTableOptions,
     ) -> Result<()> {
         let mut options = options;
         options.table_type = GithubTableType::Comments.to_string();
         let req = CreateTableReq {
             if_not_exists: false,
-            tenant_id,
+            tenant_id: tenant_id.to_string(),
             db: options.owner.clone(),
             table: format!("{}_{}", options.repo.clone(), "comments"),
             table_meta: TableMeta {

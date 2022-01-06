@@ -34,7 +34,6 @@ use common_meta_types::TableInfo;
 use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
-use uuid::Uuid;
 
 use crate::MetaApi;
 
@@ -47,12 +46,12 @@ pub struct MetaApiTestSuite {}
 
 impl MetaApiTestSuite {
     pub async fn database_create_get_drop<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
-        let tenant_id = Uuid::new_v4();
+        let tenant_id = "tenant1";
         tracing::info!("--- create db1");
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant_id: tenant_id,
+                tenant_id: tenant_id.to_string(),
                 db: "db1".to_string(),
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
@@ -70,7 +69,7 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant_id: tenant_id,
+                tenant_id: tenant_id.to_string(),
                 db: "db1".to_string(),
                 meta: DatabaseMeta {
                     engine: "".to_string(),
@@ -88,7 +87,7 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant_id: tenant_id,
+                tenant_id: tenant_id.to_string(),
                 db: "db1".to_string(),
                 meta: DatabaseMeta {
                     engine: "".to_string(),
@@ -115,7 +114,7 @@ impl MetaApiTestSuite {
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant_id: tenant_id,
+                tenant_id: tenant_id.to_string(),
                 db: "db2".to_string(),
                 meta: DatabaseMeta {
                     engine: "".to_string(),
@@ -156,7 +155,7 @@ impl MetaApiTestSuite {
         {
             mt.drop_database(DropDatabaseReq {
                 if_exists: false,
-                tenant_id: tenant_id,
+                tenant_id: tenant_id.to_string(),
                 db: "db2".to_string(),
             })
             .await?;
@@ -173,7 +172,7 @@ impl MetaApiTestSuite {
         {
             mt.drop_database(DropDatabaseReq {
                 if_exists: true,
-                tenant_id: tenant_id,
+                tenant_id: tenant_id.to_string(),
                 db: "db2".to_string(),
             })
             .await?;
@@ -184,7 +183,7 @@ impl MetaApiTestSuite {
 
     pub async fn database_list<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         tracing::info!("--- prepare db1 and db2");
-        let tenant_id = Uuid::new_v4();
+        let tenant_id = "tenant1";
         {
             let res = self.create_database(mt, tenant_id, "db1").await?;
             assert_eq!(1, res.database_id);
@@ -195,7 +194,11 @@ impl MetaApiTestSuite {
 
         tracing::info!("--- get_databases");
         {
-            let dbs = mt.list_databases(ListDatabaseReq { tenant_id }).await?;
+            let dbs = mt
+                .list_databases(ListDatabaseReq {
+                    tenant_id: tenant_id.to_string(),
+                })
+                .await?;
             let want: Vec<u64> = vec![1, 2];
             let got = dbs.iter().map(|x| x.database_id).collect::<Vec<_>>();
             assert_eq!(want, got)
@@ -205,7 +208,7 @@ impl MetaApiTestSuite {
     }
 
     pub async fn table_create_get_drop<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
-        let tenant_id = Uuid::new_v4();
+        let tenant_id = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
 
@@ -213,7 +216,7 @@ impl MetaApiTestSuite {
         {
             let plan = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant_id: tenant_id,
+                tenant_id: tenant_id.to_string(),
                 db: db_name.to_string(),
                 meta: DatabaseMeta {
                     engine: "".to_string(),
@@ -242,7 +245,7 @@ impl MetaApiTestSuite {
 
             let mut req = CreateTableReq {
                 if_not_exists: false,
-                tenant_id: tenant_id,
+                tenant_id: tenant_id.to_string(),
                 db: db_name.to_string(),
                 table: tbl_name.to_string(),
                 table_meta: TableMeta {
@@ -384,7 +387,7 @@ impl MetaApiTestSuite {
             {
                 let plan = DropTableReq {
                     if_exists: false,
-                    tenant_id,
+                    tenant_id: tenant_id.to_string(),
                     db: db_name.to_string(),
                     table: tbl_name.to_string(),
                 };
@@ -407,7 +410,7 @@ impl MetaApiTestSuite {
             {
                 let plan = DropTableReq {
                     if_exists: false,
-                    tenant_id,
+                    tenant_id: tenant_id.to_string(),
                     db: db_name.to_string(),
                     table: tbl_name.to_string(),
                 };
@@ -425,7 +428,7 @@ impl MetaApiTestSuite {
             {
                 let plan = DropTableReq {
                     if_exists: true,
-                    tenant_id,
+                    tenant_id: tenant_id.to_string(),
                     db: db_name.to_string(),
                     table: tbl_name.to_string(),
                 };
@@ -437,7 +440,7 @@ impl MetaApiTestSuite {
     }
 
     pub async fn table_list<MT: MetaApi>(&self, mt: &MT) -> anyhow::Result<()> {
-        let tenant_id = Uuid::new_v4();
+        let tenant_id = "tenant1";
         let db_name = "db1";
 
         tracing::info!("--- prepare db");
@@ -459,7 +462,7 @@ impl MetaApiTestSuite {
 
             let mut plan = CreateTableReq {
                 if_not_exists: false,
-                tenant_id: tenant_id,
+                tenant_id: tenant_id.to_string(),
                 db: db_name.to_string(),
                 table: "tb1".to_string(),
                 table_meta: TableMeta {
@@ -497,14 +500,14 @@ impl MetaApiTestSuite {
     async fn create_database<MT: MetaApi>(
         &self,
         mt: &MT,
-        tenant_id: Uuid,
+        tenant_id: &str,
         db_name: &str,
     ) -> anyhow::Result<CreateDatabaseReply> {
         tracing::info!("--- create database {}", db_name);
 
         let req = CreateDatabaseReq {
             if_not_exists: false,
-            tenant_id: tenant_id,
+            tenant_id: tenant_id.to_string(),
             db: db_name.to_string(),
             meta: DatabaseMeta {
                 engine: "".to_string(),
@@ -528,11 +531,11 @@ impl MetaApiTestSuite {
         node_b: &MT,
     ) -> anyhow::Result<()> {
         tracing::info!("--- create db1 on node_a");
-        let tenant_id = Uuid::new_v4();
+        let tenant_id = "tenant1";
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant_id: tenant_id,
+                tenant_id: tenant_id.to_string(),
                 db: "db1".to_string(),
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
@@ -579,13 +582,13 @@ impl MetaApiTestSuite {
         node_b: &MT,
     ) -> anyhow::Result<()> {
         tracing::info!("--- create db1 and db3 on node_a");
-        let tenant_id = Uuid::new_v4();
+        let tenant_id = "tenant1";
         {
             let dbs = vec!["db1", "db3"];
             for db_name in dbs {
                 let req = CreateDatabaseReq {
                     if_not_exists: false,
-                    tenant_id,
+                    tenant_id: tenant_id.to_string(),
                     db: db_name.to_string(),
                     meta: DatabaseMeta {
                         engine: "github".to_string(),
@@ -600,7 +603,11 @@ impl MetaApiTestSuite {
 
         tracing::info!("--- list databases from node_b");
         {
-            let res = node_b.list_databases(ListDatabaseReq { tenant_id }).await;
+            let res = node_b
+                .list_databases(ListDatabaseReq {
+                    tenant_id: tenant_id.to_string(),
+                })
+                .await;
             tracing::debug!("get database list: {:?}", res);
             let res = res?;
             assert_eq!(2, res.len(), "database list len is 2");
@@ -620,12 +627,12 @@ impl MetaApiTestSuite {
         node_b: &MT,
     ) -> anyhow::Result<()> {
         tracing::info!("--- create db1 and tb1, tb2 on node_a");
-        let tenant_id = Uuid::new_v4();
+        let tenant_id = "tenant1";
         let db_name = "db1";
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant_id,
+                tenant_id: tenant_id.to_string(),
                 db: db_name.to_string(),
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
@@ -647,7 +654,7 @@ impl MetaApiTestSuite {
             for tb in tables {
                 let req = CreateTableReq {
                     if_not_exists: false,
-                    tenant_id,
+                    tenant_id: tenant_id.to_string(),
                     db: db_name.to_string(),
                     table: tb.to_string(),
                     table_meta: TableMeta {
@@ -687,12 +694,12 @@ impl MetaApiTestSuite {
         node_b: &MT,
     ) -> anyhow::Result<()> {
         tracing::info!("--- create table tb1 on node_a");
-        let tenant_id = Uuid::new_v4();
+        let tenant_id = "tenant1";
         let db_name = "db1";
         {
             let req = CreateDatabaseReq {
                 if_not_exists: false,
-                tenant_id,
+                tenant_id: tenant_id.to_string(),
                 db: db_name.to_string(),
                 meta: DatabaseMeta {
                     engine: "github".to_string(),
@@ -713,7 +720,7 @@ impl MetaApiTestSuite {
 
             let req = CreateTableReq {
                 if_not_exists: false,
-                tenant_id,
+                tenant_id: tenant_id.to_string(),
                 db: db_name.to_string(),
                 table: "tb1".to_string(),
                 table_meta: TableMeta {

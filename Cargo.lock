@@ -738,7 +738,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "url",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -1706,7 +1706,6 @@ dependencies = [
  "common-exception",
  "rand 0.8.4",
  "serde",
- "uuid 1.0.0-alpha.1",
 ]
 
 [[package]]
@@ -1806,7 +1805,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tonic",
- "uuid 1.0.0-alpha.1",
 ]
 
 [[package]]
@@ -1838,7 +1836,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tonic",
- "uuid 1.0.0-alpha.1",
 ]
 
 [[package]]
@@ -1870,6 +1867,7 @@ dependencies = [
  "common-exception",
  "derive_more",
  "enumflags2",
+ "lazy_static",
  "maplit",
  "once_cell",
  "prost",
@@ -1878,7 +1876,6 @@ dependencies = [
  "thiserror",
  "tonic",
  "tonic-build",
- "uuid 1.0.0-alpha.1",
 ]
 
 [[package]]

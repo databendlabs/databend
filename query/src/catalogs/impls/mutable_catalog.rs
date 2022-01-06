@@ -15,7 +15,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_api::MetaApi;
 use common_meta_embedded::MetaEmbedded;
@@ -38,7 +37,6 @@ use common_meta_types::TableMeta;
 use common_meta_types::UpsertTableOptionReply;
 use common_meta_types::UpsertTableOptionReq;
 use common_tracing::tracing;
-use uuid::Uuid;
 
 use crate::catalogs::backends::MetaRemote;
 use crate::catalogs::catalog::Catalog;
@@ -94,13 +92,12 @@ impl MutableCatalog {
             Arc::new(meta_remote)
         };
 
-        let tenant_id = Uuid::parse_str(conf.query.tenant_id.as_str())
-            .map_err(|e| ErrorCode::InvalidConfig(format!("failed to parse tenant id: {}", e)))?;
+        let tenant_id = conf.query.tenant_id.as_str();
 
         // Create default database.
         let req = CreateDatabaseReq {
             if_not_exists: true,
-            tenant_id,
+            tenant_id: tenant_id.to_string(),
             db: "default".to_string(),
             meta: DatabaseMeta {
                 engine: "".to_string(),
@@ -135,7 +132,7 @@ impl MutableCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for MutableCatalog {
-    async fn get_database(&self, tenant_id: Uuid, db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, tenant_id: &str, db_name: &str) -> Result<Arc<dyn Database>> {
         let db_info = self
             .ctx
             .meta
@@ -144,11 +141,13 @@ impl Catalog for MutableCatalog {
         self.build_db_instance(&db_info)
     }
 
-    async fn list_databases(&self, tenant_id: Uuid) -> Result<Vec<Arc<dyn Database>>> {
+    async fn list_databases(&self, tenant_id: &str) -> Result<Vec<Arc<dyn Database>>> {
         let dbs = self
             .ctx
             .meta
-            .list_databases(ListDatabaseReq { tenant_id })
+            .list_databases(ListDatabaseReq {
+                tenant_id: tenant_id.to_string(),
+            })
             .await?;
 
         dbs.iter().try_fold(vec![], |mut acc, item| {
@@ -170,7 +169,7 @@ impl Catalog for MutableCatalog {
             meta: req.meta.clone(),
         });
         let database = self.build_db_instance(&db_info)?;
-        database.init_database(req.tenant_id).await?;
+        database.init_database(&req.tenant_id).await?;
         Ok(CreateDatabaseReply {
             database_id: res.database_id,
         })
@@ -199,7 +198,7 @@ impl Catalog for MutableCatalog {
 
     async fn get_table(
         &self,
-        tenant_id: Uuid,
+        tenant_id: &str,
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
@@ -211,7 +210,7 @@ impl Catalog for MutableCatalog {
         self.get_table_by_info(table_info.as_ref())
     }
 
-    async fn list_tables(&self, tenant_id: Uuid, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables(&self, tenant_id: &str, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let table_infos = self
             .ctx
             .meta

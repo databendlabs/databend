@@ -24,13 +24,13 @@ pub async fn validate_grant_object_exists(
     ctx: &Arc<QueryContext>,
     object: &GrantObject,
 ) -> Result<()> {
-    let tenant_id = ctx.get_tenant_id()?;
+    let tenant_id = ctx.get_tenant_id();
     let catalog = ctx.get_catalog();
 
     match &object {
         GrantObject::Table(database_name, table_name) => {
             if !catalog
-                .exists_table(tenant_id, database_name, table_name)
+                .exists_table(tenant_id.as_str(), database_name, table_name)
                 .await?
             {
                 return Err(common_exception::ErrorCode::UnknownTable(format!(
@@ -40,7 +40,10 @@ pub async fn validate_grant_object_exists(
             }
         }
         GrantObject::Database(database_name) => {
-            if !catalog.exists_database(tenant_id, database_name).await? {
+            if !catalog
+                .exists_database(tenant_id.as_str(), database_name)
+                .await?
+            {
                 return Err(common_exception::ErrorCode::UnknownDatabase(format!(
                     "database {} not exists",
                     database_name,

@@ -18,11 +18,9 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Deref;
 
-use uuid::Uuid;
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseNameIdent {
-    pub tenant_id: Uuid,
+    pub tenant_id: String,
     pub db_name: String,
 }
 
@@ -60,7 +58,7 @@ impl DatabaseInfo {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateDatabaseReq {
     pub if_not_exists: bool,
-    pub tenant_id: Uuid,
+    pub tenant_id: String,
     pub db: String,
     pub meta: DatabaseMeta,
 }
@@ -73,7 +71,7 @@ pub struct CreateDatabaseReply {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropDatabaseReq {
     pub if_exists: bool,
-    pub tenant_id: Uuid,
+    pub tenant_id: String,
     pub db: String,
 }
 
@@ -94,10 +92,10 @@ impl Deref for GetDatabaseReq {
 }
 
 impl GetDatabaseReq {
-    pub fn new(tenant_id: Uuid, db_name: impl Into<String>) -> GetDatabaseReq {
+    pub fn new(tenant_id: impl Into<String>, db_name: impl Into<String>) -> GetDatabaseReq {
         GetDatabaseReq {
             inner: DatabaseNameIdent {
-                tenant_id,
+                tenant_id: tenant_id.into(),
                 db_name: db_name.into(),
             },
         }
@@ -106,5 +104,5 @@ impl GetDatabaseReq {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct ListDatabaseReq {
-    pub tenant_id: Uuid,
+    pub tenant_id: String,
 }

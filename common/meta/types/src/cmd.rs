@@ -17,7 +17,6 @@ use std::fmt;
 use async_raft::NodeId;
 use serde::Deserialize;
 use serde::Serialize;
-use uuid::Uuid;
 
 use crate::DatabaseMeta;
 use crate::KVMeta;
@@ -40,17 +39,17 @@ pub enum Cmd {
 
     /// Add a database if absent
     CreateDatabase {
-        tenant_id: Uuid,
+        tenant_id: String,
         name: String,
         meta: DatabaseMeta,
     },
 
     /// Drop a database if absent
-    DropDatabase { tenant_id: Uuid, name: String },
+    DropDatabase { tenant_id: String, name: String },
 
     /// Create a table if absent
     CreateTable {
-        tenant_id: Uuid,
+        tenant_id: String,
         db_name: String,
         table_name: String,
         table_meta: TableMeta,
@@ -58,7 +57,7 @@ pub enum Cmd {
 
     /// Drop a table if absent
     DropTable {
-        tenant_id: Uuid,
+        tenant_id: String,
         db_name: String,
         table_name: String,
     },

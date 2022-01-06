@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::CreateTableReq;
 use common_meta_types::TableMeta;
-use uuid::Uuid;
 
 use crate::PlanNode;
 
@@ -26,7 +25,7 @@ pub type TableOptions = HashMap<String, String>;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CreateTablePlan {
     pub if_not_exists: bool,
-    pub tenant_id: Uuid,
+    pub tenant_id: String,
     pub db: String,
     /// The table name
     pub table: String,

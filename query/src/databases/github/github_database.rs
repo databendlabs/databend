@@ -16,7 +16,6 @@ use common_exception::Result;
 use common_meta_types::DatabaseInfo;
 use common_tracing::tracing;
 use octocrab::params;
-use uuid::Uuid;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
@@ -50,7 +49,7 @@ impl Database for GithubDatabase {
         &self.db_info
     }
 
-    async fn init_database(&self, tenant_id: Uuid) -> Result<()> {
+    async fn init_database(&self, tenant_id: &str) -> Result<()> {
         let token = self
             .get_db_info()
             .meta

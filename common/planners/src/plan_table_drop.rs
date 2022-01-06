@@ -17,12 +17,11 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 use common_meta_types::DropTableReq;
-use uuid::Uuid;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct DropTablePlan {
     pub if_exists: bool,
-    pub tenant_id: Uuid,
+    pub tenant_id: String,
     pub db: String,
     /// The table name
     pub table: String,

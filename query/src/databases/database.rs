@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use common_exception::Result;
 use common_meta_types::DatabaseInfo;
 use dyn_clone::DynClone;
-use uuid::Uuid;
 
 #[async_trait::async_trait]
 pub trait Database: DynClone + Sync + Send {
@@ -39,7 +38,7 @@ pub trait Database: DynClone + Sync + Send {
     fn get_db_info(&self) -> &DatabaseInfo;
 
     // Initial a database.
-    async fn init_database(&self, _tenant_id: Uuid) -> Result<()> {
+    async fn init_database(&self, _tenant_id: &str) -> Result<()> {
         Ok(())
     }
 }
