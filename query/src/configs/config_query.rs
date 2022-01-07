@@ -191,9 +191,7 @@ pub struct QueryConfig {
     pub table_disk_cache_mb_size: u64,
 
     /// If in proxy mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
-    #[clap(long, env = QUERY_PROXY_MODE,
-    parse(try_from_str),
-    default_value = "true")]
+    #[clap(long, env = QUERY_PROXY_MODE)]
     pub proxy_mode: bool,
 }
 
